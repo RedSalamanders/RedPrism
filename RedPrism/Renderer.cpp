@@ -1,5 +1,7 @@
 #include "Renderer.h"
 
+#include "ChromeHost.h"
+
 #include <array>
 #include <cstring>
 #include <format>
@@ -33,9 +35,15 @@ HRESULT Renderer::Initialize(HWND window, bool forceWarp) noexcept
 
 void Renderer::Shutdown() noexcept
 {
+    _chrome = nullptr;
     ReleaseDeviceResources();
     _window = nullptr;
     _forceWarp = false;
+}
+
+void Renderer::SetChrome(ChromeHost* chrome) noexcept
+{
+    _chrome = chrome;
 }
 
 HRESULT Renderer::CreateDeviceResources() noexcept
@@ -257,7 +265,19 @@ HRESULT Renderer::EnsureDeviceForWindowMonitor() noexcept
         return S_FALSE;
     }
     const HRESULT result = CreateDeviceResources();
-    return FAILED(result) ? result : S_OK;
+    if (FAILED(result))
+    {
+        return result;
+    }
+    if (_chrome && _device)
+    {
+        const HRESULT chromeResult = _chrome->ReplaceDevice(_device.get());
+        if (FAILED(chromeResult))
+        {
+            return chromeResult;
+        }
+    }
+    return S_OK;
 }
 
 Renderer::DeviceIdentity Renderer::DeviceInfo() const noexcept
@@ -405,7 +425,22 @@ HRESULT Renderer::Resize(UINT width, UINT height) noexcept
     return CreateRenderTarget(width, height);
 }
 
-HRESULT Renderer::Render() noexcept
+ID3D11Device* Renderer::Device() const noexcept
+{
+    return _device.get();
+}
+
+UINT Renderer::Width() const noexcept
+{
+    return _width;
+}
+
+UINT Renderer::Height() const noexcept
+{
+    return _height;
+}
+
+HRESULT Renderer::Render(ChromeHost* chrome) noexcept
 {
     if (_suspended)
     {
@@ -419,6 +454,24 @@ HRESULT Renderer::Render() noexcept
     ID3D11RenderTargetView* renderTargets[] = {_renderTarget.get()};
     _context->OMSetRenderTargets(1, renderTargets, nullptr);
     _context->ClearRenderTargetView(_renderTarget.get(), kClearColor.data());
+
+    if (chrome)
+    {
+        HRESULT chromeResult = chrome->Prepare(_width, _height, static_cast<float>(GetDpiForWindow(_window)));
+        if (FAILED(chromeResult))
+        {
+            return chromeResult;
+        }
+        D3D11_VIEWPORT viewport{};
+        viewport.Width = static_cast<float>(_width);
+        viewport.Height = static_cast<float>(_height);
+        viewport.MaxDepth = 1.0f;
+        chromeResult = chrome->Composite(_context.get(), viewport);
+        if (FAILED(chromeResult))
+        {
+            return chromeResult;
+        }
+    }
 
     const HRESULT presentResult = _swapChain->Present(1, 0);
     if (IsDeviceLost(presentResult))
@@ -478,7 +531,13 @@ bool Renderer::IsWarp() const noexcept
 HRESULT Renderer::RecoverDevice() noexcept
 {
     OutputDebugStringW(L"Direct3D device was lost; rebuilding graphics resources.\n");
-    return CreateDeviceResources();
+    const HRESULT result = CreateDeviceResources();
+    if (SUCCEEDED(result) && _chrome && _device)
+    {
+        const HRESULT chromeResult = _chrome->ReplaceDevice(_device.get());
+        return FAILED(chromeResult) ? chromeResult : result;
+    }
+    return result;
 }
 
 void Renderer::ReleaseDeviceResources() noexcept

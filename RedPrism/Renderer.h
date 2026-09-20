@@ -14,6 +14,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+class ChromeHost;
+
 class Renderer final
 {
   public:
@@ -37,8 +39,12 @@ class Renderer final
 
     HRESULT Initialize(HWND window, bool forceWarp) noexcept;
     void Shutdown() noexcept;
+    void SetChrome(ChromeHost* chrome) noexcept;
     HRESULT Resize(UINT width, UINT height) noexcept;
-    HRESULT Render() noexcept;
+    HRESULT Render(ChromeHost* chrome) noexcept;
+    [[nodiscard]] ID3D11Device* Device() const noexcept;
+    [[nodiscard]] UINT Width() const noexcept;
+    [[nodiscard]] UINT Height() const noexcept;
     HRESULT ProbeOcclusion() noexcept;
     HRESULT EnsureDeviceForWindowMonitor() noexcept;
     [[nodiscard]] DeviceIdentity DeviceInfo() const noexcept;
@@ -62,6 +68,7 @@ class Renderer final
     static bool IsDeviceLost(HRESULT result) noexcept;
 
     HWND _window = nullptr;
+    ChromeHost* _chrome = nullptr;
     bool _forceWarp = false;
     bool _suspended = true;
     bool _occluded = false;

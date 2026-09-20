@@ -107,15 +107,38 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 2;
     }
 
-    const bool forceWarp = HasArgument(arguments.get(), argumentCount, RedPrismSwitchName(RedPrismSwitch::Warp));
-    const std::unique_ptr<Application> application{new (std::nothrow) Application(instance, forceWarp || selfTest)};
-    if (!application)
+    RedPrismCommandLine parsed{};
+    const wchar_t* errorToken = nullptr;
+    if (!RedPrismParseCommandLine(arguments.get(), argumentCount, parsed, &errorToken))
+    {
+        std::wstring message = L"Unknown argument \"";
+        message += errorToken ? errorToken : L"";
+        message += L"\". Run RedPrism.exe --help for the command line.\n";
+        EmitCommandLineText(message, true, selfTest);
+        return 2;
+    }
+
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(com) && com != RPC_E_CHANGED_MODE)
     {
         return 1;
     }
+    const bool uninitializeCom = SUCCEEDED(com);
 
-    const int exitCode = selfTest ? application->RunSelfTest() : application->Run(showCommand);
-    if (exitCode != 0 && !selfTest)
+    const bool forceWarp = parsed.warp || parsed.selfTest;
+    const std::unique_ptr<Application> application{new (std::nothrow)
+                                                       Application(instance, forceWarp, parsed.screenshotPath)};
+    if (!application)
+    {
+        if (uninitializeCom)
+        {
+            CoUninitialize();
+        }
+        return 1;
+    }
+
+    const int exitCode = parsed.selfTest ? application->RunSelfTest() : application->Run(showCommand);
+    if (exitCode != 0 && !parsed.selfTest && parsed.screenshotPath == nullptr)
     {
         const wchar_t* message = L"RedPrism could not start. See the debugger output.";
         switch (exitCode)
@@ -130,6 +153,10 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
             break;
         }
         MessageBoxW(nullptr, message, L"RedPrism", MB_OK | MB_ICONERROR);
+    }
+    if (uninitializeCom)
+    {
+        CoUninitialize();
     }
     return exitCode;
 }

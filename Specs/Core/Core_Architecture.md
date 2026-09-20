@@ -25,7 +25,7 @@ Win32 top-level HWND (WS_EX_NOREDIRECTIONBITMAP)
   DxUi EmbeddedHost : retained chrome (from C2; borrows the app device; no swap chain)
 ```
 
-Until C2, the idle Present path clears the back buffer to a solid color. Until C6, there is no document GPU composition.
+Until C6, there is no document GPU composition. C2 composites DxUi chrome into the same back buffer as the clear.
 
 ## Ownership
 

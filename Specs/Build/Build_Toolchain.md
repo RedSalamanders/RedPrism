@@ -11,8 +11,8 @@ build entrypoints. Runtime windowing lives in [`UI/UI_Windowing.md`](../UI/UI_Wi
 lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orchestration lives in
 [`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
 
-DxUi restore is **not** part of this contract until C2 (`Specs/Core/Core_DxUiIntegration.md`). C1 MUST NOT clone,
-reset, or build `Z:\src\DxUi`.
+DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxUi.lock.json` into
+`.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. See [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
 
 ## Toolchain
 
@@ -95,7 +95,8 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | Script | Duty |
 | --- | --- |
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All]` | Restore WIL and yyjson |
-| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild |
+| `.\restore-dxui.ps1 [-Platform x64\|ARM64]` | Restore the exact DxUi pin |
+| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
 | `.\validate-skills.ps1` | Repository skill frontmatter and body checks |

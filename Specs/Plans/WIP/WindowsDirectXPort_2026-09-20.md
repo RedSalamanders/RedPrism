@@ -21,7 +21,7 @@
 
 ## Status and ownership
 
-- **Status**: **ACTIVE, C1 complete — next C2 (DxUi pin)**
+- **Status**: **ACTIVE, C3 — DxUi editor-control evidence (library HOLD)**
 - **Priority**: P0 (the product)
 - **Effort**: XL (multi-phase; each of C0–C7 is L; C8–C15 are sequels)
 - **Risk**: HIGH
@@ -517,14 +517,14 @@ exists; killing a running exe to unblock the build.
 
 ### C2 — Pin DxUi and composite hello chrome
 
-- [ ] `Dependencies/DxUi.lock.json` with the pin above.
-- [ ] Restore script + `Build/RedPrism.DxUi.props` / `.targets` importing
+- [x] `Dependencies/DxUi.lock.json` with the pin above.
+- [x] Restore script + `Build/RedPrism.DxUi.props` / `.targets` importing
       `Z:\src\DxUi\Build\DxUi.Consumer.props` pattern (see RedXe `Build/RedXe.DxUi.props`).
-- [ ] Theme adapter: product palette → `DxUi::ThemePalette` (local files, not in DxUi).
-- [ ] `EmbeddedHost::Attach` on the app `GraphicsDevice`; one Button or Label overlay;
+- [x] Theme adapter: product palette → `DxUi::ThemePalette` (local files, not in DxUi).
+- [x] `EmbeddedHost::Attach` on the app `GraphicsDevice`; one Button or Label overlay;
       pointer/key dispatch; Prepare/Composite into the same back buffer as the clear/canvas.
-- [ ] Provenance sidecar (`DxUi.provenance.json`) and a test that rejects the wrong pin.
-- [ ] Spec: `Core_DxUiIntegration.md`.
+- [x] Provenance sidecar (`DxUi.provenance.json`) and a test that rejects the wrong pin.
+- [x] Spec: `Core_DxUiIntegration.md`.
 
 **Verify**: x64 Debug/Release/ASan Debug product tests; overlay visible in a **harness**
 screenshot (not Computer Use). Dirty DxUi compose stays within DxUi surface caps (64 MiB visible,

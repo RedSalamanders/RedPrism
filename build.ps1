@@ -105,6 +105,7 @@ $target = if ($Clean) { 'Clean' } elseif ($Rebuild) { 'Rebuild' } else { 'Build'
 if (-not $Clean) {
     Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
     & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform
+    & (Join-Path $repoRoot 'restore-dxui.ps1') -Platform $Platform -MSBuildPath $msbuild
     Write-Host ''
 }
 
@@ -139,6 +140,9 @@ if (-not $Clean) {
         throw "Build succeeded but the expected executable was not found: $executable"
     }
     Write-Host "Ready: $executable" -ForegroundColor Green
+    Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
+    $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration
+    Write-Host "DxUi provenance: $provenance" -ForegroundColor DarkGray
     if ($Run) {
         $native = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
         if ($Platform -eq 'ARM64' -and $native -ne 'Arm64') {

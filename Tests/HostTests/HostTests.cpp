@@ -66,6 +66,12 @@ void TestFrameScheduler() noexcept
     state.occlusionStatusChanged = true;
     Expect(SelectHostFrameAction(state) == HostFrameAction::ProbeOcclusion, "frame.occluded-probe");
 
+    state.rendererOccluded = false;
+    state.occlusionStatusChanged = false;
+    state.frameInvalidated = false;
+    state.chromeAnimating = true;
+    Expect(SelectHostFrameAction(state) == HostFrameAction::Render, "frame.chrome-animating");
+
     state.rendererSuspended = true;
     Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.suspended");
 }
@@ -75,14 +81,26 @@ void TestCommandLine() noexcept
     Expect(RedPrismIsHelpArgument(L"--help") && RedPrismIsHelpArgument(L"/?"), "cli.help-aliases");
     Expect(RedPrismFindSwitch(L"--warp") != nullptr, "cli.warp");
     Expect(RedPrismFindSwitch(L"--self-test") != nullptr, "cli.self-test");
+    Expect(RedPrismFindSwitch(L"--screenshot") != nullptr, "cli.screenshot");
     Expect(RedPrismFindSwitch(L"--no-such") == nullptr, "cli.unknown-switch");
 
     wchar_t unknown[] = L"--no-such";
     wchar_t* args[] = {const_cast<wchar_t*>(L"RedPrism.exe"), unknown};
     Expect(std::wstring_view{RedPrismFindUnknownArgument(args, 2)} == L"--no-such", "cli.unknown-scan");
 
+    wchar_t screenshot[] = L"--screenshot";
+    wchar_t png[] = L"overlay.png";
+    wchar_t* shotArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, png};
+    Expect(RedPrismFindUnknownArgument(shotArgs, 3) == nullptr, "cli.screenshot-value");
+
+    RedPrismCommandLine parsed{};
+    const wchar_t* error = nullptr;
+    Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath == std::wstring_view{png},
+           "cli.screenshot-parse");
+
     const std::wstring help = RedPrismFormatCommandLineHelp();
-    Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos,
+    Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
+               help.find(L"--screenshot") != std::wstring::npos,
            "cli.help-text");
 }
 } // namespace

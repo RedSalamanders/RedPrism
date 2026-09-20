@@ -15,6 +15,7 @@ struct HostFrameState final
     bool rendererOccluded = false;
     bool occlusionStatusChanged = false;
     bool frameInvalidated = true;
+    bool chromeAnimating = false;
 };
 
 [[nodiscard]] constexpr HostFrameAction SelectHostFrameAction(const HostFrameState& state) noexcept
@@ -27,7 +28,7 @@ struct HostFrameState final
     {
         return state.occlusionStatusChanged ? HostFrameAction::ProbeOcclusion : HostFrameAction::WaitForMessage;
     }
-    if (!state.frameInvalidated)
+    if (!state.frameInvalidated && !state.chromeAnimating)
     {
         return HostFrameAction::WaitForMessage;
     }

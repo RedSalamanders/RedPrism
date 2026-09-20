@@ -65,6 +65,9 @@ if ($Configuration -eq 'ASan Debug') {
         throw "ASAN failed to diagnose the isolated deliberate defect: $probeLog"
     }
     Write-Host "PASS AddressSanitizer detection probe: $probeLog"
+    # The probe executable must exit non-zero. Clear LASTEXITCODE so later PowerShell
+    # steps (Start-Process, provenance scripts) do not inherit that native failure.
+    $global:LASTEXITCODE = 0
 }
 
 Write-Host 'Running command-line help...' -ForegroundColor Cyan
@@ -94,6 +97,39 @@ Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -Wait -PassThru
 if ($selfTest.ExitCode -ne 0) {
     throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode)."
+}
+
+Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
+Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
+Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') `
+    -Platform $Platform -Configuration $Configuration
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiProvenanceTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "DxUi provenance tests failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Capturing harness screenshot...' -ForegroundColor Cyan
+$shotDir = Join-Path $repoRoot '.build\screenshots'
+New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
+$shotPath = Join-Path $shotDir "hello-dxui-$Platform-$($Configuration -replace '\s','').png"
+Remove-Item -LiteralPath $shotPath -ErrorAction SilentlyContinue
+$shotLog = Join-Path $outputRoot 'RedPrism.screenshot.log'
+$shotErr = Join-Path $outputRoot 'RedPrism.screenshot.err.log'
+Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
+$shot = Start-Process -FilePath $executable -ArgumentList @('--screenshot', $shotPath, '--warp') -Wait -PassThru `
+    -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
+if ($shot.ExitCode -eq 8) {
+    Write-Host "SKIP harness screenshot (capture unavailable, exit 8)." -ForegroundColor Yellow
+} elseif ($shot.ExitCode -ne 0) {
+    throw "RedPrism.exe --screenshot exited with code $($shot.ExitCode)."
+} elseif (-not (Test-Path -LiteralPath $shotPath -PathType Leaf)) {
+    throw "Screenshot was not written: $shotPath"
+} else {
+    $header = [IO.File]::ReadAllBytes($shotPath)
+    if ($header.Length -lt 8 -or $header[0] -ne 0x89 -or $header[1] -ne 0x50 -or $header[2] -ne 0x4E -or $header[3] -ne 0x47) {
+        throw "Screenshot is not a PNG: $shotPath"
+    }
+    Write-Host "PASS harness screenshot: $shotPath"
 }
 
 Write-Host 'All tests passed.' -ForegroundColor Green

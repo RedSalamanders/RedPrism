@@ -1,14 +1,19 @@
 #include "Application.h"
 
+#include "ChromeHost.h"
 #include "FrameScheduler.h"
+#include "WindowCapture.h"
 
 #include <cstring>
+#include <new>
 #include <powrprof.h>
+#include <windowsx.h>
 
 namespace
 {
 constexpr int kDefaultClientWidth = 1280;
 constexpr int kDefaultClientHeight = 800;
+constexpr UINT kScreenshotDelayMilliseconds = 300;
 
 [[nodiscard]] SIZE ScaleDefaultClientSize(UINT dpi) noexcept
 {
@@ -33,9 +38,30 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
     windowSize = SIZE{bounds.right - bounds.left, bounds.bottom - bounds.top};
     return S_OK;
 }
+
+[[nodiscard]] UINT KeyModifiers() noexcept
+{
+    UINT modifiers = 0;
+    if (GetKeyState(VK_SHIFT) < 0)
+    {
+        modifiers |= MK_SHIFT;
+    }
+    if (GetKeyState(VK_CONTROL) < 0)
+    {
+        modifiers |= MK_CONTROL;
+    }
+    return modifiers;
+}
 } // namespace
 
-Application::Application(HINSTANCE instance, bool forceWarp) noexcept : _instance(instance), _forceWarp(forceWarp) {}
+Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath) noexcept
+    : _instance(instance), _forceWarp(forceWarp)
+{
+    if (screenshotPath && screenshotPath[0] != L'\0')
+    {
+        _screenshotPath = screenshotPath;
+    }
+}
 
 Application::~Application()
 {
@@ -45,6 +71,15 @@ Application::~Application()
     {
         UnregisterClassW(kWindowClassName, _instance);
         _classRegistered = false;
+    }
+}
+
+void Application::RequestFrameThunk(void* context) noexcept
+{
+    auto* application = static_cast<Application*>(context);
+    if (application)
+    {
+        application->_frameInvalidated = true;
     }
 }
 
@@ -71,7 +106,21 @@ int Application::Run(int showCommand) noexcept
         return 5;
     }
 
-    ShowWindow(_window.get(), showCommand);
+    result = InitializeChrome();
+    if (FAILED(result))
+    {
+        OutputDebugStringW(L"DxUi chrome initialization failed.\n");
+        return 5;
+    }
+
+    if (!_screenshotPath.empty())
+    {
+        ShowWindow(_window.get(), SW_SHOWNOACTIVATE);
+    }
+    else
+    {
+        ShowWindow(_window.get(), showCommand);
+    }
 
     MSG message{};
     while (_window)
@@ -80,6 +129,10 @@ int Application::Run(int showCommand) noexcept
         {
             if (message.message == WM_QUIT)
             {
+                if (!_screenshotPath.empty())
+                {
+                    return FAILED(_screenshotResult) ? 8 : 0;
+                }
                 return FAILED(_runtimeFailure) ? 5 : static_cast<int>(message.wParam);
             }
             TranslateMessage(&message);
@@ -96,6 +149,12 @@ int Application::Run(int showCommand) noexcept
             _occlusionStatusChanged = false;
         }
 
+        const bool chromeAnimating = _chrome && _chrome->NeedsAnimation();
+        if (_chrome && _chrome->NeedsPreparation())
+        {
+            _frameInvalidated = true;
+        }
+
         HostFrameAction frameAction = SelectHostFrameAction(HostFrameState{
             _windowVisible,
             _displayPoweredOn,
@@ -103,6 +162,7 @@ int Application::Run(int showCommand) noexcept
             _renderer.IsOccluded(),
             _occlusionStatusChanged,
             _frameInvalidated,
+            chromeAnimating,
         });
         if (frameAction == HostFrameAction::ProbeOcclusion)
         {
@@ -126,6 +186,7 @@ int Application::Run(int showCommand) noexcept
                 _renderer.IsOccluded(),
                 false,
                 _frameInvalidated,
+                _chrome && _chrome->NeedsAnimation(),
             });
         }
 
@@ -140,7 +201,11 @@ int Application::Run(int showCommand) noexcept
             continue;
         }
 
-        result = _renderer.Render();
+        if (_chrome)
+        {
+            (void)_chrome->AdvanceAnimation(GetTickCount64());
+        }
+        result = _renderer.Render(_chrome.get());
         if (FAILED(result))
         {
             _runtimeFailure = result;
@@ -149,8 +214,17 @@ int Application::Run(int showCommand) noexcept
             continue;
         }
         _frameInvalidated = false;
+        if (!_screenshotPath.empty() && !_screenshotArmed && _window)
+        {
+            _screenshotArmed = true;
+            (void)SetTimer(_window.get(), kScreenshotTimerId, kScreenshotDelayMilliseconds, nullptr);
+        }
     }
 
+    if (!_screenshotPath.empty())
+    {
+        return FAILED(_screenshotResult) ? 8 : 0;
+    }
     return FAILED(_runtimeFailure) ? 5 : 0;
 }
 
@@ -196,10 +270,36 @@ int Application::RunSelfTest() noexcept
         return 5;
     }
 
-    result = _renderer.Render();
+    result = InitializeChrome();
+    if (FAILED(result))
+    {
+        OutputDebugStringW(L"DxUi chrome initialization failed.\n");
+        return 5;
+    }
+
+    result = _renderer.Render(_chrome.get());
     if (FAILED(result))
     {
         OutputDebugStringW(L"Self-test Present failed.\n");
+        return 5;
+    }
+    const DxUi::EmbeddedStatistics visible = _chrome->Statistics();
+    if (visible.surfaceBytes == 0 || visible.composites == 0)
+    {
+        OutputDebugStringW(L"Visible DxUi chrome did not allocate a surface or composite.\n");
+        return 5;
+    }
+    if (visible.surfaceBytes > (64ull * 1024ull * 1024ull))
+    {
+        OutputDebugStringW(L"Visible DxUi chrome exceeded the 64 MiB surface cap.\n");
+        return 5;
+    }
+
+    _chrome->SetVisible(false);
+    const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
+    if (hidden.surfaceBytes != 0)
+    {
+        OutputDebugStringW(L"Hidden DxUi chrome retained a cached surface.\n");
         return 5;
     }
 
@@ -293,8 +393,36 @@ HRESULT Application::InitializeRenderer() noexcept
     return S_OK;
 }
 
+HRESULT Application::InitializeChrome() noexcept
+{
+    auto chrome = std::unique_ptr<ChromeHost>(new (std::nothrow) ChromeHost());
+    if (!chrome)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const HRESULT result = chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    _chrome = std::move(chrome);
+    _renderer.SetChrome(_chrome.get());
+    _frameInvalidated = true;
+    return S_OK;
+}
+
 void Application::CloseMainWindow() noexcept
 {
+    if (_window)
+    {
+        (void)KillTimer(_window.get(), kScreenshotTimerId);
+    }
+    _renderer.SetChrome(nullptr);
+    if (_chrome)
+    {
+        _chrome->Detach();
+    }
+    _chrome.reset();
     _renderer.Shutdown();
     _rendererReady = false;
     _window.reset();
@@ -355,6 +483,65 @@ void Application::CheckDeviceAdapter() noexcept
     }
 }
 
+void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    if (!_chrome)
+    {
+        return;
+    }
+
+    DxUi::PointerEvent event{};
+    event.modifiers = GET_KEYSTATE_WPARAM(wParam) | KeyModifiers();
+    POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    if (message == WM_MOUSEWHEEL)
+    {
+        POINT screen{point};
+        if (!ScreenToClient(_window.get(), &screen))
+        {
+            return;
+        }
+        point = screen;
+        event.wheelDelta = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam));
+        event.action = DxUi::PointerAction::Wheel;
+    }
+    else if (message == WM_MOUSELEAVE)
+    {
+        event.action = DxUi::PointerAction::Leave;
+        _mouseTracked = false;
+    }
+    else if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN)
+    {
+        event.action = DxUi::PointerAction::Down;
+        (void)SetCapture(_window.get());
+    }
+    else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP)
+    {
+        event.action = DxUi::PointerAction::Up;
+        if (GetCapture() == _window.get())
+        {
+            ReleaseCapture();
+        }
+    }
+    else
+    {
+        event.action = DxUi::PointerAction::Move;
+        if (!_mouseTracked)
+        {
+            TRACKMOUSEEVENT track{};
+            track.cbSize = sizeof(track);
+            track.dwFlags = TME_LEAVE;
+            track.hwndTrack = _window.get();
+            _mouseTracked = TrackMouseEvent(&track) != FALSE;
+        }
+    }
+    event.xPixels = static_cast<float>(point.x);
+    event.yPixels = static_cast<float>(point.y);
+    if (_chrome->DispatchPointer(event))
+    {
+        _frameInvalidated = true;
+    }
+}
+
 LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     Application* application = reinterpret_cast<Application*>(GetWindowLongPtrW(window, GWLP_USERDATA));
@@ -393,11 +580,57 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         break;
     case WM_SHOWWINDOW:
         _windowVisible = wParam != FALSE;
+        if (_chrome)
+        {
+            _chrome->SetVisible(_windowVisible);
+        }
         if (_windowVisible)
         {
             _frameInvalidated = true;
         }
         return 0;
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_MOUSEWHEEL:
+    case WM_MOUSELEAVE:
+        OnPointer(message, wParam, lParam);
+        return 0;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (_chrome && _chrome->DispatchKey(static_cast<UINT>(wParam), true, KeyModifiers()))
+        {
+            _frameInvalidated = true;
+        }
+        break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (_chrome && _chrome->DispatchKey(static_cast<UINT>(wParam), false, KeyModifiers()))
+        {
+            _frameInvalidated = true;
+        }
+        break;
+    case WM_CHAR:
+        if (_chrome && _chrome->DispatchCharacter(static_cast<wchar_t>(wParam), KeyModifiers()))
+        {
+            _frameInvalidated = true;
+        }
+        return 0;
+    case WM_TIMER:
+        if (wParam == kScreenshotTimerId && !_screenshotPath.empty() && _window)
+        {
+            (void)KillTimer(window, kScreenshotTimerId);
+            _screenshotResult = RedPrism::SaveWindowScreenshot(window, _screenshotPath.c_str());
+            if (FAILED(_screenshotResult))
+            {
+                OutputDebugStringW(L"Screenshot capture failed.\n");
+            }
+            PostMessageW(window, WM_CLOSE, 0, 0);
+            return 0;
+        }
+        break;
     case WM_POWERBROADCAST:
         if (wParam == PBT_POWERSETTINGCHANGE && lParam != 0)
         {

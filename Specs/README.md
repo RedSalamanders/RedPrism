@@ -56,5 +56,4 @@ When a spec, implementation, test, or document disagrees:
 | Windowing | [`UI/UI_Windowing.md`](UI/UI_Windowing.md) |
 | Testing | [`Testing/Testing_Validation.md`](Testing/Testing_Validation.md) |
 
-`Core/Core_DxUiIntegration.md` is created in C2. Until then the consumer-dxui skill and the port plan describe the
-intended pin; they are not a substitute for that contract after C2 lands.
+`Core/Core_DxUiIntegration.md` is the consumer pin contract.

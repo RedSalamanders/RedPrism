@@ -1,0 +1,3 @@
+<Project>
+  <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.targets" />
+</Project>

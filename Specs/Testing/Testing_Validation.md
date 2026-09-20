@@ -14,7 +14,7 @@ before a phase is Done. Screenshot policy for later chrome lives here so C7 does
 `.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
 then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated
 negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-switch`) MUST NOT become the test
-entrypoint's success exit code.
+entrypoint's success exit code and MUST NOT be reused as the pass/fail signal for a later gate.
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
 
@@ -27,7 +27,9 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 | ASan Debug only | `HostTests.exe --asan-probe` MUST NOT exit 0 and the captured log MUST contain `AddressSanitizer: heap-use-after-free`. An ordinary crash without that diagnostic is a failed probe. |
 | Help | `RedPrism.exe --help` exit 0; redirected stdout contains `--self-test` |
 | Unknown switch | `RedPrism.exe --no-such-switch` exit 2 |
-| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0 |
+| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0; visible DxUi surface then 0 when hidden |
+| Provenance | `DxUi.provenance.json` matches the lock; wrong-pin fixtures are rejected |
+| Harness screenshot | `--screenshot <png> --warp` writes a PNG or exits 8 when capture is unavailable |
 
 `ASAN_OPTIONS` for the probe is `halt_on_error=1:abort_on_error=0:detect_leaks=0`.
 
@@ -35,7 +37,6 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 
 | When | Gate |
 | --- | --- |
-| C2 | Provenance test rejects the wrong DxUi pin; overlay screenshot from the **application harness** |
 | C4 | Document/history unit tests under Debug and ASan Debug; 256 MiB trim test |
 | C5 | ASan I/O tests; exploded v7 fixture round-trip; path-traversal reject; missing HEIF is a clean error |
 | C6 | WARP composite golden; device-loss recreate; occlusion does not Present |
