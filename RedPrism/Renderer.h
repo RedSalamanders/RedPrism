@@ -1,0 +1,83 @@
+#pragma once
+
+#include "AdapterSelection.h"
+
+#include <array>
+#include <cstdint>
+#include <d3d11_1.h>
+#include <dxgi1_3.h>
+#include <windows.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/com.h>
+#include <wil/resource.h>
+#pragma warning(pop)
+
+class Renderer final
+{
+  public:
+    static constexpr UINT kOcclusionStatusMessage = WM_APP + 1;
+
+    struct DeviceIdentity final
+    {
+        LUID adapterLuid{};
+        bool warp = false;
+        bool adapterOwnsWindowMonitor = false;
+        std::array<wchar_t, 128> adapterName{};
+    };
+
+    Renderer() = default;
+    ~Renderer();
+
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+    Renderer(Renderer&&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
+
+    HRESULT Initialize(HWND window, bool forceWarp) noexcept;
+    void Shutdown() noexcept;
+    HRESULT Resize(UINT width, UINT height) noexcept;
+    HRESULT Render() noexcept;
+    HRESULT ProbeOcclusion() noexcept;
+    HRESULT EnsureDeviceForWindowMonitor() noexcept;
+    [[nodiscard]] DeviceIdentity DeviceInfo() const noexcept;
+    [[nodiscard]] HANDLE FrameLatencyWaitableObject() const noexcept;
+    [[nodiscard]] bool IsSuspended() const noexcept;
+    [[nodiscard]] bool IsOccluded() const noexcept;
+    [[nodiscard]] bool IsWarp() const noexcept;
+
+  private:
+    static constexpr DXGI_FORMAT kTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    HRESULT CreateDeviceResources() noexcept;
+    HRESULT CreateDevice(bool useWarp) noexcept;
+    static HRESULT FindAdapterForMonitor(HMONITOR monitor, wil::com_ptr_nothrow<IDXGIAdapter1>& adapter,
+                                         LUID& adapterLuid) noexcept;
+    void RecordDeviceIdentity(bool warp, bool adapterOwnsWindowMonitor) noexcept;
+    HRESULT CreateSwapChain() noexcept;
+    HRESULT CreateRenderTarget(UINT width, UINT height) noexcept;
+    HRESULT RecoverDevice() noexcept;
+    void ReleaseDeviceResources() noexcept;
+    static bool IsDeviceLost(HRESULT result) noexcept;
+
+    HWND _window = nullptr;
+    bool _forceWarp = false;
+    bool _suspended = true;
+    bool _occluded = false;
+    UINT _width = 0;
+    UINT _height = 0;
+    D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_11_0;
+
+    wil::com_ptr_nothrow<ID3D11Device> _device;
+    wil::com_ptr_nothrow<ID3D11DeviceContext> _context;
+    wil::com_ptr_nothrow<ID3D11DeviceContext1> _context1;
+    wil::com_ptr_nothrow<IDXGIFactory2> _factory;
+    wil::com_ptr_nothrow<IDXGISwapChain1> _swapChain;
+    wil::com_ptr_nothrow<ID3D11RenderTargetView> _renderTarget;
+    wil::unique_handle _frameLatencyWaitable;
+    DeviceIdentity _deviceInfo{};
+    HMONITOR _deviceMonitor = nullptr;
+    DWORD _occlusionStatusCookie = 0;
+    bool _occlusionStatusRegistered = false;
+};

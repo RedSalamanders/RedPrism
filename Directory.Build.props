@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
+    <RedPrismBuildRoot>$(MSBuildThisFileDirectory).build\</RedPrismBuildRoot>
+    <OutDir>$(RedPrismBuildRoot)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(RedPrismBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
+    <TargetName>$(MSBuildProjectName)</TargetName>
+
+    <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='ARM64'">arm64</RedPrismVcpkgPlatformScope>
+    <RedPrismVcpkgPlatformScope Condition="'$(RedPrismVcpkgPlatformScope)'==''">x64</RedPrismVcpkgPlatformScope>
+    <RedPrismVcpkgTriplet Condition="'$(Platform)'=='ARM64'">arm64-windows</RedPrismVcpkgTriplet>
+    <RedPrismVcpkgTriplet Condition="'$(RedPrismVcpkgTriplet)'==''">x64-windows</RedPrismVcpkgTriplet>
+    <VcpkgManifestRoot>$(MSBuildThisFileDirectory)</VcpkgManifestRoot>
+    <VcpkgInstalledDir>$(RedPrismBuildRoot)vcpkg_installed\$(RedPrismVcpkgPlatformScope)\</VcpkgInstalledDir>
+    <VcpkgEnabled>false</VcpkgEnabled>
+
+    <RedPrismBuildNumber Condition="'$(RedPrismBuildNumber)'==''">0</RedPrismBuildNumber>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='ASan Debug'">
+    <EnableASAN>true</EnableASAN>
+    <LinkIncremental>false</LinkIncremental>
+    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests'">true</CopyAsanBinariesToOutDir>
+    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'!='RedPrism' and '$(MSBuildProjectName)'!='HostTests'">false</CopyAsanBinariesToOutDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/utf-8 /permissive- /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)Common;$(MSBuildThisFileDirectory)RedPrism;$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <ResourceCompile>
+      <PreprocessorDefinitions>REDPRISM_VERSION_BUILD=$(RedPrismBuildNumber);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and ('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">
+    <Link>
+      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='Release'">
+    <Link>
+      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

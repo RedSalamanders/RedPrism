@@ -1,0 +1,123 @@
+# RedPrism build toolchain
+
+Status: current normative repository contract
+Last reviewed: 2026-09-20
+Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `vcpkg-install.ps1`, `format.ps1`
+
+## Scope
+
+This contract owns the Windows C++ toolchain, configurations, generated-output layout, vcpkg pin, and the root
+build entrypoints. Runtime windowing lives in [`UI/UI_Windowing.md`](../UI/UI_Windowing.md). Architecture ownership
+lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orchestration lives in
+[`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
+
+DxUi restore is **not** part of this contract until C2 (`Specs/Core/Core_DxUiIntegration.md`). C1 MUST NOT clone,
+reset, or build `Z:\src\DxUi`.
+
+## Toolchain
+
+| Item | Required value |
+| --- | --- |
+| Generator | MSBuild via `RedPrism.sln`. CMake, MinGW, and a second C++ standard are prohibited. |
+| IDE / toolset | Visual Studio 2026 (18.x), `v145` |
+| Windows SDK | `10.0.26100.0` |
+| Language | MSVC `stdcpplatest`, Unicode Win32 APIs |
+| Warnings | `/W4`, `/permissive-`, SDL, warnings as errors, `/utf-8`, `/Zc:preprocessor` |
+| CRT | `/MDd` Debug and ASan Debug, `/MD` Release |
+| Minimum OS | Windows 11 build 22000.2600 |
+
+First-party translation units compile as C++.
+
+## Configurations and platforms
+
+Every native project MUST map Debug, Release, and ASan Debug on x64 and ARM64 (six profiles).
+
+ASan Debug MUST use `/MDd`, disabled optimization, program-database debug information, and real AddressSanitizer
+instrumentation. `Common/RequireAddressSanitizer.h` is a forced include so an unsanitized ASan Debug compilation is a
+build error.
+
+ARM64 **runtime** claims require a native ARM64 host. Cross-compilation from x64 is allowed; `test.ps1 -Platform ARM64`
+MUST refuse to run on a non-ARM64 host.
+
+## Outputs
+
+| Kind | Path |
+| --- | --- |
+| Binaries | `.build/<Platform>/<Configuration>/` |
+| Intermediates | `.build/Intermediate/<Platform>/<Configuration>/<Project>/` |
+| vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64>/` |
+| vcpkg tool checkout | `.build/vcpkg-tool/` |
+| MSBuild logs | `.build/logs/` |
+
+`.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
+
+## Exact-output process preflight
+
+Before dependency installation, cleaning, rebuilding, or building, `build.ps1` MUST inspect running `RedPrism.exe`
+processes. A build invocation does not own an independently launched process and MUST NOT terminate one. It MUST reject
+only a process whose `Win32_Process.ExecutablePath`, after absolute-path normalization, equals the selected
+`.build/<Platform>/<Configuration>/RedPrism.exe`.
+
+- An exact-path match MUST fail the build and name the process identifier and path so the user can close it and retry.
+- Same-name processes from another checkout, platform, configuration, or path MUST remain running and MUST NOT block
+  the build.
+- Enumeration failure MUST fail the build with an explicit statement that no process was terminated.
+- `-Run` performs the same preflight, builds, then launches the new target.
+
+## vcpkg
+
+| File | Value |
+| --- | --- |
+| `vcpkg-tool.json` repository | `https://github.com/microsoft/vcpkg` |
+| `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `9e593bb18ea69cc5095e012465dcd675a822ed0d` |
+| WIL | `version>="1.0.260126.7"` |
+| yyjson | `version>="0.12.0"` |
+
+C1 dependencies are WIL and yyjson only. libzip is C5. onnxruntime is a later product decision. `curl`, `webview2`,
+`aws-sdk-cpp`, `sqlite3`, `7zip`, `ftxui`, `pe-parse`, `libjpeg-turbo`, `libpng`, and `libraw` MUST NOT be added by
+this contract.
+
+`vcpkg-install.ps1` clones the pinned tooling under `.build/vcpkg-tool/`, bootstraps it, and installs into the
+platform-scoped tree. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
+are wired from that tree. `Directory.Build.targets` copies `yyjson.dll` next to `RedPrism.exe` and `HostTests.exe`.
+
+`build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform before MSBuild.
+
+## Version stamp
+
+`Common/Version.h` is `0.1.<build>.0`. `build.ps1` passes `/p:RedPrismBuildNumber=` as the Git commit count of `HEAD`,
+or `0` when the repository has no commits. Only `ResourceCompile` sees that number so a new stamp does not rebuild C++.
+
+The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=RedPrism`.
+
+## Entry points
+
+| Script | Duty |
+| --- | --- |
+| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All]` | Restore WIL and yyjson |
+| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild |
+| `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
+| `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
+| `.\validate-skills.ps1` | Repository skill frontmatter and body checks |
+
+`build.ps1` locates MSBuild from `MSBUILD_EXE_PATH`, `PATH`, or vswhere (including prerelease VS 2026). Every MSBuild
+invocation writes a UTF-8 log under `.build/logs/`.
+
+## Solution shape
+
+`RedPrism.sln` contains `RedPrism` (Win32 GUI) and `HostTests` (console). `Common/` is header-only and has no `.vcxproj`.
+A later `Shaders/` project or build-time FXC/DXC step is owned by the rendering contracts, not this file.
+
+## Validation
+
+```powershell
+.\validate-skills.ps1
+.\build.ps1 -Platform x64 -Configuration Debug
+.\build.ps1 -Platform x64 -Configuration Release
+.\build.ps1 -Platform x64 -Configuration "ASan Debug"
+.\test.ps1 -Platform x64 -Configuration Debug
+.\format.ps1 -Check
+```
+
+Expected: zero MSBuild warnings or errors; `.build\x64\<Configuration>\RedPrism.exe` exists; ASan Debug binaries are
+really instrumented.

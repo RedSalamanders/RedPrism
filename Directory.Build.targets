@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='ASan Debug'">
+    <ClCompile>
+      <EnableASAN>true</EnableASAN>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <ForcedIncludeFiles>$(MSBuildThisFileDirectory)Common\RequireAddressSanitizer.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <Target Name="ValidateRedPrismBuildConfiguration" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)'!='x64' and '$(Platform)'!='ARM64'" Text="RedPrism supports x64 and ARM64." />
+    <Error Condition="'$(Configuration)'!='Debug' and '$(Configuration)'!='Release' and '$(Configuration)'!='ASan Debug'" Text="RedPrism supports Debug, Release and ASan Debug." />
+  </Target>
+  <PropertyGroup>
+    <RedPrismVcpkgRuntimeDir Condition="('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\debug\bin\</RedPrismVcpkgRuntimeDir>
+    <RedPrismVcpkgRuntimeDir Condition="'$(Configuration)'=='Release'">$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\bin\</RedPrismVcpkgRuntimeDir>
+  </PropertyGroup>
+
+  <Target Name="CopyRedPrismRuntimeDependencies" AfterTargets="Link"
+          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests')">
+    <ItemGroup>
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)yyjson.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(RedPrismRuntimeDependency.Identity)')"
+           Text="Missing vcpkg runtime dependency: %(RedPrismRuntimeDependency.Identity). Run .\vcpkg-install.ps1 -Platform $(Platform)." />
+    <Copy SourceFiles="@(RedPrismRuntimeDependency)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

@@ -1,0 +1,36 @@
+#include "resource.h"
+#include "../Common/Version.h"
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION REDPRISM_VERSION_NUMERIC
+ PRODUCTVERSION REDPRISM_VERSION_NUMERIC
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", REDPRISM_VERSION_COMPANY "\0"
+            VALUE "FileDescription", "RedPrism raster composition\0"
+            VALUE "FileVersion", REDPRISM_VERSION_STRING "\0"
+            VALUE "InternalName", "RedPrism\0"
+            VALUE "LegalCopyright", REDPRISM_VERSION_COPYRIGHT "\0"
+            VALUE "OriginalFilename", "RedPrism.exe\0"
+            VALUE "ProductName", REDPRISM_VERSION_PRODUCT "\0"
+            VALUE "ProductVersion", REDPRISM_VERSION_STRING "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
