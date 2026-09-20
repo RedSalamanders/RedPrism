@@ -2,7 +2,7 @@
 
 Status: current normative repository contract
 Last reviewed: 2026-09-20
-Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `vcpkg-install.ps1`, `format.ps1`
+Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `format.ps1`
 
 ## Scope
 
@@ -51,6 +51,18 @@ MUST refuse to run on a non-ARM64 host.
 
 `.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
 
+## Build presentation
+
+`build.ps1` MUST begin with the framed RedPrism pixel-art banner before any target, preflight, or MSBuild line. The
+banner is a raster prism mark: incoming beam, glass triangle, dispersed spectrum, composition layer chips, and a canvas
+checker, then a spectrum `REDPRISM` wordmark. It MUST include the tagline `REDPRISM // RASTER COMPOSITION // BUILD LOCKED`.
+On color hosts the spectrum is painted per pixel (24-bit when the host advertises truecolor or Windows Terminal);
+plain and redirected capture keep the same block geometry without terminal control sequences. This mark is RedPrism's,
+not a copy of another product banner.
+
+`Tests/BuildProcessTests/BuildPresentationTests.ps1` MUST prove banner identity, even scene geometry, interactive-host
+selection, and that a CI-style redirected console is not treated as a color host.
+
 ## Exact-output process preflight
 
 Before dependency installation, cleaning, rebuilding, or building, `build.ps1` MUST inspect running `RedPrism.exe`
@@ -72,14 +84,16 @@ only a process whose `Win32_Process.ExecutablePath`, after absolute-path normali
 | `vcpkg-tool.json` commit and `vcpkg.json` `builtin-baseline` | `9e593bb18ea69cc5095e012465dcd675a822ed0d` |
 | WIL | `version>="1.0.260126.7"` |
 | yyjson | `version>="0.12.0"` |
+| libzip | `default-features: false` (zlib is restored as its dependency) |
 
-C1 dependencies are WIL and yyjson only. libzip is C5. onnxruntime is a later product decision. `curl`, `webview2`,
+C0–C4 used WIL and yyjson only. C5 adds libzip. onnxruntime is a later product decision. `curl`, `webview2`,
 `aws-sdk-cpp`, `sqlite3`, `7zip`, `ftxui`, `pe-parse`, `libjpeg-turbo`, `libpng`, and `libraw` MUST NOT be added by
 this contract.
 
 `vcpkg-install.ps1` clones the pinned tooling under `.build/vcpkg-tool/`, bootstraps it, and installs into the
 platform-scoped tree. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
-are wired from that tree. `Directory.Build.targets` copies `yyjson.dll` next to `RedPrism.exe` and `HostTests.exe`.
+are wired from that tree. `Directory.Build.targets` copies `yyjson.dll`, `zip.dll`, and the zlib runtime (`z.dll` /
+`zd.dll` or `zlib1.dll`) next to `RedPrism.exe`, `HostTests.exe`, `IoTests.exe`, and `CompositionTests.exe`.
 
 `build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform before MSBuild.
 
@@ -94,7 +108,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 
 | Script | Duty |
 | --- | --- |
-| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All]` | Restore WIL and yyjson |
+| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All]` | Restore WIL, yyjson, and libzip |
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64]` | Restore the exact DxUi pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
@@ -106,8 +120,9 @@ invocation writes a UTF-8 log under `.build/logs/`.
 
 ## Solution shape
 
-`RedPrism.sln` contains `RedPrism` (Win32 GUI) and `HostTests` (console). `Common/` is header-only and has no `.vcxproj`.
-A later `Shaders/` project or build-time FXC/DXC step is owned by the rendering contracts, not this file.
+`RedPrism.sln` contains `RedPrism` (Win32 GUI), `HostTests`, `DocumentTests`, `IoTests`, and `CompositionTests`.
+`Common/` sources compile into those test and app projects. HLSL under `RedPrism/Shaders/` is compiled with FXC into
+headers consumed by `CanvasRenderer`.
 
 ## Validation
 

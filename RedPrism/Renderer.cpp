@@ -1,6 +1,9 @@
 #include "Renderer.h"
 
+#include "CanvasRenderer.h"
+#include "CanvasViewport.h"
 #include "ChromeHost.h"
+#include "Document.h"
 
 #include <array>
 #include <cstring>
@@ -440,7 +443,13 @@ UINT Renderer::Height() const noexcept
     return _height;
 }
 
-HRESULT Renderer::Render(ChromeHost* chrome) noexcept
+ID3D11DeviceContext* Renderer::Context() const noexcept
+{
+    return _context.get();
+}
+
+HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
+                         const CanvasDocument* document) noexcept
 {
     if (_suspended)
     {
@@ -457,19 +466,36 @@ HRESULT Renderer::Render(ChromeHost* chrome) noexcept
 
     if (chrome)
     {
-        HRESULT chromeResult = chrome->Prepare(_width, _height, static_cast<float>(GetDpiForWindow(_window)));
+        HRESULT chromeResult = chrome->Prepare(
+            _width, _height, _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window)));
         if (FAILED(chromeResult))
         {
             return chromeResult;
         }
-        D3D11_VIEWPORT viewport{};
-        viewport.Width = static_cast<float>(_width);
-        viewport.Height = static_cast<float>(_height);
-        viewport.MaxDepth = 1.0f;
-        chromeResult = chrome->Composite(_context.get(), viewport);
+        D3D11_VIEWPORT viewportDx{};
+        viewportDx.Width = static_cast<float>(_width);
+        viewportDx.Height = static_cast<float>(_height);
+        viewportDx.MaxDepth = 1.0f;
+        chromeResult = chrome->Composite(_context.get(), viewportDx);
         if (FAILED(chromeResult))
         {
             return chromeResult;
+        }
+    }
+
+    if (composition && composition->HasDevice() && document && viewport && chrome)
+    {
+        HRESULT composeResult = composition->Compose(*document);
+        if (FAILED(composeResult))
+        {
+            return composeResult;
+        }
+        const CanvasHole hole = chrome->HolePixels();
+        composeResult = composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left, hole.top,
+                                                 hole.width, hole.height);
+        if (FAILED(composeResult))
+        {
+            return composeResult;
         }
     }
 

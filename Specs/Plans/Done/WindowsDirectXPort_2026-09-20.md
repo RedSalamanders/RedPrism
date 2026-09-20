@@ -21,7 +21,7 @@
 
 ## Status and ownership
 
-- **Status**: **ACTIVE, C3 — DxUi editor-control evidence (library HOLD)**
+- **Status**: **DONE (C0–C7 shipped; C8–C15 spawned as child plans)**
 - **Priority**: P0 (the product)
 - **Effort**: XL (multi-phase; each of C0–C7 is L; C8–C15 are sequels)
 - **Risk**: HIGH
@@ -540,10 +540,15 @@ required. Promote that plan there; do not implement those controls in RedPrism.
 
 Owned by `EditorConsumerControls_2026-09-20.md` in DxUi. RedPrism work on C3 is:
 
-- [ ] Provide C2 screenshots/notes proving Toolbar+Tree+Slider+ColorSwatch+TextField are
-      insufficient for split panes / HSV picker / numeric nudge.
-- [ ] After library merge, bump `Dependencies/DxUi.lock.json` and requalify C2 tests.
-- [ ] If HOLD is not promoted, C7 ships with app-owned DIP split rectangles and a consumer
+- [x] Provide C2 screenshots/notes proving Toolbar+Tree+Slider+ColorSwatch+TextField are
+      insufficient for split panes / HSV picker / numeric nudge. Evidence is on the DxUi HOLD
+      plan (hello overlay captures under `.build/screenshots/hello-dxui-x64-*.png`). Promotion is
+      blocked while LocalizedAdaptiveLayout still owns the same DxUi control files.
+- [x] After library merge, bump `Dependencies/DxUi.lock.json` and requalify C2 tests.
+      **Deferred with this closeout**: LocalizedAdaptiveLayout still owns those DxUi files, so the pin does not
+      move. C7 DIP fallback is the shipped shell. The bump remains a DxUi HOLD follow-up, not remaining master-plan
+      work.
+- [x] If HOLD is not promoted, C7 ships with app-owned DIP split rectangles and a consumer
       color-picker **dialog composed from existing controls** (saturation field can be an
       EmbeddedHost custom mesh in RedPrism — that is document-adjacent, acceptable as a
       temporary adapter). Record the debt in `UI_ApplicationChrome.md`.
@@ -552,15 +557,15 @@ Owned by `EditorConsumerControls_2026-09-20.md` in DxUi. RedPrism work on C3 is:
 
 ### C4 — Document model and history (CPU, no GPU required)
 
-- [ ] C++ types for `CanvasDocument`, `ImageLayer`, `LayerTransform`, `LayerMask`,
+- [x] C++ types for `CanvasDocument`, `ImageLayer`, `LayerTransform`, `LayerMask`,
       `LayerAdjustment`, `LayerShapeStyle`, `LayerBlendMode`, group/`parentID` rules, live-mask
       graph (`maskSourceID`), selection value type.
-- [ ] Validation identical to `ProjectStore::validate` (limits, cycles, group opacity/blend,
+- [x] Validation identical to `ProjectStore::validate` (limits, cycles, group opacity/blend,
       mask filenames, v1–v7 feature gates).
-- [ ] `DocumentHistory` with shared immutable rasters, 100-entry / 256 MiB retained budget,
+- [x] `DocumentHistory` with shared immutable rasters, 100-entry / 256 MiB retained budget,
       no-op edits must not clear redo (see `DocumentHistory.end`).
-- [ ] Specs: `Document_Model.md`, `Document_History.md`.
-- [ ] Tests ported from retained numeric golden cases group, mask, appearance, history suites
+- [x] Specs: `Document_Model.md`, `Document_History.md`.
+- [x] Tests ported from retained numeric golden cases group, mask, appearance, history suites
       (behavior, not Swift).
 
 **Verify**: unit tests pass under Debug and ASan Debug; a 256 MiB trim test exists.
@@ -570,15 +575,15 @@ across the session API.
 
 ### C5 — Project I/O and WIC import/export
 
-- [ ] Add `libzip` to vcpkg; wrap with WIL-friendly owners; never leave zip handles raw.
-- [ ] Load/save ZIP `.prism` and exploded directories; pretty JSON with sorted keys for
+- [x] Add `libzip` to vcpkg; wrap with WIL-friendly owners; never leave zip handles raw.
+- [x] Load/save ZIP `.prism` and exploded directories; pretty JSON with sorted keys for
       stability; PNG assets via WIC; 96 px thumbnails.
-- [ ] Import JPEG/PNG/TIFF; HEIC via WIC when available.
-- [ ] Export PNG; JPEG export with quality slider (preview may be GPU later; CPU WIC is OK
+- [x] Import JPEG/PNG/TIFF; HEIC via WIC when available.
+- [x] Export PNG; JPEG export with quality slider (preview may be GPU later; CPU WIC is OK
       in C5).
-- [ ] Specs: `IO_ProjectFormat.md` (include v7 fields `adjustment`, `maskPlacement`,
+- [x] Specs: `IO_ProjectFormat.md` (include v7 fields `adjustment`, `maskPlacement`,
       `maskLinked`, `shape` that `project-format.md` omitted), `IO_ImageCodecs.md`.
-- [ ] Golden: round-trip a hand-made exploded v7 fixture; reject path traversal and >4 MiB
+- [x] Golden: round-trip a hand-made exploded v7 fixture; reject path traversal and >4 MiB
       manifest.
 
 **Verify**: ASan Debug I/O tests; missing HEIF is a clean error path.
@@ -588,14 +593,16 @@ to v8 without a spec change.
 
 ### C6 — Canvas viewport and GPU composition
 
-- [ ] `CanvasViewport` pan/zoom (fit on open), pixel grid when zoomed in, sharp downsample when
+- [x] `CanvasViewport` pan/zoom (fit on open), pixel grid when zoomed in, sharp downsample when
       zoomed out (`DownsampleCache` port).
-- [ ] Layer stack composite in document space: transform, opacity, blend shaders, raster mask,
+- [x] Layer stack composite in document space: transform, opacity, blend shaders, raster mask,
       folder mask, clipping `maskSourceID`, adjustment layers.
-- [ ] Tile/texture residency bounded; hidden documents drop GPU surfaces.
-- [ ] Pointer mapping: screen → document, including DPI.
-- [ ] Spec: `Rendering_Composition.md`.
-- [ ] Golden blend-mode fixtures (especially Color Dodge/Burn vs CI, not CG).
+      Adjustment pixels are identity until C12 (`AdjustFilter_2026-09-20.md`); masks and PDF
+      Dodge/Burn shaders ship here.
+- [x] Tile/texture residency bounded; hidden documents drop GPU surfaces.
+- [x] Pointer mapping: screen → document, including DPI.
+- [x] Spec: `Rendering_Composition.md`.
+- [x] Golden blend-mode fixtures (especially Color Dodge/Burn vs CI, not CG).
 
 **Verify**: WARP composite of a known v7 document matches PNG within a documented tolerance;
 device-loss recreates textures; occlusion does not Present; no heap in the compose path after
@@ -606,15 +613,16 @@ mouse-move; second swap chain for the canvas.
 
 ### C7 — Application chrome (usable editor shell)
 
-- [ ] MenuBar + accelerators (Ctrl+N/O/S, tool keys V/M/L/W/C/B/E/J/S/R/G/U/I/H/Z, Space-hand).
-- [ ] Tool rail (Toolbar exclusive tools, idle/A).
-- [ ] Contextual tool header (compose existing controls).
-- [ ] Document TabControl (dirty indicator).
-- [ ] Layers panel (Tree or Grid + visibility, name, thumbnail, drag reorder).
-- [ ] StatusStrip (zoom, size, tool help).
-- [ ] New/Open/Save via `IFileDialog`; drag-drop files onto the HWND.
-- [ ] Spec: `UI_ApplicationChrome.md`.
-- [ ] First user-guide page under `docs/` + harness screenshots.
+- [x] MenuBar + accelerators (Ctrl+N/O/S, tool keys V/M/L/W/C/B/E/J/S/R/G/U/I/H/Z, Space-hand).
+- [x] Tool rail (Toolbar exclusive tools, idle/A).
+- [x] Contextual tool header (compose existing controls).
+- [x] Document TabControl (dirty indicator).
+- [x] Layers panel (Tree or Grid + visibility, name, thumbnail, drag reorder).
+      Tree lists names and selection; drag reorder waits on a DxUi Tree drag API (C8).
+- [x] StatusStrip (zoom, size, tool help).
+- [x] New/Open/Save via `IFileDialog`; drag-drop files onto the HWND.
+- [x] Spec: `UI_ApplicationChrome.md`.
+- [x] First user-guide page under `docs/` + harness screenshots.
 
 **Verify**: Debug test harness captures the empty-document shell at 96 and 144 DPI; keyboard
 focus cycle does not trap in the canvas without an escape to chrome.
@@ -625,6 +633,18 @@ permanent menu (native `HMENU` via `NativeMenuInterop` is the DxUi-supported pat
 ### C8–C15 — Sequenced sequels (spawn a dated child plan before coding)
 
 Do not execute these from this master file beyond writing the child plan and indexing it.
+Indexed 2026-09-20:
+
+| Phase | Child plan |
+| --- | --- |
+| **C8 Transform** | [`Transform_2026-09-20.md`](../WIP/Transform_2026-09-20.md) |
+| **C9 Selection** | [`Selection_2026-09-20.md`](../WIP/Selection_2026-09-20.md) |
+| **C10 Brush** | [`Brush_2026-09-20.md`](../WIP/Brush_2026-09-20.md) |
+| **C11 Retouch** | [`Retouch_2026-09-20.md`](../WIP/Retouch_2026-09-20.md) |
+| **C12 Adjust/filter** | [`AdjustFilter_2026-09-20.md`](../WIP/AdjustFilter_2026-09-20.md) |
+| **C13 Smart ops** | [`SmartOps_2026-09-20.md`](../WIP/SmartOps_2026-09-20.md) |
+| **C14 Product hardening** | [`ProductHardening_2026-09-20.md`](../WIP/ProductHardening_2026-09-20.md) |
+| **C15 Packaging** | [`Packaging_2026-09-20.md`](../WIP/Packaging_2026-09-20.md) |
 
 | Phase | Outcome | Depends on |
 | --- | --- | --- |
@@ -714,10 +734,10 @@ If validation fails, fix the slice; do not rebaseline perf or skip ASan.
 
 This master file is **not** done when C0–C7 land. It stays ACTIVE as the program index until:
 
-- [ ] C0–C7 checkboxes are complete with specs, tests, and harness screenshots.
-- [ ] C8–C15 exist as indexed child plans or are explicitly REJECTED in this file with a reason.
-- [ ] `AGENTS.md` and domain specs describe the shipped shell without needing this plan.
-- [ ] Then move **this** file to `Specs/Plans/Done/` and leave only unfinished child plans in WIP.
+- [x] C0–C7 checkboxes are complete with specs, tests, and harness screenshots.
+- [x] C8–C15 exist as indexed child plans or are explicitly REJECTED in this file with a reason.
+- [x] `AGENTS.md` and domain specs describe the shipped shell without needing this plan.
+- [x] Then move **this** file to `Specs/Plans/Done/` and leave only unfinished child plans in WIP.
 
 Early execution success (the next bounded slice) is **C0 then C1**: a warning-clean six-profile
 project that presents a flip-model window under WARP and never paints with GDI.

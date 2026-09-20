@@ -82,6 +82,7 @@ void TestCommandLine() noexcept
     Expect(RedPrismFindSwitch(L"--warp") != nullptr, "cli.warp");
     Expect(RedPrismFindSwitch(L"--self-test") != nullptr, "cli.self-test");
     Expect(RedPrismFindSwitch(L"--screenshot") != nullptr, "cli.screenshot");
+    Expect(RedPrismFindSwitch(L"--dpi") != nullptr, "cli.dpi");
     Expect(RedPrismFindSwitch(L"--no-such") == nullptr, "cli.unknown-switch");
 
     wchar_t unknown[] = L"--no-such";
@@ -98,9 +99,15 @@ void TestCommandLine() noexcept
     Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath == std::wstring_view{png},
            "cli.screenshot-parse");
 
+    wchar_t dpiSwitch[] = L"--dpi";
+    wchar_t dpiValue[] = L"144";
+    wchar_t* dpiArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, png, dpiSwitch, dpiValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(dpiArgs, 5, parsed, &error) && parsed.screenshotDpi == 144, "cli.dpi-parse");
+
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
-               help.find(L"--screenshot") != std::wstring::npos,
+               help.find(L"--screenshot") != std::wstring::npos && help.find(L"--dpi") != std::wstring::npos,
            "cli.help-text");
 }
 } // namespace

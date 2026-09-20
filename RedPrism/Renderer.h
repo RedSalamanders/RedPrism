@@ -15,6 +15,9 @@
 #pragma warning(pop)
 
 class ChromeHost;
+class CanvasRenderer;
+struct CanvasViewport;
+struct CanvasDocument;
 
 class Renderer final
 {
@@ -41,8 +44,14 @@ class Renderer final
     void Shutdown() noexcept;
     void SetChrome(ChromeHost* chrome) noexcept;
     HRESULT Resize(UINT width, UINT height) noexcept;
-    HRESULT Render(ChromeHost* chrome) noexcept;
+    HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
+                   const CanvasDocument* document) noexcept;
+    void SetLayoutDpi(float dpi) noexcept
+    {
+        _layoutDpi = dpi;
+    }
     [[nodiscard]] ID3D11Device* Device() const noexcept;
+    [[nodiscard]] ID3D11DeviceContext* Context() const noexcept;
     [[nodiscard]] UINT Width() const noexcept;
     [[nodiscard]] UINT Height() const noexcept;
     HRESULT ProbeOcclusion() noexcept;
@@ -87,4 +96,5 @@ class Renderer final
     HMONITOR _deviceMonitor = nullptr;
     DWORD _occlusionStatusCookie = 0;
     bool _occlusionStatusRegistered = false;
+    float _layoutDpi = 0;
 };

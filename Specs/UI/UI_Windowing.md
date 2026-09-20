@@ -59,7 +59,8 @@ command line.`) shown the same way.
 | *(none)* | Create the titled Direct3D 11 window and run the idle message loop |
 | `--warp` | Force WARP (Microsoft Basic Render Driver) |
 | `--self-test` | Create the titled window **hidden**, force WARP, assert the DPI-adjusted 1280×800 logical client, composite DxUi chrome, prove visible surface then 0 when hidden, exit 0 |
-| `--screenshot <png>` | Show the titled window without activating it, present chrome, capture through Windows.Graphics.Capture, exit 0 or 8 |
+| `--screenshot <png>` | Show the titled window without activating it, present chrome and the canvas, capture through Windows.Graphics.Capture, exit 0 or 8 |
+| `--dpi 96\|144` | Override layout DPI and the 1280×800 logical client scale for `--screenshot` |
 | `--help` | Print the catalog and exit 0 |
 
 `--self-test` without `--warp` still uses WARP. Self-test MUST refuse a non-WARP device (exit 5).
@@ -82,4 +83,4 @@ Before initializing the renderer, `--self-test` MUST verify:
 ```
 
 `HostTests` pins the catalog. `test.ps1` runs `--help` with redirected stdout, rejects `--no-such-switch` with exit 2,
-runs hidden `--self-test --warp`, and captures `--screenshot` without stealing focus.
+runs hidden `--self-test --warp`, and captures `--screenshot --dpi 96` and `--dpi 144` without stealing focus.

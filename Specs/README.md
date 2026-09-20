@@ -53,7 +53,13 @@ When a spec, implementation, test, or document disagrees:
 | Architecture | [`Core/Core_Architecture.md`](Core/Core_Architecture.md) |
 | Performance | [`Core/Core_PerformanceAndResources.md`](Core/Core_PerformanceAndResources.md) |
 | DxUi pin (from C2) | [`Core/Core_DxUiIntegration.md`](Core/Core_DxUiIntegration.md) |
+| Document model (from C4) | [`Document/Document_Model.md`](Document/Document_Model.md) |
+| Document history (from C4) | [`Document/Document_History.md`](Document/Document_History.md) |
+| Application chrome | [`UI/UI_ApplicationChrome.md`](UI/UI_ApplicationChrome.md) |
 | Windowing | [`UI/UI_Windowing.md`](UI/UI_Windowing.md) |
+| Project I/O | [`IO/IO_ProjectFormat.md`](IO/IO_ProjectFormat.md) |
+| Image codecs | [`IO/IO_ImageCodecs.md`](IO/IO_ImageCodecs.md) |
+| Canvas composition | [`Rendering/Rendering_Composition.md`](Rendering/Rendering_Composition.md) |
 | Testing | [`Testing/Testing_Validation.md`](Testing/Testing_Validation.md) |
 
 `Core/Core_DxUiIntegration.md` is the consumer pin contract.

@@ -24,6 +24,7 @@ Outputs are always `.build/<Platform>/<Configuration>/`. Intermediates are under
 Pinned vcpkg state stays beneath `.build/`. Do not substitute a developer-global install.
 
 `build.ps1` discovers Visual Studio, including prerelease instances. Do not hardcode a developer installation path.
+It begins with the framed RedPrism pixel-art banner owned by `Build/BuildPresentation.psm1`.
 
 Every build, clean, and rebuild preflights the selected `RedPrism.exe` output. A running process whose normalized
 path exactly matches that output blocks the build with diagnostics and is never terminated.

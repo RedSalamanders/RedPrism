@@ -20,11 +20,17 @@
   </PropertyGroup>
 
   <Target Name="CopyRedPrismRuntimeDependencies" AfterTargets="Link"
-          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests')">
+          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests' or '$(MSBuildProjectName)'=='IoTests' or '$(MSBuildProjectName)'=='CompositionTests')">
     <ItemGroup>
       <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)yyjson.dll" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)zip.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)zip.dll')" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)zipd.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)zipd.dll')" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)z.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)z.dll')" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)zd.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)zd.dll')" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)zlib1.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)zlib1.dll')" />
+      <RedPrismRuntimeDependency Include="$(RedPrismVcpkgRuntimeDir)zlibd1.dll" Condition="Exists('$(RedPrismVcpkgRuntimeDir)zlibd1.dll')" />
     </ItemGroup>
-    <Error Condition="!Exists('%(RedPrismRuntimeDependency.Identity)')"
+    <Error Condition="'%(RedPrismRuntimeDependency.Identity)'!='' and !Exists('%(RedPrismRuntimeDependency.Identity)')"
            Text="Missing vcpkg runtime dependency: %(RedPrismRuntimeDependency.Identity). Run .\vcpkg-install.ps1 -Platform $(Platform)." />
     <Copy SourceFiles="@(RedPrismRuntimeDependency)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>

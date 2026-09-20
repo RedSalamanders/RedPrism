@@ -2,7 +2,7 @@
 
 Status: current normative product contract
 Last reviewed: 2026-09-20
-Owner: `Application` frame loop, `Renderer`, and (from later phases) Document GPU and DxUi adapters
+Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
 
@@ -26,7 +26,8 @@ state change is pending. Operating-system scheduling noise is outside this contr
 - `Renderer::Render` MUST NOT run from `WM_PAINT`.
 - Hidden, minimized, or zero-size client: no `Present`, no render-target create. The swap chain MAY remain allocated
   at the last non-zero size until a later resize; a zero-size `WM_SIZE` suspends Present and MUST NOT call
-  `ResizeBuffers` to 0×0 as a way to keep presenting.
+  `ResizeBuffers` to 0×0 as a way to keep presenting. Hidden documents MUST drop canvas GPU surfaces
+  (`CanvasRenderer::CanvasSurfaceBytes() == 0`).
 - After `Present` reports `DXGI_STATUS_OCCLUDED`, stop content presents, wait for the DXGI factory occlusion-status
   window message, and recover with `DXGI_PRESENT_TEST` only. Occlusion polling is prohibited.
 - The swap chain MUST be created with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame latency 1.

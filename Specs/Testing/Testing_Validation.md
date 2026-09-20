@@ -2,7 +2,7 @@
 
 Status: current normative repository contract
 Last reviewed: 2026-09-20
-Owner: `test.ps1`, `Tests/HostTests`, and `RedPrism.exe` diagnostic switches
+Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
 
@@ -28,8 +28,12 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 | Help | `RedPrism.exe --help` exit 0; redirected stdout contains `--self-test` |
 | Unknown switch | `RedPrism.exe --no-such-switch` exit 2 |
 | WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0; visible DxUi surface then 0 when hidden |
+| DocumentTests | `DocumentTests.exe` exit 0 (graph, `ProjectStore`-identical validation, history budget) |
+| CompositionTests | `CompositionTests.exe` exit 0 (viewport mapping, WARP Multiply and Color Dodge goldens, device-loss recreate, hidden canvas bytes 0) |
+| IoTests | `IoTests.exe` exit 0 (v7 exploded/ZIP round-trip, path-traversal reject, 4 MiB manifest reject, missing HEIF clean error) |
 | Provenance | `DxUi.provenance.json` matches the lock; wrong-pin fixtures are rejected |
-| Harness screenshot | `--screenshot <png> --warp` writes a PNG or exits 8 when capture is unavailable |
+| Build presentation | Framed pixel-art banner identity, even scene geometry, and interactive-terminal selection |
+| Harness screenshot | `--screenshot <png> --warp --dpi 96` and `--dpi 144` each write a PNG of the empty-document shell, or exit 8 when capture is unavailable |
 
 `ASAN_OPTIONS` for the probe is `halt_on_error=1:abort_on_error=0:detect_leaks=0`.
 
@@ -37,11 +41,9 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 
 | When | Gate |
 | --- | --- |
-| C4 | Document/history unit tests under Debug and ASan Debug; 256 MiB trim test |
-| C5 | ASan I/O tests; exploded v7 fixture round-trip; path-traversal reject; missing HEIF is a clean error |
-| C6 | WARP composite golden; device-loss recreate; occlusion does not Present |
-| C7 | Harness screenshots of the empty-document shell at 96 and 144 DPI |
 | C8–C13 | Tool and filter goldens ported from retained numeric golden cases behavior, not UI-driver scripts |
+| C14 | Settings, crash, localization, UIA |
+| C15 | Portable ZIP packaging |
 
 In-process tests live under `Tests/` and are invoked by `test.ps1`. GUI tests default to no-activation. Interactive
 desktop focus requires an explicit lease in a later spec.

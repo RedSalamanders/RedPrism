@@ -35,6 +35,10 @@ $repoRoot = Split-Path -Parent $PSCommandPath
 $solutionPath = Join-Path $repoRoot 'RedPrism.sln'
 $executable = Join-Path $repoRoot ".build\$Platform\$Configuration\RedPrism.exe"
 
+Import-Module (Join-Path $repoRoot 'Build\BuildPresentation.psm1') -Force
+$useInteractiveTerminal = Test-RedPrismInteractiveTerminal
+Write-RedPrismBuildBanner -UseColor $useInteractiveTerminal
+
 function Assert-BuildOutputProcessNotRunning {
     param([string] $ExpectedExecutablePath)
     if (-not (Test-Path -LiteralPath $ExpectedExecutablePath -PathType Leaf)) {

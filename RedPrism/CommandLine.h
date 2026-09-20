@@ -11,6 +11,7 @@ enum class RedPrismSwitch : uint8_t
     Warp,
     SelfTest,
     Screenshot,
+    Dpi,
     Count,
 };
 
@@ -36,6 +37,7 @@ struct RedPrismCommandLine final
     bool warp = false;
     bool selfTest = false;
     const wchar_t* screenshotPath = nullptr;
+    uint32_t screenshotDpi = 0;
 };
 
 inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help", L"-h", L"/?", L"-?"};
@@ -55,6 +57,9 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"<png>",
                                   L"Show the window without activating it, present chrome, capture it through "
                                   L"Windows.Graphics.Capture, and exit: 0 written, 8 failed.",
+                                  L"Diagnostics"},
+        RedPrismCommandLineSwitch{RedPrismSwitch::Dpi, L"--dpi", nullptr, RedPrismSwitchValue::Separate, L"<96|144>",
+                                  L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
                                   L"Diagnostics"},
     };
 
@@ -155,6 +160,35 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             }
             parsed.screenshotPath = arguments[++index];
             break;
+        case RedPrismSwitch::Dpi:
+            if (index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
+            {
+                if (errorToken)
+                {
+                    *errorToken = arguments[index];
+                }
+                return false;
+            }
+            {
+                const std::wstring_view text{arguments[++index]};
+                if (text == L"96")
+                {
+                    parsed.screenshotDpi = 96;
+                }
+                else if (text == L"144")
+                {
+                    parsed.screenshotDpi = 144;
+                }
+                else
+                {
+                    if (errorToken)
+                    {
+                        *errorToken = arguments[index];
+                    }
+                    return false;
+                }
+            }
+            break;
         case RedPrismSwitch::Count:
             break;
         }
@@ -168,7 +202,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     text += L"RedPrism — Windows raster composition\n\n";
     text += L"Usage: RedPrism.exe [--warp]\n";
     text += L"       RedPrism.exe --self-test [--warp]\n";
-    text += L"       RedPrism.exe --screenshot <png> [--warp]\n";
+    text += L"       RedPrism.exe --screenshot <png> [--warp] [--dpi 96|144]\n";
     text += L"       RedPrism.exe --help\n";
     text += L"\nWithout switches RedPrism opens a titled Direct3D 11 window with DxUi chrome.\n";
     for (const wchar_t* group : kRedPrismCommandLineGroups)

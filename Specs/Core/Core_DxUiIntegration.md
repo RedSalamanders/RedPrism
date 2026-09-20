@@ -39,6 +39,14 @@ EmbeddedHost holds no cached surface (0 bytes). Visible surface stays within the
 
 DxUi C++ stays inside `RedPrism.exe`. Never pass DxUi types, STL, WIL, or exceptions across a future plugin ABI.
 
+## C7 fallback until library promotion
+
+`EditorConsumerControls_2026-09-20.md` stays HOLD while LocalizedAdaptiveLayout owns the same DxUi control
+files. C2 evidence (hello overlay + catalog gaps for Splitter, ColorPicker, and NumericStepper) is attached
+there. Until the pin moves, chrome layout debt is in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md):
+app-owned DIP split rectangles, a ColorSwatch-launched dialog from existing controls, and TextField numeric
+nudge. Do not implement those three controls in RedPrism.
+
 ## Screenshot harness
 
 `--screenshot <png>` shows the titled window with `SW_SHOWNOACTIVATE`, presents chrome, waits 300 ms on a one-shot

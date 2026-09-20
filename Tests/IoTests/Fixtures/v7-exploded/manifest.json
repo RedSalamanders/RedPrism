@@ -1,0 +1,77 @@
+{
+  "activeLayerID": "00000000-0000-4000-8000-000000000002",
+  "colorSpace": "sRGB",
+  "documentID": "00000000-0000-4000-8000-000000000001",
+  "format": "com.redprism.project",
+  "height": 2,
+  "layers": [
+    {
+      "blendMode": "Multiply",
+      "id": "00000000-0000-4000-8000-000000000002",
+      "imageFile": "00000000-0000-4000-8000-000000000002.png",
+      "isVisible": true,
+      "name": "Red",
+      "opacity": 1,
+      "transform": {
+        "flipX": false,
+        "flipY": false,
+        "origin": {"x": 0, "y": 0},
+        "rotation": 0,
+        "sampling": "High quality",
+        "size": {"height": 2, "width": 2}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "isGroup": true,
+      "isVisible": true,
+      "name": "Group",
+      "transform": {
+        "flipX": false,
+        "flipY": false,
+        "origin": {"x": 0, "y": 0},
+        "rotation": 0,
+        "sampling": "High quality",
+        "size": {"height": 2, "width": 2}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "imageFile": "00000000-0000-4000-8000-000000000004.png",
+      "isVisible": true,
+      "name": "Child",
+      "parentID": "00000000-0000-4000-8000-000000000003",
+      "transform": {
+        "flipX": false,
+        "flipY": false,
+        "origin": {"x": 0, "y": 0},
+        "rotation": 0,
+        "sampling": "High quality",
+        "size": {"height": 2, "width": 2}
+      }
+    },
+    {
+      "adjustment": {
+        "colorize": false,
+        "hue": 0,
+        "kind": "Hue/Saturation",
+        "lightness": 0,
+        "saturation": 0
+      },
+      "id": "00000000-0000-4000-8000-000000000005",
+      "isVisible": true,
+      "name": "Hue/Saturation",
+      "transform": {
+        "flipX": false,
+        "flipY": false,
+        "origin": {"x": 0, "y": 0},
+        "rotation": 0,
+        "sampling": "High quality",
+        "size": {"height": 2, "width": 2}
+      }
+    }
+  ],
+  "resolution": 72,
+  "version": 7,
+  "width": 2
+}

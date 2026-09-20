@@ -50,6 +50,27 @@ if ($LASTEXITCODE -ne 0) {
     throw "HostTests.exe failed with exit code $LASTEXITCODE."
 }
 
+Write-Host 'Running document model tests...' -ForegroundColor Cyan
+$documentTests = Join-Path $outputRoot 'DocumentTests.exe'
+& $documentTests
+if ($LASTEXITCODE -ne 0) {
+    throw "DocumentTests.exe failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Running composition tests...' -ForegroundColor Cyan
+$compositionTests = Join-Path $outputRoot 'CompositionTests.exe'
+& $compositionTests
+if ($LASTEXITCODE -ne 0) {
+    throw "CompositionTests.exe failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Running project I/O tests...' -ForegroundColor Cyan
+$ioTests = Join-Path $outputRoot 'IoTests.exe'
+& $ioTests
+if ($LASTEXITCODE -ne 0) {
+    throw "IoTests.exe failed with exit code $LASTEXITCODE."
+}
+
 if ($Configuration -eq 'ASan Debug') {
     $probeLog = Join-Path $repoRoot ".build\logs\ASan-probe-$Platform-$([guid]::NewGuid().ToString('N')).log"
     New-Item -ItemType Directory -Path (Split-Path $probeLog) -Force | Out-Null
@@ -80,7 +101,7 @@ if ($help.ExitCode -ne 0) {
     throw "RedPrism.exe --help exited with code $($help.ExitCode)."
 }
 $helpText = Get-Content -LiteralPath $helpLog -Raw -ErrorAction SilentlyContinue
-if ($helpText -notmatch '--self-test') {
+if ($helpText -notmatch '--self-test' -or $helpText -notmatch '--dpi') {
     throw 'RedPrism.exe --help did not print the command catalog.'
 }
 
@@ -108,28 +129,40 @@ if ($LASTEXITCODE -ne 0) {
     throw "DxUi provenance tests failed with exit code $LASTEXITCODE."
 }
 
-Write-Host 'Capturing harness screenshot...' -ForegroundColor Cyan
+Write-Host 'Validating build presentation...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\BuildPresentationTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "Build presentation tests failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 $shotDir = Join-Path $repoRoot '.build\screenshots'
 New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
-$shotPath = Join-Path $shotDir "hello-dxui-$Platform-$($Configuration -replace '\s','').png"
-Remove-Item -LiteralPath $shotPath -ErrorAction SilentlyContinue
-$shotLog = Join-Path $outputRoot 'RedPrism.screenshot.log'
-$shotErr = Join-Path $outputRoot 'RedPrism.screenshot.err.log'
-Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
-$shot = Start-Process -FilePath $executable -ArgumentList @('--screenshot', $shotPath, '--warp') -Wait -PassThru `
-    -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
-if ($shot.ExitCode -eq 8) {
-    Write-Host "SKIP harness screenshot (capture unavailable, exit 8)." -ForegroundColor Yellow
-} elseif ($shot.ExitCode -ne 0) {
-    throw "RedPrism.exe --screenshot exited with code $($shot.ExitCode)."
-} elseif (-not (Test-Path -LiteralPath $shotPath -PathType Leaf)) {
-    throw "Screenshot was not written: $shotPath"
-} else {
-    $header = [IO.File]::ReadAllBytes($shotPath)
-    if ($header.Length -lt 8 -or $header[0] -ne 0x89 -or $header[1] -ne 0x50 -or $header[2] -ne 0x4E -or $header[3] -ne 0x47) {
-        throw "Screenshot is not a PNG: $shotPath"
+foreach ($dpi in @(96, 144)) {
+    $shotPath = Join-Path $shotDir "empty-shell-$dpi-$Platform-$($Configuration -replace '\s','').png"
+    Remove-Item -LiteralPath $shotPath -ErrorAction SilentlyContinue
+    $shotLog = Join-Path $outputRoot "RedPrism.screenshot-$dpi.log"
+    $shotErr = Join-Path $outputRoot "RedPrism.screenshot-$dpi.err.log"
+    Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
+    $shot = Start-Process -FilePath $executable -ArgumentList @('--screenshot', $shotPath, '--warp', '--dpi', "$dpi") `
+        -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
+    if (-not $shot.WaitForExit(60000)) {
+        $shot.Kill()
+        throw "RedPrism.exe --screenshot --dpi $dpi did not exit within 60 seconds."
     }
-    Write-Host "PASS harness screenshot: $shotPath"
+    if ($shot.ExitCode -eq 8) {
+        Write-Host "SKIP harness screenshot at $dpi DPI (capture unavailable, exit 8)." -ForegroundColor Yellow
+    } elseif ($shot.ExitCode -ne 0) {
+        throw "RedPrism.exe --screenshot --dpi $dpi exited with code $($shot.ExitCode)."
+    } elseif (-not (Test-Path -LiteralPath $shotPath -PathType Leaf)) {
+        throw "Screenshot was not written: $shotPath"
+    } else {
+        $header = [IO.File]::ReadAllBytes($shotPath)
+        if ($header.Length -lt 8 -or $header[0] -ne 0x89 -or $header[1] -ne 0x50 -or $header[2] -ne 0x4E -or $header[3] -ne 0x47) {
+            throw "Screenshot is not a PNG: $shotPath"
+        }
+        Write-Host "PASS harness screenshot ($dpi DPI): $shotPath"
+    }
 }
 
 Write-Host 'All tests passed.' -ForegroundColor Green

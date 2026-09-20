@@ -21,8 +21,8 @@
   <PropertyGroup Condition="'$(Configuration)'=='ASan Debug'">
     <EnableASAN>true</EnableASAN>
     <LinkIncremental>false</LinkIncremental>
-    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests'">true</CopyAsanBinariesToOutDir>
-    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'!='RedPrism' and '$(MSBuildProjectName)'!='HostTests'">false</CopyAsanBinariesToOutDir>
+    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests' or '$(MSBuildProjectName)'=='DocumentTests' or '$(MSBuildProjectName)'=='IoTests' or '$(MSBuildProjectName)'=='CompositionTests'">true</CopyAsanBinariesToOutDir>
+    <CopyAsanBinariesToOutDir Condition="'$(MSBuildProjectName)'!='RedPrism' and '$(MSBuildProjectName)'!='HostTests' and '$(MSBuildProjectName)'!='DocumentTests' and '$(MSBuildProjectName)'!='IoTests' and '$(MSBuildProjectName)'!='CompositionTests'">false</CopyAsanBinariesToOutDir>
   </PropertyGroup>
 
   <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">

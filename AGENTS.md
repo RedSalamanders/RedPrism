@@ -45,10 +45,10 @@ only and is never a build input.
 
 | Owner | Responsibility |
 | --- | --- |
-| `Application` | HWND, messages, DPI, command line, frame scheduling |
+| `Application` | HWND, messages, DPI, command line, frame scheduling, files, `CanvasRenderer` |
 | `Renderer` | D3D11 device, swap chain, Present, occlusion, adapter-of-monitor |
-| Document (from C4) | Layers, history, tools — never GPU device ownership |
-| DxUi EmbeddedHost (from C2) | Retained chrome; borrows the app device; no swap chain |
+| Document | Layers, history — never GPU device ownership |
+| DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
 
 ## Mandatory rules
 
