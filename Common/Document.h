@@ -72,6 +72,34 @@ struct Vec2
     [[nodiscard]] bool operator==(const Vec2&) const noexcept = default;
 };
 
+// A 2-D affine map in the row-vector convention of CGAffineTransform: x' = a*x + c*y + tx, y' = b*x + d*y + ty.
+struct Affine2
+{
+    double a = 1;
+    double b = 0;
+    double c = 0;
+    double d = 1;
+    double tx = 0;
+    double ty = 0;
+    [[nodiscard]] static Affine2 Translation(double x, double y) noexcept
+    {
+        return Affine2{1, 0, 0, 1, x, y};
+    }
+    [[nodiscard]] static Affine2 Scale(double x, double y) noexcept
+    {
+        return Affine2{x, 0, 0, y, 0, 0};
+    }
+    [[nodiscard]] static Affine2 Rotation(double radians) noexcept;
+    [[nodiscard]] Vec2 Apply(Vec2 point) const noexcept
+    {
+        return Vec2{a * point.x + c * point.y + tx, b * point.x + d * point.y + ty};
+    }
+    // This map, then `other` (CGAffineTransform.concatenating).
+    [[nodiscard]] Affine2 Concat(const Affine2& other) const noexcept;
+    [[nodiscard]] Affine2 Inverted() const noexcept;
+    [[nodiscard]] bool operator==(const Affine2&) const noexcept = default;
+};
+
 enum class RasterFormat
 {
     Bgra8888,
@@ -171,6 +199,30 @@ struct LayerTransform
     {
         return Vec2{origin.x + size.x / 2.0, origin.y + size.y / 2.0};
     }
+    [[nodiscard]] double Radians() const noexcept;
+    // The unit square (0…1, y down) mapped where this transform places a layer; flips are not applied here.
+    [[nodiscard]] Vec2 Point(Vec2 unit) const noexcept;
+    [[nodiscard]] bool Contains(Vec2 point) const noexcept;
+    // Corners in handle order: top-left, top-right, bottom-right, bottom-left.
+    [[nodiscard]] std::array<Vec2, 4> Corners() const noexcept;
+    // Width as a percentage of the `pixelSize` it places (100 % draws them 1:1).
+    [[nodiscard]] double ScalePercent(Vec2 pixelSize) const noexcept;
+    // Both sides set to `percent` of `pixelSize`, keeping the center, rotation and flips.
+    [[nodiscard]] LayerTransform ScaledToPercent(double percent, Vec2 pixelSize) const noexcept;
+    // Whole pixels and whole degrees: what dragging, scaling and rotating leave behind.
+    [[nodiscard]] LayerTransform Rounded() const noexcept;
+    // The unit square mapped onto the document, flips included.
+    [[nodiscard]] Affine2 UnitToDocument() const noexcept;
+    // A transform placing the unit square as `map` does (shear dropped), keeping this sampling.
+    [[nodiscard]] LayerTransform Placing(const Affine2& map) const noexcept;
+    // This placement carried along as a layer moves from `from` to `to`.
+    [[nodiscard]] LayerTransform Following(const LayerTransform& from, const LayerTransform& to) const noexcept;
+    // The same place on the document, whatever the sampling.
+    [[nodiscard]] bool SamePlacement(const LayerTransform& other) const noexcept;
+    // Mirrored across a vertical line at `axis` (horizontally) or a horizontal one.
+    [[nodiscard]] LayerTransform Mirrored(bool horizontally, double axis) const noexcept;
+    static constexpr std::array<Vec2, 8> kHandles{Vec2{0, 0}, Vec2{0.5, 0}, Vec2{1, 0}, Vec2{1, 0.5},
+                                                  Vec2{1, 1}, Vec2{0.5, 1}, Vec2{0, 1}, Vec2{0, 0.5}};
 };
 
 enum class LayerBlendMode
@@ -418,6 +470,11 @@ struct LayerMask
     [[nodiscard]] static bool IsValid(const Raster& image) noexcept;
 };
 
+// Where a mask sits after its layer moves from `from` to `to`: a linked placement follows, an unlinked mask stays,
+// a uniform 1 x 1 mask and a mask that lands exactly on its layer report nullopt.
+[[nodiscard]] std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const LayerTransform& from,
+                                                                const LayerTransform& to) noexcept;
+
 struct DocumentSelection
 {
     bool antialiased = true;
@@ -459,6 +516,35 @@ struct CanvasDocument
     std::vector<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
     [[nodiscard]] bool operator==(const CanvasDocument&) const noexcept = default;
+};
+
+// Several layers transformed together: the upright box around them when the edit began (what the draft edits) and
+// each one's transform then.
+struct SnapTargets;
+
+struct TransformGroup
+{
+    LayerTransform box;
+    std::vector<std::pair<Guid, LayerTransform>> originals;
+};
+
+// A pending transform: the draft the handles and inspector edit. `persistent` edits wait for Apply/Cancel; others
+// commit when the drag ends. `corners` set means a free distortion; `mask` an unlinked mask placed alone.
+struct TransformEdit
+{
+    Guid layerID;
+    LayerTransform draft;
+    bool persistent = true;
+    std::optional<std::array<Vec2, 4>> corners;
+    bool mask = false;
+    std::optional<TransformGroup> group;
+};
+
+// Document positions a move has just snapped to, drawn as guides while it lasts.
+struct SnapGuides
+{
+    std::vector<double> xs;
+    std::vector<double> ys;
 };
 
 struct HierarchyEntry
@@ -614,6 +700,65 @@ class DocumentSession
     [[nodiscard]] std::vector<HierarchyEntry> LayerRows() const;
     [[nodiscard]] bool CanPlaceLayer(const Guid& id, const std::optional<Guid>& parent) const;
 
+    // Transform editing (C8, Specs/Document/Document_Tools.md). A pending edit holds a draft; the document changes
+    // only on commit, as one history entry. Blank layers (no pixels), hidden layers and folders alone cannot
+    // transform; a selected folder transforms its visible pixel layers as a group.
+    [[nodiscard]] bool CanTransform() const noexcept;
+    [[nodiscard]] bool TransformsAsGroup() const noexcept;
+    [[nodiscard]] std::vector<Guid> GroupTransformMemberIDs() const;
+    [[nodiscard]] std::optional<LayerTransform> GroupTransformBox() const;
+    [[nodiscard]] const std::optional<TransformEdit>& PendingTransformEdit() const noexcept
+    {
+        return _transformEdit;
+    }
+    void BeginTransform(bool persistent = true);
+    void PreviewTransform(const LayerTransform& value);
+    void BeginDistort();
+    void PreviewCorners(const std::array<Vec2, 4>& corners);
+    void BeginDuplicateTransform();
+    void CommitTransform();
+    void CancelTransform();
+    // Arrow keys: a pending edit moves its draft; without one the move commits at once.
+    void NudgeLayer(double dx, double dy);
+    // Where a layer's handles sit: the pending draft (the layer's or its mask's), else the layer.
+    [[nodiscard]] LayerTransform EditedTransform(const ImageLayer& layer) const;
+    // A layer's transform under the pending edit; nullopt when the edit does not move it.
+    [[nodiscard]] std::optional<LayerTransform> PendingTransform(const ImageLayer& layer) const;
+    [[nodiscard]] LayerTransform DisplayedTransform(const ImageLayer& layer) const;
+    [[nodiscard]] std::optional<LayerTransform> DisplayedMaskPlacement(const ImageLayer& layer) const;
+    // Pixels the transform places, what 100 % scale draws 1:1; nullopt for a layer without pixels.
+    [[nodiscard]] std::optional<Vec2> TransformPixelSize() const;
+    [[nodiscard]] bool TransformTargetsMask() const noexcept;
+    // Snap targets: canvas edges and center plus every other visible pixel layer's bounds and center.
+    [[nodiscard]] SnapTargets TransformSnapTargets(const std::unordered_set<Guid>& excluding) const;
+    // `draft` nudged so the layer lines up with a nearby target within `tolerance` document pixels; the guides it
+    // met stay in LastSnapGuides until cleared.
+    [[nodiscard]] LayerTransform SnappedMove(const LayerTransform& draft, const std::unordered_set<Guid>& moving,
+                                             double tolerance);
+    [[nodiscard]] const SnapGuides& LastSnapGuides() const noexcept
+    {
+        return _snapGuides;
+    }
+    void ClearSnapGuides() noexcept
+    {
+        _snapGuides = {};
+    }
+    void FlipLayers(bool horizontally);
+    void FlipCanvas(bool horizontally);
+    void DuplicateActiveLayer();
+    void SelectLayerTarget(const Guid& id, bool mask);
+    [[nodiscard]] bool IsMaskSelected() const noexcept
+    {
+        return _maskSelected;
+    }
+    void ToggleMaskLink(const Guid& id);
+    // The document as the canvas draws it: the pending transform, mask placement and distortion (at preview size)
+    // applied to a cached copy that shares every raster with the real document.
+    [[nodiscard]] const CanvasDocument* DisplayDocument() const;
+    bool locksTransformRatio = true;
+    bool transformAutoSelect = false;
+    bool showsTransformControls = true;
+
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
     // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
     static constexpr uint32_t kDefaultForegroundArgb = 0xFF000000u;
@@ -657,4 +802,11 @@ class DocumentSession
     std::unordered_set<Guid> _collapsed;
     uint32_t _foregroundArgb = kDefaultForegroundArgb;
     uint32_t _backgroundArgb = kDefaultBackgroundArgb;
+    std::optional<TransformEdit> _transformEdit;
+    std::optional<std::pair<Guid, Guid>> _transformDuplicate; // copy, source
+    SnapGuides _snapGuides;
+    bool _maskSelected = false;
+    std::uint64_t _editRevision = 0;
+    mutable std::uint64_t _displayRevision = 0;
+    mutable std::optional<CanvasDocument> _displayCopy;
 };

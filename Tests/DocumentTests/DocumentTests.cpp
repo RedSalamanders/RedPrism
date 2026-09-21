@@ -1,7 +1,13 @@
 #include "Document.h"
+#include "TransformEdit.h"
 
+#include <array>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <initializer_list>
+#include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -508,6 +514,598 @@ void TestPaletteColors()
     Expect(session.history.CanUndo() == couldUndo && session.history.IsModified() == modified,
            "palette.outside-history");
 }
+
+// ── Transform (C8, ported from legacy TransformTests, MaskTransformTests and DistortTests) ────────────────
+
+[[nodiscard]] bool Near(double a, double b, double epsilon = 0.0001) noexcept
+{
+    return std::abs(a - b) < epsilon;
+}
+
+[[nodiscard]] bool NearPoint(Vec2 a, Vec2 b, double epsilon = 0.0001) noexcept
+{
+    return Near(a.x, b.x, epsilon) && Near(a.y, b.y, epsilon);
+}
+
+[[nodiscard]] Raster SolidRaster(int width, int height, std::uint8_t blue, std::uint8_t green, std::uint8_t red,
+                                 std::uint8_t alpha)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
+    for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
+    {
+        bytes[index] = blue;
+        bytes[index + 1] = green;
+        bytes[index + 2] = red;
+        bytes[index + 3] = alpha;
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+[[nodiscard]] Raster GrayRaster(int width, int height, std::uint8_t value)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), value);
+    return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+}
+
+[[nodiscard]] std::uint8_t AlphaAt(const Raster& raster, int x, int y) noexcept
+{
+    if (x < 0 || y < 0 || x >= raster.Width() || y >= raster.Height() || raster.Format() != RasterFormat::Bgra8888)
+    {
+        return 0;
+    }
+    return raster.Data()[static_cast<std::size_t>(y) * static_cast<std::size_t>(raster.Stride()) +
+                         static_cast<std::size_t>(x) * 4u + 3u];
+}
+
+// A painted layer placed on the session's document and made active, as an import leaves it.
+Guid InsertPainted(DocumentSession& session, int width, int height, Vec2 origin, const wchar_t* name = L"Painted")
+{
+    ImageLayer layer = RasterLayer(width, height, name);
+    layer.asset->image = SolidRaster(width, height, 0, 0, 255, 255);
+    layer.asset->thumbnail = layer.asset->image;
+    layer.transform.origin = origin;
+    session.Document().value().layers.push_back(layer);
+    session.SelectLayer(layer.id);
+    return layer.id;
+}
+
+void TestTransformGeometry()
+{
+    LayerTransform t;
+    t.origin = Vec2{100, 200};
+    t.size = Vec2{100, 50};
+    t.rotation = 90;
+    Expect(t.Contains(t.Center()), "transform.contains-center");
+    Expect(t.Contains(Vec2{150, 265}) && !t.Contains(Vec2{190, 225}), "transform.rotated-contains");
+    Expect(NearPoint(t.Point(Vec2{1, 1}), Vec2{125, 275}), "transform.rotated-corner");
+    const std::array<Vec2, 4> corners = t.Corners();
+    Expect(NearPoint(corners[0], Vec2{175, 175}) && NearPoint(corners[2], Vec2{125, 275}), "transform.corners-order");
+
+    LayerTransform s;
+    s.size = Vec2{200, 300};
+    s.rotation = 30;
+    Expect(s.ScalePercent(Vec2{100, 100}) == 200.0, "transform.scale-percent");
+    const LayerTransform scaled = s.ScaledToPercent(50, Vec2{100, 100});
+    Expect(scaled.size == Vec2{50, 50} && NearPoint(scaled.Center(), s.Center()) && scaled.rotation == 30 &&
+               scaled.ScalePercent(Vec2{100, 100}) == 50.0,
+           "transform.scaled-to-percent");
+
+    LayerTransform r;
+    r.origin = Vec2{1.4, 2.6};
+    r.size = Vec2{0.2, 10.5};
+    r.rotation = 12.4;
+    const LayerTransform rounded = r.Rounded();
+    Expect(rounded.origin == Vec2{1, 3} && rounded.size == Vec2{1, 11} && rounded.rotation == 12, "transform.rounded");
+
+    LayerTransform m;
+    m.origin = Vec2{10, 20};
+    m.size = Vec2{40, 30};
+    m.rotation = 15;
+    const LayerTransform mirrored = m.Mirrored(true, 100);
+    Expect(mirrored.flipX && !mirrored.flipY && mirrored.origin.x == 150 && mirrored.origin.y == 20 &&
+               mirrored.rotation == -15,
+           "transform.mirrored-horizontal");
+    const LayerTransform vertical = m.Mirrored(false, 50);
+    Expect(vertical.flipY && vertical.origin.y == 50 && vertical.origin.x == 10, "transform.mirrored-vertical");
+
+    LayerTransform from;
+    from.size = Vec2{100, 100};
+    LayerTransform to = from;
+    to.origin = Vec2{25, -10};
+    LayerTransform placed;
+    placed.origin = Vec2{10, 10};
+    placed.size = Vec2{20, 20};
+    placed.rotation = 33;
+    const LayerTransform moved = placed.Following(from, to);
+    Expect(moved.origin == Vec2{35, 0} && moved.rotation == 33, "transform.following-move");
+    LayerTransform big = from;
+    big.size = Vec2{200, 200};
+    const LayerTransform grown = placed.Following(from, big);
+    Expect(NearPoint(grown.Center(), Vec2{40, 40}) && NearPoint(grown.size, Vec2{40, 40}) && Near(grown.rotation, 33),
+           "transform.following-scale");
+    LayerTransform turned = from;
+    turned.rotation = 90;
+    const LayerTransform rotated = placed.Following(from, turned);
+    Expect(NearPoint(rotated.Center(), Vec2{80, 20}) && Near(rotated.rotation, 123) &&
+               NearPoint(rotated.size, Vec2{20, 20}) && !rotated.flipY,
+           "transform.following-rotate");
+    Expect(placed.Following(from, from) == placed, "transform.following-identity");
+
+    LayerTransform sampled = placed;
+    sampled.sampling = LayerSampling::Nearest;
+    Expect(placed.SamePlacement(sampled) && !(placed == sampled), "transform.same-placement");
+    Expect(NearPoint(placed.UnitToDocument().Apply(Vec2{0, 0}), placed.Point(Vec2{0, 0})) &&
+               NearPoint(placed.UnitToDocument().Apply(Vec2{1, 1}), placed.Point(Vec2{1, 1})),
+           "transform.unit-to-document");
+    LayerTransform flipped = placed;
+    flipped.flipX = true;
+    Expect(NearPoint(flipped.UnitToDocument().Apply(Vec2{0, 0}), placed.Point(Vec2{1, 0})), "transform.unit-flip");
+    const Affine2 map = Affine2::Translation(3, 4).Concat(Affine2::Scale(2, 2));
+    Expect(map.Apply(Vec2{1, 1}) == Vec2{8, 10} && NearPoint(map.Inverted().Apply(Vec2{8, 10}), Vec2{1, 1}),
+           "transform.affine-concat-inverse");
+}
+
+void TestTransformDrag()
+{
+    LayerTransform original;
+    original.size = Vec2{100, 50};
+    const TransformDrag move{TransformDrag::Mode::Move, -1, original, Vec2{40, 20}, std::nullopt};
+    Expect(move.Updated(Vec2{60, 25}, true, true).origin == Vec2{20, 0}, "drag.move-shift-axis");
+    Expect(move.Updated(Vec2{60, 25}, true, false).origin == Vec2{20, 5}, "drag.move-free");
+    const TransformDrag rotate{TransformDrag::Mode::Rotate, -1, original, Vec2{100, 25}, std::nullopt};
+    const LayerTransform rotated = rotate.Updated(Vec2{50, 75}, true, false);
+    Expect(Near(rotated.rotation, 90) && rotated.Center() == original.Center(), "drag.rotate-90");
+    Expect(std::fmod(rotate.Updated(Vec2{99, 45}, true, true).rotation, 15.0) == 0.0, "drag.rotate-shift-15");
+    const TransformDrag resize{TransformDrag::Mode::Resize, 4, original, Vec2{100, 50}, std::nullopt};
+    Expect(resize.Updated(Vec2{150, 50}, true, true).size == Vec2{150, 50}, "drag.resize-shift-inverts-lock");
+    const LayerTransform locked = resize.Updated(Vec2{150, 50}, true, false);
+    Expect(Near(locked.size.x / locked.size.y, 2.0) && locked.origin == Vec2{0, 0}, "drag.resize-lock-ratio-anchor");
+
+    LayerTransform turned;
+    turned.origin = Vec2{31, -19};
+    turned.size = Vec2{200, 100};
+    turned.rotation = 37;
+    bool anchored = true;
+    bool ratio = true;
+    bool valid = true;
+    for (int index = 0; index < 8; ++index)
+    {
+        const Vec2 handle = LayerTransform::kHandles[static_cast<std::size_t>(index)];
+        const Vec2 opposite{1 - handle.x, 1 - handle.y};
+        const Vec2 start = turned.Point(handle);
+        const TransformDrag drag{TransformDrag::Mode::Resize, index, turned, start, std::nullopt};
+        for (const bool lock : {true, false})
+        {
+            const LayerTransform changed = drag.Updated(Vec2{start.x + 34, start.y + 17}, lock, false);
+            anchored = anchored && NearPoint(turned.Point(opposite), changed.Point(opposite));
+            if (lock)
+            {
+                ratio = ratio && Near(changed.size.x / changed.size.y, 2.0);
+            }
+            valid = valid && changed.IsValid();
+        }
+    }
+    Expect(anchored, "drag.resize-keeps-opposite-anchor");
+    Expect(ratio, "drag.resize-locked-ratio");
+    Expect(valid, "drag.resize-valid");
+    const TransformDrag centered{TransformDrag::Mode::Resize, 4, original, Vec2{100, 50}, std::nullopt};
+    const LayerTransform grown = centered.Updated(Vec2{110, 60}, false, false, true);
+    Expect(NearPoint(grown.Center(), original.Center()) && NearPoint(grown.size, Vec2{120, 70}),
+           "drag.resize-option-center");
+    LayerTransform tiny = original;
+    const TransformDrag collapse{TransformDrag::Mode::Resize, 4, tiny, Vec2{100, 50}, std::nullopt};
+    Expect(collapse.Updated(Vec2{-500, -500}, false, false).IsValid(), "drag.resize-never-invalid");
+
+    const std::array<Vec2, 4> corners = original.Corners();
+    const TransformDrag corner{TransformDrag::Mode::Distort, 2, original, Vec2{100, 0}, corners};
+    const std::optional<std::array<Vec2, 4>> one = corner.Corners(Vec2{110, 5}, false);
+    Expect(one.has_value() && (*one)[1] == Vec2{110, 5} && (*one)[0] == corners[0] && (*one)[2] == corners[2],
+           "drag.distort-corner");
+    const TransformDrag edge{TransformDrag::Mode::Distort, 3, original, Vec2{100, 25}, corners};
+    const std::optional<std::array<Vec2, 4>> two = edge.Corners(Vec2{105, 30}, true);
+    Expect(two.has_value() && (*two)[1] == Vec2{105, 0} && (*two)[2] == Vec2{105, 50} && (*two)[0] == corners[0],
+           "drag.distort-edge-shift");
+    const TransformDrag body{TransformDrag::Mode::Move, -1, original, Vec2{50, 25}, corners};
+    const std::optional<std::array<Vec2, 4>> all = body.Corners(Vec2{60, 35}, false);
+    Expect(all.has_value() && (*all)[3] == Vec2{10, 60} && (*all)[0] == Vec2{10, 10}, "drag.distort-body");
+    const TransformDrag spin{TransformDrag::Mode::Rotate, -1, original, Vec2{}, corners};
+    Expect(!spin.Corners(Vec2{}, false).has_value(), "drag.distort-none-for-rotate");
+    Expect(!move.Corners(Vec2{}, false).has_value(), "drag.distort-none-without-corners");
+}
+
+void TestTransformSnap()
+{
+    const std::array<double, 3> xs{0, 100, 200};
+    const std::array<double, 2> ys{0, 50};
+    const TransformSnap::Result nearest = TransformSnap::Offset(12, 3, 52, 23, xs, ys, 15);
+    Expect(nearest.offset.x == -12 && nearest.x == 0.0 && nearest.offset.y == -3 && nearest.y == 0.0,
+           "snap.nearest-target");
+    const TransformSnap::Result none = TransformSnap::Offset(40, 300, 60, 320, xs, ys, 5);
+    Expect(none.offset == Vec2{} && !none.x.has_value() && !none.y.has_value(), "snap.out-of-tolerance");
+    const TransformSnap::Result tie = TransformSnap::Offset(98, 0, 198, 10, xs, ys, 5);
+    Expect(tie.offset.x == 2 && tie.x == 100.0 && tie.offset.y == 0 && tie.y == 0.0, "snap.smallest-move");
+
+    DocumentSession session;
+    session.CreateDocument(400, 200, false);
+    const Guid other = InsertPainted(session, 100, 100, Vec2{200, 50}, L"Other");
+    const Guid id = InsertPainted(session, 50, 50, Vec2{0, 0});
+    const SnapTargets targets = session.TransformSnapTargets({id});
+    Expect(targets.xs.size() == 6 && targets.ys.size() == 6 && targets.xs[3] == 200 && targets.ys[4] == 100,
+           "snap.targets-canvas-and-layers");
+    LayerTransform draft = session.ActiveLayer()->transform;
+    draft.origin = Vec2{147, 3};
+    const LayerTransform snapped = session.SnappedMove(draft, {id}, 5);
+    Expect(snapped.origin == Vec2{150, 0} && session.LastSnapGuides().xs.size() == 1 &&
+               session.LastSnapGuides().xs[0] == 200 && session.LastSnapGuides().ys.size() == 1 &&
+               session.LastSnapGuides().ys[0] == 0,
+           "snap.session-move-with-guides");
+    session.ClearSnapGuides();
+    Expect(session.LastSnapGuides().xs.empty() && session.LastSnapGuides().ys.empty(), "snap.clear-guides");
+    Expect(session.TransformSnapTargets({id, other}).xs.size() == 3, "snap.excludes-moving");
+}
+
+void TestTransformSession()
+{
+    DocumentSession session;
+    session.CreateDocument(200, 100, false);
+    Expect(!session.CanTransform(), "transform.no-layer");
+    session.AddBlankLayer();
+    const Guid blank = session.ActiveLayerID().value();
+    Expect(!session.CanTransform(), "transform.blank-cannot");
+    session.BeginTransform();
+    Expect(!session.PendingTransformEdit().has_value(), "transform.blank-no-edit");
+    const Guid id = InsertPainted(session, 200, 100, Vec2{0, 0});
+    Expect(session.CanTransform() && !session.TransformsAsGroup(), "transform.painted-can");
+    const ImageLayer original = *session.ActiveLayer();
+    const int count = session.history.UndoCount();
+    session.BeginTransform();
+    LayerTransform value = original.transform;
+    value.origin = Vec2{-45, 34};
+    value.size = Vec2{80, 140};
+    value.rotation = 23;
+    value.flipX = true;
+    for (int repeat = 0; repeat < 30; ++repeat)
+    {
+        session.PreviewTransform(value);
+    }
+    Expect(session.ActiveLayer()->transform == original.transform, "transform.preview-keeps-document");
+    Expect(session.history.UndoCount() == count, "transform.preview-no-history");
+    Expect(session.DisplayedTransform(*session.ActiveLayer()) == value &&
+               session.EditedTransform(*session.ActiveLayer()) == value,
+           "transform.preview-displayed");
+    const CanvasDocument* display = session.DisplayDocument();
+    Expect(display != nullptr && display != &session.Document().value() && display->layers.back().transform == value &&
+               display->layers.back().asset->image == original.asset->image && display == session.DisplayDocument(),
+           "transform.display-copy-shares-raster");
+    session.CancelTransform();
+    Expect(*session.ActiveLayer() == original && session.DisplayDocument() == &session.Document().value(),
+           "transform.cancel-restores");
+    session.BeginTransform();
+    session.PreviewTransform(value);
+    session.CommitTransform();
+    Expect(session.history.UndoCount() == count + 1 && session.ActiveLayer()->transform == value &&
+               session.history.UndoName() == L"Transform Layer",
+           "transform.commit-history");
+    session.Undo();
+    Expect(*session.ActiveLayer() == original, "transform.undo");
+    session.Redo();
+    Expect(session.ActiveLayer()->transform == value && session.ActiveLayerID() == original.id, "transform.redo");
+    session.Undo();
+
+    const int afterUndo = session.history.UndoCount();
+    session.BeginTransform();
+    session.CommitTransform();
+    Expect(session.history.UndoCount() == afterUndo, "transform.noop-commit");
+    session.BeginTransform();
+    LayerTransform invalid = session.PendingTransformEdit()->draft;
+    invalid.size.x = 0;
+    session.PreviewTransform(invalid);
+    Expect(session.PendingTransformEdit()->draft.size.x == 200, "transform.invalid-zero-ignored");
+    invalid.size.x = std::numeric_limits<double>::infinity();
+    session.PreviewTransform(invalid);
+    Expect(session.PendingTransformEdit()->draft.size.x == 200, "transform.invalid-inf-ignored");
+    LayerTransform moved = session.PendingTransformEdit()->draft;
+    moved.origin.x = 10;
+    session.PreviewTransform(moved);
+    session.SelectLayer(blank);
+    Expect(!session.PendingTransformEdit().has_value() && Find(session.Document(), id)->transform.origin.x == 10 &&
+               session.history.UndoCount() == afterUndo + 1,
+           "transform.select-commits");
+    session.SelectLayer(id);
+    Expect(session.TransformPixelSize().has_value() && session.TransformPixelSize().value() == Vec2{200, 100},
+           "transform.pixel-size");
+
+    session.BeginTransform();
+    session.PreviewTransform(value);
+    const int pending = session.history.UndoCount();
+    session.Undo();
+    Expect(!session.PendingTransformEdit().has_value() && session.history.UndoCount() == pending &&
+               session.ActiveLayer()->transform.origin.x == 10,
+           "transform.undo-cancels-pending");
+
+    session.BeginTransform();
+    session.NudgeLayer(1, 0);
+    Expect(session.PendingTransformEdit().has_value() && session.PendingTransformEdit()->draft.origin.x == 11 &&
+               session.ActiveLayer()->transform.origin.x == 10,
+           "transform.nudge-pending");
+    session.CancelTransform();
+    const int nudgeCount = session.history.UndoCount();
+    session.NudgeLayer(0, -3);
+    Expect(!session.PendingTransformEdit().has_value() && session.ActiveLayer()->transform.origin.y == -3 &&
+               session.history.UndoCount() == nudgeCount + 1,
+           "transform.nudge-commits");
+}
+
+void TestTransformDuplicate()
+{
+    DocumentSession session;
+    session.CreateDocument(400, 200, false);
+    InsertPainted(session, 100, 100, Vec2{150, 50});
+    const ImageLayer original = *session.ActiveLayer();
+    const int count = session.history.UndoCount();
+    session.BeginDuplicateTransform();
+    LayerTransform moved = original.transform;
+    moved.origin.x += 50;
+    session.PreviewTransform(moved);
+    session.CommitTransform();
+    Expect(session.Document().value().layers.size() == 2, "duplicate.two-layers");
+    Expect(session.Document().value().layers[0].transform == original.transform, "duplicate.original-stays");
+    Expect(session.ActiveLayer()->transform == moved && session.ActiveLayer()->name == L"Painted copy" &&
+               session.ActiveLayer()->asset->image == original.asset->image,
+           "duplicate.copy-moved-shares-pixels");
+    Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Duplicate Layer",
+           "duplicate.one-step");
+    session.Undo();
+    Expect(session.Document().value().layers.size() == 1 && session.ActiveLayerID() == original.id, "duplicate.undo");
+    session.BeginDuplicateTransform();
+    session.PreviewTransform(moved);
+    session.CancelTransform();
+    Expect(session.Document().value().layers.size() == 1 && session.ActiveLayerID() == original.id &&
+               session.history.UndoCount() == count,
+           "duplicate.cancel");
+}
+
+void TestTransformGroup()
+{
+    DocumentSession session;
+    session.CreateDocument(400, 300, false);
+    session.AddGroup();
+    const Guid folder = session.ActiveLayerID().value();
+    const Guid a = InsertPainted(session, 100, 50, Vec2{10, 20}, L"A");
+    session.Document().value().layers.back().parentID = folder;
+    const Guid b = InsertPainted(session, 40, 40, Vec2{200, 100}, L"B");
+    session.Document().value().layers.back().parentID = folder;
+    session.SelectLayer(folder);
+    Expect(session.TransformsAsGroup() && session.CanTransform(), "group.folder-transforms-members");
+    Expect(session.GroupTransformMemberIDs().size() == 2, "group.members");
+    const std::optional<LayerTransform> box = session.GroupTransformBox();
+    Expect(box.has_value() && box->origin == Vec2{10, 20} && box->size == Vec2{230, 120}, "group.box");
+    Expect(session.EditedTransform(*session.ActiveLayer()) == box.value(), "group.edited-transform-is-box");
+    Expect(session.TransformPixelSize().has_value() && session.TransformPixelSize().value() == box->size,
+           "group.pixel-size");
+    session.BeginTransform();
+    LayerTransform draft = box.value();
+    draft.origin.x += 100;
+    draft.origin.y -= 5;
+    session.PreviewTransform(draft);
+    const ImageLayer* layerA = Find(session.Document(), a);
+    Expect(layerA != nullptr && session.DisplayedTransform(*layerA).origin == Vec2{110, 15} &&
+               layerA->transform.origin == Vec2{10, 20},
+           "group.preview-follows");
+    session.CommitTransform();
+    Expect(Find(session.Document(), a)->transform.origin == Vec2{110, 15} &&
+               Find(session.Document(), b)->transform.origin == Vec2{300, 95} &&
+               session.history.UndoName() == L"Transform Layers",
+           "group.commit-moves-all");
+    session.BeginTransform();
+    LayerTransform grown = session.PendingTransformEdit()->draft;
+    grown.size = Vec2{460, 240};
+    session.PreviewTransform(grown);
+    session.CommitTransform();
+    const ImageLayer* grownA = Find(session.Document(), a);
+    Expect(grownA != nullptr && NearPoint(grownA->transform.size, Vec2{200, 100}) &&
+               NearPoint(grownA->transform.origin, Vec2{110, 15}),
+           "group.scale-follows");
+    session.FlipLayers(true);
+    Expect(Find(session.Document(), a)->transform.flipX && Find(session.Document(), b)->transform.flipX &&
+               session.history.UndoName() == L"Flip Horizontal",
+           "group.flip-members");
+    session.Undo();
+    Expect(!Find(session.Document(), a)->transform.flipX, "group.flip-undo");
+}
+
+void TestMaskTransform()
+{
+    DocumentSession session;
+    session.CreateDocument(400, 200, false);
+    const Guid id = InsertPainted(session, 400, 200, Vec2{0, 0});
+    LayerMask mask;
+    mask.asset.image = GrayRaster(400, 200, 255);
+    mask.asset.thumbnail = mask.asset.image;
+    mask.asset.name = L"mask";
+    session.Document().value().layers.back().mask = mask;
+    const LayerTransform original = session.ActiveLayer()->transform;
+
+    session.SelectLayerTarget(id, true);
+    Expect(session.IsMaskSelected() && !session.TransformTargetsMask(), "mask.linked-targets-layer");
+    session.BeginTransform();
+    LayerTransform moved = session.PendingTransformEdit()->draft;
+    moved.origin.x += 100;
+    session.PreviewTransform(moved);
+    Expect(!session.PendingTransformEdit()->mask && !session.DisplayedMaskPlacement(*session.ActiveLayer()).has_value(),
+           "mask.linked-follows-preview");
+    session.CommitTransform();
+    Expect(session.ActiveLayer()->transform == moved && !session.ActiveLayer()->mask->placement.has_value() &&
+               session.ActiveLayer()->mask->asset.image == mask.asset.image,
+           "mask.linked-commit");
+    session.Undo();
+
+    session.ToggleMaskLink(id);
+    Expect(!session.ActiveLayer()->mask->linked && session.history.UndoName() == L"Unlink Layer Mask", "mask.unlink");
+    session.SelectLayerTarget(id, false);
+    session.BeginTransform();
+    moved = session.PendingTransformEdit()->draft;
+    moved.origin.x += 100;
+    session.PreviewTransform(moved);
+    Expect(session.DisplayedMaskPlacement(*session.ActiveLayer()) == original, "mask.unlinked-stays-preview");
+    const CanvasDocument* display = session.DisplayDocument();
+    Expect(display != nullptr && display->layers.back().transform == moved &&
+               display->layers.back().mask->placement == original,
+           "mask.unlinked-display-copy");
+    session.CommitTransform();
+    Expect(session.ActiveLayer()->transform == moved && session.ActiveLayer()->mask->placement == original,
+           "mask.unlinked-layer-moves-alone");
+    session.Undo();
+    Expect(session.ActiveLayer()->transform == original && !session.ActiveLayer()->mask->placement.has_value() &&
+               !session.ActiveLayer()->mask->linked,
+           "mask.unlinked-undo");
+
+    session.SelectLayerTarget(id, true);
+    Expect(session.TransformTargetsMask(), "mask.targets-mask");
+    session.BeginTransform();
+    moved = session.PendingTransformEdit()->draft;
+    moved.origin.x += 100;
+    session.PreviewTransform(moved);
+    Expect(session.PendingTransformEdit()->mask && session.DisplayedTransform(*session.ActiveLayer()) == original &&
+               session.EditedTransform(*session.ActiveLayer()) == moved &&
+               session.DisplayedMaskPlacement(*session.ActiveLayer()) == moved,
+           "mask.mask-alone-preview");
+    Expect(!session.TransformPixelSize().has_value(), "mask.mask-alone-no-pixel-size");
+    session.CommitTransform();
+    Expect(session.ActiveLayer()->transform == original && session.ActiveLayer()->mask->placement == moved &&
+               session.ActiveLayer()->mask->asset.image == mask.asset.image &&
+               session.history.UndoName() == L"Transform Layer Mask",
+           "mask.mask-alone-commit");
+
+    session.ToggleMaskLink(id);
+    session.SelectLayerTarget(id, false);
+    session.BeginTransform();
+    LayerTransform together = session.PendingTransformEdit()->draft;
+    together.origin.x += 50;
+    session.PreviewTransform(together);
+    session.CommitTransform();
+    const std::optional<LayerTransform> placement = session.ActiveLayer()->mask->placement;
+    Expect(placement.has_value() && Near(placement->origin.x, moved.origin.x + 50) &&
+               Near(placement->origin.y, moved.origin.y) && Near(placement->size.x, moved.size.x),
+           "mask.relinked-follows");
+
+    LayerMask uniform;
+    uniform.asset.image = GrayRaster(1, 1, 255);
+    uniform.asset.thumbnail = uniform.asset.image;
+    uniform.linked = false;
+    Expect(!MaskPlacementMoving(uniform, original, moved).has_value(), "mask.uniform-follows-anywhere");
+}
+
+void TestFlipCommands()
+{
+    DocumentSession session;
+    session.CreateDocument(400, 200, false);
+    InsertPainted(session, 100, 50, Vec2{20, 30});
+    LayerTransform before = session.ActiveLayer()->transform;
+    before.rotation = 10;
+    session.Document().value().layers.back().transform = before;
+    session.FlipCanvas(true);
+    const LayerTransform flipped = session.ActiveLayer()->transform;
+    Expect(flipped.flipX && flipped.rotation == -10 && Near(flipped.Center().x, 400 - before.Center().x) &&
+               flipped.origin.y == 30 && session.history.UndoName() == L"Flip Canvas Horizontal",
+           "flip.canvas-horizontal");
+    session.FlipCanvas(false);
+    Expect(session.ActiveLayer()->transform.flipY &&
+               Near(session.ActiveLayer()->transform.Center().y, 200 - before.Center().y) &&
+               session.ActiveLayer()->transform.rotation == 10,
+           "flip.canvas-vertical");
+    session.Undo();
+    session.Undo();
+    Expect(session.ActiveLayer()->transform == before, "flip.canvas-undo");
+    session.FlipLayers(false);
+    Expect(session.ActiveLayer()->transform.flipY &&
+               NearPoint(session.ActiveLayer()->transform.Center(), before.Center()) &&
+               session.history.UndoName() == L"Flip Vertical",
+           "flip.layer-about-center");
+    session.Document().value().selection = DocumentSelection{true, false, {Vec2{10, 10}, Vec2{50, 10}, Vec2{50, 40}}};
+    session.FlipCanvas(true);
+    Expect(session.Document().value().selection->outline[0] == Vec2{390, 10}, "flip.canvas-selection");
+}
+
+void TestDistortWarp()
+{
+    const std::array<Vec2, 4> shape{Vec2{10, 10}, Vec2{60, 10}, Vec2{30, 30}, Vec2{10, 30}};
+    const DistortWarp::Homography map = DistortWarp::MakeHomography(shape);
+    const std::array<Vec2, 4> units{Vec2{0, 0}, Vec2{1, 0}, Vec2{1, 1}, Vec2{0, 1}};
+    bool hits = true;
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        hits = hits && NearPoint(map.Map(units[index]), shape[index], 1e-6);
+    }
+    Expect(hits, "distort.homography-hits-corners");
+    Expect(DistortWarp::IsUsable(shape), "distort.usable");
+    Expect(!DistortWarp::IsUsable(std::array<Vec2, 4>{shape[0], shape[2], shape[1], shape[3]}),
+           "distort.bow-tie-refused");
+    Expect(!DistortWarp::IsUsable(std::array<Vec2, 4>{shape[0], shape[0], shape[2], shape[3]}),
+           "distort.collapsed-refused");
+    const std::optional<DistortWarp::Homography> inverse = map.Inverted();
+    Expect(inverse.has_value() && NearPoint(inverse->Map(shape[2]), Vec2{1, 1}, 1e-6), "distort.inverse");
+
+    DocumentSession session;
+    session.CreateDocument(100, 60, false);
+    InsertPainted(session, 20, 20, Vec2{10, 10});
+    session.BeginTransform(false);
+    session.BeginDistort();
+    Expect(session.PendingTransformEdit()->corners.has_value() && session.PendingTransformEdit()->persistent,
+           "distort.begin");
+    session.PreviewCorners(std::array<Vec2, 4>{shape[0], shape[2], shape[1], shape[3]});
+    Expect(session.PendingTransformEdit()->corners.value()[1] == Vec2{30, 10}, "distort.twisted-ignored");
+    session.PreviewCorners(shape);
+    const CanvasDocument* display = session.DisplayDocument();
+    Expect(display != nullptr && display->layers.back().transform.origin == Vec2{10, 10} &&
+               display->layers.back().transform.size == Vec2{50, 20},
+           "distort.preview-bounds");
+    const int count = session.history.UndoCount();
+    session.CommitTransform();
+    const ImageLayer* layer = session.ActiveLayer();
+    Expect(!session.PendingTransformEdit().has_value() && session.history.UndoCount() == count + 1 &&
+               session.history.UndoName() == L"Distort",
+           "distort.commit-history");
+    Expect(layer->transform.origin == Vec2{10, 10} && layer->transform.size == Vec2{50, 20} &&
+               layer->transform.rotation == 0,
+           "distort.commit-bounds");
+    const Raster& warped = layer->asset->image;
+    Expect(warped.Width() == 50 && warped.Height() == 20, "distort.warped-size");
+    Expect(AlphaAt(warped, 40, 2) == 255 && AlphaAt(warped, 5, 15) == 255, "distort.inside-opaque");
+    Expect(AlphaAt(warped, 40, 18) == 0, "distort.outside-transparent");
+    session.Undo();
+    Expect(session.ActiveLayer()->transform.size == Vec2{20, 20} && session.ActiveLayer()->asset->image.Width() == 20,
+           "distort.undo");
+
+    DocumentSession trim;
+    trim.CreateDocument(100, 60, false);
+    ImageLayer stroke = RasterLayer(40, 20, L"Stroke");
+    std::vector<std::uint8_t> bytes(40u * 4u * 20u, 0);
+    for (int y = 5; y < 15; ++y)
+    {
+        for (int x = 15; x < 25; ++x)
+        {
+            const std::size_t offset = (static_cast<std::size_t>(y) * 40u + static_cast<std::size_t>(x)) * 4u;
+            bytes[offset + 2] = 255;
+            bytes[offset + 3] = 255;
+        }
+    }
+    stroke.asset->image = Raster::Make(40, 20, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    stroke.asset->thumbnail = stroke.asset->image;
+    stroke.transform.origin = Vec2{10, 10};
+    trim.Document().value().layers.push_back(stroke);
+    trim.SelectLayer(stroke.id);
+    trim.BeginTransform(false);
+    trim.BeginDistort();
+    trim.PreviewCorners(std::array<Vec2, 4>{Vec2{10, 10}, Vec2{60, 10}, Vec2{50, 30}, Vec2{10, 30}});
+    trim.CommitTransform();
+    const LayerTransform trimmed = trim.ActiveLayer()->transform;
+    Expect(trimmed.size.x < 20 && trimmed.size.y <= 12 && trimmed.origin.x >= 20 && trimmed.origin.y >= 14,
+           "distort.trimmed-bounds");
+    Expect(AlphaAt(trim.ActiveLayer()->asset->image, static_cast<int>(30 - trimmed.origin.x),
+                   static_cast<int>(20 - trimmed.origin.y)) == 255,
+           "distort.trimmed-pixels-stay");
+}
 } // namespace
 
 int wmain()
@@ -528,6 +1126,15 @@ int wmain()
     TestDeleteClearsClipping();
     TestNamingAndInsertion();
     TestPaletteColors();
+    TestTransformGeometry();
+    TestTransformDrag();
+    TestTransformSnap();
+    TestTransformSession();
+    TestTransformDuplicate();
+    TestTransformGroup();
+    TestMaskTransform();
+    TestFlipCommands();
+    TestDistortWarp();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

@@ -46,7 +46,8 @@ the codecs and the composition use) and Gray8 masks. Consumers that cache by `Ra
 
 `LayerTransform` matches archived behavioral reference: origin, size, clockwise rotation
 degrees, flipX/flipY, sampling. Valid when all values are finite, size is 1…300 000 per side, and
-`abs(origin) ≤ 1 000 000`.
+`abs(origin) ≤ 1 000 000`. Its geometry helpers (`Point`, `Contains`, `Corners`, `Following`, `Mirrored`, …), the
+`Affine2` map and the session's transform editing are specified in [`Document_Tools.md`](Document_Tools.md).
 
 `LayerMask` is Gray8 coverage (white reveals). Optional `placement` (the mask moved apart from its layer); `linked`
 defaults true. `MaskTransform(layer)` is where the mask pixels sit: the placement, else the layer transform.

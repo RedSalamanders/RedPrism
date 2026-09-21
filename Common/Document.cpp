@@ -1,5 +1,6 @@
 #include "Document.h"
 
+#include "TransformEdit.h"
 #include "Utf8.h"
 
 #include <algorithm>
@@ -754,12 +755,28 @@ void DocumentSession::EndEdit()
 
 void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 {
+    const bool keepMaskTarget = _maskSelected && _activeLayerID == snapshot.activeLayerID;
     _document = snapshot.document;
     _activeLayerID = snapshot.activeLayerID;
+    _selected.clear();
+    if (_activeLayerID.has_value())
+    {
+        _selected.insert(_activeLayerID.value());
+    }
+    const ImageLayer* active = ActiveLayer();
+    _maskSelected = keepMaskTarget && active != nullptr && active->mask.has_value();
+    ++_editRevision;
+    _displayCopy.reset();
 }
 
 void DocumentSession::Undo()
 {
+    // A pending transform is not in history yet: the first Undo discards it, as Escape would.
+    if (_transformEdit.has_value())
+    {
+        CancelTransform();
+        return;
+    }
     const std::optional<DocumentHistory::Snapshot> snapshot = history.Undo();
     if (snapshot.has_value())
     {
@@ -769,6 +786,11 @@ void DocumentSession::Undo()
 
 void DocumentSession::Redo()
 {
+    if (_transformEdit.has_value())
+    {
+        CancelTransform();
+        return;
+    }
     const std::optional<DocumentHistory::Snapshot> snapshot = history.Redo();
     if (snapshot.has_value())
     {
@@ -778,6 +800,11 @@ void DocumentSession::Redo()
 
 void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 {
+    if (id != _activeLayerID)
+    {
+        CommitTransform();
+        _maskSelected = false;
+    }
     if (!id.has_value() || FindLayer(id.value()) == nullptr)
     {
         _activeLayerID.reset();
@@ -1289,4 +1316,1020 @@ double MaskEdgeBackground(const Raster& thumbnail) noexcept
         }
     }
     return total * 2 >= count * 255 ? 1.0 : 0.0;
+}
+
+// ── Transform editing (C8) ───────────────────────────────────────────────
+
+namespace
+{
+constexpr double kTransformPi = 3.14159265358979323846;
+
+[[nodiscard]] std::unordered_set<Guid> EffectiveVisibleIDs(const CanvasDocument& document)
+{
+    std::unordered_set<Guid> ids;
+    for (const HierarchyEntry& entry : HierarchyEntries(document.layers))
+    {
+        if (entry.visible)
+        {
+            ids.insert(entry.id);
+        }
+    }
+    return ids;
+}
+
+struct CornerBounds
+{
+    double minX = 0;
+    double minY = 0;
+    double maxX = 0;
+    double maxY = 0;
+};
+
+[[nodiscard]] CornerBounds BoundsOfCorners(const std::array<Vec2, 4>& corners) noexcept
+{
+    CornerBounds bounds{corners[0].x, corners[0].y, corners[0].x, corners[0].y};
+    for (const Vec2& corner : corners)
+    {
+        bounds.minX = std::min(bounds.minX, corner.x);
+        bounds.minY = std::min(bounds.minY, corner.y);
+        bounds.maxX = std::max(bounds.maxX, corner.x);
+        bounds.maxY = std::max(bounds.maxY, corner.y);
+    }
+    return bounds;
+}
+} // namespace
+
+Affine2 Affine2::Rotation(double radians) noexcept
+{
+    const double s = std::sin(radians);
+    const double co = std::cos(radians);
+    return Affine2{co, s, -s, co, 0, 0};
+}
+
+Affine2 Affine2::Concat(const Affine2& o) const noexcept
+{
+    return Affine2{a * o.a + b * o.c, a * o.b + b * o.d,          c * o.a + d * o.c,
+                   c * o.b + d * o.d, tx * o.a + ty * o.c + o.tx, tx * o.b + ty * o.d + o.ty};
+}
+
+Affine2 Affine2::Inverted() const noexcept
+{
+    const double determinant = a * d - b * c;
+    if (!std::isfinite(determinant) || std::abs(determinant) < 1e-300)
+    {
+        return Affine2{};
+    }
+    Affine2 result;
+    result.a = d / determinant;
+    result.b = -b / determinant;
+    result.c = -c / determinant;
+    result.d = a / determinant;
+    result.tx = (c * ty - d * tx) / determinant;
+    result.ty = (b * tx - a * ty) / determinant;
+    return result;
+}
+
+double LayerTransform::Radians() const noexcept
+{
+    return std::fmod(rotation, 360.0) * kTransformPi / 180.0;
+}
+
+Vec2 LayerTransform::Point(Vec2 unit) const noexcept
+{
+    const double x = (unit.x - 0.5) * size.x;
+    const double y = (unit.y - 0.5) * size.y;
+    const double radians = Radians();
+    const Vec2 center = Center();
+    return Vec2{center.x + x * std::cos(radians) - y * std::sin(radians),
+                center.y + x * std::sin(radians) + y * std::cos(radians)};
+}
+
+bool LayerTransform::Contains(Vec2 point) const noexcept
+{
+    const Vec2 center = Center();
+    const double x = point.x - center.x;
+    const double y = point.y - center.y;
+    const double radians = Radians();
+    return std::abs(x * std::cos(radians) + y * std::sin(radians)) <= size.x / 2.0 &&
+           std::abs(-x * std::sin(radians) + y * std::cos(radians)) <= size.y / 2.0;
+}
+
+std::array<Vec2, 4> LayerTransform::Corners() const noexcept
+{
+    return {Point(Vec2{0, 0}), Point(Vec2{1, 0}), Point(Vec2{1, 1}), Point(Vec2{0, 1})};
+}
+
+double LayerTransform::ScalePercent(Vec2 pixelSize) const noexcept
+{
+    return size.x / std::max(1.0, pixelSize.x) * 100.0;
+}
+
+LayerTransform LayerTransform::ScaledToPercent(double percent, Vec2 pixelSize) const noexcept
+{
+    LayerTransform result = *this;
+    const Vec2 center = Center();
+    result.size = Vec2{pixelSize.x * percent / 100.0, pixelSize.y * percent / 100.0};
+    result.origin = Vec2{center.x - result.size.x / 2.0, center.y - result.size.y / 2.0};
+    return result;
+}
+
+LayerTransform LayerTransform::Rounded() const noexcept
+{
+    LayerTransform result = *this;
+    result.origin = Vec2{std::round(origin.x), std::round(origin.y)};
+    result.size = Vec2{std::max(1.0, std::round(size.x)), std::max(1.0, std::round(size.y))};
+    result.rotation = std::round(rotation);
+    return result;
+}
+
+Affine2 LayerTransform::UnitToDocument() const noexcept
+{
+    const Vec2 center = Center();
+    return Affine2::Translation(-0.5, -0.5)
+        .Concat(Affine2::Scale(size.x * (flipX ? -1.0 : 1.0), size.y * (flipY ? -1.0 : 1.0)))
+        .Concat(Affine2::Rotation(Radians()))
+        .Concat(Affine2::Translation(center.x, center.y));
+}
+
+LayerTransform LayerTransform::Placing(const Affine2& map) const noexcept
+{
+    // Keep this transform's horizontal flip and the rotation nearest its own, so the numbers stay familiar.
+    const double sign = flipX ? -1.0 : 1.0;
+    const double angle = std::atan2(map.b * sign, map.a * sign);
+    const double along = -map.c * std::sin(angle) + map.d * std::cos(angle);
+    const Vec2 middle = map.Apply(Vec2{0.5, 0.5});
+    LayerTransform result = *this;
+    result.size = Vec2{std::hypot(map.a, map.b), std::abs(along)};
+    const double degrees = angle * 180.0 / kTransformPi;
+    result.rotation = degrees + std::round((rotation - degrees) / 360.0) * 360.0;
+    result.flipY = along < 0;
+    result.origin = Vec2{middle.x - result.size.x / 2.0, middle.y - result.size.y / 2.0};
+    return result;
+}
+
+LayerTransform LayerTransform::Following(const LayerTransform& from, const LayerTransform& to) const noexcept
+{
+    if (from == to)
+    {
+        return *this;
+    }
+    // A plain move carries exactly.
+    if (from.size == to.size && from.rotation == to.rotation && from.flipX == to.flipX && from.flipY == to.flipY)
+    {
+        LayerTransform moved = *this;
+        moved.origin.x += to.origin.x - from.origin.x;
+        moved.origin.y += to.origin.y - from.origin.y;
+        return moved;
+    }
+    return Placing(UnitToDocument().Concat(from.UnitToDocument().Inverted()).Concat(to.UnitToDocument()));
+}
+
+bool LayerTransform::SamePlacement(const LayerTransform& other) const noexcept
+{
+    LayerTransform copy = *this;
+    copy.sampling = other.sampling;
+    return copy == other;
+}
+
+LayerTransform LayerTransform::Mirrored(bool horizontally, double axis) const noexcept
+{
+    LayerTransform result = *this;
+    const Vec2 center = Center();
+    if (horizontally)
+    {
+        result.flipX = !flipX;
+        result.origin.x = 2.0 * axis - center.x - size.x / 2.0;
+    }
+    else
+    {
+        result.flipY = !flipY;
+        result.origin.y = 2.0 * axis - center.y - size.y / 2.0;
+    }
+    result.rotation = -rotation;
+    return result;
+}
+
+std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const LayerTransform& from,
+                                                  const LayerTransform& to) noexcept
+{
+    // A uniform mask looks the same wherever it sits.
+    if (mask.asset.image.Width() <= 1 && mask.asset.image.Height() <= 1)
+    {
+        return std::nullopt;
+    }
+    std::optional<LayerTransform> moved;
+    if (mask.linked)
+    {
+        if (mask.placement.has_value())
+        {
+            moved = mask.placement.value().Following(from, to);
+        }
+    }
+    else
+    {
+        moved = mask.placement.has_value() ? mask.placement.value() : from;
+    }
+    if (!moved.has_value() || moved.value().SamePlacement(to))
+    {
+        return std::nullopt;
+    }
+    return moved;
+}
+
+bool DocumentSession::CanTransform() const noexcept
+{
+    if (!_document.has_value())
+    {
+        return false;
+    }
+    if (TransformsAsGroup())
+    {
+        return !GroupTransformMemberIDs().empty();
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value() || layer->isGroup)
+    {
+        return false;
+    }
+    return EffectiveVisibleIDs(_document.value()).contains(layer->id);
+}
+
+bool DocumentSession::TransformsAsGroup() const noexcept
+{
+    if (_selected.size() > 1)
+    {
+        return true;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    return _selected.size() == 1 && layer != nullptr && layer->isGroup;
+}
+
+std::vector<Guid> DocumentSession::GroupTransformMemberIDs() const
+{
+    std::vector<Guid> ids;
+    if (!TransformsAsGroup() || !_document.has_value())
+    {
+        return ids;
+    }
+    const CanvasDocument& document = _document.value();
+    std::unordered_map<Guid, std::optional<Guid>> parents;
+    for (const ImageLayer& layer : document.layers)
+    {
+        parents[layer.id] = layer.parentID;
+    }
+    const std::unordered_set<Guid> visible = EffectiveVisibleIDs(document);
+    for (const ImageLayer& layer : document.layers)
+    {
+        if (!layer.asset.has_value() || layer.isGroup || !visible.contains(layer.id))
+        {
+            continue;
+        }
+        std::optional<Guid> current = layer.id;
+        for (int depth = 0; depth < 64 && current.has_value(); ++depth)
+        {
+            if (_selected.contains(current.value()))
+            {
+                ids.push_back(layer.id);
+                break;
+            }
+            const auto parent = parents.find(current.value());
+            current = parent == parents.end() ? std::nullopt : parent->second;
+        }
+    }
+    return ids;
+}
+
+std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
+{
+    std::optional<CornerBounds> bounds;
+    for (const Guid& id : GroupTransformMemberIDs())
+    {
+        const ImageLayer* layer = FindLayer(id);
+        if (layer == nullptr)
+        {
+            continue;
+        }
+        const CornerBounds layerBounds = BoundsOfCorners(layer->transform.Corners());
+        if (!bounds.has_value())
+        {
+            bounds = layerBounds;
+            continue;
+        }
+        bounds->minX = std::min(bounds->minX, layerBounds.minX);
+        bounds->minY = std::min(bounds->minY, layerBounds.minY);
+        bounds->maxX = std::max(bounds->maxX, layerBounds.maxX);
+        bounds->maxY = std::max(bounds->maxY, layerBounds.maxY);
+    }
+    if (!bounds.has_value())
+    {
+        return std::nullopt;
+    }
+    LayerTransform box;
+    box.origin = Vec2{bounds->minX, bounds->minY};
+    box.size = Vec2{std::max(1.0, bounds->maxX - bounds->minX), std::max(1.0, bounds->maxY - bounds->minY)};
+    return box;
+}
+
+void DocumentSession::BeginTransform(bool persistent)
+{
+    if (_transformEdit.has_value() || !CanTransform())
+    {
+        return;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr)
+    {
+        return;
+    }
+    if (TransformsAsGroup())
+    {
+        const std::optional<LayerTransform> box = GroupTransformBox();
+        if (!box.has_value())
+        {
+            return;
+        }
+        TransformGroup group;
+        group.box = box.value();
+        for (const Guid& id : GroupTransformMemberIDs())
+        {
+            if (const ImageLayer* member = FindLayer(id))
+            {
+                group.originals.emplace_back(id, member->transform);
+            }
+        }
+        _transformEdit = TransformEdit{layer->id, box.value(), persistent, std::nullopt, false, std::move(group)};
+    }
+    else
+    {
+        // An unlinked mask, when selected, transforms on its own; linked, layer and mask move together.
+        const bool maskAlone = _maskSelected && layer->mask.has_value() && !layer->mask.value().linked;
+        _transformEdit = TransformEdit{layer->id,  maskAlone ? MaskTransform(*layer) : layer->transform,
+                                       persistent, std::nullopt,
+                                       maskAlone,  std::nullopt};
+    }
+    ++_editRevision;
+}
+
+void DocumentSession::PreviewTransform(const LayerTransform& value)
+{
+    if (!value.IsValid() || !_transformEdit.has_value())
+    {
+        return;
+    }
+    _transformEdit->draft = value;
+    ++_editRevision;
+}
+
+void DocumentSession::BeginDistort()
+{
+    if (!_transformEdit.has_value() || _transformEdit->corners.has_value() || !_transformEdit->draft.IsValid())
+    {
+        return;
+    }
+    _transformEdit->corners = _transformEdit->draft.Corners();
+    _transformEdit->persistent = true;
+    ++_editRevision;
+}
+
+void DocumentSession::PreviewCorners(const std::array<Vec2, 4>& corners)
+{
+    if (!_transformEdit.has_value() || !_transformEdit->corners.has_value() || !DistortWarp::IsUsable(corners))
+    {
+        return;
+    }
+    _transformEdit->corners = corners;
+    ++_editRevision;
+}
+
+void DocumentSession::BeginDuplicateTransform()
+{
+    // Alt-drag duplicates a single layer; several selected, or a folder, just move.
+    if (_transformDuplicate.has_value() || TransformsAsGroup() || !_activeLayerID.has_value())
+    {
+        return;
+    }
+    const Guid source = _activeLayerID.value();
+    CommitTransform();
+    if (!CanTransform())
+    {
+        return;
+    }
+    BeginEdit(L"Duplicate Layer");
+    DuplicateActiveLayer();
+    if (!_activeLayerID.has_value() || _activeLayerID.value() == source)
+    {
+        EndEdit();
+        return;
+    }
+    _transformDuplicate = std::make_pair(_activeLayerID.value(), source);
+    BeginTransform(false);
+}
+
+void DocumentSession::CommitTransform()
+{
+    _snapGuides = {};
+    if (!_transformEdit.has_value())
+    {
+        return;
+    }
+    const TransformEdit edit = _transformEdit.value();
+    _transformEdit.reset();
+    _displayCopy.reset();
+    ++_editRevision;
+    const auto finishDuplicate = [this]
+    {
+        if (_transformDuplicate.has_value())
+        {
+            _transformDuplicate.reset();
+            EndEdit();
+        }
+    };
+    if (!_document.has_value())
+    {
+        finishDuplicate();
+        return;
+    }
+    std::vector<ImageLayer>& layers = _document.value().layers;
+    if (edit.mask)
+    {
+        const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
+        if (edit.draft.IsValid() && index.has_value() && layers[index.value()].mask.has_value())
+        {
+            ImageLayer& layer = layers[index.value()];
+            if (edit.corners.has_value())
+            {
+                // A distorted mask is resampled into the shape, its background outside it.
+                const std::optional<DistortWarp::Warped> moved =
+                    DistortWarp::WarpMask(layer.mask->asset.image, edit.draft, edit.corners.value(),
+                                          MaskEdgeBackground(layer.mask->asset.thumbnail));
+                if (moved.has_value())
+                {
+                    BeginEdit(L"Distort Layer Mask");
+                    if (!(moved->image == layer.mask->asset.image))
+                    {
+                        layer.mask->asset.image = moved->image;
+                        layer.mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
+                    }
+                    layer.mask->placement = moved->transform.SamePlacement(layer.transform)
+                                                ? std::nullopt
+                                                : std::optional<LayerTransform>(moved->transform);
+                    EndEdit();
+                }
+            }
+            else
+            {
+                const std::optional<LayerTransform> placement = edit.draft.SamePlacement(layer.transform)
+                                                                    ? std::nullopt
+                                                                    : std::optional<LayerTransform>(edit.draft);
+                if (placement != layer.mask->placement)
+                {
+                    BeginEdit(L"Transform Layer Mask");
+                    layer.mask->placement = placement;
+                    EndEdit();
+                }
+            }
+        }
+        finishDuplicate();
+        return;
+    }
+    if (edit.corners.has_value())
+    {
+        BeginEdit(edit.group.has_value() ? L"Distort Layers" : L"Distort");
+        std::vector<Guid> ids;
+        if (edit.group.has_value())
+        {
+            for (const auto& [id, original] : edit.group->originals)
+            {
+                ids.push_back(id);
+            }
+        }
+        else
+        {
+            ids.push_back(edit.layerID);
+        }
+        for (const Guid& id : ids)
+        {
+            const std::optional<std::size_t> index = IndexOf(layers, id);
+            if (!index.has_value() || !layers[index.value()].asset.has_value())
+            {
+                continue;
+            }
+            ImageLayer& layer = layers[index.value()];
+            LayerTransform transform = edit.draft;
+            std::array<Vec2, 4> corners = edit.corners.value();
+            if (edit.group.has_value())
+            {
+                const auto original = std::find_if(edit.group->originals.begin(), edit.group->originals.end(),
+                                                   [&](const auto& entry) { return entry.first == id; });
+                if (original == edit.group->originals.end())
+                {
+                    continue;
+                }
+                transform = original->second.Following(edit.group->box, edit.draft);
+                corners = DistortWarp::Carried(transform, edit.draft, edit.corners.value());
+                if (!DistortWarp::IsUsable(corners))
+                {
+                    continue;
+                }
+            }
+            const std::optional<DistortWarp::WarpedTrimmed> warped =
+                DistortWarp::WarpTrimmed(layer.asset->image, transform, corners);
+            if (!warped.has_value())
+            {
+                continue;
+            }
+            if (layer.mask.has_value() && !layer.mask->placement.has_value() && layer.mask->linked)
+            {
+                // A uniform mask passes through; any other is warped and cropped with the pixels.
+                const std::optional<DistortWarp::Warped> warpedMask =
+                    DistortWarp::Warp(layer.mask->asset.image, transform, corners, true);
+                if (warpedMask.has_value() && !(warpedMask->image == layer.mask->asset.image))
+                {
+                    const Raster& full = warpedMask->image;
+                    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(warped->cropWidth) *
+                                                    static_cast<std::size_t>(warped->cropHeight));
+                    for (int y = 0; y < warped->cropHeight; ++y)
+                    {
+                        const int sourceY = std::clamp(warped->cropY + y, 0, full.Height() - 1);
+                        for (int x = 0; x < warped->cropWidth; ++x)
+                        {
+                            const int sourceX = std::clamp(warped->cropX + x, 0, full.Width() - 1);
+                            bytes[static_cast<std::size_t>(y) * static_cast<std::size_t>(warped->cropWidth) +
+                                  static_cast<std::size_t>(x)] =
+                                full.Data()[static_cast<std::size_t>(sourceY) *
+                                                static_cast<std::size_t>(full.Stride()) +
+                                            static_cast<std::size_t>(sourceX)];
+                        }
+                    }
+                    Raster cropped = Raster::Make(warped->cropWidth, warped->cropHeight, RasterFormat::Gray8,
+                                                  bytes.data(), bytes.size());
+                    if (cropped.HasStorage())
+                    {
+                        layer.mask->asset.image = cropped;
+                        layer.mask->asset.thumbnail = Raster::MakeThumbnail(cropped);
+                    }
+                }
+            }
+            layer.asset->image = warped->image;
+            layer.asset->thumbnail = Raster::MakeThumbnail(warped->image);
+            layer.transform = warped->transform;
+        }
+        EndEdit();
+        finishDuplicate();
+        return;
+    }
+    if (edit.group.has_value())
+    {
+        if (edit.draft.IsValid())
+        {
+            BeginEdit(L"Transform Layers");
+            for (const auto& [id, original] : edit.group->originals)
+            {
+                const std::optional<std::size_t> index = IndexOf(layers, id);
+                if (!index.has_value())
+                {
+                    continue;
+                }
+                const LayerTransform moved = original.Following(edit.group->box, edit.draft);
+                if (!moved.IsValid())
+                {
+                    continue;
+                }
+                ImageLayer& layer = layers[index.value()];
+                if (layer.mask.has_value())
+                {
+                    layer.mask->placement = MaskPlacementMoving(layer.mask.value(), original, moved);
+                }
+                layer.transform = moved;
+            }
+            EndEdit();
+        }
+        finishDuplicate();
+        return;
+    }
+    const std::optional<std::size_t> index = IndexOf(layers, edit.layerID);
+    if (edit.draft.IsValid() && index.has_value())
+    {
+        BeginEdit(L"Transform Layer");
+        ImageLayer& layer = layers[index.value()];
+        if (layer.mask.has_value())
+        {
+            layer.mask->placement = MaskPlacementMoving(layer.mask.value(), layer.transform, edit.draft);
+        }
+        layer.transform = edit.draft;
+        EndEdit();
+    }
+    finishDuplicate();
+}
+
+void DocumentSession::CancelTransform()
+{
+    _snapGuides = {};
+    if (!_transformEdit.has_value())
+    {
+        return;
+    }
+    _transformEdit.reset();
+    _displayCopy.reset();
+    ++_editRevision;
+    if (_transformDuplicate.has_value() && _document.has_value())
+    {
+        const auto [copy, source] = _transformDuplicate.value();
+        std::vector<ImageLayer>& layers = _document.value().layers;
+        layers.erase(
+            std::remove_if(layers.begin(), layers.end(), [&](const ImageLayer& layer) { return layer.id == copy; }),
+            layers.end());
+        _activeLayerID = source;
+        _selected = {source};
+        _transformDuplicate.reset();
+        EndEdit();
+    }
+}
+
+void DocumentSession::NudgeLayer(double dx, double dy)
+{
+    const bool alreadyEditing = _transformEdit.has_value();
+    if (!alreadyEditing)
+    {
+        BeginTransform(false);
+    }
+    if (!_transformEdit.has_value())
+    {
+        return;
+    }
+    LayerTransform value = _transformEdit->draft;
+    value.origin.x += dx;
+    value.origin.y += dy;
+    PreviewTransform(value);
+    if (_transformEdit->corners.has_value())
+    {
+        std::array<Vec2, 4> corners = _transformEdit->corners.value();
+        for (Vec2& corner : corners)
+        {
+            corner.x += dx;
+            corner.y += dy;
+        }
+        PreviewCorners(corners);
+    }
+    if (!alreadyEditing)
+    {
+        CommitTransform();
+    }
+}
+
+LayerTransform DocumentSession::EditedTransform(const ImageLayer& layer) const
+{
+    if (_transformEdit.has_value() && _transformEdit->layerID == layer.id)
+    {
+        return _transformEdit->draft;
+    }
+    if (!_transformEdit.has_value() && _activeLayerID == layer.id && TransformsAsGroup())
+    {
+        if (const std::optional<LayerTransform> box = GroupTransformBox())
+        {
+            return box.value();
+        }
+    }
+    return _activeLayerID == layer.id && TransformTargetsMask() ? MaskTransform(layer) : layer.transform;
+}
+
+std::optional<LayerTransform> DocumentSession::PendingTransform(const ImageLayer& layer) const
+{
+    if (!_transformEdit.has_value() || _transformEdit->mask)
+    {
+        return std::nullopt;
+    }
+    if (_transformEdit->group.has_value())
+    {
+        for (const auto& [id, original] : _transformEdit->group->originals)
+        {
+            if (id == layer.id)
+            {
+                return original.Following(_transformEdit->group->box, _transformEdit->draft);
+            }
+        }
+        return std::nullopt;
+    }
+    return _transformEdit->layerID == layer.id ? std::optional<LayerTransform>(_transformEdit->draft) : std::nullopt;
+}
+
+LayerTransform DocumentSession::DisplayedTransform(const ImageLayer& layer) const
+{
+    const std::optional<LayerTransform> pending = PendingTransform(layer);
+    return pending.has_value() ? pending.value() : layer.transform;
+}
+
+std::optional<LayerTransform> DocumentSession::DisplayedMaskPlacement(const ImageLayer& layer) const
+{
+    if (!_transformEdit.has_value())
+    {
+        return std::nullopt;
+    }
+    if (_transformEdit->mask)
+    {
+        return _transformEdit->layerID == layer.id ? std::optional<LayerTransform>(_transformEdit->draft)
+                                                   : std::nullopt;
+    }
+    const std::optional<LayerTransform> pending = PendingTransform(layer);
+    if (!pending.has_value() || !layer.mask.has_value())
+    {
+        return std::nullopt;
+    }
+    return MaskPlacementMoving(layer.mask.value(), layer.transform, pending.value());
+}
+
+std::optional<Vec2> DocumentSession::TransformPixelSize() const
+{
+    if (_transformEdit.has_value() && _transformEdit->group.has_value())
+    {
+        return _transformEdit->group->box.size;
+    }
+    if (!_transformEdit.has_value() && TransformsAsGroup())
+    {
+        const std::optional<LayerTransform> box = GroupTransformBox();
+        return box.has_value() ? std::optional<Vec2>(box->size) : std::nullopt;
+    }
+    if (TransformTargetsMask())
+    {
+        return std::nullopt;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value() || !layer->asset->image.HasStorage())
+    {
+        return std::nullopt;
+    }
+    return Vec2{static_cast<double>(layer->asset->image.Width()), static_cast<double>(layer->asset->image.Height())};
+}
+
+bool DocumentSession::TransformTargetsMask() const noexcept
+{
+    if (_transformEdit.has_value())
+    {
+        return _transformEdit->mask;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    return _maskSelected && layer != nullptr && layer->mask.has_value() && !layer->mask->linked;
+}
+
+SnapTargets DocumentSession::TransformSnapTargets(const std::unordered_set<Guid>& excluding) const
+{
+    SnapTargets targets;
+    if (!_document.has_value())
+    {
+        return targets;
+    }
+    const CanvasDocument& document = _document.value();
+    const double width = static_cast<double>(document.width);
+    const double height = static_cast<double>(document.height);
+    targets.xs = {0.0, width / 2.0, width};
+    targets.ys = {0.0, height / 2.0, height};
+    for (const Guid& id : RenderLayerIds(document))
+    {
+        const ImageLayer* layer = FindLayer(id);
+        if (layer == nullptr || !layer->asset.has_value() || excluding.contains(id))
+        {
+            continue;
+        }
+        const CornerBounds bounds = BoundsOfCorners(DisplayedTransform(*layer).Corners());
+        targets.xs.insert(targets.xs.end(), {std::round(bounds.minX), std::round((bounds.minX + bounds.maxX) / 2.0),
+                                             std::round(bounds.maxX)});
+        targets.ys.insert(targets.ys.end(), {std::round(bounds.minY), std::round((bounds.minY + bounds.maxY) / 2.0),
+                                             std::round(bounds.maxY)});
+    }
+    return targets;
+}
+
+LayerTransform DocumentSession::SnappedMove(const LayerTransform& draft, const std::unordered_set<Guid>& moving,
+                                            double tolerance)
+{
+    const CornerBounds bounds = BoundsOfCorners(draft.Corners());
+    const SnapTargets targets = TransformSnapTargets(moving);
+    const TransformSnap::Result snap =
+        TransformSnap::Offset(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY, targets.xs, targets.ys, tolerance);
+    _snapGuides = {};
+    if (snap.x.has_value())
+    {
+        _snapGuides.xs.push_back(snap.x.value());
+    }
+    if (snap.y.has_value())
+    {
+        _snapGuides.ys.push_back(snap.y.value());
+    }
+    if (snap.offset == Vec2{})
+    {
+        return draft;
+    }
+    LayerTransform snapped = draft;
+    snapped.origin.x += snap.offset.x;
+    snapped.origin.y += snap.offset.y;
+    return snapped;
+}
+
+void DocumentSession::FlipLayers(bool horizontally)
+{
+    CommitTransform();
+    if (!CanTransform() || !_document.has_value())
+    {
+        return;
+    }
+    std::vector<Guid> members;
+    double axis = 0;
+    if (TransformsAsGroup())
+    {
+        const std::optional<LayerTransform> box = GroupTransformBox();
+        if (!box.has_value())
+        {
+            return;
+        }
+        members = GroupTransformMemberIDs();
+        axis = horizontally ? box->Center().x : box->Center().y;
+    }
+    else
+    {
+        const ImageLayer* layer = ActiveLayer();
+        if (layer == nullptr)
+        {
+            return;
+        }
+        members = {layer->id};
+        axis = horizontally ? layer->transform.Center().x : layer->transform.Center().y;
+    }
+    if (members.empty())
+    {
+        return;
+    }
+    const std::unordered_set<Guid> ids(members.begin(), members.end());
+    BeginEdit(horizontally ? L"Flip Horizontal" : L"Flip Vertical");
+    for (ImageLayer& layer : _document.value().layers)
+    {
+        if (!ids.contains(layer.id))
+        {
+            continue;
+        }
+        const LayerTransform flipped = layer.transform.Mirrored(horizontally, axis);
+        if (layer.mask.has_value())
+        {
+            layer.mask->placement = MaskPlacementMoving(layer.mask.value(), layer.transform, flipped);
+        }
+        layer.transform = flipped;
+    }
+    EndEdit();
+}
+
+void DocumentSession::FlipCanvas(bool horizontally)
+{
+    CommitTransform();
+    if (!_document.has_value())
+    {
+        return;
+    }
+    CanvasDocument& document = _document.value();
+    const double axis = horizontally ? document.width / 2.0 : document.height / 2.0;
+    BeginEdit(horizontally ? L"Flip Canvas Horizontal" : L"Flip Canvas Vertical");
+    for (ImageLayer& layer : document.layers)
+    {
+        layer.transform = layer.transform.Mirrored(horizontally, axis);
+        if (layer.mask.has_value() && layer.mask->placement.has_value())
+        {
+            layer.mask->placement = layer.mask->placement->Mirrored(horizontally, axis);
+        }
+    }
+    if (document.selection.has_value())
+    {
+        for (Vec2& point : document.selection->outline)
+        {
+            if (horizontally)
+            {
+                point.x = document.width - point.x;
+            }
+            else
+            {
+                point.y = document.height - point.y;
+            }
+        }
+    }
+    EndEdit();
+}
+
+void DocumentSession::DuplicateActiveLayer()
+{
+    if (!_document.has_value())
+    {
+        return;
+    }
+    const ImageLayer* active = ActiveLayer();
+    if (active == nullptr || active->isGroup)
+    {
+        return;
+    }
+    std::vector<ImageLayer>& layers = _document.value().layers;
+    const std::optional<std::size_t> index = IndexOf(layers, active->id);
+    if (!index.has_value())
+    {
+        return;
+    }
+    ImageLayer copy = *active;
+    copy.id = Guid::Generate();
+    copy.name = active->name + L" copy";
+    BeginEdit(L"Duplicate Layer");
+    layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, copy);
+    _activeLayerID = copy.id;
+    _selected = {copy.id};
+    _maskSelected = false;
+    EndEdit();
+}
+
+void DocumentSession::SelectLayerTarget(const Guid& id, bool mask)
+{
+    SelectLayer(id);
+    const ImageLayer* layer = ActiveLayer();
+    _maskSelected = mask && layer != nullptr && layer->mask.has_value();
+}
+
+void DocumentSession::ToggleMaskLink(const Guid& id)
+{
+    ImageLayer* layer = MutableLayer(id);
+    if (layer == nullptr || !layer->mask.has_value())
+    {
+        return;
+    }
+    CommitTransform();
+    BeginEdit(layer->mask->linked ? L"Unlink Layer Mask" : L"Link Layer Mask");
+    layer->mask->linked = !layer->mask->linked;
+    EndEdit();
+}
+
+const CanvasDocument* DocumentSession::DisplayDocument() const
+{
+    if (!_document.has_value())
+    {
+        return nullptr;
+    }
+    if (!_transformEdit.has_value())
+    {
+        _displayCopy.reset();
+        return &_document.value();
+    }
+    if (_displayCopy.has_value() && _displayRevision == _editRevision)
+    {
+        return &_displayCopy.value();
+    }
+    _displayCopy = _document;
+    const TransformEdit& edit = _transformEdit.value();
+    for (ImageLayer& layer : _displayCopy->layers)
+    {
+        const std::optional<LayerTransform> placement = DisplayedMaskPlacement(layer);
+        const std::optional<LayerTransform> pending = PendingTransform(layer);
+        if (pending.has_value())
+        {
+            bool warped = false;
+            if (edit.corners.has_value() && layer.asset.has_value())
+            {
+                std::array<Vec2, 4> corners = edit.corners.value();
+                if (edit.group.has_value())
+                {
+                    corners = DistortWarp::Carried(pending.value(), edit.draft, edit.corners.value());
+                }
+                if (DistortWarp::IsUsable(corners))
+                {
+                    // Preview at a bounded size; Apply resamples at full resolution.
+                    const std::optional<DistortWarp::Warped> preview =
+                        DistortWarp::Warp(layer.asset->image, pending.value(), corners, false, 1024.0);
+                    if (preview.has_value())
+                    {
+                        layer.asset->image = preview->image;
+                        layer.transform = preview->transform;
+                        if (layer.mask.has_value() && !layer.mask->placement.has_value() && layer.mask->linked)
+                        {
+                            const std::optional<DistortWarp::Warped> mask =
+                                DistortWarp::WarpMask(layer.mask->asset.image, pending.value(), corners,
+                                                      MaskEdgeBackground(layer.mask->asset.thumbnail));
+                            if (mask.has_value())
+                            {
+                                layer.mask->asset.image = mask->image;
+                                layer.mask->placement = mask->transform.SamePlacement(layer.transform)
+                                                            ? std::nullopt
+                                                            : std::optional<LayerTransform>(mask->transform);
+                            }
+                        }
+                        warped = true;
+                    }
+                }
+            }
+            if (!warped)
+            {
+                layer.transform = pending.value();
+                if (layer.mask.has_value())
+                {
+                    layer.mask->placement = placement;
+                }
+            }
+        }
+        else if (placement.has_value() && layer.mask.has_value())
+        {
+            layer.mask->placement = placement;
+        }
+    }
+    _displayRevision = _editRevision;
+    return &_displayCopy.value();
 }
