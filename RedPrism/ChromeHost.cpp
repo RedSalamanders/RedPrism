@@ -387,7 +387,8 @@ void ChromeHost::OpenMenu(size_t index, POINT screen, bool) noexcept
     {
         return;
     }
-    const std::optional<int> command = DxUi::ShowNativeHMenuContextMenu(_owner, screen, menu, _palette);
+    const std::optional<int> command =
+        DxUi::ShowNativeHMenuContextMenu(_owner, MenuAnchorScreen(index, screen), menu, _palette);
     if (command.has_value() && _onCommand)
     {
         _onCommand(command.value());
@@ -871,6 +872,85 @@ CanvasHole ChromeHost::HolePixels() const noexcept
     return hole;
 }
 
+bool ChromeHost::IsCanvasPoint(float xPixels, float yPixels) const noexcept
+{
+    if (!_attached)
+    {
+        return false;
+    }
+    const CanvasHole hole = HolePixels();
+    if (xPixels < hole.left || yPixels < hole.top || xPixels >= hole.left + hole.width ||
+        yPixels >= hole.top + hole.height)
+    {
+        return false;
+    }
+    // The picker card and the adjustment panel float over the hole: on them the pointer belongs to the chrome.
+    const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+    const auto covers = [&](const D2D1_RECT_F& card) noexcept
+    {
+        return xPixels >= card.left * scale && xPixels < card.right * scale && yPixels >= card.top * scale &&
+               yPixels < card.bottom * scale;
+    };
+    if (ColorPickerOpen() && covers(_pickerCard->GetBounds()))
+    {
+        return false;
+    }
+    if (AdjustPanelOpen() && covers(_adjustCard->GetBounds()))
+    {
+        return false;
+    }
+    return true;
+}
+
+bool ChromeHost::ApplyChromeCursor(float xPixels, float yPixels) noexcept
+{
+    if (!_attached)
+    {
+        return false;
+    }
+    const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+    LPCWSTR cursor = IDC_ARROW;
+    if (_splitter != nullptr && _splitter->IsVisible())
+    {
+        // The splitter is the one chrome control with a cursor of its own: its separator plus DxUi's hit slop, the
+        // band its own hit test uses for a drag.
+        const D2D1_RECT_F bounds = _splitter->GetBounds();
+        const float separatorLeft = bounds.left + _splitter->GetPosition() - DxUi::Splitter::kHitSlopDip;
+        const float separatorRight =
+            bounds.left + _splitter->GetPosition() + _splitter->GetThickness() + DxUi::Splitter::kHitSlopDip;
+        const float xDip = xPixels / scale;
+        const float yDip = yPixels / scale;
+        if (xDip >= separatorLeft && xDip < separatorRight && yDip >= bounds.top && yDip < bounds.bottom)
+        {
+            cursor = IDC_SIZEWE;
+        }
+    }
+    SetCursor(LoadCursorW(nullptr, cursor));
+    return true;
+}
+
+POINT ChromeHost::MenuAnchorScreen(size_t index, POINT callbackPoint) const noexcept
+{
+    POINT anchor = callbackPoint;
+    RECT item{};
+    if (_attached && _menu != nullptr && _menu->TryGetItemScreenRect(_view.Controls(), index, item))
+    {
+        anchor.x = item.left;
+        anchor.y = item.bottom;
+    }
+    POINT clientOrigin{};
+    if (!_attached || _owner == nullptr || !ClientToScreen(_owner, &clientOrigin))
+    {
+        return anchor;
+    }
+    // The embedded view owns no window: DxUi's "screen" points are relative to whatever origin it assumed for the
+    // view, so the difference to the owner's client origin puts them on the screen.
+    const POINT assumed = _view.Controls().DipPointToScreenPoint(D2D1::Point2F(0.0f, 0.0f));
+    anchor.x += clientOrigin.x - assumed.x;
+    anchor.y += clientOrigin.y - assumed.y;
+    return anchor;
+}
+
 void ChromeHost::SetDocumentTitle(std::wstring title, bool dirty)
 {
     if (_tabs && _tabs->GetTabCount() > 0)
@@ -1032,25 +1112,7 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     {
         return false;
     }
-    const CanvasHole hole = HolePixels();
-    bool inHole = event.xPixels >= hole.left && event.yPixels >= hole.top && event.xPixels < hole.left + hole.width &&
-                  event.yPixels < hole.top + hole.height;
-    if (inHole && ColorPickerOpen())
-    {
-        // The picker card floats over the hole; pointer input on it belongs to chrome, not the canvas.
-        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
-        const D2D1_RECT_F card = _pickerCard->GetBounds();
-        inHole = !(event.xPixels >= card.left * scale && event.xPixels < card.right * scale &&
-                   event.yPixels >= card.top * scale && event.yPixels < card.bottom * scale);
-    }
-    if (inHole && AdjustPanelOpen())
-    {
-        // So does the adjustment panel.
-        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
-        const D2D1_RECT_F card = _adjustCard->GetBounds();
-        inHole = !(event.xPixels >= card.left * scale && event.xPixels < card.right * scale &&
-                   event.yPixels >= card.top * scale && event.yPixels < card.bottom * scale);
-    }
+    const bool inHole = IsCanvasPoint(event.xPixels, event.yPixels);
     if (inHole && event.action == DxUi::PointerAction::Down)
     {
         _canvasFocused = true;

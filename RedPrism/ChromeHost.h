@@ -469,6 +469,14 @@ class ChromeHost final
     [[nodiscard]] bool NeedsAnimation() const noexcept;
     [[nodiscard]] DxUi::EmbeddedStatistics Statistics() const noexcept;
     [[nodiscard]] CanvasHole HolePixels() const noexcept;
+    // Whether a client-area point (pixels) belongs to the canvas: inside the hole and not on a floating card.
+    [[nodiscard]] bool IsCanvasPoint(float xPixels, float yPixels) const noexcept;
+    // Sets the cursor the chrome wants at a client-area point (pixels) off the canvas: the splitter's resize
+    // arrows, the arrow elsewhere. False before the chrome is attached.
+    bool ApplyChromeCursor(float xPixels, float yPixels) noexcept;
+    // The screen point a native flyout for menu `index` hangs from: the item's bottom-left, translated from the
+    // origin DxUi assumed for the embedded view to the owner window's client origin.
+    [[nodiscard]] POINT MenuAnchorScreen(size_t index, POINT callbackPoint) const noexcept;
     [[nodiscard]] float LayersWidthDip() const noexcept
     {
         return _layersWidthDip;

@@ -3466,9 +3466,19 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         break;
     case WM_SETCURSOR:
-        if (LOWORD(lParam) == HTCLIENT && ApplyCanvasCursor())
+        if (LOWORD(lParam) == HTCLIENT)
         {
-            return TRUE;
+            if (ApplyCanvasCursor())
+            {
+                return TRUE;
+            }
+            // Off the canvas the chrome decides (the arrow, the splitter's resize arrows): a tool cursor never lingers.
+            POINT point{};
+            if (_chrome && GetCursorPos(&point) && ScreenToClient(window, &point) &&
+                _chrome->ApplyChromeCursor(static_cast<float>(point.x), static_cast<float>(point.y)))
+            {
+                return TRUE;
+            }
         }
         break;
     case WM_CHAR:
@@ -4003,8 +4013,7 @@ bool Application::ApplyCanvasCursor() noexcept
         return false;
     }
     const CanvasHole hole = _chrome->HolePixels();
-    const bool inHole = point.x >= hole.left && point.y >= hole.top && point.x < hole.left + hole.width &&
-                        point.y < hole.top + hole.height;
+    const bool inHole = _chrome->IsCanvasPoint(static_cast<float>(point.x), static_cast<float>(point.y));
     if (!inHole && !_transformDrag.has_value())
     {
         return false;

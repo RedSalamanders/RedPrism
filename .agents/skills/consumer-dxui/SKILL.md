@@ -35,6 +35,10 @@ the pin. Do not float onto sibling `main`.
   `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`. No drag API.
 - Native flyouts go through `DxUi::ShowNativeHMenuContextMenu(owner, screen, HMENU, palette)`; an empty `HMENU`
   must not be shown.
+- An embedded view owns no window, so a DxUi "screen" point (menu items, context menus) is relative to the origin
+  the library assumed: translate it by the owner's client origin minus `DipPointToScreenPoint({0, 0})`
+  (`ChromeHost::MenuAnchorScreen`), and hit-test the canvas hole minus the floating cards through one helper
+  (`ChromeHost::IsCanvasPoint`) for pointer routing and cursors alike.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
 

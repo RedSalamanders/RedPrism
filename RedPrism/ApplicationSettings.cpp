@@ -279,6 +279,51 @@ int Application::RunProductHardeningSelfTest() noexcept
         ReportSelfTestFailure(L"The product-hardening self-test needs the chrome and the window.\n");
         return 5;
     }
+    // Chrome geometry: the File menu's flyout anchors under its item on screen, and a floating card is chrome, not
+    // canvas, while the hole beside it is canvas.
+    RECT client{};
+    POINT origin{};
+    if (!GetClientRect(_window.get(), &client) || !ClientToScreen(_window.get(), &origin))
+    {
+        ReportSelfTestFailure(L"The window's client rectangle is unavailable.\n");
+        return 5;
+    }
+    const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+    const POINT anchor = _chrome->MenuAnchorScreen(0, POINT{0, 0});
+    // The item rectangle DxUi reports sits inside the bar (a couple of DIP inset), so the anchor lands in the bar's
+    // lower part: below its middle, not below its bottom edge.
+    const LONG menuBottom = origin.y + static_cast<LONG>(std::lround(DxUi::MenuBar::kDefaultHeightDip * scale));
+    const LONG menuMiddle = origin.y + static_cast<LONG>(std::lround(DxUi::MenuBar::kDefaultHeightDip * scale / 2.0f));
+    if (anchor.x < origin.x || anchor.x >= origin.x + client.right || anchor.y <= menuMiddle ||
+        anchor.y > menuBottom + 1)
+    {
+        ReportSelfTestFailure(std::format(
+            L"The File menu anchor ({}, {}) is not under its item (client origin {}, {}; menu bottom {}).\n", anchor.x,
+            anchor.y, origin.x, origin.y, menuBottom));
+        return 5;
+    }
+    const CanvasHole hole = _chrome->HolePixels();
+    const float holeX = hole.left + hole.width / 2.0f;
+    const float holeY = hole.top + hole.height / 2.0f;
+    if (!_chrome->IsCanvasPoint(holeX, holeY) || _chrome->IsCanvasPoint(hole.left / 2.0f, holeY))
+    {
+        ReportSelfTestFailure(L"The canvas hit test does not tell the hole from the rail.\n");
+        return 5;
+    }
+    _chrome->OpenColorPicker(false);
+    (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    const D2D1_RECT_F card = _chrome->ColorPickerBoundsDip();
+    const float cardX = (card.left + card.right) / 2.0f * scale;
+    const float cardY = (card.top + card.bottom) / 2.0f * scale;
+    const bool cardIsChrome =
+        _chrome->ColorPickerOpen() && card.right > card.left && !_chrome->IsCanvasPoint(cardX, cardY);
+    _chrome->CloseColorPicker(false);
+    if (!cardIsChrome)
+    {
+        ReportSelfTestFailure(L"The open color picker card counts as canvas.\n");
+        return 5;
+    }
+
     // Accessibility: every interactive control carries a name and the window's UIA root exposes the chrome.
     const std::vector<std::wstring> unnamed = _chrome->UnnamedInteractiveControls();
     if (!unnamed.empty())
@@ -317,10 +362,8 @@ int Application::RunProductHardeningSelfTest() noexcept
         ReportSelfTestFailure(L"The chrome's UIA tree carries too few named elements.\n");
         return 5;
     }
-    POINT origin{};
     wil::com_ptr_nothrow<IRawElementProviderFragment> hit;
-    if (!ClientToScreen(_window.get(), &origin) ||
-        FAILED(root->ElementProviderFromPoint(origin.x + 8.0, origin.y + 8.0, hit.put())) || !hit)
+    if (FAILED(root->ElementProviderFromPoint(origin.x + 8.0, origin.y + 8.0, hit.put())) || !hit)
     {
         ReportSelfTestFailure(L"ElementProviderFromPoint found no chrome element under the menu bar.\n");
         return 5;

@@ -272,7 +272,10 @@ another panel applies the open one. The session contract lives in
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
-`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing.
+`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. A flyout hangs
+from its item's bottom-left on screen: the embedded view owns no window, so `ChromeHost::MenuAnchorScreen` takes
+the item rectangle DxUi reports and translates it by the difference between the owner's client origin and the
+origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-test checks the File menu's anchor.
 
 | Menu | Commands |
 | --- | --- |
