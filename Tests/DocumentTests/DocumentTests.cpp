@@ -5728,6 +5728,87 @@ void TestCrop()
     Expect(!targets.CropFrame().has_value() && !targets.VisibleCropRect().has_value(), "crop.cleared");
 }
 
+void TestMerge()
+{
+    // Merge Down: the top layer and the one beneath it in the same folder become one layer named after the lower.
+    DocumentSession session;
+    session.CreateDocument(4, 4);
+    session.AddBlankLayer();
+    const Guid bottom = session.ActiveLayerID().value();
+    session.SelectLayer(bottom);
+    Expect(!session.PlanMerge().has_value(), "merge.bottom-layer-has-no-plan");
+    ImageLayer red = RasterLayer(2, 2, L"Red");
+    ImageLayer blue = RasterLayer(2, 2, L"Blue");
+    blue.transform.origin = Vec2{2, 2};
+    session.BeginEdit(L"Setup");
+    session.Document().value().layers.push_back(red);
+    session.Document().value().layers.push_back(blue);
+    session.EndEdit();
+    session.AddBlankLayer();
+    const Guid clipped = session.ActiveLayerID().value();
+    Expect(session.LinkMask(red.id, clipped), "merge.clip-setup");
+    session.SelectLayer(blue.id);
+    const std::optional<DocumentSession::MergePlan> plan = session.PlanMerge();
+    Expect(plan.has_value() && plan->action == L"Merge Down" && plan->name == L"Red" && plan->anchor == blue.id &&
+               plan->ids == std::vector<Guid>{red.id, blue.id} && plan->removed.size() == 2 &&
+               !plan->parent.has_value(),
+           "merge.down-plan");
+    // A composite the composition would give: red at (0,0)–(1,1), blue at (2,2)–(3,3), the rest clear.
+    std::vector<std::uint8_t> bytes(4u * 4u * 4u, 0);
+    const auto paint = [&](int x, int y, std::uint8_t b, std::uint8_t g, std::uint8_t r)
+    {
+        std::uint8_t* pixel = bytes.data() + (static_cast<std::size_t>(y) * 4 + x) * 4u;
+        pixel[0] = b;
+        pixel[1] = g;
+        pixel[2] = r;
+        pixel[3] = 255;
+    };
+    paint(0, 0, 0, 0, 255);
+    paint(1, 1, 0, 0, 255);
+    paint(2, 2, 255, 0, 0);
+    paint(3, 3, 255, 0, 0);
+    const Raster composite = Raster::Make(4, 4, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    const std::optional<CanvasDocument> before = session.Document();
+    Expect(session.MergeLayers(plan.value(), composite), "merge.down-applies");
+    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    const ImageLayer* merged = session.ActiveLayer();
+    // The blank clipped layer sits above the bottom one, so the merged layer lands at the top, in Blue's slot.
+    Expect(layers.size() == 3 && merged != nullptr && merged->name == L"Red" && merged->id != red.id &&
+               layers[2].id == merged->id && session.history.UndoName() == L"Merge Down",
+           "merge.down-result-in-place");
+    Expect(merged != nullptr && merged->asset.has_value() && merged->asset->image.Width() == 4 &&
+               merged->transform.origin == Vec2{0, 0} && merged->transform.size == Vec2{4, 4},
+           "merge.down-trimmed-to-pixels");
+    const ImageLayer* clip = Find(session.Document(), clipped);
+    Expect(clip != nullptr && clip->maskSourceID == merged->id, "merge.clips-follow-the-result");
+    session.Undo();
+    Expect(session.Document() == before, "merge.undo");
+    session.Redo();
+    Expect(session.Document().value().layers.size() == 3, "merge.redo");
+    // Merge Group: a folder with pixel layers merges its contents in its place and goes; an empty one has no plan.
+    DocumentSession group;
+    group.CreateDocument(4, 4);
+    group.AddGroup();
+    const Guid folder = group.ActiveLayerID().value();
+    Expect(!group.PlanMerge().has_value(), "merge.empty-folder-has-no-plan");
+    ImageLayer inner = RasterLayer(4, 4, L"Inner");
+    inner.parentID = folder;
+    group.BeginEdit(L"Setup");
+    group.Document().value().layers.push_back(inner);
+    group.EndEdit();
+    group.SelectLayer(folder);
+    const std::optional<DocumentSession::MergePlan> groupPlan = group.PlanMerge();
+    Expect(groupPlan.has_value() && groupPlan->action == L"Merge Group" && groupPlan->name == L"Folder 1" &&
+               groupPlan->ids == std::vector<Guid>{folder, inner.id} && !groupPlan->parent.has_value(),
+           "merge.group-plan");
+    Expect(group.MergeLayers(groupPlan.value(), composite) && group.Document().value().layers.size() == 1 &&
+               group.ActiveLayer() != nullptr && group.ActiveLayer()->name == L"Folder 1" &&
+               !group.ActiveLayer()->isGroup && group.history.UndoName() == L"Merge Group",
+           "merge.group-applies");
+    // A stale plan (its layers gone) is refused.
+    Expect(!group.MergeLayers(groupPlan.value(), composite), "merge.stale-plan-refused");
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5811,6 +5892,7 @@ int wmain()
     TestCanvasResize();
     TestImageResize();
     TestCrop();
+    TestMerge();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

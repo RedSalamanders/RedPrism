@@ -1,5 +1,6 @@
 #include "Document.h"
 
+#include "Adjust.h"
 #include "CanvasSize.h"
 #include "Crop.h"
 #include "TransformEdit.h"
@@ -1795,6 +1796,168 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
+}
+
+std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
+{
+    const ImageLayer* active = ActiveLayer();
+    if (!_document.has_value() || active == nullptr)
+    {
+        return std::nullopt;
+    }
+    const std::vector<ImageLayer>& layers = _document.value().layers;
+    MergePlan plan;
+    if (_selected.size() > 1)
+    {
+        std::unordered_set<Guid> picked = _selected;
+        for (const Guid& id : _selected)
+        {
+            const std::unordered_set<Guid> below = DescendantIds(layers, id);
+            picked.insert(below.begin(), below.end());
+        }
+        bool pixels = false;
+        const ImageLayer* top = nullptr;
+        for (const ImageLayer& layer : layers)
+        {
+            if (!picked.contains(layer.id))
+            {
+                continue;
+            }
+            plan.ids.push_back(layer.id);
+            pixels = pixels || !layer.isGroup;
+            if (_selected.contains(layer.id))
+            {
+                top = &layer;
+            }
+        }
+        if (!pixels || top == nullptr)
+        {
+            return std::nullopt;
+        }
+        plan.removed = std::move(picked);
+        plan.name = top->name;
+        plan.parent = top->parentID;
+        plan.anchor = top->id;
+        plan.action = L"Merge Layers";
+        return plan;
+    }
+    if (active->isGroup)
+    {
+        const std::unordered_set<Guid> inside = DescendantIds(layers, active->id);
+        bool pixels = false;
+        for (const ImageLayer& layer : layers)
+        {
+            if (inside.contains(layer.id) || layer.id == active->id)
+            {
+                plan.ids.push_back(layer.id);
+                pixels = pixels || (inside.contains(layer.id) && !layer.isGroup);
+            }
+        }
+        if (!pixels)
+        {
+            return std::nullopt;
+        }
+        plan.removed = std::unordered_set<Guid>(plan.ids.begin(), plan.ids.end());
+        plan.name = active->name;
+        plan.parent = active->parentID;
+        plan.anchor = active->id;
+        plan.action = L"Merge Group";
+        return plan;
+    }
+    const std::optional<std::size_t> index = IndexOf(layers, active->id);
+    if (!index.has_value())
+    {
+        return std::nullopt;
+    }
+    const ImageLayer* below = nullptr;
+    for (std::size_t position = index.value(); position-- > 0;)
+    {
+        if (layers[position].parentID == active->parentID)
+        {
+            below = &layers[position];
+            break;
+        }
+    }
+    if (below == nullptr || below->isGroup)
+    {
+        return std::nullopt;
+    }
+    plan.ids = {below->id, active->id};
+    plan.removed = {below->id, active->id};
+    plan.name = below->name;
+    plan.parent = active->parentID;
+    plan.anchor = active->id;
+    plan.action = L"Merge Down";
+    return plan;
+}
+
+bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
+{
+    if (!_document.has_value() || !composite.HasStorage() || composite.Width() != _document.value().width ||
+        composite.Height() != _document.value().height || plan.ids.empty())
+    {
+        return false;
+    }
+    const std::vector<ImageLayer>& layers = _document.value().layers;
+    for (const Guid& id : plan.ids)
+    {
+        if (LayerById(layers, id) == nullptr)
+        {
+            return false;
+        }
+    }
+    LayerTransform canvas;
+    canvas.size = Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)};
+    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas);
+    if (!trimmed.image.HasStorage())
+    {
+        return false;
+    }
+    ImageLayer merged = ImageLayer::Blank(plan.name, trimmed.transform.size);
+    merged.transform = trimmed.transform;
+    merged.asset = RasterAsset{trimmed.image, Raster::MakeThumbnail(trimmed.image), plan.name};
+    merged.parentID = plan.parent;
+    std::vector<ImageLayer> next;
+    for (const ImageLayer& layer : layers)
+    {
+        if (!plan.removed.contains(layer.id))
+        {
+            next.push_back(layer);
+        }
+    }
+    // Layers clipped to anything that was merged now clip to the result.
+    for (ImageLayer& layer : next)
+    {
+        if (layer.maskSourceID.has_value() && plan.removed.contains(layer.maskSourceID.value()))
+        {
+            layer.maskSourceID = merged.id;
+        }
+    }
+    std::size_t slot = layers.size();
+    if (const std::optional<std::size_t> anchor = IndexOf(layers, plan.anchor); anchor.has_value())
+    {
+        slot = anchor.value();
+    }
+    std::size_t insertion = slot;
+    for (std::size_t position = 0; position < slot && position < layers.size(); ++position)
+    {
+        if (plan.removed.contains(layers[position].id))
+        {
+            --insertion;
+        }
+    }
+    next.insert(next.begin() + static_cast<std::ptrdiff_t>(std::min(insertion, next.size())), merged);
+    if (ValidateHierarchy(next) != DocumentStatus::Ok || ValidateLiveMaskGraph(next) != DocumentStatus::Ok)
+    {
+        return false;
+    }
+    BeginEdit(plan.action);
+    _document.value().layers = std::move(next);
+    _activeLayerID = merged.id;
+    _selected = {merged.id};
+    _maskSelected = false;
+    EndEdit();
+    return true;
 }
 
 void DocumentSession::SetCropFrame(std::optional<CropRect> rect) noexcept

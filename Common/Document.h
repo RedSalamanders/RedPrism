@@ -1239,6 +1239,23 @@ class DocumentSession
     [[nodiscard]] bool CommitCrop();
     // What crop edges snap to: the canvas edges and every visible pixel layer's upright bounds, in whole pixels.
     [[nodiscard]] SnapTargets CropSnapTargets() const;
+    // Merge (C16, legacy LayerMerge.swift): what Ctrl+E merges, in stacking order, and where the result goes. One
+    // layer merges with the layer beneath it in the same folder; a folder merges its contents and goes; several
+    // selected layers merge together with anything their folders hold.
+    struct MergePlan
+    {
+        std::vector<Guid> ids;
+        std::unordered_set<Guid> removed;
+        std::wstring name;
+        std::optional<Guid> parent;
+        Guid anchor;
+        std::wstring action; // Merge Down, Merge Group or Merge Layers
+    };
+    [[nodiscard]] std::optional<MergePlan> PlanMerge() const;
+    // `composite`: the plan's layers flattened as the canvas shows them (document-sized BGRA from the composition).
+    // Trimmed to its pixels it replaces them in their place, layers clipped to any of them clip to it, as one entry
+    // named by the plan; false when the plan does not fit the document any more.
+    [[nodiscard]] bool MergeLayers(const MergePlan& plan, const Raster& composite);
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
     void SetBlendMode(LayerBlendMode mode);
