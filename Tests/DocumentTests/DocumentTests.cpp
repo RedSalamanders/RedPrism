@@ -1,14 +1,19 @@
+#include "BrushStroke.h"
 #include "Document.h"
+#include "DocumentHistory.h"
 #include "Selection.h"
 #include "TransformEdit.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string>
@@ -1973,6 +1978,842 @@ void TestWandSession()
     // Add mode clips to the canvas and keeps the selection; the header defaults match the legacy settings.
     Expect(WandSettings{} == WandSettings{32, WandSampleSize::Point, true, false}, "wandsession.defaults");
 }
+
+// ── Brush (C10) ───────────────────────────────────────────────────────────
+
+[[nodiscard]] std::array<std::uint8_t, 4> PixelOf(const Raster& raster, int x, int y) noexcept
+{
+    std::array<std::uint8_t, 4> out{0, 0, 0, 0};
+    if (!raster.HasStorage() || x < 0 || y < 0 || x >= raster.Width() || y >= raster.Height())
+    {
+        return out;
+    }
+    raster.ReadRegion(x, y, 1, 1, out.data(), 4, 0);
+    return out;
+}
+
+// The active layer's pixel under a document point (nearest), transparent outside its pixels.
+[[nodiscard]] std::array<std::uint8_t, 4> LayerPixel(const DocumentSession& session, double x, double y) noexcept
+{
+    const ImageLayer* layer = session.ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return {0, 0, 0, 0};
+    }
+    const Raster& image = layer->asset->image;
+    const Vec2 pixel = PixelToDocument(layer->transform, image.Width(), image.Height()).Inverted().Apply(Vec2{x, y});
+    return PixelOf(image, static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)));
+}
+
+[[nodiscard]] std::uint8_t MaskValue(const DocumentSession& session, double x, double y) noexcept
+{
+    const ImageLayer* layer = session.ActiveLayer();
+    if (layer == nullptr || !layer->mask.has_value())
+    {
+        return 0;
+    }
+    const Raster& mask = layer->mask->asset.image;
+    const LayerTransform placement = MaskTransform(*layer);
+    const Vec2 pixel = PixelToDocument(placement, mask.Width(), mask.Height()).Inverted().Apply(Vec2{x, y});
+    std::uint8_t value = 255;
+    mask.ReadRegion(static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)), 1, 1, &value, 1, 255);
+    return value;
+}
+
+// A pending stroke's pixel under a document point: the tile's composed image, its original pixels, or the fill.
+[[nodiscard]] std::array<std::uint8_t, 4> StrokePixel(const BrushStroke& stroke, double x, double y) noexcept
+{
+    const Vec2 grid = stroke.PixelToDocument().Inverted().Apply(Vec2{x, y});
+    const int gx = static_cast<int>(std::floor(grid.x));
+    const int gy = static_cast<int>(std::floor(grid.y));
+    for (const BrushStroke::Tile& tile : stroke.Tiles())
+    {
+        if (gx >= tile.rect.x && gy >= tile.rect.y && gx < tile.rect.x + tile.rect.width &&
+            gy < tile.rect.y + tile.rect.height)
+        {
+            if (stroke.IsMask())
+            {
+                std::array<std::uint8_t, 4> out{0, 0, 0, 0};
+                tile.image.ReadRegion(gx - tile.rect.x, gy - tile.rect.y, 1, 1, out.data(), 1, 255);
+                out[3] = out[0];
+                return out;
+            }
+            return PixelOf(tile.image, gx - tile.rect.x, gy - tile.rect.y);
+        }
+    }
+    std::array<std::uint8_t, 4> out{0, 0, 0, 0};
+    if (stroke.SourceImage().HasStorage())
+    {
+        stroke.SourceImage().ReadRegion(gx - stroke.SourceRect().x, gy - stroke.SourceRect().y, 1, 1, out.data(),
+                                        stroke.IsMask() ? 1 : 4, stroke.FillValue());
+        if (stroke.IsMask())
+        {
+            out[3] = out[0];
+        }
+    }
+    return out;
+}
+
+DocumentSession BrushSession(int width = 600, int height = 80)
+{
+    DocumentSession session;
+    session.CreateDocument(width, height, false);
+    session.AddBlankLayer();
+    session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    return session;
+}
+
+[[nodiscard]] bool IsRed(const std::array<std::uint8_t, 4>& pixel) noexcept
+{
+    return pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255;
+}
+
+void TestSparseRaster()
+{
+    // A base with a tile over part of it: reads resolve without assembling the pixels.
+    std::vector<std::uint8_t> gradient(16);
+    for (std::size_t i = 0; i < gradient.size(); ++i)
+    {
+        gradient[i] = static_cast<std::uint8_t>(i * 10);
+    }
+    const Raster base = Raster::Make(4, 4, RasterFormat::Gray8, gradient.data(), gradient.size());
+    const std::vector<std::uint8_t> tileBytes{200, 201, 202, 203};
+    const Raster tile = Raster::Make(2, 2, RasterFormat::Gray8, tileBytes.data(), tileBytes.size());
+    const Raster sparse = Raster::MakeSparse(4, 4, RasterFormat::Gray8, base, 0, 0, {RasterTile{1, 1, tile}}, 0);
+    Expect(sparse.IsSparse() && !sparse.IsMaterialized() && sparse.ByteSize() == 0 && sparse.Tiles().size() == 1,
+           "sparse.made");
+    std::array<std::uint8_t, 16> read{};
+    sparse.ReadRegion(0, 0, 4, 4, read.data(), 4, 0);
+    Expect(read[0] == 0 && read[5] == 200 && read[6] == 201 && read[9] == 202 && read[10] == 203 && read[15] == 150 &&
+               !sparse.IsMaterialized(),
+           "sparse.read-region-without-materializing");
+    const Raster thumb = Raster::MakeThumbnail(sparse, 2);
+    Expect(thumb.Width() == 2 && !sparse.IsMaterialized(), "sparse.thumbnail-without-materializing");
+    const std::uint8_t* data = sparse.Data();
+    Expect(data != nullptr && sparse.IsMaterialized() && data[5] == 200 && data[15] == 150 && sparse.ByteSize() == 16,
+           "sparse.materialize-on-data");
+    int storages = 0;
+    sparse.ForEachStorage([&](const Raster&) { ++storages; });
+    Expect(storages == 3, "sparse.for-each-storage");
+    // Masks reveal beyond their pixels: the fill is white.
+    const std::uint8_t black = 0;
+    const Raster dot = Raster::Make(1, 1, RasterFormat::Gray8, &black, 1);
+    const Raster mask = Raster::MakeSparse(3, 3, RasterFormat::Gray8, dot, 1, 1, {}, 255);
+    std::array<std::uint8_t, 9> maskRead{};
+    mask.ReadRegion(0, 0, 3, 3, maskRead.data(), 3, 255);
+    Expect(maskRead[0] == 255 && maskRead[4] == 0 && maskRead[8] == 255, "sparse.mask-fill-white");
+    // Replacing: newer tiles split older ones, the crop shifts everything, the base is shared.
+    const Raster red = SolidRaster(8, 8, 0, 0, 255, 255);
+    const Raster green = SolidRaster(4, 4, 0, 255, 0, 255);
+    const Raster first = Raster::Replacing(red, 0, 0, {RasterTile{2, 2, green}}, 1, 1, 6, 6, 0);
+    Expect(first.Width() == 6 && first.IsSparse() && first.Base() == red && first.BaseX() == -1 &&
+               first.Tiles().size() == 1,
+           "sparse.replacing-crops");
+    Expect(IsRed(PixelOf(first, 0, 0)) && PixelOf(first, 1, 1)[1] == 255 && PixelOf(first, 4, 4)[1] == 255 &&
+               IsRed(PixelOf(first, 5, 5)) && !first.IsMaterialized(),
+           "sparse.replacing-pixels");
+    const Raster blue = SolidRaster(2, 2, 255, 0, 0, 255);
+    const Raster second = Raster::Replacing(first, 0, 0, {RasterTile{0, 0, blue}}, 0, 0, 6, 6, 0);
+    Expect(second.Tiles().size() == 3 && second.Base() == red && second.Tiles()[0].pixels == green &&
+               PixelOf(second, 1, 1)[0] == 255 && PixelOf(second, 2, 1)[1] == 255 && PixelOf(second, 1, 2)[1] == 255 &&
+               IsRed(PixelOf(second, 5, 0)),
+           "sparse.replacing-splits-older-tiles");
+    bool disjoint = true;
+    for (std::size_t a = 0; a < second.Tiles().size(); ++a)
+    {
+        for (std::size_t b = a + 1; b < second.Tiles().size(); ++b)
+        {
+            const RasterTile& p = second.Tiles()[a];
+            const RasterTile& q = second.Tiles()[b];
+            const bool overlap =
+                p.x < q.x + q.Width() && q.x < p.x + p.Width() && p.y < q.y + q.Height() && q.y < p.y + p.Height();
+            disjoint = disjoint && !overlap;
+        }
+    }
+    Expect(disjoint, "sparse.tiles-disjoint");
+    // The assembled bytes agree with the region reads.
+    std::vector<std::uint8_t> whole(6 * 6 * 4);
+    second.ReadRegion(0, 0, 6, 6, whole.data(), 24, 0);
+    const std::uint8_t* assembled = second.Data();
+    Expect(assembled != nullptr && std::memcmp(assembled, whole.data(), whole.size()) == 0, "sparse.assembled-matches");
+    Expect(Raster::Replacing(Raster{}, 0, 0, {RasterTile{0, 0, blue}}, 0, 0, 3, 3, 0).Width() == 3 &&
+               !Raster::Replacing(red, 0, 0, {}, 0, 0, 0, 3, 0).HasStorage(),
+           "sparse.replacing-edge-cases");
+}
+
+void TestBrushKernel()
+{
+    BrushKernelParams hard;
+    hard.radius = 10;
+    hard.hardness = 1;
+    hard.antialiasWidth = 1;
+    Expect(BrushKernel::TipCoverage(9.5, hard) == 1.0 && BrushKernel::TipCoverage(10.5, hard) == 0.0 &&
+               Near(BrushKernel::TipCoverage(10.0, hard), 0.5),
+           "kernel.hard-tip-edge");
+    BrushKernelParams soft = hard;
+    soft.hardness = 0;
+    Expect(Near(BrushKernel::TipCoverage(0.0, soft), 1.0) && Near(BrushKernel::TipCoverage(10.0, soft), 0.0) &&
+               BrushKernel::TipCoverage(5.0, soft) > 0.37 && BrushKernel::TipCoverage(5.0, soft) < 0.55,
+           "kernel.soft-gaussian");
+    Expect(BrushKernel::SegmentDistanceSquared(Vec2{5, 5}, BrushSegment{Vec2{0, 0}, Vec2{10, 0}}) == 25.0 &&
+               BrushKernel::SegmentDistanceSquared(Vec2{-3, 4}, BrushSegment{Vec2{0, 0}, Vec2{10, 0}}) == 25.0,
+           "kernel.segment-distance");
+    // A straight run needs one segment; a curve several, each within the tolerance.
+    const std::vector<BrushSegment> straight = BrushCurveSegments(Vec2{0, 0}, Vec2{10, 0}, Vec2{20, 0}, Vec2{30, 0});
+    Expect(straight.size() == 1 && straight[0].from == Vec2{10, 0} && straight[0].to == Vec2{20, 0},
+           "kernel.curve-straight");
+    const std::vector<BrushSegment> bent = BrushCurveSegments(Vec2{0, 0}, Vec2{10, 0}, Vec2{10, 10}, Vec2{0, 10});
+    Expect(bent.size() > 1 && bent.front().from == Vec2{10, 0} && bent.back().to == Vec2{10, 10}, "kernel.curve-bends");
+    // The CPU kernel on one tile: a hard dab, then a soft tail that leaves nothing behind when replaced.
+    std::vector<float> permanent(64 * 64, 0.0f);
+    std::vector<std::uint8_t> preview(64 * 64, 0);
+    BrushKernelParams params;
+    params.radius = 8;
+    params.hardness = 1;
+    params.canvasWidth = 64;
+    params.canvasHeight = 64;
+    params.antialiasWidth = 1;
+    params.spacing = 1;
+    const BrushKernelTile tile{0, 0, 0, 64, 64, permanent.data(), preview.data()};
+    const std::array<BrushSegment, 1> dab{BrushSegment{Vec2{32, 32}, Vec2{32, 32}}};
+    const std::array<BrushSegment, 1> tail{BrushSegment{Vec2{32, 32}, Vec2{60, 32}}};
+    BrushKernel::RenderTile(tile, dab, tail, params);
+    Expect(preview[32 * 64 + 32] == 255 && preview[32 * 64 + 55] == 255 && preview[10 * 64 + 10] == 0,
+           "kernel.dab-and-tail");
+    BrushKernel::RenderTile(tile, {}, {}, params);
+    Expect(preview[32 * 64 + 32] == 255 && preview[32 * 64 + 55] == 0, "kernel.tail-replaced");
+}
+
+void TestBrushStroke()
+{
+    // Legacy continuousStrokeCrossesTilesAndCommitsOneUndo.
+    DocumentSession session = BrushSession();
+    const int count = session.history.UndoCount();
+    Expect(session.CanPaint() && session.BeginBrush(Vec2{20, 40}), "brush.begin");
+    session.ContinueBrush(Vec2{580, 40});
+    const BrushStroke* stroke = session.PendingBrush();
+    Expect(stroke != nullptr && stroke->Tiles().size() == 3 && !session.ActiveLayer()->asset.has_value() &&
+               session.history.UndoCount() == count,
+           "brush.three-tiles-no-commit");
+    bool live = stroke != nullptr;
+    for (const int x : {20, 255, 256, 511, 512, 579})
+    {
+        live = live && IsRed(StrokePixel(*stroke, x, 40));
+    }
+    Expect(live, "brush.live-red-across-tiles");
+    session.FinishBrush();
+    Expect(session.PendingBrush() == nullptr && session.history.UndoCount() == count + 1 &&
+               session.history.UndoName() == L"Brush Stroke",
+           "brush.one-entry");
+    bool committed = session.ActiveLayer()->asset.has_value();
+    for (const int x : {20, 255, 256, 511, 512, 579})
+    {
+        committed = committed && IsRed(LayerPixel(session, x, 40));
+    }
+    Expect(committed && LayerPixel(session, 300, 0)[3] == 0 && session.ActiveLayer()->asset->image.IsSparse(),
+           "brush.committed-pixels");
+    session.Undo();
+    Expect(!session.ActiveLayer()->asset.has_value(), "brush.undo");
+    session.Redo();
+    Expect(session.ActiveLayer()->asset.has_value(), "brush.redo");
+}
+
+void TestBrushSoftAndCancel()
+{
+    // Legacy softBrushProducesPartialAlphaAndCancelPreservesDocument.
+    DocumentSession session = BrushSession(80, 80);
+    session.brushSettings.diameter = 40;
+    session.brushSettings.hardness = 0;
+    const std::optional<CanvasDocument> before = session.Document();
+    Expect(session.BeginBrush(Vec2{40, 40}), "brush.soft-begin");
+    const BrushStroke* stroke = session.PendingBrush();
+    const int center = StrokePixel(*stroke, 40, 40)[3];
+    const int half = StrokePixel(*stroke, 50, 40)[3];
+    Expect(center > 230 && half > 95 && half < 140 && StrokePixel(*stroke, 57, 40)[3] < 40 &&
+               StrokePixel(*stroke, 64, 40)[3] == 0,
+           "brush.soft-falloff");
+    session.CancelBrush();
+    Expect(session.PendingBrush() == nullptr && session.Document() == before, "brush.cancel-keeps-document");
+    Expect(session.BeginBrush(Vec2{-100, -100}), "brush.begin-outside");
+    session.FinishBrush();
+    Expect(session.Document() == before, "brush.outside-paints-nothing");
+}
+
+void TestBrushMask()
+{
+    // Legacy softMaskPaintingPreviewMatchesCommitAndPersists and opacityAppliesToMaskPainting.
+    DocumentSession session = BrushSession(80, 80);
+    session.brushSettings.diameter = 200;
+    Expect(session.BeginBrush(Vec2{40, 40}), "mask.paint-layer");
+    session.FinishBrush();
+    const Raster source = session.ActiveLayer()->asset->image;
+    session.AddLayerMask(true);
+    Expect(session.IsMaskSelected() && session.history.UndoName() == L"Add Reveal-All Mask", "mask.added");
+    session.brushSettings.diameter = 40;
+    session.brushSettings.hardness = 0;
+    session.maskPaintWhite = false;
+    Expect(session.BeginBrush(Vec2{40, 40}), "mask.paint-begin");
+    const BrushStroke* stroke = session.PendingBrush();
+    std::array<int, 4> live{};
+    const std::array<int, 4> xs{10, 40, 54, 70};
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        live[i] = StrokePixel(*stroke, xs[i], 40)[3];
+    }
+    session.FinishBrush();
+    bool matches = session.history.UndoName() == L"Paint Mask";
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        matches = matches && std::abs(static_cast<int>(MaskValue(session, xs[i], 40)) - live[i]) <= 1;
+    }
+    Expect(matches && MaskValue(session, 40, 40) < 25 && session.ActiveLayer()->asset->image == source &&
+               session.ActiveLayer()->mask->asset.image.Width() == 80,
+           "mask.preview-matches-commit");
+    session.maskPaintWhite = true;
+    session.brushSettings.hardness = 1;
+    Expect(session.BeginBrush(Vec2{40, 40}), "mask.white-begin");
+    session.FinishBrush();
+    Expect(MaskValue(session, 40, 40) == 255, "mask.white-reveals");
+    session.Undo();
+    Expect(session.IsMaskSelected() && MaskValue(session, 40, 40) < 25, "mask.undo-keeps-target");
+    session.Redo();
+    Expect(session.IsMaskSelected() && MaskValue(session, 40, 40) == 255, "mask.redo");
+    // Opacity applies to mask painting: a half-strength black dab leaves 128.
+    DocumentSession half = BrushSession(80, 80);
+    half.brushSettings.diameter = 200;
+    Expect(half.BeginBrush(Vec2{40, 40}), "mask.opacity-layer");
+    half.FinishBrush();
+    half.AddLayerMask(true);
+    half.brushSettings.diameter = 20;
+    half.brushSettings.opacity = 0.5;
+    half.maskPaintWhite = false;
+    Expect(half.BeginBrush(Vec2{40, 40}), "mask.opacity-begin");
+    half.ContinueBrush(Vec2{42, 40});
+    half.FinishBrush();
+    Expect(std::abs(static_cast<int>(MaskValue(half, 40, 40)) - 128) <= 1 && MaskValue(half, 5, 5) == 255,
+           "mask.opacity-halves");
+    Expect(!half.ActiveLayer()->mask->asset.image.IsMaterialized(), "mask.commit-not-materialized");
+}
+
+void TestBrushOpacityAndAccumulation()
+{
+    // Legacy opacityCapsTheWholeStrokeEvenWhereItOverlapsItself.
+    DocumentSession session = BrushSession(200, 80);
+    session.brushSettings.opacity = 0.5;
+    Expect(session.BeginBrush(Vec2{20, 40}), "opacity.begin");
+    for (const int x : {180, 20, 180, 20, 100})
+    {
+        session.ContinueBrush(Vec2{static_cast<double>(x), 40});
+    }
+    const std::array<std::uint8_t, 4> live = StrokePixel(*session.PendingBrush(), 100, 40);
+    Expect(std::abs(live[3] - 128) <= 1 && std::abs(live[2] - 128) <= 1 && live[1] == 0, "opacity.capped-live");
+    session.FinishBrush();
+    Expect(LayerPixel(session, 100, 40) == live && LayerPixel(session, 100, 0)[3] == 0, "opacity.capped-committed");
+    // Legacy softStrokeBuildsCoverageWhileKeepingItsFeatheredRim.
+    DocumentSession soft = BrushSession(200, 80);
+    soft.brushSettings.diameter = 40;
+    soft.brushSettings.hardness = 0;
+    Expect(soft.BeginBrush(Vec2{100, 40}), "accumulate.single");
+    const int single = StrokePixel(*soft.PendingBrush(), 100, 50)[3];
+    soft.CancelBrush();
+    Expect(soft.BeginBrush(Vec2{20, 40}), "accumulate.stroke");
+    soft.ContinueBrush(Vec2{180, 40});
+    const int stroke = StrokePixel(*soft.PendingBrush(), 100, 50)[3];
+    Expect(stroke > single + 60 && stroke <= 255, "accumulate.builds-coverage");
+    soft.CancelBrush();
+    // Legacy spacedDabsLeaveNoVisibleRippleAlongTheStroke.
+    for (const double hardness : {0.0, 0.5, 1.0})
+    {
+        DocumentSession wide = BrushSession(900, 300);
+        wide.brushSettings.diameter = 120;
+        wide.brushSettings.hardness = hardness;
+        Expect(wide.BeginBrush(Vec2{100, 150}), "ripple.begin");
+        wide.ContinueBrush(Vec2{800, 150});
+        const BrushStroke* pending = wide.PendingBrush();
+        int worst = 0;
+        for (const int offset : {0, 30, 50})
+        {
+            int lo = 255;
+            int hi = 0;
+            for (int x = 300; x <= 600; ++x)
+            {
+                const int alpha = StrokePixel(*pending, x, 150 + offset)[3];
+                lo = std::min(lo, alpha);
+                hi = std::max(hi, alpha);
+            }
+            worst = std::max(worst, hi - lo);
+        }
+        Expect(worst <= 16, hardness == 0.0   ? "ripple.hardness-0"
+                            : hardness == 0.5 ? "ripple.hardness-50"
+                                              : "ripple.hardness-100");
+        wide.CancelBrush();
+    }
+}
+
+void TestBrushCurveAndTail()
+{
+    // Legacy sparseMouseSamplesFollowACurveInsteadOfStraightChords.
+    DocumentSession session = BrushSession(300, 300);
+    session.brushSettings.diameter = 4;
+    const Vec2 center{150, 150};
+    const double radius = 100;
+    const auto onCircle = [&](double degrees)
+    {
+        const double radians = degrees * 3.14159265358979323846 / 180.0;
+        return Vec2{center.x + std::cos(radians) * radius, center.y + std::sin(radians) * radius};
+    };
+    Expect(session.BeginBrush(onCircle(0)), "curve.begin");
+    for (int degrees = 30; degrees <= 180; degrees += 30)
+    {
+        session.ContinueBrush(onCircle(degrees));
+    }
+    session.FinishBrush();
+    bool onArc = true;
+    for (const double degrees : {45.0, 75.0, 105.0, 135.0})
+    {
+        const Vec2 point = onCircle(degrees);
+        onArc = onArc && LayerPixel(session, std::floor(point.x) + 0.5, std::floor(point.y) + 0.5)[3] > 0;
+    }
+    Expect(onArc, "curve.follows-arc");
+    // Legacy liveStrokeReachesNewestSampleAndTailIsReplacedExactly.
+    DocumentSession tail = BrushSession(300, 120);
+    tail.brushSettings.diameter = 8;
+    Expect(tail.BeginBrush(Vec2{20, 60}), "tail.begin");
+    tail.ContinueBrush(Vec2{150, 20});
+    tail.ContinueBrush(Vec2{280, 60});
+    Expect(StrokePixel(*tail.PendingBrush(), 278, 60)[3] == 255, "tail.reaches-cursor");
+    tail.FinishBrush();
+    Expect(LayerPixel(tail, 215, 40)[3] == 0 && LayerPixel(tail, 278, 60)[3] == 255, "tail.replaced-by-curve");
+}
+
+// A raw stroke on a blank canvas-sized layer with the CPU engine (legacy BrushIntersectionTests.stroke).
+struct RawStroke
+{
+    DocumentSession session;
+    std::unique_ptr<BrushStroke> stroke;
+    explicit RawStroke(double diameter = 120, double opacity = 1)
+    {
+        session.CreateDocument(800, 800, false);
+        session.AddBlankLayer();
+        stroke = std::make_unique<BrushStroke>(*session.ActiveLayer(), false,
+                                               BrushSettings{diameter, 0, 1, 1, 1, opacity, false}, 800, 800, nullptr);
+    }
+    void Trace(const std::vector<Vec2>& points, double step = 12)
+    {
+        static_cast<void>(stroke->Append(points[0]));
+        for (std::size_t i = 1; i < points.size(); ++i)
+        {
+            const Vec2 a = points[i - 1];
+            const Vec2 b = points[i];
+            const int count = std::max(1, static_cast<int>(std::ceil(std::hypot(b.x - a.x, b.y - a.y) / step)));
+            for (int index = 1; index <= count; ++index)
+            {
+                const double t = static_cast<double>(index) / count;
+                static_cast<void>(stroke->Append(Vec2{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t}));
+            }
+        }
+        static_cast<void>(stroke->Flush());
+    }
+    [[nodiscard]] int Alpha(int x, int y) const noexcept
+    {
+        return StrokePixel(*stroke, x + 0.5, y + 0.5)[3];
+    }
+};
+
+void TestBrushCrossings()
+{
+    // Legacy selfCrossingsBlendInsteadOfTakingTheStrongestEdge.
+    RawStroke vertical;
+    RawStroke horizontal;
+    RawStroke crossing;
+    vertical.Trace({Vec2{400, 100}, Vec2{400, 700}});
+    horizontal.Trace({Vec2{700, 400}, Vec2{100, 400}});
+    crossing.Trace({Vec2{400, 100}, Vec2{400, 700}, Vec2{700, 700}, Vec2{700, 400}, Vec2{100, 400}});
+    bool blends = true;
+    for (const int offset : {45, 48, 51})
+    {
+        const int a = vertical.Alpha(400 + offset, 400 + offset);
+        const int b = horizontal.Alpha(400 + offset, 400 + offset);
+        const int actual = crossing.Alpha(400 + offset, 400 + offset);
+        const int expected = 255 - (255 - a) * (255 - b) / 255;
+        blends = blends && actual > std::max(a, b) + 10 && std::abs(actual - expected) <= 3;
+    }
+    Expect(blends, "crossing.blends-densities");
+    // Legacy accumulationDependsOnDistanceNotEventCount.
+    for (const double diameter : {12.0, 120.0})
+    {
+        RawStroke sparse(diameter);
+        RawStroke dense(diameter);
+        const std::vector<Vec2> points{Vec2{60, 400}, Vec2{740, 400}};
+        sparse.Trace(points, 1000);
+        dense.Trace(points, 8);
+        int worst = 0;
+        for (int y = 400; y < std::min(800, 400 + static_cast<int>(diameter / 2)); ++y)
+        {
+            worst = std::max(worst, std::abs(sparse.Alpha(400, y) - dense.Alpha(400, y)));
+        }
+        Expect(worst <= 2, diameter == 12.0 ? "crossing.distance-not-events-12" : "crossing.distance-not-events-120");
+    }
+    // Legacy softCrossingsRespectStrokeOpacityAndFlushIsIdempotent.
+    RawStroke paint(120, 0.4);
+    paint.Trace({Vec2{400, 100}, Vec2{400, 700}, Vec2{700, 700}, Vec2{700, 400}, Vec2{100, 400}});
+    Expect(paint.Alpha(400, 400) == 102, "crossing.opacity-cap");
+    bool capped = true;
+    for (const BrushStroke::Tile& tile : paint.stroke->Tiles())
+    {
+        const std::uint8_t* pixels = tile.image.Data();
+        for (int i = 0; i < tile.rect.width * tile.rect.height && capped; ++i)
+        {
+            capped = pixels[static_cast<std::size_t>(i) * 4u + 3u] <= 102;
+        }
+    }
+    Expect(capped, "crossing.everywhere-capped");
+    std::vector<std::vector<std::uint8_t>> before;
+    for (const BrushStroke::Tile& tile : paint.stroke->Tiles())
+    {
+        before.emplace_back(tile.image.Data(), tile.image.Data() + tile.image.ByteSize());
+    }
+    Expect(paint.stroke->Flush(), "crossing.flush-again");
+    bool same = true;
+    std::size_t index = 0;
+    for (const BrushStroke::Tile& tile : paint.stroke->Tiles())
+    {
+        same = same && index < before.size() && tile.image.ByteSize() == before[index].size() &&
+               std::memcmp(tile.image.Data(), before[index].data(), before[index].size()) == 0;
+        ++index;
+    }
+    Expect(same, "crossing.flush-idempotent");
+}
+
+void TestBrushSnapshots()
+{
+    // Legacy mouseUpAndNextStrokeNeverFlattenTheDocument.
+    DocumentSession session;
+    session.CreateDocument(2000, 2000, false);
+    session.AddBlankLayer();
+    session.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1, false};
+    Expect(session.BeginBrush(Vec2{400, 1600}), "snapshot.begin");
+    session.ContinueBrush(Vec2{400, 400});
+    session.ContinueBrush(Vec2{1600, 400});
+    session.FinishBrush();
+    const Raster first = session.ActiveLayer()->asset->image;
+    const std::size_t firstThumbnail = session.ActiveLayer()->asset->thumbnail.ByteSize();
+    Expect(first.IsSparse() && !first.IsMaterialized() && session.CanPaint(), "snapshot.mouse-up-does-not-flatten");
+    const int count = session.history.UndoCount();
+    Expect(session.BeginBrush(Vec2{800, 800}), "snapshot.second-begin");
+    session.ContinueBrush(Vec2{1100, 1100});
+    session.FinishBrush();
+    const Raster second = session.ActiveLayer()->asset->image;
+    Expect(!first.IsMaterialized() && second.IsSparse() && !second.IsMaterialized() && second.Base() == first.Base() &&
+               session.history.UndoCount() == count + 1,
+           "snapshot.next-stroke-does-not-flatten");
+    // Untouched tiles are shared: history retains the first snapshot's thumbnail and only the tiles the second
+    // stroke replaced (the pixels Undo restores), never the shared tiles and never a flattened copy of the layer.
+    std::vector<const void*> live;
+    for (const RasterTile& tile : second.Tiles())
+    {
+        live.push_back(tile.pixels.Identity());
+    }
+    std::size_t replaced = 0;
+    for (const RasterTile& tile : first.Tiles())
+    {
+        if (std::find(live.begin(), live.end(), tile.pixels.Identity()) == live.end())
+        {
+            replaced += tile.pixels.ByteSize();
+        }
+    }
+    const std::size_t retained = session.history.RetainedBytes(session.Document());
+    std::printf("  history retains %zu bytes after the second stroke, %zu in replaced tiles\n", retained, replaced);
+    Expect(replaced > 0 && replaced < 2000u * 2000u && retained == replaced + firstThumbnail,
+           "snapshot.history-shares-tiles");
+    session.Undo();
+    Expect(session.ActiveLayer()->asset->image == first, "snapshot.undo-identity");
+    session.Redo();
+    Expect(session.ActiveLayer()->asset->image == second, "snapshot.redo-identity");
+    // Legacy maskMouseUpIsImmediateAndPreservesTheImage.
+    session.AddLayerMask(true);
+    session.brushSettings.diameter = 150;
+    Expect(session.BeginBrush(Vec2{1000, 1000}), "snapshot.mask-begin");
+    session.ContinueBrush(Vec2{1100, 1000});
+    session.FinishBrush();
+    const Raster mask = session.ActiveLayer()->mask->asset.image;
+    Expect(session.ActiveLayer()->asset->image == second && LayerMask::IsValid(mask) && mask.IsSparse() &&
+               !mask.IsMaterialized(),
+           "snapshot.mask-immediate");
+    // Legacy softwareFallbackKeepsTheSoftStrokeContinuous and eightHundredPixelSoftStrokeHasNoPeriodicRidges.
+    DocumentSession ridges;
+    ridges.CreateDocument(2000, 2000, false);
+    ridges.AddBlankLayer();
+    ridges.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1, false};
+    Expect(ridges.BeginBrush(Vec2{300, 800}), "ridges.begin");
+    ridges.ContinueBrush(Vec2{1700, 800});
+    ridges.FinishBrush();
+    int worst = 0;
+    for (const int y : {800, 850, 900, 950, 990})
+    {
+        int lo = 255;
+        int hi = 0;
+        for (int x = 500; x <= 1500; x += 4)
+        {
+            const int alpha = LayerPixel(ridges, x + 0.5, y + 0.5)[3];
+            lo = std::min(lo, alpha);
+            hi = std::max(hi, alpha);
+        }
+        worst = std::max(worst, hi - lo);
+    }
+    Expect(worst <= 1, "ridges.none-along-800px-stroke");
+}
+
+void TestBrushBoundsAndBudget()
+{
+    // Legacy paintedBoundsTrimTilePaddingAndKeepSoftEdges.
+    for (const double hardness : {0.0, 1.0})
+    {
+        DocumentSession session = BrushSession(600, 200);
+        session.brushSettings.hardness = hardness;
+        Expect(session.BeginBrush(Vec2{300, 100}), "bounds.begin");
+        std::vector<std::array<std::uint8_t, 4>> live;
+        for (int x = 288; x <= 312; ++x)
+        {
+            live.push_back(StrokePixel(*session.PendingBrush(), x + 0.5, 100.5));
+        }
+        session.FinishBrush();
+        const ImageLayer* layer = session.ActiveLayer();
+        const Raster& image = layer->asset->image;
+        Expect(image.Width() <= 20 && image.Height() <= 20 && layer->transform.origin.x >= 290 &&
+                   layer->transform.origin.y >= 90,
+               hardness == 0.0 ? "bounds.trimmed-soft" : "bounds.trimmed-hard");
+        bool edges = true;
+        for (const int side : {0, 1, 2, 3})
+        {
+            bool any = false;
+            const int n = side < 2 ? image.Width() : image.Height();
+            for (int i = 0; i < n; ++i)
+            {
+                const int x = side == 0 || side == 1 ? i : (side == 2 ? 0 : image.Width() - 1);
+                const int y = side == 0 ? 0 : side == 1 ? image.Height() - 1 : i;
+                any = any || PixelOf(image, x, y)[3] > 0;
+            }
+            edges = edges && any;
+        }
+        Expect(edges, "bounds.keeps-soft-edges");
+        bool same = true;
+        for (int x = 288; x <= 312; ++x)
+        {
+            same = same && LayerPixel(session, x + 0.5, 100.5) == live[static_cast<std::size_t>(x - 288)];
+        }
+        Expect(same, "bounds.committed-equals-live");
+        const LayerTransform committed = layer->transform;
+        session.Undo();
+        Expect(!session.ActiveLayer()->asset.has_value(), "bounds.undo");
+        session.Redo();
+        Expect(session.ActiveLayer()->transform == committed, "bounds.redo-transform");
+    }
+    // Legacy largeBlankCanvasOnlyAllocatesTouchedTilesUntilCommit.
+    DocumentSession large = BrushSession(10000, 10000);
+    Expect(large.BeginBrush(Vec2{100, 100}), "budget.begin");
+    const BrushStroke* pending = large.PendingBrush();
+    std::size_t bytes = 0;
+    for (const BrushStroke::Tile& tile : pending->Tiles())
+    {
+        bytes += tile.image.ByteSize();
+    }
+    Expect(pending->Tiles().size() == 1 && bytes <= 256u * 256u * 4u && !large.ActiveLayer()->asset.has_value(),
+           "budget.one-tile");
+    large.CancelBrush();
+    // The pixel budget refuses a stroke that would grow the layer past it.
+    DocumentSession budget = BrushSession(600, 80);
+    BrushStroke limited(*budget.ActiveLayer(), false, budget.brushSettings, 600, 80, nullptr);
+    limited.SetPixelLimit(1000);
+    Expect(limited.IsValid() && !limited.Append(Vec2{20, 40}) && !limited.HasPaint(), "budget.refuses-over-limit");
+    Expect(budget.RasterEditPixelLimit(*budget.ActiveLayer(), false) == 100'000'000, "budget.full-when-alone");
+}
+
+void TestBrushRejectsAndKeys()
+{
+    // Legacy foldersHiddenLayersAndDisabledMasksRejectPainting.
+    DocumentSession session = BrushSession();
+    session.AddGroup();
+    Expect(!session.CanPaint() && !session.BeginBrush(Vec2{10, 10}), "reject.folder");
+    session.SelectLayer(session.Document()->layers.front().id);
+    session.ToggleVisibility(session.ActiveLayerID().value());
+    Expect(!session.CanPaint(), "reject.hidden");
+    session.ToggleVisibility(session.ActiveLayerID().value());
+    Expect(session.CanPaint(), "reject.visible-again");
+    session.AddLayerMask(true);
+    session.ToggleLayerMask(session.ActiveLayerID().value());
+    Expect(!session.CanPaint() && session.history.UndoName() == L"Disable Layer Mask", "reject.disabled-mask");
+    // An empty selection leaves nothing paintable; a pending transform blocks too.
+    DocumentSession empty = BrushSession();
+    empty.SetSelection(DocumentSelection{}, L"Select");
+    Expect(!empty.CanPaint(), "reject.empty-selection");
+    empty.Deselect();
+    InsertPainted(empty, 20, 20, Vec2{0, 0});
+    empty.BeginTransform(true);
+    Expect(!empty.CanPaint(), "reject.pending-transform");
+    empty.CancelTransform();
+    Expect(empty.CanPaint(), "reject.after-cancel");
+    // Legacy shiftBracketsStepHardnessByQuarters.
+    DocumentSession keys = BrushSession();
+    keys.brushSettings.hardness = 0.8;
+    keys.ChangeBrushHardness(true);
+    Expect(keys.brushSettings.hardness == 1.0, "keys.hardness-up");
+    keys.ChangeBrushHardness(true);
+    Expect(keys.brushSettings.hardness == 1.0, "keys.hardness-caps");
+    keys.brushSettings.hardness = 0.8;
+    keys.ChangeBrushHardness(false);
+    Expect(keys.brushSettings.hardness == 0.75, "keys.hardness-down");
+    for (int i = 0; i < 5; ++i)
+    {
+        keys.ChangeBrushHardness(false);
+    }
+    Expect(keys.brushSettings.hardness == 0.0, "keys.hardness-floor");
+    keys.ChangeBrushHardness(true);
+    Expect(keys.brushSettings.hardness == 0.25, "keys.hardness-quarter");
+    // Size steps by a fifth, at least a pixel, within 1–2000.
+    keys.brushSettings.diameter = 20;
+    keys.ChangeBrushSize(true);
+    Expect(keys.brushSettings.diameter == 24, "keys.size-up");
+    keys.ChangeBrushSize(false);
+    keys.ChangeBrushSize(false);
+    Expect(keys.brushSettings.diameter < 20, "keys.size-down");
+    keys.brushSettings.diameter = 2;
+    keys.ChangeBrushSize(false);
+    Expect(keys.brushSettings.diameter == 1, "keys.size-min");
+    keys.ChangeBrushSize(false);
+    Expect(keys.brushSettings.diameter == 1, "keys.size-floor");
+    keys.brushSettings.diameter = 1999;
+    keys.ChangeBrushSize(true);
+    Expect(keys.brushSettings.diameter == 2000, "keys.size-cap");
+    // Legacy numberKeysSetBrushAndGradientOpacity (the brush part).
+    keys.TypeOpacityDigit(5, 10);
+    Expect(keys.brushSettings.opacity == 0.5, "keys.opacity-5");
+    keys.TypeOpacityDigit(0, 20);
+    Expect(keys.brushSettings.opacity == 1.0, "keys.opacity-0");
+    keys.TypeOpacityDigit(4, 30);
+    keys.TypeOpacityDigit(5, 30.3);
+    Expect(keys.brushSettings.opacity == 0.45, "keys.opacity-45");
+    keys.TypeOpacityDigit(0, 40);
+    keys.TypeOpacityDigit(5, 40.2);
+    Expect(keys.brushSettings.opacity == 0.05, "keys.opacity-05");
+    Expect(keys.BeginBrush(Vec2{10, 10}), "keys.stroke");
+    keys.ChangeBrushSize(true);
+    keys.ChangeBrushHardness(false);
+    keys.TypeOpacityDigit(9, 50);
+    Expect(keys.brushSettings.diameter == 2000 && keys.brushSettings.hardness == 0.25 &&
+               keys.brushSettings.opacity == 0.05,
+           "keys.ignored-while-painting");
+    keys.CancelBrush();
+    // Shift-click line start follows the last stroke on the same target.
+    DocumentSession line = BrushSession();
+    Expect(!line.ShiftLineStart().has_value() && line.BeginBrush(Vec2{10, 20}), "line.begin");
+    line.ContinueBrush(Vec2{30, 20});
+    line.FinishBrush();
+    Expect(line.ShiftLineStart() == Vec2{30, 20}, "line.start-at-last-point");
+    line.AddBlankLayer();
+    Expect(!line.ShiftLineStart().has_value(), "line.other-layer");
+    Expect(!BrushSettings{0, 1, 0, 0, 0, 1, false}.IsValid() && !BrushSettings{40, 1.5, 0, 0, 0, 1, false}.IsValid() &&
+               !BrushSettings{40, 1, 0, 0, 0, 0, false}.IsValid() && BrushSettings{}.IsValid(),
+           "keys.settings-validity");
+}
+
+void TestBrushExpansion()
+{
+    // Legacy importedImageLayerExpandsAcrossCanvasWithoutMovingImageOrMask (0°, 37° and 90°, flipped).
+    for (const double rotation : {0.0, 37.0, 90.0})
+    {
+        DocumentSession session = BrushSession(600, 200);
+        ImageLayer imported = RasterLayer(40, 20, L"Imported");
+        imported.asset->image = SolidRaster(40, 20, 0, 0, 255, 255);
+        imported.asset->thumbnail = imported.asset->image;
+        imported.transform.origin = Vec2{240, 80};
+        imported.transform.size = Vec2{80, 40};
+        imported.transform.rotation = rotation;
+        imported.transform.flipX = true;
+        imported.transform.sampling = LayerSampling::Nearest;
+        const Raster gray = GrayRaster(1, 1, 128);
+        imported.mask = LayerMask{RasterAsset{gray, gray, L"mask"}, true, std::nullopt, true};
+        session.Document()->layers.push_back(imported);
+        session.SelectLayer(imported.id);
+        const std::optional<CanvasDocument> original = session.Document();
+        session.brushSettings = BrushSettings{16, 1, 0, 1, 0, 1, false};
+        Expect(session.BeginBrush(Vec2{12, 12}), "expand.begin");
+        session.ContinueBrush(Vec2{580, 12});
+        const BrushStroke* stroke = session.PendingBrush();
+        Expect(StrokePixel(*stroke, 12.5, 12.5)[1] > 240 && StrokePixel(*stroke, 580.5, 12.5)[1] > 240,
+               "expand.live-across-canvas");
+        session.FinishBrush();
+        const ImageLayer* layer = session.ActiveLayer();
+        Expect(LayerPixel(session, 12.5, 12.5)[1] > 240 && LayerPixel(session, 580.5, 12.5)[1] > 240 &&
+                   IsRed(LayerPixel(session, 280, 100)) && layer->transform.rotation == rotation &&
+                   layer->transform.flipX,
+               rotation == 0.0    ? "expand.committed-0"
+               : rotation == 37.0 ? "expand.committed-37"
+                                  : "expand.committed-90");
+        Expect(layer->mask.has_value() && layer->mask->asset.image.PixelCount() == 1 &&
+                   layer->mask->asset.image == gray,
+               "expand.uniform-mask-kept");
+        session.Undo();
+        Expect(session.Document() == original, "expand.undo");
+        session.Redo();
+        Expect(session.ActiveLayer()->asset->image.IsSparse(), "expand.redo");
+    }
+    // A full-size mask on the layer's grid grows with it and reveals the new area.
+    DocumentSession grown = BrushSession(300, 100);
+    ImageLayer masked = RasterLayer(40, 20, L"Masked");
+    masked.asset->image = SolidRaster(40, 20, 0, 0, 255, 255);
+    masked.asset->thumbnail = masked.asset->image;
+    masked.transform.origin = Vec2{100, 40};
+    masked.transform.size = Vec2{40, 20};
+    const Raster half = GrayRaster(40, 20, 128);
+    masked.mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
+    grown.Document()->layers.push_back(masked);
+    grown.SelectLayer(masked.id);
+    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1, false};
+    Expect(grown.BeginBrush(Vec2{20, 50}), "expand.mask-begin");
+    grown.FinishBrush();
+    const Raster newMask = grown.ActiveLayer()->mask->asset.image;
+    Expect(newMask.IsSparse() && newMask.Width() > 40 && MaskValue(grown, 20, 50) == 255 &&
+               MaskValue(grown, 120, 50) == 128,
+           "expand.mask-grows-revealing");
+}
+
+void TestBrushSelectionClip()
+{
+    // Legacy brushPaintsOnlyInsideTheSelection.
+    DocumentSession session = BrushSession(100, 40);
+    session.ApplySelection(SelectionGeometry::Rect(0, 0, 50, 40), SelectionMode::New, L"Select");
+    Expect(session.BeginBrush(Vec2{5, 20}), "clip.begin");
+    session.ContinueBrush(Vec2{95, 20});
+    session.FinishBrush();
+    Expect(IsRed(LayerPixel(session, 25.5, 20.5)) && LayerPixel(session, 75.5, 20.5)[3] == 0, "clip.inside-only");
+    // Legacy clipFollowsScaledLayersAndSoftensEdges: an erase through an antialiased triangle on a 2× layer.
+    DocumentSession scaled = BrushSession(100, 40);
+    ImageLayer blue = RasterLayer(50, 20, L"Blue");
+    blue.asset->image = SolidRaster(50, 20, 255, 0, 0, 255);
+    blue.asset->thumbnail = blue.asset->image;
+    blue.transform.origin = Vec2{0, 0};
+    blue.transform.size = Vec2{100, 40};
+    scaled.Document()->layers.push_back(blue);
+    scaled.SelectLayer(blue.id);
+    scaled.selectionAntialiased = true;
+    scaled.ApplySelection({SelectionLoop{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 40}}}, SelectionMode::New, L"Select");
+    scaled.brushSettings = BrushSettings{300, 1, 0, 0, 0, 1, false};
+    Expect(scaled.BeginBrush(Vec2{50, 20}, true), "clip.erase-begin");
+    scaled.ContinueBrush(Vec2{51, 20});
+    scaled.FinishBrush();
+    Expect(scaled.history.UndoName() == L"Erase" && LayerPixel(scaled, 10.5, 10.5)[3] == 0 &&
+               LayerPixel(scaled, 90.5, 35.5)[3] == 255,
+           "clip.erase-inside-triangle");
+    bool partial = false;
+    for (int x = 0; x < 100; ++x)
+    {
+        const int y = std::min(39, static_cast<int>((1.0 - x / 100.0) * 40.0));
+        const int alpha = LayerPixel(scaled, x + 0.5, y + 0.5)[3];
+        partial = partial || (alpha > 0 && alpha < 255);
+    }
+    Expect(partial, "clip.soft-edge-along-diagonal");
+}
 } // namespace
 
 int wmain()
@@ -2011,6 +2852,19 @@ int wmain()
     TestMarquee();
     TestWandKernel();
     TestWandSession();
+    TestSparseRaster();
+    TestBrushKernel();
+    TestBrushStroke();
+    TestBrushSoftAndCancel();
+    TestBrushMask();
+    TestBrushOpacityAndAccumulation();
+    TestBrushCurveAndTail();
+    TestBrushCrossings();
+    TestBrushSnapshots();
+    TestBrushBoundsAndBudget();
+    TestBrushRejectsAndKeys();
+    TestBrushExpansion();
+    TestBrushSelectionClip();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

@@ -107,6 +107,12 @@ enum class RasterFormat
     Gray8,
 };
 
+class Raster;
+struct RasterTile;
+
+// Immutable pixels with shared storage. A raster is either contiguous, or sparse (C10): an unchanged base placed in
+// its grid plus replacement tiles, as a painted layer leaves it. Sparse rasters share every untouched tile and the
+// base with the raster they came from, and assemble contiguous bytes only when a consumer asks for Data().
 class Raster
 {
   public:
@@ -114,6 +120,17 @@ class Raster
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels,
                                      std::size_t byteCount);
     [[nodiscard]] static Raster MakeThumbnail(const Raster& source, int maxSide = 96);
+    // A sparse raster: `base` (contiguous; may be empty) with its top-left at (baseX, baseY) of the new grid, under
+    // `tiles` (clipped to the grid, later tiles over earlier ones). Pixels no base or tile reaches read `fill`.
+    [[nodiscard]] static Raster MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX,
+                                           int baseY, std::vector<RasterTile> tiles, std::uint8_t fill);
+    // `source` (its top-left at (sourceX, sourceY) of a working grid) with `tiles` of that grid written over it,
+    // cropped to the given rectangle of the grid. Older tiles are split around newer ones so the tile list stays
+    // disjoint; the base and untouched tiles are shared, never copied.
+    [[nodiscard]] static Raster Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles,
+                                          int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill);
+    // A contiguous copy of the region (pixels outside this raster read `fill`).
+    [[nodiscard]] Raster Crop(int x, int y, int width, int height, std::uint8_t fill) const;
     [[nodiscard]] bool operator==(const Raster& other) const noexcept
     {
         return _storage == other._storage;
@@ -138,6 +155,12 @@ class Raster
     {
         return _storage ? _storage->format : RasterFormat::Bgra8888;
     }
+    [[nodiscard]] int Channels() const noexcept
+    {
+        return Format() == RasterFormat::Gray8 ? 1 : 4;
+    }
+    // Bytes this storage holds itself: contiguous pixels, or a sparse raster's assembled copy once it exists. The
+    // base and the tiles are separate storages (ForEachStorage).
     [[nodiscard]] std::size_t ByteSize() const noexcept
     {
         return _storage ? _storage->bytes.size() : 0;
@@ -150,10 +173,40 @@ class Raster
     {
         return Width() * Height();
     }
-    [[nodiscard]] const std::uint8_t* Data() const noexcept
+    // Contiguous pixels. A sparse raster assembles them on the first call; nullptr when that allocation fails.
+    [[nodiscard]] const std::uint8_t* Data() const noexcept;
+    [[nodiscard]] bool IsSparse() const noexcept
     {
-        return _storage ? _storage->bytes.data() : nullptr;
+        return _storage && _storage->sparse;
     }
+    // A sparse raster whose contiguous bytes were assembled (mouse-up must never do this).
+    [[nodiscard]] bool IsMaterialized() const noexcept
+    {
+        return _storage && _storage->materialized;
+    }
+    [[nodiscard]] Raster Base() const noexcept
+    {
+        return _storage ? Raster(_storage->base) : Raster();
+    }
+    [[nodiscard]] int BaseX() const noexcept
+    {
+        return _storage ? _storage->baseX : 0;
+    }
+    [[nodiscard]] int BaseY() const noexcept
+    {
+        return _storage ? _storage->baseY : 0;
+    }
+    [[nodiscard]] const std::vector<RasterTile>& Tiles() const noexcept;
+    [[nodiscard]] std::uint8_t Fill() const noexcept
+    {
+        return _storage ? _storage->fill : 0;
+    }
+    // The region [x, x + width) × [y, y + height) of this raster written to `out` (`outStride` bytes per row),
+    // without assembling a sparse raster; pixels outside it read `fill`.
+    void ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,
+                    std::uint8_t fill) const noexcept;
+    // Every storage this raster reaches: itself, then its base and tiles (retained-memory accounting).
+    void ForEachStorage(const std::function<void(const Raster&)>& visit) const;
 
   private:
     struct Storage
@@ -162,9 +215,42 @@ class Raster
         int height = 0;
         int stride = 0;
         RasterFormat format = RasterFormat::Bgra8888;
-        std::vector<std::uint8_t> bytes;
+        mutable std::vector<std::uint8_t> bytes;
+        mutable bool materialized = true;
+        bool sparse = false;
+        std::uint8_t fill = 0;
+        std::shared_ptr<const Storage> base;
+        int baseX = 0;
+        int baseY = 0;
+        std::vector<RasterTile> tiles;
     };
+    explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage)) {}
+    static void Materialize(const Storage& storage) noexcept;
     std::shared_ptr<const Storage> _storage;
+
+  public:
+    Raster() = default;
+};
+
+// One replacement tile of a sparse raster: a window of `pixels` (contiguous, the raster's format) placed with its
+// top-left at (x, y) in the grid. A window smaller than the pixels is how a split tile keeps sharing its storage.
+struct RasterTile
+{
+    int x = 0;
+    int y = 0;
+    Raster pixels;
+    int sourceX = 0; // window origin inside `pixels`
+    int sourceY = 0;
+    int width = 0; // 0: the whole of `pixels`
+    int height = 0;
+    [[nodiscard]] int Width() const noexcept
+    {
+        return width > 0 ? width : pixels.Width();
+    }
+    [[nodiscard]] int Height() const noexcept
+    {
+        return height > 0 ? height : pixels.Height();
+    }
 };
 
 struct RasterAsset
@@ -655,6 +741,47 @@ struct SnapGuides
     std::vector<double> ys;
 };
 
+// Brush (C10, Specs/Rendering/Rendering_Brush.md).
+struct BrushSettings
+{
+    double diameter = 40; // document pixels, 1–2000
+    double hardness = 1;  // 0 (soft) … 1 (hard)
+    double red = 0;       // paint color, straight 0…1
+    double green = 0;
+    double blue = 0;
+    // Caps the whole stroke, as in Photoshop: overlapping dabs never exceed it (0.01–1).
+    double opacity = 1;
+    // Erase: the stroke clears the layer's pixels instead of painting color on them.
+    bool erasing = false;
+    [[nodiscard]] bool operator==(const BrushSettings&) const noexcept = default;
+    [[nodiscard]] bool IsValid() const noexcept;
+    // Soft-tip deposition rate shared by the continuous integral and the dab fallback.
+    [[nodiscard]] static double SpacingFraction(double hardness) noexcept
+    {
+        return hardness >= 1.0 ? 0.015 : 0.025;
+    }
+};
+
+enum class BrushToolMode : std::uint8_t
+{
+    Paint,
+    Erase,
+};
+
+class BrushStroke;
+class BrushCoverageEngine;
+
+// What the last brush commit installed: the raster and the grid rectangle it covers (for the host's live preview).
+struct BrushCommitInfo
+{
+    Raster image;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    bool mask = false;
+};
+
 struct HierarchyEntry
 {
     Guid id;
@@ -860,6 +987,10 @@ class DocumentSession
         return _maskSelected;
     }
     void ToggleMaskLink(const Guid& id);
+    // A uniform mask on the active layer (`Add Reveal-All Mask` / `Add Hide-All Mask`), then targeted.
+    void AddLayerMask(bool revealing = true);
+    // Enables or disables a layer's mask (`Enable Layer Mask` / `Disable Layer Mask`).
+    void ToggleLayerMask(const Guid& id);
     // The document as the canvas draws it: the pending transform, mask placement and distortion (at preview size)
     // applied to a cached copy that shares every raster with the real document.
     [[nodiscard]] const CanvasDocument* DisplayDocument() const;
@@ -941,6 +1072,52 @@ class DocumentSession
     int selectionContractAmount = 1;
     static constexpr int kSelectionModifyLimit = 500;
 
+    // Brush and eraser (C10, Specs/Rendering/Rendering_Brush.md). A stroke edits the active layer's pixels or
+    // its mask in 256-pixel tiles; the coverage engine (GPU compute in the app, CPU here) computes the tip.
+    [[nodiscard]] bool CanPaint() const noexcept;
+    // Coverage engine for later strokes; nullptr means the CPU engine.
+    void SetBrushEngine(BrushCoverageEngine* engine) noexcept
+    {
+        _brushEngine = engine;
+    }
+    // Starts a stroke at `point` (document pixels): the foreground color, or `erase`; on a mask, black or white
+    // per `maskPaintWhite`. False when painting cannot start (or the stroke exceeded the pixel budget).
+    bool BeginBrush(Vec2 point, bool erase = false);
+    void ContinueBrush(Vec2 point);
+    // Replaces the provisional tail by the final curve and commits the tiles as one entry (`Brush Stroke`,
+    // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.
+    void FinishBrush();
+    void CancelBrush() noexcept;
+    [[nodiscard]] const BrushStroke* PendingBrush() const noexcept
+    {
+        return _brush.get();
+    }
+    [[nodiscard]] BrushStroke* MutableBrush() noexcept
+    {
+        return _brush.get();
+    }
+    // The commit FinishBrush just made, once.
+    [[nodiscard]] std::optional<BrushCommitInfo> TakeLastBrushCommit() noexcept
+    {
+        std::optional<BrushCommitInfo> result = std::move(_lastBrushCommit);
+        _lastBrushCommit.reset();
+        return result;
+    }
+    // Where a Shift-click paints a line from: the end of the last stroke while the same layer (or mask) is the
+    // target.
+    [[nodiscard]] std::optional<Vec2> ShiftLineStart() const noexcept;
+    // ] / [ : a fifth up or down, always at least one pixel, 1–2000.
+    void ChangeBrushSize(bool increase) noexcept;
+    // Shift-] / Shift-[ : hardness in Photoshop's 25 % steps.
+    void ChangeBrushHardness(bool increase) noexcept;
+    // Photoshop-style opacity keys: 1 = 10 % … 9 = 90 %, 0 = 100 %; two digits within 0.6 s set an exact value.
+    void TypeOpacityDigit(int digit, double timeSeconds) noexcept;
+    // The pixel budget left for a raster edit of `layer` (100 M image or mask pixels less the other layers).
+    [[nodiscard]] std::int64_t RasterEditPixelLimit(const ImageLayer& layer, bool mask) const noexcept;
+    BrushSettings brushSettings;
+    BrushToolMode brushMode = BrushToolMode::Paint;
+    bool maskPaintWhite = false;
+
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
     // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
     static constexpr uint32_t kDefaultForegroundArgb = 0xFF000000u;
@@ -993,4 +1170,15 @@ class DocumentSession
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::optional<DocumentSelection> _selectionMoveOrigin;
+    std::shared_ptr<BrushStroke> _brush;
+    BrushCoverageEngine* _brushEngine = nullptr;
+    struct LastBrushPoint
+    {
+        Vec2 point;
+        Guid layerID;
+        bool mask = false;
+    };
+    std::optional<LastBrushPoint> _lastBrushPoint;
+    std::optional<std::pair<int, double>> _pendingOpacityDigit;
+    std::optional<BrushCommitInfo> _lastBrushCommit;
 };

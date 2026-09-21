@@ -106,17 +106,19 @@ void CollectLiveIdentities(const std::optional<CanvasDocument>& current, std::un
     {
         return;
     }
+    const auto note = [&](const Raster& raster)
+    { raster.ForEachStorage([&](const Raster& storage) { seen.insert(storage.Identity()); }); };
     for (const ImageLayer& layer : current.value().layers)
     {
         if (layer.asset.has_value())
         {
-            seen.insert(layer.asset.value().image.Identity());
-            seen.insert(layer.asset.value().thumbnail.Identity());
+            note(layer.asset.value().image);
+            note(layer.asset.value().thumbnail);
         }
         if (layer.mask.has_value())
         {
-            seen.insert(layer.mask.value().asset.image.Identity());
-            seen.insert(layer.mask.value().asset.thumbnail.Identity());
+            note(layer.mask.value().asset.image);
+            note(layer.mask.value().asset.thumbnail);
         }
     }
 }
@@ -128,17 +130,18 @@ void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unorde
     {
         return;
     }
+    // A painted layer shares its base and untouched tiles with earlier snapshots: each storage counts once.
     const auto add = [&](const Raster& raster)
     {
-        const void* identity = raster.Identity();
-        if (identity == nullptr)
-        {
-            return;
-        }
-        if (seen.insert(identity).second)
-        {
-            bytes += raster.ByteSize();
-        }
+        raster.ForEachStorage(
+            [&](const Raster& storage)
+            {
+                const void* identity = storage.Identity();
+                if (identity != nullptr && seen.insert(identity).second)
+                {
+                    bytes += storage.ByteSize();
+                }
+            });
     };
     for (const ImageLayer& layer : document.value().layers)
     {

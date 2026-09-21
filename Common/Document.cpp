@@ -8,6 +8,7 @@
 #include <exception>
 #include <format>
 #include <iterator>
+#include <new>
 #include <rpc.h>
 #include <string>
 #include <string_view>
@@ -210,15 +211,32 @@ Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
     const int thumbWidth = std::max(1, (width * maxSide + largest / 2) / largest);
     const int thumbHeight = std::max(1, (height * maxSide + largest / 2) / largest);
     const RasterFormat format = source.Format();
-    const int srcStride = source.Stride();
     const int dstStride = format == RasterFormat::Gray8 ? thumbWidth : thumbWidth * 4;
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(dstStride) * static_cast<std::size_t>(thumbHeight), 0);
+    const int channels = format == RasterFormat::Gray8 ? 1 : 4;
+    if (source.IsSparse() && !source.IsMaterialized())
+    {
+        // A painted layer's thumbnail samples its tiles and base directly; assembling the pixels is never needed.
+        for (int y = 0; y < thumbHeight; ++y)
+        {
+            const int srcY = std::min(height - 1, (y * height) / thumbHeight);
+            for (int x = 0; x < thumbWidth; ++x)
+            {
+                const int srcX = std::min(width - 1, (x * width) / thumbWidth);
+                source.ReadRegion(srcX, srcY, 1, 1,
+                                  bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(dstStride) +
+                                      static_cast<std::size_t>(x) * static_cast<std::size_t>(channels),
+                                  channels, source.Fill());
+            }
+        }
+        return Make(thumbWidth, thumbHeight, format, bytes.data(), bytes.size());
+    }
+    const int srcStride = source.Stride();
     const std::uint8_t* src = source.Data();
     if (src == nullptr)
     {
         return {};
     }
-    const int channels = format == RasterFormat::Gray8 ? 1 : 4;
     for (int y = 0; y < thumbHeight; ++y)
     {
         const int srcY = std::min(height - 1, (y * height) / thumbHeight);
@@ -233,6 +251,354 @@ Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
         }
     }
     return Make(thumbWidth, thumbHeight, format, bytes.data(), bytes.size());
+}
+
+namespace
+{
+// Copies the overlap of a source rectangle onto a destination rectangle, both with their own strides.
+void BlitRegion(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWidth, int dstHeight,
+                const std::uint8_t* src, int srcStride, int srcX, int srcY, int srcWidth, int srcHeight,
+                int channels) noexcept
+{
+    // `src` covers [srcX, srcX + srcWidth) in the shared coordinate space; `dst` covers [dstX, ...).
+    const int left = std::max(dstX, srcX);
+    const int top = std::max(dstY, srcY);
+    const int right = std::min(dstX + dstWidth, srcX + srcWidth);
+    const int bottom = std::min(dstY + dstHeight, srcY + srcHeight);
+    if (right <= left || bottom <= top)
+    {
+        return;
+    }
+    const std::size_t rowBytes = static_cast<std::size_t>(right - left) * static_cast<std::size_t>(channels);
+    for (int y = top; y < bottom; ++y)
+    {
+        std::memcpy(dst + static_cast<std::size_t>(y - dstY) * static_cast<std::size_t>(dstStride) +
+                        static_cast<std::size_t>(left - dstX) * static_cast<std::size_t>(channels),
+                    src + static_cast<std::size_t>(y - srcY) * static_cast<std::size_t>(srcStride) +
+                        static_cast<std::size_t>(left - srcX) * static_cast<std::size_t>(channels),
+                    rowBytes);
+    }
+}
+
+// A tile's window blitted onto a destination rectangle of the grid.
+void BlitTile(std::uint8_t* dst, int dstStride, int dstX, int dstY, int dstWidth, int dstHeight, const RasterTile& tile,
+              int channels) noexcept
+{
+    const std::uint8_t* pixels = tile.pixels.Data();
+    if (pixels == nullptr)
+    {
+        return;
+    }
+    const int stride = tile.pixels.Stride();
+    const std::uint8_t* origin = pixels + static_cast<std::size_t>(tile.sourceY) * static_cast<std::size_t>(stride) +
+                                 static_cast<std::size_t>(tile.sourceX) * static_cast<std::size_t>(channels);
+    BlitRegion(dst, dstStride, dstX, dstY, dstWidth, dstHeight, origin, stride, tile.x, tile.y, tile.Width(),
+               tile.Height(), channels);
+}
+
+struct IntRect
+{
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    [[nodiscard]] bool Empty() const noexcept
+    {
+        return width <= 0 || height <= 0;
+    }
+    [[nodiscard]] IntRect Intersect(const IntRect& other) const noexcept
+    {
+        const int left = std::max(x, other.x);
+        const int top = std::max(y, other.y);
+        const int right = std::min(x + width, other.x + other.width);
+        const int bottom = std::min(y + height, other.y + other.height);
+        return IntRect{left, top, std::max(0, right - left), std::max(0, bottom - top)};
+    }
+};
+
+// `rect` less `hole` (which lies inside it): the rows above and below, then the columns beside.
+void Subtract(const IntRect& rect, const IntRect& hole, std::vector<IntRect>& out)
+{
+    if (hole.y > rect.y)
+    {
+        out.push_back(IntRect{rect.x, rect.y, rect.width, hole.y - rect.y});
+    }
+    if (hole.y + hole.height < rect.y + rect.height)
+    {
+        out.push_back(IntRect{rect.x, hole.y + hole.height, rect.width, rect.y + rect.height - hole.y - hole.height});
+    }
+    if (hole.x > rect.x)
+    {
+        out.push_back(IntRect{rect.x, hole.y, hole.x - rect.x, hole.height});
+    }
+    if (hole.x + hole.width < rect.x + rect.width)
+    {
+        out.push_back(IntRect{hole.x + hole.width, hole.y, rect.x + rect.width - hole.x - hole.width, hole.height});
+    }
+}
+} // namespace
+
+const std::uint8_t* Raster::Data() const noexcept
+{
+    if (!_storage)
+    {
+        return nullptr;
+    }
+    if (!_storage->materialized)
+    {
+        Materialize(*_storage);
+    }
+    return _storage->materialized ? _storage->bytes.data() : nullptr;
+}
+
+const std::vector<RasterTile>& Raster::Tiles() const noexcept
+{
+    static const std::vector<RasterTile> kNone;
+    return _storage ? _storage->tiles : kNone;
+}
+
+void Raster::Materialize(const Storage& storage) noexcept
+{
+    const std::size_t size = static_cast<std::size_t>(storage.stride) * static_cast<std::size_t>(storage.height);
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.assign(size, storage.fill);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return;
+    }
+    const int channels = storage.format == RasterFormat::Gray8 ? 1 : 4;
+    if (storage.base && storage.base->materialized)
+    {
+        BlitRegion(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, storage.base->bytes.data(),
+                   storage.base->stride, storage.baseX, storage.baseY, storage.base->width, storage.base->height,
+                   channels);
+    }
+    for (const RasterTile& tile : storage.tiles)
+    {
+        BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
+    }
+    storage.bytes = std::move(bytes);
+    storage.materialized = true;
+}
+
+void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,
+                        std::uint8_t fill) const noexcept
+{
+    if (out == nullptr || width <= 0 || height <= 0)
+    {
+        return;
+    }
+    const int channels = Channels();
+    for (int row = 0; row < height; ++row)
+    {
+        std::memset(out + static_cast<std::size_t>(row) * static_cast<std::size_t>(outStride), fill,
+                    static_cast<std::size_t>(width) * static_cast<std::size_t>(channels));
+    }
+    if (!_storage)
+    {
+        return;
+    }
+    const Storage& storage = *_storage;
+    if (storage.materialized)
+    {
+        BlitRegion(out, outStride, x, y, width, height, storage.bytes.data(), storage.stride, 0, 0, storage.width,
+                   storage.height, channels);
+        return;
+    }
+    // Un-assembled sparse storage: the raster's own fill inside its bounds, then the base, then the tiles.
+    const IntRect inside = IntRect{x, y, width, height}.Intersect(IntRect{0, 0, storage.width, storage.height});
+    if (!inside.Empty() && storage.fill != fill)
+    {
+        for (int row = inside.y; row < inside.y + inside.height; ++row)
+        {
+            std::memset(out + static_cast<std::size_t>(row - y) * static_cast<std::size_t>(outStride) +
+                            static_cast<std::size_t>(inside.x - x) * static_cast<std::size_t>(channels),
+                        storage.fill, static_cast<std::size_t>(inside.width) * static_cast<std::size_t>(channels));
+        }
+    }
+    if (storage.base && storage.base->materialized)
+    {
+        // Only the part of the base inside this raster's grid shows.
+        const IntRect visible =
+            IntRect{storage.baseX, storage.baseY, storage.base->width, storage.base->height}.Intersect(
+                IntRect{0, 0, storage.width, storage.height});
+        if (!visible.Empty())
+        {
+            BlitRegion(out, outStride, x, y, width, height,
+                       storage.base->bytes.data() +
+                           static_cast<std::size_t>(visible.y - storage.baseY) *
+                               static_cast<std::size_t>(storage.base->stride) +
+                           static_cast<std::size_t>(visible.x - storage.baseX) * static_cast<std::size_t>(channels),
+                       storage.base->stride, visible.x, visible.y, visible.width, visible.height, channels);
+        }
+    }
+    for (const RasterTile& tile : storage.tiles)
+    {
+        BlitTile(out, outStride, x, y, width, height, tile, channels);
+    }
+}
+
+Raster Raster::Crop(int x, int y, int width, int height, std::uint8_t fill) const
+{
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
+    {
+        return {};
+    }
+    const int channels = Channels();
+    const int stride = width * channels;
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(stride) * static_cast<std::size_t>(height), fill);
+    ReadRegion(x, y, width, height, bytes.data(), stride, fill);
+    return Make(width, height, Format(), bytes.data(), bytes.size());
+}
+
+void Raster::ForEachStorage(const std::function<void(const Raster&)>& visit) const
+{
+    if (!_storage || !visit)
+    {
+        return;
+    }
+    visit(*this);
+    if (_storage->base)
+    {
+        visit(Raster(_storage->base));
+    }
+    for (const RasterTile& tile : _storage->tiles)
+    {
+        visit(tile.pixels);
+    }
+}
+
+Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Raster& base, int baseX, int baseY,
+                          std::vector<RasterTile> tiles, std::uint8_t fill)
+{
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
+    {
+        return {};
+    }
+    if (base.HasStorage() && (base.Format() != format || base.IsSparse()))
+    {
+        return {};
+    }
+    auto storage = std::make_shared<Storage>();
+    storage->width = width;
+    storage->height = height;
+    storage->stride = format == RasterFormat::Gray8 ? width : width * 4;
+    storage->format = format;
+    storage->materialized = false;
+    storage->sparse = true;
+    storage->fill = fill;
+    storage->base = base._storage;
+    storage->baseX = baseX;
+    storage->baseY = baseY;
+    const IntRect grid{0, 0, width, height};
+    for (RasterTile& tile : tiles)
+    {
+        if (!tile.pixels.HasStorage() || tile.pixels.Format() != format)
+        {
+            continue;
+        }
+        if (tile.sourceX < 0 || tile.sourceY < 0 || tile.sourceX + tile.Width() > tile.pixels.Width() ||
+            tile.sourceY + tile.Height() > tile.pixels.Height())
+        {
+            continue;
+        }
+        const IntRect rect{tile.x, tile.y, tile.Width(), tile.Height()};
+        const IntRect kept = rect.Intersect(grid);
+        if (kept.Empty())
+        {
+            continue;
+        }
+        // Clipping moves the window; the pixels stay shared.
+        tile.sourceX += kept.x - rect.x;
+        tile.sourceY += kept.y - rect.y;
+        tile.x = kept.x;
+        tile.y = kept.y;
+        tile.width = kept.width;
+        tile.height = kept.height;
+        storage->tiles.push_back(std::move(tile));
+    }
+    Raster raster;
+    raster._storage = std::move(storage);
+    return raster;
+}
+
+Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles, int cropX,
+                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill)
+{
+    if (cropWidth < 1 || cropHeight < 1)
+    {
+        return {};
+    }
+    const RasterFormat format = source.HasStorage()
+                                    ? source.Format()
+                                    : (tiles.empty() ? RasterFormat::Bgra8888 : tiles.front().pixels.Format());
+    Raster base;
+    int baseX = sourceX;
+    int baseY = sourceY;
+    std::vector<RasterTile> older;
+    if (source.IsSparse())
+    {
+        base = source.Base();
+        baseX = sourceX + source.BaseX();
+        baseY = sourceY + source.BaseY();
+        older = source.Tiles();
+        for (RasterTile& tile : older)
+        {
+            tile.x += sourceX;
+            tile.y += sourceY;
+        }
+    }
+    else if (source.HasStorage())
+    {
+        base = source;
+    }
+    // Newer tiles replace what they cover: split every older tile around them so the list stays disjoint.
+    std::vector<RasterTile> result;
+    for (const RasterTile& old : older)
+    {
+        std::vector<IntRect> pieces{IntRect{old.x, old.y, old.Width(), old.Height()}};
+        for (const RasterTile& fresh : tiles)
+        {
+            const IntRect cover{fresh.x, fresh.y, fresh.Width(), fresh.Height()};
+            std::vector<IntRect> next;
+            for (const IntRect& piece : pieces)
+            {
+                const IntRect overlap = piece.Intersect(cover);
+                if (overlap.Empty())
+                {
+                    next.push_back(piece);
+                    continue;
+                }
+                Subtract(piece, overlap, next);
+            }
+            pieces = std::move(next);
+        }
+        for (const IntRect& piece : pieces)
+        {
+            // A piece is a window into the old tile's pixels: nothing is copied.
+            RasterTile view = old;
+            view.sourceX = old.sourceX + piece.x - old.x;
+            view.sourceY = old.sourceY + piece.y - old.y;
+            view.x = piece.x;
+            view.y = piece.y;
+            view.width = piece.width;
+            view.height = piece.height;
+            result.push_back(std::move(view));
+        }
+    }
+    for (RasterTile& fresh : tiles)
+    {
+        result.push_back(std::move(fresh));
+    }
+    for (RasterTile& tile : result)
+    {
+        tile.x -= cropX;
+        tile.y -= cropY;
+    }
+    return MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), fill);
 }
 
 bool LayerTransform::IsValid() const noexcept
