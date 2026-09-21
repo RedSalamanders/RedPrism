@@ -1170,6 +1170,14 @@ class DocumentSession
     [[nodiscard]] bool PlaceLayer(const Guid& id, const std::optional<Guid>& parent,
                                   const std::optional<Guid>& above = std::nullopt, bool atBottom = false);
     void MoveActiveLayerOutOfGroup();
+    // C16 (Specs/Document/Document_Model.md "Session edits"): the Layer menu's ordering, grouping and clipping
+    // toggle, and the empty state after Close Project.
+    [[nodiscard]] bool CanMoveActiveLayer(int offset) const;
+    void MoveActiveLayer(int offset);
+    void GroupSelectedLayers();
+    [[nodiscard]] bool CanToggleClippingMask(const Guid& id) const;
+    void ToggleClippingMask(const Guid& id);
+    void ClearDocument();
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
     void SetBlendMode(LayerBlendMode mode);

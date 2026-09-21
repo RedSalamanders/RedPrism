@@ -5168,6 +5168,156 @@ void TestSmartEdits()
     }
 }
 
+void TestLayerOrdering()
+{
+    // Legacy LayerTests.reorderTranslatesVisibleOrderAndKeepsSelection: Move Layer Up / Down swap siblings.
+    DocumentSession session;
+    session.CreateDocument(800, 600);
+    for (int i = 0; i < 3; ++i)
+    {
+        session.AddBlankLayer();
+    }
+    const auto names = [&]()
+    {
+        std::vector<std::wstring> result;
+        for (const ImageLayer& layer : session.Document().value().layers)
+        {
+            result.push_back(layer.name);
+        }
+        return result;
+    };
+    const Guid top = session.ActiveLayerID().value();
+    Expect(!session.CanMoveActiveLayer(1) && session.CanMoveActiveLayer(-1), "order.top-moves-down-only");
+    session.MoveActiveLayer(1);
+    Expect(names() == std::vector<std::wstring>{L"Layer 1", L"Layer 2", L"Layer 3"},
+           "order.refused-move-changes-nothing");
+    session.MoveActiveLayer(-1);
+    Expect(names() == std::vector<std::wstring>{L"Layer 1", L"Layer 3", L"Layer 2"} && session.ActiveLayerID() == top &&
+               session.history.UndoName() == L"Reorder Layers",
+           "order.move-down-swaps");
+    session.MoveActiveLayer(-1);
+    Expect(names() == std::vector<std::wstring>{L"Layer 3", L"Layer 1", L"Layer 2"} && !session.CanMoveActiveLayer(-1),
+           "order.bottom-stops");
+    session.MoveActiveLayer(1);
+    Expect(names() == std::vector<std::wstring>{L"Layer 1", L"Layer 3", L"Layer 2"}, "order.move-up-swaps");
+    session.Undo();
+    session.Undo();
+    session.Undo();
+    Expect(names() == std::vector<std::wstring>{L"Layer 1", L"Layer 2", L"Layer 3"}, "order.undo-restores");
+    // Siblings only: a layer alone in its folder cannot move past the folder's contents.
+    session.SelectLayer(std::nullopt);
+    session.AddGroup();
+    session.AddBlankLayer();
+    Expect(!session.CanMoveActiveLayer(1) && !session.CanMoveActiveLayer(-1), "order.folder-child-alone");
+    session.SelectLayer(std::nullopt);
+    Expect(!session.CanMoveActiveLayer(1), "order.no-active-layer");
+}
+
+void TestGroupSelection()
+{
+    // Legacy GroupingSelectionTests.singleLayerAndFolderAreWrappedRatherThanCreatingAChildFolder.
+    DocumentSession session;
+    session.CreateDocument(100, 100);
+    session.AddBlankLayer();
+    const Guid layer = session.ActiveLayerID().value();
+    session.GroupSelectedLayers();
+    const Guid inner = session.ActiveLayerID().value();
+    const ImageLayer* wrapped = Find(session.Document(), layer);
+    const ImageLayer* innerFolder = Find(session.Document(), inner);
+    Expect(wrapped != nullptr && wrapped->parentID == inner && innerFolder != nullptr && innerFolder->isGroup &&
+               innerFolder->name == L"Folder 1" && session.history.UndoName() == L"Group Layers",
+           "wrap.single-layer");
+    session.GroupSelectedLayers();
+    const Guid outer = session.ActiveLayerID().value();
+    innerFolder = Find(session.Document(), inner);
+    wrapped = Find(session.Document(), layer);
+    Expect(innerFolder != nullptr && innerFolder->parentID == outer && wrapped != nullptr &&
+               wrapped->parentID == inner && session.ActiveLayer() != nullptr &&
+               !session.ActiveLayer()->parentID.has_value(),
+           "wrap.folder-wrapped-not-child");
+    session.Undo();
+    innerFolder = Find(session.Document(), inner);
+    Expect(innerFolder != nullptr && !innerFolder->parentID.has_value() &&
+               session.Document().value().layers.size() == 2,
+           "wrap.undo");
+    // Legacy itemsFromDifferentFoldersUseCommonParentAndEmptySelectionCreatesEmptyGroup: nothing selected makes
+    // an empty folder at the top.
+    DocumentSession empty;
+    empty.CreateDocument(100, 100);
+    empty.GroupSelectedLayers();
+    const ImageLayer* folder = empty.ActiveLayer();
+    Expect(folder != nullptr && folder->isGroup && !folder->parentID.has_value() &&
+               empty.Document().value().layers.size() == 1,
+           "wrap.empty-selection-makes-folder");
+    const Guid folderId = folder != nullptr ? folder->id : Guid{};
+    empty.AddBlankLayer(); // the layers vector may reallocate: `folder` is stale from here on
+    const Guid a = empty.ActiveLayerID().value();
+    const ImageLayer* inside = Find(empty.Document(), a);
+    Expect(inside != nullptr && inside->parentID == folderId, "wrap.blank-layer-joins-active-folder");
+    // A layer inside a folder wraps inside that folder: the wrapper's parent is the common parent.
+    empty.SelectLayer(a);
+    empty.GroupSelectedLayers();
+    const ImageLayer* wrapper = empty.ActiveLayer();
+    inside = Find(empty.Document(), a);
+    Expect(wrapper != nullptr && wrapper->isGroup && wrapper->name == L"Folder 2" && inside != nullptr &&
+               inside->parentID == wrapper->id && wrapper->parentID == empty.Document().value().layers[0].id,
+           "wrap.inside-folder-keeps-parent");
+}
+
+void TestClippingToggle()
+{
+    // Legacy LiveLayerMask.toggleClippingMask: Ctrl+Alt+G clips to the sibling below, sharing its base.
+    DocumentSession session;
+    session.CreateDocument(4, 4);
+    session.AddBlankLayer();
+    const Guid base = session.ActiveLayerID().value();
+    session.AddBlankLayer();
+    const Guid middle = session.ActiveLayerID().value();
+    session.AddBlankLayer();
+    const Guid top = session.ActiveLayerID().value();
+    Expect(!session.CanToggleClippingMask(base), "clip.bottom-has-no-base");
+    Expect(session.CanToggleClippingMask(middle), "clip.can-clip-to-below");
+    session.ToggleClippingMask(middle);
+    const ImageLayer* clipped = Find(session.Document(), middle);
+    Expect(clipped != nullptr && clipped->maskSourceID == base && session.history.UndoName() == L"Create Clipping Mask",
+           "clip.clips-to-below");
+    session.ToggleClippingMask(top);
+    const ImageLayer* shared = Find(session.Document(), top);
+    Expect(shared != nullptr && shared->maskSourceID == base, "clip.shares-clipped-base");
+    session.ToggleClippingMask(middle);
+    clipped = Find(session.Document(), middle);
+    Expect(clipped != nullptr && !clipped->maskSourceID.has_value() &&
+               session.history.UndoName() == L"Release Clipping Mask",
+           "clip.release");
+    session.Undo();
+    clipped = Find(session.Document(), middle);
+    Expect(clipped != nullptr && clipped->maskSourceID == base, "clip.undo-restores");
+    session.SelectLayer(std::nullopt);
+    session.AddGroup();
+    const Guid folder = session.ActiveLayerID().value();
+    Expect(!session.CanToggleClippingMask(folder), "clip.folder-cannot-clip");
+}
+
+void TestClearDocument()
+{
+    DocumentSession session;
+    session.CreateDocument(10, 10, true);
+    session.AddBlankLayer();
+    Expect(session.history.IsModified() && session.Document().has_value(), "clear.before");
+    session.ClearDocument();
+    Expect(!session.Document().has_value() && !session.ActiveLayerID().has_value() && !session.history.CanUndo() &&
+               !session.history.IsModified() && session.LayerRows().empty() && session.DisplayDocument() == nullptr,
+           "clear.empty-state");
+    session.AddBlankLayer();
+    session.GroupSelectedLayers();
+    session.MoveActiveLayer(1);
+    Expect(!session.Document().has_value() && !session.history.CanUndo(), "clear.edits-need-a-document");
+    session.CreateDocument(20, 30, true);
+    Expect(session.Document().has_value() && session.Document().value().width == 20 &&
+               session.Document().value().layers.size() == 1 && session.ActiveLayerID().has_value(),
+           "clear.next-document");
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5243,6 +5393,10 @@ int wmain()
     TestAdjustmentLayers();
     TestBlends();
     TestSmartEdits();
+    TestLayerOrdering();
+    TestGroupSelection();
+    TestClippingToggle();
+    TestClearDocument();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

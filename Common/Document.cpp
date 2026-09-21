@@ -1470,6 +1470,317 @@ void DocumentSession::MoveActiveLayerOutOfGroup()
     (void)PlaceLayer(layerId, destination, above);
 }
 
+namespace
+{
+// The layers sharing `parent`, in document order (bottom to top).
+[[nodiscard]] std::vector<Guid> SiblingIds(const std::vector<ImageLayer>& layers, const std::optional<Guid>& parent)
+{
+    std::vector<Guid> ids;
+    for (const ImageLayer& layer : layers)
+    {
+        if (layer.parentID == parent)
+        {
+            ids.push_back(layer.id);
+        }
+    }
+    return ids;
+}
+
+// `id`'s parents from the nearest up, then nullopt for the document root (legacy `ancestors`).
+[[nodiscard]] std::vector<std::optional<Guid>> AncestorChain(const std::vector<ImageLayer>& layers, const Guid& id)
+{
+    std::vector<std::optional<Guid>> result;
+    const ImageLayer* layer = LayerById(layers, id);
+    std::optional<Guid> parent = layer != nullptr ? layer->parentID : std::nullopt;
+    int guard = 0;
+    while (parent.has_value() && guard++ <= kMaxGroupDepth)
+    {
+        result.push_back(parent);
+        const ImageLayer* next = LayerById(layers, parent.value());
+        parent = next != nullptr ? next->parentID : std::nullopt;
+    }
+    result.push_back(std::nullopt);
+    return result;
+}
+} // namespace
+
+bool DocumentSession::CanMoveActiveLayer(int offset) const
+{
+    const ImageLayer* active = ActiveLayer();
+    if (active == nullptr || !_document.has_value() || offset == 0)
+    {
+        return false;
+    }
+    const std::vector<Guid> siblings = SiblingIds(_document.value().layers, active->parentID);
+    const auto position = std::find(siblings.begin(), siblings.end(), active->id);
+    if (position == siblings.end())
+    {
+        return false;
+    }
+    const std::ptrdiff_t index = (position - siblings.begin()) + offset;
+    return index >= 0 && index < static_cast<std::ptrdiff_t>(siblings.size());
+}
+
+void DocumentSession::MoveActiveLayer(int offset)
+{
+    if (!CanMoveActiveLayer(offset))
+    {
+        return;
+    }
+    const ImageLayer* active = ActiveLayer();
+    const std::vector<Guid> siblings = SiblingIds(_document.value().layers, active->parentID);
+    const auto position = std::find(siblings.begin(), siblings.end(), active->id);
+    const Guid other = siblings[static_cast<std::size_t>((position - siblings.begin()) + offset)];
+    const std::optional<std::size_t> first = IndexOf(_document.value().layers, active->id);
+    const std::optional<std::size_t> second = IndexOf(_document.value().layers, other);
+    if (!first.has_value() || !second.has_value())
+    {
+        return;
+    }
+    BeginEdit(L"Reorder Layers");
+    std::vector<ImageLayer>& layers = _document.value().layers;
+    std::swap(layers[first.value()], layers[second.value()]);
+    EndEdit();
+}
+
+void DocumentSession::GroupSelectedLayers()
+{
+    if (!_document.has_value() || static_cast<int>(_document.value().layers.size()) >= kMaxLayerCount)
+    {
+        return;
+    }
+    const std::vector<ImageLayer>& layers = _document.value().layers;
+    std::unordered_set<Guid> selected;
+    for (const Guid& id : _selected)
+    {
+        if (LayerById(layers, id) != nullptr)
+        {
+            selected.insert(id);
+        }
+    }
+    // A selected folder carries its subtree; selected descendants must not be pulled out of it.
+    std::unordered_set<Guid> rootIds;
+    for (const Guid& id : selected)
+    {
+        bool inside = false;
+        for (const std::optional<Guid>& ancestor : AncestorChain(layers, id))
+        {
+            if (ancestor.has_value() && selected.contains(ancestor.value()))
+            {
+                inside = true;
+                break;
+            }
+        }
+        if (!inside)
+        {
+            rootIds.insert(id);
+        }
+    }
+    std::vector<Guid> ordered;
+    for (const HierarchyEntry& entry : HierarchyEntries(layers))
+    {
+        if (rootIds.contains(entry.id))
+        {
+            ordered.push_back(entry.id);
+        }
+    }
+    // The nearest ancestor every selected root shares (the document root when nothing is selected).
+    std::optional<Guid> parent;
+    if (!ordered.empty())
+    {
+        for (const std::optional<Guid>& candidate : AncestorChain(layers, ordered.front()))
+        {
+            bool common = true;
+            for (const Guid& id : ordered)
+            {
+                const std::vector<std::optional<Guid>> chain = AncestorChain(layers, id);
+                if (std::find(chain.begin(), chain.end(), candidate) == chain.end())
+                {
+                    common = false;
+                    break;
+                }
+            }
+            if (common)
+            {
+                parent = candidate;
+                break;
+            }
+        }
+    }
+    std::unordered_set<std::wstring> names;
+    for (const ImageLayer& layer : layers)
+    {
+        names.insert(layer.name);
+    }
+    int number = 1;
+    std::wstring name;
+    do
+    {
+        name = L"Folder " + std::to_wstring(number);
+        ++number;
+    } while (names.contains(name));
+    ImageLayer group = ImageLayer::Blank(
+        name, Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)});
+    group.isGroup = true;
+    group.parentID = parent;
+    // The wrapper goes at the topmost selected branch in the common parent.
+    std::vector<Guid> branches;
+    for (const Guid& id : ordered)
+    {
+        Guid branch = id;
+        int guard = 0;
+        while (guard++ <= kMaxGroupDepth)
+        {
+            const ImageLayer* layer = LayerById(layers, branch);
+            if (layer == nullptr || !layer->parentID.has_value() || layer->parentID == parent)
+            {
+                break;
+            }
+            branch = layer->parentID.value();
+        }
+        branches.push_back(branch);
+    }
+    std::optional<std::size_t> highest;
+    for (std::size_t index = layers.size(); index-- > 0;)
+    {
+        if (std::find(branches.begin(), branches.end(), layers[index].id) != branches.end())
+        {
+            highest = index;
+            break;
+        }
+    }
+    std::size_t insertion = layers.size();
+    if (highest.has_value())
+    {
+        insertion = 0;
+        for (std::size_t index = 0; index <= highest.value(); ++index)
+        {
+            if (!rootIds.contains(layers[index].id))
+            {
+                ++insertion;
+            }
+        }
+    }
+    std::vector<ImageLayer> next;
+    for (const ImageLayer& layer : layers)
+    {
+        if (!rootIds.contains(layer.id))
+        {
+            next.push_back(layer);
+        }
+    }
+    next.insert(next.begin() + static_cast<std::ptrdiff_t>(std::min(insertion, next.size())), group);
+    for (const Guid& id : ordered)
+    {
+        const ImageLayer* child = LayerById(layers, id);
+        if (child != nullptr)
+        {
+            ImageLayer copy = *child;
+            copy.parentID = group.id;
+            next.push_back(std::move(copy));
+        }
+    }
+    if (ValidateHierarchy(next) != DocumentStatus::Ok)
+    {
+        return;
+    }
+    BeginEdit(L"Group Layers");
+    _document.value().layers = std::move(next);
+    _activeLayerID = group.id;
+    _selected = {group.id};
+    if (parent.has_value())
+    {
+        _collapsed.erase(parent.value());
+    }
+    EndEdit();
+}
+
+bool DocumentSession::CanToggleClippingMask(const Guid& id) const
+{
+    const ImageLayer* layer = FindLayer(id);
+    if (layer == nullptr || layer->isGroup || !_document.has_value())
+    {
+        return false;
+    }
+    if (layer->maskSourceID.has_value())
+    {
+        return true;
+    }
+    const std::vector<Guid> siblings = SiblingIds(_document.value().layers, layer->parentID);
+    const auto position = std::find(siblings.begin(), siblings.end(), id);
+    if (position == siblings.end() || position == siblings.begin())
+    {
+        return false;
+    }
+    const ImageLayer* below = FindLayer(*(position - 1));
+    if (below == nullptr || below->isGroup)
+    {
+        return false;
+    }
+    return CanLinkMask(below->maskSourceID.value_or(below->id), id);
+}
+
+void DocumentSession::ToggleClippingMask(const Guid& id)
+{
+    if (!CanToggleClippingMask(id))
+    {
+        return;
+    }
+    ImageLayer* layer = MutableLayer(id);
+    if (layer == nullptr)
+    {
+        return;
+    }
+    if (layer->maskSourceID.has_value())
+    {
+        BeginEdit(L"Release Clipping Mask");
+        layer->maskSourceID.reset();
+        EndEdit();
+        return;
+    }
+    // Clips to the next lower sibling, sharing its base when it is already clipped.
+    const std::vector<Guid> siblings = SiblingIds(_document.value().layers, layer->parentID);
+    const auto position = std::find(siblings.begin(), siblings.end(), id);
+    const ImageLayer* below = FindLayer(*(position - 1));
+    if (below == nullptr)
+    {
+        return;
+    }
+    (void)LinkMask(below->maskSourceID.value_or(below->id), id);
+}
+
+void DocumentSession::ClearDocument()
+{
+    _document.reset();
+    _activeLayerID.reset();
+    _selected.clear();
+    _collapsed.clear();
+    _transformEdit.reset();
+    _transformDuplicate.reset();
+    _snapGuides = {};
+    _maskSelected = false;
+    ++_editRevision;
+    _displayCopy.reset();
+    _lassoDraft.reset();
+    _selectionMoveOrigin.reset();
+    _brush.reset();
+    _lastBrushPoint.reset();
+    _pendingOpacityDigit.reset();
+    _lastBrushCommit.reset();
+    _cloneOffset.reset();
+    _warp.reset();
+    _warpSource = {};
+    _gradient.reset();
+    _shapeDraft.reset();
+    _pixelMove.reset();
+    _filter.reset();
+    _levels.reset();
+    _hueSaturation.reset();
+    _adjustmentEditingID.reset();
+    _adjustmentOriginal.reset();
+    history.Reset();
+}
+
 void DocumentSession::DeleteLayer(const Guid& id)
 {
     if (!_document.has_value())

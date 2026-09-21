@@ -1508,7 +1508,27 @@ bool PathLooksLikeZipProject(const wchar_t* path) noexcept
             return true;
         }
     }
-    return IsFile(path);
+    // Any other file counts only with a ZIP signature (a local, empty or spanned archive): an image dropped on the
+    // window is not a project.
+    if (!IsFile(path))
+    {
+        return false;
+    }
+    wil::unique_hfile file{
+        CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (!file)
+    {
+        return false;
+    }
+    std::array<std::uint8_t, 4> header{};
+    DWORD read = 0;
+    if (!ReadFile(file.get(), header.data(), static_cast<DWORD>(header.size()), &read, nullptr) || read < header.size())
+    {
+        return false;
+    }
+    return header[0] == 'P' && header[1] == 'K' &&
+           ((header[2] == 3 && header[3] == 4) || (header[2] == 5 && header[3] == 6) ||
+            (header[2] == 7 && header[3] == 8));
 }
 
 ProjectLoadResult LoadProject(const wchar_t* path)

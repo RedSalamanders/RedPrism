@@ -512,6 +512,7 @@ void TestImportOntoDocument()
     document.width = 100;
     document.height = 100;
     std::optional<Guid> active;
+    Expect(!PathLooksLikeZipProject(path.c_str()), "import.png-is-not-a-project");
     Expect(ImportImageOnto(document, path.c_str(), active) == ProjectIoStatus::Ok, "import.ok");
     Expect(document.layers.size() == 1 && document.width == 6 && document.height == 3, "import.empty-adopts-size");
     Expect(active.has_value() && document.layers[0].id == active.value() && document.layers[0].name == L"import",
