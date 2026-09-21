@@ -715,6 +715,45 @@ struct CanvasDocument
     [[nodiscard]] bool operator==(const CanvasDocument&) const noexcept = default;
 };
 
+// The Crop tool's frame in document pixels (C16, Common/Crop.h holds its geometry, drag and snap).
+struct CropRect
+{
+    double x = 0;
+    double y = 0;
+    double width = 0;
+    double height = 0;
+
+    [[nodiscard]] double MinX() const noexcept
+    {
+        return x;
+    }
+    [[nodiscard]] double MinY() const noexcept
+    {
+        return y;
+    }
+    [[nodiscard]] double MaxX() const noexcept
+    {
+        return x + width;
+    }
+    [[nodiscard]] double MaxY() const noexcept
+    {
+        return y + height;
+    }
+    [[nodiscard]] double MidX() const noexcept
+    {
+        return x + width / 2.0;
+    }
+    [[nodiscard]] double MidY() const noexcept
+    {
+        return y + height / 2.0;
+    }
+    [[nodiscard]] CropRect OffsetBy(double dx, double dy) const noexcept
+    {
+        return CropRect{x + dx, y + dy, width, height};
+    }
+    [[nodiscard]] bool operator==(const CropRect&) const noexcept = default;
+};
+
 // Several layers transformed together: the upright box around them when the edit began (what the draft edits) and
 // each one's transform then.
 struct SnapTargets;
@@ -1181,6 +1220,25 @@ class DocumentSession
     // A resized document (Canvas Size, Image Size, Crop: the same id, every layer still there) installed as one
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
+    // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
+    // it. The host sets the whole canvas when the tool is chosen and cancels when it goes.
+    [[nodiscard]] const std::optional<CropRect>& CropFrame() const noexcept
+    {
+        return _cropRect;
+    }
+    void SetCropFrame(std::optional<CropRect> rect) noexcept;
+    // The frame shown while the Crop tool is active: the pending one, else the whole canvas.
+    [[nodiscard]] std::optional<CropRect> VisibleCropRect() const noexcept;
+    int cropRatioChoice = 0; // 0 Free, 1 Original (the canvas ratio), 2 1:1, 3 4:3, 4 16:9
+    [[nodiscard]] std::optional<double> CropRatio() const noexcept;
+    void CancelCrop() noexcept;
+    // The visible frame re-shaped to the chosen ratio, keeping its width and center, when the result is valid.
+    void ChangeCropRatio() noexcept;
+    // The canvas resized to the frame (the content moved by the frame's origin) as one `Crop` entry; false when
+    // there is no valid frame. The frame is dropped either way.
+    [[nodiscard]] bool CommitCrop();
+    // What crop edges snap to: the canvas edges and every visible pixel layer's upright bounds, in whole pixels.
+    [[nodiscard]] SnapTargets CropSnapTargets() const;
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
     void SetBlendMode(LayerBlendMode mode);
@@ -1700,6 +1758,7 @@ class DocumentSession
     uint32_t _backgroundArgb = kDefaultBackgroundArgb;
     std::optional<TransformEdit> _transformEdit;
     std::optional<std::pair<Guid, Guid>> _transformDuplicate; // copy, source
+    std::optional<CropRect> _cropRect;
     SnapGuides _snapGuides;
     bool _maskSelected = false;
     std::uint64_t _editRevision = 0;

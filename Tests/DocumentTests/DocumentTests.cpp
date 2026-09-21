@@ -1,6 +1,7 @@
 #include "Adjust.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
+#include "Crop.h"
 #include "Document.h"
 #include "DocumentHistory.h"
 #include "Selection.h"
@@ -5602,6 +5603,131 @@ void TestImageResize()
            "imagesize.placed-mask-scales-placement");
 }
 
+void TestCrop()
+{
+    // Legacy CropTests.dragGeometrySupportsReverseRatioMoveAndEveryHandle.
+    const CropRect rect = CropGeometry::Create(Vec2{100, 100}, Vec2{20, 60}, 2.0);
+    Expect(rect == CropRect{20, 60, 80, 40}, "crop.create-reverse-ratio");
+    const CropDrag move{Vec2{40, 70}, rect, CropDrag::Mode::Move, -1};
+    Expect(move.Updated(Vec2{30, 40}, std::nullopt) == rect.OffsetBy(-10, -30), "crop.move");
+    bool handlesHold = true;
+    for (int index = 0; index < 8; ++index)
+    {
+        const Vec2 unit = LayerTransform::kHandles[static_cast<std::size_t>(index)];
+        const Vec2 start{rect.MinX() + unit.x * rect.width, rect.MinY() + unit.y * rect.height};
+        const CropDrag drag{start, rect, CropDrag::Mode::Resize, index};
+        const CropRect next = drag.Updated(Vec2{start.x + (unit.x * 2 - 1) * 20, start.y + (unit.y * 2 - 1) * 10}, 2.0);
+        handlesHold = handlesHold && CropGeometry::Valid(next) && std::abs(next.width / next.height - 2) < 0.05 &&
+                      !(next == rect);
+    }
+    Expect(handlesHold, "crop.every-handle-keeps-ratio");
+    // Legacy cropTranslatesWithoutResamplingAndUndoRestoresBounds: the layer moves, its pixels stay.
+    DocumentSession session;
+    session.CreateDocument(64, 32);
+    ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
+    const Raster fixture = RedLeftRaster(64, 32);
+    layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
+    session.BeginEdit(L"Import Image");
+    session.Document().value().layers.push_back(layer);
+    session.EndEdit();
+    session.SelectLayer(layer.id);
+    const std::optional<CanvasDocument> before = session.Document();
+    session.SetCropFrame(CropRect{8, 4, 32, 16});
+    Expect(session.CommitCrop() && !session.CropFrame().has_value() &&
+               session.VisibleCropRect() == CropRect{0, 0, 32, 16} && session.Document().value().width == 32 &&
+               session.Document().value().height == 16 && session.history.UndoName() == L"Crop",
+           "crop.commit-resizes");
+    const ImageLayer* moved = Find(session.Document(), layer.id);
+    Expect(moved != nullptr && moved->transform.origin == Vec2{-8, -4} && moved->asset.has_value() &&
+               moved->asset->image == fixture,
+           "crop.translates-without-resampling");
+    session.Undo();
+    Expect(session.Document() == before, "crop.undo-restores-bounds");
+    session.Redo();
+    Expect(session.Document().value().width == 32, "crop.redo");
+    // Legacy sameSizeOffsetCropAndExpansionUseExactBounds.
+    DocumentSession offset;
+    offset.CreateDocument(100, 50);
+    offset.AddBlankLayer();
+    const Guid blank = offset.ActiveLayerID().value();
+    offset.SetCropFrame(CropRect{-20, 10, 100, 50});
+    Expect(offset.CommitCrop() && Find(offset.Document(), blank)->transform.origin == Vec2{20, -10},
+           "crop.same-size-offset");
+    offset.SetCropFrame(CropRect{-10, -10, 140, 80});
+    Expect(offset.CommitCrop() && offset.Document().value().width == 140 && offset.Document().value().height == 80 &&
+               Find(offset.Document(), blank)->transform.origin == Vec2{30, 0},
+           "crop.expansion-exact-bounds");
+    // Legacy cancellationAndViewportMappingDoNotEditDocument.
+    DocumentSession cancel;
+    cancel.CreateDocument(1000, 500);
+    const std::optional<CanvasDocument> original = cancel.Document();
+    const int entries = cancel.history.UndoCount();
+    cancel.SetCropFrame(cancel.VisibleCropRect());
+    Expect(cancel.CropFrame() == CropRect{0, 0, 1000, 500} && cancel.Document() == original, "crop.tool-frames-canvas");
+    cancel.SetCropFrame(CropRect{25, 20, 200, 100});
+    cancel.CancelCrop();
+    Expect(cancel.VisibleCropRect() == CropRect{0, 0, 1000, 500} && cancel.Document() == original &&
+               cancel.history.UndoCount() == entries,
+           "crop.cancel-edits-nothing");
+    cancel.SetCropFrame(CropRect{0, 0, 1000, 500});
+    Expect(cancel.CommitCrop() && cancel.history.UndoCount() == entries && cancel.Document() == original,
+           "crop.whole-canvas-commit-is-no-entry");
+    // The ratio choice re-shapes the frame about its center, keeping the width.
+    cancel.SetCropFrame(CropRect{100, 100, 400, 100});
+    cancel.cropRatioChoice = 2;
+    cancel.ChangeCropRatio();
+    Expect(cancel.CropFrame() == CropRect{100, -50, 400, 400}, "crop.ratio-reshapes");
+    cancel.cropRatioChoice = 1;
+    Expect(cancel.CropRatio().has_value() && std::abs(cancel.CropRatio().value() - 2.0) < 1e-9, "crop.original-ratio");
+    // Legacy cropEdgesSnapToNearbyEdges.
+    const CropSnap snap{{0, 200, 50, 150}, {0, 100, 20, 80}, 6};
+    const CropRect frame{10, 10, 60, 40};
+    const CropDrag snapMove{Vec2{30, 30}, frame, CropDrag::Mode::Move, -1};
+    const Vec2 movedTo{26, 34};
+    Expect(snap.Apply(snapMove.Updated(movedTo, std::nullopt), snapMove, movedTo, std::nullopt) ==
+               CropRect{0, 20, 60, 40},
+           "crop.snap-move");
+    int cornerIndex = -1;
+    for (int index = 0; index < 8; ++index)
+    {
+        if (LayerTransform::kHandles[static_cast<std::size_t>(index)] == Vec2{1, 1})
+        {
+            cornerIndex = index;
+        }
+    }
+    const CropDrag resize{Vec2{70, 50}, frame, CropDrag::Mode::Resize, cornerIndex};
+    const Vec2 near{146, 83};
+    Expect(snap.Apply(resize.Updated(near, std::nullopt), resize, near, std::nullopt) == CropRect{10, 10, 140, 70},
+           "crop.snap-resize-corner");
+    const Vec2 far{120, 60};
+    Expect(snap.Apply(resize.Updated(far, std::nullopt), resize, far, std::nullopt) == CropRect{10, 10, 110, 50},
+           "crop.snap-too-far");
+    const CropRect ratioRect{10, 10, 138, 69};
+    Expect(snap.Apply(ratioRect, resize, Vec2{148, 79}, 2.0) == ratioRect, "crop.snap-keeps-ratio");
+    const CropDrag create{Vec2{52, 18}, CropRect{}, CropDrag::Mode::Create, -1};
+    const Vec2 dragged{147, 77};
+    Expect(snap.Apply(create.Updated(dragged, std::nullopt), create, dragged, std::nullopt) == CropRect{52, 18, 98, 62},
+           "crop.snap-create-dragged-corner");
+    // Legacy snapTargetsAreTheCanvasAndLayerBounds: a 100 × 60 layer centered in 400 × 300.
+    DocumentSession targets;
+    targets.CreateDocument(400, 300);
+    ImageLayer red = ImageLayer::Blank(L"Red", Vec2{100, 60});
+    const Raster redRaster = RedLeftRaster(100, 60);
+    red.asset = RasterAsset{redRaster, Raster::MakeThumbnail(redRaster), red.name};
+    red.transform.origin = Vec2{150, 120};
+    targets.BeginEdit(L"Import Image");
+    targets.Document().value().layers.push_back(red);
+    targets.EndEdit();
+    const SnapTargets found = targets.CropSnapTargets();
+    const std::set<double> xs(found.xs.begin(), found.xs.end());
+    const std::set<double> ys(found.ys.begin(), found.ys.end());
+    Expect(xs == std::set<double>{0, 400, 150, 250} && ys == std::set<double>{0, 300, 120, 180}, "crop.snap-targets");
+    // Clearing the session drops a frame; a new document has none.
+    targets.SetCropFrame(CropRect{1, 1, 10, 10});
+    targets.ClearDocument();
+    Expect(!targets.CropFrame().has_value() && !targets.VisibleCropRect().has_value(), "crop.cleared");
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5684,6 +5810,7 @@ int wmain()
     TestSizeDrafts();
     TestCanvasResize();
     TestImageResize();
+    TestCrop();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

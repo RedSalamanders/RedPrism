@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#include "CanvasSize.h"
+#include "Crop.h"
 #include "TransformEdit.h"
 #include "Utf8.h"
 
@@ -1757,6 +1759,7 @@ void DocumentSession::ClearDocument()
     _collapsed.clear();
     _transformEdit.reset();
     _transformDuplicate.reset();
+    _cropRect.reset();
     _snapGuides = {};
     _maskSelected = false;
     ++_editRevision;
@@ -1792,6 +1795,89 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
+}
+
+void DocumentSession::SetCropFrame(std::optional<CropRect> rect) noexcept
+{
+    _cropRect = rect;
+}
+
+std::optional<CropRect> DocumentSession::VisibleCropRect() const noexcept
+{
+    if (!_document.has_value())
+    {
+        return std::nullopt;
+    }
+    if (_cropRect.has_value())
+    {
+        return _cropRect;
+    }
+    return CropRect{0, 0, static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)};
+}
+
+std::optional<double> DocumentSession::CropRatio() const noexcept
+{
+    switch (cropRatioChoice)
+    {
+    case 1:
+        if (_document.has_value())
+        {
+            return static_cast<double>(_document.value().width) / static_cast<double>(_document.value().height);
+        }
+        return std::nullopt;
+    case 2:
+        return 1.0;
+    case 3:
+        return 4.0 / 3.0;
+    case 4:
+        return 16.0 / 9.0;
+    default:
+        return std::nullopt;
+    }
+}
+
+void DocumentSession::CancelCrop() noexcept
+{
+    _cropRect.reset();
+}
+
+void DocumentSession::ChangeCropRatio() noexcept
+{
+    const std::optional<CropRect> rect = VisibleCropRect();
+    const std::optional<double> ratio = CropRatio();
+    if (!rect.has_value() || !ratio.has_value() || !(ratio.value() > 0.0))
+    {
+        return;
+    }
+    const double height = rect->width / ratio.value();
+    const CropRect next =
+        CropGeometry::Snapped(CropRect{rect->MinX(), rect->MidY() - height / 2.0, rect->width, height});
+    if (CropGeometry::Valid(next))
+    {
+        _cropRect = next;
+    }
+}
+
+bool DocumentSession::CommitCrop()
+{
+    if (!_document.has_value() || !_cropRect.has_value() || !CropGeometry::Valid(_cropRect.value()))
+    {
+        return false;
+    }
+    const CropRect rect = _cropRect.value();
+    CanvasSizeOptions options;
+    options.width = static_cast<int>(rect.width);
+    options.height = static_cast<int>(rect.height);
+    options.contentOffset = Vec2{-rect.MinX(), -rect.MinY()};
+    CanvasDocument result;
+    const ResizeStatus status = ResizeCanvas(_document.value(), options, result);
+    _cropRect.reset();
+    if (status == ResizeStatus::Ok)
+    {
+        ApplyDocumentSize(std::move(result), L"Crop");
+        return true;
+    }
+    return status == ResizeStatus::Unchanged;
 }
 
 void DocumentSession::DeleteLayer(const Guid& id)
@@ -2803,6 +2889,30 @@ bool DocumentSession::TransformTargetsMask() const noexcept
     }
     const ImageLayer* layer = ActiveLayer();
     return _maskSelected && layer != nullptr && layer->mask.has_value() && !layer->mask->linked;
+}
+
+SnapTargets DocumentSession::CropSnapTargets() const
+{
+    SnapTargets targets;
+    if (!_document.has_value())
+    {
+        return targets;
+    }
+    const CanvasDocument& document = _document.value();
+    targets.xs = {0.0, static_cast<double>(document.width)};
+    targets.ys = {0.0, static_cast<double>(document.height)};
+    for (const Guid& id : RenderLayerIds(document))
+    {
+        const ImageLayer* layer = FindLayer(id);
+        if (layer == nullptr || !layer->asset.has_value())
+        {
+            continue;
+        }
+        const CornerBounds bounds = BoundsOfCorners(DisplayedTransform(*layer).Corners());
+        targets.xs.insert(targets.xs.end(), {std::round(bounds.minX), std::round(bounds.maxX)});
+        targets.ys.insert(targets.ys.end(), {std::round(bounds.minY), std::round(bounds.maxY)});
+    }
+    return targets;
 }
 
 SnapTargets DocumentSession::TransformSnapTargets(const std::unordered_set<Guid>& excluding) const
