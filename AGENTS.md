@@ -29,7 +29,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 | Skill | Use it for |
 | --- | --- |
 | [spec-workflow](.agents/skills/spec-workflow/SKILL.md) | Domain specs, WIP/Done lifecycle |
-| [build-redprism](.agents/skills/build-redprism/SKILL.md) | `build.ps1`, `test.ps1`, configurations, outputs |
+| [build-redprism](.agents/skills/build-redprism/SKILL.md) | `build.ps1`, `test.ps1`, `package.ps1`, configurations, outputs |
 | [test-harness](.agents/skills/test-harness/SKILL.md) | In-process tests, goldens, WARP fixtures, harness screenshots |
 | [direct3d11-rendering](.agents/skills/direct3d11-rendering/SKILL.md) | Device, swap chain, Present, WARP, device loss |
 | [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, the brush compute shader, build-time HLSL |

@@ -18,10 +18,15 @@ Use the repository entrypoints instead of assembling ad hoc MSBuild commands:
 .\build.ps1 -Platform ARM64
 .\build.ps1 -Rebuild
 .\test.ps1
+.\package.ps1 -Platform x64
 ```
 
 Outputs are always `.build/<Platform>/<Configuration>/`. Intermediates are under `.build/Intermediate/`.
 Pinned vcpkg state stays beneath `.build/`. Do not substitute a developer-global install.
+
+`package.ps1` builds Release and stages the portable ZIP (`.build/packages/`, never committed) with the app-local
+Visual C++ CRT and the vcpkg DLLs the import table names, then proves a clean extraction runs `--help` and
+`--self-test --warp` with a system-only `Path`. It never packages Debug (`Specs/Build/Build_Packaging.md`).
 
 `build.ps1` discovers Visual Studio, including prerelease instances. Do not hardcode a developer installation path.
 It begins with the framed RedPrism pixel-art banner owned by `Build/BuildPresentation.psm1`.
