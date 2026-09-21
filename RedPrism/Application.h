@@ -6,6 +6,7 @@
 #include "Document.h"
 #include "EditorTool.h"
 #include "Renderer.h"
+#include "SettingsStore.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
 
@@ -50,6 +51,8 @@ class Application final
     int RunSelfTest() noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
+    // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
+    void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
 
   private:
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
@@ -63,6 +66,19 @@ class Application final
     HRESULT InitializeRenderer() noexcept;
     HRESULT InitializeChrome() noexcept;
     HRESULT InitializeDocument() noexcept;
+    // ApplicationSettings.cpp: the settings file, its event-driven reload on the UI thread, the theme and the C14
+    // gates.
+    void ApplySettings(const AppSettings& settings) noexcept;
+    void RefreshTheme() noexcept;
+    bool StartSettingsWatch() noexcept;
+    void StopSettingsWatch() noexcept;
+    void NoteSettingsFileState() noexcept;
+    void OnSettingsDirectoryChanged(bool immediate) noexcept;
+    bool ReloadSettingsIfChanged() noexcept;
+    void SaveSettings() noexcept;
+    [[nodiscard]] HANDLE SettingsWatchHandle() const noexcept;
+    int RunProductHardeningSelfTest() noexcept;
+    static constexpr UINT_PTR kSettingsTimerId = 7;
     void SyncChrome() noexcept;
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
@@ -217,6 +233,12 @@ class Application final
     std::wstring _demo;
     bool _quietUi = false;
     bool _forceWarp = false;
+    std::wstring _settingsPath;
+    AppSettings _settings;
+    wil::unique_hfind_change _settingsWatch;
+    FILETIME _settingsSeenWrite{};
+    std::uint64_t _settingsSeenSize = 0;
+    bool _restoreMaximized = false;
     bool _classRegistered = false;
     bool _rendererReady = false;
     bool _windowVisible = false;

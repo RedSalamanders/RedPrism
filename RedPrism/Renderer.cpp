@@ -16,7 +16,6 @@ namespace
 constexpr UINT kSwapChainFlags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 constexpr size_t kMaximumEnumeratedAdapters = 8;
 constexpr size_t kMaximumEnumeratedOutputs = 32;
-constexpr std::array<float, 4> kClearColor{0.118f, 0.118f, 0.133f, 1.0f};
 } // namespace
 
 Renderer::~Renderer()
@@ -462,7 +461,7 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
 
     ID3D11RenderTargetView* renderTargets[] = {_renderTarget.get()};
     _context->OMSetRenderTargets(1, renderTargets, nullptr);
-    _context->ClearRenderTargetView(_renderTarget.get(), kClearColor.data());
+    _context->ClearRenderTargetView(_renderTarget.get(), _clearColor.data());
 
     // Order: chrome layout (the hole), then the document into the hole, then the chrome surface over it. The DxUi
     // surface is transparent where no control paints, so tooltips and popups that overlap the canvas stay visible.

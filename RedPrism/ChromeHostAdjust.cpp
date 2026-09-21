@@ -86,9 +86,10 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
             _onAdjust(what, value);
         }
     };
-    const auto combo = [this](std::initializer_list<UINT> items, AdjustAction what)
+    const auto combo = [this](UINT nameId, std::initializer_list<UINT> items, AdjustAction what)
     {
         DxUi::ComboBox* control = _adjustCard->AddChild<DxUi::ComboBox>();
+        control->SetAccessibleName(LoadStringResource(nullptr, nameId));
         std::vector<DxUi::ComboBox::Item> entries;
         std::size_t index = 0;
         for (const UINT id : items)
@@ -131,6 +132,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     {
         DxUi::NumericStepper* control = _adjustCard->AddChild<DxUi::NumericStepper>();
         control->SetLabel(LoadStringResource(nullptr, labelId), 0.0f);
+        control->SetAccessibleName(LoadStringResource(nullptr, labelId));
         control->SetUnit(unitId != 0 ? LoadStringResource(nullptr, unitId) : std::wstring{},
                          unitId != 0 ? 14.0f : 0.0f);
         control->SetMinimum(minimum);
@@ -155,6 +157,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
         AdjustRow& entry = _adjustRows[static_cast<std::size_t>(id)];
         entry.label = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, labelId));
         entry.slider = _adjustCard->AddChild<DxUi::Slider>();
+        entry.slider->SetAccessibleName(LoadStringResource(nullptr, labelId));
         entry.slider->SetMinimum(logarithmic ? std::log(minimum) : minimum);
         entry.slider->SetMaximum(logarithmic ? std::log(maximum) : maximum);
         entry.slider->SetStep(logarithmic ? 0.01 : std::pow(10.0, -decimals));
@@ -178,9 +181,10 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
         entry.decimals = decimals;
     };
     // Curves and Levels share the channel choice.
-    _adjustChannel =
-        combo({IDS_ADJUST_RGB, IDS_ADJUST_RED, IDS_ADJUST_GREEN, IDS_ADJUST_BLUE}, AdjustAction::SetChannel);
+    _adjustChannel = combo(IDS_ADJUST_CHANNEL, {IDS_ADJUST_RGB, IDS_ADJUST_RED, IDS_ADJUST_GREEN, IDS_ADJUST_BLUE},
+                           AdjustAction::SetChannel);
     _curveEditor = _adjustCard->AddChild<CurveEditor>();
+    _curveEditor->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_CURVE_EDITOR));
     _curveEditor->SetOnChange(
         [this](std::vector<CurvePoint> points)
         {
@@ -203,6 +207,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _curveReset = button(IDS_ADJUST_RESET, [action] { action(AdjustAction::Reset, 0.0); });
     // Levels.
     _levelsInput = _adjustCard->AddChild<LevelsBar>();
+    _levelsInput->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LEVELS_INPUT));
     _levelsInput->SetKind(LevelsBar::Kind::Input);
     _levelsInput->SetOnHandle(
         [this](int handle, double value)
@@ -228,6 +233,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
             }
         });
     _levelsOutput = _adjustCard->AddChild<LevelsBar>();
+    _levelsOutput->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LEVELS_OUTPUT));
     _levelsOutput->SetKind(LevelsBar::Kind::Output);
     _levelsOutput->SetOnHandle(
         [this](int handle, double value)
@@ -266,7 +272,8 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
             button(autoIds[index], [action, index] { action(AdjustAction::AutoLevels, static_cast<double>(index)); });
     }
     // Hue / Saturation.
-    _hueRange = combo({IDS_ADJUST_MASTER, IDS_ADJUST_REDS, IDS_ADJUST_YELLOWS, IDS_ADJUST_GREENS, IDS_ADJUST_CYANS,
+    _hueRange = combo(IDS_ADJUST_RANGE,
+                      {IDS_ADJUST_MASTER, IDS_ADJUST_REDS, IDS_ADJUST_YELLOWS, IDS_ADJUST_GREENS, IDS_ADJUST_CYANS,
                        IDS_ADJUST_BLUES, IDS_ADJUST_MAGENTAS},
                       AdjustAction::SetRange);
     const UINT hueSampleIds[] = {IDS_ADJUST_HUE_SAMPLE, IDS_ADJUST_HUE_ADD, IDS_ADJUST_HUE_REMOVE};
@@ -297,6 +304,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     row(AdjustRowId::Saturation, IDS_ADJUST_SATURATION, 0, -100, 100, 0, false, AdjustAction::SetSaturation);
     row(AdjustRowId::Lightness, IDS_ADJUST_LIGHTNESS, 0, -100, 100, 0, false, AdjustAction::SetLightness);
     _spectrum = _adjustCard->AddChild<SpectrumEditor>();
+    _spectrum->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_HUE_SPECTRUM));
     _spectrum->SetOnHandle(
         [this](int index, double degrees)
         {
@@ -312,10 +320,13 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     row(AdjustRowId::Offset, IDS_ADJUST_OFFSET, 0, -0.5, 0.5, 4, false, AdjustAction::SetOffset);
     row(AdjustRowId::Gamma, IDS_ADJUST_GAMMA, 0, 0.01, 9.99, 2, true, AdjustAction::SetGamma);
     _gradientRamp = _adjustCard->AddChild<GradientRamp>();
+    _gradientRamp->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_GRADIENT_RAMP));
     _mapShadows = _adjustCard->AddChild<DxUi::ColorSwatch>(0xFF000000u);
+    _mapShadows->SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_SHADOWS));
     _mapShadows->SetOnClick([action] { action(AdjustAction::OpenShadows, 0.0); });
     _mapShadowsLabel = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_SHADOWS));
     _mapHighlights = _adjustCard->AddChild<DxUi::ColorSwatch>(0xFFFFFFFFu);
+    _mapHighlights->SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_HIGHLIGHTS));
     _mapHighlights->SetOnClick([action] { action(AdjustAction::OpenHighlights, 0.0); });
     _mapHighlightsLabel = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_HIGHLIGHTS));
     _mapReverse = checkbox(IDS_ADJUST_REVERSE, AdjustAction::SetReversed);
@@ -327,7 +338,8 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     row(AdjustRowId::Angle, IDS_ADJUST_ANGLE, IDS_UNIT_DEGREES, -90, 90, 0, false, AdjustAction::SetAngle);
     row(AdjustRowId::Distance, IDS_ADJUST_DISTANCE, IDS_UNIT_PIXELS, 1, 2000, 0, true, AdjustAction::SetDistance);
     row(AdjustRowId::Amount, IDS_ADJUST_AMOUNT, IDS_UNIT_PERCENT, 0.1, 400, 1, true, AdjustAction::SetAmount);
-    _noiseDistribution = combo({IDS_ADJUST_UNIFORM, IDS_ADJUST_GAUSSIAN}, AdjustAction::SetGaussian);
+    _noiseDistribution =
+        combo(IDS_A11Y_NOISE_DISTRIBUTION, {IDS_ADJUST_UNIFORM, IDS_ADJUST_GAUSSIAN}, AdjustAction::SetGaussian);
     _noiseMono = checkbox(IDS_ADJUST_MONOCHROMATIC, AdjustAction::SetMonochromatic);
     row(AdjustRowId::Distortion, IDS_ADJUST_DISTORTION, 0, -100, 100, 0, false, AdjustAction::SetDistortion);
     _lensHint = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LENS_HINT));

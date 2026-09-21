@@ -335,6 +335,7 @@ int Application::Run(int showCommand) noexcept
         OutputDebugStringW(L"Document initialization failed.\n");
         return 5;
     }
+    ApplySettings(_settings);
 
     if (!_screenshotPath.empty())
     {
@@ -353,7 +354,8 @@ int Application::Run(int showCommand) noexcept
     }
     else
     {
-        ShowWindow(_window.get(), showCommand);
+        const bool plain = showCommand == SW_SHOWNORMAL || showCommand == SW_SHOWDEFAULT || showCommand == SW_SHOW;
+        ShowWindow(_window.get(), _restoreMaximized && plain ? SW_SHOWMAXIMIZED : showCommand);
     }
 
     MSG message{};
@@ -558,6 +560,7 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"Document initialization failed.\n");
         return 5;
     }
+    ApplySettings(_settings);
 
     BindCompositionDevice();
     SyncChrome();
@@ -1552,6 +1555,12 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
     }
 
+    // Product hardening (C14): accessible names and the UIA root, the settings file's live reload and the theme.
+    if (const int hardening = RunProductHardeningSelfTest(); hardening != 0)
+    {
+        return hardening;
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -1618,6 +1627,22 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
     if (!SetWindowPos(window, nullptr, 0, 0, windowSize.cx, windowSize.cy, SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE))
     {
         return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    // A saved placement (Specs/Core/Core_Settings.md) replaces the default size when it still meets a monitor.
+    if (_settings.window.valid && _screenshotDpi == 0 && visible)
+    {
+        WINDOWPLACEMENT placement{};
+        placement.length = sizeof(placement);
+        placement.showCmd = SW_HIDE;
+        placement.rcNormalPosition =
+            RECT{_settings.window.x, _settings.window.y, _settings.window.x + _settings.window.width,
+                 _settings.window.y + _settings.window.height};
+        if (MonitorFromRect(&placement.rcNormalPosition, MONITOR_DEFAULTTONULL) != nullptr &&
+            SetWindowPlacement(window, &placement))
+        {
+            _restoreMaximized = _settings.window.maximized;
+        }
     }
 
     result = RegisterDisplayPowerNotification(window);
@@ -2100,6 +2125,7 @@ void Application::DropBrushEngine() noexcept
 
 void Application::CloseMainWindow() noexcept
 {
+    SaveSettings();
     if (_window)
     {
         (void)KillTimer(_window.get(), kScreenshotTimerId);
@@ -2119,9 +2145,22 @@ void Application::CloseMainWindow() noexcept
 
 bool Application::WaitUntilMessage() noexcept
 {
-    const DWORD waitResult = MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-    if (waitResult == WAIT_OBJECT_0)
+    // The settings directory watch waits beside the queue: a change reloads on this thread, never a poll.
+    HANDLE handles[1]{};
+    DWORD count = 0;
+    if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
     {
+        handles[count++] = watch;
+    }
+    const DWORD waitResult =
+        MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    if (waitResult == WAIT_OBJECT_0 + count)
+    {
+        return true;
+    }
+    if (count != 0 && waitResult == WAIT_OBJECT_0)
+    {
+        OnSettingsDirectoryChanged(false);
         return true;
     }
     const DWORD error = waitResult == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA;
@@ -2137,12 +2176,23 @@ bool Application::WaitForFrameLatency() noexcept
     {
         return true;
     }
-    const DWORD waitResult = MsgWaitForMultipleObjectsEx(1, &waitable, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    HANDLE handles[2]{waitable, nullptr};
+    DWORD count = 1;
+    if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
+    {
+        handles[count++] = watch;
+    }
+    const DWORD waitResult = MsgWaitForMultipleObjectsEx(count, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     if (waitResult == WAIT_OBJECT_0)
     {
         return true;
     }
-    if (waitResult == WAIT_OBJECT_0 + 1)
+    if (count == 2 && waitResult == WAIT_OBJECT_0 + 1)
+    {
+        OnSettingsDirectoryChanged(false);
+        return false;
+    }
+    if (waitResult == WAIT_OBJECT_0 + count)
     {
         return false;
     }
@@ -3262,8 +3312,8 @@ void Application::ExportFlattened(bool jpeg) noexcept
         {
             return;
         }
-        if (ExportDocumentJpeg(raster, JpegExportOptions{0.8, _session.Document().value().resolution}, path.c_str()) !=
-            ProjectIoStatus::Ok)
+        if (ExportDocumentJpeg(raster, JpegExportOptions{_settings.jpegQuality, _session.Document().value().resolution},
+                               path.c_str()) != ProjectIoStatus::Ok)
         {
             ShowError(IDS_ERROR_EXPORT_JPEG);
         }
@@ -3311,6 +3361,29 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         CheckDeviceAdapter();
         return dpiResult;
     }
+    case WM_GETOBJECT:
+        if (_chrome)
+        {
+            if (const LRESULT provider = _chrome->HandleGetObject(wParam, lParam); provider != 0)
+            {
+                return provider;
+            }
+        }
+        break;
+    case WM_MOVE:
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+        if (_chrome)
+        {
+            _chrome->UpdateAccessibilityPlacement();
+        }
+        break;
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+    case WM_SYSCOLORCHANGE:
+        // High contrast or the app mode changed: the palette follows (Specs/UI/UI_ApplicationChrome.md, Theme).
+        RefreshTheme();
+        break;
     case WM_EXITSIZEMOVE:
         CheckDeviceAdapter();
         break;
@@ -3395,6 +3468,12 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         return 0;
     case WM_TIMER:
+        if (wParam == kSettingsTimerId)
+        {
+            (void)KillTimer(window, kSettingsTimerId);
+            (void)ReloadSettingsIfChanged();
+            return 0;
+        }
         if (wParam == kScreenshotTimerId && !_screenshotPath.empty() && _window)
         {
             (void)KillTimer(window, kScreenshotTimerId);
@@ -3454,6 +3533,10 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
 
 LRESULT Application::OnSize(HWND window, UINT width, UINT height) noexcept
 {
+    if (_chrome)
+    {
+        _chrome->UpdateAccessibilityPlacement();
+    }
     if (!_rendererReady)
     {
         return 0;

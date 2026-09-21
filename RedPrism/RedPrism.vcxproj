@@ -134,6 +134,7 @@
     <ClInclude Include="FrameScheduler.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="ThemePalette.h" />
+    <ClInclude Include="AccessibilityRoot.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -150,9 +151,15 @@
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />
+    <ClCompile Include="..\Common\SettingsStore.cpp" />
+    <ClCompile Include="..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
+    <ClCompile Include="ApplicationSettings.cpp" />
+    <ClCompile Include="AccessibilityRoot.cpp" />
+    <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />
     <ClCompile Include="BrushCompute.cpp" />
     <ClCompile Include="CanvasRenderer.cpp" />

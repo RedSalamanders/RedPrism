@@ -46,6 +46,16 @@ class Renderer final
     HRESULT Resize(UINT width, UINT height) noexcept;
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
                    const CanvasDocument* document) noexcept;
+    // The color behind the canvas (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system window
+    // color under high contrast.
+    void SetClearColor(const std::array<float, 4>& color) noexcept
+    {
+        _clearColor = color;
+    }
+    [[nodiscard]] const std::array<float, 4>& ClearColor() const noexcept
+    {
+        return _clearColor;
+    }
     void SetLayoutDpi(float dpi) noexcept
     {
         _layoutDpi = dpi;
@@ -97,4 +107,5 @@ class Renderer final
     DWORD _occlusionStatusCookie = 0;
     bool _occlusionStatusRegistered = false;
     float _layoutDpi = 0;
+    std::array<float, 4> _clearColor{0.118f, 0.118f, 0.133f, 1.0f};
 };

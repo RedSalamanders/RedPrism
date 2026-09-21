@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AccessibilityRoot.h"
 #include "AdjustControls.h"
 #include "CanvasOverlay.h"
 #include "Document.h"
@@ -17,11 +18,16 @@
 
 #include <DxUi/DxUi.h>
 #include <DxUi/Embedded.h>
+#include <DxUi/EmbeddedAccessibility.h>
 #include <DxUi/NativeMenuInterop.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/resource.h>
+
+#include "ThemePalette.h"
+
+class ChromeAccessibilitySite;
 #pragma warning(pop)
 
 using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu>;
@@ -478,7 +484,30 @@ class ChromeHost final
     void SetCanvasFocused(bool focused) noexcept
     {
         _canvasFocused = focused;
+        UpdateAccessibilityPlacement();
     }
+    // The chrome palette (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system high-contrast colors.
+    void SetTheme(const DxUi::ThemePalette& palette) noexcept;
+    [[nodiscard]] bool ThemeIsDark() const noexcept
+    {
+        return _palette.dark;
+    }
+    [[nodiscard]] bool ThemeIsHighContrast() const noexcept
+    {
+        return _palette.highContrast;
+    }
+    // UI Automation (ChromeHostAccessibility.cpp): the window's root with the DxUi tree beneath it.
+    void AttachAccessibility() noexcept;
+    void DetachAccessibility() noexcept;
+    [[nodiscard]] LRESULT HandleGetObject(WPARAM wParam, LPARAM lParam) noexcept;
+    void UpdateAccessibilityPlacement() noexcept;
+    [[nodiscard]] IRawElementProviderFragmentRoot* AccessibilityRoot() const noexcept; // not add-referenced
+    [[nodiscard]] HRESULT AccessibilityStatus() const noexcept // the last attach attempt (S_FALSE: none yet)
+    {
+        return _accessibilityStatus;
+    }
+    // Self-test gate: interactive controls without an accessible name, described by kind and parent.
+    [[nodiscard]] std::vector<std::wstring> UnnamedInteractiveControls() const;
     [[nodiscard]] bool ColorPickerOpen() const noexcept;
     [[nodiscard]] uint32_t ForegroundColor() const noexcept
     {
@@ -540,6 +569,11 @@ class ChromeHost final
     void* _requestContext = nullptr;
     void (*_requestFrame)(void*) noexcept = nullptr;
     HWND _owner = nullptr;
+    DxUi::ThemePalette _palette = RedPrism::MakeRedPrismThemePalette(true);
+    wil::com_ptr_nothrow<WindowAccessibilityRoot> _accessibilityRoot;
+    std::shared_ptr<ChromeAccessibilitySite> _accessibilitySite;
+    HRESULT _accessibilityStatus = S_FALSE;
+    [[nodiscard]] DxUi::EmbeddedAccessibilityPlacement AccessibilityPlacement() const noexcept;
     std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
     DxUi::MenuBar* _menu = nullptr;
     DxUi::TabControl* _tabs = nullptr;

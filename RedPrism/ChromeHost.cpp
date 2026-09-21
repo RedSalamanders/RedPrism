@@ -110,7 +110,7 @@ HRESULT ChromeHost::Attach(ID3D11Device* device, void* requestContext, void (*re
         Detach();
         return result;
     }
-    _view.Controls().SetTheme(RedPrism::MakeRedPrismThemePalette());
+    _view.Controls().SetTheme(_palette);
     _attached = true;
     _view.SetVisible(true);
     return S_OK;
@@ -127,6 +127,7 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
     {
         return result;
     }
+    DetachAccessibility(); // DxUi drops UIA on a device swap; the next Prepare attaches again
     result = _view.ReplaceDevice(_graphics);
     if (FAILED(result))
     {
@@ -138,6 +139,7 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
+    DetachAccessibility();
     _view.Detach();
     _menu = nullptr;
     _tabs = nullptr;
@@ -191,12 +193,26 @@ void ChromeHost::Detach() noexcept
 
 void ChromeHost::SetVisible(bool visible) noexcept
 {
+    if (!visible)
+    {
+        DetachAccessibility(); // DxUi drops UIA on hide; the next Prepare attaches again
+    }
     _view.SetVisible(visible);
 }
 
 void ChromeHost::SetOwnerWindow(HWND window) noexcept
 {
     _owner = window;
+}
+
+void ChromeHost::SetTheme(const DxUi::ThemePalette& palette) noexcept
+{
+    _palette = palette;
+    if (_attached)
+    {
+        _view.Controls().SetTheme(_palette);
+        _view.MarkDirty();
+    }
 }
 
 void ChromeHost::SetCommandHandler(std::function<void(int)> handler)
@@ -371,8 +387,7 @@ void ChromeHost::OpenMenu(size_t index, POINT screen, bool) noexcept
     {
         return;
     }
-    const std::optional<int> command =
-        DxUi::ShowNativeHMenuContextMenu(_owner, screen, menu, RedPrism::MakeRedPrismThemePalette());
+    const std::optional<int> command = DxUi::ShowNativeHMenuContextMenu(_owner, screen, menu, _palette);
     if (command.has_value() && _onCommand)
     {
         _onCommand(command.value());
@@ -388,6 +403,7 @@ HRESULT ChromeHost::Build() noexcept
         BuildMenus();
         auto root = std::make_unique<DxUi::Panel>();
         _menu = root->AddChild<DxUi::MenuBar>();
+        _menu->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_MENU_BAR));
         std::vector<DxUi::MenuBarItem> items;
         constexpr std::array<UINT, static_cast<std::size_t>(MenuIndex::Count)> kMenuIds{
             IDS_MENU_FILE,   IDS_MENU_EDIT,   IDS_MENU_IMAGE, IDS_MENU_LAYER,
@@ -401,8 +417,10 @@ HRESULT ChromeHost::Build() noexcept
         _menu->SetItems(std::move(items));
         _menu->SetOnOpenItem([this](size_t index, POINT screen, bool keyboard) { OpenMenu(index, screen, keyboard); });
         _tabs = root->AddChild<DxUi::TabControl>();
+        _tabs->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_PROJECT_TABS));
         _tabs->AddTab<DxUi::Panel>(LoadStringResource(nullptr, IDS_UNTITLED));
         _rail = root->AddChild<DxUi::Toolbar>();
+        _rail->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_TOOLS));
         for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
             const EditorTool tool = EditorToolAt(index);
@@ -439,6 +457,7 @@ HRESULT ChromeHost::Build() noexcept
         BuildShapeHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
+        _opacity->SetAccessibleName(LoadStringResource(nullptr, IDS_LAYER_OPACITY));
         _opacity->SetMinimum(0.0);
         _opacity->SetMaximum(100.0);
         _opacity->SetStep(1.0);
@@ -462,6 +481,7 @@ HRESULT ChromeHost::Build() noexcept
                 _onOpacity(change.value / 100.0, phase);
             });
         _layers = root->AddChild<DxUi::Tree>();
+        _layers->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LAYERS));
         _treeModel.onLayer = &_onLayer;
         _treeModel.onExpand = &_onExpand;
         _layers->SetModel(&_treeModel);
@@ -474,6 +494,7 @@ HRESULT ChromeHost::Build() noexcept
         _overlay = root->AddChild<CanvasOverlay>();
         // The splitter spans canvas and layers; only its separator (plus slop) is hittable, so it goes above them.
         _splitter = root->AddChild<DxUi::Splitter>();
+        _splitter->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LAYERS_SPLITTER));
         _splitter->SetMinimumFirstPane(kCanvasMinDip);
         _splitter->SetMinimumSecondPane(kLayersMinDip);
         _splitter->SetOnChange([this](DxUi::SplitterChange change) { OnSplitterChange(change); });
@@ -484,6 +505,7 @@ HRESULT ChromeHost::Build() noexcept
         _pickerCard->SetCornerRadius(8.0f);
         _pickerCard->SetVisible(false);
         _picker = _pickerCard->AddChild<DxUi::ColorPicker>();
+        _picker->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_COLOR_PICKER));
         DxUi::ColorPicker::Labels labels;
         labels.newColor = LoadStringResource(nullptr, IDS_PICKER_NEW);
         labels.currentColor = LoadStringResource(nullptr, IDS_PICKER_CURRENT);
@@ -494,6 +516,9 @@ HRESULT ChromeHost::Build() noexcept
         labels.ok = LoadStringResource(nullptr, IDS_PICKER_OK);
         labels.cancel = LoadStringResource(nullptr, IDS_PICKER_CANCEL);
         _picker->SetLabels(std::move(labels));
+        _picker->RedField().SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_RED));
+        _picker->GreenField().SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_GREEN));
+        _picker->BlueField().SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_BLUE));
         _picker->SetOnChange([this](DxUi::ColorPickerChange change) { OnPickerChange(change); });
         _view.Controls().SetRoot(std::move(root));
         SyncToolVisuals();
@@ -983,7 +1008,13 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
     _dpi = dpi > 0.0f ? dpi : 96.0f;
     SyncToolVisuals();
     Arrange();
-    return _view.Prepare(widthPixels, heightPixels, _dpi);
+    const HRESULT prepared = _view.Prepare(widthPixels, heightPixels, _dpi);
+    if (SUCCEEDED(prepared) && _owner != nullptr && !_accessibilitySite)
+    {
+        // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
+        AttachAccessibility();
+    }
+    return prepared;
 }
 
 HRESULT ChromeHost::Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept
@@ -1023,11 +1054,13 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     if (inHole && event.action == DxUi::PointerAction::Down)
     {
         _canvasFocused = true;
+        UpdateAccessibilityPlacement();
         return false;
     }
     if (!inHole && event.action == DxUi::PointerAction::Down)
     {
         _canvasFocused = false;
+        UpdateAccessibilityPlacement();
     }
     return _view.DispatchPointer(event);
 }
@@ -1041,6 +1074,7 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     if (down && virtualKey == VK_ESCAPE && _canvasFocused)
     {
         _canvasFocused = false;
+        UpdateAccessibilityPlacement();
         return true;
     }
     if (_view.DispatchKey(virtualKey, down, modifiers))
@@ -1093,6 +1127,7 @@ void ChromeHost::BuildTransformHeader(DxUi::Panel& root)
     {
         DxUi::NumericStepper* control = _transformHeader->AddChild<DxUi::NumericStepper>();
         control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        control->SetAccessibleName(LoadStringResource(nullptr, labelId));
         if (unitId != 0)
         {
             control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
@@ -1156,6 +1191,7 @@ void ChromeHost::BuildTransformHeader(DxUi::Panel& root)
                          DxUi::ComboBox::Item{L"smooth", LoadStringResource(nullptr, IDS_TRANSFORM_SAMPLING_SMOOTH)},
                          DxUi::ComboBox::Item{L"high", LoadStringResource(nullptr, IDS_TRANSFORM_SAMPLING_HIGH)}});
     _sampling->SetSelectedIndex(2);
+    _sampling->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_SAMPLING));
     _sampling->SetOnSelectionChanged(
         [this](size_t index)
         {
@@ -1364,6 +1400,7 @@ void ChromeHost::BuildSelectionHeader(DxUi::Panel& root)
         control->SetItems(std::move(entries));
         control->SetSelectedIndex(0);
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetOnSelectionChanged(
             [this, action](size_t index)
             {
@@ -1378,6 +1415,7 @@ void ChromeHost::BuildSelectionHeader(DxUi::Panel& root)
     {
         DxUi::Checkbox* control = _selectionHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, labelId));
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetChecked(checked);
         control->SetOnToggled(
             [this, action](bool value)
@@ -1394,6 +1432,7 @@ void ChromeHost::BuildSelectionHeader(DxUi::Panel& root)
     {
         DxUi::NumericStepper* control = _selectionHeader->AddChild<DxUi::NumericStepper>();
         control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        control->SetAccessibleName(LoadStringResource(nullptr, labelId));
         if (unitId != 0)
         {
             control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
@@ -1646,6 +1685,7 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
         control->SetItems(std::move(entries));
         control->SetSelectedIndex(0);
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetOnSelectionChanged(
             [this, action](size_t index)
             {
@@ -1661,6 +1701,7 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
     {
         DxUi::NumericStepper* control = _brushHeader->AddChild<DxUi::NumericStepper>();
         control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        control->SetAccessibleName(LoadStringResource(nullptr, labelId));
         control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
         control->SetMinimum(minimum);
         control->SetMaximum(maximum);
@@ -1669,6 +1710,7 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
         control->SetDecimals(0);
         control->SetValue(value);
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetOnChange(
             [this, action](DxUi::NumericStepperChange change)
             {
@@ -1895,6 +1937,7 @@ void ChromeHost::BuildGradientHeader(DxUi::Panel& root)
         control->SetItems(std::move(entries));
         control->SetSelectedIndex(0);
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetOnSelectionChanged(
             [this, action](size_t index)
             {
@@ -1912,6 +1955,8 @@ void ChromeHost::BuildGradientHeader(DxUi::Panel& root)
     {
         *swatch = _gradientHeader->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
         (*swatch)->SetTooltipText(LoadStringResource(nullptr, IDS_GRADIENT_COLORS_TIP));
+        (*swatch)->SetAccessibleName(
+            LoadStringResource(nullptr, swatch == &_gradientStart ? IDS_A11Y_GRADIENT_START : IDS_A11Y_GRADIENT_END));
         (*swatch)->SetOnClick(
             [this]
             {
@@ -1935,6 +1980,7 @@ void ChromeHost::BuildGradientHeader(DxUi::Panel& root)
         });
     _gradientOpacity = _gradientHeader->AddChild<DxUi::NumericStepper>();
     _gradientOpacity->SetLabel(LoadStringResource(nullptr, IDS_BRUSH_OPACITY), 54.0f);
+    _gradientOpacity->SetAccessibleName(LoadStringResource(nullptr, IDS_BRUSH_OPACITY));
     _gradientOpacity->SetUnit(LoadStringResource(nullptr, IDS_UNIT_PERCENT), 14.0f);
     _gradientOpacity->SetMinimum(1.0);
     _gradientOpacity->SetMaximum(100.0);
@@ -2078,6 +2124,7 @@ void ChromeHost::BuildShapeHeader(DxUi::Panel& root)
                           DxUi::ComboBox::Item{L"ellipse", LoadStringResource(nullptr, IDS_SHAPE_ELLIPSE)}});
     _shapeKind->SetSelectedIndex(0);
     _shapeKind->SetTooltipText(LoadStringResource(nullptr, IDS_SHAPE_KIND_TIP));
+    _shapeKind->SetAccessibleName(LoadStringResource(nullptr, IDS_SHAPE_KIND_TIP));
     _shapeKind->SetOnSelectionChanged(
         [this](size_t index)
         {
@@ -2088,6 +2135,7 @@ void ChromeHost::BuildShapeHeader(DxUi::Panel& root)
         });
     _shapeRadius = _shapeHeader->AddChild<DxUi::NumericStepper>();
     _shapeRadius->SetLabel(LoadStringResource(nullptr, IDS_SHAPE_RADIUS), 50.0f);
+    _shapeRadius->SetAccessibleName(LoadStringResource(nullptr, IDS_SHAPE_RADIUS));
     _shapeRadius->SetUnit(LoadStringResource(nullptr, IDS_UNIT_PIXELS), 18.0f);
     _shapeRadius->SetMinimum(0.0);
     _shapeRadius->SetMaximum(5000.0);

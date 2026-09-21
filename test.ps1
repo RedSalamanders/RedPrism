@@ -91,6 +91,22 @@ if ($Configuration -eq 'ASan Debug') {
     $global:LASTEXITCODE = 0
 }
 
+Write-Host 'Running crash probe...' -ForegroundColor Cyan
+$crashRoot = Join-Path $repoRoot (".build\logs\crash-probe-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
+$crashErr = Join-Path $outputRoot 'RedPrism.crash-probe.err.log'
+Remove-Item -LiteralPath $crashErr -ErrorAction SilentlyContinue
+$probe = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--crash-probe', ('"' + $crashRoot + '"')) -Wait -PassThru `
+    -RedirectStandardError $crashErr
+$dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-*.dmp' -ErrorAction SilentlyContinue)
+$pendingMarker = Join-Path $crashRoot 'pending.txt'
+$pendingText = if (Test-Path -LiteralPath $pendingMarker) { (Get-Content -LiteralPath $pendingMarker -Raw).Trim() } else { '' }
+if ($probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
+    throw "RedPrism.exe --crash-probe did not leave one dump and its marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
+}
+Write-Host "PASS crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
+Remove-Item -LiteralPath $crashRoot -Recurse -Force -ErrorAction SilentlyContinue
+$global:LASTEXITCODE = 0
+
 Write-Host 'Running command-line help...' -ForegroundColor Cyan
 $helpLog = Join-Path $outputRoot 'RedPrism.help.log'
 $helpErr = Join-Path $outputRoot 'RedPrism.help.err.log'

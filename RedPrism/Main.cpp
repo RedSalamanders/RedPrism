@@ -1,17 +1,29 @@
 #include "Application.h"
 #include "CommandLine.h"
+#include "CrashDumps.h"
+#include "Localization.h"
 #include "Resources.h"
+#include "SettingsStore.h"
 #include "resource.h"
 
 #include <memory>
 #include <new>
+#include <optional>
 #include <shellapi.h>
 #include <string>
 #include <string_view>
 #include <windows.h>
 
+#include <wil/resource.h>
+
 namespace
 {
+#ifdef _DEBUG
+constexpr bool kDebugBuild = true;
+#else
+constexpr bool kDebugBuild = false;
+#endif
+
 struct LocalFreeDeleter
 {
     void operator()(wchar_t** value) const noexcept
@@ -103,10 +115,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     }
     if (const wchar_t* unknown = RedPrismFindUnknownArgument(arguments.get(), argumentCount))
     {
-        std::wstring message = L"Unknown argument \"";
-        message += unknown;
-        message += L"\". Run RedPrism.exe --help for the command line.\n";
-        EmitCommandLineText(message, true, selfTest);
+        EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT, std::wstring_view{unknown}) +
+                                L"\n",
+                            true, selfTest);
         return 2;
     }
 
@@ -114,11 +125,21 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const wchar_t* errorToken = nullptr;
     if (!RedPrismParseCommandLine(arguments.get(), argumentCount, parsed, &errorToken))
     {
-        std::wstring message = L"Unknown argument \"";
-        message += errorToken ? errorToken : L"";
-        message += L"\". Run RedPrism.exe --help for the command line.\n";
-        EmitCommandLineText(message, true, selfTest);
+        EmitCommandLineText(FormatStringResource(nullptr, IDS_ERROR_UNKNOWN_ARGUMENT,
+                                                 std::wstring_view{errorToken ? errorToken : L""}) +
+                                L"\n",
+                            true, selfTest);
         return 2;
+    }
+
+    // Crash handling comes first so every later failure leaves a dump (Specs/Core/Core_CrashHandling.md); the
+    // probe raises a fault through it and never reaches the window.
+    const std::wstring crashDirectory = parsed.crashProbeDirectory != nullptr ? std::wstring{parsed.crashProbeDirectory}
+                                                                              : CrashDumps::DefaultDirectory();
+    CrashDumps::InstallCrashHandler(crashDirectory.c_str());
+    if (parsed.crashProbeDirectory != nullptr)
+    {
+        CrashDumps::RaiseProbeCrash();
     }
 
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -139,6 +160,48 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         }
         return 1;
     }
+
+    // Settings, the language and last time's crash report belong to ordinary runs: the harness switches keep the
+    // defaults (dark chrome, English) and never touch the user's directories.
+    const bool harness =
+        parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
+    AppSettings settings;
+    std::wstring settingsPath;
+    wil::unique_hmodule satellite;
+    if (harness)
+    {
+        settings.theme = ThemePreference::Dark;
+    }
+    else
+    {
+        settingsPath = SettingsStore::DefaultPath(kDebugBuild);
+        if (!settingsPath.empty())
+        {
+            const SettingsLoadResult loaded = SettingsStore::LoadCold(settingsPath);
+            settings = loaded.settings;
+            if (loaded.status == SettingsLoadStatus::Invalid)
+            {
+                OutputDebugStringW(
+                    L"The settings file was not a settings document: backed up and replaced by the template.\n");
+            }
+        }
+        satellite.reset(Localization::LoadSatelliteModule(Localization::SatelliteCandidates(
+            Localization::ExecutableDirectory(), settings.language, Localization::SystemUiLanguages())));
+        SetStringResourceSatellite(satellite.get());
+        // A crash last time: say where the report went (nothing is uploaded) and offer its folder.
+        if (const std::optional<std::wstring> pending = CrashDumps::TakePending(crashDirectory); pending.has_value())
+        {
+            const std::wstring message = FormatStringResource(nullptr, IDS_CRASH_PROMPT, pending.value());
+            const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+            if (MessageBoxW(nullptr, message.c_str(), caption.c_str(), MB_YESNO | MB_ICONWARNING) == IDYES)
+            {
+                const std::wstring select = L"/select,\"" + pending.value() + L"\"";
+                (void)ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+            }
+        }
+        (void)CrashDumps::PruneDumps(crashDirectory, CrashDumps::kKeepNewest);
+    }
+    application->UseSettings(std::move(settingsPath), settings);
 
     const int exitCode = parsed.selfTest           ? application->RunSelfTest()
                          : parsed.bench != nullptr ? application->RunBenchmark()
@@ -161,6 +224,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
         MessageBoxW(nullptr, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
     }
+    SetStringResourceSatellite(nullptr);
     if (uninitializeCom)
     {
         CoUninitialize();
