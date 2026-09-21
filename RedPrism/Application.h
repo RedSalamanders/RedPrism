@@ -27,6 +27,12 @@ enum class SelectionAction : std::uint8_t;
 enum class BrushAction : std::uint8_t;
 enum class GradientAction : std::uint8_t;
 enum class ShapeAction : std::uint8_t;
+enum class AdjustAction : std::uint8_t;
+enum class ChromeEditPhase : std::uint8_t;
+namespace DxUi
+{
+struct PointerEvent;
+}
 
 class Application final
 {
@@ -99,6 +105,21 @@ class Application final
     void PushPixelMoveTiles() noexcept;
     void MirrorClipboard() noexcept;
     void PasteFromClipboard() noexcept;
+    // Color adjustments and filters (C12, ApplicationAdjust.cpp): the Image and Filter menus, the adjustment panel's
+    // actions, adjustment layers edited over the composite beneath them, and the eyedroppers on the canvas.
+    bool BeginColorEdit(int command) noexcept;
+    void AddAdjustmentLayer(int command) noexcept;
+    void EditActiveAdjustment() noexcept;
+    void OpenAdjustmentEditor() noexcept;
+    [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
+    void ApplyColorEdit() noexcept;
+    void CancelColorEdit() noexcept;
+    void OnAdjustAction(AdjustAction action, double value) noexcept;
+    void OnCurveChanged(std::vector<CurvePoint> points) noexcept;
+    void OnBandChanged(int index, double degrees) noexcept;
+    void OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept;
+    void SyncAdjustPanel() noexcept;
+    [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
     void OnBrushAction(BrushAction action, double value) noexcept;
@@ -174,8 +195,10 @@ class Application final
     std::optional<Vec2> _marqueeDragPixel;
     bool _marqueeConstrainArmed = true;
     bool _lassoDragging = false;
-    std::optional<Vec2> _pixelDragStart; // document point where a Ctrl-drag lifted the selected pixels
-    DWORD _clipboardSequence = 0;        // the system clipboard's sequence number at the last mirrored copy
+    std::optional<Vec2> _pixelDragStart;      // document point where a Ctrl-drag lifted the selected pixels
+    std::optional<double> _hueTargetStart;    // view x where a targeted Hue/Saturation drag began
+    GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
+    DWORD _clipboardSequence = 0;             // the system clipboard's sequence number at the last mirrored copy
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;

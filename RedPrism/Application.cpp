@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "Adjust.h"
+
 #include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "FrameScheduler.h"
@@ -1416,6 +1418,108 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
     }
 
+    // Color adjustments: Ctrl+L opens Levels on a painted layer and its output white previews black through the
+    // display document, Escape restores, an input white of 128 turns the gray white and Enter records one `Levels`
+    // entry; the Filter menu's Gaussian Blur applies as one entry; a Hue/Saturation adjustment layer opens its panel
+    // over the red beneath, a hue of 120 rotates it live on the canvas and Enter keeps the record as one entry;
+    // Shift+= steps the blend mode.
+    {
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
+        {
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+            std::vector<std::uint8_t> bgra;
+            UINT width = 0;
+            UINT height = 0;
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
+                static_cast<UINT>(y) >= height)
+            {
+                return false;
+            }
+            const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
+            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            return true;
+        };
+        InsertPaintedLayer(_session, L"Gray", 120, 120, Vec2{0, 0}, 0.0, 0xFF808080u);
+        OnTool(EditorTool::Move);
+        _chrome->SetCanvasFocused(true);
+        std::array<int, 4> pixel{};
+        if (!HandleAccelerator('L', MK_CONTROL) || !_session.PendingLevels().has_value() || !_chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(L"Ctrl+L did not open the Levels panel.\n");
+            return 5;
+        }
+        OnAdjustAction(AdjustAction::SetOutputWhite, 0.0);
+        if (!pixelAt(50, 50, pixel) || pixel[0] > 5)
+        {
+            SelfTestFailure(L"The Levels preview did not show through the canvas.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingLevels().has_value() || _chrome->AdjustPanelOpen() ||
+            !pixelAt(50, 50, pixel) || pixel[0] < 120)
+        {
+            SelfTestFailure(L"Escape did not cancel the Levels edit.\n");
+            return 5;
+        }
+        const int levelsCount = _session.history.UndoCount();
+        static_cast<void>(HandleAccelerator('L', MK_CONTROL));
+        OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingLevels().has_value() ||
+            _session.history.UndoCount() != levelsCount + 1 || _session.history.UndoName() != L"Levels" ||
+            !pixelAt(50, 50, pixel) || pixel[0] < 250)
+        {
+            SelfTestFailure(L"Enter did not apply the Levels edit as one entry.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandGaussianBlur);
+        if (!_session.PendingFilter().has_value() || _session.PendingFilter()->kind != FilterKind::GaussianBlur ||
+            !_chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(L"The Filter menu did not open Gaussian Blur.\n");
+            return 5;
+        }
+        OnAdjustAction(AdjustAction::SetRadius, 2.0);
+        OnAdjustAction(AdjustAction::Apply, 0.0);
+        if (_session.PendingFilter().has_value() || _session.history.UndoName() != L"Gaussian Blur")
+        {
+            SelfTestFailure(L"Applying Gaussian Blur did not record one entry.\n");
+            return 5;
+        }
+        InsertPaintedLayer(_session, L"Red", 120, 120, Vec2{0, 0}, 0.0, 0xFFFF0000u);
+        const std::size_t layersBefore = _session.Document()->layers.size();
+        OnCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
+        if (_session.Document()->layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
+            !_session.ActiveLayer()->adjustment.has_value() || !_session.PendingHueSaturation().has_value() ||
+            !_chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(L"New Hue/Saturation Adjustment did not add a layer and open its panel.\n");
+            return 5;
+        }
+        OnAdjustAction(AdjustAction::SetHue, 120.0);
+        if (!pixelAt(50, 50, pixel) || pixel[1] < 200 || pixel[2] > 60)
+        {
+            SelfTestFailure(L"The adjustment layer did not rotate the red beneath it live.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingHueSaturation().has_value() ||
+            _session.history.UndoName() != L"Edit Hue/Saturation Adjustment" ||
+            std::fabs(Adjust::RangeOf(_session.ActiveLayer()->adjustment->ResolvedHsv()).hue - 120.0) > 0.01 ||
+            !pixelAt(50, 50, pixel) || pixel[1] < 200)
+        {
+            SelfTestFailure(L"Enter did not keep the adjustment layer's settings.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_OEM_PLUS, MK_SHIFT) ||
+            _session.ActiveLayer()->blendMode != LayerBlendMode::Multiply ||
+            _session.history.UndoName() != L"Layer Blend Mode")
+        {
+            SelfTestFailure(L"Shift+= did not step the blend mode.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Move);
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -1628,6 +1732,11 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetBrushHandler([this](BrushAction action, double value) { OnBrushAction(action, value); });
     chrome->SetGradientHandler([this](GradientAction action, double value) { OnGradientAction(action, value); });
     chrome->SetShapeHandler([this](ShapeAction action, double value) { OnShapeAction(action, value); });
+    chrome->SetAdjustHandler([this](AdjustAction action, double value) { OnAdjustAction(action, value); });
+    chrome->SetCurveHandler([this](std::vector<CurvePoint> points) { OnCurveChanged(std::move(points)); });
+    chrome->SetBandHandler([this](int index, double degrees) { OnBandChanged(index, degrees); });
+    chrome->SetAdjustColorHandler([this](ChromeEditPhase phase, uint32_t argb, bool highlights)
+                                  { OnAdjustColor(phase, argb, highlights); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -1682,6 +1791,7 @@ void Application::SyncChrome() noexcept
     _chrome->SetEditTargets(_session.IsMaskSelected() && _session.ActiveLayer() != nullptr &&
                                 _session.ActiveLayer()->mask.has_value(),
                             _session.CanTransformSelection());
+    SyncAdjustPanel();
     const CanvasDocument* document = _session.DisplayDocument();
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
@@ -2118,6 +2228,10 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         _frameInvalidated = true;
         return;
     }
+    if (!panMode && AdjustPointer(event, view, inHole))
+    {
+        return;
+    }
     if ((SamplesColor() || _samplingColor) && !panMode)
     {
         // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
@@ -2531,6 +2645,31 @@ void Application::OnCommand(int command) noexcept
         _session.LayerViaCopy();
         DocumentChanged();
         break;
+    case ChromeHost::kCommandCurves:
+    case ChromeHost::kCommandLevels:
+    case ChromeHost::kCommandHueSaturation:
+    case ChromeHost::kCommandExposure:
+    case ChromeHost::kCommandGradientMap:
+    case ChromeHost::kCommandGrain:
+    case ChromeHost::kCommandGaussianBlur:
+    case ChromeHost::kCommandMotionBlur:
+    case ChromeHost::kCommandAddNoise:
+    case ChromeHost::kCommandLensCorrection:
+        EndSelectionInteraction(false);
+        static_cast<void>(BeginColorEdit(command));
+        break;
+    case ChromeHost::kCommandNewLevelsAdjustment:
+    case ChromeHost::kCommandNewCurvesAdjustment:
+    case ChromeHost::kCommandNewHueSaturationAdjustment:
+    case ChromeHost::kCommandNewExposureAdjustment:
+    case ChromeHost::kCommandNewGradientMapAdjustment:
+    case ChromeHost::kCommandNewGrainAdjustment:
+        EndSelectionInteraction(false);
+        AddAdjustmentLayer(command);
+        break;
+    case ChromeHost::kCommandEditAdjustment:
+        EditActiveAdjustment();
+        break;
     case ChromeHost::kCommandAddMask:
     case ChromeHost::kCommandAddBlackMask:
         EndSelectionInteraction(false);
@@ -2586,6 +2725,7 @@ void Application::OnTool(EditorTool tool) noexcept
         FinishBrushStroke();
         FinishWarpStroke();
         CommitGradient();
+        ApplyColorEdit();
         if (_session.PendingShape().has_value())
         {
             _shapeDragging = false;
@@ -2674,6 +2814,15 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         case 'G':
             OnCommand(shift ? ChromeHost::kCommandMoveOutOfGroup : ChromeHost::kCommandNewFolder);
             return true;
+        case 'M':
+            OnCommand(ChromeHost::kCommandCurves);
+            return true;
+        case 'L':
+            OnCommand(ChromeHost::kCommandLevels);
+            return true;
+        case 'U':
+            OnCommand(ChromeHost::kCommandHueSaturation);
+            return true;
         case '0':
             OnCommand(ChromeHost::kCommandZoomFit);
             return true;
@@ -2700,6 +2849,26 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (_session.HasColorEdit() && (virtualKey == VK_RETURN || virtualKey == VK_ESCAPE))
+        {
+            // Enter is the panel's OK, Escape its Cancel.
+            if (virtualKey == VK_ESCAPE)
+            {
+                CancelColorEdit();
+            }
+            else
+            {
+                ApplyColorEdit();
+            }
+            return true;
+        }
+        if (shift && (virtualKey == VK_OEM_PLUS || virtualKey == VK_OEM_MINUS))
+        {
+            // Shift+= and Shift+- step the active layer's blend mode, wrapping.
+            _session.StepBlendMode(virtualKey == VK_OEM_PLUS);
+            DocumentChanged();
+            return true;
+        }
         if (virtualKey == VK_ESCAPE && _pixelDragStart.has_value())
         {
             CancelPixelDrag();
@@ -3341,6 +3510,22 @@ void Application::ApplyDemo() noexcept
         _brushHover = Vec2{880, 430};
         OnTool(EditorTool::Brush);
         return;
+    }
+    if (_demo == L"adjust")
+    {
+        // A painted backdrop and swatch with a Levels adjustment layer above them, its panel open on the histogram.
+        InsertPaintedLayer(_session, L"Backdrop", 620, 400, Vec2{160, 120}, 0.0, 0xFF2F6FB0u);
+        InsertPaintedLayer(_session, L"Swatch", 260, 180, Vec2{300, 200}, 12.0, 0xFFE58A2Eu);
+        OnTool(EditorTool::Move);
+        _session.AddAdjustment(AdjustmentKind::Levels);
+        OpenAdjustmentEditor();
+        if (_session.PendingLevels().has_value())
+        {
+            LevelsSettings settings = _session.PendingLevels()->settings;
+            Adjust::SetLevelsCurrent(settings, LevelRange{20, 1.2, 230, 0, 255});
+            _session.UpdateLevels(settings, true);
+            DocumentChanged();
+        }
     }
     if (_demo == L"retouch")
     {

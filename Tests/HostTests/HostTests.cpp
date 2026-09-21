@@ -10,7 +10,9 @@
 
 #include <array>
 #include <cmath>
+#include <crtdbg.h>
 #include <cstdio>
+#include <cstdlib>
 #include <dwrite.h>
 #include <optional>
 #include <set>
@@ -35,9 +37,11 @@ void Expect(bool condition, const char* name) noexcept
     if (condition)
     {
         std::printf("PASS %s\n", name);
+        std::fflush(stdout);
         return;
     }
     std::printf("FAIL %s\n", name);
+    std::fflush(stdout);
     ++gFailures;
 }
 
@@ -158,6 +162,10 @@ void TestCommandLine() noexcept
     parsed = {};
     Expect(RedPrismParseCommandLine(brushArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{brushValue},
            "cli.demo-brush");
+    wchar_t adjustValue[] = L"adjust";
+    wchar_t* adjustArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, adjustValue};
+    Expect(RedPrismParseCommandLine(adjustArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{adjustValue},
+           "cli.demo-adjust");
     wchar_t retouchValue[] = L"retouch";
     wchar_t* retouchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, retouchValue};
     parsed = {};
@@ -289,7 +297,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 218> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 297> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -518,7 +526,86 @@ void TestStringTable() noexcept
                                          IDS_CMD_ADD_MASK,
                                          IDS_CMD_ADD_BLACK_MASK,
                                          IDS_CMD_DELETE_LAYER_MASK,
-                                         IDS_CMD_TRANSFORM_SELECTION};
+                                         IDS_CMD_TRANSFORM_SELECTION,
+                                         IDS_CMD_CURVES,
+                                         IDS_CMD_LEVELS,
+                                         IDS_CMD_HUE_SATURATION,
+                                         IDS_CMD_EXPOSURE,
+                                         IDS_CMD_GRADIENT_MAP,
+                                         IDS_CMD_GRAIN,
+                                         IDS_CMD_GAUSSIAN_BLUR,
+                                         IDS_CMD_MOTION_BLUR,
+                                         IDS_CMD_ADD_NOISE,
+                                         IDS_CMD_LENS_CORRECTION,
+                                         IDS_CMD_NEW_ADJUSTMENT,
+                                         IDS_CMD_ADJUST_LEVELS,
+                                         IDS_CMD_ADJUST_CURVES,
+                                         IDS_CMD_ADJUST_HSV,
+                                         IDS_CMD_ADJUST_EXPOSURE,
+                                         IDS_CMD_ADJUST_GRADIENT_MAP,
+                                         IDS_CMD_ADJUST_GRAIN,
+                                         IDS_CMD_EDIT_ADJUSTMENT,
+                                         IDS_ADJUST_CHANNEL,
+                                         IDS_ADJUST_RGB,
+                                         IDS_ADJUST_RED,
+                                         IDS_ADJUST_GREEN,
+                                         IDS_ADJUST_BLUE,
+                                         IDS_ADJUST_REMOVE_POINT,
+                                         IDS_ADJUST_RESET,
+                                         IDS_ADJUST_CURVE_HINT,
+                                         IDS_ADJUST_CURVE_POINT,
+                                         IDS_ADJUST_INPUT_BLACK,
+                                         IDS_ADJUST_GAMMA,
+                                         IDS_ADJUST_INPUT_WHITE,
+                                         IDS_ADJUST_OUTPUT_BLACK,
+                                         IDS_ADJUST_OUTPUT_WHITE,
+                                         IDS_ADJUST_SAMPLE_BLACK,
+                                         IDS_ADJUST_SAMPLE_GRAY,
+                                         IDS_ADJUST_SAMPLE_WHITE,
+                                         IDS_ADJUST_SAMPLE_TIP,
+                                         IDS_ADJUST_AUTO_CONTRAST,
+                                         IDS_ADJUST_AUTO_COLOR,
+                                         IDS_ADJUST_AUTO_NEUTRAL,
+                                         IDS_ADJUST_RANGE,
+                                         IDS_ADJUST_MASTER,
+                                         IDS_ADJUST_REDS,
+                                         IDS_ADJUST_YELLOWS,
+                                         IDS_ADJUST_GREENS,
+                                         IDS_ADJUST_CYANS,
+                                         IDS_ADJUST_BLUES,
+                                         IDS_ADJUST_MAGENTAS,
+                                         IDS_ADJUST_HUE,
+                                         IDS_ADJUST_SATURATION,
+                                         IDS_ADJUST_LIGHTNESS,
+                                         IDS_ADJUST_HUE_SAMPLE,
+                                         IDS_ADJUST_HUE_ADD,
+                                         IDS_ADJUST_HUE_REMOVE,
+                                         IDS_ADJUST_HUE_SAMPLE_TIP,
+                                         IDS_ADJUST_TARGETED,
+                                         IDS_ADJUST_TARGETED_TIP,
+                                         IDS_ADJUST_INVERT_RANGE,
+                                         IDS_ADJUST_COLORIZE,
+                                         IDS_ADJUST_SHADOWS,
+                                         IDS_ADJUST_HIGHLIGHTS,
+                                         IDS_ADJUST_REVERSE,
+                                         IDS_ADJUST_EXPOSURE,
+                                         IDS_ADJUST_OFFSET,
+                                         IDS_ADJUST_AMOUNT,
+                                         IDS_ADJUST_SIZE,
+                                         IDS_ADJUST_ROUGHNESS,
+                                         IDS_ADJUST_RADIUS,
+                                         IDS_ADJUST_ANGLE,
+                                         IDS_ADJUST_DISTANCE,
+                                         IDS_ADJUST_UNIFORM,
+                                         IDS_ADJUST_GAUSSIAN,
+                                         IDS_ADJUST_MONOCHROMATIC,
+                                         IDS_ADJUST_DISTORTION,
+                                         IDS_ADJUST_LENS_HINT,
+                                         IDS_ADJUST_PREVIEW,
+                                         IDS_ADJUST_LIMITED,
+                                         IDS_ADJUST_OK,
+                                         IDS_ADJUST_EDIT_TITLE,
+                                         IDS_ERROR_FILTER};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -614,6 +701,14 @@ void TestTransformOverlayGeometry() noexcept
 
 int wmain(int argc, wchar_t** argv)
 {
+#if defined(_DEBUG)
+    // A Debug assertion reports on stderr and aborts instead of waiting on a dialog no harness can click.
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
+    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     if (argc > 1 && std::wstring_view{argv[1]} == L"--asan-probe")
     {
         return RunAddressSanitizerProbe();

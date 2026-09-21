@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AdjustControls.h"
 #include "CanvasOverlay.h"
 #include "Document.h"
 #include "EditorTool.h"
@@ -159,6 +160,75 @@ struct ShapeInspectorState
     uint32_t foregroundArgb = 0xFF000000u;
 };
 
+// The adjustment panel (C12, Specs/UI/UI_ApplicationChrome.md): which editor it shows and every value the session
+// holds for it, mirrored through SetAdjustInspector; its controls report changes as actions with one value.
+enum class AdjustPanelKind : std::uint8_t
+{
+    None,
+    Filter,
+    Levels,
+    HueSaturation,
+};
+
+enum class AdjustAction : std::uint8_t
+{
+    SetPreview,
+    Cancel,
+    Apply,
+    Reset,
+    SetChannel,  // Curves and Levels: 0 RGB, 1 red, 2 green, 3 blue
+    RemovePoint, // Curves: the point at this index
+    SetInputBlack,
+    SetInputGamma,
+    SetInputWhite,
+    SetOutputBlack,
+    SetOutputWhite,
+    SetLevelsSample, // 0 none, 1 black, 2 gray, 3 white
+    AutoLevels,      // 0 contrast, 1 color, 2 neutral
+    SetRadius,
+    SetAngle,
+    SetDistance,
+    SetAmount,
+    SetGaussian,
+    SetMonochromatic,
+    SetDistortion,
+    SetExposure,
+    SetOffset,
+    SetGamma,
+    SetGrainAmount,
+    SetGrainSize,
+    SetGrainRoughness,
+    SetReversed,
+    OpenShadows,
+    OpenHighlights,
+    SetRange, // 0 master, 1 reds … 6 magentas
+    SetHue,
+    SetSaturation,
+    SetLightness,
+    SetColorize,
+    SetInvertRange,
+    SetHueSample, // 0 none, 1 sample, 2 add, 3 remove
+    SetTargeting,
+};
+
+struct AdjustInspectorState
+{
+    AdjustPanelKind panel = AdjustPanelKind::None;
+    std::wstring title;
+    FilterKind filter = FilterKind::GaussianBlur;
+    FilterSettings settings;
+    LevelsSettings levels;
+    LevelsHistogram histogram{};
+    bool histogramReady = false;
+    int levelsSample = 0;
+    HueSaturationSettings hsv;
+    int hueSample = 0;
+    bool targeting = false;
+    bool preview = true;
+    bool limitedToSelection = false;
+    bool editsAdjustment = false;
+};
+
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
 struct SelectionInspectorState
 {
@@ -267,6 +337,23 @@ class ChromeHost final
     static constexpr int kCommandInverse = 702;
     static constexpr int kCommandLoadLayerSelection = 703;
     static constexpr int kCommandLoadMaskSelection = 704;
+    static constexpr int kCommandNewLevelsAdjustment = 310;
+    static constexpr int kCommandNewCurvesAdjustment = 311;
+    static constexpr int kCommandNewHueSaturationAdjustment = 312;
+    static constexpr int kCommandNewExposureAdjustment = 313;
+    static constexpr int kCommandNewGradientMapAdjustment = 314;
+    static constexpr int kCommandNewGrainAdjustment = 315;
+    static constexpr int kCommandEditAdjustment = 316;
+    static constexpr int kCommandCurves = 602;
+    static constexpr int kCommandLevels = 603;
+    static constexpr int kCommandHueSaturation = 604;
+    static constexpr int kCommandExposure = 605;
+    static constexpr int kCommandGradientMap = 606;
+    static constexpr int kCommandGrain = 607;
+    static constexpr int kCommandGaussianBlur = 800;
+    static constexpr int kCommandMotionBlur = 801;
+    static constexpr int kCommandAddNoise = 802;
+    static constexpr int kCommandLensCorrection = 803;
 
     enum class MenuIndex : std::size_t
     {
@@ -324,6 +411,17 @@ class ChromeHost final
     void SetGradientInspector(const GradientInspectorState& state) noexcept;
     void SetShapeHandler(std::function<void(ShapeAction, double)> handler);
     void SetShapeInspector(const ShapeInspectorState& state) noexcept;
+    // The adjustment panel (C12): actions with a value, the curve editor's points, a spectrum band handle, and the
+    // Gradient Map's color picks (the picker's phase, the color and which end).
+    void SetAdjustHandler(std::function<void(AdjustAction, double)> handler);
+    void SetCurveHandler(std::function<void(std::vector<CurvePoint>)> handler);
+    void SetBandHandler(std::function<void(int, double)> handler);
+    void SetAdjustColorHandler(std::function<void(ChromeEditPhase, uint32_t, bool)> handler);
+    void SetAdjustInspector(const AdjustInspectorState& state) noexcept;
+    [[nodiscard]] bool AdjustPanelOpen() const noexcept;
+    [[nodiscard]] D2D1_RECT_F AdjustPanelBoundsDip() const noexcept;
+    // The color picker on a Gradient Map end; its changes go to the adjust color handler, never the palette.
+    void OpenAdjustColorPicker(uint32_t argb, bool highlights) noexcept;
     void SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept;
     void SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept;
     void SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept;
@@ -543,6 +641,82 @@ class ChromeHost final
     std::function<void(BrushAction, double)> _onBrush;
     std::function<void(GradientAction, double)> _onGradient;
     std::function<void(ShapeAction, double)> _onShape;
+    // The adjustment panel (ChromeHostAdjust.cpp).
+    enum class AdjustRowId : std::uint8_t
+    {
+        Radius,
+        Angle,
+        Distance,
+        Amount,
+        Distortion,
+        Exposure,
+        Offset,
+        Gamma,
+        GrainAmount,
+        GrainSize,
+        GrainRoughness,
+        Hue,
+        Saturation,
+        Lightness,
+        Count,
+    };
+    struct AdjustRow
+    {
+        DxUi::Label* label = nullptr;
+        DxUi::Slider* slider = nullptr;
+        DxUi::NumericStepper* stepper = nullptr;
+        AdjustAction action = AdjustAction::SetRadius;
+        double minimum = 0;
+        double maximum = 1;
+        bool logarithmic = false;
+        int decimals = 0;
+    };
+    void BuildAdjustPanel(DxUi::Panel& root);
+    void ArrangeAdjustPanel(float right, float top, float bottom) noexcept;
+    DxUi::CardPanel* _adjustCard = nullptr;
+    DxUi::Label* _adjustTitle = nullptr;
+    DxUi::ComboBox* _adjustChannel = nullptr;
+    CurveEditor* _curveEditor = nullptr;
+    DxUi::Label* _curveCaption = nullptr;
+    DxUi::Button* _curveRemove = nullptr;
+    DxUi::Button* _curveReset = nullptr;
+    LevelsBar* _levelsInput = nullptr;
+    LevelsBar* _levelsOutput = nullptr;
+    DxUi::NumericStepper* _levelsBlack = nullptr;
+    DxUi::NumericStepper* _levelsGamma = nullptr;
+    DxUi::NumericStepper* _levelsWhite = nullptr;
+    DxUi::NumericStepper* _levelsOutBlack = nullptr;
+    DxUi::NumericStepper* _levelsOutWhite = nullptr;
+    std::array<DxUi::Button*, 3> _levelsSample{};
+    std::array<DxUi::Button*, 3> _levelsAuto{};
+    DxUi::ComboBox* _hueRange = nullptr;
+    std::array<DxUi::Button*, 3> _hueSample{};
+    DxUi::Button* _hueTargeting = nullptr;
+    SpectrumEditor* _spectrum = nullptr;
+    DxUi::Checkbox* _hueInvert = nullptr;
+    DxUi::Checkbox* _hueColorize = nullptr;
+    GradientRamp* _gradientRamp = nullptr;
+    DxUi::ColorSwatch* _mapShadows = nullptr;
+    DxUi::Label* _mapShadowsLabel = nullptr;
+    DxUi::ColorSwatch* _mapHighlights = nullptr;
+    DxUi::Label* _mapHighlightsLabel = nullptr;
+    DxUi::Checkbox* _mapReverse = nullptr;
+    DxUi::ComboBox* _noiseDistribution = nullptr;
+    DxUi::Checkbox* _noiseMono = nullptr;
+    DxUi::Label* _lensHint = nullptr;
+    std::array<AdjustRow, static_cast<std::size_t>(AdjustRowId::Count)> _adjustRows{};
+    DxUi::Checkbox* _adjustPreview = nullptr;
+    DxUi::Label* _adjustNote = nullptr;
+    DxUi::Button* _adjustCancel = nullptr;
+    DxUi::Button* _adjustApply = nullptr;
+    AdjustInspectorState _adjustInspector;
+    bool _syncingAdjust = false;
+    std::function<void(AdjustAction, double)> _onAdjust;
+    std::function<void(std::vector<CurvePoint>)> _onCurve;
+    std::function<void(int, double)> _onBand;
+    std::function<void(ChromeEditPhase, uint32_t, bool)> _onAdjustColor;
+    bool _pickerForAdjust = false;
+    bool _pickerHighlights = false;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;

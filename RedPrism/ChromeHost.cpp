@@ -151,6 +151,13 @@ void ChromeHost::Detach() noexcept
     _backgroundWell = nullptr;
     _opacity = nullptr;
     _pickerCard = nullptr;
+    _adjustCard = nullptr;
+    _curveEditor = nullptr;
+    _levelsInput = nullptr;
+    _levelsOutput = nullptr;
+    _spectrum = nullptr;
+    _gradientRamp = nullptr;
+    _adjustRows = {};
     _picker = nullptr;
     _overlay = nullptr;
     _transformHeader = nullptr;
@@ -280,6 +287,13 @@ void ChromeHost::BuildMenus() noexcept
     }
     if (HMENU image = _menus[static_cast<std::size_t>(MenuIndex::Image)].get())
     {
+        AppendCommand(image, kCommandCurves, IDS_CMD_CURVES);
+        AppendCommand(image, kCommandLevels, IDS_CMD_LEVELS);
+        AppendCommand(image, kCommandHueSaturation, IDS_CMD_HUE_SATURATION);
+        AppendCommand(image, kCommandExposure, IDS_CMD_EXPOSURE);
+        AppendCommand(image, kCommandGradientMap, IDS_CMD_GRADIENT_MAP);
+        AppendCommand(image, kCommandGrain, IDS_CMD_GRAIN);
+        AppendSeparator(image);
         AppendCommand(image, kCommandFlipCanvasHorizontal, IDS_CMD_FLIP_CANVAS_HORIZONTAL);
         AppendCommand(image, kCommandFlipCanvasVertical, IDS_CMD_FLIP_CANVAS_VERTICAL);
     }
@@ -288,6 +302,19 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(layer, kCommandNewLayer, IDS_CMD_NEW_LAYER);
         AppendCommand(layer, kCommandNewFolder, IDS_CMD_NEW_FOLDER);
         AppendCommand(layer, kCommandLayerViaCopy, IDS_CMD_LAYER_VIA_COPY);
+        if (HMENU adjustments = CreatePopupMenu())
+        {
+            // The submenu belongs to the Layer menu once appended; DestroyMenu on the parent frees it.
+            AppendCommand(adjustments, kCommandNewLevelsAdjustment, IDS_CMD_ADJUST_LEVELS);
+            AppendCommand(adjustments, kCommandNewCurvesAdjustment, IDS_CMD_ADJUST_CURVES);
+            AppendCommand(adjustments, kCommandNewHueSaturationAdjustment, IDS_CMD_ADJUST_HSV);
+            AppendCommand(adjustments, kCommandNewExposureAdjustment, IDS_CMD_ADJUST_EXPOSURE);
+            AppendCommand(adjustments, kCommandNewGradientMapAdjustment, IDS_CMD_ADJUST_GRADIENT_MAP);
+            AppendCommand(adjustments, kCommandNewGrainAdjustment, IDS_CMD_ADJUST_GRAIN);
+            const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_NEW_ADJUSTMENT);
+            (void)AppendMenuW(layer, MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(adjustments), caption.c_str());
+        }
+        AppendCommand(layer, kCommandEditAdjustment, IDS_CMD_EDIT_ADJUSTMENT);
         AppendSeparator(layer);
         AppendCommand(layer, kCommandDeleteLayer, IDS_CMD_DELETE_LAYER);
         AppendCommand(layer, kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY);
@@ -307,6 +334,13 @@ void ChromeHost::BuildMenus() noexcept
         AppendSeparator(select);
         AppendCommand(select, kCommandLoadLayerSelection, IDS_CMD_LOAD_LAYER_SELECTION);
         AppendCommand(select, kCommandLoadMaskSelection, IDS_CMD_LOAD_MASK_SELECTION);
+    }
+    if (HMENU filter = _menus[static_cast<std::size_t>(MenuIndex::Filter)].get())
+    {
+        AppendCommand(filter, kCommandGaussianBlur, IDS_CMD_GAUSSIAN_BLUR);
+        AppendCommand(filter, kCommandMotionBlur, IDS_CMD_MOTION_BLUR);
+        AppendCommand(filter, kCommandAddNoise, IDS_CMD_ADD_NOISE);
+        AppendCommand(filter, kCommandLensCorrection, IDS_CMD_LENS_CORRECTION);
     }
     if (HMENU view = _menus[static_cast<std::size_t>(MenuIndex::View)].get())
     {
@@ -442,7 +476,9 @@ HRESULT ChromeHost::Build() noexcept
         _splitter->SetMinimumFirstPane(kCanvasMinDip);
         _splitter->SetMinimumSecondPane(kLayersMinDip);
         _splitter->SetOnChange([this](DxUi::SplitterChange change) { OnSplitterChange(change); });
-        // The picker card floats over the canvas hole; chrome composites over the canvas with premultiplied alpha.
+        // The adjustment panel and the picker card float over the canvas hole; chrome composites over the canvas
+        // with premultiplied alpha. The picker comes last so it opens above the panel.
+        BuildAdjustPanel(*root);
         _pickerCard = root->AddChild<DxUi::CardPanel>();
         _pickerCard->SetCornerRadius(8.0f);
         _pickerCard->SetVisible(false);
@@ -576,6 +612,7 @@ void ChromeHost::Arrange() noexcept
     {
         _status->SetBounds(D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
     }
+    ArrangeAdjustPanel(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangePicker();
 }
 
@@ -636,6 +673,27 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
 
 void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
 {
+    if (_pickerForAdjust)
+    {
+        // A Gradient Map end: the panel follows the working color; OK keeps it, Cancel restores it.
+        const ChromeEditPhase phase = change.phase == DxUi::ColorPickerChangePhase::Preview  ? ChromeEditPhase::Preview
+                                      : change.phase == DxUi::ColorPickerChangePhase::Commit ? ChromeEditPhase::Commit
+                                                                                             : ChromeEditPhase::Cancel;
+        if (phase != ChromeEditPhase::Preview)
+        {
+            _pickerForAdjust = false;
+            if (_pickerCard)
+            {
+                _pickerCard->SetVisible(false);
+            }
+        }
+        _view.MarkDirty();
+        if (_onAdjustColor)
+        {
+            _onAdjustColor(phase, change.argb | 0xFF000000u, _pickerHighlights);
+        }
+        return;
+    }
     switch (change.phase)
     {
     case DxUi::ColorPickerChangePhase::Preview:
@@ -950,6 +1008,14 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
         // The picker card floats over the hole; pointer input on it belongs to chrome, not the canvas.
         const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
         const D2D1_RECT_F card = _pickerCard->GetBounds();
+        inHole = !(event.xPixels >= card.left * scale && event.xPixels < card.right * scale &&
+                   event.yPixels >= card.top * scale && event.yPixels < card.bottom * scale);
+    }
+    if (inHole && AdjustPanelOpen())
+    {
+        // So does the adjustment panel.
+        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+        const D2D1_RECT_F card = _adjustCard->GetBounds();
         inHole = !(event.xPixels >= card.left * scale && event.xPixels < card.right * scale &&
                    event.yPixels >= card.top * scale && event.yPixels < card.bottom * scale);
     }
