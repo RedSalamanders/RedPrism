@@ -25,4 +25,9 @@ graphics ownership inside `RedPrism/Renderer.*`.
 - Create the device with `D3D11_CREATE_DEVICE_BGRA_SUPPORT` so DxUi can borrow it from C2.
 - Query `ID3D11DeviceContext1` at device creation.
 - Compile fixed HLSL at build time when shaders exist. Do not add runtime `d3dcompiler` for fixed shaders.
+- Frame order in `Renderer::Render`: clear → chrome `Prepare` (layout decides the canvas hole) → composition
+  `Compose` (only when the document changed) + `BlitToTarget` → chrome `Composite` over the canvas → one `Present`.
+  Rebind the back-buffer RTV after the composition pass; it unbinds its targets.
+- Textures cached by a CPU identity (`Raster::Identity()`) hold the owning `Raster` and are swept after each
+  composition; see the `hlsl-composition` skill.
 - Preserve `--warp`. Rendering happens on the idle side of the UI loop. Do not draw from `WM_PAINT`.

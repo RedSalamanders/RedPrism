@@ -22,4 +22,10 @@ using unique_yyjson_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_
 - For a dynamic key, allocate both key and value as document-owned `yyjson_mut_val*` values and call
   `yyjson_mut_obj_add()`.
 
+- `yyjson_obj_get` returns the first occurrence of a duplicated key; tests that override a field inject it first.
+- Swift `Codable` shapes on disk (`.prism`): non-optional properties are always present, optional ones are omitted
+  when nil, and a dictionary keyed by an enum that is not `CodingKeyRepresentable` is an alternating key/value
+  array (`["Reds", {…}, "Master", {…}]`) in unspecified order. Read both array and object forms; write the array
+  form in a fixed order. See `Specs/IO/IO_ProjectFormat.md`.
+
 Project manifests (C5) and settings (C14) must follow this ownership. Do not introduce a second JSON library.
