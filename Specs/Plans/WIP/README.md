@@ -17,6 +17,7 @@ recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 T
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
+| [`PixelEdits_2026-09-21.md`](PixelEdits_2026-09-21.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md); [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md) | Fill, clear, invert, pixel moves, floating selection transform, masks from the selection, clipboard (the C9 deferrals) |
 | [`AdjustFilter_2026-09-20.md`](AdjustFilter_2026-09-20.md) | `ACTIVE` | [`Rendering_Composition`](../../Rendering/Rendering_Composition.md) | Adjustment layers and filters; HSL blends |
 | [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Content-aware fill; Remove Background decision |
 | [`ProductHardening_2026-09-20.md`](ProductHardening_2026-09-20.md) | `ACTIVE` | settings/crash specs (create in C14); [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md) | Settings, minidumps, localization, UIA |

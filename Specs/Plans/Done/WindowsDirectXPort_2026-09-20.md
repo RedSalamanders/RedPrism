@@ -639,6 +639,7 @@ Indexed 2026-09-20:
 | --- | --- |
 | **C8 Transform** | [`Transform_2026-09-20.md`](Transform_2026-09-20.md) (done) |
 | **C9 Selection** | [`Selection_2026-09-20.md`](Selection_2026-09-20.md) (done) |
+| **C9b Pixel edits** | [`PixelEdits_2026-09-21.md`](../WIP/PixelEdits_2026-09-21.md) (the edits C9 deferred to the raster primitives) |
 | **C10 Brush** | [`Brush_2026-09-20.md`](Brush_2026-09-20.md) (done) |
 | **C11 Retouch** | [`Retouch_2026-09-20.md`](Retouch_2026-09-20.md) (done) |
 | **C12 Adjust/filter** | [`AdjustFilter_2026-09-20.md`](../WIP/AdjustFilter_2026-09-20.md) |
