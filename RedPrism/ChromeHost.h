@@ -81,6 +81,32 @@ enum class SelectionAction : std::uint8_t
     Deselect,
 };
 
+// What the Brush and Eraser header asks of the host (Specs/Rendering/Rendering_Brush.md): a chosen index, a typed
+// number (size in pixels, hardness and opacity in percent) or a request to open the color picker.
+enum class BrushAction : std::uint8_t
+{
+    SetMode,
+    SetSize,
+    SetHardness,
+    SetOpacity,
+    SetMaskPaint,
+    OpenColor,
+};
+
+struct BrushInspectorState
+{
+    bool visible = false;
+    bool enabled = false;
+    EditorTool tool = EditorTool::Brush;
+    int mode = 0; // 0 paint, 1 erase
+    double size = 40;
+    double hardness = 100;
+    double opacity = 100;
+    bool maskSelected = false;
+    bool maskPaintWhite = false;
+    uint32_t foregroundArgb = 0xFF000000u;
+};
+
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
 struct SelectionInspectorState
 {
@@ -224,6 +250,11 @@ class ChromeHost final
     // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
+    // The Brush and Eraser header: mode, size, hardness, opacity, mask paint and the color swatch.
+    void SetBrushHandler(std::function<void(BrushAction, double)> handler);
+    void SetBrushInspector(const BrushInspectorState& state) noexcept;
+    // The tip circle over the canvas, in canvas-hole pixels (nullopt hides it).
+    void SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
@@ -306,6 +337,8 @@ class ChromeHost final
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
     void ArrangeSelectionHeader(float left, float top, float right, float bottom) noexcept;
+    void BuildBrushHeader(DxUi::Panel& root);
+    void ArrangeBrushHeader(float left, float top, float right, float bottom) noexcept;
     void BuildMenus() noexcept;
     void OpenMenu(size_t index, POINT screen, bool keyboard) noexcept;
     void SyncToolVisuals() noexcept;
@@ -371,6 +404,18 @@ class ChromeHost final
     DxUi::Button* _deselectButton = nullptr;
     SelectionInspectorState _selectionInspector;
     bool _syncingSelection = false;
+    DxUi::Panel* _brushHeader = nullptr;
+    DxUi::Label* _brushTitle = nullptr;
+    DxUi::ComboBox* _brushMode = nullptr;
+    DxUi::NumericStepper* _brushSize = nullptr;
+    DxUi::NumericStepper* _brushHardness = nullptr;
+    DxUi::NumericStepper* _brushOpacity = nullptr;
+    DxUi::ComboBox* _brushMaskPaint = nullptr;
+    DxUi::Label* _brushColorLabel = nullptr;
+    DxUi::ColorSwatch* _brushColor = nullptr;
+    DxUi::Label* _brushMaskNote = nullptr;
+    BrushInspectorState _brushInspector;
+    bool _syncingBrush = false;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
@@ -382,6 +427,7 @@ class ChromeHost final
     std::function<void()> _onLayout;
     std::function<void(TransformAction, double)> _onTransform;
     std::function<void(SelectionAction, double)> _onSelection;
+    std::function<void(BrushAction, double)> _onBrush;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;

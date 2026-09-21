@@ -88,6 +88,12 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
     return tool == EditorTool::Marquee || tool == EditorTool::Lasso || tool == EditorTool::Wand;
 }
 
+// The tools that paint with a tip: the Brush (which can erase) and the Eraser.
+[[nodiscard]] constexpr bool EditorToolIsBrush(EditorTool tool) noexcept
+{
+    return tool == EditorTool::Brush || tool == EditorTool::Eraser;
+}
+
 // Segoe Fluent Icons code points. HostTests proves every glyph exists in the installed icon font.
 [[nodiscard]] constexpr wchar_t EditorToolGlyph(EditorTool tool) noexcept
 {

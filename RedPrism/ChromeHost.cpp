@@ -237,6 +237,11 @@ void ChromeHost::SetSelectionHandler(std::function<void(SelectionAction, double)
     _onSelection = std::move(handler);
 }
 
+void ChromeHost::SetBrushHandler(std::function<void(BrushAction, double)> handler)
+{
+    _onBrush = std::move(handler);
+}
+
 void ChromeHost::BuildMenus() noexcept
 {
     for (unique_hmenu& menu : _menus)
@@ -376,6 +381,7 @@ HRESULT ChromeHost::Build() noexcept
         _header = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, EditorToolNameId(_tool)));
         BuildTransformHeader(*root);
         BuildSelectionHeader(*root);
+        BuildBrushHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
         _opacity->SetMinimum(0.0);
@@ -525,6 +531,7 @@ void ChromeHost::Arrange() noexcept
     }
     ArrangeTransformHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeSelectionHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    ArrangeBrushHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     if (_overlay)
     {
         _overlay->SetBounds(D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
@@ -823,9 +830,13 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
     {
         _selectionHeader->SetVisible(EditorToolIsSelection(tool));
     }
+    if (_brushHeader)
+    {
+        _brushHeader->SetVisible(EditorToolIsBrush(tool));
+    }
     if (_header)
     {
-        _header->SetVisible(tool != EditorTool::Move && !EditorToolIsSelection(tool));
+        _header->SetVisible(tool != EditorTool::Move && !EditorToolIsSelection(tool) && !EditorToolIsBrush(tool));
         _header->SetText(LoadStringResource(nullptr, EditorToolNameId(_tool)));
     }
 }
@@ -1500,4 +1511,191 @@ void ChromeHost::SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexce
         }
     }
     _overlay->SetDraft(std::move(draft));
+}
+
+void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
+{
+    _brushHeader = root.AddChild<DxUi::Panel>();
+    _brushTitle = _brushHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_TOOL_BRUSH));
+    _brushTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+    const auto combo =
+        [this](std::initializer_list<std::pair<const wchar_t*, UINT>> items, UINT tipId, BrushAction action)
+    {
+        DxUi::ComboBox* control = _brushHeader->AddChild<DxUi::ComboBox>();
+        std::vector<DxUi::ComboBox::Item> entries;
+        for (const auto& [value, id] : items)
+        {
+            entries.push_back(DxUi::ComboBox::Item{value, LoadStringResource(nullptr, id)});
+        }
+        control->SetItems(std::move(entries));
+        control->SetSelectedIndex(0);
+        control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetOnSelectionChanged(
+            [this, action](size_t index)
+            {
+                if (!_syncingBrush && _onBrush)
+                {
+                    _onBrush(action, static_cast<double>(index));
+                }
+            });
+        return control;
+    };
+    const auto stepper = [this](UINT labelId, float labelWidth, UINT unitId, float unitWidth, double minimum,
+                                double maximum, double value, UINT tipId, BrushAction action)
+    {
+        DxUi::NumericStepper* control = _brushHeader->AddChild<DxUi::NumericStepper>();
+        control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
+        control->SetMinimum(minimum);
+        control->SetMaximum(maximum);
+        control->SetStep(1.0);
+        control->SetLargeStep(10.0);
+        control->SetDecimals(0);
+        control->SetValue(value);
+        control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetOnChange(
+            [this, action](DxUi::NumericStepperChange change)
+            {
+                if (!_syncingBrush && _onBrush)
+                {
+                    _onBrush(action, change.value);
+                }
+            });
+        return control;
+    };
+    _brushMode = combo({{L"paint", IDS_BRUSH_MODE_PAINT}, {L"erase", IDS_BRUSH_MODE_ERASE}}, IDS_BRUSH_MODE_TIP,
+                       BrushAction::SetMode);
+    _brushSize = stepper(IDS_BRUSH_SIZE, 34.0f, IDS_UNIT_PIXELS, 18.0f, 1.0, 2000.0, 40.0, IDS_BRUSH_SIZE_TIP,
+                         BrushAction::SetSize);
+    _brushHardness = stepper(IDS_BRUSH_HARDNESS, 62.0f, IDS_UNIT_PERCENT, 14.0f, 0.0, 100.0, 100.0,
+                             IDS_BRUSH_HARDNESS_TIP, BrushAction::SetHardness);
+    _brushOpacity = stepper(IDS_BRUSH_OPACITY, 54.0f, IDS_UNIT_PERCENT, 14.0f, 1.0, 100.0, 100.0, IDS_BRUSH_OPACITY_TIP,
+                            BrushAction::SetOpacity);
+    _brushMaskPaint = combo({{L"black", IDS_BRUSH_MASK_BLACK}, {L"white", IDS_BRUSH_MASK_WHITE}}, IDS_BRUSH_MASK_TIP,
+                            BrushAction::SetMaskPaint);
+    _brushColorLabel = _brushHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_BRUSH_COLOR));
+    // The same foreground color and picker as the rail's well.
+    _brushColor = _brushHeader->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
+    _brushColor->SetAccessibleName(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
+    _brushColor->SetTooltipText(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
+    _brushColor->SetOnClick(
+        [this]
+        {
+            if (_onBrush)
+            {
+                _onBrush(BrushAction::OpenColor, 0.0);
+            }
+        });
+    _brushMaskNote = _brushHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_BRUSH_MASK_NOTE));
+    _brushHeader->SetVisible(EditorToolIsBrush(_tool));
+    if (_header)
+    {
+        _header->SetVisible(_tool != EditorTool::Move && !EditorToolIsSelection(_tool) && !EditorToolIsBrush(_tool));
+    }
+}
+
+void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bottom) noexcept
+{
+    if (!_brushHeader)
+    {
+        return;
+    }
+    _brushHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    constexpr float kRowDip = 28.0f;
+    constexpr float kGapDip = 6.0f;
+    const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
+    const float rowBottom = rowTop + kRowDip;
+    const BrushInspectorState& state = _brushInspector;
+    float rightEdge = right - 4.0f;
+    if (_brushMaskNote)
+    {
+        const bool fits = state.maskSelected && rightEdge - 50.0f > left + 80.0f;
+        _brushMaskNote->SetVisible(fits);
+        if (fits)
+        {
+            _brushMaskNote->SetBounds(D2D1::RectF(rightEdge - 50.0f, rowTop, rightEdge, rowBottom));
+            rightEdge -= 50.0f + kGapDip;
+        }
+    }
+    struct Slot
+    {
+        DxUi::Control* control;
+        float width;
+        bool wanted;
+    };
+    const std::array<Slot, 8> slots{Slot{_brushTitle, 72.0f, true},
+                                    Slot{_brushMode, 104.0f, state.tool == EditorTool::Brush},
+                                    Slot{_brushSize, 118.0f, true},
+                                    Slot{_brushHardness, 150.0f, true},
+                                    Slot{_brushOpacity, 142.0f, true},
+                                    Slot{_brushMaskPaint, 150.0f, state.maskSelected},
+                                    Slot{_brushColorLabel, 40.0f, !state.maskSelected},
+                                    Slot{_brushColor, 34.0f, !state.maskSelected}};
+    float cursor = left + 4.0f;
+    bool room = true;
+    for (const Slot& slot : slots)
+    {
+        if (slot.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
+        slot.control->SetVisible(fits);
+        if (fits)
+        {
+            const float inset = slot.control == _brushColor ? 4.0f : 0.0f;
+            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            cursor += slot.width + kGapDip;
+        }
+        else if (slot.wanted)
+        {
+            room = false;
+        }
+    }
+}
+
+void ChromeHost::SetBrushInspector(const BrushInspectorState& state) noexcept
+{
+    _brushInspector = state;
+    if (!_brushHeader)
+    {
+        return;
+    }
+    // Values only; the next Prepare arranges the slots the state wants.
+    _syncingBrush = true;
+    _brushTitle->SetText(LoadStringResource(nullptr, EditorToolNameId(state.tool)));
+    _brushMode->SetSelectedIndex(static_cast<size_t>(std::clamp(state.mode, 0, 1)));
+    const auto sync = [](DxUi::NumericStepper* stepper, double value, bool enabled)
+    {
+        stepper->SetEnabled(enabled);
+        if (!stepper->IsEditing())
+        {
+            stepper->SetValue(value);
+        }
+    };
+    sync(_brushSize, state.size, state.enabled);
+    sync(_brushHardness, state.hardness, state.enabled);
+    sync(_brushOpacity, state.opacity, state.enabled);
+    _brushMaskPaint->SetSelectedIndex(state.maskPaintWhite ? 1u : 0u);
+    _brushMode->SetEnabled(state.enabled);
+    _brushMaskPaint->SetEnabled(state.enabled);
+    _brushColor->SetSwatchValue(state.foregroundArgb);
+    _brushColor->SetEnabled(state.enabled);
+    _syncingBrush = false;
+}
+
+void ChromeHost::SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (cursor.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        cursor->center.x *= toDip;
+        cursor->center.y *= toDip;
+        cursor->radius *= toDip;
+    }
+    _overlay->SetBrushCursor(cursor);
 }

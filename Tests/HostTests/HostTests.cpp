@@ -141,11 +141,11 @@ void TestCommandLine() noexcept
     parsed = {};
     Expect(RedPrismParseCommandLine(demoArgs, 5, parsed, &error) && parsed.demo == std::wstring_view{demoValue},
            "cli.demo-parse");
-    wchar_t badDemo[] = L"brush";
+    wchar_t badDemo[] = L"sketch";
     wchar_t* badDemoArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, badDemo};
     parsed = {};
     Expect(!RedPrismParseCommandLine(badDemoArgs, 3, parsed, &error) && error != nullptr &&
-               std::wstring_view{error} == L"brush",
+               std::wstring_view{error} == L"sketch",
            "cli.demo-rejects-unknown");
     wchar_t selectionValue[] = L"selection";
     wchar_t* selectionArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, selectionValue};
@@ -153,6 +153,21 @@ void TestCommandLine() noexcept
     Expect(RedPrismParseCommandLine(selectionArgs, 3, parsed, &error) &&
                parsed.demo == std::wstring_view{selectionValue},
            "cli.demo-selection");
+    wchar_t brushValue[] = L"brush";
+    wchar_t* brushArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, brushValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(brushArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{brushValue},
+           "cli.demo-brush");
+    wchar_t benchSwitch[] = L"--bench";
+    wchar_t* benchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, brushValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(benchArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{brushValue},
+           "cli.bench-brush");
+    wchar_t* badBenchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, badDemo};
+    parsed = {};
+    Expect(!RedPrismParseCommandLine(badBenchArgs, 3, parsed, &error) && error != nullptr &&
+               std::wstring_view{error} == L"sketch",
+           "cli.bench-rejects-unknown");
 
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
@@ -269,7 +284,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 155> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 170> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -435,7 +450,22 @@ void TestStringTable() noexcept
                                          IDS_WAND_ALL_LAYERS,
                                          IDS_WAND_SAMPLE_TIP,
                                          IDS_WAND_CONTIGUOUS,
-                                         IDS_WAND_CONTIGUOUS_TIP};
+                                         IDS_WAND_CONTIGUOUS_TIP,
+                                         IDS_ERROR_BRUSH_BUDGET,
+                                         IDS_BRUSH_MODE_PAINT,
+                                         IDS_BRUSH_MODE_ERASE,
+                                         IDS_BRUSH_MODE_TIP,
+                                         IDS_BRUSH_SIZE,
+                                         IDS_BRUSH_SIZE_TIP,
+                                         IDS_BRUSH_HARDNESS,
+                                         IDS_BRUSH_HARDNESS_TIP,
+                                         IDS_BRUSH_OPACITY,
+                                         IDS_BRUSH_OPACITY_TIP,
+                                         IDS_BRUSH_MASK_BLACK,
+                                         IDS_BRUSH_MASK_WHITE,
+                                         IDS_BRUSH_MASK_TIP,
+                                         IDS_BRUSH_COLOR,
+                                         IDS_BRUSH_MASK_NOTE};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BrushCompute.h"
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
 #include "Document.h"
@@ -23,12 +24,13 @@
 class ChromeHost;
 enum class TransformAction : std::uint8_t;
 enum class SelectionAction : std::uint8_t;
+enum class BrushAction : std::uint8_t;
 
 class Application final
 {
   public:
     Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
-                const wchar_t* demo = nullptr) noexcept;
+                const wchar_t* demo = nullptr, const wchar_t* bench = nullptr) noexcept;
     ~Application();
 
     Application(const Application&) = delete;
@@ -38,6 +40,8 @@ class Application final
 
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
+    // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
+    int RunBenchmark() noexcept;
 
   private:
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
@@ -81,6 +85,17 @@ class Application final
     void SelectionChanged() noexcept;
     void RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept;
     [[nodiscard]] std::optional<Raster> WandComposite() noexcept;
+    // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
+    // engine, the live preview in the composition, keys and the tip circle.
+    void OnBrushAction(BrushAction action, double value) noexcept;
+    void BeginBrushStroke(Vec2 view, UINT modifiers) noexcept;
+    void ContinueBrushStroke(Vec2 view) noexcept;
+    void FinishBrushStroke() noexcept;
+    void CancelBrushStroke() noexcept;
+    void PushStrokeTiles() noexcept;
+    void SyncBrushCursor() noexcept;
+    void DropBrushEngine() noexcept;
+    [[nodiscard]] bool BrushErases() const noexcept;
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
@@ -99,6 +114,8 @@ class Application final
     wil::unique_hpowernotify _displayPowerNotification;
     Renderer _renderer;
     std::unique_ptr<ChromeHost> _chrome;
+    // Declared before the session: a pending stroke tells its engine when the session drops it.
+    GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     CanvasViewport _viewport;
     CanvasRenderer _composition;
@@ -122,6 +139,9 @@ class Application final
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;
+    bool _brushDragging = false;
+    std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
+    std::wstring _bench;
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
     std::wstring _demo;

@@ -142,7 +142,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 $shotDir = Join-Path $repoRoot '.build\screenshots'
 New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
-foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ dpi = 96; demo = 'transform' }, @{ dpi = 96; demo = 'selection' })) {
+foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ dpi = 96; demo = 'transform' }, @{ dpi = 96; demo = 'selection' }, @{ dpi = 96; demo = 'brush' })) {
     $dpi = $shotCase.dpi
     $demo = $shotCase.demo
     $shotName = if ($demo) { "$demo-$dpi" } else { "empty-shell-$dpi" }

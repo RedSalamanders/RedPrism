@@ -129,8 +129,8 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const bool uninitializeCom = SUCCEEDED(com);
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
-    const std::unique_ptr<Application> application{
-        new (std::nothrow) Application(instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo)};
+    const std::unique_ptr<Application> application{new (std::nothrow) Application(
+        instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
     if (!application)
     {
         if (uninitializeCom)
@@ -140,8 +140,10 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 1;
     }
 
-    const int exitCode = parsed.selfTest ? application->RunSelfTest() : application->Run(showCommand);
-    if (exitCode != 0 && !parsed.selfTest && parsed.screenshotPath == nullptr)
+    const int exitCode = parsed.selfTest           ? application->RunSelfTest()
+                         : parsed.bench != nullptr ? application->RunBenchmark()
+                                                   : application->Run(showCommand);
+    if (exitCode != 0 && !parsed.selfTest && parsed.bench == nullptr && parsed.screenshotPath == nullptr)
     {
         UINT messageId = IDS_ERROR_START_GENERIC;
         switch (exitCode)

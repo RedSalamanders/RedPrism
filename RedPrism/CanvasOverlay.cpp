@@ -40,6 +40,12 @@ void CanvasOverlay::SetDraft(std::optional<Draft> draft)
     RequestInvalidate();
 }
 
+void CanvasOverlay::SetBrushCursor(std::optional<BrushCursor> cursor) noexcept
+{
+    _brushCursor = cursor;
+    RequestInvalidate();
+}
+
 D2D1_RECT_F CanvasOverlay::GetHitBounds() const noexcept
 {
     return D2D1::RectF();
@@ -70,6 +76,7 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     }
     PaintSelection(dc, host, bounds);
     PaintDraft(dc, host, bounds);
+    PaintBrushCursor(dc, host, bounds);
     PaintTransform(dc, host, bounds);
     dc->PopAxisAlignedClip();
 }
@@ -215,6 +222,35 @@ void CanvasOverlay::PaintDraft(ID2D1DeviceContext* dc, DxUi::ControlHost& host, 
         dc->FillRectangle(handle, white);
         dc->DrawRectangle(handle, black, kLineWidthDip);
     }
+}
+
+void CanvasOverlay::PaintBrushCursor(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
+{
+    if (!_brushCursor.has_value())
+    {
+        return;
+    }
+    const BrushCursor& cursor = _brushCursor.value();
+    const D2D1_POINT_2F center = D2D1::Point2F(bounds.left + cursor.center.x, bounds.top + cursor.center.y);
+    ID2D1SolidColorBrush* white = host.GetSolidBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f));
+    ID2D1SolidColorBrush* black = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    if (cursor.radius < 2.0f)
+    {
+        // A tip too small to draw as a ring shows as a crosshair.
+        constexpr float kArm = 5.0f;
+        for (const auto& [brush, width] : {std::pair<ID2D1SolidColorBrush*, float>{white, 2.5f}, {black, 1.0f}})
+        {
+            dc->DrawLine(D2D1::Point2F(center.x - kArm, center.y), D2D1::Point2F(center.x + kArm, center.y), brush,
+                         width);
+            dc->DrawLine(D2D1::Point2F(center.x, center.y - kArm), D2D1::Point2F(center.x, center.y + kArm), brush,
+                         width);
+        }
+        return;
+    }
+    // A white ring under a black one reads on any pixels (legacy BrushCursorOverlay).
+    const D2D1_ELLIPSE ring = D2D1::Ellipse(center, cursor.radius, cursor.radius);
+    dc->DrawEllipse(ring, white, 2.5f);
+    dc->DrawEllipse(ring, black, 1.0f);
 }
 
 void CanvasOverlay::PaintTransform(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const

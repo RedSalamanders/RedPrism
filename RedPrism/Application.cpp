@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
@@ -252,12 +253,16 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
 } // namespace
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
-                         const wchar_t* demo) noexcept
+                         const wchar_t* demo, const wchar_t* bench) noexcept
     : _instance(instance), _forceWarp(forceWarp)
 {
     if (demo != nullptr && demo[0] != L'\0')
     {
         _demo = demo;
+    }
+    if (bench != nullptr && bench[0] != L'\0')
+    {
+        _bench = bench;
     }
     if (screenshotPath && screenshotPath[0] != L'\0')
     {
@@ -879,6 +884,111 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
     }
 
+    // Brush and Eraser: a stroke through the compute engine commits one sparse entry that never assembles its
+    // pixels, the eraser clears them, [ and ] and the digit keys change the tip, Escape drops a stroke.
+    {
+        OnTool(EditorTool::Brush);
+        _chrome->SetCanvasFocused(true);
+        // The selection block leaves a lasso outline behind, and strokes are clipped to the selection.
+        OnCommand(ChromeHost::kCommandDeselect);
+        OnCommand(ChromeHost::kCommandNewLayer);
+        _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1, false};
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        const CanvasHole hole = _chrome->HolePixels();
+        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        {
+            const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
+            OnPointer(message, wParam,
+                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
+                                 static_cast<int>(std::lround(hole.top + view.y))));
+        };
+        const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
+        {
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+            std::vector<std::uint8_t> bgra;
+            UINT width = 0;
+            UINT height = 0;
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
+                static_cast<UINT>(y) >= height)
+            {
+                return false;
+            }
+            const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
+            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            return true;
+        };
+        if (!_brushEngine.Ready())
+        {
+            SelfTestFailure(L"The brush compute engine did not initialize on the WARP device.\n");
+            return 5;
+        }
+        std::array<int, 4> before{};
+        std::array<int, 4> besideBefore{};
+        if (!pixelAt(300, 600, before) || !pixelAt(300, 500, besideBefore))
+        {
+            SelfTestFailure(L"The canvas could not be read back before the stroke.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 200.0, 600.0);
+        if (!_brushDragging || _session.PendingBrush() == nullptr || !_composition.HasStroke())
+        {
+            SelfTestFailure(L"Pressing with the Brush did not start a stroke with a live preview.\n");
+            return 5;
+        }
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 400.0, 600.0);
+        std::array<int, 4> live{};
+        if (!pixelAt(300, 600, live) || live[2] < 250 || live[1] > 5 || live[0] > 5 || live[3] < 250)
+        {
+            SelfTestFailure(L"The live stroke did not show red paint on the canvas.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 400.0, 600.0);
+        const ImageLayer* painted = _session.ActiveLayer();
+        if (_brushDragging || _session.PendingBrush() != nullptr || _composition.HasStroke() || painted == nullptr ||
+            !painted->asset.has_value() || !painted->asset->image.IsSparse() ||
+            painted->asset->image.IsMaterialized() || _session.history.UndoName() != L"Brush Stroke")
+        {
+            SelfTestFailure(L"Releasing the Brush did not commit one sparse Brush Stroke entry.\n");
+            return 5;
+        }
+        std::array<int, 4> committed{};
+        std::array<int, 4> beside{};
+        if (!pixelAt(300, 600, committed) || committed[2] < 250 || committed[3] < 250 || !pixelAt(300, 500, beside) ||
+            beside != besideBefore || painted->asset->image.IsMaterialized())
+        {
+            SelfTestFailure(L"The committed stroke did not draw from the adopted texture.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Eraser);
+        pointer(WM_LBUTTONDOWN, 0, 300.0, 600.0);
+        pointer(WM_LBUTTONUP, 0, 300.0, 600.0);
+        std::array<int, 4> erased{};
+        if (_session.history.UndoName() != L"Erase" || !pixelAt(300, 600, erased) || erased != before)
+        {
+            SelfTestFailure(L"The Eraser did not clear the painted pixels.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Brush);
+        _session.brushSettings.diameter = 30;
+        if (!HandleAccelerator(VK_OEM_6, 0) || _session.brushSettings.diameter != 36 ||
+            !HandleAccelerator(VK_OEM_4, MK_SHIFT) || _session.brushSettings.hardness != 0.75 ||
+            !HandleAccelerator('5', 0) || _session.brushSettings.opacity != 0.5)
+        {
+            SelfTestFailure(L"The bracket and digit keys did not change the brush tip.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
+        if (_session.PendingBrush() == nullptr || !HandleAccelerator(VK_ESCAPE, 0) ||
+            _session.PendingBrush() != nullptr || _composition.HasStroke() || _brushDragging ||
+            _session.history.UndoName() != L"Erase")
+        {
+            SelfTestFailure(L"Escape did not drop the stroke in progress.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Move);
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -1088,6 +1198,7 @@ HRESULT Application::InitializeChrome() noexcept
         });
     chrome->SetTransformHandler([this](TransformAction action, double value) { OnTransformAction(action, value); });
     chrome->SetSelectionHandler([this](SelectionAction action, double value) { OnSelectionAction(action, value); });
+    chrome->SetBrushHandler([this](BrushAction action, double value) { OnBrushAction(action, value); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -1333,6 +1444,21 @@ void Application::SyncChrome() noexcept
         draft = std::move(converted);
     }
     _chrome->SetLassoDraft(std::move(draft));
+
+    // Brush and Eraser: the header mirrors the session; the tip circle follows the pointer.
+    BrushInspectorState brush;
+    brush.visible = EditorToolIsBrush(_tool);
+    brush.enabled = document != nullptr;
+    brush.tool = _tool == EditorTool::Eraser ? EditorTool::Eraser : EditorTool::Brush;
+    brush.mode = _session.brushMode == BrushToolMode::Erase ? 1 : 0;
+    brush.size = _session.brushSettings.diameter;
+    brush.hardness = _session.brushSettings.hardness * 100.0;
+    brush.opacity = _session.brushSettings.opacity * 100.0;
+    brush.maskSelected = _session.IsMaskSelected();
+    brush.maskPaintWhite = _session.maskPaintWhite;
+    brush.foregroundArgb = _session.ForegroundColor();
+    _chrome->SetBrushInspector(brush);
+    SyncBrushCursor();
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -1342,12 +1468,26 @@ void Application::BindCompositionDevice() noexcept
     if (!device || !context)
     {
         _composition.ReleaseDeviceResources();
+        DropBrushEngine();
         return;
     }
     if (_composition.Device() != device)
     {
         (void)_composition.CreateDeviceResources(device, context);
+        // The brush computes coverage on the same device; without it the CPU kernel paints. A stroke in
+        // flight on the old device is dropped with it.
+        DropBrushEngine();
+        (void)_brushEngine.Initialize(device, context);
+        _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
     }
+}
+
+void Application::DropBrushEngine() noexcept
+{
+    _session.CancelBrush();
+    _brushDragging = false;
+    _brushEngine.Release();
+    _session.SetBrushEngine(nullptr);
 }
 
 void Application::CloseMainWindow() noexcept
@@ -1357,6 +1497,7 @@ void Application::CloseMainWindow() noexcept
         (void)KillTimer(_window.get(), kScreenshotTimerId);
     }
     _renderer.SetChrome(nullptr);
+    DropBrushEngine();
     _composition.ReleaseDeviceResources();
     if (_chrome)
     {
@@ -1487,6 +1628,12 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     event.yPixels = static_cast<float>(point.y);
     if (_chrome->DispatchPointer(event))
     {
+        if (_brushHover.has_value() && !_brushDragging)
+        {
+            // The pointer is over the chrome: the tip circle leaves the canvas.
+            _brushHover.reset();
+            SyncBrushCursor();
+        }
         _frameInvalidated = true;
         return;
     }
@@ -1504,6 +1651,40 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         SyncChrome();
         _frameInvalidated = true;
         return;
+    }
+    if (EditorToolIsBrush(_tool) && !panMode)
+    {
+        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
+        {
+            _canvasDrag = false;
+            BeginBrushStroke(view, event.modifiers);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move)
+        {
+            if (_brushDragging)
+            {
+                ContinueBrushStroke(view);
+                return;
+            }
+            _brushHover = inHole ? std::optional<Vec2>(_viewport.DocumentFromView(view, documentSize)) : std::nullopt;
+            SyncBrushCursor();
+        }
+        if (event.action == DxUi::PointerAction::Up && _brushDragging)
+        {
+            ContinueBrushStroke(view);
+            FinishBrushStroke();
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Leave)
+        {
+            _brushHover.reset();
+            if (_brushDragging)
+            {
+                FinishBrushStroke();
+            }
+            SyncBrushCursor();
+        }
     }
     if (EditorToolIsSelection(_tool) && !panMode)
     {
@@ -1757,8 +1938,10 @@ void Application::OnTool(EditorTool tool) noexcept
         _session.CommitTransform();
         _session.ClearSnapGuides();
         EndSelectionInteraction(false);
+        FinishBrushStroke();
     }
     _tool = tool;
+    SyncBrushCursor();
     if (_chrome)
     {
         _chrome->SetTool(tool);
@@ -1835,6 +2018,41 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (virtualKey == VK_ESCAPE && (_brushDragging || _session.PendingBrush() != nullptr))
+        {
+            CancelBrushStroke();
+            return true;
+        }
+        if (EditorToolIsBrush(_tool) && (virtualKey == VK_OEM_4 || virtualKey == VK_OEM_6))
+        {
+            // [ and ] step the size; with Shift the hardness, in quarters.
+            if (shift)
+            {
+                _session.ChangeBrushHardness(virtualKey == VK_OEM_6);
+            }
+            else
+            {
+                _session.ChangeBrushSize(virtualKey == VK_OEM_6);
+            }
+            SyncChrome();
+            return true;
+        }
+        if ((EditorToolIsBrush(_tool) || _tool == EditorTool::Move) && virtualKey >= '0' && virtualKey <= '9' &&
+            !shift && !control)
+        {
+            // Photoshop's opacity keys: brush opacity with a brush tool, the active layer's with the Move tool.
+            const int digit = static_cast<int>(virtualKey - '0');
+            if (EditorToolIsBrush(_tool))
+            {
+                _session.TypeOpacityDigit(digit, static_cast<double>(GetTickCount64()) / 1000.0);
+            }
+            else
+            {
+                _session.SetOpacity(digit == 0 ? 1.0 : digit / 10.0);
+            }
+            DocumentChanged();
+            return true;
+        }
         if (_session.PendingLasso().has_value() &&
             (virtualKey == VK_ESCAPE || virtualKey == VK_RETURN || virtualKey == VK_BACK || virtualKey == VK_DELETE))
         {
@@ -2346,6 +2564,43 @@ void Application::ApplyDemo() noexcept
         _session.ApplySelection(SelectionGeometry::Rect(640, 380, 220, 130), SelectionMode::Add,
                                 L"Rectangular Marquee");
         OnTool(EditorTool::Marquee);
+        return;
+    }
+    if (_demo == L"brush")
+    {
+        // A backdrop with a few strokes (soft, hard, erased) on a layer above it, and the Brush's header.
+        InsertPaintedLayer(_session, L"Backdrop", 620, 400, Vec2{160, 120}, 0.0, 0xFF2F6FB0u);
+        _session.AddBlankLayer();
+        const auto stroke = [&](const BrushSettings& settings, std::initializer_list<Vec2> points, bool erase)
+        {
+            _session.brushSettings = settings;
+            bool first = true;
+            for (const Vec2& point : points)
+            {
+                if (first)
+                {
+                    if (!_session.BeginBrush(point, erase))
+                    {
+                        return;
+                    }
+                    first = false;
+                }
+                else
+                {
+                    _session.ContinueBrush(point);
+                }
+            }
+            _session.FinishBrush();
+        };
+        stroke(BrushSettings{90, 0, 0.90, 0.54, 0.18, 1, false},
+               {Vec2{220, 200}, Vec2{420, 160}, Vec2{620, 260}, Vec2{800, 200}}, false);
+        stroke(BrushSettings{36, 1, 0.96, 0.96, 0.96, 1, false}, {Vec2{230, 360}, Vec2{500, 300}, Vec2{760, 380}},
+               false);
+        stroke(BrushSettings{60, 0.5, 0.20, 0.72, 0.36, 0.6, false}, {Vec2{300, 440}, Vec2{700, 430}}, false);
+        stroke(BrushSettings{70, 1, 0, 0, 0, 1, false}, {Vec2{560, 330}, Vec2{620, 420}}, true);
+        _session.brushSettings = BrushSettings{60, 0.5, 0.90, 0.54, 0.18, 1, false};
+        _brushHover = Vec2{880, 430};
+        OnTool(EditorTool::Brush);
     }
 }
 
@@ -2672,6 +2927,12 @@ bool Application::ApplyCanvasCursor() noexcept
     else if (_tool == EditorTool::Zoom)
     {
         cursor = IDC_CROSS;
+    }
+    else if (EditorToolIsBrush(_tool))
+    {
+        // The tip circle in the overlay is the cursor; the arrow would only hide the pixels under it.
+        SetCursor(_session.Document().has_value() ? nullptr : LoadCursorW(nullptr, IDC_CROSS));
+        return true;
     }
     else if (EditorToolIsSelection(_tool))
     {
@@ -3047,4 +3308,354 @@ std::optional<Raster> Application::WandComposite() noexcept
         return std::nullopt;
     }
     return raster;
+}
+
+// ── Brush and Eraser ──────────────────────────────────────────────────────
+
+bool Application::BrushErases() const noexcept
+{
+    return _tool == EditorTool::Eraser || (_tool == EditorTool::Brush && _session.brushMode == BrushToolMode::Erase);
+}
+
+void Application::OnBrushAction(BrushAction action, double value) noexcept
+{
+    // Reached from inside a DxUi callback: chrome re-syncs on the next frame rather than re-entering Prepare.
+    switch (action)
+    {
+    case BrushAction::SetMode:
+        _session.brushMode = value >= 0.5 ? BrushToolMode::Erase : BrushToolMode::Paint;
+        break;
+    case BrushAction::SetSize:
+        if (std::isfinite(value))
+        {
+            _session.brushSettings.diameter = std::clamp(std::round(value), 1.0, 2000.0);
+        }
+        break;
+    case BrushAction::SetHardness:
+        if (std::isfinite(value))
+        {
+            _session.brushSettings.hardness = std::clamp(value, 0.0, 100.0) / 100.0;
+        }
+        break;
+    case BrushAction::SetOpacity:
+        if (std::isfinite(value))
+        {
+            _session.brushSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
+        }
+        break;
+    case BrushAction::SetMaskPaint:
+        _session.maskPaintWhite = value >= 0.5;
+        break;
+    case BrushAction::OpenColor:
+        if (_chrome)
+        {
+            _chrome->OpenColorPicker(false);
+        }
+        break;
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
+{
+    if (!_session.Document().has_value() || _brushDragging)
+    {
+        return;
+    }
+    // The stroke's coverage and its preview live on the current device.
+    BindCompositionDevice();
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    const bool erase = BrushErases();
+    const bool couldPaint = _session.CanPaint();
+    bool begun = false;
+    if ((modifiers & MK_SHIFT) != 0)
+    {
+        // Shift-click paints a straight line from the end of the last stroke on this layer or mask.
+        const std::optional<Vec2> start = _session.ShiftLineStart();
+        if (start.has_value())
+        {
+            begun = _session.BeginBrush(start.value(), erase);
+            if (begun)
+            {
+                _session.ContinueBrush(pixel);
+            }
+        }
+    }
+    if (!begun)
+    {
+        begun = _session.BeginBrush(pixel, erase);
+    }
+    const BrushStroke* stroke = _session.PendingBrush();
+    if (!begun || stroke == nullptr)
+    {
+        if (couldPaint)
+        {
+            ShowError(IDS_ERROR_BRUSH_BUDGET);
+        }
+        return;
+    }
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = stroke->LayerID();
+    preview.mask = stroke->IsMask();
+    preview.width = stroke->Width();
+    preview.height = stroke->Height();
+    preview.transform = stroke->PaintTransform();
+    preview.fill = stroke->FillValue();
+    const Raster& source = stroke->SourceImage();
+    if (source.HasStorage() && source.Width() == stroke->SourceRect().width &&
+        source.Height() == stroke->SourceRect().height)
+    {
+        preview.source = source;
+        preview.sourceX = stroke->SourceRect().x;
+        preview.sourceY = stroke->SourceRect().y;
+    }
+    else if (source.HasStorage())
+    {
+        // A uniform mask stretched over the grid is its one value everywhere.
+        std::uint8_t uniform = preview.fill;
+        source.ReadRegion(0, 0, 1, 1, &uniform, source.Channels(), preview.fill);
+        preview.fill = uniform;
+    }
+    (void)_composition.BeginStroke(preview);
+    _brushDragging = true;
+    _brushHover = pixel;
+    PushStrokeTiles();
+    SyncBrushCursor();
+}
+
+void Application::PushStrokeTiles() noexcept
+{
+    BrushStroke* stroke = _session.MutableBrush();
+    if (stroke == nullptr || !_composition.HasStroke())
+    {
+        _frameInvalidated = true;
+        return;
+    }
+    std::vector<RasterTile> tiles;
+    if (_composition.StrokeTextureMissing())
+    {
+        // The working texture is (re)built from every touched tile.
+        tiles = stroke->Patches();
+        static_cast<void>(stroke->TakeChanged());
+    }
+    else
+    {
+        for (const std::size_t index : stroke->TakeChanged())
+        {
+            const BrushStroke::Tile& tile = stroke->Tiles()[index];
+            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
+        }
+    }
+    if (!tiles.empty())
+    {
+        (void)_composition.UpdateStrokeTiles(tiles);
+    }
+    _frameInvalidated = true;
+}
+
+void Application::ContinueBrushStroke(Vec2 view) noexcept
+{
+    if (!_brushDragging)
+    {
+        return;
+    }
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    _brushHover = pixel;
+    _session.ContinueBrush(pixel);
+    if (_session.PendingBrush() == nullptr)
+    {
+        // The stroke ran out of pixel budget or the engine failed: it is gone.
+        _brushDragging = false;
+        _composition.EndStroke(nullptr, 0, 0);
+        ShowError(IDS_ERROR_BRUSH_BUDGET);
+        DocumentChanged();
+        return;
+    }
+    PushStrokeTiles();
+    SyncBrushCursor();
+}
+
+void Application::FinishBrushStroke() noexcept
+{
+    if (!_brushDragging)
+    {
+        return;
+    }
+    _brushDragging = false;
+    _session.FinishBrush();
+    const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
+    if (commit.has_value())
+    {
+        _composition.EndStroke(&commit->image, commit->x, commit->y);
+    }
+    else
+    {
+        _composition.EndStroke(nullptr, 0, 0);
+    }
+    DocumentChanged();
+}
+
+void Application::CancelBrushStroke() noexcept
+{
+    if (!_brushDragging && _session.PendingBrush() == nullptr)
+    {
+        return;
+    }
+    _brushDragging = false;
+    _session.CancelBrush();
+    _composition.EndStroke(nullptr, 0, 0);
+    DocumentChanged();
+}
+
+void Application::SyncBrushCursor() noexcept
+{
+    if (!_chrome)
+    {
+        return;
+    }
+    std::optional<CanvasOverlay::BrushCursor> cursor;
+    if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value())
+    {
+        const Vec2 view = _viewport.ViewFromDocument(_brushHover.value(), DocumentSize());
+        CanvasOverlay::BrushCursor circle;
+        circle.center = D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
+        circle.radius = static_cast<float>(_session.brushSettings.diameter * _viewport.PointsPerPixel() / 2.0);
+        circle.hardness = static_cast<float>(_session.brushSettings.hardness);
+        cursor = circle;
+    }
+    _chrome->SetBrushCursor(cursor);
+    _frameInvalidated = true;
+}
+
+namespace
+{
+// Benchmark lines go to stdout when the parent redirected it (and always to the debugger).
+void BenchmarkReport(const std::wstring& text) noexcept
+{
+    OutputDebugStringW(text.c_str());
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (output == nullptr || output == INVALID_HANDLE_VALUE)
+    {
+        return;
+    }
+    const int size =
+        WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0)
+    {
+        return;
+    }
+    std::string utf8(static_cast<size_t>(size), '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), utf8.data(), size, nullptr,
+                            nullptr) != size)
+    {
+        return;
+    }
+    DWORD written = 0;
+    (void)WriteFile(output, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+}
+} // namespace
+
+int Application::RunBenchmark() noexcept
+{
+    if (_bench != L"brush")
+    {
+        return 2;
+    }
+    _quietUi = true;
+    _screenshotDpi = 0;
+    _renderer.SetLayoutDpi(0);
+    if (FAILED(RegisterWindowClass()) || FAILED(CreateMainWindow(false)))
+    {
+        return 2;
+    }
+    if (FAILED(InitializeRenderer()) || FAILED(InitializeChrome()) || FAILED(InitializeDocument()))
+    {
+        return 5;
+    }
+    BindCompositionDevice();
+    SyncChrome();
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    const auto now = [&]
+    {
+        LARGE_INTEGER counter{};
+        QueryPerformanceCounter(&counter);
+        return static_cast<double>(counter.QuadPart) * 1000.0 / static_cast<double>(frequency.QuadPart);
+    };
+    std::wstring report = std::format(L"BRUSH BENCH device={} engine={}\n", _renderer.IsWarp() ? L"WARP" : L"hardware",
+                                      _brushEngine.Ready() ? L"compute" : L"cpu");
+    // The legacy scenario: 4000 x 4000, 40 and 800 px soft white strokes of 120 updates 40 px apart, blank and
+    // opaque layers, two passes each; times include the frame that shows each update.
+    for (const double diameter : {40.0, 800.0})
+    {
+        for (const bool opaque : {false, true})
+        {
+            _session.CreateDocument(4000, 4000, false);
+            if (opaque)
+            {
+                InsertPaintedLayer(_session, L"Opaque 4K", 4000, 4000, Vec2{0, 0}, 0.0, 0xFF000000u);
+            }
+            else
+            {
+                _session.AddBlankLayer();
+            }
+            _session.history.MarkSaved();
+            _viewport.followsFit = true;
+            _session.brushSettings = BrushSettings{diameter, 0, 1, 1, 1, 1, false};
+            OnTool(EditorTool::Brush);
+            DocumentChanged();
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+            // `update` is the pointer update alone (curve, kernel dispatch and readback, tile composition, tile
+            // upload); `frame` adds the composition, blit and Present that show it. Presenting paces the GPU queue
+            // at the display's refresh and the preview readback waits behind it, so two more passes run the updates
+            // without a frame in between (`alone`): the brush's own cost.
+            std::vector<double> updates;
+            std::vector<double> frames;
+            std::vector<double> alone;
+            for (int pass = 0; pass < 4; ++pass)
+            {
+                const bool presented = pass < 2;
+                const double start = now();
+                BeginBrushStroke(_viewport.ViewFromDocument(Vec2{700, 3200}, DocumentSize()), 0);
+                for (int i = 1; i <= 120; ++i)
+                {
+                    const double t = now();
+                    const Vec2 point = i <= 60 ? Vec2{700.0, 3200.0 - i * 40.0} : Vec2{700.0 + (i - 60) * 40.0, 800.0};
+                    ContinueBrushStroke(_viewport.ViewFromDocument(point, DocumentSize()));
+                    if (!presented)
+                    {
+                        alone.push_back(now() - t);
+                        continue;
+                    }
+                    updates.push_back(now() - t);
+                    (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+                    frames.push_back(now() - t);
+                }
+                const double end = now();
+                FinishBrushStroke();
+                const double committedAt = now();
+                (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+                const bool committed = _session.history.UndoName() == L"Brush Stroke";
+                report += std::format(L"BRUSH BENCH diameter={} opaque={} pass={} presented={} draw={:.1f}ms "
+                                      L"commit={:.1f}ms mouseUp={:.1f}ms committed={}\n",
+                                      static_cast<int>(diameter), opaque ? L"true" : L"false", pass,
+                                      presented ? L"true" : L"false", end - start, committedAt - end, now() - end,
+                                      committed ? L"true" : L"false");
+            }
+            const auto stats = [](std::vector<double>& samples)
+            {
+                std::sort(samples.begin(), samples.end());
+                return std::format(L"median={:.2f} p95={:.2f} max={:.2f}ms", samples[samples.size() / 2],
+                                   samples[static_cast<std::size_t>(static_cast<double>(samples.size()) * 0.95)],
+                                   samples.back());
+            };
+            report += std::format(L"BRUSH BENCH diameter={} opaque={} update {} frame {} alone {}\n",
+                                  static_cast<int>(diameter), opaque ? L"true" : L"false", stats(updates),
+                                  stats(frames), stats(alone));
+        }
+    }
+    BenchmarkReport(report);
+    CloseMainWindow();
+    return 0;
 }
