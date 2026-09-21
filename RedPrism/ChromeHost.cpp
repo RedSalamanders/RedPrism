@@ -280,6 +280,7 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(edit, kCommandFillForeground, IDS_CMD_FILL_FOREGROUND);
         AppendCommand(edit, kCommandFillBackground, IDS_CMD_FILL_BACKGROUND);
         AppendCommand(edit, kCommandClearPixels, IDS_CMD_CLEAR_PIXELS);
+        AppendCommand(edit, kCommandContentAwareFill, IDS_CMD_CONTENT_AWARE_FILL);
         AppendSeparator(edit);
         AppendCommand(edit, kCommandInvert, IDS_CMD_INVERT);
         AppendSeparator(edit);

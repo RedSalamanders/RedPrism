@@ -227,6 +227,7 @@ struct AdjustInspectorState
     bool preview = true;
     bool limitedToSelection = false;
     bool editsAdjustment = false;
+    bool previewFailed = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
 };
 
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
@@ -314,6 +315,7 @@ class ChromeHost final
     static constexpr int kCommandFillBackground = 208;
     static constexpr int kCommandClearPixels = 209;
     static constexpr int kCommandInvert = 210;
+    static constexpr int kCommandContentAwareFill = 211;
     static constexpr int kCommandNewLayer = 300;
     static constexpr int kCommandNewFolder = 301;
     static constexpr int kCommandDeleteLayer = 302;
@@ -706,6 +708,8 @@ class ChromeHost final
     DxUi::Label* _lensHint = nullptr;
     std::array<AdjustRow, static_cast<std::size_t>(AdjustRowId::Count)> _adjustRows{};
     DxUi::Checkbox* _adjustPreview = nullptr;
+    DxUi::Label* _fillHint = nullptr;
+    DxUi::Label* _fillNoSource = nullptr;
     DxUi::Label* _adjustNote = nullptr;
     DxUi::Button* _adjustCancel = nullptr;
     DxUi::Button* _adjustApply = nullptr;

@@ -1486,6 +1486,38 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Applying Gaussian Blur did not record one entry.\n");
             return 5;
         }
+        // Content-Aware Fill: a red block filled into a selection on the white plate fills back to white through
+        // Shift+Delete and Enter as one entry; with everything selected there is nothing to copy from, so Enter
+        // refuses and Escape closes the panel.
+        _session.ApplySelection(SelectionGeometry::Rect(40.0, 40.0, 20.0, 20.0), SelectionMode::New, L"Select");
+        _session.SetForegroundColor(0xFFFF0000u);
+        OnCommand(ChromeHost::kCommandFillForeground);
+        const int fillCount = _session.history.UndoCount();
+        if (!pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || !HandleAccelerator(VK_DELETE, MK_SHIFT) ||
+            !_session.PendingFilter().has_value() || _session.PendingFilter()->kind != FilterKind::ContentAwareFill ||
+            _session.PendingFilter()->previewFailed || !_chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(L"Shift+Delete did not open Content-Aware Fill on the selection.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingFilter().has_value() ||
+            _session.history.UndoCount() != fillCount + 1 || _session.history.UndoName() != L"Content-Aware Fill" ||
+            !pixelAt(50, 50, pixel) || pixel[0] < 240 || pixel[1] < 240 || pixel[2] < 240)
+        {
+            SelfTestFailure(L"Enter did not apply Content-Aware Fill as one entry.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandSelectAll);
+        if (!HandleAccelerator(VK_DELETE, MK_SHIFT) || !_session.PendingFilter().has_value() ||
+            !_session.PendingFilter()->previewFailed || !HandleAccelerator(VK_RETURN, 0) ||
+            !_session.PendingFilter().has_value() || !HandleAccelerator(VK_ESCAPE, 0) ||
+            _session.PendingFilter().has_value() || _chrome->AdjustPanelOpen())
+        {
+            SelfTestFailure(
+                L"Content-Aware Fill with nothing to copy from did not refuse Enter and close on Escape.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandDeselect);
         InsertPaintedLayer(_session, L"Red", 120, 120, Vec2{0, 0}, 0.0, 0xFFFF0000u);
         const std::size_t layersBefore = _session.Document()->layers.size();
         OnCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
@@ -2655,6 +2687,7 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandMotionBlur:
     case ChromeHost::kCommandAddNoise:
     case ChromeHost::kCommandLensCorrection:
+    case ChromeHost::kCommandContentAwareFill:
         EndSelectionInteraction(false);
         static_cast<void>(BeginColorEdit(command));
         break;
@@ -2726,6 +2759,11 @@ void Application::OnTool(EditorTool tool) noexcept
         FinishWarpStroke();
         CommitGradient();
         ApplyColorEdit();
+        if (_session.PendingFilter().has_value() && _session.PendingFilter()->previewFailed)
+        {
+            // A fill with nothing to copy from cannot apply; the tool switch drops it rather than trapping the panel.
+            CancelColorEdit();
+        }
         if (_session.PendingShape().has_value())
         {
             _shapeDragging = false;
@@ -3005,6 +3043,13 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             _session.NudgeLayer(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
                                 virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
             DocumentChanged();
+            return true;
+        }
+        if (virtualKey == VK_DELETE && shift)
+        {
+            // Shift+Delete fills the selection from its surroundings (Edit > Content-Aware Fill).
+            EndSelectionInteraction(false);
+            static_cast<void>(BeginColorEdit(ChromeHost::kCommandContentAwareFill));
             return true;
         }
         if (virtualKey == VK_DELETE)

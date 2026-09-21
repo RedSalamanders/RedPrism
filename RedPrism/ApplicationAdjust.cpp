@@ -84,6 +84,9 @@ bool Application::BeginColorEdit(int command) noexcept
     case ChromeHost::kCommandLensCorrection:
         _session.BeginFilter(FilterKind::LensCorrection);
         break;
+    case ChromeHost::kCommandContentAwareFill:
+        _session.BeginFilter(FilterKind::ContentAwareFill);
+        break;
     default:
         return false;
     }
@@ -530,6 +533,7 @@ void Application::SyncAdjustPanel() noexcept
         state.settings = filter->settings;
         state.preview = filter->preview;
         state.limitedToSelection = filter->selection.has_value();
+        state.previewFailed = filter->previewFailed;
     }
     state.editsAdjustment = editsAdjustment;
     _chrome->SetAdjustInspector(state);

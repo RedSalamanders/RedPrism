@@ -256,6 +256,7 @@ BEGIN
     IDS_CMD_FILL_FOREGROUND         "Fill with &Foreground Color\tAlt+Backspace"
     IDS_CMD_FILL_BACKGROUND         "Fill with &Background Color\tCtrl+Backspace"
     IDS_CMD_CLEAR_PIXELS            "Clear &Selection Pixels"
+    IDS_CMD_CONTENT_AWARE_FILL      "Content-Aware &Fill...\tShift+Delete"
     IDS_CMD_INVERT                  "&Invert\tCtrl+I"
     IDS_CMD_INVERT_MASK             "&Invert Mask\tCtrl+I"
     IDS_CMD_LAYER_VIA_COPY          "Layer via Cop&y\tCtrl+J"
@@ -342,4 +343,6 @@ BEGIN
     IDS_ADJUST_OK                   "OK"
     IDS_ADJUST_EDIT_TITLE           "{0} Adjustment"
     IDS_ERROR_FILTER                "The filter could not run on this layer."
+    IDS_ADJUST_CONTENT_FILL_HINT    "Fill the selection using surrounding pixels from this layer."
+    IDS_ADJUST_NO_SOURCE            "Not enough unselected, opaque image pixels to synthesize a fill. Use a smaller selection with some surrounding image."
 END

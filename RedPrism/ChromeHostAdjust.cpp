@@ -333,6 +333,12 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _lensHint = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LENS_HINT));
     _lensHint->SetMultiline(true);
     _lensHint->SetFontRole(DxUi::FontRole::Small);
+    _fillHint = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_CONTENT_FILL_HINT));
+    _fillHint->SetMultiline(true);
+    _fillHint->SetFontRole(DxUi::FontRole::Small);
+    _fillNoSource = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_NO_SOURCE));
+    _fillNoSource->SetMultiline(true);
+    _fillNoSource->SetFontRole(DxUi::FontRole::Small);
     // Shared footer.
     _adjustPreview = checkbox(IDS_ADJUST_PREVIEW, AdjustAction::SetPreview);
     _adjustNote = _adjustCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_ADJUST_LIMITED));
@@ -483,6 +489,13 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         case FilterKind::LensCorrection:
             placeRow(AdjustRowId::Distortion);
             place(_lensHint, 36.0f);
+            break;
+        case FilterKind::ContentAwareFill:
+            place(_fillHint, 36.0f);
+            if (state.previewFailed)
+            {
+                place(_fillNoSource, 54.0f);
+            }
             break;
         }
         break;
@@ -681,12 +694,15 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         }
         showRow(AdjustRowId::Distortion, kind(FilterKind::LensCorrection), settings.distortion);
         show(_lensHint, kind(FilterKind::LensCorrection));
+        show(_fillHint, kind(FilterKind::ContentAwareFill));
+        show(_fillNoSource, kind(FilterKind::ContentAwareFill) && state.previewFailed);
         // Footer.
         show(_adjustPreview, true);
         _adjustPreview->SetChecked(state.preview);
         show(_adjustNote, state.limitedToSelection && !state.editsAdjustment);
         show(_adjustCancel, true);
         show(_adjustApply, true);
+        _adjustApply->SetEnabled(!(kind(FilterKind::ContentAwareFill) && state.previewFailed));
         _view.Controls().SetDefaultButton(_adjustApply);
         _view.Controls().SetCancelButton(_adjustCancel);
     }
