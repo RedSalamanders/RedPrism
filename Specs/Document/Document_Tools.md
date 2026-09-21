@@ -1,8 +1,9 @@
-# Document tools: transform (C8), selection (C9) and brush (C10)
+# Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
 Last reviewed: 2026-09-21
-Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush members),
+Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
+members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
 `RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`
 
@@ -219,6 +220,54 @@ mask is selected, and no explicitly empty selection.
 - `AddLayerMask(revealing)` gives the active layer a uniform 1×1 mask (`Add Reveal-All Mask` / `Add Hide-All Mask`)
   and selects it; `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
 
+## Retouch session (C11)
+
+The brush pipeline takes a kind (`BrushKind`: Paint, Erase, Heal, Clone, Blur) through `BeginBrush(point, kind,
+composite)`; the kernels, the tile composition and the warp model live in
+[`Rendering_Brush.md`](../Rendering/Rendering_Brush.md).
+
+- **Spot Healing** (`spotHealingMode`: Content-Aware default, Create Texture, Proximity Match; `SpotHealing::Heal` in
+  `Common/Heal.*` is the legacy `HealPixels.c`): the stroke shows a dark wash while painting; `FinishBrush` rebuilds
+  the painted area from nearby texture and records `Spot Healing`. Never on a mask.
+- **Clone Stamp** (`cloneSettings`: `aligned` default on, `sampleAllLayers` default off; `cloneSource`):
+  `SetCloneSource(point)` (Alt-click) starts a new alignment; `CloneStrokeOffset(point)` is the whole-pixel offset a
+  stroke would copy with (aligned strokes keep the first stroke's, otherwise from the brush to the source);
+  `CloneSamplePoint(point)` is where the crosshair sits; `CloneSample(composite)` is what a stroke copies from at
+  document size (the active layer's pixels as placed, or the host's composite, required for All Layers). A stroke
+  without a source does not start. Records `Clone Stamp`. Never on a mask.
+- **Smear** (`smearMode`: Liquify default, Blur, Smudge). Blur is a brush stroke that paints `BlurSample(mask)`, the
+  layer (or its mask, with its edge tone beyond its pixels) softened by sigma = diameter / 10 clamped to 1.5–30,
+  through the tip at the Strength opacity (`Blur`). Liquify and Smudge are warps (`WarpStroke`): a document-size copy
+  of the layer as shown, changed dab by dab (`BeginWarp` / `ContinueWarp`; spacing 8 % of the diameter for Smudge,
+  2.5 % for Liquify; hardness at most 0.98; strength = opacity); Smudge carries the color it picked up, taking on
+  what it leaves by the strength; Liquify moves pixels with the brush, most at the center. `FinishWarp` paints the
+  result into the layer along the dabs with a hard tip four pixels wider, replacing the pixels under it (`Liquify`,
+  `Smudge`); `CancelWarp` drops it; `PendingWarp` is the stroke in progress. Never on a mask.
+- **Tip families**: `SwitchBrushTipFamily(from, to)` parks the size, hardness and opacity per family (0 the Brush,
+  Eraser and Spot Healing; 1 Clone Stamp; 2 Smear; the parked families start soft at 40 px).
+- **Gradient** (`gradientSettings`: shape Linear / Radial, style Foreground to Transparent default / Foreground to
+  Background, `reversed`, `opacity`): `BeginGradient(point)` opens a pending raster edit on the active layer or mask
+  (a new line on the same target replaces the pending one); `MoveGradient(start, end)` and `RefreshGradient`
+  re-render from the endpoints, settings and palette (the palette setters refresh it); `GradientColors` are the two
+  straight ends; `EndGradientDrag` drops a click without a line (under half a pixel); `CommitGradient` records
+  `Gradient` / `Gradient Mask`; `ResolveGradient` commits a pending edit and runs on layer and target switches and
+  before a new layer is inserted; `CancelGradient` and the first Undo drop it. The fill covers the canvas (before the
+  start and past the end take the end colors; radial is centered on the start with the end on its rim) within the
+  selection, composited over the original pixels at the opacity; a mask takes the colors' first component as gray.
+- **Shape** (`shapeKind` Rectangle default / Ellipse, `shapeCornerRadius` 0–5000): `BeginShape` anchors at a whole
+  pixel; `DragShape(point, square, fromCenter)` uses `DragBox`; `FinishShape` adds a layer above the active one named
+  `Rectangle N` / `Ellipse N` filled with the foreground color (`ShapeImage`: exact-area coverage of the rectangle,
+  its corners rounded by the radius at most half the shorter side, or the ellipse), one entry (`Rectangle`,
+  `Ellipse`), keeping the selection; a drag under a pixel makes nothing; over 100 M pixels is refused.
+  `ToggleShapeKind` (Shift-U) drops a draft. A shape layer stays live (`LiveShape`: its pixels are still the ones the
+  shape drew, tracked by `ImageLayer::shapeImage`) and redraws at its new size when a transform commits, keeping a
+  rounded corner's radius; a mask on its grid takes an explicit placement so it stays put. Loaded shape layers are
+  live; painting on one makes it plain pixels.
+- **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
+  document pixel (nullopt outside or over transparency); `showsSampleRing` (default on) shows the comparison ring.
+- `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
+  one (inside its folder) in one entry, the base for shapes and later pastes.
+
 ## Validation
 
 `DocumentTests`: geometry (`transform.*`)
@@ -242,3 +291,8 @@ Brush: `DocumentTests` `sparse.*`, `kernel.*`, `brush.*`, the brush `mask.*` cas
 `line.*`, `keys.*`, `expand.*` and `clip.*` (the legacy `BrushStrokeTests`, `BrushIntersectionTests`,
 `RasterSnapshotTests` and mask painting cases), listed in [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md).
 The WARP self-test paints, erases, keys and cancels a stroke through `Application`.
+
+Retouch: `DocumentTests` `heal.*` (the legacy `SpotHealingTests` blemish for every mode), `clone.*` and `tips.*`
+(`CloneStampTests`), `blur.*`, `smudge.*`, `liquify.*` and `warp.*` (own goldens: a softened edge, carried color, a
+pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`), `shape.*` (`ShapeToolTests` plus the redraw on
+scaling) and `eyedropper.*`. The WARP self-test drives each tool through `Application`.

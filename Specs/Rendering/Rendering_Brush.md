@@ -100,6 +100,29 @@ Sparse rasters that reach `TextureFor` without an adopted texture (Undo, Redo, a
 the GPU the same way (`CreateSparseTexture`: clear to the fill, copy the base's texture, upload the tiles), which
 keeps the CPU copy unassembled; a device without render-target support for the format falls back to `Data()`.
 
+## Retouch strokes (C11)
+
+The same stroke composes from a *sample* when one is set (`SetSample`: a document-size premultiplied BGRA raster, or
+Gray8 on a mask, read bilinearly at the grid pixel's document position shifted by a whole-pixel offset): Clone Stamp
+paints the sample over the pixels under the tip through the coverage and opacity; Blur does the same with the layer
+softened (`ImageFilters::GaussianBlur`: separable, radius three sigma, transparent beyond an image's edge and clamped
+for a mask); a warp result (Liquify, Smudge) replaces the pixels under a hard tip. Outside the sample nothing is
+copied. Spot Healing paints a dark wash (12 % gray at a fixed 45 %) while the stroke is drawn and, at mouse-up,
+`Heal` runs the legacy kernel (`Common/Heal.*`) over the layer's original pixels within the painted bounds grown by
+3.2 × (the spot's larger side + 32), with the stroke coverage as the mask, and writes the result into the tiles
+within the selection before the usual commit. Because that rewrite follows the last preview update, the host does
+not adopt the working texture for a healing stroke; the committed raster uploads on its own, as a warp's does (its
+working copy lived on the document grid, not the layer's).
+
+`PaintCanvas` fills tiles without segments: every tile the canvas and the selection's bounds cover starts from its
+original content and takes a per-pixel shade at the pixel's document center, clipped to the canvas and the selection
+coverage (`FillGradient` for the Gradient tool; `Fill` and `ClearPixels` for later edits). Redrawing restarts from
+the original, so a moved line never accumulates.
+
+Smudge and Liquify work on `WarpStroke`, a document-size copy of the layer as shown, dab by dab (the weight follows
+the hardness, at most 0.98, with a smoothstep rim); the host shows the copy through the stroke preview on the
+document grid (256² tiles marked dirty per dab) and the session paints the result into the layer along the dabs.
+
 ## Budgets
 
 | Budget | Limit |

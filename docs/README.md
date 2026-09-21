@@ -48,6 +48,11 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   digits the opacity. Shift-click draws a straight line from the last stroke. With a layer mask selected the brush
   paints it black (hide) or white (reveal). Strokes show as you draw and commit on release as one undo step that
   shares every untouched tile with the previous state.
+- **Retouch**: Spot Healing (J) blends a blemish into its surroundings (Content-Aware, Create Texture or Proximity
+  Match); Clone Stamp (S) copies from an Alt-clicked source, aligned or not, from this layer or all layers; Smear
+  (R) liquifies, blurs or smudges; Gradient (G) drags a linear or radial fill that previews until Enter or Apply;
+  Shape (U) drags a rectangle (with a corner radius) or an ellipse into a new layer, Shift-U switching the kind;
+  the Eyedropper (I), or Alt with the Brush, reads a color from the canvas.
 
 Empty-document harness captures:
 
@@ -56,6 +61,7 @@ Empty-document harness captures:
 - [Move tool demo](screenshots/transform-96.png) (`--demo transform`)
 - [Selection demo](screenshots/selection-96.png) (`--demo selection`)
 - [Brush demo](screenshots/brush-96.png) (`--demo brush`)
+- [Retouch demo](screenshots/retouch-96.png) (`--demo retouch`)
 
-Retouch and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
+Filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

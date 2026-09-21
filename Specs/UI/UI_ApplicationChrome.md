@@ -178,6 +178,40 @@ same way); Escape cancels a stroke in progress. The stroke contract lives in
 [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md), the session API in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
+## Retouch tools
+
+Spot Healing, Clone Stamp and Smear share the brush header (`BrushInspectorState`), which adds per tool: Type
+(Content-Aware / Create Texture / Proximity Match) for Spot Healing; Aligned and This Layer / All Layers for Clone
+Stamp, with `Alt-click to set the source` pinned right until a source exists; Mode (Liquify / Blur / Smudge) for
+Smear, whose opacity is labelled Strength. Neither Clone Stamp nor Smear shows the color swatch. The tip ring is
+their cursor; Clone Stamp adds a crosshair at the point it copies from, following the pointer once a stroke fixed
+the offset. Pointer rules: Alt-click with Clone Stamp sets the source; a press starts a stroke of the tool's kind
+(Smear's Liquify and Smudge start a warp instead, shown live through the stroke preview), Shift-click a line;
+release, leaving the window or a tool switch commits, Escape drops; a stroke on a mask does nothing for Spot Healing
+and Clone Stamp and reports `IDS_ERROR_SMEAR_MASK` for Liquify and Smudge; Clone Stamp without a source reports
+`IDS_ERROR_CLONE_SOURCE`. Switching between the Brush family (Brush, Eraser, Spot Healing), Clone Stamp and Smear
+parks each family's size, hardness and opacity.
+
+The Gradient header (`ChromeHost::BuildGradientHeader`, `GradientInspectorState`): Shape (Linear / Radial), the two
+end colors as swatches (either opens the foreground picker), Colors (Foreground to Background / Foreground to
+Transparent), Reverse, Opacity (1–100 %), a `Mask` note, and Cancel / Apply pinned right while a line is pending.
+Pointer rules: a press starts a line and drags its end; a press within 10 DIP of a pending line's end drags that end
+(Shift snaps the line to 45°); a click without a line pends nothing. The pending gradient shows through the
+composition's stroke preview and the overlay draws the line with a handle at each end. Enter or Apply commits, Escape
+or Cancel drops, Undo drops, and switching tools, layers or targets applies it. Digits set the gradient's opacity.
+Palette changes re-render the pending line.
+
+The Shape header (`BuildShapeHeader`, `ShapeInspectorState`): Rectangle / Ellipse, Radius (px, rectangles only) and
+Fill (the foreground swatch). A drag draws the shape as a draft on the overlay, filled with the foreground color and
+outlined (Shift squares, Alt grows from the center); release adds the layer; Escape or a tool switch drops the
+draft; Shift-U switches the kind (U alone selects the tool).
+
+The Eyedropper (I), or Alt with the Brush, Spot Healing and Gradient between strokes, reads the composited canvas
+under the pointer while pressed into the foreground color, or into the open color picker; the overlay shows the
+legacy comparison ring (the new color above, the color before the press below) unless Sample Ring is off in the View
+menu. Its cursor, and the Gradient's and Shape's, is the crosshair. Every string is a STRINGTABLE entry
+(`IDS_HEAL_*`, `IDS_CLONE_*`, `IDS_SMEAR_*`, `IDS_GRADIENT_*`, `IDS_SHAPE_*`).
+
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
@@ -191,7 +225,7 @@ with C12.
 | Image | Flip Canvas Horizontal, Flip Canvas Vertical |
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Delete Layer (Delete, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
-| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-) |
+| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
 | Help | About RedPrism (version from `Common/Version.h`) |
 
 StatusStrip shows zoom percent, document size, and the current tool with its key. The tab title is the file name
@@ -254,4 +288,9 @@ Marquee's header; `--demo brush` writes `docs/screenshots/brush-96.png`: a backd
 and erased strokes under the Brush header and the tip cursor. With the brush tools the self-test paints a stroke
 through the compute engine (a live preview, then one sparse `Brush Stroke` entry drawn from the adopted texture),
 erases it, drives `[` `]` Shift-`[` and a digit, and cancels a stroke with Escape. Keyboard Escape leaves the
-canvas. `HostTests` covers tool tables, glyphs and the string table.
+canvas. With the retouch tools the self-test paints a mark, stamps it from a source with Clone Stamp, blends the
+stamp away with Spot Healing, drags it with Smudge through a live warp, blurs it, previews and applies a Gradient
+with Enter after a digit set its opacity, adds a Rectangle layer with the Shape tool, switches the kind with Shift-U,
+drops a draft with Escape and samples the shape's color with the Eyedropper. `--demo retouch` writes
+`docs/screenshots/retouch-96.png`: a radial gradient, a rounded rectangle and an ellipse under the Shape header.
+`HostTests` covers tool tables, glyphs and the string table.

@@ -12,7 +12,7 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
 | Executable | Scope | Notes |
 | --- | --- | --- |
 | `HostTests` | Pure functions of the host (`AdapterSelection.h`, `FrameScheduler.h`, `CommandLine.h`, `EditorTool.h`), DirectWrite glyph presence, STRINGTABLE of `RedPrism.exe` | No window, no device; `--asan-probe` is the sanitizer probe |
-| `DocumentTests` | `Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection` (Clipper2), `BrushStroke` (sparse rasters, the CPU kernel) | CPU only |
+| `DocumentTests` | `Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection` (Clipper2), `BrushStroke` (sparse rasters, the CPU kernel), `Heal`, `ImageFilters`, `WarpStroke` | CPU only |
 | `IoTests` | `ProjectStore`, `ImageCodecs` | Needs COM (`CoInitializeEx`), writes under `%TEMP%\RedPrism.IoTests` |
 | `CompositionTests` | `CanvasRenderer`, `CanvasViewport`, `GpuBrushCoverage` (the compute brush against the CPU kernel), sparse upload and stroke preview | Creates its own WARP device; reads pixels back |
 | `RedPrism.exe --self-test --warp` | Window + swap chain + chrome + composition lifetime | Hidden; exit 0 only when every assertion holds |

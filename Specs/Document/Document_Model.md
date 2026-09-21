@@ -38,7 +38,9 @@ It is not saved. `nullopt` means no selection; a selection enclosing no area mea
 `ImageLayer` is a value type: `Guid` id, optional shared `Raster` asset, `LayerTransform`, name, visibility,
 optional `parentID`, `isGroup`, opacity 0…1, `LayerBlendMode`, optional `LayerMask`, optional `maskSourceID`,
 optional `LayerAdjustment`, optional `LayerShapeStyle`. Blank layers allocate no pixels. Groups have no image
-file. Adjustment layers (v7) are not groups and have no image file.
+file. Adjustment layers (v7) are not groups and have no image file. A shape layer also keeps `shapeImage`, the
+raster its shape drew, outside equality: while the asset still holds it the layer is a live shape (`LiveShape`) that
+redraws at a new size (C11).
 
 `Raster` is immutable shared storage (`std::shared_ptr`). Equality of image pixels is identity of that storage,
 matching Swift `CGImage ===`. Formats: BGRA8888 (premultiplied, B,G,R,A byte order, the WIC `32bppPBGRA` layout
