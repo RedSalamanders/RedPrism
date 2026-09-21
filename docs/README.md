@@ -59,6 +59,12 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   (R) liquifies, blurs or smudges; Gradient (G) drags a linear or radial fill that previews until Enter or Apply;
   Shape (U) drags a rectangle (with a corner radius) or an ellipse into a new layer, Shift-U switching the kind;
   the Eyedropper (I), or Alt with the Brush, reads a color from the canvas.
+- **Adjust**: the Image menu's Curves (Ctrl+M), Levels (Ctrl+L), Hue/Saturation (Ctrl+U), Exposure, Gradient Map
+  and Grain and the Filter menu's Gaussian Blur, Motion Blur, Add Noise and Lens Correction edit the active layer
+  (inside the selection) in a panel with a live preview; OK applies one undo step. The Layer menu adds adjustment
+  layers of the same kinds that stay live over everything beneath them (or their clipping base) and edit through
+  the same panels. Shift+= and Shift+- step a layer's blend mode; Hue, Saturation, Color and Luminosity blend as in
+  Photoshop.
 
 Empty-document harness captures:
 
@@ -68,6 +74,7 @@ Empty-document harness captures:
 - [Selection demo](screenshots/selection-96.png) (`--demo selection`)
 - [Brush demo](screenshots/brush-96.png) (`--demo brush`)
 - [Retouch demo](screenshots/retouch-96.png) (`--demo retouch`)
+- [Adjust demo](screenshots/adjust-96.png) (`--demo adjust`)
 
 Filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

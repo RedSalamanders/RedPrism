@@ -67,8 +67,37 @@ multiplied by the source's live coverage.
 Modes 1–8 (Multiply, Screen, Overlay, Darken, Lighten, Difference, Color Dodge, Color Burn) are the separable PDF
 formulas on straight colors, composited as `Co = (1−αs)·Cb + (1−αb)·Cs + αs·αb·B(cb,cs)`. Color Dodge and Color
 Burn follow the PDF / Core Image definition, never Core Graphics. Hue, Saturation, Color and Luminosity (modes
-9–12) pass the source color until C12 ships the HSL mixes. Adjustment layers do not alter pixels in this phase
-(C12); groups are pass-through.
+9–12) are the PDF non-separable mixes on straight colors (`Lum` 0.3/0.59/0.11, `ClipColor`, `SetLum`, `Sat`,
+`SetSat`): Hue takes the source hue at the backdrop's saturation and luminosity, Saturation the source saturation
+on the backdrop's hue, Color the source color at the backdrop's luminosity, Luminosity the backdrop's color at the
+source luminosity. `Adjust::BlendStraight` is the CPU reference every mode is checked against. Groups are
+pass-through.
+
+## Adjustment layers (C12)
+
+An adjustment layer (`ImageLayer::adjustment`, no pixels of its own) reworks the composite beneath it, as the legacy
+`LiveMaskRenderer.adjust` did on the whole canvas so far:
+
+- Pass `Adjust` (6) reads the current canvas as the destination, unpremultiplies each pixel, runs the kind's math
+  on the straight color, blends the result over the original straight color with the layer's blend mode when it is
+  not Normal, and mixes it back at the layer's coverage (opacity × its own raster mask through its placement, with
+  the mask's edge tone beyond a placed mask × its folders' coverage), keeping the pixel's alpha; a transparent pixel
+  is left alone. The layer's transform only places its mask.
+- A clipped adjustment (`maskSourceID`) applies inside its base's clipping stack through pass `StackAdjust` (7): the
+  stack's straight base color is reworked at the child's coverage and the stack alpha kept, so a soft base edge is
+  adjusted like the color it is. A clipped adjustment that is not directly above its base draws nothing, as in
+  the legacy renderer. A hidden adjustment (or a hidden folder above it) draws nothing.
+- The kinds: Levels, Curves and Exposure are three 256-entry tables (one RGBA32F row, `g_lut`, sampled linearly
+  between neighboring entries exactly like the CPU `levels_apply`); Gradient Map is a 256-entry color table
+  indexed by the rounded Rec. 709 luminance of the straight color; Hue/Saturation is the 33³ color cube
+  (`g_cube`, RGBA32F `Texture3D`, trilinear like `CIColorCube`, built by `Adjust::ColorCube`); Grain is
+  procedural in the shader, the legacy lattice hash at the document pixel center with the layer's seed, so the
+  pattern is fixed in document space however the canvas is drawn. `Common/Adjust.cpp` holds the CPU reference for
+  each (`ApplyAdjustment`) and `CompositionTests` proves the GPU stays within its tolerance.
+- Textures per adjustment layer are cached by layer id (`AdjustTextures`), rebuilt when the settings change (an
+  adjustment edited live in the panel rebuilds per change), released when a composition no longer uses them or
+  with the document surfaces, and counted in `CanvasSurfaceBytes`.
+
 
 ## Composition lifetime and residency
 
@@ -84,6 +113,9 @@ Burn follow the PDF / Core Image definition, never Core Graphics. Hue, Saturatio
   from a working texture updated tile by tile (`BeginStroke` / `UpdateStrokeTiles`) and adopted into the cache on
   commit (`EndStroke`), as [`Rendering_Brush.md`](Rendering_Brush.md) specifies; it counts in `CanvasSurfaceBytes`
   and is dropped with the surfaces.
+- Adjustment layers keep their lookup textures (a 256 × 1 RGBA32F row, the 33³ Hue/Saturation cube) cached by
+  layer id and released like rasters; a filter preview on a pixel layer is an ordinary raster shown through the
+  display document, uploaded once per settings change.
 - Canvas surfaces: two BGRA8 canvases, two BGRA8 stack surfaces (allocated on the first clipping stack), and a pool
   of R8 coverage textures reused across compositions. `CanvasSurfaceBytes()` reports all of them. Hidden, minimized,
   or occluded documents drop them (`ReleaseDocumentSurfaces`, `CanvasSurfaceBytes() == 0`) and MUST NOT Present.
@@ -115,3 +147,5 @@ here so goldens are not silently rebaselined:
 | Viewport (`CompositionTests.swift`) | round trip at zoom 0.25/1/3.75 and backing 1/2 within 1e-6; cursor pixel fixed under zoom; fit margin ≤ 704×504 in 800×600 at 2×; resize keeps the center; limits 0.001 and 32 |
 | Sparse upload and stroke preview (C10, `sparse.*`, `stroke.*`) | an assembled sparse raster renders like its contiguous twin; the preview texture builds from source and fill, takes tile updates, previews masks, is adopted on commit and rebuilt after a reset |
 | Compute brush (C10, `gpubrush.*`) | kernel tiles and a session stroke through `GpuBrushCoverage` match the CPU engine within 2/255 per pixel; tile buffers are released after `EndStroke` |
+| Adjustment layers (C12, `adjust.*`, legacy `AdjustmentLayerTests`) | a Levels layer with output white 0 blackens the white beneath but not the red above, stays live when the base changes and does nothing hidden; a clipped inverted master curve turns the green base magenta and leaves the blue alone until unclipped (then yellow); Hue 120 turns red green (±8), opacity 0 and a black mask keep the pixels; Multiply keeps the coverage `[255,128,32,0]` exactly and a 128 mask mixes half red half green at the same alphas; Levels, Curves, Exposure and Gradient Map match `Adjust::ApplyAdjustment` within 1/255, Hue/Saturation within 4, Grain within 2; tables and the cube count in `CanvasSurfaceBytes` and go with the surfaces |
+| HSL blends (C12, `blend.hsl-golden`) | Hue, Saturation, Color and Luminosity at opacity 1 and 0.5 match `Adjust::BlendStraight` composited over the opaque backdrop within 2/255 |

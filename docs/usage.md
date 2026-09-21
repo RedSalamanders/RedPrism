@@ -9,7 +9,7 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--self-test` | Hidden WARP smoke (used by `test.ps1`) |
 | `--screenshot <png>` | Capture without activation, then exit |
 | `--dpi 96\|144` | Layout DPI for `--screenshot` |
-| `--demo transform\|selection\|brush\|retouch` | Populate the new document for a `--screenshot` |
+| `--demo transform\|selection\|brush\|retouch\|adjust` | Populate the new document for a `--screenshot` |
 | `--bench brush` | Run the brush benchmark (4K document, 40 and 800 px strokes, blank and opaque layers), print `BRUSH BENCH` lines and exit |
 | `--help` | Print the catalog and exit 0 |
 
@@ -50,6 +50,9 @@ the File menu.
 | 0-9 | Brush opacity 100 %, 10-90 % (two digits within 0.6 s for other percents); the active layer's opacity with the Move tool |
 | Shift-click / Escape | Straight brush line from the last stroke / drop the stroke in progress |
 | Alt-click | Set the Clone Stamp source; with the Brush, Spot Healing or Gradient, sample a color |
+| Ctrl+M / Ctrl+L / Ctrl+U | Curves, Levels, Hue/Saturation on the active layer (the Image menu adds Exposure, Gradient Map, Grain; the Filter menu the blurs, noise and lens correction) |
+| Enter / Escape | OK / Cancel the open adjustment panel (canvas focused) |
+| Shift+= / Shift+- | Step the active layer's blend mode forward / back |
 | Enter / Escape | Apply / drop a pending gradient; Escape also drops a shape draft (canvas focused) |
 | Shift+U | Switch the Shape tool between Rectangle and Ellipse |
 | Alt-drag / Ctrl-drag handle / Shift | Duplicate while moving / distort / constrain an axis, snap rotation to 15°, free the ratio |

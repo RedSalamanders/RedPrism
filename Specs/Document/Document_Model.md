@@ -73,7 +73,8 @@ Color Dodge, Color Burn, Hue, Saturation, Color, Luminosity.
 `LayerAdjustment` mirrors the Swift record: kind, legacy HSV scalars, optional `hsvSettings`, `levels`, `curves`,
 optional `exposureSettings`, `gradientMapSettings`, `grainSettings`. `IsValid` matches the Swift field gates (HSV
 ranges, four normalized level ranges, curves 2…32 strictly increasing x from 0 to 255, exposure/gradient-map/grain
-ranges). Applying filters is C12.
+ranges). Adjustment layers apply live in the composition and the Image menu applies the same kinds to a layer's
+pixels (C12, [`Document_Tools.md`](Document_Tools.md), [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)).
 
 ## Hierarchy and clipping
 

@@ -222,19 +222,54 @@ legacy comparison ring (the new color above, the color before the press below) u
 menu. Its cursor, and the Gradient's and Shape's, is the crosshair. Every string is a STRINGTABLE entry
 (`IDS_HEAL_*`, `IDS_CLONE_*`, `IDS_SMEAR_*`, `IDS_GRADIENT_*`, `IDS_SHAPE_*`).
 
+## Adjustment panel
+
+Every color adjustment and filter edits in one card (`ChromeHost::BuildAdjustPanel`, `ChromeHostAdjust.cpp`) that
+floats over the top-right of the canvas hole below the header while a session edit is open (`AdjustInspectorState`
+mirrors the session; the panel never re-lays out inside a drag callback). It shows the edit's title (`<Kind>
+Adjustment` when an adjustment layer is edited), the kind's controls, a Preview checkbox, a `Limited to the
+selection` note for a pixel layer with a selection, and Cancel / OK (the host's default and cancel buttons while
+open; Enter and Escape with the canvas focused do the same). Value rows are a label, a `Slider` (logarithmic
+for radius, distance, amount, gamma and grain size, so the small values get most of the travel) and an exact
+`NumericStepper`. The drawn controls live in `RedPrism/AdjustControls.*`:
+
+- **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
+  points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the
+  selected point shows `Input · Output`), Remove point (never the ends) and Reset.
+- **Levels**: the channel choice, a `LevelsBar` with the channel's histogram (the display scale of
+  `Adjust::HistogramDisplayScale`) and the black, gamma and white handles, the input steppers, the output ramp
+  with its two handles and steppers, the Black / Gray / White eyedroppers (an armed one samples the original layer
+  on the next canvas click; pressing it again stops) and Auto Contrast / Color / Neutral.
+- **Hue/Saturation**: the range choice, the Sample / Add / Remove eyedroppers and the Targeted toggle (a color
+  range only; a canvas click samples, a Targeted drag changes that color's saturation, or its hue with Ctrl), the
+  Hue (±180°, 0–360° colorizing), Saturation and Lightness rows, the `SpectrumEditor` (the hues as they are, the
+  four band handles, the hues as they leave) with `Apply outside this range instead`, and Colorize.
+- **Exposure**: Exposure, Offset, Gamma. **Gradient Map**: a `GradientRamp` of the ends, the Shadows and
+  Highlights swatches (each opens the color picker on that end; its preview follows the working color, Cancel
+  restores it, OK keeps it, the palette is untouched) and Reverse. **Grain**: Amount, Size, Roughness.
+- **Gaussian Blur**: Radius. **Motion Blur**: Angle, Distance. **Add Noise**: Amount, Uniform / Gaussian,
+  Monochromatic. **Lens Correction**: Remove Distortion with its hint.
+
+Pointer input on the card belongs to the chrome (`DispatchPointer` excludes it from the hole). The Image and Filter
+menus, the Layer menu's `New Adjustment Layer` submenu (Levels, Curves, Hue/Saturation, Exposure, Gradient Map,
+Grain) and `Edit Adjustment…` (the active adjustment layer) open the panel; a new adjustment layer opens it at
+once, over the composite of the layers beneath it (`Application::CompositeBelow`). Switching tools or opening
+another panel applies the open one. The session contract lives in
+[`Document_Tools.md`](../Document/Document_Tools.md).
+
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
-`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. Filter fills in
-with C12.
+`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing.
 
 | Menu | Commands |
 | --- | --- |
 | File | New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As (Ctrl+Shift+S), Export PNG, Export JPEG, Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels; Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
-| Image | Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Add Mask, Add Black Mask (from the selection when there is one), Flip Layer Horizontal, Flip Layer Vertical |
+| Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Flip Canvas Horizontal, Flip Canvas Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Add Mask, Add Black Mask (from the selection when there is one), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…, Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
+| Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
 | Help | About RedPrism (version from `Common/Version.h`) |
 

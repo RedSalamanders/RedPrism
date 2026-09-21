@@ -54,7 +54,7 @@ When a spec, implementation, test, or document disagrees:
 | Performance | [`Core/Core_PerformanceAndResources.md`](Core/Core_PerformanceAndResources.md) |
 | DxUi pin (from C2) | [`Core/Core_DxUiIntegration.md`](Core/Core_DxUiIntegration.md) |
 | Document model (from C4) | [`Document/Document_Model.md`](Document/Document_Model.md) |
-| Document tools (transform from C8, selection from C9, brush session from C10, retouch from C11, pixel edits from C9b) | [`Document/Document_Tools.md`](Document/Document_Tools.md) |
+| Document tools (transform from C8, selection from C9, brush session from C10, retouch from C11, pixel edits from C9b, color adjustments and filters from C12) | [`Document/Document_Tools.md`](Document/Document_Tools.md) |
 | Document history (from C4) | [`Document/Document_History.md`](Document/Document_History.md) |
 | Application chrome | [`UI/UI_ApplicationChrome.md`](UI/UI_ApplicationChrome.md) |
 | Windowing | [`UI/UI_Windowing.md`](UI/UI_Windowing.md) |

@@ -26,7 +26,14 @@ Read `Specs/Rendering/Rendering_Composition.md` first; it is the contract and th
   layer transform (clockwise rotation, flips mirror the unit square). Sample images at unit coordinates; `Load`
   document-space textures (canvas, coverage) at `int2(position)`.
 - Premultiplied everywhere on the canvas; straight color only inside a clipping stack surface. Blend formulas take
-  straight colors (`BlendStraight`) and composite with the PDF separable operator (`PremulOver`).
+  straight colors (`BlendStraight`, the separable modes and the PDF non-separable Hue / Saturation / Color /
+  Luminosity) and composite with the PDF separable operator (`PremulOver`); `Adjust::BlendStraight` is the CPU
+  reference.
+- Adjustment layers (C12) are passes 6 (`Adjust`, the canvas beneath) and 7 (`StackAdjust`, the stack's straight
+  base color): lookup textures at t5 (`g_lut`, a 256 × 1 RGBA32F row) and t6 (`g_cube`, the 33³ Hue/Saturation
+  cube) built by `CanvasRenderer::AdjustmentInputs` from `Common/Adjust.cpp`, Grain procedural in the shader;
+  the CPU `Adjust::ApplyAdjustment` is the golden (1/255 for tables, 4 for the cube, 2 for grain). A function with
+  several returns can trip FXC's X4000 with warnings as errors; keep one return per pass function.
 
 ## Coverage and stacks
 

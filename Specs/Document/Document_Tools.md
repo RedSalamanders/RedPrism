@@ -323,6 +323,65 @@ mask, no pending transform or stroke, and no explicitly empty selection.
   without the clipboard (`Layer via Copy`), or `DuplicateActiveLayer` without one. `NextLayerName` is the first
   unused `Layer N`.
 
+## Color adjustments and filters (C12)
+
+The legacy `Levels.swift`, `HueSaturation.swift`, `Curves.swift`, `ImageAdjustments.swift`, `Filters.swift` and
+`AdjustmentEditing.swift`: the Image menu's Curves, Levels, Hue/Saturation, Exposure, Gradient Map and Grain and
+the Filter menu's Gaussian Blur, Motion Blur, Add Noise and Lens Correction run on the active image layer, inside
+the selection when there is one, with a live preview and one entry on OK; adjustment layers keep the same settings
+live and edit through the same panels. The kernels live in `Common/Adjust.*` (the legacy `LevelsPixels.c`,
+`AdjustPixels.c`, `NoisePixels.c`, `LensPixels.c` number for number on premultiplied BGRA, the Hue/Saturation
+cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels in
+[`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), the composition's live application in
+[`Rendering_Composition.md`](../Rendering/Rendering_Composition.md).
+
+- `CanAdjustColors`: a document, no open panel, no stroke, warp or pixel move, a visible image layer (not a group,
+  not its mask) with pixels and no explicitly empty selection. While a panel is open (`HasColorEdit`) painting,
+  Undo and Redo wait; a new panel, a tool switch or another layer's panel applies the open one first (the host).
+- **Filters** (`FilterEdit`, `FilterSettings` normalized: radius 0.1–250, angle −90–90, distance 1–2000, amount
+  0.1–400, distortion −100–100, the curves, exposure, gradient map and grain settings). `BeginFilter(kind)` commits a
+  pending transform, applies a pending gradient, drops a lasso draft and starts from the last applied settings
+  (`filterSettings`; a Gradient Map from the foreground to the background color); a blur pads the layer out by
+  its reach (3 × radius + 2, or half the streak + 2, growing again when raised) so it spreads instead of stopping
+  at the border. `UpdateFilter(settings, preview)` renders the preview at once from a copy no larger than 4096 px
+  on the longest side for the table kinds, 2048 for blurs and the lens, full size for noise and grain (a smaller
+  copy would coarsen them), blended through the selection coverage on that grid; `DisplayDocument` shows it in
+  place of the layer (a mask on the layer's grid keeps its place over a grown grid). `CommitFilter` renders at
+  full size, trims a blur back to its pixels (`TrimmedToAlpha`) carrying a mask onto the new grid with its edge
+  tone beyond, and records the kind's name, unless the layer changed under the edit; an identity edit (lens 0,
+  default exposure, grain 0) closes without an entry. `CancelFilter` drops it. `Adjust::RunFilter` is the kernel
+  switch; Gaussian Blur is `ImageFilters::GaussianBlur` (sigma = radius), Motion Blur an even streak of the
+  distance along the angle (counterclockwise from horizontal on screen) sampled up to 96 times, Add Noise the
+  legacy hash noise (uniform ±amount % of half the range, Gaussian at two thirds, monochromatic one value per
+  pixel) with a seed fixed while the panel is open, Lens Correction the radial warp (k = distortion / 100 × 0.35).
+- **Levels** (`LevelsEdit`): `BeginLevels` builds the alpha- and selection-weighted histogram of the original
+  (`Adjust::Histogram`; RGB is the mean of the channels); `UpdateLevels` previews the tables (identity shows the
+  layer's own pixels); `AutoLevels` (Contrast: one shared interval from the 0.1 % clipped ends; Color: per
+  channel; Neutral: per channel with the gamma that centers the mean); the eyedroppers `SetLevelsSampleMode` /
+  `SampleLevels(point)` read the original layer's straight color under a document point (transparent pixels are
+  ignored) and calibrate black, gray or white; `CommitLevels` records `Levels` (identity closes without one).
+  `LevelRange` normalizes to black 0–254, white black + 1…255, gamma 0.1–9.99, outputs 0–255; `LevelsApply` runs
+  the channel range then the RGB range.
+- **Hue/Saturation** (`HueSaturationEdit`, `HueSaturationSettings`: Master and six ranges with their bands,
+  `colorize`, `invertRange`): `UpdateHueSaturation` previews through the cube; the eyedroppers
+  (`SetHueSampleMode`, `SampleHueRange(composite, point)`) re-center, widen or narrow the selected range's band on
+  the hue of the visible composite (near-neutral pixels have none; Master and Colorize refuse); the targeted
+  adjustment (`SetHueTargeting`, `BeginHueTargeting` picks the range claiming the sampled hue most,
+  `DragHueTargeting(viewDelta, adjustsHue)` changes its saturation, or hue with Ctrl, by half a unit per view
+  point measured from the start; `EndHueTargeting`); Colorize starts at hue 0, saturation 25; `CommitHueSaturation`
+  records `Hue/Saturation` (identity changes nothing). Band math: `BandWeight` ramps through the shoulders and
+  wraps, `BandCentered`, `BandInclude`, `BandExclude`, `BandSetHandle` (a crossing move is refused).
+- **Adjustment layers**: `AddAdjustment(kind)` inserts a canvas-size layer above the active one with the kind's
+  defaults (a Gradient Map from the palette, a Grain seed of its own), one `New <Kind> Adjustment` entry, and marks
+  it for editing (`AdjustmentEditingID`); `UpdateAdjustment(id, value)` changes a valid record live (no entry).
+  `BeginAdjustmentEditing(id, below)` opens the kind's panel over the composite beneath the layer (the host renders
+  it with the layer and everything above hidden) inside one `Edit <Kind> Adjustment` entry: the panel's changes
+  update the record (`PreviewAdjustmentEditing`; Preview off shows the original), OK keeps the settings and
+  Cancel restores them (`FinishAdjustmentEditing`). The source is only for the histogram and sampling and never
+  replaces pixels.
+- `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
+  wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
+
 ## Validation
 
 `DocumentTests`: geometry (`transform.*`)
@@ -363,3 +422,20 @@ the outline following the handles, Escape restoring exactly, an unchanged transf
 growth past the layer edge, Undo dropping the edit). The WARP self-test drives the Edit menu, the clipboard keys, a
 Ctrl-drag through the live preview, Ctrl+Right, Delete, Ctrl+T with Escape and Enter, Ctrl+J, Add Mask and
 Ctrl+Shift+C through `Application`.
+
+Color adjustments and filters: `DocumentTests` `levels.*` (the legacy `LevelsTests`: identity no-ops, input
+clipping, gamma, inversion through alpha, channel order, the alpha- and selection-weighted histogram, preview,
+cancel, commit, undo and redo, the display scale, the auto algorithms and eyedropper calibration, the eyedropper's
+transparent and outside rejections), `hsv.*` (`HueSaturationTests`: an exact no-op, hue, saturation and lightness
+ranges, colorize, the selection, the live preview that never accumulates, band weights and handles, independent
+ranges, invert, the sliders and the after bar, the eyedroppers, the targeted drag, sampling refusals), `adjust.*`
+(`ImageAdjustmentTests`: exposure in linear light, the gradient map and its reverse, grain fixed in document space,
+validity, new layers from the palette with their own grain seed, the Image menu's Exposure as one entry), `filter.*`
+(`FilterTests`: a Gaussian blur growing the layer and softening its edges as one entry, motion blur along its
+angle, noise on color but never alpha, lens correction opening only the pincushion corners), `adjustlayer.*`
+(`AdjustmentLayerTests`: settings surviving undo, redo and duplicate, the identity curve and the Image command
+keeping alpha, every kind's editor keeping pixels dynamic and supporting cancel, the blend-mode step) and `blend.*`
+(the HSL formulas). `CompositionTests` `adjust.*` and `blend.hsl-golden` prove the live layers and the blends on
+the GPU ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)). The WARP self-test drives Ctrl+L with a
+preview, Escape and Enter, the Filter menu's Gaussian Blur, a Hue/Saturation adjustment layer edited live and kept
+with Enter, and Shift+= through `Application`.
