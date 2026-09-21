@@ -92,6 +92,9 @@
     <ClCompile Include="..\..\RedPrism\CanvasRenderer.cpp" />
     <ClCompile Include="..\..\RedPrism\BrushCompute.cpp" />
     <ClCompile Include="..\..\Common\BrushStroke.cpp" />
+    <ClCompile Include="..\..\Common\Heal.cpp" />
+    <ClCompile Include="..\..\Common\ImageFilters.cpp" />
+    <ClCompile Include="..\..\Common\WarpStroke.cpp" />
     <ClCompile Include="..\..\Common\Selection.cpp" />
   </ItemGroup>
   <ItemGroup>

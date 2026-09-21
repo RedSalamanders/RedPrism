@@ -1138,6 +1138,12 @@ void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 void DocumentSession::Undo()
 {
     _lassoDraft.reset();
+    // A pending gradient is not in history yet: the first Undo discards it, as Escape would.
+    if (_gradient)
+    {
+        CancelGradient();
+        return;
+    }
     // A pending transform is not in history yet: the first Undo discards it, as Escape would.
     if (_transformEdit.has_value())
     {
@@ -1170,6 +1176,7 @@ void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 {
     if (id != _activeLayerID)
     {
+        ResolveGradient();
         CommitTransform();
         _maskSelected = false;
     }
@@ -1230,6 +1237,17 @@ void DocumentSession::AddBlankLayer()
     } while (names.contains(name));
     ImageLayer layer = ImageLayer::Blank(
         name, Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)});
+    InsertLayerAboveActive(std::move(layer), L"New Blank Layer", false);
+}
+
+void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection)
+{
+    if (!_document.has_value())
+    {
+        return;
+    }
+    // The new layer becomes the target: a pending gradient applies first, as any layer switch does.
+    ResolveGradient();
     const ImageLayer* active = ActiveLayer();
     if (active != nullptr)
     {
@@ -1279,9 +1297,14 @@ void DocumentSession::AddBlankLayer()
             }
         }
     }
-    BeginEdit(L"New Blank Layer");
+    BeginEdit(editName);
     _document.value().layers.insert(_document.value().layers.begin() + static_cast<std::ptrdiff_t>(insertion), layer);
+    if (dropsSelection)
+    {
+        _document.value().selection.reset();
+    }
     _activeLayerID = layer.id;
+    _selected = {layer.id};
     EndEdit();
 }
 
@@ -2270,6 +2293,7 @@ void DocumentSession::CommitTransform()
                     layer.mask->placement = MaskPlacementMoving(layer.mask.value(), original, moved);
                 }
                 layer.transform = moved;
+                RedrawShape(index.value());
             }
             EndEdit();
         }
@@ -2286,6 +2310,7 @@ void DocumentSession::CommitTransform()
             layer.mask->placement = MaskPlacementMoving(layer.mask.value(), layer.transform, edit.draft);
         }
         layer.transform = edit.draft;
+        RedrawShape(index.value());
         EndEdit();
     }
     finishDuplicate();
@@ -2614,6 +2639,10 @@ void DocumentSession::DuplicateActiveLayer()
 
 void DocumentSession::SelectLayerTarget(const Guid& id, bool mask)
 {
+    if (id != _activeLayerID || mask != _maskSelected)
+    {
+        ResolveGradient();
+    }
     SelectLayer(id);
     const ImageLayer* layer = ActiveLayer();
     _maskSelected = mask && layer != nullptr && layer->mask.has_value();

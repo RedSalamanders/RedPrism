@@ -2,10 +2,13 @@
 
 #include "Document.h"
 
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -178,6 +181,37 @@ class BrushStroke
     [[nodiscard]] std::optional<Commit> PaintSnapshot() const;
     [[nodiscard]] LayerTransform TransformFor(const GridRect& bounds) const noexcept;
 
+    // Clone Stamp, Blur and warp results paint from `sample` (document-size premultiplied BGRA, or Gray8 on a mask)
+    // read at the grid pixel's document position shifted by the offset, through the coverage: over the pixels under
+    // the tip, or replacing them (`replaces`).
+    void SetSample(Raster sample, int offsetX, int offsetY, bool replaces);
+    [[nodiscard]] bool HasSample() const noexcept
+    {
+        return _sample.has_value();
+    }
+    // The history entry the commit records (empty: the default per kind).
+    void SetEditName(std::wstring name)
+    {
+        _editName = std::move(name);
+    }
+    [[nodiscard]] const std::wstring& EditName() const noexcept
+    {
+        return _editName;
+    }
+    // Spot Healing once the stroke ends: rebuilds the painted area from nearby texture (`SpotHealing::Heal`) into the
+    // tiles, so the usual commit applies it as one entry. Reads the layer's original pixels, never the dark wash
+    // shown while painting. False when memory runs out.
+    [[nodiscard]] bool Heal(std::uint32_t seed);
+    // Replaces this edit with a gradient over the whole canvas (or the selection) composited onto the original
+    // pixels; redrawing restarts from each tile's original content, so moving the line never accumulates. Colors
+    // are straight red, green, blue, alpha in 0…1 (a mask takes the first component as its gray).
+    [[nodiscard]] bool FillGradient(GradientShape shape, Vec2 start, Vec2 end, const std::array<double, 4>& from,
+                                    const std::array<double, 4>& to, double opacity);
+    // Fills the selection (or the whole canvas) with a straight color.
+    [[nodiscard]] bool Fill(const std::array<double, 4>& color);
+    // Erases image pixels to transparency inside the selection, only where pixels exist.
+    [[nodiscard]] bool ClearPixels();
+
     [[nodiscard]] const Guid& LayerID() const noexcept
     {
         return _layerID;
@@ -232,6 +266,11 @@ class BrushStroke
     [[nodiscard]] bool AllocateTile(std::uint64_t key);
     void ComposeTile(Tile& tile);
     [[nodiscard]] double SelectionAt(Vec2 document) const noexcept;
+    // Runs `shade` in document coordinates over every tile the canvas and selection cover (only the layer's existing
+    // pixels with `withinSource`), starting from each tile's original content; `shade` returns false to leave a
+    // pixel alone. `destinationOut` takes the shaded alpha out of the pixels instead of painting.
+    [[nodiscard]] bool PaintCanvas(bool withinSource, double opacity, bool destinationOut,
+                                   const std::function<bool(Vec2, std::array<double, 4>&)>& shade);
 
     Guid _layerID;
     bool _mask = false;
@@ -255,4 +294,9 @@ class BrushStroke
     std::unordered_set<std::uint64_t> _tailKeys;
     std::vector<Tile> _tiles;
     std::unordered_map<std::uint64_t, std::size_t> _index;
+    std::optional<Raster> _sample;
+    int _sampleX = 0;
+    int _sampleY = 0;
+    bool _replaces = false;
+    std::wstring _editName;
 };

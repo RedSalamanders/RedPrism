@@ -1228,6 +1228,11 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
             }
             imagePixels -= decoded.image.PixelCount();
             layer.asset = RasterAsset{decoded.image, decoded.thumbnail, layer.name};
+            if (layer.shape.has_value())
+            {
+                // A loaded shape layer is live: it redraws at a new size until its pixels are edited.
+                layer.shapeImage = decoded.image;
+            }
         }
         if (!record.maskFile.empty())
         {

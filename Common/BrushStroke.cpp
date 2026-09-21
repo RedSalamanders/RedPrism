@@ -1,5 +1,9 @@
 #include "BrushStroke.h"
 
+#include "Heal.h"
+#include "ImageFilters.h"
+#include "WarpStroke.h"
+
 #include "Selection.h"
 
 #include <algorithm>
@@ -648,6 +652,11 @@ double BrushStroke::SelectionAt(Vec2 document) const noexcept
            255.0;
 }
 
+namespace
+{
+[[nodiscard]] bool SampleAt(const Raster& raster, double x, double y, std::array<double, 4>& out) noexcept;
+}
+
 void BrushStroke::ComposeTile(Tile& tile)
 {
     const int channels = _mask ? 1 : 4;
@@ -671,6 +680,11 @@ void BrushStroke::ComposeTile(Tile& tile)
     const double paintB = _settings.blue * 255.0;
     const double paintG = _settings.green * 255.0;
     const double paintR = _settings.red * 255.0;
+    const bool sampling = _sample.has_value() && _sample->HasStorage() &&
+                          _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888);
+    const bool washing = !sampling && _settings.healing && !_mask;
+    const auto round8 = [](double value)
+    { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
     for (std::size_t index = 0; index < count; ++index)
     {
         const std::uint8_t coverage = tile.coverage[index];
@@ -678,12 +692,15 @@ void BrushStroke::ComposeTile(Tile& tile)
         {
             continue;
         }
-        double c = coverage / 255.0 * _settings.opacity;
+        const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
+        const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
+        const Vec2 document = _pixelToDocument.Apply(Vec2{tile.rect.x + px + 0.5, tile.rect.y + py + 0.5});
+        // While painting, the area to heal shows as a dark wash at a fixed 45 %, as in Photoshop; Heal() rebuilds
+        // it from its surroundings when the stroke ends. Everything else takes the opacity.
+        double c = coverage / 255.0 * (washing ? 0.45 : _settings.opacity);
         if (_selection.has_value())
         {
-            const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
-            const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
-            c *= SelectionAt(_pixelToDocument.Apply(Vec2{tile.rect.x + px + 0.5, tile.rect.y + py + 0.5}));
+            c *= SelectionAt(document);
             if (c <= 0.0)
             {
                 continue;
@@ -692,25 +709,62 @@ void BrushStroke::ComposeTile(Tile& tile)
         std::uint8_t* out = bytes.data() + index * static_cast<std::size_t>(channels);
         const std::uint8_t* under = base + index * static_cast<std::size_t>(channels);
         const double keep = 1.0 - c;
-        if (_mask)
+        if (sampling)
         {
-            out[0] = static_cast<std::uint8_t>(std::lround(gray * c + under[0] * keep));
+            std::array<double, 4> sample{};
+            if (!SampleAt(*_sample, document.x + _sampleX, document.y + _sampleY, sample))
+            {
+                continue;
+            }
+            if (_mask)
+            {
+                out[0] = round8(sample[0] * c + under[0] * keep);
+            }
+            else if (_replaces)
+            {
+                // The sample replaces what is under the tip, so it can also clear pixels.
+                for (int channel = 0; channel < 4; ++channel)
+                {
+                    out[channel] = round8(sample[channel] * c + under[channel] * keep);
+                }
+            }
+            else
+            {
+                // Premultiplied source-over with the sample's own alpha.
+                const double hold = 1.0 - sample[3] / 255.0 * c;
+                for (int channel = 0; channel < 4; ++channel)
+                {
+                    out[channel] = round8(sample[channel] * c + under[channel] * hold);
+                }
+            }
+        }
+        else if (washing)
+        {
+            constexpr double kWash = 0.12 * 255.0;
+            out[0] = round8(kWash * c + under[0] * keep);
+            out[1] = round8(kWash * c + under[1] * keep);
+            out[2] = round8(kWash * c + under[2] * keep);
+            out[3] = round8(255.0 * c + under[3] * keep);
+        }
+        else if (_mask)
+        {
+            out[0] = round8(gray * c + under[0] * keep);
         }
         else if (_settings.erasing)
         {
             // Erasing takes the coverage out of the layer's alpha, leaving the pixels under it transparent.
             for (int channel = 0; channel < 4; ++channel)
             {
-                out[channel] = static_cast<std::uint8_t>(std::lround(under[channel] * keep));
+                out[channel] = round8(under[channel] * keep);
             }
         }
         else
         {
             // Premultiplied paint (color × coverage) over the pixels under it.
-            out[0] = static_cast<std::uint8_t>(std::lround(paintB * c + under[0] * keep));
-            out[1] = static_cast<std::uint8_t>(std::lround(paintG * c + under[1] * keep));
-            out[2] = static_cast<std::uint8_t>(std::lround(paintR * c + under[2] * keep));
-            out[3] = static_cast<std::uint8_t>(std::lround(255.0 * c + under[3] * keep));
+            out[0] = round8(paintB * c + under[0] * keep);
+            out[1] = round8(paintG * c + under[1] * keep);
+            out[2] = round8(paintR * c + under[2] * keep);
+            out[3] = round8(255.0 * c + under[3] * keep);
         }
     }
     tile.image = Raster::Make(tile.rect.width, tile.rect.height, _mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888,
@@ -929,19 +983,65 @@ std::int64_t DocumentSession::RasterEditPixelLimit(const ImageLayer& layer, bool
 
 bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 {
+    return BeginBrush(point, erase ? BrushKind::Erase : BrushKind::Paint);
+}
+
+bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
+{
     if (!CanPaint())
     {
         return false;
     }
     const ImageLayer* layer = ActiveLayer();
     const bool mask = _maskSelected;
+    // Spot Healing and Clone Stamp rework image pixels; they have nothing to do on a mask.
+    if (mask && (kind == BrushKind::Heal || kind == BrushKind::Clone))
+    {
+        return false;
+    }
     BrushSettings settings = brushSettings;
-    settings.erasing = erase && !mask;
+    settings.erasing = kind == BrushKind::Erase && !mask;
+    settings.healing = kind == BrushKind::Heal;
+    settings.healingMode = spotHealingMode;
     if (mask)
     {
         settings.red = maskPaintWhite ? 1.0 : 0.0;
         settings.green = settings.red;
         settings.blue = settings.red;
+    }
+    std::optional<Raster> sample;
+    int offsetX = 0;
+    int offsetY = 0;
+    std::wstring editName;
+    if (kind == BrushKind::Clone)
+    {
+        const std::optional<Vec2> offset = CloneStrokeOffset(point);
+        if (!offset.has_value())
+        {
+            return false;
+        }
+        sample = CloneSample(composite);
+        if (!sample->HasStorage())
+        {
+            return false;
+        }
+        offsetX = static_cast<int>(std::lround(offset->x));
+        offsetY = static_cast<int>(std::lround(offset->y));
+        _cloneOffset = offset;
+        editName = L"Clone Stamp";
+    }
+    else if (kind == BrushKind::Blur)
+    {
+        sample = BlurSample(mask);
+        if (!sample->HasStorage())
+        {
+            return false;
+        }
+        editName = L"Blur";
+    }
+    else if (kind == BrushKind::Heal)
+    {
+        editName = L"Spot Healing";
     }
     std::shared_ptr<BrushStroke> stroke;
     try
@@ -964,6 +1064,11 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
         stroke->SetSelectionClip(
             SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
     }
+    if (sample.has_value())
+    {
+        stroke->SetSample(std::move(sample.value()), offsetX, offsetY, false);
+    }
+    stroke->SetEditName(std::move(editName));
     _lastBrushPoint = LastBrushPoint{point, layer->id, mask};
     if (!stroke->Append(point))
     {
@@ -996,14 +1101,31 @@ void DocumentSession::CancelBrush() noexcept
 
 void DocumentSession::FinishBrush()
 {
+    _lastBrushCommit.reset();
     if (!_brush)
     {
         return;
     }
-    _lastBrushCommit.reset();
     const std::shared_ptr<BrushStroke> stroke = std::move(_brush);
     _brush.reset();
-    if (!stroke->Flush() || !stroke->HasPaint() || !_document.has_value())
+    if (!stroke->Flush())
+    {
+        return;
+    }
+    if (stroke->Settings().healing && !stroke->Heal(NextHealSeed()))
+    {
+        return;
+    }
+    if (!stroke->HasPaint())
+    {
+        return;
+    }
+    CommitStroke(stroke);
+}
+
+void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke)
+{
+    if (!stroke || !_document.has_value())
     {
         return;
     }
@@ -1033,7 +1155,8 @@ void DocumentSession::FinishBrush()
             return;
         }
     }
-    const std::wstring name = stroke->IsMask()             ? L"Paint Mask"
+    const std::wstring name = !stroke->EditName().empty()  ? stroke->EditName()
+                              : stroke->IsMask()           ? L"Paint Mask"
                               : stroke->Settings().erasing ? L"Erase"
                                                            : L"Brush Stroke";
     BeginEdit(name);
@@ -1104,9 +1227,22 @@ void DocumentSession::ChangeBrushHardness(bool increase) noexcept
 
 void DocumentSession::TypeOpacityDigit(int digit, double timeSeconds) noexcept
 {
-    if (_brush || digit < 0 || digit > 9)
+    if (_brush)
     {
         return;
+    }
+    const int percent = TypedOpacityPercent(digit, timeSeconds);
+    if (percent > 0)
+    {
+        brushSettings.opacity = percent / 100.0;
+    }
+}
+
+int DocumentSession::TypedOpacityPercent(int digit, double timeSeconds) noexcept
+{
+    if (digit < 0 || digit > 9)
+    {
+        return -1;
     }
     int percent = digit == 0 ? 100 : digit * 10;
     if (_pendingOpacityDigit.has_value() && timeSeconds - _pendingOpacityDigit->second < 0.6)
@@ -1118,7 +1254,7 @@ void DocumentSession::TypeOpacityDigit(int digit, double timeSeconds) noexcept
     {
         _pendingOpacityDigit = std::make_pair(digit, timeSeconds);
     }
-    brushSettings.opacity = percent / 100.0;
+    return percent;
 }
 
 void DocumentSession::AddLayerMask(bool revealing)
@@ -1149,4 +1285,984 @@ void DocumentSession::ToggleLayerMask(const Guid& id)
     layer->mask->enabled = !layer->mask->enabled;
     ++_editRevision;
     EndEdit();
+}
+
+// ── Samples, healing and canvas fills (C11) ───────────────────────────────
+
+namespace
+{
+// `raster` read bilinearly at document coordinates (pixel centers at half coordinates), into premultiplied BGRA (or
+// the gray in [0]); false outside the raster, where nothing is copied.
+[[nodiscard]] bool SampleAt(const Raster& raster, double x, double y, std::array<double, 4>& out) noexcept
+{
+    const int width = raster.Width();
+    const int height = raster.Height();
+    const std::uint8_t* data = raster.Data();
+    if (data == nullptr || !(x >= 0.0) || !(y >= 0.0) || !(x < width) || !(y < height))
+    {
+        return false;
+    }
+    const int channels = raster.Channels();
+    const std::size_t stride = static_cast<std::size_t>(raster.Stride());
+    const double sx = std::clamp(x - 0.5, 0.0, static_cast<double>(width - 1));
+    const double sy = std::clamp(y - 0.5, 0.0, static_cast<double>(height - 1));
+    const double fx0 = std::floor(sx);
+    const double fy0 = std::floor(sy);
+    const double tx = sx - fx0;
+    const double ty = sy - fy0;
+    const int ix = static_cast<int>(fx0);
+    const int iy = static_cast<int>(fy0);
+    const auto at = [&](int px, int py, int channel) -> double
+    {
+        px = std::clamp(px, 0, width - 1);
+        py = std::clamp(py, 0, height - 1);
+        return data[static_cast<std::size_t>(py) * stride +
+                    static_cast<std::size_t>(px) * static_cast<std::size_t>(channels) +
+                    static_cast<std::size_t>(channel)];
+    };
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        const double top = at(ix, iy, channel) + (at(ix + 1, iy, channel) - at(ix, iy, channel)) * tx;
+        const double bottom = at(ix, iy + 1, channel) + (at(ix + 1, iy + 1, channel) - at(ix, iy + 1, channel)) * tx;
+        out[static_cast<std::size_t>(channel)] = top + (bottom - top) * ty;
+    }
+    return true;
+}
+} // namespace
+
+void BrushStroke::SetSample(Raster sample, int offsetX, int offsetY, bool replaces)
+{
+    _sample = std::move(sample);
+    _sampleX = offsetX;
+    _sampleY = offsetY;
+    _replaces = replaces;
+}
+
+bool BrushStroke::Heal(std::uint32_t seed)
+{
+    if (!_valid || _failed || !_settings.healing || _mask)
+    {
+        return false;
+    }
+    std::optional<GridRect> painted;
+    for (const Tile& tile : _tiles)
+    {
+        if (!tile.touched)
+        {
+            continue;
+        }
+        const SpotHealing::Bounds edges = SpotHealing::CoverageBounds(
+            tile.coverage.data(), static_cast<std::size_t>(tile.rect.width), static_cast<std::size_t>(tile.rect.height),
+            static_cast<std::size_t>(tile.rect.width));
+        if (edges.Empty())
+        {
+            continue;
+        }
+        const GridRect rect{static_cast<int>(edges.x0) + tile.rect.x, static_cast<int>(edges.y0) + tile.rect.y,
+                            static_cast<int>(edges.x1 - edges.x0), static_cast<int>(edges.y1 - edges.y0)};
+        painted = painted.has_value() ? painted->Union(rect) : rect;
+    }
+    if (!painted.has_value())
+    {
+        return true;
+    }
+    // Room for the kernel's patch search, which looks up to about three spot-widths away.
+    const int reach = static_cast<int>(std::ceil((std::max(painted->width, painted->height) + 32) * 3.2));
+    const GridRect region =
+        GridRect{painted->x - reach, painted->y - reach, painted->width + 2 * reach, painted->height + 2 * reach}
+            .Intersect(GridRect{0, 0, _width, _height});
+    if (region.Empty())
+    {
+        return true;
+    }
+    const std::size_t w = static_cast<std::size_t>(region.width);
+    const std::size_t h = static_cast<std::size_t>(region.height);
+    std::vector<std::uint8_t> pixels;
+    std::vector<std::uint8_t> gray;
+    try
+    {
+        pixels.assign(w * h * 4u, 0);
+        gray.assign(w * h, 0);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    // The layer's original pixels within the region (transparent beyond them), never the wash.
+    if (_source.HasStorage())
+    {
+        _source.ReadRegion(region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height,
+                           pixels.data(), region.width * 4, 0);
+    }
+    for (const Tile& tile : _tiles)
+    {
+        if (!tile.touched)
+        {
+            continue;
+        }
+        const GridRect overlap = tile.rect.Intersect(region);
+        for (int y = overlap.y; y < overlap.y + overlap.height; ++y)
+        {
+            std::memcpy(gray.data() + static_cast<std::size_t>(y - region.y) * w +
+                            static_cast<std::size_t>(overlap.x - region.x),
+                        tile.coverage.data() +
+                            static_cast<std::size_t>(y - tile.rect.y) * static_cast<std::size_t>(tile.rect.width) +
+                            static_cast<std::size_t>(overlap.x - tile.rect.x),
+                        static_cast<std::size_t>(overlap.width));
+        }
+    }
+    if (!SpotHealing::Heal(pixels.data(), gray.data(), w, h, w * 4u, static_cast<float>(_settings.opacity),
+                           static_cast<SpotHealing::Mode>(_settings.healingMode), seed))
+    {
+        return false;
+    }
+    // The healed region replaces the wash in every touched tile, within the selection.
+    for (Tile& tile : _tiles)
+    {
+        if (!tile.touched || tile.base.Data() == nullptr)
+        {
+            continue;
+        }
+        const std::size_t count =
+            static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height) * 4u;
+        std::vector<std::uint8_t> bytes;
+        try
+        {
+            bytes.assign(tile.base.Data(), tile.base.Data() + count);
+        }
+        catch (const std::bad_alloc&)
+        {
+            return false;
+        }
+        const GridRect overlap = tile.rect.Intersect(region);
+        for (int y = overlap.y; y < overlap.y + overlap.height; ++y)
+        {
+            for (int x = overlap.x; x < overlap.x + overlap.width; ++x)
+            {
+                const std::uint8_t* healed =
+                    pixels.data() +
+                    (static_cast<std::size_t>(y - region.y) * w + static_cast<std::size_t>(x - region.x)) * 4u;
+                std::uint8_t* out = bytes.data() + (static_cast<std::size_t>(y - tile.rect.y) *
+                                                        static_cast<std::size_t>(tile.rect.width) +
+                                                    static_cast<std::size_t>(x - tile.rect.x)) *
+                                                       4u;
+                double clip = 1.0;
+                if (_selection.has_value())
+                {
+                    clip = SelectionAt(_pixelToDocument.Apply(Vec2{x + 0.5, y + 0.5}));
+                }
+                for (int channel = 0; channel < 4; ++channel)
+                {
+                    out[channel] =
+                        static_cast<std::uint8_t>(std::lround(healed[channel] * clip + out[channel] * (1.0 - clip)));
+                }
+            }
+        }
+        tile.image =
+            Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        tile.changed = true;
+    }
+    return true;
+}
+
+bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinationOut,
+                              const std::function<bool(Vec2, std::array<double, 4>&)>& shade)
+{
+    if (!_valid || _failed)
+    {
+        return false;
+    }
+    // The area: the canvas, within the selection's bounds when there is one.
+    double areaX0 = 0;
+    double areaY0 = 0;
+    double areaX1 = _canvasWidth;
+    double areaY1 = _canvasHeight;
+    if (_selection.has_value() && _selection->Data() != nullptr)
+    {
+        const SpotHealing::Bounds bounds = SpotHealing::CoverageBounds(
+            _selection->Data(), static_cast<std::size_t>(_selection->Width()),
+            static_cast<std::size_t>(_selection->Height()), static_cast<std::size_t>(_selection->Stride()));
+        if (bounds.Empty())
+        {
+            return true;
+        }
+        areaX0 = std::max(areaX0, static_cast<double>(bounds.x0));
+        areaY0 = std::max(areaY0, static_cast<double>(bounds.y0));
+        areaX1 = std::min(areaX1, static_cast<double>(bounds.x1));
+        areaY1 = std::min(areaY1, static_cast<double>(bounds.y1));
+        if (areaX1 <= areaX0 || areaY1 <= areaY0)
+        {
+            return true;
+        }
+    }
+    GridRect affected = MappedBox(_pixelToDocument.Inverted(), areaX0, areaY0, areaX1, areaY1)
+                            .Intersect(GridRect{0, 0, _width, _height});
+    if (withinSource)
+    {
+        affected = affected.Intersect(_sourceRect);
+    }
+    if (affected.Empty())
+    {
+        return true;
+    }
+    const int columns = (_width + kTileSize - 1) / kTileSize;
+    const int channels = _mask ? 1 : 4;
+    for (int ty = affected.y / kTileSize; ty <= (affected.y + affected.height - 1) / kTileSize; ++ty)
+    {
+        for (int tx = affected.x / kTileSize; tx <= (affected.x + affected.width - 1) / kTileSize; ++tx)
+        {
+            const std::uint64_t key =
+                static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) + static_cast<std::uint64_t>(tx);
+            if (!AllocateTile(key))
+            {
+                _failed = true;
+                return false;
+            }
+            Tile& tile = _tiles[_index[key]];
+            const std::uint8_t* base = tile.base.Data();
+            if (base == nullptr)
+            {
+                _failed = true;
+                return false;
+            }
+            const std::size_t count =
+                static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
+            std::vector<std::uint8_t> bytes;
+            try
+            {
+                bytes.assign(base, base + count * static_cast<std::size_t>(channels));
+            }
+            catch (const std::bad_alloc&)
+            {
+                _failed = true;
+                return false;
+            }
+            for (std::size_t index = 0; index < count; ++index)
+            {
+                const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
+                const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
+                const Vec2 document = _pixelToDocument.Apply(Vec2{tile.rect.x + px + 0.5, tile.rect.y + py + 0.5});
+                if (!(document.x >= 0.0) || !(document.y >= 0.0) || !(document.x < _canvasWidth) ||
+                    !(document.y < _canvasHeight))
+                {
+                    continue;
+                }
+                double a = opacity;
+                if (_selection.has_value())
+                {
+                    a *= SelectionAt(document);
+                }
+                std::array<double, 4> color{};
+                if (a <= 0.0 || !shade(document, color))
+                {
+                    continue;
+                }
+                a *= std::clamp(color[3], 0.0, 1.0);
+                if (a <= 0.0)
+                {
+                    continue;
+                }
+                std::uint8_t* out = bytes.data() + index * static_cast<std::size_t>(channels);
+                const double keep = 1.0 - a;
+                const auto round8 = [](double value)
+                { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
+                if (destinationOut)
+                {
+                    for (int channel = 0; channel < channels; ++channel)
+                    {
+                        out[channel] = round8(out[channel] * keep);
+                    }
+                }
+                else if (_mask)
+                {
+                    out[0] = round8(std::clamp(color[0], 0.0, 1.0) * 255.0 * a + out[0] * keep);
+                }
+                else
+                {
+                    out[0] = round8(std::clamp(color[2], 0.0, 1.0) * 255.0 * a + out[0] * keep);
+                    out[1] = round8(std::clamp(color[1], 0.0, 1.0) * 255.0 * a + out[1] * keep);
+                    out[2] = round8(std::clamp(color[0], 0.0, 1.0) * 255.0 * a + out[2] * keep);
+                    out[3] = round8(255.0 * a + out[3] * keep);
+                }
+            }
+            tile.image = Raster::Make(tile.rect.width, tile.rect.height,
+                                      _mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888, bytes.data(), bytes.size());
+            tile.touched = true;
+            tile.changed = true;
+        }
+    }
+    return true;
+}
+
+bool BrushStroke::FillGradient(GradientShape shape, Vec2 start, Vec2 end, const std::array<double, 4>& from,
+                               const std::array<double, 4>& to, double opacity)
+{
+    const double dx = end.x - start.x;
+    const double dy = end.y - start.y;
+    const double length2 = dx * dx + dy * dy;
+    const double length = std::sqrt(length2);
+    return PaintCanvas(false, std::clamp(opacity, 0.0, 1.0), false,
+                       [&](Vec2 point, std::array<double, 4>& color)
+                       {
+                           double t = 0.0;
+                           if (shape == GradientShape::Linear)
+                           {
+                               t = length2 > 0.0 ? ((point.x - start.x) * dx + (point.y - start.y) * dy) / length2
+                                                 : 0.0;
+                           }
+                           else
+                           {
+                               t = length > 0.0 ? std::hypot(point.x - start.x, point.y - start.y) / length : 0.0;
+                           }
+                           t = std::clamp(t, 0.0, 1.0);
+                           for (std::size_t channel = 0; channel < 4; ++channel)
+                           {
+                               color[channel] = from[channel] + (to[channel] - from[channel]) * t;
+                           }
+                           return true;
+                       });
+}
+
+bool BrushStroke::Fill(const std::array<double, 4>& color)
+{
+    return PaintCanvas(false, 1.0, false,
+                       [&](Vec2, std::array<double, 4>& out)
+                       {
+                           out = color;
+                           return true;
+                       });
+}
+
+bool BrushStroke::ClearPixels()
+{
+    return PaintCanvas(true, 1.0, true,
+                       [](Vec2, std::array<double, 4>& out)
+                       {
+                           out = {0.0, 0.0, 0.0, 1.0};
+                           return true;
+                       });
+}
+
+// ── Clone Stamp, Blur and the warp modes on the session ───────────────────
+
+void DocumentSession::SetCloneSource(Vec2 point) noexcept
+{
+    if (!std::isfinite(point.x) || !std::isfinite(point.y))
+    {
+        return;
+    }
+    cloneSource = point;
+    _cloneOffset.reset();
+}
+
+std::optional<Vec2> DocumentSession::CloneStrokeOffset(Vec2 point) const noexcept
+{
+    if (!cloneSource.has_value())
+    {
+        return std::nullopt;
+    }
+    if (cloneSettings.aligned && _cloneOffset.has_value())
+    {
+        return _cloneOffset;
+    }
+    return Vec2{std::round(cloneSource->x - point.x), std::round(cloneSource->y - point.y)};
+}
+
+std::optional<Vec2> DocumentSession::CloneSamplePoint(Vec2 point) const noexcept
+{
+    if (!cloneSource.has_value())
+    {
+        return std::nullopt;
+    }
+    if (!_cloneOffset.has_value() || (!cloneSettings.aligned && !_brush))
+    {
+        return cloneSource;
+    }
+    return Vec2{point.x + _cloneOffset->x, point.y + _cloneOffset->y};
+}
+
+Raster DocumentSession::CloneSample(const Raster* composite) const
+{
+    if (!_document.has_value())
+    {
+        return {};
+    }
+    const CanvasDocument& document = _document.value();
+    if (cloneSettings.sampleAllLayers)
+    {
+        if (composite == nullptr || !composite->HasStorage() || composite->Width() != document.width ||
+            composite->Height() != document.height || composite->Format() != RasterFormat::Bgra8888)
+        {
+            return {};
+        }
+        return *composite;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer != nullptr && !layer->isGroup && layer->asset.has_value())
+    {
+        return RenderLayerPixels(layer->asset->image, DisplayedTransform(*layer), document.width, document.height);
+    }
+    return Raster::Make(document.width, document.height, RasterFormat::Bgra8888);
+}
+
+Raster DocumentSession::BlurSample(bool mask) const
+{
+    const ImageLayer* layer = ActiveLayer();
+    if (!_document.has_value() || layer == nullptr)
+    {
+        return {};
+    }
+    const CanvasDocument& document = _document.value();
+    const double sigma = std::min(30.0, std::max(1.5, brushSettings.diameter / 10.0));
+    if (mask)
+    {
+        if (!layer->mask.has_value())
+        {
+            return {};
+        }
+        // Past its pixels a mask keeps its edge tone, so blurring near its edge doesn't pull in the wrong one.
+        const std::uint8_t background =
+            static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(layer->mask->asset.thumbnail) * 255.0));
+        const Raster sharp = ImageFilters::RenderMaskPixels(layer->mask->asset.image, MaskTransform(*layer),
+                                                            document.width, document.height, background);
+        return ImageFilters::GaussianBlur(sharp, sigma);
+    }
+    if (layer->isGroup || !layer->asset.has_value())
+    {
+        return {};
+    }
+    const Raster sharp =
+        RenderLayerPixels(layer->asset->image, DisplayedTransform(*layer), document.width, document.height);
+    return ImageFilters::GaussianBlur(sharp, sigma);
+}
+
+bool DocumentSession::BeginWarp(Vec2 point)
+{
+    if (!CanPaint() || _maskSelected || _warp)
+    {
+        return false;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || layer->isGroup)
+    {
+        return false;
+    }
+    const CanvasDocument& document = _document.value();
+    const Raster image =
+        layer->asset.has_value()
+            ? RenderLayerPixels(layer->asset->image, DisplayedTransform(*layer), document.width, document.height)
+            : Raster::Make(document.width, document.height, RasterFormat::Bgra8888);
+    std::shared_ptr<WarpStroke> warp;
+    try
+    {
+        warp = std::make_shared<WarpStroke>(image, smearMode, brushSettings);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    if (!warp->IsValid())
+    {
+        return false;
+    }
+    _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
+    warp->Append(point);
+    _warp = std::move(warp);
+    _lastBrushPoint = LastBrushPoint{point, layer->id, false};
+    return true;
+}
+
+void DocumentSession::ContinueWarp(Vec2 point)
+{
+    if (!_warp)
+    {
+        return;
+    }
+    _warp->Append(point);
+    if (_lastBrushPoint.has_value())
+    {
+        _lastBrushPoint->point = point;
+    }
+}
+
+void DocumentSession::CancelWarp() noexcept
+{
+    _warp.reset();
+}
+
+void DocumentSession::FinishWarp()
+{
+    if (!_warp)
+    {
+        return;
+    }
+    const std::shared_ptr<WarpStroke> warp = std::move(_warp);
+    _warp.reset();
+    if (warp->Points().empty() || !_document.has_value())
+    {
+        return;
+    }
+    const ImageLayer* current = MutableLayer(_warpSource.layerID);
+    const Raster currentImage = current != nullptr && current->asset.has_value() ? current->asset->image : Raster{};
+    if (current == nullptr || !(currentImage == _warpSource.image) || current->transform != _warpSource.transform)
+    {
+        return;
+    }
+    // A hard tip a little wider than the brush covers everything the stroke moved.
+    BrushSettings settings = brushSettings;
+    settings.diameter = std::min(2000.0, warp->Diameter() + 4.0);
+    settings.hardness = 1.0;
+    settings.opacity = 1.0;
+    settings.erasing = false;
+    settings.healing = false;
+    std::shared_ptr<BrushStroke> stroke;
+    try
+    {
+        stroke =
+            std::make_shared<BrushStroke>(*current, false, settings, _document->width, _document->height, _brushEngine);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return;
+    }
+    if (!stroke->IsValid())
+    {
+        return;
+    }
+    stroke->SetPixelLimit(RasterEditPixelLimit(*current, false));
+    if (_document->selection.has_value())
+    {
+        const DocumentSelection& selection = _document->selection.value();
+        stroke->SetSelectionClip(
+            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
+    }
+    stroke->SetSample(warp->Image(), 0, 0, true);
+    stroke->SetEditName(warp->Mode() == SmearMode::Liquify ? L"Liquify" : L"Smudge");
+    for (const Vec2& point : warp->Points())
+    {
+        if (!stroke->Append(point))
+        {
+            return;
+        }
+    }
+    if (!stroke->Flush() || !stroke->HasPaint())
+    {
+        return;
+    }
+    CommitStroke(stroke);
+}
+
+void DocumentSession::SwitchBrushTipFamily(int from, int to) noexcept
+{
+    if (from == to || from < 0 || to < 0 || from >= static_cast<int>(_parkedTips.size()) ||
+        to >= static_cast<int>(_parkedTips.size()))
+    {
+        return;
+    }
+    _parkedTips[static_cast<std::size_t>(from)] = {brushSettings.diameter, brushSettings.hardness,
+                                                   brushSettings.opacity};
+    const std::array<double, 3>& parked = _parkedTips[static_cast<std::size_t>(to)];
+    brushSettings.diameter = parked[0];
+    brushSettings.hardness = parked[1];
+    brushSettings.opacity = parked[2];
+}
+
+// ── Gradient, Shape and the eyedropper (C11) ──────────────────────────────
+
+namespace
+{
+[[nodiscard]] std::array<double, 4> StraightColor(std::uint32_t argb, double alpha) noexcept
+{
+    return {((argb >> 16) & 0xFFu) / 255.0, ((argb >> 8) & 0xFFu) / 255.0, (argb & 0xFFu) / 255.0, alpha};
+}
+
+// A rectangle with rounded corners as one clockwise loop; the arcs are fine enough to read as curves.
+[[nodiscard]] std::vector<SelectionLoop> RoundedRectLoops(double width, double height, double radius)
+{
+    SelectionLoop loop;
+    const int segments = std::max(4, static_cast<int>(std::ceil(radius * 3.14159265358979323846 / 4.0)));
+    const auto arc = [&](double cx, double cy, double from)
+    {
+        for (int i = 0; i <= segments; ++i)
+        {
+            const double angle = from + (3.14159265358979323846 / 2.0) * i / segments;
+            loop.push_back(Vec2{cx + std::cos(angle) * radius, cy + std::sin(angle) * radius});
+        }
+    };
+    // Clockwise in top-left coordinates: top edge, right edge, bottom edge, left edge.
+    arc(width - radius, radius, -3.14159265358979323846 / 2.0);
+    arc(width - radius, height - radius, 0.0);
+    arc(radius, height - radius, 3.14159265358979323846 / 2.0);
+    arc(radius, radius, 3.14159265358979323846);
+    return {loop};
+}
+} // namespace
+
+std::optional<LayerShapeStyle> LiveShape(const ImageLayer& layer) noexcept
+{
+    if (!layer.shape.has_value() || !layer.asset.has_value() || !layer.shapeImage.HasStorage() ||
+        !(layer.asset->image == layer.shapeImage))
+    {
+        return std::nullopt;
+    }
+    return layer.shape;
+}
+
+std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noexcept
+{
+    const std::array<double, 4> foreground = StraightColor(_foregroundArgb, 1.0);
+    std::array<std::array<double, 4>, 2> colors{foreground, foreground};
+    if (gradientSettings.style == GradientStyle::ForegroundToBackground)
+    {
+        colors[1] = StraightColor(_backgroundArgb, 1.0);
+    }
+    else
+    {
+        colors[1][3] = 0.0;
+    }
+    if (gradientSettings.reversed)
+    {
+        std::swap(colors[0], colors[1]);
+    }
+    return colors;
+}
+
+bool DocumentSession::BeginGradient(Vec2 point)
+{
+    if (!_document.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    {
+        return false;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr)
+    {
+        return false;
+    }
+    // Dragging a new line replaces the pending one on the same target.
+    if (_gradient && _gradient->raster->LayerID() == layer->id && _gradient->raster->IsMask() == _maskSelected)
+    {
+        _gradient->start = point;
+        _gradient->end = point;
+        RefreshGradient();
+        return _gradient != nullptr;
+    }
+    if (!CanPaint())
+    {
+        return false;
+    }
+    const bool mask = _maskSelected;
+    std::shared_ptr<BrushStroke> raster;
+    try
+    {
+        raster = std::make_shared<BrushStroke>(*layer, mask, BrushSettings{}, _document->width, _document->height,
+                                               _brushEngine);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    if (!raster->IsValid())
+    {
+        return false;
+    }
+    raster->SetPixelLimit(RasterEditPixelLimit(*layer, mask));
+    if (_document->selection.has_value())
+    {
+        const DocumentSelection& selection = _document->selection.value();
+        raster->SetSelectionClip(
+            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
+    }
+    raster->SetEditName(mask ? L"Gradient Mask" : L"Gradient");
+    try
+    {
+        _gradient = std::make_shared<GradientEdit>(GradientEdit{std::move(raster), point, point});
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    return true;
+}
+
+void DocumentSession::MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end)
+{
+    if (!_gradient)
+    {
+        return;
+    }
+    if (start.has_value() && std::isfinite(start->x) && std::isfinite(start->y))
+    {
+        _gradient->start = start.value();
+    }
+    if (end.has_value() && std::isfinite(end->x) && std::isfinite(end->y))
+    {
+        _gradient->end = end.value();
+    }
+    RefreshGradient();
+}
+
+void DocumentSession::RefreshGradient()
+{
+    if (!_gradient || !_gradient->HasLine())
+    {
+        return;
+    }
+    const std::array<std::array<double, 4>, 2> colors = GradientColors();
+    if (!_gradient->raster->FillGradient(gradientSettings.shape, _gradient->start, _gradient->end, colors[0], colors[1],
+                                         gradientSettings.opacity))
+    {
+        CancelGradient();
+    }
+}
+
+void DocumentSession::EndGradientDrag()
+{
+    if (_gradient && !_gradient->HasLine())
+    {
+        CancelGradient();
+    }
+}
+
+void DocumentSession::CancelGradient() noexcept
+{
+    _gradient.reset();
+}
+
+void DocumentSession::CommitGradient()
+{
+    if (!_gradient)
+    {
+        return;
+    }
+    const std::shared_ptr<GradientEdit> edit = std::move(_gradient);
+    _gradient.reset();
+    if (!edit->HasLine())
+    {
+        return;
+    }
+    CommitStroke(edit->raster);
+}
+
+void DocumentSession::ResolveGradient()
+{
+    if (_gradient)
+    {
+        CommitGradient();
+    }
+}
+
+void DocumentSession::BeginShape(Vec2 point)
+{
+    if (!_document.has_value() || _transformEdit.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    {
+        return;
+    }
+    const Vec2 anchor{std::round(point.x), std::round(point.y)};
+    _shapeDraft = ShapeDraft{shapeKind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
+                             shapeKind == ShapeKind::Rectangle ? std::max(0.0, shapeCornerRadius) : 0.0};
+}
+
+void DocumentSession::DragShape(Vec2 point, bool square, bool fromCenter)
+{
+    if (!_shapeDraft.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
+    {
+        return;
+    }
+    _shapeDraft->rect = DragBox(_shapeDraft->anchor, point, square, fromCenter);
+}
+
+void DocumentSession::CancelShape() noexcept
+{
+    _shapeDraft.reset();
+}
+
+void DocumentSession::ToggleShapeKind()
+{
+    CancelShape();
+    shapeKind = shapeKind == ShapeKind::Rectangle ? ShapeKind::Ellipse : ShapeKind::Rectangle;
+}
+
+std::wstring DocumentSession::NextShapeName(ShapeKind kind) const
+{
+    std::unordered_set<std::wstring> names;
+    if (_document.has_value())
+    {
+        for (const ImageLayer& layer : _document->layers)
+        {
+            names.insert(layer.name);
+        }
+    }
+    const std::wstring base = kind == ShapeKind::Rectangle ? L"Rectangle " : L"Ellipse ";
+    int number = 1;
+    std::wstring name;
+    do
+    {
+        name = base + std::to_wstring(number);
+        ++number;
+    } while (names.contains(name));
+    return name;
+}
+
+Raster DocumentSession::ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb, double cornerRadius)
+{
+    if (width < 1 || height < 1 ||
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels)
+    {
+        return {};
+    }
+    std::vector<SelectionLoop> loops;
+    if (kind == ShapeKind::Ellipse)
+    {
+        loops = SelectionGeometry::Ellipse(0, 0, width, height);
+    }
+    else
+    {
+        // A rectangle's corners round by the radius, at most half its shorter side (so a large radius makes a pill).
+        const double radius = std::min({std::max(0.0, cornerRadius), width / 2.0, height / 2.0});
+        loops = radius > 0.0 ? RoundedRectLoops(width, height, radius) : SelectionGeometry::Rect(0, 0, width, height);
+    }
+    const Raster coverage = SelectionGeometry::Coverage(loops, width, height, true);
+    const std::uint8_t* mask = coverage.Data();
+    if (mask == nullptr)
+    {
+        return {};
+    }
+    const std::array<double, 4> color = StraightColor(argb, 1.0);
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return {};
+    }
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::size_t index =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x);
+            const double c = mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
+                                  static_cast<std::size_t>(x)] /
+                             255.0;
+            std::uint8_t* out = bytes.data() + index * 4u;
+            out[0] = static_cast<std::uint8_t>(std::lround(color[2] * 255.0 * c));
+            out[1] = static_cast<std::uint8_t>(std::lround(color[1] * 255.0 * c));
+            out[2] = static_cast<std::uint8_t>(std::lround(color[0] * 255.0 * c));
+            out[3] = static_cast<std::uint8_t>(std::lround(255.0 * c));
+        }
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+void DocumentSession::FinishShape()
+{
+    if (!_shapeDraft.has_value())
+    {
+        return;
+    }
+    const ShapeDraft draft = _shapeDraft.value();
+    _shapeDraft.reset();
+    const double width = draft.rect.maxX - draft.rect.minX;
+    const double height = draft.rect.maxY - draft.rect.minY;
+    if (!_document.has_value() || _transformEdit.has_value() || width < 1.0 || height < 1.0)
+    {
+        return;
+    }
+    const int pixelWidth = static_cast<int>(std::lround(width));
+    const int pixelHeight = static_cast<int>(std::lround(height));
+    if (static_cast<std::int64_t>(pixelWidth) * static_cast<std::int64_t>(pixelHeight) > kMaxShapePixels)
+    {
+        return;
+    }
+    const Raster image = ShapeImage(draft.kind, pixelWidth, pixelHeight, _foregroundArgb, draft.cornerRadius);
+    if (!image.HasStorage())
+    {
+        return;
+    }
+    const std::array<double, 4> color = StraightColor(_foregroundArgb, 1.0);
+    const LayerShapeStyle style{draft.kind, color[0], color[1], color[2], draft.cornerRadius};
+    AddPixelLayer(image, Vec2{draft.rect.minX, draft.rect.minY}, NextShapeName(draft.kind),
+                  draft.kind == ShapeKind::Rectangle ? L"Rectangle" : L"Ellipse", false, style);
+}
+
+void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
+                                    bool dropsSelection, std::optional<LayerShapeStyle> shape)
+{
+    if (!_document.has_value() || !image.HasStorage())
+    {
+        return;
+    }
+    ImageLayer layer =
+        ImageLayer::Blank(name, Vec2{static_cast<double>(image.Width()), static_cast<double>(image.Height())});
+    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), std::move(name)};
+    layer.transform.origin = origin;
+    layer.shape = shape;
+    if (shape.has_value())
+    {
+        layer.shapeImage = image;
+    }
+    InsertLayerAboveActive(std::move(layer), editName, dropsSelection);
+}
+
+void DocumentSession::RedrawShape(std::size_t index)
+{
+    if (!_document.has_value() || index >= _document->layers.size())
+    {
+        return;
+    }
+    ImageLayer& layer = _document->layers[index];
+    const std::optional<LayerShapeStyle> shape = LiveShape(layer);
+    if (!shape.has_value() || !layer.asset.has_value())
+    {
+        return;
+    }
+    const int width = std::max(1, static_cast<int>(std::lround(layer.transform.size.x)));
+    const int height = std::max(1, static_cast<int>(std::lround(layer.transform.size.y)));
+    if ((width == layer.asset->image.Width() && height == layer.asset->image.Height()) ||
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels)
+    {
+        return;
+    }
+    const std::uint32_t argb =
+        0xFF000000u | (static_cast<std::uint32_t>(std::lround(std::clamp(shape->red, 0.0, 1.0) * 255.0)) << 16) |
+        (static_cast<std::uint32_t>(std::lround(std::clamp(shape->green, 0.0, 1.0) * 255.0)) << 8) |
+        static_cast<std::uint32_t>(std::lround(std::clamp(shape->blue, 0.0, 1.0) * 255.0));
+    const Raster image = ShapeImage(shape->kind, width, height, argb, shape->cornerRadius);
+    if (!image.HasStorage())
+    {
+        return;
+    }
+    // A mask that follows the layer's pixel grid stays exactly where it is while that grid changes size.
+    if (layer.mask.has_value() && !layer.mask->placement.has_value())
+    {
+        layer.mask->placement = MaskTransform(layer);
+    }
+    const std::wstring name = layer.asset->name;
+    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), name};
+    layer.shapeImage = image;
+}
+
+std::optional<std::uint32_t> DocumentSession::SampleCompositeColor(const Raster& composite, Vec2 point) noexcept
+{
+    const std::uint8_t* data =
+        composite.HasStorage() && composite.Format() == RasterFormat::Bgra8888 ? composite.Data() : nullptr;
+    if (data == nullptr || !std::isfinite(point.x) || !std::isfinite(point.y) || point.x < 0.0 || point.y < 0.0 ||
+        point.x >= composite.Width() || point.y >= composite.Height())
+    {
+        return std::nullopt;
+    }
+    const int x = static_cast<int>(std::floor(point.x));
+    const int y = static_cast<int>(std::floor(point.y));
+    const std::uint8_t* pixel = data + static_cast<std::size_t>(y) * static_cast<std::size_t>(composite.Stride()) +
+                                static_cast<std::size_t>(x) * 4u;
+    const double alpha = pixel[3];
+    if (alpha <= 0.0)
+    {
+        return std::nullopt;
+    }
+    const auto channel = [&](std::uint8_t value) -> std::uint32_t
+    { return static_cast<std::uint32_t>(std::lround(std::min(alpha, static_cast<double>(value)) / alpha * 255.0)); };
+    return 0xFF000000u | (channel(pixel[2]) << 16) | (channel(pixel[1]) << 8) | channel(pixel[0]);
 }

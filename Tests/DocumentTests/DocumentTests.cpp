@@ -3,6 +3,7 @@
 #include "DocumentHistory.h"
 #include "Selection.h"
 #include "TransformEdit.h"
+#include "WarpStroke.h"
 
 #include <algorithm>
 #include <array>
@@ -2816,6 +2817,627 @@ void TestBrushSelectionClip()
 }
 } // namespace
 
+// ── Retouch (C11) ─────────────────────────────────────────────
+
+Raster BytesRaster(int width, int height, const std::function<std::array<std::uint8_t, 4>(int, int)>& pixel)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::array<std::uint8_t, 4> value = pixel(x, y);
+            std::memcpy(
+                bytes.data() +
+                    (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * 4u,
+                value.data(), 4);
+        }
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+Guid InsertPixels(DocumentSession& session, const Raster& image, const wchar_t* name)
+{
+    ImageLayer layer = RasterLayer(image.Width(), image.Height(), name);
+    layer.asset->image = image;
+    layer.asset->thumbnail = Raster::MakeThumbnail(image);
+    session.Document().value().layers.push_back(layer);
+    session.SelectLayer(layer.id);
+    return layer.id;
+}
+
+// The active layer's pixel under document (x, y), read through the layer's origin; transparent beyond it.
+std::array<std::uint8_t, 4> ActivePixel(const DocumentSession& session, int x, int y)
+{
+    std::array<std::uint8_t, 4> out{0, 0, 0, 0};
+    const ImageLayer* layer = session.ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return out;
+    }
+    const int lx = x - static_cast<int>(std::lround(layer->transform.origin.x));
+    const int ly = y - static_cast<int>(std::lround(layer->transform.origin.y));
+    layer->asset->image.ReadRegion(lx, ly, 1, 1, out.data(), 4, 0);
+    return out;
+}
+
+std::uint8_t ActiveMaskValue(const DocumentSession& session, int x, int y)
+{
+    std::uint8_t out = 255;
+    const ImageLayer* layer = session.ActiveLayer();
+    if (layer == nullptr || !layer->mask.has_value())
+    {
+        return out;
+    }
+    const int lx = x - static_cast<int>(std::lround(layer->transform.origin.x));
+    const int ly = y - static_cast<int>(std::lround(layer->transform.origin.y));
+    layer->mask->asset.image.ReadRegion(lx, ly, 1, 1, &out, 1, 255);
+    return out;
+}
+
+// A short stroke of `kind` at `point` (a half-pixel move), committed.
+bool Dab(DocumentSession& session, Vec2 point, BrushKind kind, const Raster* composite = nullptr)
+{
+    if (!session.BeginBrush(point, kind, composite))
+    {
+        return false;
+    }
+    session.ContinueBrush(Vec2{point.x + 0.5, point.y});
+    session.FinishBrush();
+    return session.PendingBrush() == nullptr;
+}
+
+void TestSpotHealing()
+{
+    // Legacy healsTheBlemishUnderTheBrushAndNothingElse: vertical gray stripes, 2 px wide, with a 10 × 10 red
+    // blemish in the middle, healed by every mode.
+    const auto surfacePixel = [](int x, int y) -> std::array<std::uint8_t, 4>
+    {
+        const bool red = x >= 55 && x < 65 && y >= 35 && y < 45;
+        const std::uint8_t gray = x % 4 < 2 ? 100 : 112;
+        return red ? std::array<std::uint8_t, 4>{20, 20, 230, 255} : std::array<std::uint8_t, 4>{gray, gray, gray, 255};
+    };
+    const Raster surface = BytesRaster(120, 80, surfacePixel);
+    const std::array<std::pair<SpotHealingMode, const char*>, 3> modes{
+        std::pair{SpotHealingMode::ContentAware, "heal.content-aware"},
+        std::pair{SpotHealingMode::CreateTexture, "heal.create-texture"},
+        std::pair{SpotHealingMode::ProximityMatch, "heal.proximity-match"}};
+    for (const auto& [mode, name] : modes)
+    {
+        DocumentSession session;
+        session.CreateDocument(120, 80, false);
+        InsertPixels(session, surface, L"Surface");
+        session.spotHealingMode = mode;
+        session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1, false};
+        const int count = session.history.UndoCount();
+        bool ok = session.BeginBrush(Vec2{60, 40}, BrushKind::Heal);
+        // While painting, the spot shows as a dark wash.
+        std::array<std::uint8_t, 4> wash{255, 255, 255, 255};
+        if (ok)
+        {
+            for (const BrushStroke::Tile& tile : session.PendingBrush()->Tiles())
+            {
+                if (tile.rect.Intersect(GridRect{60, 40, 1, 1}).Empty())
+                {
+                    continue;
+                }
+                wash = PixelOf(tile.image, 60 - tile.rect.x, 40 - tile.rect.y);
+            }
+        }
+        session.ContinueBrush(Vec2{60.5, 40});
+        session.FinishBrush();
+        ok = ok && wash[2] < 150 && session.history.UndoCount() == count + 1 &&
+             session.history.UndoName() == L"Spot Healing" && session.PendingBrush() == nullptr;
+        bool healed = true;
+        for (const auto& [x, y] : {std::pair{60, 40}, std::pair{56, 36}, std::pair{64, 44}})
+        {
+            const std::array<std::uint8_t, 4> pixel = ActivePixel(session, x, y);
+            healed = healed && static_cast<int>(pixel[2]) - pixel[1] < 30 && pixel[1] >= 80 && pixel[1] <= 130 &&
+                     pixel[3] == 255;
+        }
+        // Away from the brush, nothing moves.
+        bool untouched = true;
+        for (const auto& [x, y] :
+             {std::pair{10, 10}, std::pair{90, 40}, std::pair{30, 40}, std::pair{60, 10}, std::pair{60, 70}})
+        {
+            untouched = untouched && ActivePixel(session, x, y) == surfacePixel(x, y);
+        }
+        Expect(ok && healed && untouched, name);
+    }
+    // Healing reworks image pixels: it never starts on a mask.
+    DocumentSession masked;
+    masked.CreateDocument(60, 40, false);
+    const Guid id = InsertPixels(masked, SolidRaster(60, 40, 0, 0, 255, 255), L"Red");
+    masked.AddLayerMask(true);
+    masked.SelectLayerTarget(id, true);
+    Expect(masked.IsMaskSelected() && !masked.BeginBrush(Vec2{30, 20}, BrushKind::Heal) &&
+               masked.PendingBrush() == nullptr,
+           "heal.never-on-a-mask");
+}
+
+void TestCloneStamp()
+{
+    // Legacy copiesTheSourceUnderTheBrushKeepingAlignmentUntilItIsTurnedOff: left half red with a green square
+    // (x 10–19, y 15–24), right half blue.
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> green{0, 255, 0, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    const Raster colors = BytesRaster(80, 40,
+                                      [&](int x, int y)
+                                      {
+                                          if (x >= 10 && x < 20 && y >= 15 && y < 25)
+                                          {
+                                              return green;
+                                          }
+                                          return x < 40 ? red : blue;
+                                      });
+    DocumentSession session;
+    session.CreateDocument(80, 40, false);
+    InsertPixels(session, colors, L"Colors");
+    session.brushSettings = BrushSettings{6, 1, 0, 0, 0, 1, false};
+    // Nothing to copy until a source is set.
+    Expect(!session.BeginBrush(Vec2{60, 20}, BrushKind::Clone) && session.PendingBrush() == nullptr &&
+               !session.CloneStrokeOffset(Vec2{60, 20}).has_value(),
+           "clone.needs-a-source");
+    session.SetCloneSource(Vec2{15, 20});
+    const std::optional<Vec2> sample = session.CloneSamplePoint(Vec2{60, 20});
+    Expect(sample.has_value() && sample->x == 15 && sample->y == 20, "clone.crosshair-at-the-source");
+    const int count = session.history.UndoCount();
+    Expect(Dab(session, Vec2{60, 20}, BrushKind::Clone) && session.history.UndoCount() == count + 1 &&
+               session.history.UndoName() == L"Clone Stamp",
+           "clone.one-entry");
+    Expect(ActivePixel(session, 60, 20) == green && ActivePixel(session, 70, 5) == blue,
+           "clone.copies-the-source-under-the-brush");
+    // Aligned: the next stroke keeps the offset (−45, 0), so (66, 20) copies red from (21, 20).
+    const std::optional<Vec2> aligned = session.CloneSamplePoint(Vec2{66, 20});
+    Expect(aligned.has_value() && aligned->x == 21 && aligned->y == 20, "clone.crosshair-follows-when-aligned");
+    Expect(Dab(session, Vec2{66, 20}, BrushKind::Clone) && ActivePixel(session, 66, 20) == red,
+           "clone.aligned-keeps-the-offset");
+    // Not aligned: every stroke starts at the source again.
+    session.cloneSettings.aligned = false;
+    Expect(Dab(session, Vec2{50, 10}, BrushKind::Clone) && ActivePixel(session, 50, 10) == green,
+           "clone.unaligned-starts-at-the-source");
+    // Sample All Layers copies from the composite the host passes in, and needs it.
+    session.cloneSettings.sampleAllLayers = true;
+    const Raster magenta = SolidRaster(80, 40, 255, 0, 255, 255);
+    Expect(!session.BeginBrush(Vec2{30, 30}, BrushKind::Clone, nullptr), "clone.all-layers-needs-the-composite");
+    Expect(Dab(session, Vec2{30, 30}, BrushKind::Clone, &magenta) &&
+               ActivePixel(session, 30, 30) == std::array<std::uint8_t, 4>{255, 0, 255, 255},
+           "clone.all-layers-copies-the-composite");
+    // A mask is never cloned.
+    DocumentSession masked;
+    masked.CreateDocument(60, 40, false);
+    const Guid id = InsertPixels(masked, SolidRaster(60, 40, 0, 0, 255, 255), L"Red");
+    masked.AddLayerMask(true);
+    masked.SelectLayerTarget(id, true);
+    masked.SetCloneSource(Vec2{10, 10});
+    Expect(!masked.BeginBrush(Vec2{30, 20}, BrushKind::Clone), "clone.never-on-a-mask");
+    // Legacy cloneStampKeepsItsOwnSoftBrushTip: Clone Stamp (family 1) parks its own tip.
+    DocumentSession tips;
+    tips.CreateDocument(40, 20, false);
+    tips.brushSettings.diameter = 30;
+    Expect(tips.brushSettings.hardness == 1, "tips.brush-starts-hard");
+    tips.SwitchBrushTipFamily(0, 1);
+    Expect(tips.brushSettings.hardness == 0 && tips.brushSettings.diameter == 40, "tips.clone-has-its-own-soft-tip");
+    tips.brushSettings.hardness = 0.5;
+    tips.SwitchBrushTipFamily(1, 0);
+    Expect(tips.brushSettings.hardness == 1 && tips.brushSettings.diameter == 30, "tips.brush-gets-its-tip-back");
+    tips.SwitchBrushTipFamily(0, 1);
+    Expect(tips.brushSettings.hardness == 0.5 && tips.brushSettings.diameter == 40, "tips.clone-remembers-its-change");
+    tips.SwitchBrushTipFamily(1, 1);
+    Expect(tips.brushSettings.hardness == 0.5, "tips.same-family-changes-nothing");
+}
+
+void TestBlurTool()
+{
+    // Blur paints a softened copy of the layer through the tip; going over an area again softens it further.
+    const std::array<std::uint8_t, 4> black{0, 0, 0, 255};
+    const std::array<std::uint8_t, 4> white{255, 255, 255, 255};
+    const Raster edge = BytesRaster(40, 40, [&](int x, int) { return x < 20 ? black : white; });
+    DocumentSession session;
+    session.CreateDocument(40, 40, false);
+    InsertPixels(session, edge, L"Edge");
+    session.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1, false};
+    const int count = session.history.UndoCount();
+    Expect(Dab(session, Vec2{20, 20}, BrushKind::Blur) && session.history.UndoCount() == count + 1 &&
+               session.history.UndoName() == L"Blur",
+           "blur.one-entry");
+    const std::array<std::uint8_t, 4> at = ActivePixel(session, 19, 20);
+    Expect(at[0] > 30 && at[0] < 225 && at[0] == at[1] && at[3] == 255, "blur.softens-the-edge");
+    Expect(ActivePixel(session, 5, 20) == black && ActivePixel(session, 35, 20) == white, "blur.leaves-the-rest");
+    const std::array<std::uint8_t, 4> once = ActivePixel(session, 17, 20);
+    Expect(Dab(session, Vec2{20, 20}, BrushKind::Blur) && ActivePixel(session, 17, 20)[0] > once[0],
+           "blur.again-softens-further");
+    // On a mask it blurs the mask, keeping its tone beyond its pixels.
+    DocumentSession masked;
+    masked.CreateDocument(40, 40, false);
+    const Guid id = InsertPixels(masked, SolidRaster(40, 40, 0, 0, 255, 255), L"Red");
+    masked.AddLayerMask(true);
+    std::vector<std::uint8_t> half(40u * 40u, 0);
+    for (int y = 0; y < 40; ++y)
+    {
+        for (int x = 20; x < 40; ++x)
+        {
+            half[static_cast<std::size_t>(y) * 40u + static_cast<std::size_t>(x)] = 255;
+        }
+    }
+    const Raster halfMask = Raster::Make(40, 40, RasterFormat::Gray8, half.data(), half.size());
+    for (ImageLayer& layer : masked.Document().value().layers)
+    {
+        if (layer.id == id)
+        {
+            layer.mask->asset.image = halfMask;
+            layer.mask->asset.thumbnail = halfMask;
+        }
+    }
+    masked.SelectLayerTarget(id, true);
+    masked.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1, false};
+    Expect(masked.IsMaskSelected() && Dab(masked, Vec2{20, 20}, BrushKind::Blur) &&
+               masked.history.UndoName() == L"Blur",
+           "blur.mask-entry");
+    const std::uint8_t maskEdge = ActiveMaskValue(masked, 19, 20);
+    Expect(maskEdge > 30 && maskEdge < 225 && ActiveMaskValue(masked, 5, 20) == 0 &&
+               ActiveMaskValue(masked, 35, 20) == 255,
+           "blur.softens-the-mask");
+    Expect(ActivePixel(masked, 19, 20) == std::array<std::uint8_t, 4>{0, 0, 255, 255}, "blur.mask-leaves-the-pixels");
+}
+
+void TestSmearWarp()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    const Raster halves = BytesRaster(60, 20, [&](int x, int) { return x < 30 ? red : blue; });
+    // Smudge drags the color it picked up along the stroke.
+    DocumentSession smudge;
+    smudge.CreateDocument(60, 20, false);
+    InsertPixels(smudge, halves, L"Halves");
+    smudge.smearMode = SmearMode::Smudge;
+    smudge.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+    Expect(smudge.BeginWarp(Vec2{25, 10}) && smudge.PendingWarp() != nullptr && smudge.PendingBrush() == nullptr,
+           "smudge.begins");
+    smudge.ContinueWarp(Vec2{45, 10});
+    const int count = smudge.history.UndoCount();
+    smudge.FinishWarp();
+    Expect(smudge.PendingWarp() == nullptr && smudge.history.UndoCount() == count + 1 &&
+               smudge.history.UndoName() == L"Smudge",
+           "smudge.one-entry");
+    const std::array<std::uint8_t, 4> dragged = ActivePixel(smudge, 35, 10);
+    Expect(dragged[2] > 0 && dragged[0] < 255 && dragged[3] == 255, "smudge.carries-color-along");
+    Expect(ActivePixel(smudge, 5, 10) == red && ActivePixel(smudge, 55, 10) == blue, "smudge.leaves-the-rest");
+    // Liquify pushes pixels along with the brush: the edge moves right.
+    DocumentSession liquify;
+    liquify.CreateDocument(60, 20, false);
+    InsertPixels(liquify, halves, L"Halves");
+    liquify.smearMode = SmearMode::Liquify;
+    liquify.brushSettings = BrushSettings{12, 0.5, 0, 0, 0, 1, false};
+    Expect(liquify.BeginWarp(Vec2{30, 10}), "liquify.begins");
+    liquify.ContinueWarp(Vec2{38, 10});
+    liquify.FinishWarp();
+    const std::array<std::uint8_t, 4> pushed = ActivePixel(liquify, 33, 10);
+    Expect(liquify.history.UndoName() == L"Liquify" && pushed[2] > pushed[0], "liquify.pushes-the-edge");
+    Expect(ActivePixel(liquify, 5, 10) == red && ActivePixel(liquify, 55, 10) == blue, "liquify.leaves-the-rest");
+    // The working copy hands the preview its changed tiles once; cancelling records nothing; masks refuse.
+    DocumentSession cancel;
+    cancel.CreateDocument(60, 20, false);
+    const Guid id = InsertPixels(cancel, halves, L"Halves");
+    cancel.smearMode = SmearMode::Smudge;
+    cancel.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+    const int before = cancel.history.UndoCount();
+    Expect(cancel.BeginWarp(Vec2{25, 10}), "warp.cancel-begins");
+    cancel.ContinueWarp(Vec2{35, 10});
+    const std::vector<RasterTile> tiles = cancel.MutableWarp()->TakeChangedTiles();
+    Expect(tiles.size() == 1 && tiles[0].pixels.Width() == 60 && tiles[0].pixels.Height() == 20 &&
+               cancel.MutableWarp()->TakeChangedTiles().empty(),
+           "warp.changed-tiles-once");
+    cancel.CancelWarp();
+    Expect(cancel.PendingWarp() == nullptr && cancel.history.UndoCount() == before &&
+               ActivePixel(cancel, 35, 10) == blue,
+           "warp.cancel-records-nothing");
+    cancel.AddLayerMask(true);
+    cancel.SelectLayerTarget(id, true);
+    Expect(!cancel.BeginWarp(Vec2{25, 10}), "warp.never-on-a-mask");
+}
+
+[[nodiscard]] bool Near(int value, int target, int tolerance = 3) noexcept
+{
+    return std::abs(value - target) <= tolerance;
+}
+
+[[nodiscard]] bool NearPixel(const std::array<std::uint8_t, 4>& value, const std::array<int, 4>& target) noexcept
+{
+    return Near(value[0], target[0]) && Near(value[1], target[1]) && Near(value[2], target[2]) &&
+           Near(value[3], target[3]);
+}
+
+DocumentSession GradientSession(int width = 101, int height = 4)
+{
+    DocumentSession session;
+    session.CreateDocument(width, height, false);
+    session.AddBlankLayer();
+    Expect(session.gradientSettings.style == GradientStyle::ForegroundToTransparent, "gradient.default-style");
+    session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+    return session;
+}
+
+void DragGradient(DocumentSession& session, Vec2 start, Vec2 end)
+{
+    session.BeginGradient(start);
+    session.MoveGradient(std::nullopt, end);
+    session.EndGradientDrag();
+}
+
+void TestGradientTool()
+{
+    // Legacy foregroundToBackgroundFillsCanvasAndCommitsOneUndo (pixels within 3 levels, as Core Graphics quantizes).
+    {
+        DocumentSession session = GradientSession();
+        const int count = session.history.UndoCount();
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        Expect(session.PendingGradient() != nullptr && !session.ActiveLayer()->asset.has_value() &&
+                   session.history.UndoCount() == count,
+               "gradient.pending-leaves-the-document");
+        session.CommitGradient();
+        Expect(session.PendingGradient() == nullptr && session.history.UndoCount() == count + 1 &&
+                   session.history.UndoName() == L"Gradient",
+               "gradient.commits-one-entry");
+        const std::array<std::uint8_t, 4> middle = ActivePixel(session, 50, 1);
+        Expect(NearPixel(ActivePixel(session, 0, 0), {0, 0, 0, 255}) &&
+                   NearPixel(ActivePixel(session, 100, 3), {255, 255, 255, 255}) && Near(middle[2], 128) &&
+                   middle[2] == middle[1] && middle[3] == 255,
+               "gradient.foreground-to-background");
+        session.Undo();
+        Expect(!session.ActiveLayer()->asset.has_value(), "gradient.undo-restores");
+    }
+    // Legacy radialSpreadsFromStartToRimInEveryDirection.
+    {
+        DocumentSession session = GradientSession(101, 101);
+        session.gradientSettings.shape = GradientShape::Radial;
+        DragGradient(session, Vec2{50.5, 50.5}, Vec2{90.5, 50.5});
+        session.CommitGradient();
+        std::array<int, 4> halfway{};
+        int i = 0;
+        for (const auto& [x, y] : {std::pair{70, 50}, std::pair{30, 50}, std::pair{50, 70}, std::pair{50, 30}})
+        {
+            halfway[static_cast<std::size_t>(i++)] = ActivePixel(session, x, y)[2];
+        }
+        bool even = true;
+        for (const int value : halfway)
+        {
+            even = even && Near(value, 128, 5) && Near(value, halfway[0], 1);
+        }
+        Expect(NearPixel(ActivePixel(session, 50, 50), {0, 0, 0, 255}) && even &&
+                   NearPixel(ActivePixel(session, 100, 50), {255, 255, 255, 255}) &&
+                   NearPixel(ActivePixel(session, 0, 0), {255, 255, 255, 255}),
+               "gradient.radial");
+    }
+    // Legacy reverseOpacityAndDirectionFollowSettings: white at the start with 50 % alpha on a blank layer.
+    {
+        DocumentSession session = GradientSession();
+        session.gradientSettings.reversed = true;
+        session.gradientSettings.opacity = 0.5;
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        session.CommitGradient();
+        const std::array<std::uint8_t, 4> start = ActivePixel(session, 0, 2);
+        const std::array<std::uint8_t, 4> end = ActivePixel(session, 100, 2);
+        Expect(Near(start[3], 128) && Near(start[2], start[3]) && Near(end[2], 0) && Near(end[3], 128),
+               "gradient.reverse-and-opacity");
+    }
+    // Legacy foregroundToTransparentPreservesUnderlyingPixelsAndAlpha.
+    {
+        DocumentSession session = GradientSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        // Everything before the start is foreground: a solid red layer.
+        DragGradient(session, Vec2{100.5, 2}, Vec2{101, 2});
+        session.CommitGradient();
+        Expect(NearPixel(ActivePixel(session, 50, 2), {0, 0, 255, 255}), "gradient.solid-fill");
+        session.SetForegroundColor(0xFF000000u);
+        session.gradientSettings.style = GradientStyle::ForegroundToTransparent;
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        session.CommitGradient();
+        const std::array<std::uint8_t, 4> middle = ActivePixel(session, 50, 2);
+        Expect(NearPixel(ActivePixel(session, 0, 2), {0, 0, 0, 255}) &&
+                   NearPixel(ActivePixel(session, 100, 2), {0, 0, 255, 255}) && Near(middle[2], 128) &&
+                   middle[1] == 0 && middle[3] == 255,
+               "gradient.foreground-to-transparent");
+    }
+    // Legacy cancelUndoAndClicksLeaveDocumentUntouched.
+    {
+        DocumentSession session = GradientSession();
+        const CanvasDocument before = session.Document().value();
+        session.BeginGradient(Vec2{10, 2});
+        session.EndGradientDrag();
+        Expect(session.PendingGradient() == nullptr, "gradient.click-pends-nothing");
+        DragGradient(session, Vec2{0, 2}, Vec2{100, 2});
+        session.CancelGradient();
+        Expect(session.PendingGradient() == nullptr && session.Document().value() == before, "gradient.cancel");
+        DragGradient(session, Vec2{0, 2}, Vec2{100, 2});
+        session.Undo();
+        Expect(session.PendingGradient() == nullptr && session.Document().value() == before, "gradient.undo-drops");
+    }
+    // Legacy redraggingReplacesPendingLineWithoutAccumulating.
+    {
+        DocumentSession session = GradientSession();
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        DragGradient(session, Vec2{100.5, 2}, Vec2{0.5, 2});
+        session.CommitGradient();
+        Expect(NearPixel(ActivePixel(session, 0, 2), {255, 255, 255, 255}) &&
+                   NearPixel(ActivePixel(session, 100, 2), {0, 0, 0, 255}),
+               "gradient.redrag-replaces");
+    }
+    // Legacy maskGradientWritesCoverageInsideLayerBounds: the default mask palette paints black (hide) to white.
+    {
+        DocumentSession session = GradientSession();
+        DragGradient(session, Vec2{0, 2}, Vec2{0.6, 2});
+        session.CommitGradient(); // Opaque black layer.
+        session.AddLayerMask(true);
+        const Guid id = session.ActiveLayerID().value();
+        session.SelectLayerTarget(id, true);
+        Expect(session.IsMaskSelected(), "gradient.mask-target");
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        session.CommitGradient();
+        Expect(session.history.UndoName() == L"Gradient Mask" && Near(ActiveMaskValue(session, 0, 2), 0) &&
+                   Near(ActiveMaskValue(session, 100, 2), 255) && Near(ActiveMaskValue(session, 50, 2), 128),
+               "gradient.mask");
+    }
+    // Legacy paletteChangesUpdatePendingPreview, and the pending tiles feed the preview.
+    {
+        DocumentSession session = GradientSession();
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        const BrushStroke& raster = *session.PendingGradient()->raster;
+        Expect(!raster.Tiles().empty() && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 0,
+               "gradient.preview-tiles");
+        session.SwapPaletteColors();
+        Expect(session.GradientColors()[0][0] == 1.0 && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 255,
+               "gradient.palette-updates-preview");
+        // Switching layers applies it.
+        const int count = session.history.UndoCount();
+        session.AddBlankLayer();
+        Expect(session.PendingGradient() == nullptr && session.history.UndoCount() == count + 2,
+               "gradient.layer-switch-applies");
+    }
+}
+
+DocumentSession ShapeSession()
+{
+    DocumentSession session;
+    session.CreateDocument(100, 80, true);
+    session.SetForegroundColor(0xFFFF0000u);
+    return session;
+}
+
+void DragShape(DocumentSession& session, Vec2 from, Vec2 to, bool square = false, bool fromCenter = false)
+{
+    session.BeginShape(from);
+    session.DragShape(to, square, fromCenter);
+    session.FinishShape();
+}
+
+void TestShapeTool()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    // Legacy rectangleFillsANewLayerWithTheForegroundColorAsOneUndoStep.
+    {
+        DocumentSession session = ShapeSession();
+        session.SelectAll();
+        const int count = session.history.UndoCount();
+        DragShape(session, Vec2{10, 10}, Vec2{40, 30});
+        const std::vector<ImageLayer>& layers = session.Document().value().layers;
+        Expect(layers.size() == 2 && layers[0].name == L"Layer 1" && layers[1].name == L"Rectangle 1" &&
+                   session.ActiveLayer()->name == L"Rectangle 1" && session.history.UndoCount() == count + 1 &&
+                   session.history.UndoName() == L"Rectangle",
+               "shape.rectangle-layer");
+        Expect(session.ActiveLayer()->transform.origin == Vec2{10, 10} &&
+                   session.ActiveLayer()->transform.size == Vec2{30, 20} && session.Selection().has_value() &&
+                   LiveShape(*session.ActiveLayer()).has_value(),
+               "shape.rectangle-placed-keeps-selection");
+        Expect(ActivePixel(session, 25, 20) == red && ActivePixel(session, 10, 10) == red &&
+                   ActivePixel(session, 39, 29) == red && ActivePixel(session, 9, 20)[3] == 0 &&
+                   ActivePixel(session, 40, 20)[3] == 0 && ActivePixel(session, 25, 30)[3] == 0,
+               "shape.rectangle-pixels");
+        DragShape(session, Vec2{60, 10}, Vec2{70, 20});
+        Expect(session.ActiveLayer()->name == L"Rectangle 2", "shape.next-name");
+        session.Undo();
+        session.Undo();
+        Expect(session.Document().value().layers.size() == 1, "shape.undo");
+    }
+    // Legacy ellipseLeavesItsCornersClearWithShiftCircleAndOptionFromCenter.
+    {
+        DocumentSession session = ShapeSession();
+        session.ToggleShapeKind();
+        Expect(session.shapeKind == ShapeKind::Ellipse, "shape.toggle-kind");
+        DragShape(session, Vec2{50, 40}, Vec2{60, 45}, true, true);
+        Expect(session.ActiveLayer()->name == L"Ellipse 1" && session.history.UndoName() == L"Ellipse" &&
+                   session.ActiveLayer()->transform.origin == Vec2{40, 30} &&
+                   session.ActiveLayer()->transform.size == Vec2{20, 20},
+               "shape.ellipse-layer");
+        Expect(ActivePixel(session, 50, 40) == red && ActivePixel(session, 41, 40)[3] > 0 &&
+                   ActivePixel(session, 50, 31)[3] > 0 && ActivePixel(session, 40, 30)[3] == 0 &&
+                   ActivePixel(session, 59, 49)[3] == 0,
+               "shape.ellipse-pixels");
+    }
+    // Legacy aClickEscapeOrToolSwitchMakesNoLayer (the host cancels the draft when the tool changes).
+    {
+        DocumentSession session = ShapeSession();
+        const int count = session.history.UndoCount();
+        session.BeginShape(Vec2{20, 20});
+        session.FinishShape();
+        session.BeginShape(Vec2{20, 20});
+        session.DragShape(Vec2{50, 50}, false, false);
+        const std::optional<ShapeDraft>& draft = session.PendingShape();
+        Expect(draft.has_value() && draft->rect.minX == 20 && draft->rect.minY == 20 && draft->rect.maxX == 50 &&
+                   draft->rect.maxY == 50,
+               "shape.draft-box");
+        session.CancelShape();
+        Expect(!session.PendingShape().has_value() && session.history.UndoCount() == count &&
+                   session.Document().value().layers.size() == 1,
+               "shape.click-and-cancel-make-nothing");
+    }
+    // Legacy roundedRectanglesFollowTheRadiusAndClampToAPill.
+    {
+        DocumentSession session = ShapeSession();
+        session.shapeCornerRadius = 8;
+        DragShape(session, Vec2{10, 10}, Vec2{50, 40}); // 40 × 30
+        session.shapeCornerRadius = 500;
+        DragShape(session, Vec2{55, 50}, Vec2{95, 70}); // 40 × 20: radius 10
+        session.SelectLayer(session.Document().value().layers[1].id);
+        Expect(ActivePixel(session, 10, 10)[3] == 0 && ActivePixel(session, 11, 11)[3] == 0 &&
+                   ActivePixel(session, 13, 13)[3] == 255 && ActivePixel(session, 30, 10)[3] == 255 &&
+                   ActivePixel(session, 30, 25) == red,
+               "shape.rounded-corners");
+        session.SelectLayer(session.Document().value().layers[2].id);
+        Expect(ActivePixel(session, 55, 50)[3] == 0 && ActivePixel(session, 75, 60) == red &&
+                   session.Document().value().layers.size() == 3,
+               "shape.pill");
+        session.ToggleShapeKind();
+        session.BeginShape(Vec2{5, 5});
+        Expect(session.PendingShape().has_value() && session.PendingShape()->cornerRadius == 0,
+               "shape.ellipse-takes-no-radius");
+        session.CancelShape();
+    }
+    // A scaled shape layer draws its shape again at the new size (the corner keeps its radius); painting on it
+    // makes it plain pixels that stretch instead.
+    {
+        DocumentSession session = ShapeSession();
+        session.shapeCornerRadius = 8;
+        DragShape(session, Vec2{10, 10}, Vec2{50, 40});
+        session.BeginTransform(false);
+        LayerTransform doubled = session.ActiveLayer()->transform;
+        doubled.size = Vec2{80, 60};
+        session.PreviewTransform(doubled);
+        session.CommitTransform();
+        const ImageLayer* scaled = session.ActiveLayer();
+        Expect(scaled->asset->image.Width() == 80 && scaled->asset->image.Height() == 60 &&
+                   LiveShape(*scaled).has_value() && ActivePixel(session, 11, 11)[3] == 0 &&
+                   ActivePixel(session, 20, 20) == red,
+               "shape.redraws-when-scaled");
+        session.brushSettings = BrushSettings{10, 1, 0, 0, 1, 1, false};
+        Expect(session.BeginBrush(Vec2{40, 30}, BrushKind::Paint), "shape.paint-begins");
+        session.FinishBrush();
+        Expect(!LiveShape(*session.ActiveLayer()).has_value(), "shape.painted-is-plain-pixels");
+    }
+}
+
+void TestEyedropper()
+{
+    // The composite's straight sRGB color under a document point; nothing over transparency or off the canvas.
+    std::vector<std::uint8_t> bytes(4u * 4u * 4u, 0);
+    const std::array<std::uint8_t, 4> half{64, 0, 128, 128}; // premultiplied: blue 0.5, green 0, red 1 at 50 %
+    std::memcpy(bytes.data() + (1u * 4u + 1u) * 4u, half.data(), 4);
+    const std::array<std::uint8_t, 4> teal{200, 150, 20, 255};
+    std::memcpy(bytes.data() + (2u * 4u + 3u) * 4u, teal.data(), 4);
+    const Raster composite = Raster::Make(4, 4, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    Expect(DocumentSession::SampleCompositeColor(composite, Vec2{1.7, 1.2}) == 0xFFFF0080u,
+           "eyedropper.unpremultiplies");
+    Expect(DocumentSession::SampleCompositeColor(composite, Vec2{3.5, 2.5}) == 0xFF1496C8u, "eyedropper.opaque");
+    Expect(!DocumentSession::SampleCompositeColor(composite, Vec2{0.5, 0.5}).has_value() &&
+               !DocumentSession::SampleCompositeColor(composite, Vec2{4, 1}).has_value() &&
+               !DocumentSession::SampleCompositeColor(composite, Vec2{-1, 1}).has_value(),
+           "eyedropper.nothing-over-transparency-or-outside");
+    DocumentSession session;
+    session.CreateDocument(4, 4, true);
+    Expect(session.showsSampleRing, "eyedropper.ring-shown-by-default");
+}
+
 int wmain()
 {
     TestHierarchy();
@@ -2865,6 +3487,13 @@ int wmain()
     TestBrushRejectsAndKeys();
     TestBrushExpansion();
     TestBrushSelectionClip();
+    TestSpotHealing();
+    TestCloneStamp();
+    TestBlurTool();
+    TestSmearWarp();
+    TestGradientTool();
+    TestShapeTool();
+    TestEyedropper();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

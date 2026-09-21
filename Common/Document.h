@@ -696,6 +696,9 @@ struct ImageLayer
     std::optional<LayerMask> mask;
     std::optional<LayerAdjustment> adjustment;
     std::optional<LayerShapeStyle> shape;
+    // The raster the shape drew (C11): while `asset` still holds it the layer is a live shape that redraws at a new
+    // size; once anything else changes the pixels it is plain pixels. Not part of equality.
+    Raster shapeImage;
 
     [[nodiscard]] bool operator==(const ImageLayer& other) const noexcept;
     static ImageLayer Blank(std::wstring name, Vec2 size);
@@ -742,6 +745,65 @@ struct SnapGuides
 };
 
 // Brush (C10, Specs/Rendering/Rendering_Brush.md).
+// Spot Healing's kind of repair (C11, Specs/Document/Document_Tools.md).
+enum class SpotHealingMode : std::uint8_t
+{
+    ContentAware,
+    CreateTexture,
+    ProximityMatch,
+};
+
+// The Smear tool's modes: Liquify pushes pixels, Blur softens, Smudge drags color along.
+enum class SmearMode : std::uint8_t
+{
+    Liquify,
+    Blur,
+    Smudge,
+};
+
+// What a brush stroke does to the pixels under the tip.
+enum class BrushKind : std::uint8_t
+{
+    Paint,
+    Erase,
+    Heal,
+    Clone,
+    Blur,
+};
+
+// Clone Stamp's options-bar settings.
+struct CloneSettings
+{
+    // The source moves with the brush and keeps its offset between strokes; off, every stroke starts again at the
+    // source point.
+    bool aligned = true;
+    // Copy from every visible layer as shown rather than the active layer alone.
+    bool sampleAllLayers = false;
+    [[nodiscard]] bool operator==(const CloneSettings&) const noexcept = default;
+};
+
+// Linear runs from start to end; radial is centered on the start with the end on its rim.
+enum class GradientShape : std::uint8_t
+{
+    Linear,
+    Radial,
+};
+
+enum class GradientStyle : std::uint8_t
+{
+    ForegroundToBackground,
+    ForegroundToTransparent,
+};
+
+struct GradientSettings
+{
+    GradientShape shape = GradientShape::Linear;
+    GradientStyle style = GradientStyle::ForegroundToTransparent;
+    bool reversed = false;
+    double opacity = 1;
+    [[nodiscard]] bool operator==(const GradientSettings&) const noexcept = default;
+};
+
 struct BrushSettings
 {
     double diameter = 40; // document pixels, 1–2000
@@ -753,6 +815,9 @@ struct BrushSettings
     double opacity = 1;
     // Erase: the stroke clears the layer's pixels instead of painting color on them.
     bool erasing = false;
+    // Spot Healing uses nearby source pixels instead of the foreground color, once the stroke ends.
+    bool healing = false;
+    SpotHealingMode healingMode = SpotHealingMode::ContentAware;
     [[nodiscard]] bool operator==(const BrushSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept;
     // Soft-tip deposition rate shared by the continuous integral and the dab fallback.
@@ -770,6 +835,34 @@ enum class BrushToolMode : std::uint8_t
 
 class BrushStroke;
 class BrushCoverageEngine;
+class WarpStroke;
+
+// An uncommitted gradient on one layer or mask (C11). Endpoints are document pixels; the raster preview lives in the
+// stroke's tiles and never touches the document until commit.
+struct GradientEdit
+{
+    std::shared_ptr<BrushStroke> raster;
+    Vec2 start;
+    Vec2 end;
+    [[nodiscard]] bool HasLine() const noexcept
+    {
+        return std::hypot(end.x - start.x, end.y - start.y) >= 0.5;
+    }
+};
+
+// A shape being dragged out with the Shape tool, in whole document pixels.
+struct ShapeDraft
+{
+    ShapeKind kind = ShapeKind::Rectangle;
+    Vec2 anchor;
+    SelectionBounds rect;
+    // Document pixels, fixed when the drag starts; rectangles only.
+    double cornerRadius = 0;
+    [[nodiscard]] bool operator==(const ShapeDraft&) const noexcept = default;
+};
+
+// The shape this layer still is: nullopt once its pixels were edited some other way.
+[[nodiscard]] std::optional<LayerShapeStyle> LiveShape(const ImageLayer& layer) noexcept;
 
 // What the last brush commit installed: the raster and the grid rectangle it covers (for the host's live preview).
 struct BrushCommitInfo
@@ -1083,6 +1176,95 @@ class DocumentSession
     // Starts a stroke at `point` (document pixels): the foreground color, or `erase`; on a mask, black or white
     // per `maskPaintWhite`. False when painting cannot start (or the stroke exceeded the pixel budget).
     bool BeginBrush(Vec2 point, bool erase = false);
+    // The retouch brushes (C11): Spot Healing and Clone Stamp rework image pixels and never start on a mask; Blur
+    // paints a softened copy of the layer or its mask through the tip. Clone Stamp needs a source
+    // (`SetCloneSource`) and, with `cloneSettings.sampleAllLayers`, the host's composite of the visible canvas at
+    // document size.
+    bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite = nullptr);
+    // Alt-click: where Clone Stamp copies from. A new source starts a new alignment.
+    void SetCloneSource(Vec2 point) noexcept;
+    // The whole-pixel offset a stroke starting at `point` would copy with: aligned strokes keep the first
+    // stroke's; otherwise it runs from the brush to the source. Nullopt without a source.
+    [[nodiscard]] std::optional<Vec2> CloneStrokeOffset(Vec2 point) const noexcept;
+    // Where the source sits for a brush at `point`, for the canvas's crosshair: the source itself until a stroke
+    // fixes the offset.
+    [[nodiscard]] std::optional<Vec2> CloneSamplePoint(Vec2 point) const noexcept;
+    // What a Clone Stamp stroke copies from, at document size: the active layer's own pixels as placed, or the
+    // composite. Empty when there is nothing to copy.
+    [[nodiscard]] Raster CloneSample(const Raster* composite) const;
+    // What a Blur stroke paints: the active layer (or its mask) as shown, softened by an amount that follows the
+    // brush size. Empty when there is nothing to blur.
+    [[nodiscard]] Raster BlurSample(bool mask) const;
+    // Smudge and Liquify (the Smear tool's warp modes) work on a document-size copy of the active layer's pixels,
+    // never on a mask; `FinishWarp` paints the result into the layer along the stroke as one entry (`Liquify`,
+    // `Smudge`).
+    bool BeginWarp(Vec2 point);
+    void ContinueWarp(Vec2 point);
+    void FinishWarp();
+    void CancelWarp() noexcept;
+    [[nodiscard]] const WarpStroke* PendingWarp() const noexcept
+    {
+        return _warp.get();
+    }
+    [[nodiscard]] WarpStroke* MutableWarp() noexcept
+    {
+        return _warp.get();
+    }
+    // Clone Stamp (family 1) and Smear (family 2) keep their own size, hardness and opacity; the other brushes
+    // share family 0. Called when the tool changes families; the parked tips start soft at 40 px.
+    void SwitchBrushTipFamily(int from, int to) noexcept;
+
+    // Gradient (C11): a pending raster edit on the active layer or its mask, shown through the stroke preview until
+    // Apply, Enter, or a tool, layer or target switch commits it (`Gradient`, `Gradient Mask`); Undo, Escape or
+    // Cancel drop it. Dragging a new line on the same target replaces the pending one.
+    bool BeginGradient(Vec2 point);
+    void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
+    // Re-renders the pending gradient from the current endpoints, settings and palette.
+    void RefreshGradient();
+    // Straight red, green, blue, alpha of both ends after the style and Reverse; a mask takes the first component.
+    [[nodiscard]] std::array<std::array<double, 4>, 2> GradientColors() const noexcept;
+    // Ends a drag; a click without a line leaves nothing pending.
+    void EndGradientDrag();
+    void CancelGradient() noexcept;
+    void CommitGradient();
+    // Switching tools, layers or targets applies the pending gradient, as in Photoshop.
+    void ResolveGradient();
+    [[nodiscard]] const GradientEdit* PendingGradient() const noexcept
+    {
+        return _gradient.get();
+    }
+    [[nodiscard]] GradientEdit* MutableGradient() noexcept
+    {
+        return _gradient.get();
+    }
+
+    // Shape (C11): a drag in whole pixels (Shift squares, Alt grows from the center) becomes a new layer above the
+    // active one filled with the foreground color, one entry (`Rectangle`, `Ellipse`); a click makes nothing and
+    // the selection is left alone. Shift-U switches the kind.
+    static constexpr std::int64_t kMaxShapePixels = 100'000'000;
+    void BeginShape(Vec2 point);
+    void DragShape(Vec2 point, bool square, bool fromCenter);
+    void CancelShape() noexcept;
+    void ToggleShapeKind();
+    void FinishShape();
+    [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
+    {
+        return _shapeDraft;
+    }
+    // "Rectangle 1", "Ellipse 2", … skipping names already in the document.
+    [[nodiscard]] std::wstring NextShapeName(ShapeKind kind) const;
+    // The shape filling its box, anti-aliased where it curves, premultiplied BGRA; empty over the pixel budget.
+    [[nodiscard]] static Raster ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb,
+                                           double cornerRadius);
+    // Inserts pixels as a new layer above the active one (inside its folder), all in one entry. Pasting drops the
+    // selection, as in Photoshop; a drawn shape keeps it.
+    void AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
+                       bool dropsSelection, std::optional<LayerShapeStyle> shape);
+
+    // Eyedropper (C11): the straight sRGB color of the visible canvas at one document pixel, read from the host's
+    // composite (document-size premultiplied BGRA). Nullopt outside the canvas or over a fully transparent pixel.
+    [[nodiscard]] static std::optional<std::uint32_t> SampleCompositeColor(const Raster& composite,
+                                                                           Vec2 point) noexcept;
     void ContinueBrush(Vec2 point);
     // Replaces the provisional tail by the final curve and commits the tiles as one entry (`Brush Stroke`,
     // `Erase`, `Paint Mask`); nothing is recorded when no pixel changed.
@@ -1112,11 +1294,28 @@ class DocumentSession
     void ChangeBrushHardness(bool increase) noexcept;
     // Photoshop-style opacity keys: 1 = 10 % … 9 = 90 %, 0 = 100 %; two digits within 0.6 s set an exact value.
     void TypeOpacityDigit(int digit, double timeSeconds) noexcept;
+    // The percent a digit types (with the two-digit window), for a caller that applies it elsewhere; -1 when none.
+    [[nodiscard]] int TypedOpacityPercent(int digit, double timeSeconds) noexcept;
+    // A tool switch ends a two-digit entry in progress.
+    void ClearPendingOpacityDigit() noexcept
+    {
+        _pendingOpacityDigit.reset();
+    }
     // The pixel budget left for a raster edit of `layer` (100 M image or mask pixels less the other layers).
     [[nodiscard]] std::int64_t RasterEditPixelLimit(const ImageLayer& layer, bool mask) const noexcept;
     BrushSettings brushSettings;
     BrushToolMode brushMode = BrushToolMode::Paint;
     bool maskPaintWhite = false;
+    SpotHealingMode spotHealingMode = SpotHealingMode::ContentAware;
+    CloneSettings cloneSettings;
+    std::optional<Vec2> cloneSource;
+    SmearMode smearMode = SmearMode::Liquify;
+    GradientSettings gradientSettings;
+    ShapeKind shapeKind = ShapeKind::Rectangle;
+    // Corner radius in pixels for rectangles the Shape tool draws; 0 keeps the corners square.
+    double shapeCornerRadius = 0;
+    // The eyedropper's comparison ring (new color above, previous below) while sampling.
+    bool showsSampleRing = true;
 
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
     // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
@@ -1133,19 +1332,23 @@ class DocumentSession
     void SetForegroundColor(uint32_t argb) noexcept
     {
         _foregroundArgb = argb | 0xFF000000u;
+        RefreshGradient();
     }
     void SetBackgroundColor(uint32_t argb) noexcept
     {
         _backgroundArgb = argb | 0xFF000000u;
+        RefreshGradient();
     }
     void SwapPaletteColors() noexcept
     {
         std::swap(_foregroundArgb, _backgroundArgb);
+        RefreshGradient();
     }
     void ResetPaletteColors() noexcept
     {
         _foregroundArgb = kDefaultForegroundArgb;
         _backgroundArgb = kDefaultBackgroundArgb;
+        RefreshGradient();
     }
 
   private:
@@ -1181,4 +1384,27 @@ class DocumentSession
     std::optional<LastBrushPoint> _lastBrushPoint;
     std::optional<std::pair<int, double>> _pendingOpacityDigit;
     std::optional<BrushCommitInfo> _lastBrushCommit;
+    std::optional<Vec2> _cloneOffset;
+    std::shared_ptr<WarpStroke> _warp;
+    struct WarpSource
+    {
+        Guid layerID;
+        Raster image;
+        LayerTransform transform;
+    };
+    WarpSource _warpSource;
+    std::array<std::array<double, 3>, 3> _parkedTips{{{40, 1, 1}, {40, 0, 1}, {40, 0, 1}}};
+    std::uint32_t _healSeed = 0x9e3779b9u;
+    std::shared_ptr<GradientEdit> _gradient;
+    std::optional<ShapeDraft> _shapeDraft;
+    void InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection);
+    // A shape layer scaled to a new size draws its shape again at that size, so a rounded corner keeps its radius
+    // instead of stretching. Part of the edit that changed the size.
+    void RedrawShape(std::size_t index);
+    void CommitStroke(const std::shared_ptr<BrushStroke>& stroke);
+    [[nodiscard]] std::uint32_t NextHealSeed() noexcept
+    {
+        _healSeed = _healSeed * 1664525u + 1013904223u;
+        return _healSeed;
+    }
 };
