@@ -66,6 +66,10 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   the same panels. Shift+= and Shift+- step a layer's blend mode; Hue, Saturation, Color and Luminosity blend as in
   Photoshop. Edit › Content-Aware Fill (Shift+Delete) fills a selection from the surrounding pixels of the layer,
   growing the layer when the selection reaches past its edge; the panel says when nothing opaque surrounds it.
+- **Settings, reports, access**: a JSON settings file under `%LocalAppData%\RedPrism` applies live as you edit
+  it (theme, sample ring, panel width, JPEG quality) and remembers the window; a crash leaves a local minidump
+  and the next start says where (nothing is uploaded); the chrome follows Windows high contrast and exposes every
+  control to UI Automation with a name; a `Languages\<tag>` satellite table translates the chrome.
 
 Empty-document harness captures:
 

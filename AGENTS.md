@@ -40,7 +40,8 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 | [modern-cpp-windows](.agents/skills/modern-cpp-windows/SKILL.md) | Ownership, HRESULT, warnings, style |
 | [localization](.agents/skills/localization/SKILL.md) | STRINGTABLE, positional placeholders, `Common/Resources.h` |
 | [numeric-goldens](.agents/skills/numeric-goldens/SKILL.md) | Independent numeric expectations, fixture formulas and documented tolerances |
-| [settings-store](.agents/skills/settings-store/SKILL.md) | Future settings paths and recovery (C14) |
+| [settings-store](.agents/skills/settings-store/SKILL.md) | The settings document, its schema, cold recovery, atomic saves, UI-thread live reload |
+| [crash-handling](.agents/skills/crash-handling/SKILL.md) | Local minidumps, the pending marker and prompt, the `--crash-probe` gate |
 | [consumer-dxui](.agents/skills/consumer-dxui/SKILL.md) | Exact DxUi pin, pinned-library facts, pin bumps |
 
 ## Architecture ownership

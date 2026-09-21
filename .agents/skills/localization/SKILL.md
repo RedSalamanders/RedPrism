@@ -23,5 +23,12 @@ Read `Specs/UI/UI_ApplicationChrome.md` (Strings) before adding chrome text.
 - Tests load the executable's table with `LoadLibraryExW(..., LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE)`
   and pass that module to the helpers; nothing in `Tests/` runs `RedPrism.exe` code to read strings.
 
-Satellite resource DLLs and language switching are C14 work (`ProductHardening_2026-09-20.md`); until then the
-embedded English table is the only language, but the discipline above keeps it translatable.
+Languages (C14): a translated table is a resource-only DLL built from the same `.rc` and ids, placed at
+`<exe dir>\Languages\<tag>\RedPrism.resources.dll`. `Common/Localization.*` picks the candidates (the `language`
+setting's tag, its primary subtag, then Windows' display languages and theirs) and `SetStringResourceSatellite`
+makes `LoadStringResource(nullptr, id)` read it first, falling back to the embedded English for a missing id. No
+translation ships in v1; keep the ids stable so one can. The harness switches stay English; tests prove the
+candidate order and the override in `HostTests` `locale.*`.
+
+Accessible names are chrome strings too: every interactive DxUi control gets `SetAccessibleName` from the same
+table (a label id, a tooltip id or an `IDS_A11Y_*` id), and the self-test fails on a control without one.

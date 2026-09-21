@@ -22,6 +22,14 @@ default layer names (`Layer 1`, `Folder 1`) stays in the document model because 
 legacy tests; it is not chrome. `HostTests` loads `RedPrism.exe` as a data file and proves every catalogued id
 resolves with positional placeholders only.
 
+Languages (C14): a translated table ships as a resource-only module `<exe dir>\Languages\<tag>\RedPrism.resources.dll`
+built from the same `.rc` with the same ids (`Common/Localization.*`). An ordinary start tries the `language`
+setting's tag then its primary subtag, then each Windows display language and its primary subtag
+(`SatelliteCandidates`), loads the first that exists as a data file and hands it to `SetStringResourceSatellite`;
+`LoadStringResource(nullptr, id)` reads the satellite first and falls back to the embedded English for an id it
+lacks. No translation ships in v1; the harness switches stay English. `HostTests` `locale.*` proves the candidate
+order and the override.
+
 ## Shell layout (DIP)
 
 At 96 DPI one DIP equals one pixel. Physical size scales with window DPI (or `--dpi` during `--screenshot`).
@@ -310,6 +318,30 @@ Mask-selected black/white policy arrives with mask painting.
 
 The C3 fallback (app-owned split rectangles, a ColorSwatch-launched dialog from existing controls, TextField
 numeric nudge) is retired: RedPrism consumes the library controls and does not implement a second toolkit.
+
+## Theme
+
+`RedPrism/ThemePalette.h` builds the chrome palette: dark (the C1 clear color behind the canvas) or DxUi's light
+default, chosen by the `theme` setting (`system` follows Windows' app mode, [`Core_Settings.md`](../Core/Core_Settings.md)).
+Windows high contrast overrides both: `MakeHighContrastThemePalette` maps every role to the active contrast
+theme's system colors (`highContrast` set, accent = highlight, borders and text = window text) and the renderer's
+clear color becomes the system window color. `Application::RefreshTheme` reapplies on `WM_SETTINGCHANGE`,
+`WM_THEMECHANGED` and `WM_SYSCOLORCHANGE` and on a live settings change; native menus take the same palette.
+
+## Accessibility
+
+The main window answers `WM_GETOBJECT` with `WindowAccessibilityRoot` (`RedPrism/AccessibilityRoot.*`): the HWND's
+UIA provider (`UiaHostProviderFromHwnd`) whose one child is the DxUi chrome's fragment root, attached through
+`EmbeddedHost::AttachAccessibility` after the first `Prepare` (DxUi attaches lazily and drops the attachment on hide or
+a device swap; the next `Prepare` re-arms it) with a `ChromeAccessibilitySite` (the window root as parent and fragment root,
+focus requests to the HWND, a frame after a UIA action). The placement (client rectangle in screen pixels, whether
+the chrome rather than the canvas holds the keyboard focus) follows `WM_SIZE`, `WM_MOVE`, focus changes and the
+canvas-focus toggle. Every interactive control carries an accessible name: buttons and checkboxes from their
+captions, steppers and sliders from their labels, combo boxes from their tooltips, the wells, swatches, tree,
+tabs, rail, splitter, picker and the drawn adjustment controls from `IDS_A11Y_*` strings.
+`ChromeHost::UnnamedInteractiveControls` walks the tree and the WARP self-test requires it empty, walks the UIA
+tree from the window root (at least eight named elements) and resolves a point under the menu bar. Detaching the
+chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`, `UiaDisconnectProvider`).
 
 ## Files
 

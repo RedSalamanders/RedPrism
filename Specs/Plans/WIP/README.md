@@ -15,12 +15,12 @@ recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 T
 [`Brush_2026-09-20.md`](../Done/Brush_2026-09-20.md), C11 Retouch in
 [`Retouch_2026-09-20.md`](../Done/Retouch_2026-09-20.md), C9b Pixel edits in
 [`PixelEdits_2026-09-21.md`](../Done/PixelEdits_2026-09-21.md), C12 Adjust and filter in
-[`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md) and C13 Smart operations (Remove Background
-rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md).
+[`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md) C13 Smart operations (Remove Background
+rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) and C14 Product hardening in
+[`ProductHardening_2026-09-20.md`](../Done/ProductHardening_2026-09-20.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`ProductHardening_2026-09-20.md`](ProductHardening_2026-09-20.md) | `ACTIVE` | settings/crash specs (create in C14); [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md) | Settings, minidumps, localization, UIA |
 | [`Packaging_2026-09-20.md`](Packaging_2026-09-20.md) | `ACTIVE` | `Build_Packaging` (create in C15) | Portable ZIP and version stamp |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to

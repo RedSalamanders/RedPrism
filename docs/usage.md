@@ -61,3 +61,20 @@ the File menu.
 | V M L W C B E J S R G U I H Z A | Tools (canvas focused) |
 | Space (held) | Pan |
 | Escape | Focus chrome |
+
+## Settings, crash reports and languages
+
+RedPrism keeps its settings in `%LocalAppData%\RedPrism\settings.json` (`settings.debug.json` for Debug builds), a
+small JSON document written on exit and readable in any editor: `theme` (`system`, `light`, `dark`), `language`
+(a tag such as `fr-FR`, empty for Windows' display language), `layersPanelWidth`, `sampleRing`, `jpegQuality` and
+the `window` placement. Edits while RedPrism runs apply as you save the file (the theme, the sample ring, the
+panel width, the JPEG quality); the language and the window placement take effect at the next start. A file that
+is not valid JSON is left alone while RedPrism runs; at the next start it is backed up as `settings.json.invalid-…`
+and replaced by the defaults. Windows high contrast overrides the theme while it is on.
+
+If RedPrism crashes it writes a minidump to `%LocalAppData%\RedPrism\Crashes` and, at the next start, says so and
+offers to open the folder. Nothing is sent anywhere; the newest ten reports are kept.
+
+A translated string table goes to `<RedPrism folder>\Languages\<tag>\RedPrism.resources.dll` (a resource-only
+DLL built from `RedPrism/RedPrism.rc` with the same ids); the `language` setting or Windows' display language
+picks it, and any missing string falls back to English.
