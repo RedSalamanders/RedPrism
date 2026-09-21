@@ -725,6 +725,18 @@ struct TransformGroup
     std::vector<std::pair<Guid, LayerTransform>> originals;
 };
 
+// Ctrl+T with a selection (C9b): the selected pixels float on a temporary layer, edited with the normal transform
+// handles, then merge back into their layer as one `Transform Selection` entry; Escape restores exactly.
+struct FloatingTransform
+{
+    Guid sourceID;
+    std::shared_ptr<CanvasDocument> before;
+    std::optional<Guid> beforeActive;
+    LayerTransform original;
+    int pixelWidth = 0;
+    int pixelHeight = 0;
+};
+
 // A pending transform: the draft the handles and inspector edit. `persistent` edits wait for Apply/Cancel; others
 // commit when the drag ends. `corners` set means a free distortion; `mask` an unlinked mask placed alone.
 struct TransformEdit
@@ -735,6 +747,8 @@ struct TransformEdit
     std::optional<std::array<Vec2, 4>> corners;
     bool mask = false;
     std::optional<TransformGroup> group;
+    // Set when transforming selected pixels (Ctrl+T with a selection) rather than a layer.
+    std::optional<FloatingTransform> floating;
 };
 
 // Document positions a move has just snapped to, drawn as guides while it lasts.
@@ -834,6 +848,7 @@ enum class BrushToolMode : std::uint8_t
 };
 
 class BrushStroke;
+struct GridRect;
 class BrushCoverageEngine;
 class WarpStroke;
 
@@ -863,6 +878,29 @@ struct ShapeDraft
 
 // The shape this layer still is: nullopt once its pixels were edited some other way.
 [[nodiscard]] std::optional<LayerShapeStyle> LiveShape(const ImageLayer& layer) noexcept;
+
+// Fill with the foreground or background color (C9b).
+enum class FillSource : std::uint8_t
+{
+    Foreground,
+    Background,
+};
+
+// Selected pixels being dragged (C9b): the lifted raster plus the outline it started from.
+struct PixelMove
+{
+    std::shared_ptr<BrushStroke> raster;
+    DocumentSelection origin;
+    bool duplicate = false;
+    Vec2 offset;
+};
+
+// Pixels copied from the canvas, with where they came from so Paste can put them back in place.
+struct PixelClipboard
+{
+    Raster image;
+    Vec2 origin;
+};
 
 // What the last brush commit installed: the raster and the grid rectangle it covers (for the host's live preview).
 struct BrushCommitInfo
@@ -1253,6 +1291,80 @@ class DocumentSession
     }
     // "Rectangle 1", "Ellipse 2", … skipping names already in the document.
     [[nodiscard]] std::wstring NextShapeName(ShapeKind kind) const;
+    // "Layer 1", "Layer 2", … skipping names already in the document.
+    [[nodiscard]] std::wstring NextLayerName() const;
+
+    // Pixel edits (C9b, Specs/Document/Document_Tools.md): the selection edits that need raster primitives.
+    [[nodiscard]] bool CanEditPixels() const noexcept
+    {
+        return CanPaint();
+    }
+    // Fills the selection (the whole canvas without one; an empty selection nothing) with the palette color as one
+    // entry (`Fill`, `Fill Mask`); a mask takes the color's first component, so black hides and white reveals.
+    void FillSelection(FillSource source);
+    // Delete with a selection: image pixels become transparent (`Clear`); on a mask the selection fills with the
+    // background color, as in Photoshop.
+    void ClearSelectedPixels();
+    // The Delete key: clears the selection when there is one; otherwise deletes the targeted mask, or the layer.
+    void DeleteKeyPressed();
+    void DeleteLayerOrMask();
+    void DeleteLayerMask();
+    // Ctrl+I: inverts the layer's colors (transparency kept) or its mask, inside the selection or across the whole
+    // layer without one; a pending transform or gradient applies first. One entry (`Invert`, `Invert Mask`).
+    [[nodiscard]] bool CanInvert() const noexcept;
+    void InvertPixels();
+    // Ctrl-drag / Ctrl-arrow: the selected pixels (or a copy) move with the outline as one entry (`Move Pixels`,
+    // `Duplicate Pixels`); false when there is nothing to move (no selection, a mask target, no pixels).
+    bool BeginPixelMove(bool duplicate = false);
+    // Previews the pixels `offset` whole document pixels away; the stored selection stays put until commit.
+    void MovePixels(double dx, double dy);
+    void FinishPixelMove();
+    void CancelPixelMove() noexcept;
+    void NudgePixels(double dx, double dy);
+    [[nodiscard]] const PixelMove* PendingPixelMove() const noexcept
+    {
+        return _pixelMove.get();
+    }
+    [[nodiscard]] PixelMove* MutablePixelMove() noexcept
+    {
+        return _pixelMove.get();
+    }
+    // The outline to draw: during a pixel move the original shifted by the drag; while transforming selected
+    // pixels it follows the handles (and a distortion).
+    [[nodiscard]] std::optional<DocumentSelection> DisplayedSelection() const;
+    // Add Mask with a selection: a mask on the layer's pixel grid hiding the selection (or, not revealing, showing
+    // only it), dropping the selection and targeting the mask (`Add Mask from Selection`); without one,
+    // `AddLayerMask`.
+    void AddMask(bool revealing = true);
+    // Ctrl+T with a selection transforms the selected pixels on a floating layer; without one, the layer.
+    [[nodiscard]] bool CanTransformSelection() const noexcept;
+    void TransformCommand();
+    void BeginSelectionTransform();
+    // Maps the original selection to where the floating pixels are now (nullopt for a plain layer edit).
+    [[nodiscard]] std::optional<Affine2> FloatingSelectionMap(const TransformEdit& edit) const noexcept;
+    // The clipboard: Copy takes the selection (or the whole canvas) from the active layer or its mask as shown;
+    // Copy Merged takes the host's composite; Paste puts the pixels back in place as a new layer; Layer via Copy
+    // skips the clipboard. The host mirrors copies to the system clipboard and brings other apps' images in.
+    [[nodiscard]] std::optional<GridRect> SelectionCopyRegion() const noexcept;
+    [[nodiscard]] bool CanCopyPixels() const noexcept;
+    [[nodiscard]] std::optional<PixelClipboard> RenderSelectedPixels(const ImageLayer& layer, bool mask) const;
+    [[nodiscard]] bool CanCopyMerged() const noexcept;
+    [[nodiscard]] std::optional<PixelClipboard> RenderMergedPixels(const Raster& composite) const;
+    bool CopySelection();
+    bool CopyMergedSelection(const Raster& composite);
+    void CutSelection();
+    [[nodiscard]] bool CanPaste() const noexcept
+    {
+        return _document.has_value() && _clipboard.has_value();
+    }
+    void Paste();
+    // Pixels from another app, centered on the canvas (`Paste`).
+    void PasteImage(const Raster& image);
+    void LayerViaCopy();
+    [[nodiscard]] const std::optional<PixelClipboard>& Clipboard() const noexcept
+    {
+        return _clipboard;
+    }
     // The shape filling its box, anti-aliased where it curves, premultiplied BGRA; empty over the pixel budget.
     [[nodiscard]] static Raster ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb,
                                            double cornerRadius);
@@ -1397,11 +1509,17 @@ class DocumentSession
     std::uint32_t _healSeed = 0x9e3779b9u;
     std::shared_ptr<GradientEdit> _gradient;
     std::optional<ShapeDraft> _shapeDraft;
+    std::shared_ptr<PixelMove> _pixelMove;
+    std::optional<PixelClipboard> _clipboard;
+    [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask) const;
+    void MergeFloating(const TransformEdit& edit, const FloatingTransform& floating);
+    void CancelFloating(const FloatingTransform& floating);
     void InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection);
     // A shape layer scaled to a new size draws its shape again at that size, so a rounded corner keeps its radius
     // instead of stretching. Part of the edit that changed the size.
     void RedrawShape(std::size_t index);
-    void CommitStroke(const std::shared_ptr<BrushStroke>& stroke);
+    // Installs a raster edit as one entry; `alsoApply` runs inside the same entry (a moved selection).
+    void CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply = {});
     [[nodiscard]] std::uint32_t NextHealSeed() noexcept
     {
         _healSeed = _healSeed * 1664525u + 1013904223u;

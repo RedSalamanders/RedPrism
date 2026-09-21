@@ -3438,6 +3438,595 @@ void TestEyedropper()
     Expect(session.showsSampleRing, "eyedropper.ring-shown-by-default");
 }
 
+// ── Pixel edits (C9b) ─────────────────────────────────────────
+
+DocumentSession PixelEditSession(int width = 100, int height = 40)
+{
+    DocumentSession session;
+    session.CreateDocument(width, height, true);
+    return session;
+}
+
+void SelectRect(DocumentSession& session, double x, double y, double width, double height, bool antialiased = true)
+{
+    session.selectionAntialiased = antialiased;
+    session.ApplySelection(SelectionGeometry::Rect(x, y, width, height), SelectionMode::New, L"Select");
+}
+
+// A layer's pixel under document (x, y), read through its transform (nearest); transparent beyond it.
+std::array<std::uint8_t, 4> LayerPixelOf(const DocumentSession& session, const Guid& id, int x, int y)
+{
+    std::array<std::uint8_t, 4> out{0, 0, 0, 0};
+    const ImageLayer* layer = Find(session.Document(), id);
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return out;
+    }
+    const Raster& image = layer->asset->image;
+    const Vec2 pixel =
+        PixelToDocument(layer->transform, image.Width(), image.Height()).Inverted().Apply(Vec2{x + 0.5, y + 0.5});
+    if (pixel.x < 0.0 || pixel.y < 0.0 || pixel.x >= image.Width() || pixel.y >= image.Height())
+    {
+        return out;
+    }
+    image.ReadRegion(static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)), 1, 1, out.data(), 4,
+                     0);
+    return out;
+}
+
+// A 100×40 layer: red left half, blue right half, made with the palette fills.
+void TwoColorLayer(DocumentSession& session)
+{
+    session.SetForegroundColor(0xFFFF0000u);
+    session.SetBackgroundColor(0xFF0000FFu);
+    session.FillSelection(FillSource::Background);
+    SelectRect(session, 0, 0, 50, 40);
+    session.FillSelection(FillSource::Foreground);
+    session.Deselect();
+}
+
+std::optional<SelectionBounds> SelectionBox(const DocumentSession& session)
+{
+    return session.Selection().has_value() ? session.Selection()->Bounds() : std::nullopt;
+}
+
+bool BoxIs(const std::optional<SelectionBounds>& box, double minX, double minY, double maxX, double maxY)
+{
+    return box.has_value() && std::fabs(box->minX - minX) < 0.01 && std::fabs(box->minY - minY) < 0.01 &&
+           std::fabs(box->maxX - maxX) < 0.01 && std::fabs(box->maxY - maxY) < 0.01;
+}
+
+void TestPixelEdits()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    const std::array<std::uint8_t, 4> white{255, 255, 255, 255};
+    // Legacy brushPaintsOnlyInsideTheSelection.
+    {
+        DocumentSession session = PixelEditSession();
+        SelectRect(session, 0, 0, 50, 40);
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        Expect(session.BeginBrush(Vec2{5, 20}), "edit.brush-begins");
+        session.ContinueBrush(Vec2{95, 20});
+        session.FinishBrush();
+        Expect(ActivePixel(session, 25, 20) == red && ActivePixel(session, 75, 20)[3] == 0,
+               "edit.brush-inside-selection");
+    }
+    // Legacy emptySelectionEditsNothing.
+    {
+        DocumentSession session = PixelEditSession();
+        SelectRect(session, 10, 10, 10, 10);
+        session.ApplySelection(SelectionGeometry::Rect(0, 0, 100, 40), SelectionMode::Subtract, L"Subtract");
+        Expect(session.Selection().has_value() && session.Selection()->IsEmpty(), "edit.empty-selection");
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        static_cast<void>(session.BeginBrush(Vec2{5, 20}));
+        session.ContinueBrush(Vec2{95, 20});
+        session.FinishBrush();
+        session.FillSelection(FillSource::Foreground);
+        session.ClearSelectedPixels();
+        Expect(!session.BeginGradient(Vec2{0, 20}) && session.PendingGradient() == nullptr, "edit.empty-no-gradient");
+        Expect(!session.CanPaint() && !session.CanEditPixels() && session.Document().value() == before &&
+                   session.history.UndoCount() == count && ActivePixel(session, 50, 20)[3] == 0,
+               "edit.empty-selection-edits-nothing");
+    }
+    // Legacy gradientStaysInsideTheSelection.
+    {
+        DocumentSession session = PixelEditSession();
+        SelectRect(session, 0, 0, 50, 40);
+        session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+        Expect(session.BeginGradient(Vec2{0.5, 20}), "edit.gradient-begins");
+        session.MoveGradient(std::nullopt, Vec2{99.5, 20});
+        session.CommitGradient();
+        Expect(ActivePixel(session, 10, 20)[3] == 255 && ActivePixel(session, 75, 20)[3] == 0,
+               "edit.gradient-inside-selection");
+    }
+    // Legacy fillUsesPaletteInsideSelectionOrWholeLayerWithoutOne.
+    {
+        DocumentSession session = PixelEditSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        SelectRect(session, 20, 10, 30, 20);
+        const int count = session.history.UndoCount();
+        session.FillSelection(FillSource::Foreground);
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Fill" &&
+                   ActivePixel(session, 30, 20) == red && ActivePixel(session, 5, 5)[3] == 0,
+               "edit.fill-selection");
+        session.Deselect();
+        session.FillSelection(FillSource::Background);
+        Expect(ActivePixel(session, 5, 5) == white && ActivePixel(session, 30, 20) == white, "edit.fill-whole-layer");
+    }
+    // Legacy deleteClearsSelectedPixelsOrDeletesTheLayerWithoutASelection.
+    {
+        DocumentSession session = PixelEditSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        session.FillSelection(FillSource::Foreground);
+        SelectRect(session, 20, 10, 30, 20);
+        session.ClearSelectedPixels();
+        Expect(session.history.UndoName() == L"Clear" && ActivePixel(session, 30, 20)[3] == 0 &&
+                   ActivePixel(session, 5, 5) == red,
+               "edit.clear");
+        session.Undo();
+        Expect(ActivePixel(session, 30, 20) == red, "edit.clear-undo");
+        session.Deselect();
+        session.DeleteKeyPressed();
+        Expect(session.Document().value().layers.empty(), "edit.delete-key-deletes-the-layer");
+    }
+    // Legacy maskFillHidesOnlyTheSelectedArea.
+    {
+        DocumentSession session = PixelEditSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        session.FillSelection(FillSource::Foreground);
+        session.AddLayerMask(true);
+        session.SelectLayerTarget(session.ActiveLayerID().value(), true);
+        SelectRect(session, 20, 10, 30, 20);
+        session.FillSelection(FillSource::Foreground);
+        Expect(session.history.UndoName() == L"Fill Mask" && ActiveMaskValue(session, 30, 20) == 0 &&
+                   ActiveMaskValue(session, 5, 5) == 255,
+               "edit.mask-fill-hides-the-selection");
+        session.ClearSelectedPixels();
+        Expect(ActiveMaskValue(session, 30, 20) == 255, "edit.mask-clear-reveals");
+    }
+    // Legacy clipFollowsScaledLayersAndSoftensEdges: a 50×20 image stretched 2× over the 100×40 canvas.
+    {
+        DocumentSession session = PixelEditSession();
+        const Guid id = InsertPixels(session, SolidRaster(50, 20, 255, 0, 0, 255), L"Blue");
+        session.BeginTransform(true);
+        LayerTransform stretched = session.ActiveLayer()->transform;
+        stretched.origin = Vec2{0, 0};
+        stretched.size = Vec2{100, 40};
+        session.PreviewTransform(stretched);
+        session.CommitTransform();
+        session.selectionAntialiased = true;
+        session.ApplySelection({SelectionLoop{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 40}}}, SelectionMode::New, L"Select");
+        session.ClearSelectedPixels();
+        bool soft = false;
+        for (int x = 0; x < 100; ++x)
+        {
+            const int y = std::min(39, static_cast<int>((1.0 - x / 100.0) * 40));
+            const std::uint8_t alpha = LayerPixelOf(session, id, x, y)[3];
+            soft = soft || (alpha > 0 && alpha < 255);
+        }
+        Expect(LayerPixelOf(session, id, 10, 10)[3] == 0 && LayerPixelOf(session, id, 90, 35)[3] == 255 && soft,
+               "edit.clip-follows-scaled-layers");
+    }
+    // Legacy maskButtonAddsWhiteMaskOrHidesTheSelection and layerMenuMasksUseTheSelection.
+    {
+        DocumentSession session = PixelEditSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        session.FillSelection(FillSource::Foreground);
+        session.AddMask();
+        Expect(session.ActiveLayer()->mask.has_value() && session.history.UndoName() == L"Add Reveal-All Mask" &&
+                   MaskValue(session, 30.5, 20.5) == 255,
+               "edit.mask-button-without-selection");
+        session.Undo();
+        Expect(!session.ActiveLayer()->mask.has_value(), "edit.mask-button-undo");
+        SelectRect(session, 20, 10, 30, 20);
+        session.AddMask();
+        Expect(session.history.UndoName() == L"Add Mask from Selection" && !session.Selection().has_value() &&
+                   session.IsMaskSelected() && ActiveMaskValue(session, 30, 20) == 0 &&
+                   ActiveMaskValue(session, 5, 5) == 255,
+               "edit.mask-from-selection-hides-it");
+        session.Undo();
+        Expect(!session.ActiveLayer()->mask.has_value() && session.Selection().has_value(),
+               "edit.mask-from-selection-undo");
+        session.AddMask(false);
+        Expect(session.history.UndoName() == L"Add Mask from Selection" && ActiveMaskValue(session, 30, 20) == 255 &&
+                   ActiveMaskValue(session, 5, 5) == 0,
+               "edit.black-mask-from-selection-shows-it");
+        session.Undo();
+        session.Deselect();
+        session.AddMask(false);
+        Expect(session.history.UndoName() == L"Add Hide-All Mask" && MaskValue(session, 30.5, 20.5) == 0,
+               "edit.black-mask-without-selection");
+    }
+    // Legacy maskFromSelectionLinesUpOnScaledLayers.
+    {
+        DocumentSession session = PixelEditSession(100, 100);
+        const Guid id = InsertPixels(session, SolidRaster(50, 50, 255, 0, 0, 255), L"Blue");
+        for (ImageLayer& layer : session.Document().value().layers)
+        {
+            if (layer.id == id)
+            {
+                layer.transform.origin = Vec2{0, 0};
+                layer.transform.size = Vec2{100, 100};
+            }
+        }
+        SelectRect(session, 0, 0, 50, 50);
+        session.AddMask();
+        const ImageLayer* layer = session.ActiveLayer();
+        std::uint8_t inside = 255;
+        std::uint8_t outside = 0;
+        std::uint8_t beside = 0;
+        if (layer != nullptr && layer->mask.has_value())
+        {
+            layer->mask->asset.image.ReadRegion(12, 12, 1, 1, &inside, 1, 255);
+            layer->mask->asset.image.ReadRegion(37, 37, 1, 1, &outside, 1, 0);
+            layer->mask->asset.image.ReadRegion(37, 12, 1, 1, &beside, 1, 0);
+        }
+        Expect(layer != nullptr && layer->mask.has_value() && layer->mask->asset.image.Width() == 50 && inside == 0 &&
+                   outside == 255 && beside == 255,
+               "edit.mask-from-selection-uses-the-layer-grid");
+    }
+    // Legacy deletingWithTheMaskTargetedRemovesOnlyTheMask.
+    {
+        DocumentSession session = PixelEditSession();
+        const Guid id = session.ActiveLayerID().value();
+        session.AddLayerMask(false);
+        Expect(session.IsMaskSelected(), "edit.mask-targeted");
+        session.DeleteKeyPressed();
+        Expect(session.ActiveLayer() != nullptr && session.ActiveLayer()->id == id &&
+                   !session.ActiveLayer()->mask.has_value() && session.history.UndoName() == L"Delete Layer Mask" &&
+                   !session.IsMaskSelected(),
+               "edit.delete-removes-only-the-mask");
+        session.Undo();
+        Expect(session.ActiveLayer()->mask.has_value(), "edit.delete-mask-undo");
+        session.SelectLayerTarget(id, true);
+        session.DeleteLayerOrMask();
+        Expect(session.Document().value().layers.size() == 1 && !session.ActiveLayer()->mask.has_value(),
+               "edit.trash-follows-the-target");
+        session.AddLayerMask(true);
+        session.SelectLayerTarget(id, false);
+        session.DeleteLayerOrMask();
+        Expect(session.Document().value().layers.empty(), "edit.trash-deletes-the-layer");
+    }
+    // Legacy invertKeepsTransparencyStaysInSelectionAndWorksOnMasks.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 0, 0, 100, 20);
+        session.InvertPixels();
+        Expect(session.history.UndoName() == L"Invert" &&
+                   ActivePixel(session, 10, 5) == std::array<std::uint8_t, 4>{255, 255, 0, 255} &&
+                   ActivePixel(session, 90, 5) == std::array<std::uint8_t, 4>{0, 255, 255, 255} &&
+                   ActivePixel(session, 10, 30) == red,
+               "edit.invert-inside-selection");
+        session.Deselect();
+        DocumentSession blank = PixelEditSession();
+        InsertPixels(blank, SolidRaster(100, 40, 128, 128, 128, 128), L"Half");
+        blank.InvertPixels();
+        const std::array<std::uint8_t, 4> half = ActivePixel(blank, 50, 20);
+        Expect(std::abs(static_cast<int>(half[3]) - 128) <= 1 && half[0] == 0 && half[2] == 0,
+               "edit.invert-keeps-alpha");
+        session.AddLayerMask(true);
+        session.InvertPixels();
+        Expect(session.history.UndoName() == L"Invert Mask" && ActiveMaskValue(session, 50, 30) == 0,
+               "edit.invert-mask");
+    }
+    // Legacy invertIsFastOnLargeImagesAndHandlesUniformMasksWithASelection, at a size the CPU pass covers in tests.
+    {
+        DocumentSession session = PixelEditSession(1000, 750);
+        InsertPixels(session, SolidRaster(1000, 750, 0, 0, 255, 255), L"Big");
+        session.InvertPixels();
+        SelectRect(session, 0, 0, 500, 750);
+        session.InvertPixels();
+        Expect(ActivePixel(session, 100, 100) == red &&
+                   ActivePixel(session, 900, 100) == std::array<std::uint8_t, 4>{255, 255, 0, 255},
+               "edit.invert-twice-and-once");
+        session.AddLayerMask(true);
+        session.InvertPixels();
+        Expect(ActiveMaskValue(session, 100, 100) == 0 && ActiveMaskValue(session, 900, 100) == 255,
+               "edit.invert-uniform-mask-with-selection");
+    }
+    // Legacy invertWorksInEveryTool: a pending gradient is applied first, then inverted.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        Expect(session.CanInvert(), "edit.can-invert");
+        Expect(session.BeginGradient(Vec2{0, 20}), "edit.invert-gradient-begins");
+        session.MoveGradient(std::nullopt, Vec2{100, 20});
+        Expect(session.PendingGradient() != nullptr && session.CanInvert(), "edit.invert-with-pending-gradient");
+        session.InvertPixels();
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Invert",
+               "edit.invert-applies-the-gradient");
+        session.Undo();
+        Expect(session.history.UndoName() == L"Gradient", "edit.invert-undo-leaves-the-gradient");
+    }
+}
+
+void TestPixelMoves()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    // Legacy cmdDragMovesSelectedPixelsAndOutlineAsOneUndo.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 10, 10, 10, 10);
+        const int count = session.history.UndoCount();
+        Expect(session.BeginPixelMove(), "pixelmove.begins");
+        session.MovePixels(30.4, 0);
+        session.MovePixels(60.2, 5);
+        session.FinishPixelMove();
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Move Pixels" &&
+                   BoxIs(SelectionBox(session), 70, 15, 80, 25),
+               "pixelmove.one-entry-with-the-outline");
+        Expect(ActivePixel(session, 15, 15)[3] == 0 && ActivePixel(session, 75, 20) == red &&
+                   ActivePixel(session, 85, 20) == blue && ActivePixel(session, 5, 5) == red,
+               "pixelmove.pixels-moved");
+        session.Undo();
+        Expect(BoxIs(SelectionBox(session), 10, 10, 20, 20) && ActivePixel(session, 15, 15) == red, "pixelmove.undo");
+    }
+    // Legacy duplicatePixelDragPreservesSourceAndUndoesTogether.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 10, 10, 10, 10);
+        const int count = session.history.UndoCount();
+        Expect(session.BeginPixelMove(true), "pixelmove.duplicate-begins");
+        session.MovePixels(60, 5);
+        session.FinishPixelMove();
+        Expect(ActivePixel(session, 15, 15)[2] > 250 && ActivePixel(session, 75, 20)[2] > 250 &&
+                   session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Duplicate Pixels",
+               "pixelmove.duplicate-keeps-the-source");
+        session.Undo();
+        Expect(ActivePixel(session, 15, 15)[2] > 250 && ActivePixel(session, 75, 20)[0] > 250,
+               "pixelmove.duplicate-undo");
+    }
+    // Legacy cmdArrowNudgesPixelsAndMasksRefuse.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 40, 0, 10, 40);
+        session.NudgePixels(10, 0);
+        Expect(ActivePixel(session, 45, 20)[3] == 0 && ActivePixel(session, 55, 20) == red, "pixelmove.nudge");
+        session.AddLayerMask(true);
+        Expect(session.IsMaskSelected() && !session.BeginPixelMove(), "pixelmove.masks-refuse");
+        session.CancelPixelMove();
+    }
+    // Legacy pixelMoveNeverShowsTheOutlineAtItsOldSpot.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 10, 10, 10, 10);
+        Expect(session.BeginPixelMove(), "pixelmove.outline-begins");
+        session.MovePixels(30, 0);
+        const std::optional<DocumentSelection> displayed = session.DisplayedSelection();
+        Expect(displayed.has_value() && BoxIs(displayed->Bounds(), 40, 10, 50, 20) &&
+                   BoxIs(SelectionBox(session), 10, 10, 20, 20),
+               "pixelmove.outline-follows-the-drag");
+        session.FinishPixelMove();
+        Expect(BoxIs(SelectionBox(session), 40, 10, 50, 20) && session.PendingPixelMove() == nullptr,
+               "pixelmove.outline-stays-moved");
+        // The pending raster feeds the preview like a stroke.
+        Expect(session.BeginPixelMove(), "pixelmove.preview-begins");
+        session.MovePixels(5, 0);
+        Expect(session.MutablePixelMove() != nullptr && !session.MutablePixelMove()->raster->Tiles().empty(),
+               "pixelmove.preview-tiles");
+        session.CancelPixelMove();
+        Expect(session.PendingPixelMove() == nullptr && BoxIs(SelectionBox(session), 40, 10, 50, 20),
+               "pixelmove.cancel");
+    }
+}
+
+void TestClipboard()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    const std::array<std::uint8_t, 4> green{0, 255, 0, 255};
+    // Legacy copyAndPastePutsPixelsOnANewLayerInPlace.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const Guid source = session.ActiveLayerID().value();
+        SelectRect(session, 40, 10, 20, 20);
+        Expect(session.CopySelection() && session.CanPaste(), "clipboard.copy");
+        const int count = session.history.UndoCount();
+        session.Paste();
+        const ImageLayer* pasted = session.ActiveLayer();
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Paste" &&
+                   pasted != nullptr && pasted->id != source && pasted->name == L"Layer 2" &&
+                   !session.Selection().has_value() && pasted->transform.origin == Vec2{40, 10} &&
+                   pasted->transform.size == Vec2{20, 20},
+               "clipboard.paste-in-place");
+        Expect(LayerPixelOf(session, pasted->id, 45, 15) == red && LayerPixelOf(session, pasted->id, 55, 15) == blue &&
+                   LayerPixelOf(session, pasted->id, 30, 15)[3] == 0 && LayerPixelOf(session, source, 45, 15) == red,
+               "clipboard.pasted-pixels");
+        session.Undo();
+        Expect(session.Document().value().layers.size() == 1, "clipboard.paste-undo");
+    }
+    // Legacy cutLeavesAHoleAndPasteRestoresThePixels.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const Guid source = session.ActiveLayerID().value();
+        SelectRect(session, 10, 10, 10, 10);
+        session.CutSelection();
+        Expect(LayerPixelOf(session, source, 15, 15)[3] == 0 && session.history.UndoName() == L"Clear",
+               "clipboard.cut");
+        session.Paste();
+        Expect(LayerPixelOf(session, session.ActiveLayerID().value(), 15, 15) == red, "clipboard.paste-restores");
+    }
+    // Legacy layerViaCopyCopiesTheSelectionOrDuplicatesTheLayer.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const ImageLayer source = *session.ActiveLayer();
+        SelectRect(session, 60, 0, 10, 40);
+        session.LayerViaCopy();
+        Expect(session.history.UndoName() == L"Layer via Copy" && session.Document().value().layers.size() == 2 &&
+                   session.ActiveLayer()->transform.size == Vec2{10, 40} && !session.Selection().has_value(),
+               "clipboard.layer-via-copy");
+        session.SelectLayer(source.id);
+        session.LayerViaCopy();
+        Expect(session.history.UndoName() == L"Duplicate Layer" &&
+                   session.ActiveLayer()->name == source.name + L" copy" &&
+                   session.ActiveLayer()->asset->image == source.asset->image,
+               "clipboard.layer-via-copy-duplicates");
+    }
+    // Legacy lassoShapedSelectionCopiesAndPastes.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        Lasso(session, {Vec2{10, 5}, Vec2{40, 5}, Vec2{10, 35}});
+        Expect(session.history.UndoName() == L"Lasso" && session.CanCopyPixels(), "clipboard.lasso-copyable");
+        Expect(session.CopySelection(), "clipboard.lasso-copy");
+        session.Paste();
+        const ImageLayer* pasted = session.ActiveLayer();
+        Expect(pasted != nullptr && pasted->transform.origin == Vec2{10, 5} && pasted->transform.size == Vec2{30, 30} &&
+                   LayerPixelOf(session, pasted->id, 15, 10) == red &&
+                   LayerPixelOf(session, pasted->id, 38, 33)[3] == 0,
+               "clipboard.lasso-paste");
+    }
+    // Legacy copyMergedTakesEveryVisibleLayerNotJustTheActiveOne, with the host's composite built by hand.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const Guid greenLayer = InsertPixels(session, SolidRaster(20, 20, 0, 255, 0, 255), L"Green");
+        for (ImageLayer& layer : session.Document().value().layers)
+        {
+            if (layer.id == greenLayer)
+            {
+                layer.transform.origin = Vec2{60, 10};
+            }
+        }
+        SelectRect(session, 55, 5, 30, 30);
+        Expect(session.CopySelection(), "clipboard.active-layer-copy");
+        session.Paste();
+        Expect(LayerPixelOf(session, session.ActiveLayerID().value(), 65, 15) == green &&
+                   LayerPixelOf(session, session.ActiveLayerID().value(), 58, 8)[3] == 0,
+               "clipboard.active-layer-only");
+        session.Undo();
+        session.SelectLayer(greenLayer);
+        SelectRect(session, 55, 5, 30, 30);
+        const Raster composite = BytesRaster(100, 40,
+                                             [&](int x, int y)
+                                             {
+                                                 if (x >= 60 && x < 80 && y >= 10 && y < 30)
+                                                 {
+                                                     return green;
+                                                 }
+                                                 return x < 50 ? red : blue;
+                                             });
+        Expect(session.CanCopyMerged() && session.CopyMergedSelection(composite), "clipboard.copy-merged");
+        session.Paste();
+        Expect(LayerPixelOf(session, session.ActiveLayerID().value(), 65, 15) == green &&
+                   LayerPixelOf(session, session.ActiveLayerID().value(), 58, 8) == blue,
+               "clipboard.merged-takes-every-layer");
+        // Pasting another app's image centers it.
+        session.PasteImage(SolidRaster(10, 10, 0, 255, 255, 255));
+        Expect(session.history.UndoName() == L"Paste" && session.ActiveLayer()->transform.origin == Vec2{45, 15},
+               "clipboard.external-paste-centers");
+    }
+}
+
+void TestFloatingSelection()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    // Legacy transformSelectionMovesPixelsAndOutlineAsOneUndo.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const Guid source = session.ActiveLayerID().value();
+        SelectRect(session, 10, 10, 10, 10);
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        Expect(session.CanTransformSelection(), "floating.can-transform");
+        session.TransformCommand();
+        Expect(session.PendingTransformEdit().has_value() && session.PendingTransformEdit()->floating.has_value() &&
+                   session.ActiveLayer()->name == L"Floating Selection",
+               "floating.begins-on-a-floating-layer");
+        LayerTransform draft = session.PendingTransformEdit()->draft;
+        draft.origin = Vec2{70, 20};
+        session.PreviewTransform(draft);
+        const std::optional<DocumentSelection> displayed = session.DisplayedSelection();
+        Expect(displayed.has_value() && BoxIs(displayed->Bounds(), 70, 20, 80, 30),
+               "floating.outline-follows-the-handles");
+        session.CommitTransform();
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Transform Selection" &&
+                   session.Document().value().layers.size() == 1 && session.ActiveLayerID() == source &&
+                   BoxIs(SelectionBox(session), 70, 20, 80, 30),
+               "floating.merges-as-one-entry");
+        Expect(ActivePixel(session, 15, 15)[3] == 0 && ActivePixel(session, 75, 25) == red &&
+                   ActivePixel(session, 85, 25) == blue,
+               "floating.merged-pixels");
+        session.Undo();
+        Expect(session.Document().value() == before, "floating.undo");
+    }
+    // Legacy escapeRestoresExactlyWithoutAnUndoStep.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 10, 10, 10, 10);
+        const CanvasDocument before = session.Document().value();
+        const std::optional<Guid> active = session.ActiveLayerID();
+        const int count = session.history.UndoCount();
+        session.BeginSelectionTransform();
+        LayerTransform draft = session.PendingTransformEdit()->draft;
+        draft.origin.x += 30;
+        session.PreviewTransform(draft);
+        session.CancelTransform();
+        Expect(session.Document().value() == before && session.ActiveLayerID() == active &&
+                   !session.PendingTransformEdit().has_value() && session.history.UndoCount() == count,
+               "floating.escape-restores-exactly");
+    }
+    // Legacy applyingAnUnchangedTransformLeavesSoftEdgesUntouched.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        session.selectionAntialiased = true;
+        session.ApplySelection(SelectionGeometry::Ellipse(10.3, 5.7, 30, 25), SelectionMode::New, L"Select");
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        session.BeginSelectionTransform();
+        session.CommitTransform();
+        Expect(session.Document().value() == before && session.history.UndoCount() == count,
+               "floating.unchanged-restores");
+    }
+    // Legacy scalingAndMovingPastTheLayerEdgeGrowsTheLayer (a tool switch applies it; here the commit itself).
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const Guid source = session.ActiveLayerID().value();
+        SelectRect(session, 0, 0, 10, 10);
+        session.BeginSelectionTransform();
+        LayerTransform draft = session.PendingTransformEdit()->draft;
+        draft.size = Vec2{20, 20};
+        draft.origin = Vec2{90, 30};
+        session.PreviewTransform(draft);
+        session.CommitTransform();
+        const ImageLayer* layer = Find(session.Document(), source);
+        Expect(!session.PendingTransformEdit().has_value() && session.history.UndoName() == L"Transform Selection" &&
+                   layer != nullptr && layer->transform.size == Vec2{110, 50},
+               "floating.grows-the-layer");
+        Expect(LayerPixelOf(session, source, 95, 35) == red && LayerPixelOf(session, source, 5, 5)[3] == 0 &&
+                   BoxIs(SelectionBox(session), 90, 30, 110, 50),
+               "floating.grown-pixels-and-outline");
+    }
+    // Undo during the edit drops it, like Escape.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 10, 10, 10, 10);
+        const CanvasDocument before = session.Document().value();
+        session.BeginSelectionTransform();
+        session.Undo();
+        Expect(!session.PendingTransformEdit().has_value() && session.Document().value() == before,
+               "floating.undo-drops");
+    }
+}
+
 int wmain()
 {
     TestHierarchy();
@@ -3494,6 +4083,10 @@ int wmain()
     TestGradientTool();
     TestShapeTool();
     TestEyedropper();
+    TestPixelEdits();
+    TestPixelMoves();
+    TestClipboard();
+    TestFloatingSelection();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

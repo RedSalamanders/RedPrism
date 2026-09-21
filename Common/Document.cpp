@@ -1223,18 +1223,7 @@ void DocumentSession::AddBlankLayer()
     {
         return;
     }
-    std::unordered_set<std::wstring> names;
-    for (const ImageLayer& layer : _document.value().layers)
-    {
-        names.insert(layer.name);
-    }
-    int number = 1;
-    std::wstring name;
-    do
-    {
-        name = L"Layer " + std::to_wstring(number);
-        ++number;
-    } while (names.contains(name));
+    const std::wstring name = NextLayerName();
     ImageLayer layer = ImageLayer::Blank(
         name, Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)});
     InsertLayerAboveActive(std::move(layer), L"New Blank Layer", false);
@@ -2141,6 +2130,20 @@ void DocumentSession::CommitTransform()
         finishDuplicate();
         return;
     }
+    if (edit.floating.has_value())
+    {
+        // Unchanged: restore exactly, so soft selection edges never pick up a seam.
+        if (edit.draft == edit.floating->original && !edit.corners.has_value())
+        {
+            CancelFloating(edit.floating.value());
+        }
+        else
+        {
+            MergeFloating(edit, edit.floating.value());
+        }
+        finishDuplicate();
+        return;
+    }
     std::vector<ImageLayer>& layers = _document.value().layers;
     if (edit.mask)
     {
@@ -2323,6 +2326,7 @@ void DocumentSession::CancelTransform()
     {
         return;
     }
+    const std::optional<FloatingTransform> floating = _transformEdit->floating;
     _transformEdit.reset();
     _displayCopy.reset();
     ++_editRevision;
@@ -2337,6 +2341,10 @@ void DocumentSession::CancelTransform()
         _selected = {source};
         _transformDuplicate.reset();
         EndEdit();
+    }
+    if (floating.has_value())
+    {
+        CancelFloating(floating.value());
     }
 }
 

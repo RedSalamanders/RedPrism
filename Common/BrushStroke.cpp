@@ -2,6 +2,7 @@
 
 #include "Heal.h"
 #include "ImageFilters.h"
+#include "TransformEdit.h"
 #include "WarpStroke.h"
 
 #include "Selection.h"
@@ -1123,7 +1124,7 @@ void DocumentSession::FinishBrush()
     CommitStroke(stroke);
 }
 
-void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke)
+void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply)
 {
     if (!stroke || !_document.has_value())
     {
@@ -1183,6 +1184,10 @@ void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke)
         const std::wstring layerName = current->name;
         current->asset = RasterAsset{result->image, result->thumbnail, layerName};
         current->transform = result->transform;
+    }
+    if (alsoApply)
+    {
+        alsoApply();
     }
     ++_editRevision;
     EndEdit();
@@ -1465,14 +1470,16 @@ bool BrushStroke::Heal(std::uint32_t seed)
     return true;
 }
 
-bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinationOut,
+bool BrushStroke::PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                               const std::function<bool(Vec2, std::array<double, 4>&)>& shade)
 {
     if (!_valid || _failed)
     {
         return false;
     }
-    // The area: the canvas, within the selection's bounds when there is one.
+    // The area: the canvas, within the selection's bounds when there is one. Without a selection Invert covers
+    // every pixel the layer has, on or off the canvas.
+    const bool everywhere = mode == PaintMode::Invert && !_selection.has_value();
     double areaX0 = 0;
     double areaY0 = 0;
     double areaX1 = _canvasWidth;
@@ -1495,8 +1502,9 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinatio
             return true;
         }
     }
-    GridRect affected = MappedBox(_pixelToDocument.Inverted(), areaX0, areaY0, areaX1, areaY1)
-                            .Intersect(GridRect{0, 0, _width, _height});
+    GridRect affected = everywhere ? _sourceRect
+                                   : MappedBox(_pixelToDocument.Inverted(), areaX0, areaY0, areaX1, areaY1)
+                                         .Intersect(GridRect{0, 0, _width, _height});
     if (withinSource)
     {
         affected = affected.Intersect(_sourceRect);
@@ -1507,6 +1515,8 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinatio
     }
     const int columns = (_width + kTileSize - 1) / kTileSize;
     const int channels = _mask ? 1 : 4;
+    const auto round8 = [](double value)
+    { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
     for (int ty = affected.y / kTileSize; ty <= (affected.y + affected.height - 1) / kTileSize; ++ty)
     {
         for (int tx = affected.x / kTileSize; tx <= (affected.x + affected.width - 1) / kTileSize; ++tx)
@@ -1541,9 +1551,15 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinatio
             {
                 const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
                 const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
+                if (withinSource && (tile.rect.x + px < _sourceRect.x || tile.rect.y + py < _sourceRect.y ||
+                                     tile.rect.x + px >= _sourceRect.x + _sourceRect.width ||
+                                     tile.rect.y + py >= _sourceRect.y + _sourceRect.height))
+                {
+                    continue;
+                }
                 const Vec2 document = _pixelToDocument.Apply(Vec2{tile.rect.x + px + 0.5, tile.rect.y + py + 0.5});
-                if (!(document.x >= 0.0) || !(document.y >= 0.0) || !(document.x < _canvasWidth) ||
-                    !(document.y < _canvasHeight))
+                if (!everywhere && (!(document.x >= 0.0) || !(document.y >= 0.0) || !(document.x < _canvasWidth) ||
+                                    !(document.y < _canvasHeight)))
                 {
                     continue;
                 }
@@ -1564,13 +1580,26 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, bool destinatio
                 }
                 std::uint8_t* out = bytes.data() + index * static_cast<std::size_t>(channels);
                 const double keep = 1.0 - a;
-                const auto round8 = [](double value)
-                { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
-                if (destinationOut)
+                if (mode == PaintMode::DestinationOut)
                 {
                     for (int channel = 0; channel < channels; ++channel)
                     {
                         out[channel] = round8(out[channel] * keep);
+                    }
+                }
+                else if (mode == PaintMode::Invert)
+                {
+                    // Premultiplied: each color becomes alpha − color, so transparency is kept; a mask flips.
+                    if (_mask)
+                    {
+                        out[0] = round8((255.0 - out[0]) * a + out[0] * keep);
+                    }
+                    else
+                    {
+                        for (int channel = 0; channel < 3; ++channel)
+                        {
+                            out[channel] = round8((out[3] - out[channel]) * a + out[channel] * keep);
+                        }
                     }
                 }
                 else if (_mask)
@@ -1601,7 +1630,7 @@ bool BrushStroke::FillGradient(GradientShape shape, Vec2 start, Vec2 end, const 
     const double dy = end.y - start.y;
     const double length2 = dx * dx + dy * dy;
     const double length = std::sqrt(length2);
-    return PaintCanvas(false, std::clamp(opacity, 0.0, 1.0), false,
+    return PaintCanvas(false, std::clamp(opacity, 0.0, 1.0), PaintMode::Over,
                        [&](Vec2 point, std::array<double, 4>& color)
                        {
                            double t = 0.0;
@@ -1625,7 +1654,7 @@ bool BrushStroke::FillGradient(GradientShape shape, Vec2 start, Vec2 end, const 
 
 bool BrushStroke::Fill(const std::array<double, 4>& color)
 {
-    return PaintCanvas(false, 1.0, false,
+    return PaintCanvas(false, 1.0, PaintMode::Over,
                        [&](Vec2, std::array<double, 4>& out)
                        {
                            out = color;
@@ -1635,7 +1664,7 @@ bool BrushStroke::Fill(const std::array<double, 4>& color)
 
 bool BrushStroke::ClearPixels()
 {
-    return PaintCanvas(true, 1.0, true,
+    return PaintCanvas(true, 1.0, PaintMode::DestinationOut,
                        [](Vec2, std::array<double, 4>& out)
                        {
                            out = {0.0, 0.0, 0.0, 1.0};
@@ -2265,4 +2294,1181 @@ std::optional<std::uint32_t> DocumentSession::SampleCompositeColor(const Raster&
     const auto channel = [&](std::uint8_t value) -> std::uint32_t
     { return static_cast<std::uint32_t>(std::lround(std::min(alpha, static_cast<double>(value)) / alpha * 255.0)); };
     return 0xFF000000u | (channel(pixel[2]) << 16) | (channel(pixel[1]) << 8) | channel(pixel[0]);
+}
+
+// ── Lifted pixels and the invert pass ─────────────────────────────────────
+
+bool BrushStroke::Invert()
+{
+    return PaintCanvas(true, 1.0, PaintMode::Invert,
+                       [](Vec2, std::array<double, 4>& out)
+                       {
+                           out = {0.0, 0.0, 0.0, 1.0};
+                           return true;
+                       });
+}
+
+bool BrushStroke::LiftSelection()
+{
+    if (!_valid || _failed || _mask || !_source.HasStorage() || !_selection.has_value() ||
+        _selection->Data() == nullptr)
+    {
+        return false;
+    }
+    const SpotHealing::Bounds bounds = SpotHealing::CoverageBounds(
+        _selection->Data(), static_cast<std::size_t>(_selection->Width()),
+        static_cast<std::size_t>(_selection->Height()), static_cast<std::size_t>(_selection->Stride()));
+    if (bounds.Empty())
+    {
+        return false;
+    }
+    const GridRect region =
+        MappedBox(_pixelToDocument.Inverted(), static_cast<double>(bounds.x0), static_cast<double>(bounds.y0),
+                  static_cast<double>(bounds.x1), static_cast<double>(bounds.y1))
+            .Intersect(_sourceRect);
+    if (region.Empty())
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.assign(static_cast<std::size_t>(region.width) * static_cast<std::size_t>(region.height) * 4u, 0);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    // The layer's pixels under the selection, faded by its coverage.
+    _source.ReadRegion(region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height, bytes.data(),
+                       region.width * 4, 0);
+    for (int y = 0; y < region.height; ++y)
+    {
+        for (int x = 0; x < region.width; ++x)
+        {
+            const double coverage = SelectionAt(_pixelToDocument.Apply(Vec2{region.x + x + 0.5, region.y + y + 0.5}));
+            std::uint8_t* pixel = bytes.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(region.width) +
+                                                  static_cast<std::size_t>(x)) *
+                                                     4u;
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                pixel[channel] = static_cast<std::uint8_t>(std::lround(pixel[channel] * coverage));
+            }
+        }
+    }
+    const Raster image = Raster::Make(region.width, region.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    if (!image.HasStorage())
+    {
+        return false;
+    }
+    _lifted = Lifted{image, region};
+    return true;
+}
+
+bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
+{
+    if (!_lifted.has_value() || !_selection.has_value())
+    {
+        return false;
+    }
+    const Affine2 inverse = _pixelToDocument.Inverted();
+    const Vec2 zero = inverse.Apply(Vec2{0, 0});
+    const Vec2 moved = inverse.Apply(offset);
+    const double targetX = _lifted->rect.x + (moved.x - zero.x);
+    const double targetY = _lifted->rect.y + (moved.y - zero.y);
+    const bool whole = targetX == std::round(targetX) && targetY == std::round(targetY);
+    // Every tile the pixels leave or land on is rebuilt, as is any tile a previous preview changed.
+    const GridRect landing{static_cast<int>(std::floor(targetX)), static_cast<int>(std::floor(targetY)),
+                           _lifted->rect.width + 1, _lifted->rect.height + 1};
+    const GridRect needed = _lifted->rect.Union(landing).Intersect(GridRect{0, 0, _width, _height});
+    std::vector<std::uint64_t> keys = _moveTiles;
+    if (!needed.Empty())
+    {
+        const int columns = (_width + kTileSize - 1) / kTileSize;
+        for (int ty = needed.y / kTileSize; ty <= (needed.y + needed.height - 1) / kTileSize; ++ty)
+        {
+            for (int tx = needed.x / kTileSize; tx <= (needed.x + needed.width - 1) / kTileSize; ++tx)
+            {
+                const std::uint64_t key = static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) +
+                                          static_cast<std::uint64_t>(tx);
+                if (!AllocateTile(key))
+                {
+                    _failed = true;
+                    return false;
+                }
+                if (std::find(keys.begin(), keys.end(), key) == keys.end())
+                {
+                    keys.push_back(key);
+                }
+            }
+        }
+    }
+    const Raster& lifted = _lifted->image;
+    for (const std::uint64_t key : keys)
+    {
+        const auto found = _index.find(key);
+        if (found == _index.end())
+        {
+            continue;
+        }
+        Tile& tile = _tiles[found->second];
+        const std::uint8_t* base = tile.base.Data();
+        if (base == nullptr)
+        {
+            continue;
+        }
+        const std::size_t count =
+            static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
+        std::vector<std::uint8_t> bytes;
+        try
+        {
+            bytes.assign(base, base + count * 4u);
+        }
+        catch (const std::bad_alloc&)
+        {
+            _failed = true;
+            return false;
+        }
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
+            const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
+            const int gx = tile.rect.x + px;
+            const int gy = tile.rect.y + py;
+            std::uint8_t* out = bytes.data() + index * 4u;
+            if (!duplicate)
+            {
+                // The selection becomes a hole.
+                const double coverage = SelectionAt(_pixelToDocument.Apply(Vec2{gx + 0.5, gy + 0.5}));
+                if (coverage > 0.0)
+                {
+                    for (int channel = 0; channel < 4; ++channel)
+                    {
+                        out[channel] = static_cast<std::uint8_t>(std::lround(out[channel] * (1.0 - coverage)));
+                    }
+                }
+            }
+            // The lifted pixels land `offset` away: exact when whole pixels, bilinear otherwise.
+            std::array<double, 4> sample{};
+            const double sx = gx + 0.5 - targetX;
+            const double sy = gy + 0.5 - targetY;
+            bool inside = false;
+            if (whole)
+            {
+                const int ix = static_cast<int>(std::floor(sx));
+                const int iy = static_cast<int>(std::floor(sy));
+                if (ix >= 0 && iy >= 0 && ix < lifted.Width() && iy < lifted.Height())
+                {
+                    const std::uint8_t* pixel =
+                        lifted.Data() + static_cast<std::size_t>(iy) * static_cast<std::size_t>(lifted.Stride()) +
+                        static_cast<std::size_t>(ix) * 4u;
+                    for (int channel = 0; channel < 4; ++channel)
+                    {
+                        sample[static_cast<std::size_t>(channel)] = pixel[channel];
+                    }
+                    inside = true;
+                }
+            }
+            else
+            {
+                inside = SampleAt(lifted, sx, sy, sample);
+            }
+            if (!inside || sample[3] <= 0.0)
+            {
+                continue;
+            }
+            const double hold = 1.0 - sample[3] / 255.0;
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                out[channel] = static_cast<std::uint8_t>(std::lround(
+                    std::clamp(sample[static_cast<std::size_t>(channel)] + out[channel] * hold, 0.0, 255.0)));
+            }
+        }
+        tile.image =
+            Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        tile.touched = true;
+        tile.changed = true;
+    }
+    _moveTiles = std::move(keys);
+    return true;
+}
+
+// ── Pixel edits on the session (C9b) ──────────────────────────────────────
+
+namespace
+{
+[[nodiscard]] std::optional<std::size_t> LayerIndex(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
+{
+    for (std::size_t index = 0; index < layers.size(); ++index)
+    {
+        if (layers[index].id == id)
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
+// A selection's loops carried through a distortion of the floating pixels (legacy DistortWarp.mapPath).
+[[nodiscard]] std::vector<SelectionLoop> LoopsThroughDistortion(const std::vector<SelectionLoop>& loops,
+                                                                const LayerTransform& original, int width, int height,
+                                                                const LayerTransform& draft,
+                                                                const std::array<Vec2, 4>& corners)
+{
+    if (!DistortWarp::IsUsable(corners) || width < 1 || height < 1)
+    {
+        return loops;
+    }
+    const Affine2 toPixels = PixelToDocument(original, width, height).Inverted();
+    const DistortWarp::Homography map = DistortWarp::MakeHomography(corners);
+    std::vector<SelectionLoop> result;
+    result.reserve(loops.size());
+    for (const SelectionLoop& loop : loops)
+    {
+        SelectionLoop carried;
+        carried.reserve(loop.size());
+        for (const Vec2& point : loop)
+        {
+            const Vec2 pixel = toPixels.Apply(point);
+            double u = pixel.x / width;
+            double v = pixel.y / height;
+            if (draft.flipX)
+            {
+                u = 1.0 - u;
+            }
+            if (draft.flipY)
+            {
+                v = 1.0 - v;
+            }
+            carried.push_back(map.Map(Vec2{u, v}));
+        }
+        result.push_back(std::move(carried));
+    }
+    return result;
+}
+
+// Gray8 as opaque gray BGRA (a mask copied to the clipboard shows as pixels).
+[[nodiscard]] Raster GrayAsPixels(const Raster& gray)
+{
+    const std::uint8_t* data = gray.Data();
+    if (data == nullptr)
+    {
+        return {};
+    }
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.resize(static_cast<std::size_t>(gray.Width()) * static_cast<std::size_t>(gray.Height()) * 4u);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return {};
+    }
+    for (int y = 0; y < gray.Height(); ++y)
+    {
+        for (int x = 0; x < gray.Width(); ++x)
+        {
+            const std::uint8_t value = data[static_cast<std::size_t>(y) * static_cast<std::size_t>(gray.Stride()) +
+                                            static_cast<std::size_t>(x)];
+            std::uint8_t* out = bytes.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(gray.Width()) +
+                                                static_cast<std::size_t>(x)) *
+                                                   4u;
+            out[0] = value;
+            out[1] = value;
+            out[2] = value;
+            out[3] = 255;
+        }
+    }
+    return Raster::Make(gray.Width(), gray.Height(), RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+} // namespace
+
+std::wstring DocumentSession::NextLayerName() const
+{
+    std::unordered_set<std::wstring> names;
+    if (_document.has_value())
+    {
+        for (const ImageLayer& layer : _document->layers)
+        {
+            names.insert(layer.name);
+        }
+    }
+    int number = 1;
+    std::wstring name;
+    do
+    {
+        name = L"Layer " + std::to_wstring(number);
+        ++number;
+    } while (names.contains(name));
+    return name;
+}
+
+std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& layer, bool mask) const
+{
+    if (!_document.has_value())
+    {
+        return nullptr;
+    }
+    std::shared_ptr<BrushStroke> edit;
+    try
+    {
+        edit = std::make_shared<BrushStroke>(layer, mask, BrushSettings{}, _document->width, _document->height,
+                                             _brushEngine);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return nullptr;
+    }
+    if (!edit->IsValid())
+    {
+        return nullptr;
+    }
+    edit->SetPixelLimit(RasterEditPixelLimit(layer, mask));
+    if (_document->selection.has_value())
+    {
+        const DocumentSelection& selection = _document->selection.value();
+        edit->SetSelectionClip(
+            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
+    }
+    return edit;
+}
+
+void DocumentSession::FillSelection(FillSource source)
+{
+    if (!CanPaint())
+    {
+        return;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr)
+    {
+        return;
+    }
+    const bool mask = _maskSelected;
+    // A mask has its own palette: black hides and white reveals, the foreground per `maskPaintWhite`.
+    std::array<double, 4> color =
+        StraightColor(source == FillSource::Background ? _backgroundArgb : _foregroundArgb, 1.0);
+    if (mask)
+    {
+        const bool white = source == FillSource::Background ? !maskPaintWhite : maskPaintWhite;
+        color = {white ? 1.0 : 0.0, white ? 1.0 : 0.0, white ? 1.0 : 0.0, 1.0};
+    }
+    const std::shared_ptr<BrushStroke> edit = MakeRasterEdit(*layer, mask);
+    if (!edit)
+    {
+        return;
+    }
+    edit->SetEditName(mask ? L"Fill Mask" : L"Fill");
+    if (!edit->Fill(color) || !edit->HasPaint())
+    {
+        return;
+    }
+    CommitStroke(edit);
+}
+
+void DocumentSession::ClearSelectedPixels()
+{
+    if (!_document.has_value() || !_document->selection.has_value() || !CanPaint())
+    {
+        return;
+    }
+    if (_maskSelected)
+    {
+        FillSelection(FillSource::Background);
+        return;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return;
+    }
+    const std::shared_ptr<BrushStroke> edit = MakeRasterEdit(*layer, false);
+    if (!edit)
+    {
+        return;
+    }
+    edit->SetEditName(L"Clear");
+    if (!edit->ClearPixels() || !edit->HasPaint())
+    {
+        return;
+    }
+    CommitStroke(edit);
+}
+
+void DocumentSession::DeleteLayerMask()
+{
+    if (!_activeLayerID.has_value())
+    {
+        return;
+    }
+    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    if (layer == nullptr || !layer->mask.has_value())
+    {
+        return;
+    }
+    BeginEdit(L"Delete Layer Mask");
+    layer->mask.reset();
+    _maskSelected = false;
+    ++_editRevision;
+    EndEdit();
+}
+
+void DocumentSession::DeleteLayerOrMask()
+{
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr)
+    {
+        return;
+    }
+    if (_maskSelected && layer->mask.has_value())
+    {
+        DeleteLayerMask();
+    }
+    else
+    {
+        DeleteLayer(layer->id);
+    }
+}
+
+void DocumentSession::DeleteKeyPressed()
+{
+    if (_document.has_value() && _document->selection.has_value())
+    {
+        ClearSelectedPixels();
+    }
+    else
+    {
+        DeleteLayerOrMask();
+    }
+}
+
+bool DocumentSession::CanInvert() const noexcept
+{
+    if (!_document.has_value() || _brush || _warp || _pixelMove)
+    {
+        return false;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || (layer->isGroup && !_maskSelected) || !EffectivelyVisible(_document.value(), layer->id))
+    {
+        return false;
+    }
+    if (_document->selection.has_value() && _document->selection->IsEmpty())
+    {
+        return false;
+    }
+    return _maskSelected ? (layer->mask.has_value() && layer->mask->enabled)
+                         : (layer->asset.has_value() && !layer->adjustment.has_value());
+}
+
+void DocumentSession::InvertPixels()
+{
+    if (!CanInvert())
+    {
+        return;
+    }
+    // Invert is available in every tool: a pending transform or gradient is applied first.
+    CommitTransform();
+    ResolveGradient();
+    if (!CanInvert())
+    {
+        return;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    const bool mask = _maskSelected;
+    const std::shared_ptr<BrushStroke> edit = MakeRasterEdit(*layer, mask);
+    if (!edit)
+    {
+        return;
+    }
+    edit->SetEditName(mask ? L"Invert Mask" : L"Invert");
+    if (!edit->Invert() || !edit->HasPaint())
+    {
+        return;
+    }
+    CommitStroke(edit);
+}
+
+bool DocumentSession::BeginPixelMove(bool duplicate)
+{
+    if (_pixelMove || !_document.has_value() || !_document->selection.has_value() || _document->selection->IsEmpty() ||
+        !CanPaint() || _maskSelected)
+    {
+        return false;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return false;
+    }
+    const std::shared_ptr<BrushStroke> raster = MakeRasterEdit(*layer, false);
+    if (!raster || !raster->LiftSelection())
+    {
+        return false;
+    }
+    raster->SetEditName(duplicate ? L"Duplicate Pixels" : L"Move Pixels");
+    try
+    {
+        _pixelMove =
+            std::make_shared<PixelMove>(PixelMove{raster, _document->selection.value(), duplicate, Vec2{0, 0}});
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    return true;
+}
+
+void DocumentSession::MovePixels(double dx, double dy)
+{
+    if (!_pixelMove || !std::isfinite(dx) || !std::isfinite(dy))
+    {
+        return;
+    }
+    const Vec2 rounded{std::round(dx), std::round(dy)};
+    if (!_pixelMove->raster->MoveLifted(rounded, _pixelMove->duplicate))
+    {
+        CancelPixelMove();
+        return;
+    }
+    _pixelMove->offset = rounded;
+}
+
+std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
+{
+    if (!_document.has_value())
+    {
+        return std::nullopt;
+    }
+    if (_pixelMove)
+    {
+        DocumentSelection moved = _pixelMove->origin;
+        moved.loops = SelectionGeometry::Translated(moved.loops, _pixelMove->offset.x, _pixelMove->offset.y);
+        return moved;
+    }
+    if (_transformEdit.has_value() && _transformEdit->floating.has_value() && _document->selection.has_value())
+    {
+        DocumentSelection moved = _document->selection.value();
+        const FloatingTransform& floating = _transformEdit->floating.value();
+        if (_transformEdit->corners.has_value())
+        {
+            moved.loops =
+                LoopsThroughDistortion(moved.loops, floating.original, floating.pixelWidth, floating.pixelHeight,
+                                       _transformEdit->draft, _transformEdit->corners.value());
+            return moved;
+        }
+        if (const std::optional<Affine2> map = FloatingSelectionMap(_transformEdit.value()); map.has_value())
+        {
+            moved.loops = SelectionGeometry::Transformed(moved.loops, map.value());
+            return moved;
+        }
+    }
+    return _document->selection;
+}
+
+void DocumentSession::FinishPixelMove()
+{
+    if (!_pixelMove)
+    {
+        return;
+    }
+    const std::shared_ptr<PixelMove> move = std::move(_pixelMove);
+    _pixelMove.reset();
+    if (move->offset.x == 0.0 && move->offset.y == 0.0)
+    {
+        return;
+    }
+    DocumentSelection moved = move->origin;
+    moved.loops = SelectionGeometry::Translated(moved.loops, move->offset.x, move->offset.y);
+    CommitStroke(move->raster, [&] { _document->selection = moved; });
+}
+
+void DocumentSession::CancelPixelMove() noexcept
+{
+    _pixelMove.reset();
+}
+
+void DocumentSession::NudgePixels(double dx, double dy)
+{
+    if (!BeginPixelMove())
+    {
+        return;
+    }
+    MovePixels(dx, dy);
+    FinishPixelMove();
+}
+
+void DocumentSession::AddMask(bool revealing)
+{
+    if (!_document.has_value() || !_document->selection.has_value())
+    {
+        AddLayerMask(revealing);
+        return;
+    }
+    if (_transformEdit.has_value() || !_activeLayerID.has_value())
+    {
+        return;
+    }
+    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    if (layer == nullptr || layer->mask.has_value())
+    {
+        return;
+    }
+    // Mask pixels cover the layer's own pixel grid, like every other mask.
+    const int width =
+        layer->asset.has_value() ? layer->asset->image.Width() : static_cast<int>(std::lround(layer->transform.size.x));
+    const int height = layer->asset.has_value() ? layer->asset->image.Height()
+                                                : static_cast<int>(std::lround(layer->transform.size.y));
+    if (width < 1 || height < 1 || static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > 100'000'000)
+    {
+        return;
+    }
+    const DocumentSelection& selection = _document->selection.value();
+    const Affine2 toPixels = PixelToDocument(layer->transform, width, height).Inverted();
+    const Raster coverage = SelectionGeometry::Coverage(SelectionGeometry::Transformed(selection.loops, toPixels),
+                                                        width, height, selection.antialiased);
+    const std::uint8_t* data = coverage.Data();
+    if (data == nullptr)
+    {
+        return;
+    }
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+    }
+    catch (const std::bad_alloc&)
+    {
+        return;
+    }
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::uint8_t inside = data[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
+                                             static_cast<std::size_t>(x)];
+            bytes[static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)] =
+                revealing ? static_cast<std::uint8_t>(255 - inside) : inside;
+        }
+    }
+    const Raster mask = Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+    if (!mask.HasStorage())
+    {
+        return;
+    }
+    BeginEdit(L"Add Mask from Selection");
+    layer->mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer->name}, true, std::nullopt, true};
+    _document->selection.reset();
+    _maskSelected = true;
+    ++_editRevision;
+    EndEdit();
+}
+
+bool DocumentSession::CanTransformSelection() const noexcept
+{
+    if (_transformEdit.has_value() || !CanPaint() || _maskSelected || !_document.has_value() ||
+        !_document->selection.has_value() || _document->selection->IsEmpty())
+    {
+        return false;
+    }
+    const ImageLayer* layer = ActiveLayer();
+    return layer != nullptr && layer->asset.has_value();
+}
+
+void DocumentSession::TransformCommand()
+{
+    if (CanTransformSelection())
+    {
+        BeginSelectionTransform();
+    }
+    else
+    {
+        BeginTransform(true);
+    }
+}
+
+void DocumentSession::BeginSelectionTransform()
+{
+    if (!CanTransformSelection())
+    {
+        return;
+    }
+    const ImageLayer source = *ActiveLayer();
+    const std::optional<PixelClipboard> lifted = RenderSelectedPixels(source, false);
+    if (!lifted.has_value())
+    {
+        return;
+    }
+    std::shared_ptr<CanvasDocument> before;
+    try
+    {
+        before = std::make_shared<CanvasDocument>(_document.value());
+    }
+    catch (const std::bad_alloc&)
+    {
+        return;
+    }
+    const std::optional<Guid> beforeActive = _activeLayerID;
+    // Outer entry: closed by CommitTransform (merge) or CancelTransform (restore).
+    BeginEdit(L"Transform Selection");
+    ClearSelectedPixels();
+    const std::optional<std::size_t> index = LayerIndex(_document->layers, source.id);
+    if (!index.has_value())
+    {
+        _document = *before;
+        _activeLayerID = beforeActive;
+        EndEdit();
+        return;
+    }
+    ImageLayer floating = ImageLayer::Blank(L"Floating Selection", Vec2{static_cast<double>(lifted->image.Width()),
+                                                                        static_cast<double>(lifted->image.Height())});
+    floating.asset = RasterAsset{lifted->image, Raster::MakeThumbnail(lifted->image), L"Floating Selection"};
+    floating.transform.origin = lifted->origin;
+    floating.parentID = source.parentID;
+    floating.opacity = source.opacity;
+    floating.blendMode = source.blendMode;
+    _document->layers.insert(_document->layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, floating);
+    _activeLayerID = floating.id;
+    _selected = {floating.id};
+    _maskSelected = false;
+    TransformEdit edit;
+    edit.layerID = floating.id;
+    edit.draft = floating.transform;
+    edit.persistent = true;
+    edit.floating = FloatingTransform{
+        source.id, before, beforeActive, floating.transform, lifted->image.Width(), lifted->image.Height()};
+    _transformEdit = std::move(edit);
+    ++_editRevision;
+}
+
+std::optional<Affine2> DocumentSession::FloatingSelectionMap(const TransformEdit& edit) const noexcept
+{
+    if (!edit.floating.has_value() || edit.floating->pixelWidth < 1 || edit.floating->pixelHeight < 1)
+    {
+        return std::nullopt;
+    }
+    const FloatingTransform& floating = edit.floating.value();
+    return PixelToDocument(floating.original, floating.pixelWidth, floating.pixelHeight)
+        .Inverted()
+        .Concat(PixelToDocument(edit.draft, floating.pixelWidth, floating.pixelHeight));
+}
+
+void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTransform& floating)
+{
+    bool merged = false;
+    do
+    {
+        if (!edit.draft.IsValid() || !_document.has_value() || !floating.before)
+        {
+            break;
+        }
+        std::vector<ImageLayer>& layers = _document->layers;
+        const std::optional<std::size_t> floatingIndex = LayerIndex(layers, edit.layerID);
+        const std::optional<std::size_t> sourceIndex = LayerIndex(layers, floating.sourceID);
+        if (!floatingIndex.has_value() || !sourceIndex.has_value() ||
+            !layers[floatingIndex.value()].asset.has_value() || !layers[sourceIndex.value()].asset.has_value())
+        {
+            break;
+        }
+        Raster pixels = layers[floatingIndex.value()].asset->image;
+        LayerTransform placed = edit.draft;
+        if (edit.corners.has_value())
+        {
+            // A distorted selection is warped into its new shape first, then merged like any other.
+            const std::optional<DistortWarp::WarpedTrimmed> warped =
+                DistortWarp::WarpTrimmed(pixels, edit.draft, edit.corners.value());
+            if (!warped.has_value())
+            {
+                break;
+            }
+            pixels = warped->image;
+            placed = warped->transform;
+        }
+        const ImageLayer& source = layers[sourceIndex.value()];
+        const int sourceWidth = source.asset->image.Width();
+        const int sourceHeight = source.asset->image.Height();
+        const Affine2 toDocument = PixelToDocument(source.transform, sourceWidth, sourceHeight);
+        const Affine2 toPixels = toDocument.Inverted();
+        const Affine2 floatingToDocument = PixelToDocument(placed, pixels.Width(), pixels.Height());
+        // The floating pixels on the source's own grid, growing the layer where they now extend past it.
+        const GridRect original{0, 0, sourceWidth, sourceHeight};
+        const GridRect extent =
+            original.Union(MappedBox(floatingToDocument.Concat(toPixels), 0.0, 0.0, static_cast<double>(pixels.Width()),
+                                     static_cast<double>(pixels.Height())));
+        if (extent.width > 30'000 || extent.height > 30'000 ||
+            static_cast<std::int64_t>(extent.width) * static_cast<std::int64_t>(extent.height) > 100'000'000)
+        {
+            break;
+        }
+        std::vector<std::uint8_t> bytes;
+        try
+        {
+            bytes.assign(static_cast<std::size_t>(extent.width) * static_cast<std::size_t>(extent.height) * 4u, 0);
+        }
+        catch (const std::bad_alloc&)
+        {
+            break;
+        }
+        source.asset->image.ReadRegion(extent.x, extent.y, extent.width, extent.height, bytes.data(), extent.width * 4,
+                                       0);
+        const Affine2 documentToFloating = floatingToDocument.Inverted();
+        for (int y = 0; y < extent.height; ++y)
+        {
+            for (int x = 0; x < extent.width; ++x)
+            {
+                const Vec2 document = toDocument.Apply(Vec2{extent.x + x + 0.5, extent.y + y + 0.5});
+                const Vec2 floatingPixel = documentToFloating.Apply(document);
+                std::array<double, 4> sample{};
+                if (!SampleAt(pixels, floatingPixel.x, floatingPixel.y, sample) || sample[3] <= 0.0)
+                {
+                    continue;
+                }
+                std::uint8_t* out =
+                    bytes.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(extent.width) +
+                                    static_cast<std::size_t>(x)) *
+                                       4u;
+                const double hold = 1.0 - sample[3] / 255.0;
+                for (int channel = 0; channel < 4; ++channel)
+                {
+                    out[channel] = static_cast<std::uint8_t>(std::lround(
+                        std::clamp(sample[static_cast<std::size_t>(channel)] + out[channel] * hold, 0.0, 255.0)));
+                }
+            }
+        }
+        const Raster image =
+            Raster::Make(extent.width, extent.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        if (!image.HasStorage())
+        {
+            break;
+        }
+        LayerTransform mergedTransform = source.transform;
+        mergedTransform.size = Vec2{extent.width * source.transform.size.x / sourceWidth,
+                                    extent.height * source.transform.size.y / sourceHeight};
+        const Vec2 center = toDocument.Apply(Vec2{extent.x + extent.width / 2.0, extent.y + extent.height / 2.0});
+        mergedTransform.origin = Vec2{center.x - mergedTransform.size.x / 2.0, center.y - mergedTransform.size.y / 2.0};
+        if (!mergedTransform.IsValid())
+        {
+            break;
+        }
+        std::optional<LayerMask> mask = source.mask;
+        if (mask.has_value() && !mask->placement.has_value() && extent != original &&
+            mask->asset.image.PixelCount() > 1)
+        {
+            // A mask on the layer's grid grows with it, revealing the new area; a uniform mask stays as is.
+            const Raster grown =
+                Raster::Replacing(mask->asset.image, 0, 0, {}, extent.x, extent.y, extent.width, extent.height, 255);
+            if (grown.HasStorage())
+            {
+                mask->asset.image = grown;
+                mask->asset.thumbnail = Raster::MakeThumbnail(grown);
+            }
+        }
+        std::optional<DocumentSelection> moved;
+        if (_document->selection.has_value())
+        {
+            DocumentSelection selection = _document->selection.value();
+            if (edit.corners.has_value())
+            {
+                selection.loops = LoopsThroughDistortion(selection.loops, floating.original, floating.pixelWidth,
+                                                         floating.pixelHeight, edit.draft, edit.corners.value());
+            }
+            else if (const std::optional<Affine2> map = FloatingSelectionMap(edit); map.has_value())
+            {
+                selection.loops = SelectionGeometry::Transformed(selection.loops, map.value());
+            }
+            moved = std::move(selection);
+        }
+        const std::wstring name = source.name;
+        layers.erase(layers.begin() + static_cast<std::ptrdiff_t>(floatingIndex.value()));
+        const std::optional<std::size_t> target = LayerIndex(layers, floating.sourceID);
+        if (!target.has_value())
+        {
+            break;
+        }
+        ImageLayer& installed = layers[target.value()];
+        installed.asset = RasterAsset{image, Raster::MakeThumbnail(image), name};
+        installed.transform = mergedTransform;
+        installed.mask = mask;
+        _document->selection = moved;
+        _activeLayerID = floating.sourceID;
+        _selected = {floating.sourceID};
+        _maskSelected = false;
+        merged = true;
+    } while (false);
+    if (!merged && floating.before)
+    {
+        _document = *floating.before;
+        _activeLayerID = floating.beforeActive;
+    }
+    ++_editRevision;
+    EndEdit();
+}
+
+void DocumentSession::CancelFloating(const FloatingTransform& floating)
+{
+    if (floating.before)
+    {
+        _document = *floating.before;
+    }
+    _activeLayerID = floating.beforeActive;
+    if (floating.beforeActive.has_value())
+    {
+        _selected = {floating.beforeActive.value()};
+    }
+    ++_editRevision;
+    EndEdit();
+}
+
+std::optional<GridRect> DocumentSession::SelectionCopyRegion() const noexcept
+{
+    if (!_document.has_value())
+    {
+        return std::nullopt;
+    }
+    double minX = 0;
+    double minY = 0;
+    double maxX = _document->width;
+    double maxY = _document->height;
+    if (_document->selection.has_value())
+    {
+        const std::optional<SelectionBounds> bounds = _document->selection->Bounds();
+        if (!bounds.has_value())
+        {
+            return std::nullopt;
+        }
+        minX = bounds->minX;
+        minY = bounds->minY;
+        maxX = bounds->maxX;
+        maxY = bounds->maxY;
+    }
+    // Path booleans leave tiny float noise (59.9999999), so round with a tolerance rather than add a pixel.
+    const double tolerance = 0.001;
+    const double left = std::max(0.0, std::floor(minX + tolerance));
+    const double top = std::max(0.0, std::floor(minY + tolerance));
+    const double right = std::min(static_cast<double>(_document->width), std::ceil(maxX - tolerance));
+    const double bottom = std::min(static_cast<double>(_document->height), std::ceil(maxY - tolerance));
+    if (!(right - left >= 1.0) || !(bottom - top >= 1.0))
+    {
+        return std::nullopt;
+    }
+    return GridRect{static_cast<int>(left), static_cast<int>(top), static_cast<int>(right - left),
+                    static_cast<int>(bottom - top)};
+}
+
+bool DocumentSession::CanCopyPixels() const noexcept
+{
+    const ImageLayer* layer = ActiveLayer();
+    if (!_document.has_value() || layer == nullptr || (layer->isGroup && !_maskSelected) ||
+        (_document->selection.has_value() && _document->selection->IsEmpty()))
+    {
+        return false;
+    }
+    return _maskSelected ? layer->mask.has_value() : layer->asset.has_value();
+}
+
+std::optional<PixelClipboard> DocumentSession::RenderSelectedPixels(const ImageLayer& layer, bool mask) const
+{
+    if (!_document.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::optional<GridRect> region = SelectionCopyRegion();
+    if (!region.has_value())
+    {
+        return std::nullopt;
+    }
+    const int width = _document->width;
+    const int height = _document->height;
+    Raster shown;
+    if (mask)
+    {
+        if (!layer.mask.has_value())
+        {
+            return std::nullopt;
+        }
+        // A mask as opaque gray: beyond its pixels its edge tone when placed apart, else black.
+        const std::uint8_t background =
+            layer.mask->placement.has_value()
+                ? static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(layer.mask->asset.thumbnail) * 255.0))
+                : 0;
+        shown = GrayAsPixels(
+            ImageFilters::RenderMaskPixels(layer.mask->asset.image, MaskTransform(layer), width, height, background));
+    }
+    else
+    {
+        if (!layer.asset.has_value())
+        {
+            return std::nullopt;
+        }
+        shown = RenderLayerPixels(layer.asset->image, DisplayedTransform(layer), width, height);
+    }
+    if (!shown.HasStorage())
+    {
+        return std::nullopt;
+    }
+    return RenderMergedPixels(shown);
+}
+
+bool DocumentSession::CanCopyMerged() const noexcept
+{
+    if (!_document.has_value() || (_document->selection.has_value() && _document->selection->IsEmpty()))
+    {
+        return false;
+    }
+    for (const ImageLayer& layer : _document->layers)
+    {
+        if (layer.asset.has_value())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<PixelClipboard> DocumentSession::RenderMergedPixels(const Raster& composite) const
+{
+    if (!_document.has_value() || !composite.HasStorage() || composite.Format() != RasterFormat::Bgra8888 ||
+        composite.Width() != _document->width || composite.Height() != _document->height)
+    {
+        return std::nullopt;
+    }
+    const std::optional<GridRect> region = SelectionCopyRegion();
+    if (!region.has_value())
+    {
+        return std::nullopt;
+    }
+    std::optional<Raster> coverage;
+    if (_document->selection.has_value())
+    {
+        const DocumentSelection& selection = _document->selection.value();
+        coverage =
+            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased);
+        if (!coverage->HasStorage() || coverage->Data() == nullptr)
+        {
+            return std::nullopt;
+        }
+    }
+    std::vector<std::uint8_t> bytes;
+    try
+    {
+        bytes.resize(static_cast<std::size_t>(region->width) * static_cast<std::size_t>(region->height) * 4u);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return std::nullopt;
+    }
+    composite.ReadRegion(region->x, region->y, region->width, region->height, bytes.data(), region->width * 4, 0);
+    if (coverage.has_value())
+    {
+        const std::uint8_t* mask = coverage->Data();
+        for (int y = 0; y < region->height; ++y)
+        {
+            for (int x = 0; x < region->width; ++x)
+            {
+                const double c =
+                    mask[static_cast<std::size_t>(region->y + y) * static_cast<std::size_t>(coverage->Stride()) +
+                         static_cast<std::size_t>(region->x + x)] /
+                    255.0;
+                std::uint8_t* pixel =
+                    bytes.data() + (static_cast<std::size_t>(y) * static_cast<std::size_t>(region->width) +
+                                    static_cast<std::size_t>(x)) *
+                                       4u;
+                for (int channel = 0; channel < 4; ++channel)
+                {
+                    pixel[channel] = static_cast<std::uint8_t>(std::lround(pixel[channel] * c));
+                }
+            }
+        }
+    }
+    const Raster image =
+        Raster::Make(region->width, region->height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    if (!image.HasStorage())
+    {
+        return std::nullopt;
+    }
+    return PixelClipboard{image, Vec2{static_cast<double>(region->x), static_cast<double>(region->y)}};
+}
+
+bool DocumentSession::CopySelection()
+{
+    if (!CanCopyPixels())
+    {
+        return false;
+    }
+    std::optional<PixelClipboard> copied = RenderSelectedPixels(*ActiveLayer(), _maskSelected);
+    if (!copied.has_value())
+    {
+        return false;
+    }
+    _clipboard = std::move(copied);
+    return true;
+}
+
+bool DocumentSession::CopyMergedSelection(const Raster& composite)
+{
+    if (!CanCopyMerged())
+    {
+        return false;
+    }
+    std::optional<PixelClipboard> copied = RenderMergedPixels(composite);
+    if (!copied.has_value())
+    {
+        return false;
+    }
+    _clipboard = std::move(copied);
+    return true;
+}
+
+void DocumentSession::CutSelection()
+{
+    if (!_document.has_value() || !_document->selection.has_value() || !CanCopyPixels())
+    {
+        return;
+    }
+    if (CopySelection())
+    {
+        ClearSelectedPixels();
+    }
+}
+
+void DocumentSession::Paste()
+{
+    if (!CanPaste())
+    {
+        return;
+    }
+    const PixelClipboard clip = _clipboard.value();
+    AddPixelLayer(clip.image, clip.origin, NextLayerName(), L"Paste", true, std::nullopt);
+}
+
+void DocumentSession::PasteImage(const Raster& image)
+{
+    if (!_document.has_value() || !image.HasStorage())
+    {
+        return;
+    }
+    const Vec2 origin{std::floor((_document->width - image.Width()) / 2.0),
+                      std::floor((_document->height - image.Height()) / 2.0)};
+    AddPixelLayer(image, origin, NextLayerName(), L"Paste", true, std::nullopt);
+}
+
+void DocumentSession::LayerViaCopy()
+{
+    const ImageLayer* layer = ActiveLayer();
+    if (!_document.has_value() || layer == nullptr || layer->isGroup ||
+        (_document->selection.has_value() && _document->selection->IsEmpty()))
+    {
+        return;
+    }
+    if (!_document->selection.has_value())
+    {
+        DuplicateActiveLayer();
+        return;
+    }
+    const std::optional<PixelClipboard> copied = RenderSelectedPixels(*layer, _maskSelected);
+    if (!copied.has_value())
+    {
+        return;
+    }
+    AddPixelLayer(copied->image, copied->origin, NextLayerName(), L"Layer via Copy", true, std::nullopt);
 }

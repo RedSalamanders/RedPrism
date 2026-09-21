@@ -211,6 +211,14 @@ class BrushStroke
     [[nodiscard]] bool Fill(const std::array<double, 4>& color);
     // Erases image pixels to transparency inside the selection, only where pixels exist.
     [[nodiscard]] bool ClearPixels();
+    // Cuts the selected pixels out of the original image; false when nothing is lifted (no selection, a mask, no
+    // pixels under it).
+    [[nodiscard]] bool LiftSelection();
+    // Rebuilds the affected tiles from the original: the selection becomes a transparent hole (unless `duplicate`)
+    // and the lifted pixels are placed `offset` document pixels away.
+    [[nodiscard]] bool MoveLifted(Vec2 offset, bool duplicate);
+    // Inverts the pixels (transparency kept; a mask's gray) inside the selection, or everywhere the layer has pixels.
+    [[nodiscard]] bool Invert();
 
     [[nodiscard]] const Guid& LayerID() const noexcept
     {
@@ -269,7 +277,13 @@ class BrushStroke
     // Runs `shade` in document coordinates over every tile the canvas and selection cover (only the layer's existing
     // pixels with `withinSource`), starting from each tile's original content; `shade` returns false to leave a
     // pixel alone. `destinationOut` takes the shaded alpha out of the pixels instead of painting.
-    [[nodiscard]] bool PaintCanvas(bool withinSource, double opacity, bool destinationOut,
+    enum class PaintMode
+    {
+        Over,
+        DestinationOut,
+        Invert,
+    };
+    [[nodiscard]] bool PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                                    const std::function<bool(Vec2, std::array<double, 4>&)>& shade);
 
     Guid _layerID;
@@ -299,4 +313,11 @@ class BrushStroke
     int _sampleY = 0;
     bool _replaces = false;
     std::wstring _editName;
+    struct Lifted
+    {
+        Raster image;
+        GridRect rect;
+    };
+    std::optional<Lifted> _lifted;
+    std::vector<std::uint64_t> _moveTiles;
 };
