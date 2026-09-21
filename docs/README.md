@@ -43,6 +43,10 @@ invoked instead of doing nothing.
   15°). Moves snap to the canvas and the other layers unless Ctrl is held. Alt-drag duplicates, arrows nudge,
   Ctrl+T opens Free Transform with the header's numbers; Enter or Apply commits, Escape or Cancel discards. The
   Image menu flips the canvas, the Layer menu flips the layer.
+- **Crop**: the Crop tool (C) frames the whole canvas; drag a handle (Alt from the center), the inside to move
+  the frame or the outside to draw a new one, pick a ratio in the header, and Enter or Apply Crop resizes the
+  canvas to the frame without resampling; Escape or Cancel returns to the whole canvas. Edges snap to the canvas
+  and to layer bounds.
 - **Sizes**: File › New Canvas… asks for a size (an image on the clipboard suggests its own), Image › Canvas Size…
   grows or shrinks the canvas around an anchor in pixels, percent, inches or centimeters (relative or absolute,
   ratio locked or free) with a transparent or colored extension, and Image › Image Size… resamples every layer
@@ -97,6 +101,7 @@ Empty-document harness captures:
 - [Retouch demo](screenshots/retouch-96.png) (`--demo retouch`)
 - [Adjust demo](screenshots/adjust-96.png) (`--demo adjust`)
 - [Canvas Size card](screenshots/canvassize-96.png) (`--demo canvassize`)
+- [Crop tool](screenshots/crop-96.png) (`--demo crop`)
 
 Filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

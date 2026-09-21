@@ -180,6 +180,28 @@ system clipboard changed since that copy); Alt+Backspace and Ctrl+Backspace fill
 colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
+## Crop tool
+
+The Crop tool (C, legacy `Crop.swift` / `CropControls.swift`) frames the canvas to come. Choosing the tool frames
+the whole canvas (`DocumentSession::SetCropFrame(VisibleCropRect())`); leaving it, a document on its way out or a
+tool switch drops the frame. The frame draws as the transform box without its rotation knob (`SetTransformOverlay`
+with `showsRotation` off) and everything outside it dims (`CanvasOverlay::SetCropShade`, 45 % black). Header:
+the title, Ratio (Free, Original — the canvas ratio —, 1:1, 4:3, 16:9; a choice re-shapes the visible frame about
+its center keeping its width, `ChangeCropRatio`), the frame's size in pixels, Cancel and the primary Apply Crop.
+
+Pointer (canvas hole, the Crop tool): a press on a handle resizes (`CropDrag::Mode::Resize`, Alt about the center,
+a fixed ratio kept through `TransformDrag`'s ratio lock), a press inside the frame moves it, a press outside starts
+a new frame that a drag draws from the press point (a click alone leaves the frame as it is); the pointer's
+document point drives `CropDrag::Updated`, then `CropSnap::Apply` with the canvas edges and every visible pixel
+layer's upright bounds as targets and `TransformSnap::kDistanceDip` scaled to document pixels as the tolerance,
+and a valid result becomes the frame on every move. Cursors: the resize arrows over a handle, the four-way arrow
+inside the frame, a crosshair outside. Enter or Apply Crop resizes the canvas to the frame as one `Crop` entry
+(`CommitCrop`: the content moves by the frame's origin and is never resampled; a frame equal to the canvas records
+nothing); Escape or Cancel drops the frame and the whole canvas frames again. The self-test frames the canvas by
+choosing the tool, drags the bottom-right handle to 640 × 400 through the pointer path, crops with Enter, moves
+the frame by a drag inside it, drops it with Escape, squares it through the header's ratio, cancels, undoes and
+leaves the tool.
+
 ## Brush tools
 
 The Brush and Eraser share one header (`ChromeHost::BuildBrushHeader`, mirrored from the session through
@@ -319,7 +341,6 @@ function. The functions still awaiting an implementation are:
 | --- | --- |
 | Rename Layer… | Layer menu, F2 |
 | Merge Down | Layer menu, Ctrl+E |
-| Crop | the rail (C): choosing the tool raises the notice and keeps the previous tool |
 
 The self-test invokes each of them under quiet UI and checks that the notice count rises by one while the document,
 the history and the tool stay as they were. [`Completeness_2026-09-21.md`](../Plans/WIP/Completeness_2026-09-21.md)

@@ -440,8 +440,27 @@ edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK re
 - `DocumentSession::ApplyDocumentSize(document, name)` installs a resized document (same id) as one entry named
   `Canvas Size`, `Image Size` or `Crop`, dropping any outline draft and keeping the active layer.
 
-The Crop tool's model (`CropGeometry`, `CropDrag`, `CropSnap`) follows in slice 3 of
-[`Completeness_2026-09-21.md`](../Plans/WIP/Completeness_2026-09-21.md).
+The Crop tool's model (`Common/Crop.*`, legacy `Crop.swift`) works on `CropRect` (x, y, width, height in document
+pixels; the session holds the pending frame, `CropFrame`, and shows the whole canvas when there is none,
+`VisibleCropRect`):
+
+- `CropGeometry::Snapped` standardizes and rounds a rectangle to whole pixels with at least one pixel a side;
+  `Valid` needs finite numbers, 1…30 000 a side and an origin within ±1 000 000; `Create(start, end, ratio,
+  symmetric)` is the frame dragged from `start` to `end`, the shorter axis grown to the ratio (width / height)
+  when one is given, and grown out from `start` as its center when symmetric.
+- `CropDrag::Updated(point, ratio, symmetric)`: Create as above; Move offsets the original by the drag and snaps
+  to whole pixels; Resize runs `TransformDrag` (mode Resize, the handle index, the original as an upright
+  transform) with the ratio locked when one is given and Alt about the center, then snaps.
+- `CropSnap::Apply(rect, drag, point, ratio, symmetric)`: with a positive tolerance, a move shifts the frame by the
+  smallest offset that lands one of its edges on a target per axis (its size kept); creating or resizing snaps only
+  the edge on the pointer's side of each dragged axis (a corner handle both axes, an edge handle one) and never
+  with a fixed ratio; symmetric mirrors the snapped edge about the center (the press point while creating).
+- `DocumentSession`: `SetCropFrame`, `CancelCrop`, `cropRatioChoice` with `CropRatio` (Free, Original = the
+  canvas ratio, 1:1, 4:3, 16:9), `ChangeCropRatio` (the visible frame re-shaped to the ratio about its center,
+  keeping its width, when valid), `CommitCrop` (`ResizeCanvas` with `contentOffset` = −origin as one `Crop`
+  entry: the content moves, nothing resamples; a frame equal to the canvas records nothing) and
+  `CropSnapTargets` (the canvas edges and every visible pixel layer's rounded upright bounds). `ClearDocument`
+  drops the frame.
 
 ## Validation
 
@@ -480,7 +499,10 @@ shrink, the over-budget fill, the unchanged same size), `imagedraft.*` (the Imag
 raster, the resolution-only change, the rotated hidden layer's box, the rejected size; plus a mask rasterized and
 a placed mask's scaled placement). The WARP self-test drives Canvas Size (percent, locked, anchored top-left, a
 white extension growing from the bottom-right anchor, Escape), Image Size (nearest, 300 ppi) and New Canvas
-through the cards' actions and keys.
+through the cards' actions and keys. Crop: `DocumentTests` `crop.*` (the legacy `CropTests`: the reverse ratio
+create, the move, every handle keeping the ratio, the translating commit with undo and redo, the same-size offset
+and the expansion, the cancelling and the whole-canvas commit that record nothing, the ratio re-shape, the snap
+cases and the snap targets, the cleared session); the WARP self-test drives the tool through the pointer path.
 
 Pixel edits: `DocumentTests` `edit.*` (the legacy `SelectionEditTests`: brush and gradient clipped to the selection,
 an empty selection edits nothing, fills, Clear and the Delete key, mask fills, the clip on scaled layers, masks from

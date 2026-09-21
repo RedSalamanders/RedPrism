@@ -43,7 +43,7 @@ own.
 | Layer › Move Layer Up / Down (Ctrl+] / Ctrl+[) | `EditorSession.moveActiveLayer` | done |
 | Layer › Create / Release Clipping Mask (Ctrl+Alt+G) | `LiveLayerMask.toggleClippingMask` | done |
 | Layer › Merge Down (Ctrl+E) | `LayerMerge.swift` | stub |
-| Crop tool (C): frame, ratios, snapping, Apply / Cancel | `Crop.swift`, `CropControls.swift` | stub |
+| Crop tool (C): frame, ratios, snapping, Apply / Cancel | `Crop.swift`, `CropControls.swift` | done |
 | Several layers selected at once in the layers panel | `LayerGroups.selectLayers`, `NativeLayerList` | open, no stub: the panel selects one row and every command works on it |
 | Projects in tabs | `ProjectWorkspace.swift`, `ProjectTabs.swift` | out of scope: one document per window; a second project opens in the same window after the save prompt |
 | Check for Updates…, Hide, Hide Others, Show All | the macOS application menu | not applicable on Windows |
@@ -55,7 +55,7 @@ own.
       toggle; specs, self-test, DocumentTests
 - [x] Slice 2 — sizes: `ResizeCanvas` / `ResizeImage` in Common with the legacy `CanvasSizeTests` /
       `ImageSizeTests` goldens; the New Canvas, Canvas Size and Image Size cards
-- [ ] Slice 3 — Crop tool: `CropGeometry` / `CropDrag` / `CropSnap` with the legacy `CropTests` goldens, the frame
+- [x] Slice 3 — Crop tool: `CropGeometry` / `CropDrag` / `CropSnap` with the legacy `CropTests` goldens, the frame
       overlay, the header, Apply / Cancel
 - [ ] Slice 4 — Rename Layer… card; Merge Down through the composition readback
 - [ ] Closeout: docs, screenshots, memory, plan to Done
