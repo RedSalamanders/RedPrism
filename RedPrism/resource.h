@@ -1,5 +1,7 @@
 #pragma once
 
+#define IDI_APP_ICON 1
+
 // String table. Every user-visible chrome string is declared here and defined in RedPrism.rc.
 // Placeholders are positional std::format specs ({0}, {1}); see Common/Resources.h.
 

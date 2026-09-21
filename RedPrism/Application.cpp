@@ -1586,6 +1586,16 @@ HRESULT Application::RegisterWindowClass() noexcept
     windowClass.style = 0;
     windowClass.lpfnWndProc = WindowProcedure;
     windowClass.hInstance = _instance;
+    windowClass.hIcon =
+        static_cast<HICON>(LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+                                      GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
+    windowClass.hIconSm =
+        static_cast<HICON>(LoadImageW(_instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+                                      GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
+    if (!windowClass.hIcon || !windowClass.hIconSm)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.lpszClassName = kWindowClassName;
 
