@@ -274,13 +274,17 @@ void ChromeHost::BuildMenus() noexcept
     if (HMENU file = _menus[static_cast<std::size_t>(MenuIndex::File)].get())
     {
         AppendCommand(file, kCommandNew, IDS_CMD_NEW);
+        AppendCommand(file, kCommandNewCanvas, IDS_CMD_NEW_CANVAS);
         AppendCommand(file, kCommandOpen, IDS_CMD_OPEN);
+        AppendCommand(file, kCommandImportImages, IDS_CMD_IMPORT_IMAGES);
+        AppendSeparator(file);
         AppendCommand(file, kCommandSave, IDS_CMD_SAVE);
         AppendCommand(file, kCommandSaveAs, IDS_CMD_SAVE_AS);
         AppendSeparator(file);
         AppendCommand(file, kCommandExportPng, IDS_CMD_EXPORT_PNG);
         AppendCommand(file, kCommandExportJpeg, IDS_CMD_EXPORT_JPEG);
         AppendSeparator(file);
+        AppendCommand(file, kCommandCloseProject, IDS_CMD_CLOSE_PROJECT);
         AppendCommand(file, kCommandExit, IDS_CMD_EXIT);
     }
     if (HMENU edit = _menus[static_cast<std::size_t>(MenuIndex::Edit)].get())
@@ -311,6 +315,9 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(image, kCommandGradientMap, IDS_CMD_GRADIENT_MAP);
         AppendCommand(image, kCommandGrain, IDS_CMD_GRAIN);
         AppendSeparator(image);
+        AppendCommand(image, kCommandCanvasSize, IDS_CMD_CANVAS_SIZE);
+        AppendCommand(image, kCommandImageSize, IDS_CMD_IMAGE_SIZE);
+        AppendSeparator(image);
         AppendCommand(image, kCommandFlipCanvasHorizontal, IDS_CMD_FLIP_CANVAS_HORIZONTAL);
         AppendCommand(image, kCommandFlipCanvasVertical, IDS_CMD_FLIP_CANVAS_VERTICAL);
     }
@@ -333,9 +340,16 @@ void ChromeHost::BuildMenus() noexcept
         }
         AppendCommand(layer, kCommandEditAdjustment, IDS_CMD_EDIT_ADJUSTMENT);
         AppendSeparator(layer);
+        AppendCommand(layer, kCommandGroupLayers, IDS_CMD_GROUP_LAYERS);
+        AppendCommand(layer, kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP);
+        AppendCommand(layer, kCommandRenameLayer, IDS_CMD_RENAME_LAYER);
         AppendCommand(layer, kCommandDeleteLayer, IDS_CMD_DELETE_LAYER);
         AppendCommand(layer, kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY);
-        AppendCommand(layer, kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP);
+        AppendCommand(layer, kCommandMoveLayerUp, IDS_CMD_MOVE_LAYER_UP);
+        AppendCommand(layer, kCommandMoveLayerDown, IDS_CMD_MOVE_LAYER_DOWN);
+        AppendSeparator(layer);
+        AppendCommand(layer, kCommandClipToggle, IDS_CMD_CLIP_CREATE);
+        AppendCommand(layer, kCommandMergeDown, IDS_CMD_MERGE_DOWN);
         AppendSeparator(layer);
         AppendCommand(layer, kCommandAddMask, IDS_CMD_ADD_MASK);
         AppendCommand(layer, kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK);
@@ -1032,7 +1046,7 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
                       static_cast<UINT_PTR>(kCommandRedo), redo.c_str());
 }
 
-void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection)
+void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped)
 {
     const auto rename = [](HMENU menu, int command, UINT stringId)
     {
@@ -1049,6 +1063,7 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection)
     rename(edit, kCommandInvert, masksTargeted ? IDS_CMD_INVERT_MASK : IDS_CMD_INVERT);
     rename(edit, kCommandFreeTransform, transformsSelection ? IDS_CMD_TRANSFORM_SELECTION : IDS_CMD_FREE_TRANSFORM);
     rename(layer, kCommandDeleteLayer, masksTargeted ? IDS_CMD_DELETE_LAYER_MASK : IDS_CMD_DELETE_LAYER);
+    rename(layer, kCommandClipToggle, clipped ? IDS_CMD_CLIP_RELEASE : IDS_CMD_CLIP_CREATE);
 }
 
 void ChromeHost::SyncToolVisuals() noexcept

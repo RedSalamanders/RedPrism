@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 #include <windows.h>
 
 #pragma warning(push)
@@ -174,9 +175,32 @@ class Application final
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
-    void SaveDocument(bool saveAs) noexcept;
+    [[nodiscard]] bool SaveDocument(bool saveAs) noexcept;
     void ExportFlattened(bool jpeg) noexcept;
     void OpenPath(const wchar_t* path) noexcept;
+    // ApplicationFiles.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Files" and "Unimplemented functions"): images
+    // opened as a layer or a new project, the save prompt, Import Images, Close Project and the notice for a
+    // function that has no implementation yet.
+    enum class ImageOpenChoice : std::uint8_t
+    {
+        AddLayer,
+        NewProject,
+        Cancel,
+    };
+    static constexpr UINT kNotImplementedMessage = WM_APP + 7; // Renderer owns WM_APP + 1
+    [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
+    [[nodiscard]] bool ConfirmDiscardChanges() noexcept;
+    void OpenPaths(const std::vector<std::wstring>& paths) noexcept;
+    [[nodiscard]] bool OpenProjectPath(const wchar_t* path) noexcept;
+    void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
+    [[nodiscard]] bool ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject) noexcept;
+    void ImportImages() noexcept;
+    void CloseProject() noexcept;
+    // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
+    void SettleInteractions(bool applyPanels) noexcept;
+    void ShowNotImplemented(UINT captionId) noexcept;
+    void ShowNotImplementedNotice(UINT captionId) noexcept;
+    int RunFilesSelfTest() noexcept;
     void ZoomBy(double factor) noexcept;
     void ShowError(UINT stringId) noexcept;
     [[nodiscard]] Vec2 DocumentSize() const noexcept;
@@ -232,6 +256,9 @@ class Application final
     double _overlayScale = 0.0;
     std::wstring _demo;
     bool _quietUi = false;
+    int _notImplementedCount = 0;                    // notices raised; quiet runs count instead of showing them
+    std::optional<ImageOpenChoice> _forcedImageOpen; // the self-test's answer to the image-open prompt
+    std::optional<bool> _forcedDiscard;              // the self-test's answer to the save prompt (true: Don't Save)
     bool _forceWarp = false;
     std::wstring _settingsPath;
     AppSettings _settings;

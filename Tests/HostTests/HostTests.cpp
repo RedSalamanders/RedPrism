@@ -314,7 +314,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 317> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 340> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -642,7 +642,30 @@ void TestStringTable() noexcept
                                          IDS_A11Y_LEVELS_OUTPUT,
                                          IDS_A11Y_HUE_SPECTRUM,
                                          IDS_A11Y_GRADIENT_RAMP,
-                                         IDS_A11Y_SAMPLING};
+                                         IDS_A11Y_SAMPLING,
+                                         IDS_NOT_IMPLEMENTED,
+                                         IDS_CMD_NEW_CANVAS,
+                                         IDS_CMD_IMPORT_IMAGES,
+                                         IDS_CMD_CLOSE_PROJECT,
+                                         IDS_CMD_CANVAS_SIZE,
+                                         IDS_CMD_IMAGE_SIZE,
+                                         IDS_CMD_GROUP_LAYERS,
+                                         IDS_CMD_RENAME_LAYER,
+                                         IDS_CMD_MOVE_LAYER_UP,
+                                         IDS_CMD_MOVE_LAYER_DOWN,
+                                         IDS_CMD_CLIP_CREATE,
+                                         IDS_CMD_CLIP_RELEASE,
+                                         IDS_CMD_MERGE_DOWN,
+                                         IDS_OPEN_IMAGE_TITLE,
+                                         IDS_OPEN_IMAGES_TITLE,
+                                         IDS_OPEN_IMAGE_TEXT,
+                                         IDS_OPEN_IMAGE_ADD_LAYER,
+                                         IDS_OPEN_IMAGE_NEW_PROJECT,
+                                         IDS_CONFIRM_SAVE_TITLE,
+                                         IDS_CONFIRM_SAVE_TEXT,
+                                         IDS_CONFIRM_SAVE_SAVE,
+                                         IDS_CONFIRM_SAVE_DISCARD,
+                                         IDS_QUESTION_FALLBACK};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

@@ -85,7 +85,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;comctl32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -102,7 +102,7 @@
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;comctl32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -131,6 +131,7 @@
     <ClInclude Include="SystemClipboard.h" />
     <ClInclude Include="TransformOverlay.h" />
     <ClInclude Include="CommandLine.h" />
+    <ClInclude Include="FileDialogs.h" />
     <ClInclude Include="FrameScheduler.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="ThemePalette.h" />
@@ -157,6 +158,7 @@
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
+    <ClCompile Include="ApplicationFiles.cpp" />
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
@@ -166,6 +168,7 @@
     <ClCompile Include="CanvasOverlay.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />
     <ClCompile Include="ChromeHost.cpp" />
+    <ClCompile Include="FileDialogs.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Renderer.cpp" />
   </ItemGroup>

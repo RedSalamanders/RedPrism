@@ -4,6 +4,7 @@
 
 #include "BrushStroke.h"
 #include "ChromeHost.h"
+#include "FileDialogs.h"
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
@@ -77,143 +78,6 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
     return modifiers;
 }
 
-[[nodiscard]] std::wstring FileTitle(const std::wstring& path)
-{
-    if (path.empty())
-    {
-        return LoadStringResource(nullptr, IDS_UNTITLED);
-    }
-    const size_t slash = path.find_last_of(L"\\/");
-    return slash == std::wstring::npos ? path : path.substr(slash + 1);
-}
-
-[[nodiscard]] bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept
-{
-    if (text.size() < suffix.size())
-    {
-        return false;
-    }
-    const std::wstring_view tail = text.substr(text.size() - suffix.size());
-    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), suffix.data(),
-                                static_cast<int>(suffix.size()), TRUE) == CSTR_EQUAL;
-}
-
-[[nodiscard]] bool LooksLikeProjectPath(const wchar_t* path) noexcept
-{
-    const DWORD attributes = GetFileAttributesW(path);
-    const bool directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    return directory || EndsWithNoCase(path, L".prism") || PathLooksLikeZipProject(path);
-}
-
-struct FilterStrings
-{
-    std::wstring project;
-    std::wstring images;
-    std::wstring all;
-    std::wstring exploded;
-    std::wstring jpeg;
-    std::wstring png;
-};
-
-[[nodiscard]] FilterStrings LoadFilterStrings()
-{
-    return FilterStrings{
-        LoadStringResource(nullptr, IDS_FILTER_PROJECT), LoadStringResource(nullptr, IDS_FILTER_IMAGES),
-        LoadStringResource(nullptr, IDS_FILTER_ALL),     LoadStringResource(nullptr, IDS_FILTER_EXPLODED),
-        LoadStringResource(nullptr, IDS_FILTER_JPEG),    LoadStringResource(nullptr, IDS_FILTER_PNG)};
-}
-
-[[nodiscard]] bool ReadDialogResult(IFileDialog* dialog, std::wstring& path) noexcept
-{
-    wil::com_ptr_nothrow<IShellItem> item;
-    if (FAILED(dialog->GetResult(item.put())) || !item)
-    {
-        return false;
-    }
-    wil::unique_cotaskmem_string file;
-    if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, file.put())))
-    {
-        return false;
-    }
-    path = file.get();
-    return !path.empty();
-}
-
-[[nodiscard]] bool PickOpenPath(HWND owner, std::wstring& path) noexcept
-{
-    wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
-    {
-        return false;
-    }
-    const FilterStrings strings = LoadFilterStrings();
-    const COMDLG_FILTERSPEC filters[] = {
-        {strings.project.c_str(), L"*.prism"},
-        {strings.images.c_str(), L"*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.heic;*.heif"},
-        {strings.all.c_str(), L"*.*"},
-    };
-    (void)dialog->SetFileTypes(static_cast<UINT>(std::size(filters)), filters);
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
-    {
-        return false;
-    }
-    return ReadDialogResult(dialog.get(), path);
-}
-
-[[nodiscard]] bool PickSavePath(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
-                                const COMDLG_FILTERSPEC* filters, UINT filterCount, std::wstring& path) noexcept
-{
-    wil::com_ptr_nothrow<IFileSaveDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
-    {
-        return false;
-    }
-    if (filters && filterCount != 0)
-    {
-        (void)dialog->SetFileTypes(filterCount, filters);
-    }
-    if (defaultExt)
-    {
-        (void)dialog->SetDefaultExtension(defaultExt);
-    }
-    if (defaultName)
-    {
-        (void)dialog->SetFileName(defaultName);
-    }
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
-    {
-        return false;
-    }
-    return ReadDialogResult(dialog.get(), path);
-}
-
-[[nodiscard]] UINT LoadErrorStringId(ProjectIoStatus status) noexcept
-{
-    switch (status)
-    {
-    case ProjectIoStatus::UnsupportedVersion:
-        return IDS_ERROR_UNSUPPORTED_VERSION;
-    case ProjectIoStatus::TooLarge:
-        return IDS_ERROR_TOO_LARGE;
-    case ProjectIoStatus::MissingImage:
-        return IDS_ERROR_MISSING_IMAGE;
-    case ProjectIoStatus::Ok:
-    case ProjectIoStatus::Invalid:
-    case ProjectIoStatus::Encode:
-    default:
-        return IDS_ERROR_OPEN_PROJECT;
-    }
-}
 } // namespace
 
 namespace
@@ -1560,6 +1424,11 @@ int Application::RunSelfTest() noexcept
     {
         return hardening;
     }
+    // Files and the unimplemented-function notice (C16).
+    if (const int files = RunFilesSelfTest(); files != 0)
+    {
+        return files;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -1857,7 +1726,8 @@ void Application::SyncChrome() noexcept
                               _session.history.CanRedo());
     _chrome->SetEditTargets(_session.IsMaskSelected() && _session.ActiveLayer() != nullptr &&
                                 _session.ActiveLayer()->mask.has_value(),
-                            _session.CanTransformSelection());
+                            _session.CanTransformSelection(),
+                            _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value());
     SyncAdjustPanel();
     const CanvasDocument* document = _session.DisplayDocument();
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
@@ -2558,6 +2428,11 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandSampleRing:
     case ChromeHost::kCommandAbout:
     case ChromeHost::kCommandFreeTransform:
+    case ChromeHost::kCommandNewCanvas:
+    case ChromeHost::kCommandCanvasSize:
+    case ChromeHost::kCommandImageSize:
+    case ChromeHost::kCommandRenameLayer:
+    case ChromeHost::kCommandMergeDown:
         break;
     default:
         _transformDrag.reset();
@@ -2572,11 +2447,51 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandOpen:
         OpenDocument();
         break;
+    case ChromeHost::kCommandNewCanvas:
+        ShowNotImplemented(IDS_CMD_NEW_CANVAS);
+        break;
+    case ChromeHost::kCommandImportImages:
+        ImportImages();
+        break;
+    case ChromeHost::kCommandCloseProject:
+        CloseProject();
+        break;
+    case ChromeHost::kCommandCanvasSize:
+        ShowNotImplemented(IDS_CMD_CANVAS_SIZE);
+        break;
+    case ChromeHost::kCommandImageSize:
+        ShowNotImplemented(IDS_CMD_IMAGE_SIZE);
+        break;
+    case ChromeHost::kCommandGroupLayers:
+        _session.GroupSelectedLayers();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandRenameLayer:
+        ShowNotImplemented(IDS_CMD_RENAME_LAYER);
+        break;
+    case ChromeHost::kCommandMoveLayerUp:
+        _session.MoveActiveLayer(1);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandMoveLayerDown:
+        _session.MoveActiveLayer(-1);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandClipToggle:
+        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr)
+        {
+            _session.ToggleClippingMask(active->id);
+            DocumentChanged();
+        }
+        break;
+    case ChromeHost::kCommandMergeDown:
+        ShowNotImplemented(IDS_CMD_MERGE_DOWN);
+        break;
     case ChromeHost::kCommandSave:
-        SaveDocument(false);
+        (void)SaveDocument(false);
         break;
     case ChromeHost::kCommandSaveAs:
-        SaveDocument(true);
+        (void)SaveDocument(true);
         break;
     case ChromeHost::kCommandExportPng:
         ExportFlattened(false);
@@ -2805,31 +2720,56 @@ void Application::OnCommand(int command) noexcept
     }
 }
 
+void Application::SettleInteractions(bool applyPanels) noexcept
+{
+    _transformDrag.reset();
+    _duplicateOnDrag = false;
+    _session.CommitTransform();
+    _session.ClearSnapGuides();
+    EndSelectionInteraction(false);
+    FinishBrushStroke();
+    FinishWarpStroke();
+    CommitGradient();
+    if (applyPanels)
+    {
+        ApplyColorEdit();
+    }
+    if (_session.HasColorEdit() &&
+        (!applyPanels || (_session.PendingFilter().has_value() && _session.PendingFilter()->previewFailed)))
+    {
+        // A fill with nothing to copy from cannot apply; a tool switch drops it rather than trapping the panel, and
+        // a document on its way out drops any open panel.
+        CancelColorEdit();
+    }
+    if (_session.PendingShape().has_value())
+    {
+        _shapeDragging = false;
+        _session.CancelShape();
+    }
+    EndColorSampling();
+    if (_pixelDragStart.has_value())
+    {
+        CancelPixelDrag();
+    }
+}
+
 void Application::OnTool(EditorTool tool) noexcept
 {
+    if (tool == EditorTool::Crop)
+    {
+        // Not implemented yet (Specs/UI/UI_ApplicationChrome.md "Unimplemented functions"): the notice, and the
+        // tool stays as it was.
+        ShowNotImplemented(IDS_TOOL_CROP);
+        if (_chrome)
+        {
+            _chrome->SetTool(_tool);
+        }
+        return;
+    }
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
-        _transformDrag.reset();
-        _duplicateOnDrag = false;
-        _session.CommitTransform();
-        _session.ClearSnapGuides();
-        EndSelectionInteraction(false);
-        FinishBrushStroke();
-        FinishWarpStroke();
-        CommitGradient();
-        ApplyColorEdit();
-        if (_session.PendingFilter().has_value() && _session.PendingFilter()->previewFailed)
-        {
-            // A fill with nothing to copy from cannot apply; the tool switch drops it rather than trapping the panel.
-            CancelColorEdit();
-        }
-        if (_session.PendingShape().has_value())
-        {
-            _shapeDragging = false;
-            _session.CancelShape();
-        }
-        EndColorSampling();
+        SettleInteractions(true);
         _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
         _session.ClearPendingOpacityDigit();
     }
@@ -2910,7 +2850,24 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             }
             break;
         case 'G':
+            if (GetKeyState(VK_MENU) < 0)
+            {
+                OnCommand(ChromeHost::kCommandClipToggle);
+                return true;
+            }
             OnCommand(shift ? ChromeHost::kCommandMoveOutOfGroup : ChromeHost::kCommandNewFolder);
+            return true;
+        case 'W':
+            OnCommand(ChromeHost::kCommandCloseProject);
+            return true;
+        case 'E':
+            OnCommand(ChromeHost::kCommandMergeDown);
+            return true;
+        case VK_OEM_6: // ]
+            OnCommand(ChromeHost::kCommandMoveLayerUp);
+            return true;
+        case VK_OEM_4: // [
+            OnCommand(ChromeHost::kCommandMoveLayerDown);
             return true;
         case 'M':
             OnCommand(ChromeHost::kCommandCurves);
@@ -2939,6 +2896,11 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             break;
         }
         return false;
+    }
+    if (virtualKey == VK_F2)
+    {
+        OnCommand(ChromeHost::kCommandRenameLayer);
+        return true;
     }
     if (virtualKey == VK_SPACE)
     {
@@ -3165,6 +3127,12 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
 
 void Application::NewDocument() noexcept
 {
+    if (!ConfirmDiscardChanges())
+    {
+        return;
+    }
+    SettleInteractions(false);
+    _session.ClearDocument();
     _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
     _session.history.MarkSaved();
     _documentPath.clear();
@@ -3197,73 +3165,18 @@ void Application::ShowError(UINT stringId) noexcept
     MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
 }
 
-void Application::OpenPath(const wchar_t* path) noexcept
-{
-    if (path == nullptr || path[0] == L'\0')
-    {
-        return;
-    }
-    if (LooksLikeProjectPath(path))
-    {
-        const ProjectLoadResult loaded = LoadProject(path);
-        if (loaded.status != ProjectIoStatus::Ok || !loaded.document.width)
-        {
-            if (loaded.status == ProjectIoStatus::UnsupportedVersion && !_quietUi && _window)
-            {
-                const std::wstring text =
-                    FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, loaded.formatVersion);
-                const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
-                MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
-            }
-            else
-            {
-                ShowError(LoadErrorStringId(loaded.status));
-            }
-            return;
-        }
-        // The loaded project replaces the document: no outline in progress or outline move may carry over.
-        EndSelectionInteraction(false);
-        _session.history.Reset();
-        _session.Document() = loaded.document;
-        _session.SelectLayer(loaded.activeLayerID);
-        _session.CollapsedGroupIDs().clear();
-        _session.history.MarkSaved();
-        _documentPath = path;
-        _viewport.followsFit = true;
-        DocumentChanged();
-        return;
-    }
-
-    if (!_session.Document().has_value())
-    {
-        _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
-    }
-    std::optional<Guid> active = _session.ActiveLayerID();
-    _session.BeginEdit(L"Import Image");
-    const ProjectIoStatus status = ImportImageOnto(_session.Document().value(), path, active);
-    _session.SelectLayer(active);
-    _session.EndEdit();
-    if (status != ProjectIoStatus::Ok)
-    {
-        ShowError(status == ProjectIoStatus::TooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
-        return;
-    }
-    _viewport.followsFit = true;
-    DocumentChanged();
-}
-
-void Application::SaveDocument(bool saveAs) noexcept
+bool Application::SaveDocument(bool saveAs) noexcept
 {
     if (!_session.Document().has_value())
     {
-        return;
+        return false;
     }
     std::wstring path = _documentPath;
     if (saveAs || path.empty())
     {
         if (!_window)
         {
-            return;
+            return false;
         }
         const FilterStrings strings = LoadFilterStrings();
         const COMDLG_FILTERSPEC filters[] = {
@@ -3273,7 +3186,7 @@ void Application::SaveDocument(bool saveAs) noexcept
         const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_PROJECT_NAME);
         if (!PickSavePath(_window.get(), defaultName.c_str(), L"prism", filters, 2, path))
         {
-            return;
+            return false;
         }
     }
     const bool zip = PathLooksLikeZipProject(path.c_str()) || EndsWithNoCase(path, L".prism");
@@ -3282,12 +3195,13 @@ void Application::SaveDocument(bool saveAs) noexcept
     if (status != ProjectIoStatus::Ok)
     {
         ShowError(status == ProjectIoStatus::TooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT);
-        return;
+        return false;
     }
     _documentPath = std::move(path);
     _session.history.MarkSaved();
     SyncChrome();
     _frameInvalidated = true;
+    return true;
 }
 
 void Application::ExportFlattened(bool jpeg) noexcept
@@ -3418,17 +3332,24 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_DROPFILES:
     {
         const HDROP drop = reinterpret_cast<HDROP>(wParam);
-        const UINT length = DragQueryFileW(drop, 0, nullptr, 0);
-        if (length != 0)
+        std::vector<std::wstring> paths;
+        const UINT count = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0);
+        for (UINT index = 0; index < count; ++index)
         {
+            const UINT length = DragQueryFileW(drop, index, nullptr, 0);
+            if (length == 0)
+            {
+                continue;
+            }
             std::wstring path(static_cast<std::size_t>(length) + 1, L'\0');
-            if (DragQueryFileW(drop, 0, path.data(), length + 1) != 0)
+            if (DragQueryFileW(drop, index, path.data(), length + 1) != 0)
             {
                 path.resize(length);
-                OpenPath(path.c_str());
+                paths.push_back(std::move(path));
             }
         }
         DragFinish(drop);
+        OpenPaths(paths);
         return 0;
     }
     case WM_MOUSEMOVE:
@@ -3532,7 +3453,15 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         ValidateRect(window, nullptr);
         return 0;
     case WM_CLOSE:
+        // A modified document asks first; a failure on its way out and a quiet run never ask.
+        if (_runtimeFailure == S_OK && !_quietUi && !ConfirmDiscardChanges())
+        {
+            return 0;
+        }
         CloseMainWindow();
+        return 0;
+    case kNotImplementedMessage:
+        ShowNotImplementedNotice(static_cast<UINT>(wParam));
         return 0;
     case WM_DESTROY:
         _displayPowerNotification.reset();

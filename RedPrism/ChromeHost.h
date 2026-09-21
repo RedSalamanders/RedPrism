@@ -310,6 +310,9 @@ class ChromeHost final
     static constexpr int kCommandExportPng = 104;
     static constexpr int kCommandExportJpeg = 105;
     static constexpr int kCommandExit = 106;
+    static constexpr int kCommandNewCanvas = 107;
+    static constexpr int kCommandImportImages = 108;
+    static constexpr int kCommandCloseProject = 109;
     static constexpr int kCommandUndo = 200;
     static constexpr int kCommandRedo = 201;
     static constexpr int kCommandFreeTransform = 202;
@@ -352,12 +355,20 @@ class ChromeHost final
     static constexpr int kCommandNewGradientMapAdjustment = 314;
     static constexpr int kCommandNewGrainAdjustment = 315;
     static constexpr int kCommandEditAdjustment = 316;
+    static constexpr int kCommandGroupLayers = 317;
+    static constexpr int kCommandRenameLayer = 318;
+    static constexpr int kCommandMoveLayerUp = 319;
+    static constexpr int kCommandMoveLayerDown = 320;
+    static constexpr int kCommandClipToggle = 321;
+    static constexpr int kCommandMergeDown = 322;
     static constexpr int kCommandCurves = 602;
     static constexpr int kCommandLevels = 603;
     static constexpr int kCommandHueSaturation = 604;
     static constexpr int kCommandExposure = 605;
     static constexpr int kCommandGradientMap = 606;
     static constexpr int kCommandGrain = 607;
+    static constexpr int kCommandCanvasSize = 608;
+    static constexpr int kCommandImageSize = 609;
     static constexpr int kCommandGaussianBlur = 800;
     static constexpr int kCommandMotionBlur = 801;
     static constexpr int kCommandAddNoise = 802;
@@ -444,7 +455,8 @@ class ChromeHost final
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
     // Captions that follow the target, as the legacy menus did: Invert / Invert Mask, Delete Layer / Delete Layer
     // Mask, Free Transform / Transform Selection.
-    void SetEditTargets(bool masksTargeted, bool transformsSelection);
+    // `clipped`: the active layer clips to a base, so the Layer menu offers Release Clipping Mask.
+    void SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped);
     void SetTool(EditorTool tool) noexcept;
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active);
     void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept;
