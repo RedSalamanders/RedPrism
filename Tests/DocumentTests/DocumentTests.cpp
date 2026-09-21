@@ -1,5 +1,6 @@
 #include "Adjust.h"
 #include "BrushStroke.h"
+#include "CanvasSize.h"
 #include "Document.h"
 #include "DocumentHistory.h"
 #include "Selection.h"
@@ -5318,6 +5319,289 @@ void TestClearDocument()
            "clear.next-document");
 }
 
+namespace
+{
+// The legacy ImageImportTests fixture: 64 × 32, the left half opaque red, the right half transparent.
+[[nodiscard]] Raster RedLeftRaster(int width, int height)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height), 0);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width / 2; ++x)
+        {
+            std::uint8_t* pixel = bytes.data() + (static_cast<std::size_t>(y) * width + x) * 4u;
+            pixel[2] = 255;
+            pixel[3] = 255;
+        }
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+[[nodiscard]] std::array<std::uint8_t, 4> PixelAt(const Raster& raster, int x, int y) noexcept
+{
+    std::array<std::uint8_t, 4> pixel{};
+    const std::uint8_t* data = raster.Data();
+    if (data == nullptr || x < 0 || y < 0 || x >= raster.Width() || y >= raster.Height())
+    {
+        return pixel;
+    }
+    const std::uint8_t* source =
+        data + static_cast<std::size_t>(y) * raster.Stride() + static_cast<std::size_t>(x) * 4u;
+    std::copy(source, source + 4, pixel.begin());
+    return pixel;
+}
+} // namespace
+
+void TestSizeDrafts()
+{
+    // Legacy CanvasSizeTests.relativeRatioAndUnitsUseFinalDimensions.
+    CanvasSizeDraft draft(1000, 500, 100);
+    draft.relative = true;
+    draft.locked = true;
+    draft.Set(200, true);
+    Expect(draft.width == 1200 && draft.height == 600, "canvasdraft.relative-locked");
+    Expect(draft.Displayed(false) == 100, "canvasdraft.displayed-relative");
+    draft.Set(-250, false);
+    Expect(draft.width == 500 && draft.height == 250, "canvasdraft.negative-relative");
+    draft.relative = false;
+    draft.unit = CanvasUnit::Inches;
+    draft.Set(10, true);
+    Expect(draft.width == 1000 && draft.height == 500, "canvasdraft.inches");
+    draft.unit = CanvasUnit::Percent;
+    draft.Set(50, true);
+    Expect(draft.width == 500 && draft.height == 250, "canvasdraft.percent");
+    draft.unit = CanvasUnit::Centimeters;
+    Expect(std::abs(draft.Displayed(true) - 12.7) < 0.001, "canvasdraft.centimeters");
+    draft.unit = CanvasUnit::Pixels;
+    draft.Set(0, true);
+    Expect(!draft.Valid(), "canvasdraft.zero-invalid");
+    // The anchor offsets (legacy CanvasSizeOptions.offset): floor keeps the extra pixel right/bottom.
+    CanvasSizeOptions grow;
+    grow.width = 69;
+    grow.height = 37;
+    grow.anchor = 4;
+    Expect(grow.Offset(64, 32) == Vec2{2, 2}, "canvasdraft.center-offset-floors");
+    grow.anchor = 8;
+    Expect(grow.Offset(64, 32) == Vec2{5, 5}, "canvasdraft.bottom-right-offset");
+    grow.contentOffset = Vec2{-8, -4};
+    Expect(grow.Offset(64, 32) == Vec2{-8, -4}, "canvasdraft.explicit-offset");
+    // The Image Size sheet's math: percent with the ratio locked, no resample, resolution changes.
+    ImageSizeDraft image(100, 50, 72);
+    image.unit = CanvasUnit::Percent;
+    image.Set(200, true);
+    Expect(image.width == 200 && image.height == 100, "imagedraft.percent-locked");
+    image.Set(50, false);
+    Expect(image.width == 50 && image.height == 25, "imagedraft.height-moves-width");
+    image.SetResample(false);
+    Expect(image.width == 100 && image.height == 50 && image.locked && image.unit == CanvasUnit::Inches,
+           "imagedraft.no-resample-resets");
+    Expect(std::abs(image.Displayed(true) - 100.0 / 72.0) < 1e-9, "imagedraft.inches-displayed");
+    image.Set(2, true);
+    Expect(image.width == 100 && image.resolution == 50, "imagedraft.print-size-sets-resolution");
+    image.SetResample(true);
+    image.SetResolution(100);
+    Expect(image.width == 200 && image.height == 100 && image.resolution == 100, "imagedraft.resolution-scales-pixels");
+    image.SetResolution(0);
+    Expect(!image.Valid(), "imagedraft.resolution-invalid");
+    image.SetResolution(300);
+    image.unit = CanvasUnit::Pixels;
+    image.locked = false;
+    image.Set(30000, true);
+    image.Set(30000, false);
+    Expect(!image.Valid(), "imagedraft.megapixel-limit");
+    image.SetResample(false);
+    Expect(image.Valid(), "imagedraft.no-resample-ignores-megapixels");
+}
+
+void TestCanvasResize()
+{
+    // Legacy CanvasSizeTests.everyAnchorPreservesSourceAndTransformForExpansionAndShrink.
+    CanvasDocument document;
+    document.id = Guid::Generate();
+    document.width = 64;
+    document.height = 32;
+    ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
+    const Raster fixture = RedLeftRaster(64, 32);
+    layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
+    layer.transform.rotation = 37;
+    layer.transform.flipX = true;
+    document.layers.push_back(layer);
+    bool anchorsHold = true;
+    for (const int delta : {5, -5})
+    {
+        for (int anchor = 0; anchor <= 8; ++anchor)
+        {
+            CanvasSizeOptions options;
+            options.width = 64 + delta;
+            options.height = 32 + delta;
+            options.anchor = anchor;
+            CanvasDocument result;
+            if (ResizeCanvas(document, options, result) != ResizeStatus::Ok || result.layers.size() != 1)
+            {
+                anchorsHold = false;
+                continue;
+            }
+            const std::array<double, 3> expected{0.0, delta == 5 ? 2.0 : -3.0, static_cast<double>(delta)};
+            const ImageLayer& output = result.layers[0];
+            anchorsHold = anchorsHold && output.transform.origin.x == expected[static_cast<std::size_t>(anchor % 3)] &&
+                          output.transform.origin.y == expected[static_cast<std::size_t>(anchor / 3)] &&
+                          output.transform.size == layer.transform.size && output.transform.rotation == 37 &&
+                          output.transform.flipX && output.id == layer.id && output.asset.has_value() &&
+                          output.asset->image == fixture && result.width == 64 + delta && result.height == 32 + delta;
+        }
+    }
+    Expect(anchorsHold, "canvas.every-anchor-keeps-source-and-transform");
+    // Legacy coloredExtensionPreservesOldTransparencyAndRoundTripsWithUndo: a mixed shrink/expand colors only the
+    // left/right bands; the session applies it as one Canvas Size entry.
+    DocumentSession session;
+    session.CreateDocument(4, 4);
+    session.AddBlankLayer();
+    const std::optional<CanvasDocument> before = session.Document();
+    const Guid active = session.ActiveLayerID().value();
+    CanvasSizeOptions colored;
+    colored.width = 8;
+    colored.height = 2;
+    colored.fill = CanvasExtensionColor{1, 0, 0};
+    CanvasDocument output;
+    Expect(ResizeCanvas(before.value(), colored, output) == ResizeStatus::Ok && output.layers.size() == 2 &&
+               output.layers[0].name == L"Canvas Extension" && output.layers[1].id == active,
+           "canvas.extension-layer-added-below");
+    const Raster& extension = output.layers[0].asset.has_value() ? output.layers[0].asset->image : Raster{};
+    Expect(extension.Width() == 8 && extension.Height() == 2 && PixelAt(extension, 0, 0)[3] == 255 &&
+               PixelAt(extension, 0, 0)[2] == 255 && PixelAt(extension, 3, 0)[3] == 0 &&
+               PixelAt(extension, 7, 1)[3] == 255,
+           "canvas.extension-keeps-old-transparency");
+    session.ApplyDocumentSize(output, L"Canvas Size");
+    Expect(session.Document().value().width == 8 && session.Document().value().height == 2 &&
+               session.ActiveLayerID() == active && session.history.UndoName() == L"Canvas Size",
+           "canvas.session-applies");
+    session.Undo();
+    Expect(session.Document() == before, "canvas.undo-restores");
+    session.Redo();
+    Expect(session.Document().value().width == 8 && session.Document().value().height == 2, "canvas.redo");
+    // Legacy transparentResizeIsAllocationFreeAndShrinkDoesNotAddFill.
+    CanvasDocument empty;
+    empty.id = Guid::Generate();
+    empty.width = 4;
+    empty.height = 4;
+    CanvasSizeOptions large;
+    large.width = 30000;
+    large.height = 30000;
+    CanvasDocument largeResult;
+    Expect(ResizeCanvas(empty, large, largeResult) == ResizeStatus::Ok && largeResult.layers.empty(),
+           "canvas.transparent-allocation-free");
+    CanvasSizeOptions small;
+    small.width = 2;
+    small.height = 2;
+    small.fill = CanvasExtensionColor{1, 1, 1};
+    CanvasDocument smallResult;
+    Expect(ResizeCanvas(empty, small, smallResult) == ResizeStatus::Ok && smallResult.layers.empty(),
+           "canvas.shrink-adds-no-fill");
+    large.fill = CanvasExtensionColor{1, 1, 1};
+    Expect(ResizeCanvas(empty, large, largeResult) == ResizeStatus::TooLarge, "canvas.fill-over-budget");
+    CanvasSizeOptions same;
+    same.width = 4;
+    same.height = 4;
+    Expect(ResizeCanvas(empty, same, smallResult) == ResizeStatus::Unchanged, "canvas.same-size-unchanged");
+    same.contentOffset = Vec2{1, 0};
+    Expect(ResizeCanvas(empty, same, smallResult) == ResizeStatus::Ok && smallResult.width == 4,
+           "canvas.offset-alone-resizes");
+}
+
+void TestImageResize()
+{
+    // Legacy ImageSizeTests.resizePreservesLayerIdentityAndUndoRestoresSource.
+    DocumentSession session;
+    session.CreateDocument(64, 32);
+    ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
+    const Raster fixture = RedLeftRaster(64, 32);
+    layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
+    session.BeginEdit(L"Import Image");
+    session.Document().value().layers.push_back(layer);
+    session.EndEdit();
+    session.SelectLayer(layer.id);
+    const std::optional<CanvasDocument> original = session.Document();
+    ImageSizeOptions options;
+    options.width = 128;
+    options.height = 96;
+    options.resolution = 300;
+    options.sampling = LayerSampling::Nearest;
+    CanvasDocument result;
+    Expect(ResizeImage(original.value(), options, result) == ResizeStatus::Ok, "imagesize.ok");
+    session.ApplyDocumentSize(result, L"Image Size");
+    const CanvasDocument& resized = session.Document().value();
+    Expect(resized.width == 128 && resized.height == 96 && resized.resolution == 300 &&
+               session.ActiveLayerID() == layer.id && session.history.UndoName() == L"Image Size",
+           "imagesize.document");
+    const ImageLayer* scaled = Find(session.Document(), layer.id);
+    const Raster& asset = scaled != nullptr && scaled->asset.has_value() ? scaled->asset->image : Raster{};
+    Expect(asset.Width() == 128 && asset.Height() == 96 && scaled != nullptr &&
+               scaled->transform.origin == Vec2{0, 0} && scaled->transform.size == Vec2{128, 96} &&
+               scaled->transform.sampling == LayerSampling::Nearest,
+           "imagesize.layer-box");
+    Expect(PixelAt(asset, 0, 0)[2] > 242 && PixelAt(asset, 0, 0)[3] == 255 && PixelAt(asset, 127, 0)[3] == 0,
+           "imagesize.nearest-pixels");
+    session.Undo();
+    const ImageLayer* restored = Find(session.Document(), layer.id);
+    Expect(session.Document() == original && restored != nullptr && restored->asset.has_value() &&
+               restored->asset->image == fixture,
+           "imagesize.undo-restores-source");
+    session.Redo();
+    Expect(session.Document().value().resolution == 300, "imagesize.redo");
+    // Legacy resolutionOnlyRetainsPixelsAndSurvivesSaveAndExport: the same size changes only the resolution.
+    DocumentSession plain;
+    plain.CreateDocument(32, 16);
+    plain.AddBlankLayer();
+    ImageSizeOptions resolutionOnly;
+    resolutionOnly.width = 32;
+    resolutionOnly.height = 16;
+    resolutionOnly.resolution = 300;
+    CanvasDocument same;
+    Expect(ResizeImage(plain.Document().value(), resolutionOnly, same) == ResizeStatus::Ok &&
+               same.layers[0].transform == plain.Document().value().layers[0].transform && same.resolution == 300,
+           "imagesize.resolution-only");
+    plain.ApplyDocumentSize(same, L"Image Size");
+    plain.Undo();
+    Expect(plain.Document().value().resolution == 72, "imagesize.resolution-undo");
+    // Legacy rotatedHiddenLayerScalesInDocumentAxesAndInvalidSizeIsRejected: a 90-degree 64 × 32 layer becomes
+    // 32 × 64, then scales 2× horizontally and 3× vertically.
+    CanvasDocument rotated = original.value();
+    rotated.layers[0].visible = false;
+    rotated.layers[0].transform.origin = Vec2{-16, 4};
+    rotated.layers[0].transform.rotation = 90;
+    CanvasDocument turned;
+    Expect(ResizeImage(rotated, options, turned) == ResizeStatus::Ok && !turned.layers[0].visible &&
+               turned.layers[0].transform.rotation == 0 && std::abs(turned.layers[0].transform.size.x - 64) <= 1 &&
+               std::abs(turned.layers[0].transform.size.y - 192) <= 1 && turned.layers[0].transform.origin.y < 0,
+           "imagesize.rotated-hidden-box");
+    ImageSizeOptions huge;
+    huge.width = 30000;
+    huge.height = 30000;
+    huge.resolution = 72;
+    Expect(ResizeImage(rotated, huge, turned) == ResizeStatus::TooLarge, "imagesize.rejects-megapixels");
+    Expect(session.Document().value().width == 128, "imagesize.rejection-leaves-document");
+    // A scaled layer with a mask on its own placement keeps the mask pixels; a mask on the layer rasterizes.
+    CanvasDocument masked = original.value();
+    LayerMask mask;
+    std::vector<std::uint8_t> gray(64u * 32u, 255);
+    mask.asset.image = Raster::Make(64, 32, RasterFormat::Gray8, gray.data(), gray.size());
+    mask.asset.thumbnail = Raster::MakeThumbnail(mask.asset.image);
+    masked.layers[0].mask = mask;
+    CanvasDocument maskedResult;
+    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok && maskedResult.layers[0].mask.has_value() &&
+               maskedResult.layers[0].mask->asset.image.Width() == 128 &&
+               maskedResult.layers[0].mask->asset.image.Height() == 96 &&
+               maskedResult.layers[0].mask->asset.image.Data()[0] == 255,
+           "imagesize.mask-rasterizes");
+    masked.layers[0].mask->placement = LayerTransform{Vec2{8, 8}, Vec2{16, 8}};
+    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok &&
+               maskedResult.layers[0].mask->asset.image == mask.asset.image &&
+               maskedResult.layers[0].mask->placement.has_value() &&
+               maskedResult.layers[0].mask->placement->origin == Vec2{16, 24} &&
+               maskedResult.layers[0].mask->placement->size == Vec2{32, 24},
+           "imagesize.placed-mask-scales-placement");
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5397,6 +5681,9 @@ int wmain()
     TestGroupSelection();
     TestClippingToggle();
     TestClearDocument();
+    TestSizeDrafts();
+    TestCanvasResize();
+    TestImageResize();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

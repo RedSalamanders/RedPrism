@@ -1781,6 +1781,19 @@ void DocumentSession::ClearDocument()
     history.Reset();
 }
 
+void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring name)
+{
+    if (!_document.has_value() || document.id != _document.value().id)
+    {
+        return;
+    }
+    _lassoDraft.reset();
+    _selectionMoveOrigin.reset();
+    BeginEdit(std::move(name));
+    _document = std::move(document);
+    EndEdit();
+}
+
 void DocumentSession::DeleteLayer(const Guid& id)
 {
     if (!_document.has_value())

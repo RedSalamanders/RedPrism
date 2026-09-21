@@ -1178,6 +1178,9 @@ class DocumentSession
     [[nodiscard]] bool CanToggleClippingMask(const Guid& id) const;
     void ToggleClippingMask(const Guid& id);
     void ClearDocument();
+    // A resized document (Canvas Size, Image Size, Crop: the same id, every layer still there) installed as one
+    // entry named `name`; the active layer stays.
+    void ApplyDocumentSize(CanvasDocument document, std::wstring name);
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
     void SetBlendMode(LayerBlendMode mode);
