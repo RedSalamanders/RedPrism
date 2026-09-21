@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <new>
 
 namespace
@@ -345,6 +346,8 @@ const wchar_t* FilterKindName(FilterKind kind) noexcept
         return L"Add Noise";
     case FilterKind::LensCorrection:
         return L"Lens Correction";
+    case FilterKind::ContentAwareFill:
+        return L"Content-Aware Fill";
     case FilterKind::Curves:
         return L"Curves";
     case FilterKind::Exposure:
@@ -1534,7 +1537,8 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
     return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
 }
 
-Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& given, double scale, std::uint32_t seed)
+Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& given, double scale, std::uint32_t seed,
+                 const Raster* coverage)
 {
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !std::isfinite(scale) || !(scale > 0))
     {
@@ -1595,6 +1599,19 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
         AddNoise(bytes.data(), width, height, width * 4, static_cast<float>(settings.amount), settings.gaussian,
                  settings.monochromatic, seed);
         break;
+    case FilterKind::ContentAwareFill:
+    {
+        if (coverage == nullptr || coverage->Data() == nullptr || coverage->Width() != width ||
+            coverage->Height() != height || !CopyPixels(image, bytes))
+        {
+            return {};
+        }
+        if (ContentFill(bytes.data(), width, height, width * 4, coverage->Data(), coverage->Stride()) != 1)
+        {
+            return {};
+        }
+        break;
+    }
     case FilterKind::LensCorrection:
     {
         std::vector<std::uint8_t> source;
@@ -1760,5 +1777,258 @@ double BlurMargin(FilterKind kind, const FilterSettings& settings) noexcept
     default:
         return 0;
     }
+}
+} // namespace Adjust
+
+namespace Adjust
+{
+namespace
+{
+[[nodiscard]] std::uint32_t NextRandom(std::uint32_t& state) noexcept
+{
+    state = state * 1664525u + 1013904223u;
+    return state;
+}
+
+// The mean squared difference of the known pixels around p and the pixels around q, over every channel.
+[[nodiscard]] double PatchMatch(const std::uint8_t* pixels, int stride, const std::uint8_t* known, int w, int h, int p,
+                                int q, int radius) noexcept
+{
+    const int px = p % w;
+    const int py = p / w;
+    const int qx = q % w;
+    const int qy = q / w;
+    int count = 0;
+    double sum = 0;
+    for (int dy = -radius; dy <= radius; ++dy)
+    {
+        for (int dx = -radius; dx <= radius; ++dx)
+        {
+            const int x = px + dx;
+            const int y = py + dy;
+            const int sx = qx + dx;
+            const int sy = qy + dy;
+            if (x < 0 || y < 0 || x >= w || y >= h || sx < 0 || sy < 0 || sx >= w || sy >= h ||
+                !known[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)])
+            {
+                continue;
+            }
+            const std::uint8_t* a = pixels + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride) +
+                                    static_cast<std::size_t>(x) * 4u;
+            const std::uint8_t* b = pixels + static_cast<std::size_t>(sy) * static_cast<std::size_t>(stride) +
+                                    static_cast<std::size_t>(sx) * 4u;
+            for (int c = 0; c < 4; ++c)
+            {
+                const int d = a[c] - b[c];
+                sum += d * d;
+            }
+            ++count;
+        }
+    }
+    return count ? sum / count : std::numeric_limits<double>::max();
+}
+} // namespace
+
+int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8_t* mask, int maskStride) noexcept
+{
+    if (pixels == nullptr || mask == nullptr || w < 1 || h < 1)
+    {
+        return 0;
+    }
+    const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    std::vector<std::uint8_t> known;
+    std::vector<std::uint8_t> target;
+    std::vector<std::uint8_t> valid;
+    std::vector<std::uint8_t> queued;
+    std::vector<int> donors;
+    std::vector<int> queue;
+    std::vector<int> chosen;
+    try
+    {
+        known.assign(n, 0);
+        target.assign(n, 0);
+        valid.assign(n, 0);
+        queued.assign(n, 0);
+        donors.assign(n, 0);
+        queue.assign(n, 0);
+        chosen.assign(n, -1);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return -1;
+    }
+    const int radius = (w >= 5 && h >= 5) ? 2 : 0;
+    std::size_t missing = 0;
+    std::size_t donorCount = 0;
+    std::size_t head = 0;
+    std::size_t tail = 0;
+    std::size_t scan = 0;
+    // Selected pixels are filled. Unselected opaque pixels are the image to match and copy from; unselected
+    // transparent ones are neither: nothing to match against, and left as they are.
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const std::size_t p =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+            target[p] = mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(maskStride) +
+                             static_cast<std::size_t>(x)] != 0;
+            known[p] = !target[p] && pixels[static_cast<std::size_t>(y) * static_cast<std::size_t>(stride) +
+                                            static_cast<std::size_t>(x) * 4u + 3] == 255;
+            if (target[p])
+            {
+                ++missing;
+            }
+        }
+    }
+    if (missing == 0)
+    {
+        return 1;
+    }
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const std::size_t p =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+            if (!known[p])
+            {
+                continue;
+            }
+            bool ok = true;
+            for (int dy = -radius; dy <= radius && ok; ++dy)
+            {
+                for (int dx = -radius; dx <= radius; ++dx)
+                {
+                    const int sx = x + dx;
+                    const int sy = y + dy;
+                    if (sx < 0 || sy < 0 || sx >= w || sy >= h ||
+                        !known[static_cast<std::size_t>(sy) * static_cast<std::size_t>(w) +
+                               static_cast<std::size_t>(sx)])
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if (ok)
+            {
+                valid[p] = 1;
+                donors[donorCount++] = static_cast<int>(p);
+            }
+        }
+    }
+    if (donorCount == 0)
+    {
+        return 0;
+    }
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const std::size_t p =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+            if (target[p] &&
+                ((x && known[p - 1]) || (x + 1 < w && known[p + 1]) || (y && known[p - static_cast<std::size_t>(w)]) ||
+                 (y + 1 < h && known[p + static_cast<std::size_t>(w)])))
+            {
+                queue[tail++] = static_cast<int>(p);
+                queued[p] = 1;
+            }
+        }
+    }
+    std::uint32_t seed = 0x6d2b79f5u;
+    for (;;)
+    {
+        while (head < tail)
+        {
+            const int p = queue[head++];
+            const int x = p % w;
+            const int y = p / w;
+            int best = -1;
+            double score = std::numeric_limits<double>::max();
+            const int neighbors[4] = {x ? p - 1 : -1, x + 1 < w ? p + 1 : -1, y ? p - w : -1, y + 1 < h ? p + w : -1};
+            // Propagate coherent source offsets, then refine with a randomized patch search.
+            for (int k = 0; k < 28; ++k)
+            {
+                int q = -1;
+                if (k < 4)
+                {
+                    const int t = neighbors[k];
+                    if (t >= 0)
+                    {
+                        q = (chosen[static_cast<std::size_t>(t)] >= 0 ? chosen[static_cast<std::size_t>(t)] : t) +
+                            (p - t);
+                    }
+                }
+                else
+                {
+                    q = donors[NextRandom(seed) % donorCount];
+                }
+                if (q < 0 || static_cast<std::size_t>(q) >= n || !valid[static_cast<std::size_t>(q)])
+                {
+                    continue;
+                }
+                const double s = PatchMatch(pixels, stride, known.data(), w, h, p, q, radius);
+                if (best < 0 || s < score)
+                {
+                    score = s;
+                    best = q;
+                }
+            }
+            if (best < 0)
+            {
+                best = donors[0];
+            }
+            for (int r = 64; r >= 1; r /= 2)
+            {
+                const int qx =
+                    best % w + static_cast<int>(NextRandom(seed) % static_cast<std::uint32_t>(2 * r + 1)) - r;
+                const int qy =
+                    best / w + static_cast<int>(NextRandom(seed) % static_cast<std::uint32_t>(2 * r + 1)) - r;
+                if (qx < 0 || qy < 0 || qx >= w || qy >= h ||
+                    !valid[static_cast<std::size_t>(qy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(qx)])
+                {
+                    continue;
+                }
+                const int q = qy * w + qx;
+                const double s = PatchMatch(pixels, stride, known.data(), w, h, p, q, radius);
+                if (s < score)
+                {
+                    score = s;
+                    best = q;
+                }
+            }
+            std::memcpy(pixels + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride) +
+                            static_cast<std::size_t>(x) * 4u,
+                        pixels + static_cast<std::size_t>(best / w) * static_cast<std::size_t>(stride) +
+                            static_cast<std::size_t>(best % w) * 4u,
+                        4);
+            known[static_cast<std::size_t>(p)] = 1;
+            chosen[static_cast<std::size_t>(p)] = best;
+            for (int k = 0; k < 4; ++k)
+            {
+                const int q = neighbors[k];
+                if (q >= 0 && target[static_cast<std::size_t>(q)] && !known[static_cast<std::size_t>(q)] &&
+                    !queued[static_cast<std::size_t>(q)])
+                {
+                    queued[static_cast<std::size_t>(q)] = 1;
+                    queue[tail++] = q;
+                }
+            }
+        }
+        // A selected area that only transparency touches starts from the best random donor, then spreads.
+        while (scan < n && (!target[scan] || known[scan]))
+        {
+            ++scan;
+        }
+        if (scan >= n)
+        {
+            break;
+        }
+        queue[tail++] = static_cast<int>(scan);
+        queued[scan] = 1;
+    }
+    return 1;
 }
 } // namespace Adjust

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <new>
 
 // The color adjustment and filter panels on the session (C12): previews render synchronously from a copy of the
@@ -24,6 +25,7 @@ constexpr int kFilterPreviewSide = 2048;
     {
     case FilterKind::AddNoise:
     case FilterKind::Grain:
+    case FilterKind::ContentAwareFill:
         return 0;
     case FilterKind::GaussianBlur:
     case FilterKind::MotionBlur:
@@ -161,36 +163,67 @@ bool DocumentSession::GrowFilterForBlur()
         return true;
     }
     const int pad = static_cast<int>(std::ceil(margin));
-    const int width = edit.original.Width();
-    const int height = edit.original.Height();
-    const std::int64_t grownWidth = static_cast<std::int64_t>(width) + 2 * pad;
-    const std::int64_t grownHeight = static_cast<std::int64_t>(height) + 2 * pad;
-    if (grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide || grownWidth * grownHeight > 100'000'000)
+    if (!GrowFilterGrid(-pad, -pad, edit.original.Width() + pad, edit.original.Height() + pad))
     {
         return false;
     }
-    const Raster grown = Raster::Replacing(edit.original, pad, pad, {}, 0, 0, static_cast<int>(grownWidth),
-                                           static_cast<int>(grownHeight), 0);
+    _filter->grownMargin = pad;
+    return true;
+}
+
+bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
+{
+    FilterEdit& edit = _filter.value();
+    const int width = edit.original.Width();
+    const int height = edit.original.Height();
+    // The grid already grown (or the original) unioned with the extent, all in the original's pixels.
+    int grownLeft = -edit.grownOffsetX;
+    int grownTop = -edit.grownOffsetY;
+    int grownRight = grownLeft + (edit.grownImage.HasStorage() ? edit.grownImage.Width() : width);
+    int grownBottom = grownTop + (edit.grownImage.HasStorage() ? edit.grownImage.Height() : height);
+    const int targetLeft = std::min(grownLeft, left);
+    const int targetTop = std::min(grownTop, top);
+    const int targetRight = std::max(grownRight, right);
+    const int targetBottom = std::max(grownBottom, bottom);
+    if (targetLeft == grownLeft && targetTop == grownTop && targetRight == grownRight && targetBottom == grownBottom)
+    {
+        return true;
+    }
+    const std::int64_t grownWidth = static_cast<std::int64_t>(targetRight) - targetLeft;
+    const std::int64_t grownHeight = static_cast<std::int64_t>(targetBottom) - targetTop;
+    if (grownWidth < 1 || grownHeight < 1 || grownWidth > kMaxCanvasSide || grownHeight > kMaxCanvasSide ||
+        grownWidth * grownHeight > 100'000'000)
+    {
+        return false;
+    }
+    const Raster grown = Raster::Replacing(edit.original, -targetLeft, -targetTop, {}, 0, 0,
+                                           static_cast<int>(grownWidth), static_cast<int>(grownHeight), 0);
     if (!grown.HasStorage())
     {
         return false;
     }
     LayerTransform expanded = edit.transform;
     expanded.size = Vec2{grownWidth * edit.transform.size.x / width, grownHeight * edit.transform.size.y / height};
-    const Vec2 middle = PixelToDocument(edit.transform, width, height).Apply(Vec2{width / 2.0, height / 2.0});
+    const Vec2 middle = PixelToDocument(edit.transform, width, height)
+                            .Apply(Vec2{targetLeft + grownWidth / 2.0, targetTop + grownHeight / 2.0});
     expanded.origin = Vec2{middle.x - expanded.size.x / 2, middle.y - expanded.size.y / 2};
     edit.grownImage = grown;
     edit.grownTransform = expanded;
-    edit.grownMargin = pad;
-    edit.grownOffsetX = pad;
-    edit.grownOffsetY = pad;
+    edit.grownOffsetX = -targetLeft;
+    edit.grownOffsetY = -targetTop;
     PrepareFilterPreview();
     return true;
 }
 
+bool DocumentSession::CanContentAwareFill() const noexcept
+{
+    return CanAdjustColors() && _document.has_value() && _document->selection.has_value() &&
+           !_document->selection->IsEmpty();
+}
+
 void DocumentSession::BeginFilter(FilterKind kind)
 {
-    if (!CanAdjustColors())
+    if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
     {
         return;
     }
@@ -218,6 +251,41 @@ void DocumentSession::BeginFilter(FilterKind kind)
     edit.seed = NextHealSeed();
     _filter = std::move(edit);
     PrepareFilterPreview();
+    if (kind == FilterKind::ContentAwareFill)
+    {
+        // The fill extends the layer over any of the selection on the canvas past its edge.
+        const std::optional<SelectionBounds> bounds = _filter->selection->Bounds();
+        if (bounds.has_value())
+        {
+            const Affine2 toPixels =
+                PixelToDocument(_filter->transform, _filter->original.Width(), _filter->original.Height()).Inverted();
+            const double x0 = std::max(0.0, bounds->minX);
+            const double y0 = std::max(0.0, bounds->minY);
+            const double x1 = std::min(static_cast<double>(_document->width), bounds->maxX);
+            const double y1 = std::min(static_cast<double>(_document->height), bounds->maxY);
+            if (x1 > x0 && y1 > y0)
+            {
+                double left = std::numeric_limits<double>::max();
+                double top = left;
+                double right = std::numeric_limits<double>::lowest();
+                double bottom = right;
+                for (const Vec2 corner : {Vec2{x0, y0}, Vec2{x1, y0}, Vec2{x0, y1}, Vec2{x1, y1}})
+                {
+                    const Vec2 pixel = toPixels.Apply(corner);
+                    left = std::min(left, pixel.x);
+                    top = std::min(top, pixel.y);
+                    right = std::max(right, pixel.x);
+                    bottom = std::max(bottom, pixel.y);
+                }
+                if (!GrowFilterGrid(static_cast<int>(std::floor(left)), static_cast<int>(std::floor(top)),
+                                    static_cast<int>(std::ceil(right)), static_cast<int>(std::ceil(bottom))))
+                {
+                    _filter.reset();
+                    return;
+                }
+            }
+        }
+    }
     if (!GrowFilterForBlur())
     {
         _filter.reset();
@@ -229,12 +297,18 @@ void DocumentSession::BeginFilter(FilterKind kind)
 void DocumentSession::RenderFilterPreview()
 {
     FilterEdit& edit = _filter.value();
-    Raster result = Adjust::RunFilter(edit.kind, edit.previewSource, edit.settings, edit.previewScale, edit.seed);
-    if (result.HasStorage() && edit.selection.has_value())
+    std::optional<Raster> coverage;
+    if (edit.selection.has_value())
     {
-        const Raster coverage = SelectionCoverageOn(edit.selection.value(), edit.previewTransform,
-                                                    edit.previewSource.Width(), edit.previewSource.Height());
-        result = Adjust::BlendThrough(result, edit.previewSource, coverage);
+        coverage = SelectionCoverageOn(edit.selection.value(), edit.previewTransform, edit.previewSource.Width(),
+                                       edit.previewSource.Height());
+    }
+    Raster result = Adjust::RunFilter(edit.kind, edit.previewSource, edit.settings, edit.previewScale, edit.seed,
+                                      coverage.has_value() ? &coverage.value() : nullptr);
+    edit.previewFailed = edit.kind == FilterKind::ContentAwareFill && !result.HasStorage();
+    if (result.HasStorage() && coverage.has_value())
+    {
+        result = Adjust::BlendThrough(result, edit.previewSource, coverage.value());
     }
     edit.previewRaster = result;
 }
@@ -290,12 +364,24 @@ void DocumentSession::CommitFilter()
         return;
     }
     filterSettings = edit.settings;
-    Raster image = Adjust::RunFilter(edit.kind, edit.Source(), edit.settings, 1.0, edit.seed);
-    if (image.HasStorage() && edit.selection.has_value())
+    std::optional<Raster> coverage;
+    if (edit.selection.has_value())
     {
-        const Raster coverage = SelectionCoverageOn(edit.selection.value(), edit.Placement(), edit.Source().Width(),
-                                                    edit.Source().Height());
-        image = Adjust::BlendThrough(image, edit.Source(), coverage);
+        coverage = SelectionCoverageOn(edit.selection.value(), edit.Placement(), edit.Source().Width(),
+                                       edit.Source().Height());
+    }
+    Raster image = Adjust::RunFilter(edit.kind, edit.Source(), edit.settings, 1.0, edit.seed,
+                                     coverage.has_value() ? &coverage.value() : nullptr);
+    if (edit.kind == FilterKind::ContentAwareFill && !image.HasStorage())
+    {
+        // Nothing to copy from: the panel stays open and says so; Cancel closes it.
+        _filter->previewFailed = true;
+        ++_editRevision;
+        return;
+    }
+    if (image.HasStorage() && coverage.has_value())
+    {
+        image = Adjust::BlendThrough(image, edit.Source(), coverage.value());
     }
     LayerTransform placed = edit.Placement();
     int cropX = 0;

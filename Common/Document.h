@@ -912,6 +912,7 @@ enum class FilterKind : std::uint8_t
     MotionBlur,
     AddNoise,
     LensCorrection,
+    ContentAwareFill, // C13: the selection filled from its surroundings (automatic, no settings)
     Curves,
     Exposure,
     GradientMap,
@@ -990,6 +991,9 @@ struct FilterEdit
     double previewScale = 1; // pixels in previewSource per source pixel
     Raster previewRaster;
     LayerTransform previewTransform;
+    // An automatic filter that found nothing to work from (Content-Aware Fill without opaque surroundings): the
+    // panel says so and OK waits.
+    bool previewFailed = false;
     [[nodiscard]] const Raster& Source() const noexcept
     {
         return grownImage.HasStorage() ? grownImage : original;
@@ -1504,6 +1508,8 @@ class DocumentSession
     // entry on OK; adjustment layers keep their settings live and edit through the same panels over the composite
     // beneath them. Painting and history wait while a panel is open.
     [[nodiscard]] bool CanAdjustColors() const noexcept;
+    // Content-Aware Fill (C13) needs a non-empty selection on an image layer's pixels.
+    [[nodiscard]] bool CanContentAwareFill() const noexcept;
     [[nodiscard]] bool HasColorEdit() const noexcept
     {
         return _filter.has_value() || _levels.has_value() || _hueSaturation.has_value();
@@ -1730,6 +1736,8 @@ class DocumentSession
     [[nodiscard]] PreviewLayer PreviewedLayer() const noexcept;
     [[nodiscard]] std::optional<LayerAdjustment> EditedAdjustment() const noexcept;
     bool GrowFilterForBlur();
+    // Pads the filter's grid out to cover `extent` (layer pixels), keeping what is already grown.
+    bool GrowFilterGrid(int left, int top, int right, int bottom);
     void PrepareFilterPreview();
     void RenderFilterPreview();
     void RenderLevelsPreview();

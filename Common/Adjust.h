@@ -149,9 +149,15 @@ void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std:
 // empty coverage counts nothing.
 [[nodiscard]] LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept;
 // A filter on a raster: `scale` is pixels in `image` per original layer pixel (a downscaled preview blurs
-// proportionally less); `seed` is Add Noise's and Grain's pattern. Empty on failure.
+// proportionally less); `seed` is Add Noise's and Grain's pattern; `coverage` (Gray8 on the same grid) is the
+// selection Content-Aware Fill fills, which needs it. Empty on failure, or when a fill found nothing to copy from.
 [[nodiscard]] Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& settings, double scale,
-                               std::uint32_t seed);
+                               std::uint32_t seed, const Raster* coverage = nullptr);
+// Content-Aware Fill (the legacy content_fill): selected pixels (`mask` nonzero) are synthesized from the
+// unselected opaque ones by coherent patch matching with a randomized search; unselected transparent pixels are
+// neither matched nor changed. 1 on success, 0 when no source patch exists, -1 when memory runs out.
+[[nodiscard]] int ContentFill(std::uint8_t* bgra, int width, int height, int stride, const std::uint8_t* mask,
+                              int maskStride) noexcept;
 // coverage × adjusted + (1 − coverage) × original, so fully selected pixels stay exact and soft edges blend.
 [[nodiscard]] Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage);
 // A box-filtered copy no larger than `maxSide` on its longest side (`image` itself when it already fits).

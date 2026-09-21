@@ -5052,6 +5052,122 @@ void TestBlends()
            "blend.separable");
 }
 
+// ── Content-Aware Fill (C13) ──────────────────────────────────
+
+// A 64×48 flat (0.2, 0.6, 0.8) layer with a red block, the block selected.
+DocumentSession SmartFixture()
+{
+    DocumentSession session = PixelEditSession(64, 48);
+    InsertPixels(session,
+                 BytesRaster(64, 48,
+                             [](int x, int y) -> std::array<std::uint8_t, 4>
+                             {
+                                 if (x >= 20 && x < 32 && y >= 16 && y < 26)
+                                 {
+                                     return {0, 0, 255, 255};
+                                 }
+                                 return {204, 153, 51, 255};
+                             }),
+                 L"Object");
+    SelectRect(session, 20, 16, 12, 10, false);
+    return session;
+}
+
+void TestSmartEdits()
+{
+    // Legacy fillContinuesRepeatingTexture: four-pixel stripes continue through the filled block.
+    {
+        DocumentSession session = PixelEditSession(80, 64);
+        InsertPixels(session,
+                     BytesRaster(80, 64,
+                                 [](int x, int y) -> std::array<std::uint8_t, 4>
+                                 {
+                                     if (x >= 32 && x < 44 && y >= 26 && y < 36)
+                                     {
+                                         return {0, 0, 255, 255};
+                                     }
+                                     const std::uint8_t value = (x / 4) % 2 == 0 ? 51 : 204;
+                                     return {value, value, value, 255};
+                                 }),
+                     L"Stripes");
+        SelectRect(session, 32, 26, 12, 10, false);
+        session.BeginFilter(FilterKind::ContentAwareFill);
+        Expect(session.PendingFilter().has_value() && session.PendingFilter()->kind == FilterKind::ContentAwareFill &&
+                   !session.PendingFilter()->previewFailed,
+               "smart.fill-opens");
+        session.CommitFilter();
+        int matching = 0;
+        for (int y = 26; y < 36; ++y)
+        {
+            for (int x = 32; x < 44; ++x)
+            {
+                const int expected = (x / 4) % 2 == 0 ? 51 : 204;
+                matching += std::abs(ActivePixel(session, x, y)[0] - expected) <= 1 ? 1 : 0;
+            }
+        }
+        Expect(!session.PendingFilter().has_value() && session.history.UndoName() == L"Content-Aware Fill" &&
+                   matching >= 114,
+               "smart.fill-continues-texture");
+    }
+    // Legacy fillReconstructsBackgroundInsideSelectionAndUndoes.
+    {
+        DocumentSession session = SmartFixture();
+        const Raster original = session.ActiveLayer()->asset->image;
+        const int count = session.history.UndoCount();
+        Expect(session.CanContentAwareFill(), "smart.can-fill");
+        session.BeginFilter(FilterKind::ContentAwareFill);
+        session.CommitFilter();
+        Expect(!session.PendingFilter().has_value() && session.history.UndoCount() == count + 1,
+               "smart.fill-one-entry");
+        bool flat = true;
+        for (int y = 0; y < 48; ++y)
+        {
+            for (int x = 0; x < 64; ++x)
+            {
+                const std::array<std::uint8_t, 4> p = ActivePixel(session, x, y);
+                flat = flat && std::abs(p[0] - 204) <= 1 && std::abs(p[1] - 153) <= 1 && std::abs(p[2] - 51) <= 1 &&
+                       p[3] == 255;
+            }
+        }
+        Expect(flat, "smart.fill-reconstructs-background");
+        session.Undo();
+        Expect(session.ActiveLayer()->asset->image == original, "smart.fill-undo");
+    }
+    // Legacy cancelAndNoSourceLeaveOriginalUntouched.
+    {
+        DocumentSession session = SmartFixture();
+        const Raster original = session.ActiveLayer()->asset->image;
+        session.BeginFilter(FilterKind::ContentAwareFill);
+        session.CancelFilter();
+        Expect(session.ActiveLayer()->asset->image == original && !session.PendingFilter().has_value(), "smart.cancel");
+        session.SelectAll();
+        session.BeginFilter(FilterKind::ContentAwareFill);
+        Expect(session.PendingFilter().has_value() && session.PendingFilter()->previewFailed,
+               "smart.no-source-reports");
+        session.CommitFilter();
+        Expect(session.PendingFilter().has_value() && session.ActiveLayer()->asset->image == original,
+               "smart.no-source-refuses");
+        session.CancelFilter();
+        session.Deselect();
+        Expect(!session.CanContentAwareFill(), "smart.needs-a-selection");
+    }
+    // A selection past the layer's edge grows the grid; the kernel refuses when no opaque pixel surrounds it.
+    {
+        DocumentSession session = PixelEditSession(64, 48);
+        InsertPixels(session, SolidStraight(40, 30, 0.2, 0.6, 0.8), L"Small");
+        SelectRect(session, 30, 20, 20, 16, false);
+        session.BeginFilter(FilterKind::ContentAwareFill);
+        Expect(session.PendingFilter().has_value() && session.PendingFilter()->grownImage.HasStorage() &&
+                   session.PendingFilter()->grownImage.Width() == 50 &&
+                   session.PendingFilter()->grownImage.Height() == 36,
+               "smart.grows-to-the-selection");
+        session.CommitFilter();
+        Expect(!session.PendingFilter().has_value() && session.ActiveLayer()->asset->image.Width() == 50 &&
+                   ActivePixel(session, 45, 30)[3] == 255,
+               "smart.fills-past-the-edge");
+    }
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5126,6 +5242,7 @@ int wmain()
     TestFilters();
     TestAdjustmentLayers();
     TestBlends();
+    TestSmartEdits();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);
