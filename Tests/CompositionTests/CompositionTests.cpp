@@ -1,3 +1,5 @@
+#include "BrushCompute.h"
+#include "BrushStroke.h"
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
 #include "Document.h"
@@ -580,6 +582,234 @@ void TestResidencyAndCaching(Harness& h)
     pixels = h.Render(document);
     Expect(pixels.size() == 3 * 2 * 4, "compose.resize-canvas");
 }
+
+// ── Brush (C10, Rendering_Brush.md) ──────────────────────────────────────
+
+[[nodiscard]] int At(const std::vector<std::uint8_t>& pixels, int width, int x, int y, int channel) noexcept
+{
+    const std::size_t index =
+        (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * 4 +
+        static_cast<std::size_t>(channel);
+    return index < pixels.size() ? pixels[index] : -1;
+}
+
+void TestSparseUpload(Harness& h)
+{
+    // A painted layer's raster reaches the GPU as its base texture plus tile uploads; its pixels are never assembled.
+    CanvasDocument document{};
+    document.id = Guid::Generate();
+    document.width = 4;
+    document.height = 4;
+    const Raster base = Solid(2, 2, 0, 0, 255, 255);
+    const Raster green = Solid(1, 1, 0, 255, 0, 255);
+    const Raster sparse = Raster::MakeSparse(4, 4, RasterFormat::Bgra8888, base, 1, 1, {RasterTile{0, 0, green}}, 0);
+    document.layers.push_back(LayerFrom(sparse, LayerBlendMode::Normal, L"Painted"));
+    std::vector<std::uint8_t> pixels = h.Render(document);
+    Expect(At(pixels, 4, 0, 0, 1) == 255 && At(pixels, 4, 1, 1, 2) == 255 && At(pixels, 4, 2, 2, 2) == 255 &&
+               At(pixels, 4, 3, 3, 3) == 0 && At(pixels, 4, 0, 3, 3) == 0 && !sparse.IsMaterialized(),
+           "sparse.upload-composes-base-and-tiles");
+    // The same pixels assembled on the CPU render identically.
+    const Raster twin = Raster::MakeSparse(4, 4, RasterFormat::Bgra8888, base, 1, 1, {RasterTile{0, 0, green}}, 0);
+    const std::uint8_t* twinBytes = twin.Data(); // assembles the pixels first; ByteSize() is 0 until then
+    const Raster assembled = Raster::Make(4, 4, RasterFormat::Bgra8888, twinBytes, twin.ByteSize());
+    document.layers[0].asset = RasterAsset{assembled, assembled, L"Painted"};
+    const std::vector<std::uint8_t> reference = h.Render(document);
+    Expect(reference == pixels, "sparse.upload-matches-assembled");
+    // A sparse mask reveals beyond its tiles (fill 255) and hides where a black tile lies.
+    const Raster black = Gray(2, 2, {0, 0, 0, 0});
+    const Raster mask = Raster::MakeSparse(4, 4, RasterFormat::Gray8, Raster{}, 0, 0, {RasterTile{1, 1, black}}, 255);
+    document.layers[0] = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
+    document.layers[0].mask = MaskOf(mask);
+    pixels = h.Render(document);
+    Expect(At(pixels, 4, 0, 0, 3) == 255 && At(pixels, 4, 1, 1, 3) == 0 && At(pixels, 4, 2, 2, 3) == 0 &&
+               At(pixels, 4, 3, 3, 3) == 255 && !mask.IsMaterialized(),
+           "sparse.mask-upload");
+    // A window into shared tile pixels uploads only its part.
+    const Raster twoTone = AlphaRaster({255, 255, 255, 255}, 255); // 2 x 2 white
+    RasterTile window{0, 0, twoTone};
+    window.sourceX = 1;
+    window.sourceY = 1;
+    window.width = 1;
+    window.height = 1;
+    const Raster windowed = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, Raster{}, 0, 0, {window}, 0);
+    document.layers[0] = LayerFrom(windowed, LayerBlendMode::Normal, L"Window");
+    document.layers[0].mask.reset();
+    document.width = 2;
+    document.height = 2;
+    pixels = h.Render(document);
+    Expect(At(pixels, 2, 0, 0, 3) == 255 && At(pixels, 2, 1, 1, 3) == 0 && At(pixels, 2, 1, 0, 3) == 0,
+           "sparse.tile-window-upload");
+}
+
+void TestStrokePreview(Harness& h)
+{
+    // A stroke on a blank layer draws its working texture; the commit adopts that texture without an upload.
+    CanvasDocument document{};
+    document.id = Guid::Generate();
+    document.width = 8;
+    document.height = 8;
+    ImageLayer blank = ImageLayer::Blank(L"Blank", Vec2{8, 8});
+    blank.transform.sampling = LayerSampling::Nearest;
+    document.layers.push_back(blank);
+    std::vector<std::uint8_t> pixels = h.Render(document);
+    Expect(At(pixels, 8, 3, 3, 3) == 0, "stroke.blank-before");
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = blank.id;
+    preview.mask = false;
+    preview.width = 8;
+    preview.height = 8;
+    preview.transform = blank.transform;
+    preview.fill = 0;
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && h.composition.StrokeTextureMissing(), "stroke.begin");
+    const Raster red = Solid(4, 4, 0, 0, 255, 255);
+    const std::array<RasterTile, 1> first{RasterTile{2, 2, red}};
+    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(first)) && !h.composition.StrokeTextureMissing(),
+           "stroke.first-tiles");
+    pixels = h.Render(document);
+    Expect(At(pixels, 8, 2, 2, 2) == 255 && At(pixels, 8, 5, 5, 2) == 255 && At(pixels, 8, 1, 1, 3) == 0 &&
+               At(pixels, 8, 6, 6, 3) == 0,
+           "stroke.preview-drawn");
+    const std::uint64_t bytes = h.composition.CanvasSurfaceBytes();
+    Expect(bytes >= 2ull * 8 * 8 * 4 + 8ull * 8 * 4, "stroke.working-texture-counted");
+    const Raster green = Solid(2, 2, 0, 255, 0, 255);
+    const std::array<RasterTile, 1> second{RasterTile{2, 2, green}};
+    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(second)), "stroke.second-tiles");
+    pixels = h.Render(document);
+    Expect(At(pixels, 8, 2, 2, 1) == 255 && At(pixels, 8, 4, 4, 2) == 255, "stroke.tiles-replace");
+    // Commit: the snapshot covering the grid from (2, 2) is adopted from the working texture.
+    const Raster committed =
+        Raster::Replacing(Raster{}, 0, 0, {RasterTile{2, 2, red}, RasterTile{2, 2, green}}, 2, 2, 4, 4, 0);
+    h.composition.EndStroke(&committed, 2, 2);
+    Expect(!h.composition.HasStroke() && !committed.IsMaterialized(), "stroke.ended");
+    document.layers[0].asset = RasterAsset{committed, committed, L"Blank"};
+    document.layers[0].transform.origin = Vec2{2, 2};
+    document.layers[0].transform.size = Vec2{4, 4};
+    pixels = h.Render(document);
+    Expect(At(pixels, 8, 2, 2, 1) == 255 && At(pixels, 8, 4, 4, 2) == 255 && At(pixels, 8, 1, 1, 3) == 0 &&
+               At(pixels, 8, 6, 6, 3) == 0 && !committed.IsMaterialized(),
+           "stroke.adopted-texture-draws");
+    // A mask stroke: the working texture stands in for the layer's mask (a uniform mask becomes the fill).
+    CanvasDocument masked{};
+    masked.id = Guid::Generate();
+    masked.width = 8;
+    masked.height = 8;
+    ImageLayer layer = LayerFrom(Solid(8, 8, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
+    layer.mask = MaskOf(Gray(1, 1, {255}));
+    masked.layers.push_back(layer);
+    CanvasRenderer::StrokePreview maskPreview;
+    maskPreview.layerID = layer.id;
+    maskPreview.mask = true;
+    maskPreview.width = 8;
+    maskPreview.height = 8;
+    maskPreview.transform = layer.transform;
+    maskPreview.fill = 255;
+    Expect(SUCCEEDED(h.composition.BeginStroke(maskPreview)), "stroke.mask-begin");
+    const std::array<RasterTile, 1> hide{
+        RasterTile{2, 2, Gray(4, 4, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})}};
+    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(hide)), "stroke.mask-tiles");
+    pixels = h.Render(masked);
+    Expect(At(pixels, 8, 0, 0, 3) == 255 && At(pixels, 8, 3, 3, 3) == 0 && At(pixels, 8, 7, 7, 3) == 255,
+           "stroke.mask-preview");
+    h.composition.EndStroke(nullptr, 0, 0);
+    pixels = h.Render(masked);
+    Expect(At(pixels, 8, 3, 3, 3) == 255, "stroke.mask-ended-restores");
+    // Dropping the document surfaces drops the working texture; the next update rebuilds it from every tile.
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(first)),
+           "stroke.again");
+    h.composition.ReleaseDocumentSurfaces();
+    Expect(h.composition.HasStroke() && h.composition.StrokeTextureMissing(), "stroke.texture-dropped-with-surfaces");
+    Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(first)) && !h.composition.StrokeTextureMissing(), "stroke.rebuilt");
+    pixels = h.Render(document);
+    h.composition.EndStroke(nullptr, 0, 0);
+}
+
+void TestGpuBrushCoverage(Harness& h)
+{
+    // The compute kernel and the CPU kernel agree on every tile pixel, tails included.
+    GpuBrushCoverage gpu;
+    Expect(SUCCEEDED(gpu.Initialize(h.device.get(), h.context.get())) && gpu.Ready() && !gpu.UsesCpuPermanent(),
+           "gpubrush.initialize");
+    for (const double hardness : {1.0, 0.0})
+    {
+        BrushKernelParams params;
+        params.radius = 12;
+        params.hardness = hardness;
+        params.canvasWidth = 64;
+        params.canvasHeight = 64;
+        params.antialiasWidth = 1;
+        params.spacing = std::max(0.25, 24.0 * BrushSettings::SpacingFraction(hardness));
+        std::vector<float> permanent(64 * 64, 0.0f);
+        std::vector<std::uint8_t> cpuPreview(64 * 64, 0);
+        std::vector<std::uint8_t> gpuPreview(64 * 64, 0);
+        const BrushKernelTile cpuTile{7, 0, 0, 64, 64, permanent.data(), cpuPreview.data()};
+        const std::array<BrushKernelTile, 1> gpuTiles{BrushKernelTile{7, 0, 0, 64, 64, nullptr, gpuPreview.data()}};
+        gpu.BeginStroke();
+        const auto compare = [&](const char* name)
+        {
+            int worst = 0;
+            for (std::size_t i = 0; i < cpuPreview.size(); ++i)
+            {
+                worst = std::max(worst, std::abs(static_cast<int>(cpuPreview[i]) - static_cast<int>(gpuPreview[i])));
+            }
+            Expect(worst <= 2, name);
+        };
+        const std::array<BrushSegment, 1> dab{BrushSegment{Vec2{32, 32}, Vec2{32, 32}}};
+        const std::array<BrushSegment, 1> firstTail{BrushSegment{Vec2{32, 32}, Vec2{56, 32}}};
+        BrushKernel::RenderTile(cpuTile, dab, firstTail, params);
+        Expect(gpu.Render(gpuTiles, dab, firstTail, params) && gpu.TileCount() == 1, "gpubrush.render");
+        compare(hardness >= 1.0 ? "gpubrush.hard-dab-and-tail" : "gpubrush.soft-dab-and-tail");
+        const std::array<BrushSegment, 1> settled{BrushSegment{Vec2{32, 32}, Vec2{56, 32}}};
+        const std::array<BrushSegment, 1> secondTail{BrushSegment{Vec2{56, 32}, Vec2{56, 56}}};
+        BrushKernel::RenderTile(cpuTile, settled, secondTail, params);
+        Expect(gpu.Render(gpuTiles, settled, secondTail, params), "gpubrush.render-again");
+        compare(hardness >= 1.0 ? "gpubrush.hard-settled" : "gpubrush.soft-settled");
+        BrushKernel::RenderTile(cpuTile, {}, {}, params);
+        Expect(gpu.Render(gpuTiles, {}, {}, params), "gpubrush.render-empty");
+        compare(hardness >= 1.0 ? "gpubrush.hard-tail-removed" : "gpubrush.soft-tail-removed");
+        Expect(gpuPreview[32 * 64 + 44] > 0 && gpuPreview[50 * 64 + 56] == 0, "gpubrush.tail-gone");
+        gpu.EndStroke();
+        Expect(gpu.TileCount() == 0, "gpubrush.stroke-ended");
+    }
+    // A whole stroke through the session with the GPU engine matches the CPU engine's pixels.
+    DocumentSession cpuSession;
+    cpuSession.CreateDocument(300, 120, false);
+    cpuSession.AddBlankLayer();
+    cpuSession.brushSettings = BrushSettings{40, 0, 1, 0, 0, 0.8, false};
+    DocumentSession gpuSession;
+    gpuSession.CreateDocument(300, 120, false);
+    gpuSession.AddBlankLayer();
+    gpuSession.brushSettings = cpuSession.brushSettings;
+    gpuSession.SetBrushEngine(&gpu);
+    for (DocumentSession* session : {&cpuSession, &gpuSession})
+    {
+        Expect(session->BeginBrush(Vec2{20, 60}), "gpubrush.session-begin");
+        session->ContinueBrush(Vec2{150, 20});
+        session->ContinueBrush(Vec2{280, 60});
+        session->FinishBrush();
+    }
+    const Raster cpuImage = cpuSession.ActiveLayer()->asset->image;
+    const Raster gpuImage = gpuSession.ActiveLayer()->asset->image;
+    bool same = cpuImage.Width() == gpuImage.Width() && cpuImage.Height() == gpuImage.Height() &&
+                cpuSession.ActiveLayer()->transform == gpuSession.ActiveLayer()->transform;
+    if (same)
+    {
+        std::vector<std::uint8_t> a(cpuImage.ByteSize() == 0
+                                        ? static_cast<std::size_t>(cpuImage.Stride()) * cpuImage.Height()
+                                        : cpuImage.ByteSize());
+        std::vector<std::uint8_t> b(a.size());
+        cpuImage.ReadRegion(0, 0, cpuImage.Width(), cpuImage.Height(), a.data(), cpuImage.Stride(), 0);
+        gpuImage.ReadRegion(0, 0, gpuImage.Width(), gpuImage.Height(), b.data(), gpuImage.Stride(), 0);
+        int worst = 0;
+        for (std::size_t i = 0; i < a.size(); ++i)
+        {
+            worst = std::max(worst, std::abs(static_cast<int>(a[i]) - static_cast<int>(b[i])));
+        }
+        same = worst <= 2;
+    }
+    Expect(same && gpuImage.IsSparse() && !gpuImage.IsMaterialized(), "gpubrush.session-matches-cpu");
+    gpu.Release();
+    Expect(!gpu.Ready(), "gpubrush.released");
+}
 } // namespace
 
 int wmain()
@@ -596,6 +826,9 @@ int wmain()
         TestFolderMasks(harness);
         TestTransformRendering(harness);
         TestResidencyAndCaching(harness);
+        TestSparseUpload(harness);
+        TestStrokePreview(harness);
+        TestGpuBrushCoverage(harness);
     }
     if (gFailures != 0)
     {

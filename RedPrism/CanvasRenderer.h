@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <d3d11_1.h>
+#include <optional>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -42,6 +44,37 @@ class CanvasRenderer final
                          const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                          float holeHeight) noexcept;
     HRESULT Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept;
+
+    // A brush stroke in progress on one layer (Rendering_Brush.md): the grid it paints, the pixels it started from
+    // and where they sit. The composition keeps one working texture for the grid, writes only the tiles that change,
+    // and draws it in place of the layer's image (or mask) until EndStroke.
+    struct StrokePreview
+    {
+        Guid layerID;
+        bool mask = false;
+        int width = 0;
+        int height = 0;
+        LayerTransform transform; // places the grid on the document
+        Raster source;            // the layer's image (or mask) the stroke started from; may be empty
+        int sourceX = 0;          // where the source sits in the grid
+        int sourceY = 0;
+        std::uint8_t fill = 0; // pixels beyond the source (255 reveals for masks)
+    };
+    HRESULT BeginStroke(const StrokePreview& preview) noexcept;
+    // Tiles of the grid whose pixels changed; every touched tile when StrokeTextureMissing() (the texture is then
+    // created from the source and the fill first).
+    HRESULT UpdateStrokeTiles(std::span<const RasterTile> tiles) noexcept;
+    [[nodiscard]] bool StrokeTextureMissing() const noexcept
+    {
+        return _stroke.has_value() && !_strokeTexture.srv;
+    }
+    [[nodiscard]] bool HasStroke() const noexcept
+    {
+        return _stroke.has_value();
+    }
+    // Ends the preview. With `committed` (the stroke's snapshot, covering the grid from (cropX, cropY)), the working
+    // texture is cropped into the raster cache so the committed layer draws without uploading again.
+    void EndStroke(const Raster* committed, int cropX, int cropY) noexcept;
     [[nodiscard]] std::uint64_t CanvasSurfaceBytes() const noexcept;
     [[nodiscard]] std::uint64_t CompositeCount() const noexcept
     {
@@ -144,6 +177,12 @@ class CanvasRenderer final
     HRESULT EnsureStackSurfaces() noexcept;
     HRESULT AcquireCoverage(int& index) noexcept;
     HRESULT UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept;
+    // A texture assembled on the GPU: cleared to `fill`, the base copied from its own texture, the tiles uploaded.
+    HRESULT CreateSparseTexture(int width, int height, bool gray, const Raster& base, int baseX, int baseY,
+                                std::uint8_t fill, std::span<const RasterTile> tiles, GpuTexture& gpu) noexcept;
+    HRESULT CreateMippedTexture(int width, int height, bool gray, GpuTexture& gpu) noexcept;
+    HRESULT WriteTiles(GpuTexture& gpu, std::span<const RasterTile> tiles, bool gray) noexcept;
+    [[nodiscard]] ID3D11ShaderResourceView* MaskViewFor(const ImageLayer& layer) noexcept;
     GpuTexture* TextureFor(const Raster& raster, bool gray) noexcept;
     HRESULT RunPass(const LayerConstants& constants, const PassInputs& inputs, ID3D11RenderTargetView* target) noexcept;
     void FillLayerConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs, bool& ok) noexcept;
@@ -171,6 +210,8 @@ class CanvasRenderer final
     std::vector<Surface> _coverage;
     std::size_t _coverageUsed = 0;
     std::unordered_map<const void*, GpuTexture> _rasters;
+    std::optional<StrokePreview> _stroke;
+    GpuTexture _strokeTexture;
     std::unordered_map<Guid, const ImageLayer*> _byId;
     std::unordered_map<Guid, int> _liveCoverageIndex;
     std::unordered_map<Guid, int> _groupCoverageIndex;

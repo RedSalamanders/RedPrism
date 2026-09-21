@@ -51,6 +51,7 @@ CanvasRenderer::~CanvasRenderer()
 void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 {
     _rasters.clear();
+    _strokeTexture = {};
     _canvas[0] = {};
     _canvas[1] = {};
     _stack[0] = {};
@@ -267,16 +268,16 @@ HRESULT CanvasRenderer::AcquireCoverage(int& index) noexcept
     return S_OK;
 }
 
-HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept
+HRESULT CanvasRenderer::CreateMippedTexture(int width, int height, bool gray, GpuTexture& gpu) noexcept
 {
     gpu = {};
-    if (!raster.HasStorage() || raster.Data() == nullptr)
+    if (width < 1 || height < 1)
     {
         return E_INVALIDARG;
     }
     D3D11_TEXTURE2D_DESC description{};
-    description.Width = static_cast<UINT>(raster.Width());
-    description.Height = static_cast<UINT>(raster.Height());
+    description.Width = static_cast<UINT>(width);
+    description.Height = static_cast<UINT>(height);
     description.MipLevels = 0;
     description.ArraySize = 1;
     description.Format = gray ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -295,6 +296,133 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
             return result;
         }
     }
+    gpu.width = width;
+    gpu.height = height;
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::WriteTiles(GpuTexture& gpu, std::span<const RasterTile> tiles, bool gray) noexcept
+{
+    const int channels = gray ? 1 : 4;
+    for (const RasterTile& tile : tiles)
+    {
+        const std::uint8_t* pixels = tile.pixels.Data();
+        if (pixels == nullptr || (tile.pixels.Format() == RasterFormat::Gray8) != gray)
+        {
+            return E_INVALIDARG;
+        }
+        // Only the part inside the texture.
+        const int left = std::max(0, tile.x);
+        const int top = std::max(0, tile.y);
+        const int right = std::min(gpu.width, tile.x + tile.Width());
+        const int bottom = std::min(gpu.height, tile.y + tile.Height());
+        if (right <= left || bottom <= top)
+        {
+            continue;
+        }
+        const std::uint8_t* origin =
+            pixels +
+            static_cast<std::size_t>(tile.sourceY + (top - tile.y)) * static_cast<std::size_t>(tile.pixels.Stride()) +
+            static_cast<std::size_t>(tile.sourceX + (left - tile.x)) * static_cast<std::size_t>(channels);
+        const D3D11_BOX box{static_cast<UINT>(left),  static_cast<UINT>(top),    0,
+                            static_cast<UINT>(right), static_cast<UINT>(bottom), 1};
+        _context->UpdateSubresource(gpu.texture.get(), 0, &box, origin, static_cast<UINT>(tile.pixels.Stride()), 0);
+    }
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::CreateSparseTexture(int width, int height, bool gray, const Raster& base, int baseX,
+                                              int baseY, std::uint8_t fill, std::span<const RasterTile> tiles,
+                                              GpuTexture& gpu) noexcept
+{
+    HRESULT result = CreateMippedTexture(width, height, gray, gpu);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    D3D11_TEXTURE2D_DESC description{};
+    gpu.texture->GetDesc(&description);
+    if ((description.BindFlags & D3D11_BIND_RENDER_TARGET) == 0)
+    {
+        // Without a render target there is nothing to clear into; the caller assembles the pixels instead.
+        gpu = {};
+        return E_NOTIMPL;
+    }
+    wil::com_ptr_nothrow<ID3D11RenderTargetView> target;
+    result = _device->CreateRenderTargetView(gpu.texture.get(), nullptr, target.put());
+    if (FAILED(result))
+    {
+        gpu = {};
+        return result;
+    }
+    const float level = fill / 255.0f;
+    const std::array<float, 4> clear{level, level, level, level};
+    _context->ClearRenderTargetView(target.get(), clear.data());
+    if (base.HasStorage())
+    {
+        // The base keeps its own texture (shared with the snapshots it came from); its visible part is copied.
+        const GpuTexture* baseTexture = TextureFor(base, gray);
+        if (baseTexture == nullptr || !baseTexture->texture)
+        {
+            gpu = {};
+            return E_FAIL;
+        }
+        const int left = std::max(0, baseX);
+        const int top = std::max(0, baseY);
+        const int right = std::min(width, baseX + base.Width());
+        const int bottom = std::min(height, baseY + base.Height());
+        if (right > left && bottom > top)
+        {
+            const D3D11_BOX box{static_cast<UINT>(left - baseX),  static_cast<UINT>(top - baseY),    0,
+                                static_cast<UINT>(right - baseX), static_cast<UINT>(bottom - baseY), 1};
+            _context->CopySubresourceRegion(gpu.texture.get(), 0, static_cast<UINT>(left), static_cast<UINT>(top), 0,
+                                            baseTexture->texture.get(), 0, &box);
+        }
+    }
+    result = WriteTiles(gpu, tiles, gray);
+    if (FAILED(result))
+    {
+        gpu = {};
+        return result;
+    }
+    result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
+    if (FAILED(result))
+    {
+        gpu = {};
+        return result;
+    }
+    _context->GenerateMips(gpu.srv.get());
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept
+{
+    gpu = {};
+    if (!raster.HasStorage())
+    {
+        return E_INVALIDARG;
+    }
+    if (raster.IsSparse() && !raster.IsMaterialized())
+    {
+        // A painted layer: assembled on the GPU from its base texture and tiles, never as contiguous CPU bytes.
+        const HRESULT sparse = CreateSparseTexture(raster.Width(), raster.Height(), gray, raster.Base(), raster.BaseX(),
+                                                   raster.BaseY(), raster.Fill(), raster.Tiles(), gpu);
+        if (SUCCEEDED(sparse))
+        {
+            return S_OK;
+        }
+    }
+    if (raster.Data() == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    HRESULT result = CreateMippedTexture(raster.Width(), raster.Height(), gray, gpu);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    D3D11_TEXTURE2D_DESC description{};
+    gpu.texture->GetDesc(&description);
     const D3D11_BOX box{0, 0, 0, description.Width, description.Height, 1};
     _context->UpdateSubresource(gpu.texture.get(), 0, &box, raster.Data(), static_cast<UINT>(raster.Stride()), 0);
     result = _device->CreateShaderResourceView(gpu.texture.get(), nullptr, gpu.srv.put());
@@ -306,8 +434,6 @@ HRESULT CanvasRenderer::UploadRaster(const Raster& raster, GpuTexture& gpu, bool
     {
         _context->GenerateMips(gpu.srv.get());
     }
-    gpu.width = raster.Width();
-    gpu.height = raster.Height();
     return S_OK;
 }
 
@@ -318,18 +444,106 @@ CanvasRenderer::GpuTexture* CanvasRenderer::TextureFor(const Raster& raster, boo
     {
         return nullptr;
     }
-    GpuTexture& gpu = _rasters[identity];
-    if (!gpu.srv)
+    auto found = _rasters.find(identity);
+    if (found == _rasters.end())
     {
+        GpuTexture gpu;
         if (FAILED(UploadRaster(raster, gpu, gray)))
         {
-            _rasters.erase(identity);
             return nullptr;
         }
         gpu.keepAlive = raster;
+        found = _rasters.emplace(identity, std::move(gpu)).first;
     }
-    gpu.lastUse = _composeId;
-    return &gpu;
+    found->second.lastUse = _composeId;
+    return &found->second;
+}
+
+ID3D11ShaderResourceView* CanvasRenderer::MaskViewFor(const ImageLayer& layer) noexcept
+{
+    if (_stroke.has_value() && _stroke->mask && _stroke->layerID == layer.id && _strokeTexture.srv)
+    {
+        return _strokeTexture.srv.get();
+    }
+    if (!layer.mask.has_value())
+    {
+        return nullptr;
+    }
+    GpuTexture* maskTexture = TextureFor(layer.mask.value().asset.image, true);
+    return maskTexture != nullptr ? maskTexture->srv.get() : nullptr;
+}
+
+HRESULT CanvasRenderer::BeginStroke(const StrokePreview& preview) noexcept
+{
+    if (preview.width < 1 || preview.height < 1)
+    {
+        return E_INVALIDARG;
+    }
+    _stroke = preview;
+    _strokeTexture = {};
+    _documentDirty = true;
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::UpdateStrokeTiles(std::span<const RasterTile> tiles) noexcept
+{
+    if (!_stroke.has_value() || !_device || !_context)
+    {
+        return E_UNEXPECTED;
+    }
+    HRESULT result = S_OK;
+    if (!_strokeTexture.srv)
+    {
+        result = CreateSparseTexture(_stroke->width, _stroke->height, _stroke->mask, _stroke->source, _stroke->sourceX,
+                                     _stroke->sourceY, _stroke->fill, tiles, _strokeTexture);
+    }
+    else
+    {
+        result = WriteTiles(_strokeTexture, tiles, _stroke->mask);
+        if (SUCCEEDED(result))
+        {
+            _context->GenerateMips(_strokeTexture.srv.get());
+        }
+    }
+    _documentDirty = true;
+    return result;
+}
+
+void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY) noexcept
+{
+    if (committed != nullptr && committed->HasStorage() && _strokeTexture.srv && _stroke.has_value() && _device)
+    {
+        // The working texture already holds the committed pixels: crop it into the cache, no upload.
+        GpuTexture adopted;
+        const bool gray = committed->Format() == RasterFormat::Gray8;
+        if (SUCCEEDED(CreateMippedTexture(committed->Width(), committed->Height(), gray, adopted)) && cropX >= 0 &&
+            cropY >= 0 && cropX + committed->Width() <= _stroke->width &&
+            cropY + committed->Height() <= _stroke->height)
+        {
+            const D3D11_BOX box{static_cast<UINT>(cropX),
+                                static_cast<UINT>(cropY),
+                                0,
+                                static_cast<UINT>(cropX + committed->Width()),
+                                static_cast<UINT>(cropY + committed->Height()),
+                                1};
+            _context->CopySubresourceRegion(adopted.texture.get(), 0, 0, 0, 0, _strokeTexture.texture.get(), 0, &box);
+            if (SUCCEEDED(_device->CreateShaderResourceView(adopted.texture.get(), nullptr, adopted.srv.put())))
+            {
+                D3D11_TEXTURE2D_DESC description{};
+                adopted.texture->GetDesc(&description);
+                if ((description.MiscFlags & D3D11_RESOURCE_MISC_GENERATE_MIPS) != 0)
+                {
+                    _context->GenerateMips(adopted.srv.get());
+                }
+                adopted.keepAlive = *committed;
+                adopted.lastUse = _composeId;
+                _rasters[committed->Identity()] = std::move(adopted);
+            }
+        }
+    }
+    _stroke.reset();
+    _strokeTexture = {};
+    _documentDirty = true;
 }
 
 HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInputs& inputs,
@@ -374,28 +588,40 @@ void CanvasRenderer::FillLayerConstants(const ImageLayer& layer, LayerConstants&
     constants = {};
     constants.canvasSize[0] = static_cast<float>(_canvasWidth);
     constants.canvasSize[1] = static_cast<float>(_canvasHeight);
-    if (!layer.asset.has_value())
+    const bool strokeImage =
+        _stroke.has_value() && !_stroke->mask && _stroke->layerID == layer.id && _strokeTexture.srv;
+    if (strokeImage)
     {
-        return;
+        // The stroke's grid, drawn where the stroke places it, stands in for the layer's pixels.
+        inputs.source = _strokeTexture.srv.get();
+        FillTransform(_stroke->transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
+                      constants.layerFlip);
     }
-    GpuTexture* image = TextureFor(layer.asset.value().image, false);
-    if (image == nullptr || !image->srv)
+    else
     {
-        return;
+        if (!layer.asset.has_value())
+        {
+            return;
+        }
+        GpuTexture* image = TextureFor(layer.asset.value().image, false);
+        if (image == nullptr || !image->srv)
+        {
+            return;
+        }
+        inputs.source = image->srv.get();
+        FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
+                      constants.layerFlip);
     }
-    inputs.source = image->srv.get();
-    FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
-                  constants.layerFlip);
     constants.blendMode = static_cast<std::uint32_t>(layer.blendMode);
     constants.filterMode = layer.transform.sampling == LayerSampling::Nearest ? 0u : 1u;
     constants.opacity = static_cast<float>(layer.opacity);
     if (HasEnabledMask(layer))
     {
         const LayerMask& mask = layer.mask.value();
-        GpuTexture* maskTexture = TextureFor(mask.asset.image, true);
-        if (maskTexture != nullptr && maskTexture->srv)
+        ID3D11ShaderResourceView* maskView = MaskViewFor(layer);
+        if (maskView != nullptr)
         {
-            inputs.mask = maskTexture->srv.get();
+            inputs.mask = maskView;
             constants.flags |= kFlagHasMask;
             if (mask.placement.has_value())
             {
@@ -501,8 +727,8 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
         _groupCoverageIndex.emplace(groupId, index);
         return S_OK;
     }
-    GpuTexture* maskTexture = TextureFor(group->mask.value().asset.image, true);
-    if (maskTexture == nullptr || !maskTexture->srv)
+    ID3D11ShaderResourceView* maskView = MaskViewFor(*group);
+    if (maskView == nullptr)
     {
         index = parent;
         _groupCoverageIndex.emplace(groupId, index);
@@ -522,7 +748,7 @@ HRESULT CanvasRenderer::GroupCoverage(const Guid& groupId, int depth, int& index
     FillTransform(MaskTransform(*group), constants.maskCenter, constants.maskSize, constants.maskSinCos,
                   constants.maskFlip);
     PassInputs inputs{};
-    inputs.mask = maskTexture->srv.get();
+    inputs.mask = maskView;
     if (parent != kNoCoverage)
     {
         inputs.folder = _coverage[static_cast<std::size_t>(parent)].texture.srv.get();
@@ -654,7 +880,13 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
             continue;
         }
         const ImageLayer* layer = Find(_renderIds[index]);
-        if (layer == nullptr || layer->isGroup || layer->adjustment.has_value() || !layer->asset.has_value())
+        if (layer == nullptr || layer->isGroup || layer->adjustment.has_value())
+        {
+            continue;
+        }
+        const bool painting =
+            _stroke.has_value() && !_stroke->mask && _stroke->layerID == layer->id && _strokeTexture.srv;
+        if (!layer->asset.has_value() && !painting)
         {
             continue;
         }
@@ -835,5 +1067,10 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
         bytes += 2ull * pixels * 4ull;
     }
     bytes += static_cast<std::uint64_t>(_coverage.size()) * pixels;
+    if (_strokeTexture.texture)
+    {
+        bytes += static_cast<std::uint64_t>(_strokeTexture.width) * static_cast<std::uint64_t>(_strokeTexture.height) *
+                 (_stroke.has_value() && _stroke->mask ? 1ull : 4ull);
+    }
     return bytes;
 }
