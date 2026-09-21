@@ -1429,6 +1429,10 @@ int Application::RunSelfTest() noexcept
     {
         return files;
     }
+    if (const int sizes = RunSizeSelfTest(); sizes != 0)
+    {
+        return sizes;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -1673,6 +1677,8 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetBandHandler([this](int index, double degrees) { OnBandChanged(index, degrees); });
     chrome->SetAdjustColorHandler([this](ChromeEditPhase phase, uint32_t argb, bool highlights)
                                   { OnAdjustColor(phase, argb, highlights); });
+    chrome->SetSizeHandler([this](SizeAction action, double value) { OnSizeAction(action, value); });
+    chrome->SetSizeColorHandler([this](ChromeEditPhase phase, uint32_t argb) { OnSizeColor(phase, argb); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -1729,6 +1735,7 @@ void Application::SyncChrome() noexcept
                             _session.CanTransformSelection(),
                             _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value());
     SyncAdjustPanel();
+    SyncSizeCard();
     const CanvasDocument* document = _session.DisplayDocument();
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
@@ -2428,9 +2435,6 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandSampleRing:
     case ChromeHost::kCommandAbout:
     case ChromeHost::kCommandFreeTransform:
-    case ChromeHost::kCommandNewCanvas:
-    case ChromeHost::kCommandCanvasSize:
-    case ChromeHost::kCommandImageSize:
     case ChromeHost::kCommandRenameLayer:
     case ChromeHost::kCommandMergeDown:
         break;
@@ -2448,7 +2452,7 @@ void Application::OnCommand(int command) noexcept
         OpenDocument();
         break;
     case ChromeHost::kCommandNewCanvas:
-        ShowNotImplemented(IDS_CMD_NEW_CANVAS);
+        OpenSizeCard(SizeCardKind::NewCanvas);
         break;
     case ChromeHost::kCommandImportImages:
         ImportImages();
@@ -2457,10 +2461,10 @@ void Application::OnCommand(int command) noexcept
         CloseProject();
         break;
     case ChromeHost::kCommandCanvasSize:
-        ShowNotImplemented(IDS_CMD_CANVAS_SIZE);
+        OpenSizeCard(SizeCardKind::CanvasSize);
         break;
     case ChromeHost::kCommandImageSize:
-        ShowNotImplemented(IDS_CMD_IMAGE_SIZE);
+        OpenSizeCard(SizeCardKind::ImageSize);
         break;
     case ChromeHost::kCommandGroupLayers:
         _session.GroupSelectedLayers();
@@ -2751,6 +2755,7 @@ void Application::SettleInteractions(bool applyPanels) noexcept
     {
         CancelPixelDrag();
     }
+    CancelSizeCard();
 }
 
 void Application::OnTool(EditorTool tool) noexcept
@@ -2909,6 +2914,19 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (SizeCardOpen() && (virtualKey == VK_RETURN || virtualKey == VK_ESCAPE))
+        {
+            // Enter is the size card's OK, Escape its Cancel.
+            if (virtualKey == VK_ESCAPE)
+            {
+                CancelSizeCard();
+            }
+            else
+            {
+                ApplySizeCard();
+            }
+            return true;
+        }
         if (_session.HasColorEdit() && (virtualKey == VK_RETURN || virtualKey == VK_ESCAPE))
         {
             // Enter is the panel's OK, Escape its Cancel.
@@ -3603,6 +3621,19 @@ void Application::ApplyDemo() noexcept
             _session.UpdateLevels(settings, true);
             DocumentChanged();
         }
+    }
+    if (_demo == L"canvassize")
+    {
+        // The transform layers with the Canvas Size card open at a relative, anchored, white-extended size.
+        InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
+        InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 20.0, 0xFFE58A2Eu);
+        OpenSizeCard(SizeCardKind::CanvasSize);
+        OnSizeAction(SizeAction::SetRelative, 1.0);
+        OnSizeAction(SizeAction::SetWidth, 200.0);
+        OnSizeAction(SizeAction::SetHeight, 100.0);
+        OnSizeAction(SizeAction::SetAnchor, 0.0);
+        OnSizeAction(SizeAction::SetExtension, 4.0);
+        return;
     }
     if (_demo == L"retouch")
     {

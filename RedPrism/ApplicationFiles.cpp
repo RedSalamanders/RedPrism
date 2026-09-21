@@ -516,11 +516,8 @@ int Application::RunFilesSelfTest() noexcept
         return 5;
     }
     // Every function still awaiting an implementation raises the notice count by one and changes nothing.
-    constexpr std::array<std::pair<int, const wchar_t*>, 5> kStubs{{{ChromeHost::kCommandNewCanvas, L"New Canvas"},
-                                                                    {ChromeHost::kCommandCanvasSize, L"Canvas Size"},
-                                                                    {ChromeHost::kCommandImageSize, L"Image Size"},
-                                                                    {ChromeHost::kCommandRenameLayer, L"Rename Layer"},
-                                                                    {ChromeHost::kCommandMergeDown, L"Merge Down"}}};
+    constexpr std::array<std::pair<int, const wchar_t*>, 2> kStubs{
+        {{ChromeHost::kCommandRenameLayer, L"Rename Layer"}, {ChromeHost::kCommandMergeDown, L"Merge Down"}}};
     for (const auto& [command, name] : kStubs)
     {
         const int notices = _notImplementedCount;

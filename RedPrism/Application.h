@@ -2,6 +2,7 @@
 
 #include "BrushCompute.h"
 #include "CanvasRenderer.h"
+#include "CanvasSize.h"
 #include "CanvasViewport.h"
 #include "Document.h"
 #include "EditorTool.h"
@@ -30,6 +31,8 @@ enum class BrushAction : std::uint8_t;
 enum class GradientAction : std::uint8_t;
 enum class ShapeAction : std::uint8_t;
 enum class AdjustAction : std::uint8_t;
+enum class SizeAction : std::uint8_t;
+enum class SizeCardKind : std::uint8_t;
 enum class ChromeEditPhase : std::uint8_t;
 namespace DxUi
 {
@@ -136,6 +139,16 @@ class Application final
     void OnBandChanged(int index, double degrees) noexcept;
     void OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept;
     void SyncAdjustPanel() noexcept;
+    // ApplicationSize.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): the New Canvas, Canvas Size and
+    // Image Size cards edit a draft the Application owns; Apply resizes as one entry.
+    [[nodiscard]] bool SizeCardOpen() const noexcept;
+    void OpenSizeCard(SizeCardKind kind) noexcept;
+    void CancelSizeCard() noexcept;
+    void ApplySizeCard() noexcept;
+    void OnSizeAction(SizeAction action, double value) noexcept;
+    void OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept;
+    void SyncSizeCard() noexcept;
+    int RunSizeSelfTest() noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
@@ -259,6 +272,19 @@ class Application final
     int _notImplementedCount = 0;                    // notices raised; quiet runs count instead of showing them
     std::optional<ImageOpenChoice> _forcedImageOpen; // the self-test's answer to the image-open prompt
     std::optional<bool> _forcedDiscard;              // the self-test's answer to the save prompt (true: Don't Save)
+    struct SizeDialog
+    {
+        SizeCardKind kind{}; // None
+        CanvasSizeDraft canvas;
+        int anchor = 4;
+        int extension = 0; // 0 transparent, 1 foreground, 2 background, 3 black, 4 white, 5 custom
+        uint32_t customArgb = 0xFFFFFFFFu;
+        uint32_t customBefore = 0xFFFFFFFFu; // the custom color before the picker opened (Cancel restores)
+        ImageSizeDraft image;
+        double newWidth = 1920; // New Canvas: the last typed size, or the clipboard image's
+        double newHeight = 1080;
+    };
+    SizeDialog _sizeDialog;
     bool _forceWarp = false;
     std::wstring _settingsPath;
     AppSettings _settings;

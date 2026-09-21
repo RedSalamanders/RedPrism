@@ -154,6 +154,8 @@ void ChromeHost::Detach() noexcept
     _opacity = nullptr;
     _pickerCard = nullptr;
     _adjustCard = nullptr;
+    _sizeCard = nullptr;
+    _sizeAnchors.fill(nullptr);
     _curveEditor = nullptr;
     _levelsInput = nullptr;
     _levelsOutput = nullptr;
@@ -442,18 +444,15 @@ HRESULT ChromeHost::Build() noexcept
             const std::wstring name = LoadStringResource(nullptr, EditorToolNameId(tool));
             const std::wstring tooltip =
                 FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, name, std::wstring(1, EditorToolKey(tool)));
-            // A toggle whose checked look marks the active tool: a plain button's SetPressedVisual shares the press
-            // machinery, and its transition after a tool switch cancels the next press held across a frame.
-            DxUi::Toggle* button = _rail->AddToggleButton(tooltip, std::wstring(1, EditorToolGlyph(tool)));
+            // An icon button whose pressed look, held as a latch, marks the active tool (DxUi paints a Toggle as a
+            // switch, glyph or not). The latch is written only between presses: SyncToolVisuals defers while a
+            // press is in flight, because a pressed-look write reaching the tree cancels a press held across a
+            // frame.
+            DxUi::Button* button = _rail->AddButton(tooltip, std::wstring(1, EditorToolGlyph(tool)));
             button->SetAccessibleName(name);
-            button->SetOnToggled(
-                [this, tool, button](bool checked)
+            button->SetOnClick(
+                [this, tool]
                 {
-                    if (!checked)
-                    {
-                        button->SetChecked(true); // the active tool stays active; another tool replaces it
-                        return;
-                    }
                     SetTool(tool);
                     if (_onTool)
                     {
@@ -523,6 +522,7 @@ HRESULT ChromeHost::Build() noexcept
         // The adjustment panel and the picker card float over the canvas hole; chrome composites over the canvas
         // with premultiplied alpha. The picker comes last so it opens above the panel.
         BuildAdjustPanel(*root);
+        BuildSizeCard(*root);
         _pickerCard = root->AddChild<DxUi::CardPanel>();
         _pickerCard->SetCornerRadius(8.0f);
         _pickerCard->SetVisible(false);
@@ -644,7 +644,7 @@ void ChromeHost::Arrange() noexcept
         const float wellTop = std::max(tabBottom, statusTop - kWellBlockDip);
         for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
-            if (DxUi::Toggle* button = _toolButtons[index])
+            if (DxUi::Button* button = _toolButtons[index])
             {
                 const D2D1_RECT_F bounds = ToolButtonBoundsDip(EditorToolAt(index));
                 PlaceControl(button, bounds);
@@ -693,6 +693,7 @@ void ChromeHost::Arrange() noexcept
         PlaceControl(_status, D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
     }
     ArrangeAdjustPanel(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
+    ArrangeSizeCard(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangePicker();
 }
 
@@ -753,6 +754,28 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
 
 void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
 {
+    if (_pickerForSize)
+    {
+        // The Canvas Size card's custom extension color: the swatch follows the working color; OK keeps it,
+        // Cancel restores it.
+        const ChromeEditPhase phase = change.phase == DxUi::ColorPickerChangePhase::Preview  ? ChromeEditPhase::Preview
+                                      : change.phase == DxUi::ColorPickerChangePhase::Commit ? ChromeEditPhase::Commit
+                                                                                             : ChromeEditPhase::Cancel;
+        if (phase != ChromeEditPhase::Preview)
+        {
+            _pickerForSize = false;
+            if (_pickerCard)
+            {
+                _pickerCard->SetVisible(false);
+            }
+        }
+        _view.MarkDirty();
+        if (_onSizeColor)
+        {
+            _onSizeColor(phase, change.argb | 0xFF000000u);
+        }
+        return;
+    }
     if (_pickerForAdjust)
     {
         // A Gradient Map end: the panel follows the working color; OK keeps it, Cancel restores it.
@@ -952,6 +975,10 @@ bool ChromeHost::IsCanvasPoint(float xPixels, float yPixels) const noexcept
     {
         return false;
     }
+    if (SizeCardOpen() && covers(_sizeCard->GetBounds()))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -1068,13 +1095,22 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bo
 
 void ChromeHost::SyncToolVisuals() noexcept
 {
+    // Never during a press: a pressed-look write reaching the tree cancels a press held across a frame. Between
+    // presses every button's latch is made to match the tool; the button's own pressed state is the reference,
+    // because DxUi clears it on release (the clicked active button would otherwise lose its latch).
+    if (_pointerPressed)
+    {
+        _toolVisualsDirty = true;
+        return;
+    }
+    _toolVisualsDirty = false;
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
-        DxUi::Toggle* button = _toolButtons[index];
-        const bool checked = EditorToolAt(index) == _tool;
-        if (button != nullptr && button->IsChecked() != checked)
+        DxUi::Button* button = _toolButtons[index];
+        const bool latched = EditorToolAt(index) == _tool;
+        if (button != nullptr && button->DebugIsPressed() != latched)
         {
-            button->SetChecked(checked);
+            button->SetPressedVisual(latched);
         }
     }
 }
@@ -1190,13 +1226,19 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     {
         _pointerPressed = true;
     }
-    else if (event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave)
-    {
-        _pointerPressed = false;
-    }
     _inDispatch = true;
     const bool handled = _view.DispatchPointer(event);
     _inDispatch = false;
+    if (event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave)
+    {
+        // The press is over once DxUi has handled the release (a click in it may have switched the tool): the
+        // rail latch deferred during the press applies now.
+        _pointerPressed = false;
+        if (_toolVisualsDirty)
+        {
+            SyncToolVisuals();
+        }
+    }
     return handled;
 }
 

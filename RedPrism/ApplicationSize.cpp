@@ -1,0 +1,539 @@
+#include "Application.h"
+
+#include "CanvasSize.h"
+#include "ChromeHost.h"
+#include "Resources.h"
+#include "SystemClipboard.h"
+#include "resource.h"
+
+#include <algorithm>
+#include <cmath>
+#include <format>
+#include <string>
+#include <vector>
+
+// The size cards (C16, Specs/UI/UI_ApplicationChrome.md "Size cards", Specs/Document/Document_Tools.md "Canvas
+// size, image size and crop"): the Application owns the draft the card edits, applies it through the resizers as
+// one history entry, and drives the cards in the self-test.
+
+namespace
+{
+[[nodiscard]] CanvasExtensionColor ColorOf(uint32_t argb) noexcept
+{
+    return CanvasExtensionColor{((argb >> 16) & 0xFFu) / 255.0, ((argb >> 8) & 0xFFu) / 255.0, (argb & 0xFFu) / 255.0};
+}
+
+// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
+void ReportSizeSelfTestFailure(const std::wstring& message) noexcept
+{
+    OutputDebugStringW(message.c_str());
+    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
+    if (error == nullptr || error == INVALID_HANDLE_VALUE)
+    {
+        return;
+    }
+    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
+                                         nullptr, nullptr);
+    if (size <= 0)
+    {
+        return;
+    }
+    std::string utf8(static_cast<std::size_t>(size), '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
+                            nullptr) != size)
+    {
+        return;
+    }
+    DWORD written = 0;
+    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+}
+} // namespace
+
+bool Application::SizeCardOpen() const noexcept
+{
+    return _sizeDialog.kind != SizeCardKind::None;
+}
+
+void Application::OpenSizeCard(SizeCardKind kind) noexcept
+{
+    if (kind == SizeCardKind::None)
+    {
+        return;
+    }
+    const bool hasDocument = _session.Document().has_value();
+    if (kind != SizeCardKind::NewCanvas && !hasDocument)
+    {
+        return;
+    }
+    CancelColorEdit();
+    _sizeDialog.kind = kind;
+    if (kind == SizeCardKind::NewCanvas)
+    {
+        // An image on the clipboard suggests its size, as the Mac sheet does.
+        Raster clipboard;
+        if (_window && SystemClipboard::HasImage() &&
+            SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, clipboard) && clipboard.HasStorage() &&
+            clipboard.Width() >= 1 && clipboard.Width() <= kMaxCanvasSide && clipboard.Height() >= 1 &&
+            clipboard.Height() <= kMaxCanvasSide)
+        {
+            _sizeDialog.newWidth = static_cast<double>(clipboard.Width());
+            _sizeDialog.newHeight = static_cast<double>(clipboard.Height());
+        }
+    }
+    else
+    {
+        const CanvasDocument& document = _session.Document().value();
+        _sizeDialog.canvas = CanvasSizeDraft(document.width, document.height, document.resolution);
+        _sizeDialog.anchor = 4;
+        _sizeDialog.extension = 0;
+        _sizeDialog.image = ImageSizeDraft(document.width, document.height, document.resolution);
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::CancelSizeCard() noexcept
+{
+    if (!SizeCardOpen())
+    {
+        return;
+    }
+    _sizeDialog.kind = SizeCardKind::None;
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::ApplySizeCard() noexcept
+{
+    if (!SizeCardOpen())
+    {
+        return;
+    }
+    const SizeCardKind kind = _sizeDialog.kind;
+    if (kind == SizeCardKind::NewCanvas)
+    {
+        const int width = static_cast<int>(std::round(_sizeDialog.newWidth));
+        const int height = static_cast<int>(std::round(_sizeDialog.newHeight));
+        if (!std::isfinite(_sizeDialog.newWidth) || !std::isfinite(_sizeDialog.newHeight) || width < 1 ||
+            width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
+        {
+            return;
+        }
+        if (!ConfirmDiscardChanges())
+        {
+            return;
+        }
+        _sizeDialog.kind = SizeCardKind::None;
+        SettleInteractions(false);
+        _session.ClearDocument();
+        _session.CreateDocument(width, height, true);
+        _session.history.MarkSaved();
+        _documentPath.clear();
+        _viewport.followsFit = true;
+        DocumentChanged();
+        return;
+    }
+    if (!_session.Document().has_value())
+    {
+        CancelSizeCard();
+        return;
+    }
+    CanvasDocument resized;
+    ResizeStatus status = ResizeStatus::Invalid;
+    const wchar_t* name = L"";
+    if (kind == SizeCardKind::CanvasSize)
+    {
+        const CanvasSizeDraft& draft = _sizeDialog.canvas;
+        if (!draft.Valid())
+        {
+            return;
+        }
+        CanvasSizeOptions options;
+        options.width = draft.RoundedWidth();
+        options.height = draft.RoundedHeight();
+        options.anchor = _sizeDialog.anchor;
+        switch (_sizeDialog.extension)
+        {
+        case 1:
+            options.fill = ColorOf(_session.ForegroundColor());
+            break;
+        case 2:
+            options.fill = ColorOf(_session.BackgroundColor());
+            break;
+        case 3:
+            options.fill = CanvasExtensionColor{0, 0, 0};
+            break;
+        case 4:
+            options.fill = CanvasExtensionColor{1, 1, 1};
+            break;
+        case 5:
+            options.fill = ColorOf(_sizeDialog.customArgb);
+            break;
+        default:
+            break;
+        }
+        status = ResizeCanvas(_session.Document().value(), options, resized);
+        name = L"Canvas Size";
+    }
+    else
+    {
+        const ImageSizeDraft& draft = _sizeDialog.image;
+        if (!draft.Valid())
+        {
+            return;
+        }
+        ImageSizeOptions options;
+        options.width = draft.resample ? draft.RoundedWidth() : _session.Document().value().width;
+        options.height = draft.resample ? draft.RoundedHeight() : _session.Document().value().height;
+        options.resolution = draft.resolution;
+        options.sampling = draft.sampling;
+        status = ResizeImage(_session.Document().value(), options, resized);
+        name = L"Image Size";
+    }
+    _sizeDialog.kind = SizeCardKind::None;
+    switch (status)
+    {
+    case ResizeStatus::Ok:
+        SettleInteractions(false);
+        _session.ApplyDocumentSize(std::move(resized), name);
+        _viewport.followsFit = true;
+        DocumentChanged();
+        break;
+    case ResizeStatus::Unchanged:
+        SyncChrome();
+        _frameInvalidated = true;
+        break;
+    case ResizeStatus::TooLarge:
+        SyncChrome();
+        ShowError(IDS_ERROR_TOO_LARGE);
+        break;
+    case ResizeStatus::Invalid:
+    case ResizeStatus::Memory:
+    default:
+        SyncChrome();
+        ShowError(IDS_ERROR_RESIZE);
+        break;
+    }
+}
+
+void Application::OnSizeAction(SizeAction action, double value) noexcept
+{
+    if (!SizeCardOpen() || !std::isfinite(value))
+    {
+        return;
+    }
+    switch (action)
+    {
+    case SizeAction::Cancel:
+        CancelSizeCard();
+        return;
+    case SizeAction::Apply:
+        ApplySizeCard();
+        return;
+    case SizeAction::OpenProject:
+        CancelSizeCard();
+        OpenDocument();
+        return;
+    case SizeAction::ImportImage:
+        CancelSizeCard();
+        ImportImages();
+        return;
+    default:
+        break;
+    }
+    switch (_sizeDialog.kind)
+    {
+    case SizeCardKind::NewCanvas:
+        if (action == SizeAction::SetWidth)
+        {
+            _sizeDialog.newWidth = value;
+        }
+        else if (action == SizeAction::SetHeight)
+        {
+            _sizeDialog.newHeight = value;
+        }
+        break;
+    case SizeCardKind::CanvasSize:
+    {
+        CanvasSizeDraft& draft = _sizeDialog.canvas;
+        switch (action)
+        {
+        case SizeAction::SetWidth:
+            draft.Set(value, true);
+            break;
+        case SizeAction::SetHeight:
+            draft.Set(value, false);
+            break;
+        case SizeAction::SetUnit:
+            draft.unit = static_cast<CanvasUnit>(std::clamp(static_cast<int>(value), 0, 3));
+            break;
+        case SizeAction::SetRelative:
+            draft.relative = value != 0.0;
+            break;
+        case SizeAction::SetLocked:
+            draft.locked = value != 0.0;
+            if (draft.locked)
+            {
+                // Locking settles the height on the width, as the Mac sheet does.
+                draft.Set(draft.Displayed(true), true);
+            }
+            break;
+        case SizeAction::SetAnchor:
+            _sizeDialog.anchor = std::clamp(static_cast<int>(value), 0, 8);
+            break;
+        case SizeAction::SetExtension:
+            _sizeDialog.extension = std::clamp(static_cast<int>(value), 0, 5);
+            if (_sizeDialog.extension == 5 && _chrome)
+            {
+                _sizeDialog.customBefore = _sizeDialog.customArgb;
+                _chrome->OpenSizeColorPicker(_sizeDialog.customArgb);
+            }
+            break;
+        default:
+            break;
+        }
+        break;
+    }
+    case SizeCardKind::ImageSize:
+    {
+        ImageSizeDraft& draft = _sizeDialog.image;
+        switch (action)
+        {
+        case SizeAction::SetWidth:
+            draft.Set(value, true);
+            break;
+        case SizeAction::SetHeight:
+            draft.Set(value, false);
+            break;
+        case SizeAction::SetUnit:
+            draft.unit = static_cast<CanvasUnit>(std::clamp(static_cast<int>(value), 0, 3));
+            break;
+        case SizeAction::SetLocked:
+            draft.locked = value != 0.0;
+            break;
+        case SizeAction::SetResolution:
+            draft.SetResolution(value);
+            break;
+        case SizeAction::SetResample:
+            draft.SetResample(value != 0.0);
+            break;
+        case SizeAction::SetSampling:
+            draft.sampling = static_cast<LayerSampling>(std::clamp(static_cast<int>(value), 0, 2));
+            break;
+        default:
+            break;
+        }
+        break;
+    }
+    case SizeCardKind::None:
+    default:
+        break;
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept
+{
+    if (_sizeDialog.kind != SizeCardKind::CanvasSize)
+    {
+        return;
+    }
+    // Cancel restores the color the picker opened on; Preview and OK take the working color.
+    _sizeDialog.customArgb = (phase == ChromeEditPhase::Cancel ? _sizeDialog.customBefore : argb) | 0xFF000000u;
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::SyncSizeCard() noexcept
+{
+    if (!_chrome)
+    {
+        return;
+    }
+    SizeCardState state;
+    state.kind = _sizeDialog.kind;
+    switch (_sizeDialog.kind)
+    {
+    case SizeCardKind::NewCanvas:
+        state.width = _sizeDialog.newWidth;
+        state.height = _sizeDialog.newHeight;
+        state.valid = std::isfinite(_sizeDialog.newWidth) && std::isfinite(_sizeDialog.newHeight) &&
+                      std::round(_sizeDialog.newWidth) >= 1 && std::round(_sizeDialog.newWidth) <= kMaxCanvasSide &&
+                      std::round(_sizeDialog.newHeight) >= 1 && std::round(_sizeDialog.newHeight) <= kMaxCanvasSide;
+        state.resultWidth = static_cast<int>(std::round(_sizeDialog.newWidth));
+        state.resultHeight = static_cast<int>(std::round(_sizeDialog.newHeight));
+        break;
+    case SizeCardKind::CanvasSize:
+    {
+        const CanvasSizeDraft& draft = _sizeDialog.canvas;
+        state.originalWidth = draft.originalWidth;
+        state.originalHeight = draft.originalHeight;
+        state.width = draft.Displayed(true);
+        state.height = draft.Displayed(false);
+        state.unit = static_cast<int>(draft.unit);
+        state.relative = draft.relative;
+        state.locked = draft.locked;
+        state.anchor = _sizeDialog.anchor;
+        state.extension = _sizeDialog.extension;
+        state.extensionArgb = _sizeDialog.customArgb;
+        state.valid = draft.Valid();
+        state.resultWidth = state.valid ? draft.RoundedWidth() : 0;
+        state.resultHeight = state.valid ? draft.RoundedHeight() : 0;
+        break;
+    }
+    case SizeCardKind::ImageSize:
+    {
+        const ImageSizeDraft& draft = _sizeDialog.image;
+        state.originalWidth = draft.originalWidth;
+        state.originalHeight = draft.originalHeight;
+        state.width = draft.Displayed(true);
+        state.height = draft.Displayed(false);
+        state.unit = static_cast<int>(draft.unit);
+        state.locked = draft.locked;
+        state.resolution = draft.resolution;
+        state.resample = draft.resample;
+        state.sampling = static_cast<int>(draft.sampling);
+        state.valid = draft.Valid();
+        state.resultWidth = state.valid ? draft.RoundedWidth() : 0;
+        state.resultHeight = state.valid ? draft.RoundedHeight() : 0;
+        break;
+    }
+    case SizeCardKind::None:
+    default:
+        break;
+    }
+    _chrome->SetSizeCard(state);
+}
+
+int Application::RunSizeSelfTest() noexcept
+{
+    if (!_chrome || !_window)
+    {
+        ReportSizeSelfTestFailure(L"The size self-test needs the chrome and the window.\n");
+        return 5;
+    }
+    const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
+    // A fresh default document with a small red layer at the top-left corner.
+    _forcedDiscard = true;
+    OnCommand(ChromeHost::kCommandNew);
+    _forcedDiscard.reset();
+    {
+        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(6 * 3 * 4), 0);
+        for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
+        {
+            bytes[index + 2] = 255;
+            bytes[index + 3] = 255;
+        }
+        const Raster raster = Raster::Make(6, 3, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        ImageLayer layer = ImageLayer::Blank(L"Red", Vec2{6, 3});
+        layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
+        _session.BeginEdit(L"Import Image");
+        _session.Document().value().layers.push_back(layer);
+        _session.EndEdit();
+        _session.SelectLayer(layer.id);
+        DocumentChanged();
+    }
+    const Guid red = _session.ActiveLayerID().value();
+    // Canvas Size: half the size in percent with the ratio locked, anchored top-left, applied with Enter.
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    if (!SizeCardOpen() || !_chrome->SizeCardOpen())
+    {
+        ReportSizeSelfTestFailure(L"Canvas Size did not open its card.\n");
+        return 5;
+    }
+    OnSizeAction(SizeAction::SetUnit, 1.0);
+    OnSizeAction(SizeAction::SetLocked, 1.0);
+    OnSizeAction(SizeAction::SetWidth, 50.0);
+    OnSizeAction(SizeAction::SetAnchor, 0.0);
+    OnSizeAction(SizeAction::SetExtension, 4.0);
+    _chrome->SetCanvasFocused(true);
+    if (!HandleAccelerator(VK_RETURN, 0) || SizeCardOpen() || document() == nullptr || document()->width != 640 ||
+        document()->height != 400 || _session.history.UndoName() != L"Canvas Size" || document()->layers.size() != 2 ||
+        _session.ActiveLayerID() != red || _session.ActiveLayer()->transform.origin != Vec2{0, 0})
+    {
+        ReportSizeSelfTestFailure(std::format(L"Canvas Size did not shrink the canvas to 640 × 400 around the "
+                                              L"top-left anchor ({} × {}, undo '{}', {} layers).\n",
+                                              document() ? document()->width : 0, document() ? document()->height : 0,
+                                              _session.history.UndoName(), document() ? document()->layers.size() : 0));
+        return 5;
+    }
+    // Growing with a white extension adds the bottom layer with the old canvas cut out.
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    OnSizeAction(SizeAction::SetRelative, 1.0);
+    OnSizeAction(SizeAction::SetWidth, 10.0);
+    OnSizeAction(SizeAction::SetHeight, 10.0);
+    OnSizeAction(SizeAction::SetAnchor, 8.0);
+    OnSizeAction(SizeAction::SetExtension, 4.0);
+    OnSizeAction(SizeAction::Apply, 0.0);
+    const ImageLayer* extension = document() && !document()->layers.empty() ? &document()->layers.front() : nullptr;
+    if (document() == nullptr || document()->width != 650 || document()->height != 410 || extension == nullptr ||
+        extension->name != L"Canvas Extension" || !extension->asset.has_value() ||
+        extension->asset->image.Width() != 650 || _session.ActiveLayerID() != red ||
+        _session.ActiveLayer()->transform.origin != Vec2{10, 10})
+    {
+        ReportSizeSelfTestFailure(L"Growing the canvas with a white extension did not add the extension layer and "
+                                  L"move the content by the bottom-right anchor.\n");
+        return 5;
+    }
+    // Escape drops a pending edit.
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    OnSizeAction(SizeAction::SetWidth, 100.0);
+    _chrome->SetCanvasFocused(true);
+    if (!HandleAccelerator(VK_ESCAPE, 0) || SizeCardOpen() || document() == nullptr || document()->width != 650)
+    {
+        ReportSizeSelfTestFailure(L"Escape did not cancel the Canvas Size card.\n");
+        return 5;
+    }
+    // Image Size: 325 × 205 at 300 ppi with nearest sampling; the red layer's pixels scale with the canvas.
+    OnCommand(ChromeHost::kCommandImageSize);
+    OnSizeAction(SizeAction::SetWidth, 325.0);
+    OnSizeAction(SizeAction::SetResolution, 300.0);
+    OnSizeAction(SizeAction::SetSampling, 0.0);
+    OnSizeAction(SizeAction::Apply, 0.0);
+    const ImageLayer* scaled = nullptr;
+    if (document() != nullptr)
+    {
+        for (const ImageLayer& layer : document()->layers)
+        {
+            if (layer.id == red)
+            {
+                scaled = &layer;
+            }
+        }
+    }
+    if (document() == nullptr || document()->width != 325 || document()->height != 205 ||
+        document()->resolution != 300.0 || _session.history.UndoName() != L"Image Size" || scaled == nullptr ||
+        !scaled->asset.has_value() || scaled->asset->image.Width() != 3 || scaled->asset->image.Height() != 2 ||
+        scaled->transform.origin != Vec2{5, 5} || scaled->asset->image.Data() == nullptr ||
+        scaled->asset->image.Data()[2] != 255 || scaled->asset->image.Data()[3] != 255)
+    {
+        ReportSizeSelfTestFailure(std::format(L"Image Size did not resample the document to 325 × 205 at 300 ppi "
+                                              L"({} × {} at {}, undo '{}').\n",
+                                              document() ? document()->width : 0, document() ? document()->height : 0,
+                                              document() ? document()->resolution : 0.0, _session.history.UndoName()));
+        return 5;
+    }
+    _session.Undo();
+    _session.Undo();
+    _session.Undo();
+    DocumentChanged();
+    if (document() == nullptr || document()->width != 1280 || document()->height != 800 ||
+        document()->layers.size() != 2)
+    {
+        ReportSizeSelfTestFailure(L"Undo did not restore the document through the three size entries.\n");
+        return 5;
+    }
+    // New Canvas: a fresh unmodified document of the typed size.
+    OnCommand(ChromeHost::kCommandNewCanvas);
+    OnSizeAction(SizeAction::SetWidth, 300.0);
+    OnSizeAction(SizeAction::SetHeight, 200.0);
+    OnSizeAction(SizeAction::Apply, 0.0);
+    if (SizeCardOpen() || document() == nullptr || document()->width != 300 || document()->height != 200 ||
+        document()->layers.size() != 1 || _session.history.IsModified())
+    {
+        ReportSizeSelfTestFailure(L"New Canvas did not create a 300 × 200 document with one blank layer.\n");
+        return 5;
+    }
+    return 0;
+}

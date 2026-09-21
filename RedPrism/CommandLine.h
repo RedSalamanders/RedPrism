@@ -68,12 +68,13 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::Demo, L"--demo", nullptr, RedPrismSwitchValue::Separate,
-                                  L"<transform|selection|brush|retouch|adjust>",
+                                  L"<transform|selection|brush|retouch|adjust|canvassize>",
                                   L"Populate the new document for a screenshot: transform adds two painted layers and "
                                   L"shows the Move tool's box on the rotated one; selection adds an elliptical and a "
                                   L"rectangular selection with the Marquee tool; brush paints strokes on a backdrop; "
                                   L"retouch adds a radial gradient and two shapes; adjust opens the Levels panel on "
-                                  L"a Levels adjustment layer over a painted backdrop.",
+                                  L"a Levels adjustment layer over a painted backdrop; canvassize opens the Canvas "
+                                  L"Size card over the transform layers.",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate, L"<brush>",
@@ -189,7 +190,8 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                                                std::wstring_view{arguments[index + 1]} != L"selection" &&
                                                std::wstring_view{arguments[index + 1]} != L"brush" &&
                                                std::wstring_view{arguments[index + 1]} != L"retouch" &&
-                                               std::wstring_view{arguments[index + 1]} != L"adjust"))
+                                               std::wstring_view{arguments[index + 1]} != L"adjust" &&
+                                               std::wstring_view{arguments[index + 1]} != L"canvassize"))
             {
                 if (errorToken)
                 {

@@ -188,6 +188,12 @@ void TestCommandLine() noexcept
     parsed = {};
     Expect(RedPrismParseCommandLine(retouchArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{retouchValue},
            "cli.demo-retouch");
+    wchar_t canvasSizeValue[] = L"canvassize";
+    wchar_t* canvasSizeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, canvasSizeValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(canvasSizeArgs, 3, parsed, &error) &&
+               parsed.demo == std::wstring_view{canvasSizeValue},
+           "cli.demo-canvassize");
     wchar_t benchSwitch[] = L"--bench";
     wchar_t* benchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, brushValue};
     parsed = {};
@@ -314,7 +320,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 340> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 394> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -665,7 +671,61 @@ void TestStringTable() noexcept
                                          IDS_CONFIRM_SAVE_TEXT,
                                          IDS_CONFIRM_SAVE_SAVE,
                                          IDS_CONFIRM_SAVE_DISCARD,
-                                         IDS_QUESTION_FALLBACK};
+                                         IDS_QUESTION_FALLBACK,
+                                         IDS_SIZE_NEW_CANVAS_TITLE,
+                                         IDS_SIZE_NEW_CANVAS_HINT,
+                                         IDS_SIZE_WIDTH,
+                                         IDS_SIZE_HEIGHT,
+                                         IDS_SIZE_CREATE,
+                                         IDS_SIZE_NEW_CANVAS_INVALID,
+                                         IDS_SIZE_TRANSPARENT_NOTE,
+                                         IDS_SIZE_OPEN_PROJECT,
+                                         IDS_SIZE_IMPORT_IMAGE,
+                                         IDS_SIZE_CANVAS_TITLE,
+                                         IDS_SIZE_CURRENT,
+                                         IDS_SIZE_BYTES,
+                                         IDS_SIZE_UNITS,
+                                         IDS_SIZE_UNIT_PIXELS,
+                                         IDS_SIZE_UNIT_PERCENT,
+                                         IDS_SIZE_UNIT_INCHES,
+                                         IDS_SIZE_UNIT_CENTIMETERS,
+                                         IDS_SIZE_RELATIVE,
+                                         IDS_SIZE_LOCK_ORIGINAL,
+                                         IDS_SIZE_NEW,
+                                         IDS_SIZE_CANVAS_INVALID,
+                                         IDS_SIZE_ANCHOR,
+                                         IDS_SIZE_ANCHOR_HINT,
+                                         IDS_SIZE_ANCHOR_TOP_LEFT,
+                                         IDS_SIZE_ANCHOR_TOP_CENTER,
+                                         IDS_SIZE_ANCHOR_TOP_RIGHT,
+                                         IDS_SIZE_ANCHOR_MIDDLE_LEFT,
+                                         IDS_SIZE_ANCHOR_CENTER,
+                                         IDS_SIZE_ANCHOR_MIDDLE_RIGHT,
+                                         IDS_SIZE_ANCHOR_BOTTOM_LEFT,
+                                         IDS_SIZE_ANCHOR_BOTTOM_CENTER,
+                                         IDS_SIZE_ANCHOR_BOTTOM_RIGHT,
+                                         IDS_SIZE_EXTENSION,
+                                         IDS_SIZE_EXT_TRANSPARENT,
+                                         IDS_SIZE_EXT_FOREGROUND,
+                                         IDS_SIZE_EXT_BACKGROUND,
+                                         IDS_SIZE_EXT_BLACK,
+                                         IDS_SIZE_EXT_WHITE,
+                                         IDS_SIZE_EXT_CUSTOM,
+                                         IDS_SIZE_EXTENSION_COLOR,
+                                         IDS_SIZE_IMAGE_TITLE,
+                                         IDS_SIZE_LOCK,
+                                         IDS_SIZE_RESOLUTION,
+                                         IDS_SIZE_PPI,
+                                         IDS_SIZE_RESAMPLE,
+                                         IDS_SIZE_SAMPLING,
+                                         IDS_SIZE_RESAMPLE_NOTE,
+                                         IDS_SIZE_NO_RESAMPLE_NOTE,
+                                         IDS_SIZE_RESULT,
+                                         IDS_SIZE_IMAGE_INVALID,
+                                         IDS_SIZE_RESIZE,
+                                         IDS_ERROR_RESIZE,
+                                         IDS_SIZE_MEGABYTES,
+                                         IDS_SIZE_KILOBYTES};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

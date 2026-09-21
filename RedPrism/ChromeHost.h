@@ -236,6 +236,55 @@ struct AdjustInspectorState
     bool previewFailed = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
 };
 
+// The size cards (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): New Canvas, Canvas Size and Image Size,
+// mirrored from the Application's draft through SetSizeCard; the controls report changes as actions with one value.
+enum class SizeCardKind : std::uint8_t
+{
+    None,
+    NewCanvas,
+    CanvasSize,
+    ImageSize,
+};
+
+enum class SizeAction : std::uint8_t
+{
+    SetWidth, // the field's number in the chosen unit
+    SetHeight,
+    SetUnit, // 0 pixels, 1 percent, 2 inches, 3 centimeters
+    SetRelative,
+    SetLocked,
+    SetAnchor,    // 0…8, row-major from the top left
+    SetExtension, // 0 transparent, 1 foreground, 2 background, 3 black, 4 white, 5 custom (opens the picker)
+    SetResolution,
+    SetResample,
+    SetSampling, // 0 nearest, 1 smooth, 2 high
+    OpenProject, // New Canvas: Open Project…
+    ImportImage, // New Canvas: Import Image…
+    Cancel,
+    Apply,
+};
+
+struct SizeCardState
+{
+    SizeCardKind kind = SizeCardKind::None;
+    int originalWidth = 0;
+    int originalHeight = 0;
+    double width = 0; // the numbers the fields show, in the unit
+    double height = 0;
+    int unit = 0;
+    bool relative = false;
+    bool locked = false;
+    int anchor = 4;
+    int extension = 0;
+    uint32_t extensionArgb = 0xFFFFFFFFu;
+    double resolution = 72;
+    bool resample = true;
+    int sampling = 2;
+    bool valid = true;
+    int resultWidth = 0; // the rounded pixels the card announces
+    int resultHeight = 0;
+};
+
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
 struct SelectionInspectorState
 {
@@ -441,6 +490,13 @@ class ChromeHost final
     [[nodiscard]] D2D1_RECT_F AdjustPanelBoundsDip() const noexcept;
     // The color picker on a Gradient Map end; its changes go to the adjust color handler, never the palette.
     void OpenAdjustColorPicker(uint32_t argb, bool highlights) noexcept;
+    // The size cards (C16): actions with a value, the custom extension color's picks, and the mirrored draft.
+    void SetSizeHandler(std::function<void(SizeAction, double)> handler);
+    void SetSizeColorHandler(std::function<void(ChromeEditPhase, uint32_t)> handler);
+    void SetSizeCard(const SizeCardState& state) noexcept;
+    [[nodiscard]] bool SizeCardOpen() const noexcept;
+    // The color picker on the Canvas Size card's custom extension color; changes go to the size color handler.
+    void OpenSizeColorPicker(uint32_t argb) noexcept;
     void SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept;
     void SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept;
     void SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept;
@@ -701,7 +757,8 @@ class ChromeHost final
     bool _syncingShape = false;
     BrushInspectorState _brushInspector;
     bool _syncingBrush = false;
-    std::array<DxUi::Toggle*, kEditorToolCount> _toolButtons{}; // the active tool is the checked one
+    std::array<DxUi::Button*, kEditorToolCount> _toolButtons{}; // icon buttons; the active tool's is latched
+    bool _toolVisualsDirty = false;                             // a latch change waits for the pointer to come up
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
     std::function<void(EditorTool)> _onTool;
@@ -796,6 +853,40 @@ class ChromeHost final
     std::function<void(ChromeEditPhase, uint32_t, bool)> _onAdjustColor;
     bool _pickerForAdjust = false;
     bool _pickerHighlights = false;
+    // ChromeHostSize.cpp: the size cards.
+    void BuildSizeCard(DxUi::Panel& root);
+    void ArrangeSizeCard(float right, float top, float bottom) noexcept;
+    DxUi::CardPanel* _sizeCard = nullptr;
+    DxUi::Label* _sizeTitle = nullptr;
+    DxUi::Label* _sizeCurrent = nullptr;
+    DxUi::Label* _sizeBytes = nullptr;
+    DxUi::ComboBox* _sizeUnit = nullptr;
+    DxUi::NumericStepper* _sizeWidth = nullptr;
+    DxUi::NumericStepper* _sizeHeight = nullptr;
+    DxUi::Checkbox* _sizeRelative = nullptr;
+    DxUi::Checkbox* _sizeLocked = nullptr;
+    DxUi::Label* _sizeResult = nullptr;
+    DxUi::Label* _sizeAnchorLabel = nullptr;
+    std::array<DxUi::Button*, 9> _sizeAnchors{};
+    std::array<bool, 9> _sizeAnchorPressed{};
+    DxUi::Label* _sizeAnchorName = nullptr;
+    DxUi::Label* _sizeAnchorHint = nullptr;
+    DxUi::ComboBox* _sizeExtension = nullptr;
+    DxUi::ColorSwatch* _sizeExtensionSwatch = nullptr;
+    DxUi::NumericStepper* _sizeResolution = nullptr;
+    DxUi::Label* _sizePpi = nullptr;
+    DxUi::Checkbox* _sizeResample = nullptr;
+    DxUi::ComboBox* _sizeSampling = nullptr;
+    DxUi::Label* _sizeNote = nullptr;
+    DxUi::Button* _sizeOpen = nullptr;
+    DxUi::Button* _sizeImport = nullptr;
+    DxUi::Button* _sizeCancel = nullptr;
+    DxUi::Button* _sizeApply = nullptr;
+    SizeCardState _sizeState;
+    bool _syncingSize = false;
+    bool _pickerForSize = false;
+    std::function<void(SizeAction, double)> _onSize;
+    std::function<void(ChromeEditPhase, uint32_t)> _onSizeColor;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;
