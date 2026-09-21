@@ -87,6 +87,18 @@ class Application final
     void SelectionChanged() noexcept;
     void RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept;
     [[nodiscard]] std::optional<Raster> WandComposite() noexcept;
+    // Pixel edits (C9b, Specs/Document/Document_Tools.md): the Edit menu's fills, clear, invert and clipboard,
+    // Ctrl-drag and Ctrl-arrow pixel moves (shown through the stroke preview), Ctrl+T on a selection, the Delete
+    // key and masks from the selection. A copy mirrors to the system clipboard as PNG and DIB; Paste brings another
+    // app's image in when the system clipboard changed since that copy.
+    void BeginPixelDrag(Vec2 pixel, bool duplicate) noexcept;
+    void DragPixels(Vec2 pixel, bool constrain) noexcept;
+    void FinishPixelDrag() noexcept;
+    void CancelPixelDrag() noexcept;
+    void SyncPixelMovePreview() noexcept;
+    void PushPixelMoveTiles() noexcept;
+    void MirrorClipboard() noexcept;
+    void PasteFromClipboard() noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
     void OnBrushAction(BrushAction action, double value) noexcept;
@@ -162,6 +174,8 @@ class Application final
     std::optional<Vec2> _marqueeDragPixel;
     bool _marqueeConstrainArmed = true;
     bool _lassoDragging = false;
+    std::optional<Vec2> _pixelDragStart; // document point where a Ctrl-drag lifted the selected pixels
+    DWORD _clipboardSequence = 0;        // the system clipboard's sequence number at the last mirrored copy
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;

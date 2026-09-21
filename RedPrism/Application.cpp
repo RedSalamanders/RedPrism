@@ -7,6 +7,7 @@
 #include "ProjectStore.h"
 #include "Resources.h"
 #include "Selection.h"
+#include "SystemClipboard.h"
 #include "Version.h"
 #include "WarpStroke.h"
 #include "WindowCapture.h"
@@ -1189,6 +1190,232 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
     }
 
+    // Pixel edits: Fill with Foreground Color from the Edit menu, Ctrl+X cuts to the clipboard (mirrored to the
+    // system clipboard), Ctrl+V pastes in place as a new layer, Ctrl+I inverts it, a Ctrl-drag with the Marquee
+    // moves the selected pixels through the live preview as one `Move Pixels` entry, Ctrl+Right nudges them, Delete
+    // clears them, Ctrl+T on a selection floats them (Escape restores exactly, Enter merges one `Transform
+    // Selection` entry with the outline moved), Ctrl+J copies them to a layer, Add Mask hides them and Ctrl+Shift+C
+    // copies the composite.
+    {
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        const CanvasHole hole = _chrome->HolePixels();
+        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        {
+            const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
+            OnPointer(message, wParam,
+                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
+                                 static_cast<int>(std::lround(hole.top + view.y))));
+        };
+        const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
+        {
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+            std::vector<std::uint8_t> bgra;
+            UINT width = 0;
+            UINT height = 0;
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
+                static_cast<UINT>(y) >= height)
+            {
+                return false;
+            }
+            const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
+            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            return true;
+        };
+        const auto bounds = [&]() -> std::optional<SelectionBounds>
+        {
+            const std::optional<DocumentSelection>& selection = _session.Selection();
+            return selection.has_value() ? selection->Bounds() : std::nullopt;
+        };
+        const auto shown = [&]() -> std::optional<SelectionBounds>
+        {
+            const std::optional<DocumentSelection> displayed = _session.DisplayedSelection();
+            return displayed.has_value() ? displayed->Bounds() : std::nullopt;
+        };
+        const auto closeTo = [](double a, double b) { return std::fabs(a - b) <= 2.0; };
+        const auto layerPixel = [&](int x, int y, std::array<std::uint8_t, 4>& out) -> bool
+        {
+            const ImageLayer* layer = _session.ActiveLayer();
+            if (layer == nullptr || !layer->asset.has_value())
+            {
+                return false;
+            }
+            const Raster& image = layer->asset->image;
+            const Vec2 pixel = PixelToDocument(layer->transform, image.Width(), image.Height())
+                                   .Inverted()
+                                   .Apply(Vec2{x + 0.5, y + 0.5});
+            image.ReadRegion(static_cast<int>(std::floor(pixel.x)), static_cast<int>(std::floor(pixel.y)), 1, 1,
+                             out.data(), 4, 0);
+            return true;
+        };
+        const Guid sheet = InsertPaintedLayer(_session, L"Sheet", 200, 200, Vec2{0, 0}, 0.0, 0xFF2F6FB0u);
+        OnTool(EditorTool::Marquee);
+        _chrome->SetCanvasFocused(true);
+        pointer(WM_LBUTTONDOWN, 0, 20.0, 20.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 60.0, 60.0);
+        pointer(WM_LBUTTONUP, 0, 60.0, 60.0);
+        _session.SetForegroundColor(0xFFFF0000u);
+        OnCommand(ChromeHost::kCommandFillForeground);
+        std::array<int, 4> pixel{};
+        if (_session.history.UndoName() != L"Fill" || !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
+        {
+            SelfTestFailure(L"Fill with Foreground Color did not fill the selection.\n");
+            return 5;
+        }
+        const std::size_t layersBefore = _session.Document()->layers.size();
+        if (!HandleAccelerator('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
+            !pixelAt(40, 40, pixel) || pixel[2] > 250 || !SystemClipboard::HasImage())
+        {
+            SelfTestFailure(L"Ctrl+X did not cut the selection to the clipboard.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" ||
+            _session.Document()->layers.size() != layersBefore + 1 || _session.Selection().has_value() ||
+            _session.ActiveLayer() == nullptr || _session.ActiveLayer()->transform.origin != Vec2{20, 20} ||
+            !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
+        {
+            SelfTestFailure(L"Ctrl+V did not paste the cut pixels in place as a new layer.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('I', MK_CONTROL) || _session.history.UndoName() != L"Invert" ||
+            !pixelAt(40, 40, pixel) || pixel[2] > 5 || pixel[1] < 250 || pixel[0] < 250)
+        {
+            SelfTestFailure(L"Ctrl+I did not invert the pasted layer.\n");
+            return 5;
+        }
+        // A Ctrl-drag with the Marquee lifts the selected pixels into the live preview; the outline follows.
+        pointer(WM_LBUTTONDOWN, 0, 20.0, 20.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 60.0, 60.0);
+        pointer(WM_LBUTTONUP, 0, 60.0, 60.0);
+        pointer(WM_LBUTTONDOWN, MK_CONTROL, 40.0, 40.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON | MK_CONTROL, 140.0, 40.0);
+        std::optional<SelectionBounds> box = bounds();
+        std::optional<SelectionBounds> displayed = shown();
+        if (!_pixelDragStart.has_value() || _session.PendingPixelMove() == nullptr)
+        {
+            SelfTestFailure(L"Ctrl-dragging inside the selection did not lift the selected pixels.\n");
+            return 5;
+        }
+        if (!_composition.HasStroke())
+        {
+            SelfTestFailure(L"The pixel move did not start the stroke preview.\n");
+            return 5;
+        }
+        if (!displayed.has_value() || !closeTo(displayed->minX, 120.0) || !box.has_value() || !closeTo(box->minX, 20.0))
+        {
+            SelfTestFailure(L"The outline did not follow the pixel drag while the stored selection stayed put.\n");
+            return 5;
+        }
+        if (!pixelAt(140, 40, pixel) || pixel[1] < 250)
+        {
+            SelfTestFailure(L"The moving pixels did not show at their new place through the preview.\n");
+            return 5;
+        }
+        if (!pixelAt(40, 40, pixel) || pixel[1] > 250)
+        {
+            SelfTestFailure(L"The moved pixels still showed at their old place through the preview.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, MK_CONTROL, 140.0, 40.0);
+        box = bounds();
+        if (_pixelDragStart.has_value() || _session.PendingPixelMove() != nullptr || _composition.HasStroke() ||
+            _session.history.UndoName() != L"Move Pixels" || !box.has_value() || !closeTo(box->minX, 120.0) ||
+            !pixelAt(140, 40, pixel) || pixel[1] < 250)
+        {
+            SelfTestFailure(L"Releasing the Ctrl-drag did not commit one Move Pixels entry.\n");
+            return 5;
+        }
+        // The Marquee landed on whole pixels near 20; the nudge is exact relative to where the drag left the outline.
+        const double beforeNudge = box.has_value() ? box->minX : 0.0;
+        if (!HandleAccelerator(VK_RIGHT, MK_CONTROL) || _session.history.UndoName() != L"Move Pixels" ||
+            !bounds().has_value() || std::fabs(bounds()->minX - (beforeNudge + 1.0)) > 0.01)
+        {
+            SelfTestFailure(L"Ctrl+Right did not nudge the selected pixels by one.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_DELETE, 0) || _session.history.UndoName() != L"Clear" || !pixelAt(141, 40, pixel) ||
+            pixel[1] > 250)
+        {
+            SelfTestFailure(L"Delete did not clear the selected pixels.\n");
+            return 5;
+        }
+        // Ctrl+T on a selection floats the pixels: Escape restores exactly, Enter merges one entry.
+        OnCommand(ChromeHost::kCommandDeselect);
+        _session.SelectLayer(sheet);
+        OnTool(EditorTool::Marquee);
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 140.0, 140.0);
+        pointer(WM_LBUTTONUP, 0, 140.0, 140.0);
+        const std::wstring entryBefore = _session.history.UndoName();
+        const std::size_t layersFloating = _session.Document()->layers.size();
+        if (!HandleAccelerator('T', MK_CONTROL) || _tool != EditorTool::Move ||
+            !_session.PendingTransformEdit().has_value() || !_session.PendingTransformEdit()->floating.has_value() ||
+            _session.Document()->layers.size() != layersFloating + 1)
+        {
+            SelfTestFailure(L"Ctrl+T with a selection did not float the selected pixels.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
+            _session.Document()->layers.size() != layersFloating || _session.history.UndoName() != entryBefore ||
+            _session.ActiveLayerID() != sheet)
+        {
+            SelfTestFailure(L"Escape did not restore the floating selection exactly.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('T', MK_CONTROL) || !_session.PendingTransformEdit().has_value())
+        {
+            SelfTestFailure(L"Ctrl+T did not float the selection a second time.\n");
+            return 5;
+        }
+        LayerTransform draft = _session.PendingTransformEdit()->draft;
+        draft.origin.x += 50.0;
+        _session.PreviewTransform(draft);
+        DocumentChanged();
+        displayed = shown();
+        if (!displayed.has_value() || !closeTo(displayed->minX, 150.0) || !closeTo(bounds()->minX, 100.0))
+        {
+            SelfTestFailure(L"The outline did not follow the floating pixels.\n");
+            return 5;
+        }
+        std::array<std::uint8_t, 4> cleared{};
+        std::array<std::uint8_t, 4> landed{};
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingTransformEdit().has_value() ||
+            _session.history.UndoName() != L"Transform Selection" ||
+            _session.Document()->layers.size() != layersFloating || _session.ActiveLayerID() != sheet ||
+            !closeTo(bounds()->minX, 150.0) || !layerPixel(120, 120, cleared) || cleared[3] != 0 ||
+            !layerPixel(170, 120, landed) || landed[3] != 255 || landed[0] != 0xB0)
+        {
+            SelfTestFailure(L"Enter did not merge the floating selection as one Transform Selection entry.\n");
+            return 5;
+        }
+        // Layer via Copy and Add Mask use the selection; Copy Merged takes the composite.
+        if (!HandleAccelerator('J', MK_CONTROL) || _session.history.UndoName() != L"Layer via Copy" ||
+            _session.Document()->layers.size() != layersFloating + 1 || _session.Selection().has_value())
+        {
+            SelfTestFailure(L"Ctrl+J did not copy the selection to a new layer.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandUndo);
+        OnCommand(ChromeHost::kCommandAddMask);
+        if (_session.history.UndoName() != L"Add Mask from Selection" || !_session.IsMaskSelected() ||
+            _session.Selection().has_value() || _session.ActiveLayer() == nullptr ||
+            !_session.ActiveLayer()->mask.has_value())
+        {
+            SelfTestFailure(L"Add Mask did not make a mask from the selection.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandSelectAll);
+        if (!HandleAccelerator('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
+            _session.Clipboard()->image.Width() != _session.Document()->width ||
+            _session.Clipboard()->image.Height() != _session.Document()->height)
+        {
+            SelfTestFailure(L"Ctrl+Shift+C did not copy the merged canvas.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandDeselect);
+        OnTool(EditorTool::Move);
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -1452,6 +1679,9 @@ void Application::SyncChrome() noexcept
     _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
                               _session.history.CanRedo());
+    _chrome->SetEditTargets(_session.IsMaskSelected() && _session.ActiveLayer() != nullptr &&
+                                _session.ActiveLayer()->mask.has_value(),
+                            _session.CanTransformSelection());
     const CanvasDocument* document = _session.DisplayDocument();
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
@@ -1587,7 +1817,8 @@ void Application::SyncChrome() noexcept
     selection.canModify = _session.CanModifySelection();
     selection.expandAmount = _session.selectionExpandAmount;
     selection.contractAmount = _session.selectionContractAmount;
-    const std::optional<DocumentSelection>& current = _session.Selection();
+    // The outline follows a pixel move and the floating pixels of a selection transform.
+    const std::optional<DocumentSelection> current = _session.DisplayedSelection();
     selection.hasSelection = current.has_value();
     selection.isEmpty = current.has_value() && current->IsEmpty();
     _chrome->SetSelectionInspector(selection);
@@ -2040,7 +2271,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         {
             return;
         }
-        if (event.action == DxUi::PointerAction::Up && (_selectionDragStart.has_value() || _lassoDragging))
+        if (event.action == DxUi::PointerAction::Up &&
+            (_selectionDragStart.has_value() || _lassoDragging || _pixelDragStart.has_value()))
         {
             SelectionRelease(view);
             return;
@@ -2169,11 +2401,9 @@ void Application::OnCommand(int command) noexcept
         DocumentChanged();
         break;
     case ChromeHost::kCommandDeleteLayer:
-        if (_session.ActiveLayerID().has_value())
-        {
-            _session.DeleteLayer(_session.ActiveLayerID().value());
-            DocumentChanged();
-        }
+        // The item follows the layers panel target: the mask when it is targeted, else the layer.
+        _session.DeleteLayerOrMask();
+        DocumentChanged();
         break;
     case ChromeHost::kCommandToggleLayerVisibility:
         if (_session.ActiveLayerID().has_value())
@@ -2223,7 +2453,8 @@ void Application::OnCommand(int command) noexcept
         {
             OnTool(EditorTool::Move);
         }
-        _session.BeginTransform(true);
+        // With a selection the selected pixels float and transform; otherwise the layer.
+        _session.TransformCommand();
         DocumentChanged();
         break;
     case ChromeHost::kCommandFlipLayerHorizontal:
@@ -2240,6 +2471,70 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandFlipCanvasVertical:
         _session.FlipCanvas(false);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandCut:
+        EndSelectionInteraction(false);
+        if (_session.Selection().has_value() && _session.CanCopyPixels())
+        {
+            _session.CutSelection();
+            MirrorClipboard();
+            static_cast<void>(_session.TakeLastBrushCommit());
+            DocumentChanged();
+        }
+        break;
+    case ChromeHost::kCommandCopy:
+        if (_session.CopySelection())
+        {
+            MirrorClipboard();
+        }
+        break;
+    case ChromeHost::kCommandCopyMerged:
+        if (_session.CanCopyMerged())
+        {
+            const std::optional<Raster> composite = WandComposite();
+            if (composite.has_value() && _session.CopyMergedSelection(composite.value()))
+            {
+                MirrorClipboard();
+            }
+        }
+        break;
+    case ChromeHost::kCommandPaste:
+        EndSelectionInteraction(false);
+        PasteFromClipboard();
+        break;
+    case ChromeHost::kCommandFillForeground:
+    case ChromeHost::kCommandFillBackground:
+        _session.FillSelection(command == ChromeHost::kCommandFillForeground ? FillSource::Foreground
+                                                                             : FillSource::Background);
+        static_cast<void>(_session.TakeLastBrushCommit());
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandClearPixels:
+        _session.ClearSelectedPixels();
+        static_cast<void>(_session.TakeLastBrushCommit());
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandInvert:
+        _session.InvertPixels();
+        if (_composition.HasStroke() && _session.PendingGradient() == nullptr && _session.PendingBrush() == nullptr &&
+            _session.PendingWarp() == nullptr && _session.PendingPixelMove() == nullptr)
+        {
+            // A pending gradient applied under the invert; its preview never showed the inverted pixels.
+            _composition.EndStroke(nullptr, 0, 0);
+        }
+        static_cast<void>(_session.TakeLastBrushCommit());
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandLayerViaCopy:
+        EndSelectionInteraction(false);
+        _session.LayerViaCopy();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandAddMask:
+    case ChromeHost::kCommandAddBlackMask:
+        EndSelectionInteraction(false);
+        _session.AddMask(command == ChromeHost::kCommandAddMask);
         DocumentChanged();
         break;
     case ChromeHost::kCommandSelectAll:
@@ -2343,9 +2638,36 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             OnCommand(ChromeHost::kCommandDeselect);
             return true;
         case 'I':
-            if (shift)
+            OnCommand(shift ? ChromeHost::kCommandInverse : ChromeHost::kCommandInvert);
+            return true;
+        case 'X':
+            OnCommand(ChromeHost::kCommandCut);
+            return true;
+        case 'C':
+            OnCommand(shift ? ChromeHost::kCommandCopyMerged : ChromeHost::kCommandCopy);
+            return true;
+        case 'V':
+            OnCommand(ChromeHost::kCommandPaste);
+            return true;
+        case 'J':
+            OnCommand(ChromeHost::kCommandLayerViaCopy);
+            return true;
+        case VK_BACK:
+            OnCommand(ChromeHost::kCommandFillBackground);
+            return true;
+        case VK_LEFT:
+        case VK_RIGHT:
+        case VK_UP:
+        case VK_DOWN:
+            if (_session.Selection().has_value() && !_session.Selection()->IsEmpty() &&
+                !_session.PendingLasso().has_value() && GetKeyState(VK_MENU) >= 0)
             {
-                OnCommand(ChromeHost::kCommandInverse);
+                // Ctrl-arrow moves the selected pixels in any tool, one pixel or ten with Shift, one entry each.
+                const double step = shift ? 10.0 : 1.0;
+                _session.NudgePixels(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
+                                     virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
+                static_cast<void>(_session.TakeLastBrushCommit());
+                DocumentChanged();
                 return true;
             }
             break;
@@ -2378,6 +2700,17 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (virtualKey == VK_ESCAPE && _pixelDragStart.has_value())
+        {
+            CancelPixelDrag();
+            return true;
+        }
+        if (virtualKey == VK_BACK && GetKeyState(VK_MENU) < 0 && !_session.PendingLasso().has_value())
+        {
+            // Alt+Backspace fills with the foreground color (Ctrl+Backspace the background, above).
+            OnCommand(ChromeHost::kCommandFillForeground);
+            return true;
+        }
         if (virtualKey == VK_ESCAPE && (_warpDragging || _session.PendingWarp() != nullptr))
         {
             CancelWarpStroke();
@@ -2507,7 +2840,12 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         }
         if (virtualKey == VK_DELETE)
         {
-            OnCommand(ChromeHost::kCommandDeleteLayer);
+            // Delete clears the selected pixels; without a selection it deletes the targeted mask, or the layer.
+            _transformDrag.reset();
+            _session.CommitTransform();
+            _session.DeleteKeyPressed();
+            static_cast<void>(_session.TakeLastBrushCommit());
+            DocumentChanged();
             return true;
         }
         if (virtualKey == 'X' || virtualKey == 'D')
@@ -3376,8 +3714,10 @@ bool Application::ApplyCanvasCursor() noexcept
         const bool alt = GetKeyState(VK_MENU) < 0;
         const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
         cursor = IDC_CROSS;
-        if (_selectionDragStart.has_value() ||
-            (_session.LassoCursorMode(shift, alt) == SelectionMode::New && _session.CanMoveSelection(pixel)))
+        const bool control = GetKeyState(VK_CONTROL) < 0;
+        if (_selectionDragStart.has_value() || _pixelDragStart.has_value() ||
+            ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) &&
+             _session.CanMoveSelection(pixel)))
         {
             cursor = IDC_SIZEALL;
         }
@@ -3517,6 +3857,13 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
         SelectionChanged();
         return;
     }
+    // Ctrl-drag inside the selection cuts and moves its pixels (Photoshop's temporary Move tool); Alt duplicates.
+    const bool control = (modifiers & MK_CONTROL) != 0 || GetKeyState(VK_CONTROL) < 0;
+    if (control && _session.CanMoveSelection(pixel))
+    {
+        BeginPixelDrag(pixel, alt);
+        return;
+    }
     const SelectionMode mode = _session.SelectionModeFor(shift, alt);
     // In New mode, dragging inside the selection moves its outline instead of drawing.
     if (mode == SelectionMode::New && _session.CanMoveSelection(pixel) && _session.BeginSelectionMove())
@@ -3554,6 +3901,11 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
     // Keys may have changed while the pointer was elsewhere; the header shows the mode a press would use.
     bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    if (_pixelDragStart.has_value())
+    {
+        DragPixels(pixel, shift);
+        return true;
+    }
     if (_selectionDragStart.has_value())
     {
         // Shift keeps the move on one axis: whichever way the drag has gone further.
@@ -3617,6 +3969,11 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
 void Application::SelectionRelease(Vec2 view) noexcept
 {
     static_cast<void>(view);
+    if (_pixelDragStart.has_value())
+    {
+        FinishPixelDrag();
+        return;
+    }
     if (_selectionDragStart.has_value())
     {
         const Vec2 start = _selectionDragStart.value();
@@ -3658,6 +4015,10 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
     if (_session.IsMovingSelection())
     {
         _session.EndSelectionMove();
+    }
+    if (_pixelDragStart.has_value())
+    {
+        CancelPixelDrag();
     }
     _selectionDragStart.reset();
     _lassoDragging = false;
@@ -4433,7 +4794,7 @@ void Application::SyncGradientPreview() noexcept
         return;
     }
     if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
-        _session.PendingWarp() == nullptr)
+        _session.PendingWarp() == nullptr && _session.PendingPixelMove() == nullptr)
     {
         const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
         if (commit.has_value())
@@ -4609,4 +4970,161 @@ void Application::SyncToolOverlays() noexcept
         }
     }
     _chrome->SetCloneSourceMark(source);
+}
+
+// ── Pixel edits (C9b) ────────────────────────────────────────────────────
+
+void Application::BeginPixelDrag(Vec2 pixel, bool duplicate) noexcept
+{
+    _transformDrag.reset();
+    static_cast<void>(_session.TakeLastBrushCommit());
+    if (!_session.BeginPixelMove(duplicate))
+    {
+        return;
+    }
+    _pixelDragStart = pixel;
+    SyncPixelMovePreview();
+    SelectionChanged();
+}
+
+void Application::DragPixels(Vec2 pixel, bool constrain) noexcept
+{
+    if (!_pixelDragStart.has_value())
+    {
+        return;
+    }
+    double dx = pixel.x - _pixelDragStart->x;
+    double dy = pixel.y - _pixelDragStart->y;
+    if (constrain)
+    {
+        // Shift keeps the move on one axis: whichever way the drag has gone further.
+        if (std::fabs(dx) >= std::fabs(dy))
+        {
+            dy = 0.0;
+        }
+        else
+        {
+            dx = 0.0;
+        }
+    }
+    _session.MovePixels(dx, dy);
+    if (_session.PendingPixelMove() == nullptr)
+    {
+        // The move ran out of pixel budget: the drag ends with nothing to show.
+        _pixelDragStart.reset();
+    }
+    SyncPixelMovePreview();
+    SelectionChanged();
+}
+
+void Application::FinishPixelDrag() noexcept
+{
+    _pixelDragStart.reset();
+    _session.FinishPixelMove();
+    SyncPixelMovePreview();
+    DocumentChanged();
+}
+
+void Application::CancelPixelDrag() noexcept
+{
+    _pixelDragStart.reset();
+    _session.CancelPixelMove();
+    SyncPixelMovePreview();
+    DocumentChanged();
+}
+
+void Application::SyncPixelMovePreview() noexcept
+{
+    // The lifted pixels show through the stroke preview while they drag; the commit adopts the texture like a
+    // stroke, a cancel drops it.
+    PixelMove* pending = _session.MutablePixelMove();
+    if (pending != nullptr && pending->raster)
+    {
+        if (!_composition.HasStroke())
+        {
+            BindCompositionDevice();
+            (void)_composition.BeginStroke(PreviewFor(*pending->raster));
+        }
+        PushPixelMoveTiles();
+        return;
+    }
+    if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
+        _session.PendingWarp() == nullptr && _session.PendingGradient() == nullptr)
+    {
+        const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
+        if (commit.has_value())
+        {
+            _composition.EndStroke(&commit->image, commit->x, commit->y);
+        }
+        else
+        {
+            _composition.EndStroke(nullptr, 0, 0);
+        }
+        _frameInvalidated = true;
+    }
+}
+
+void Application::PushPixelMoveTiles() noexcept
+{
+    PixelMove* pending = _session.MutablePixelMove();
+    if (pending == nullptr || !pending->raster || !_composition.HasStroke())
+    {
+        return;
+    }
+    BrushStroke& raster = *pending->raster;
+    std::vector<RasterTile> tiles;
+    if (_composition.StrokeTextureMissing())
+    {
+        tiles = raster.Patches();
+        static_cast<void>(raster.TakeChanged());
+    }
+    else
+    {
+        for (const std::size_t index : raster.TakeChanged())
+        {
+            const BrushStroke::Tile& tile = raster.Tiles()[index];
+            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
+        }
+    }
+    if (!tiles.empty())
+    {
+        (void)_composition.UpdateStrokeTiles(tiles);
+        _frameInvalidated = true;
+    }
+}
+
+void Application::MirrorClipboard() noexcept
+{
+    const std::optional<PixelClipboard>& clip = _session.Clipboard();
+    if (!clip.has_value() || !_window)
+    {
+        return;
+    }
+    // Other apps read the copy as PNG or a 32-bit DIB. The sequence number lets a later Paste tell that the system
+    // clipboard still holds this copy, so the exact pixels and their place come from the session instead.
+    if (SystemClipboard::WriteImage(_window.get(), clip->image))
+    {
+        _clipboardSequence = SystemClipboard::SequenceNumber();
+    }
+}
+
+void Application::PasteFromClipboard() noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
+    const bool foreign = !_session.CanPaste() || _clipboardSequence != SystemClipboard::SequenceNumber();
+    if (foreign && SystemClipboard::HasImage())
+    {
+        Raster image;
+        if (SystemClipboard::ReadImage(_window.get(), DocumentSession::kMaxShapePixels, image))
+        {
+            _session.PasteImage(image);
+            DocumentChanged();
+        }
+        return;
+    }
+    _session.Paste();
+    DocumentChanged();
 }

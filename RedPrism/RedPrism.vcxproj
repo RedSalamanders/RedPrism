@@ -126,6 +126,7 @@
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
     <ClInclude Include="ChromeHost.h" />
+    <ClInclude Include="SystemClipboard.h" />
     <ClInclude Include="TransformOverlay.h" />
     <ClInclude Include="CommandLine.h" />
     <ClInclude Include="FrameScheduler.h" />
@@ -149,6 +150,7 @@
     <ClCompile Include="BrushCompute.cpp" />
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
+    <ClCompile Include="SystemClipboard.cpp" />
     <ClCompile Include="ChromeHost.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Renderer.cpp" />

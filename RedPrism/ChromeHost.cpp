@@ -265,6 +265,17 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(edit, kCommandUndo, IDS_CMD_UNDO);
         AppendCommand(edit, kCommandRedo, IDS_CMD_REDO);
         AppendSeparator(edit);
+        AppendCommand(edit, kCommandCut, IDS_CMD_CUT);
+        AppendCommand(edit, kCommandCopy, IDS_CMD_COPY);
+        AppendCommand(edit, kCommandCopyMerged, IDS_CMD_COPY_MERGED);
+        AppendCommand(edit, kCommandPaste, IDS_CMD_PASTE);
+        AppendSeparator(edit);
+        AppendCommand(edit, kCommandFillForeground, IDS_CMD_FILL_FOREGROUND);
+        AppendCommand(edit, kCommandFillBackground, IDS_CMD_FILL_BACKGROUND);
+        AppendCommand(edit, kCommandClearPixels, IDS_CMD_CLEAR_PIXELS);
+        AppendSeparator(edit);
+        AppendCommand(edit, kCommandInvert, IDS_CMD_INVERT);
+        AppendSeparator(edit);
         AppendCommand(edit, kCommandFreeTransform, IDS_CMD_FREE_TRANSFORM);
     }
     if (HMENU image = _menus[static_cast<std::size_t>(MenuIndex::Image)].get())
@@ -276,10 +287,14 @@ void ChromeHost::BuildMenus() noexcept
     {
         AppendCommand(layer, kCommandNewLayer, IDS_CMD_NEW_LAYER);
         AppendCommand(layer, kCommandNewFolder, IDS_CMD_NEW_FOLDER);
+        AppendCommand(layer, kCommandLayerViaCopy, IDS_CMD_LAYER_VIA_COPY);
         AppendSeparator(layer);
         AppendCommand(layer, kCommandDeleteLayer, IDS_CMD_DELETE_LAYER);
         AppendCommand(layer, kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY);
         AppendCommand(layer, kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP);
+        AppendSeparator(layer);
+        AppendCommand(layer, kCommandAddMask, IDS_CMD_ADD_MASK);
+        AppendCommand(layer, kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK);
         AppendSeparator(layer);
         AppendCommand(layer, kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL);
         AppendCommand(layer, kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL);
@@ -812,6 +827,25 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
     (void)ModifyMenuW(edit, static_cast<UINT>(kCommandRedo),
                       MF_BYCOMMAND | MF_STRING | (canRedo ? MF_ENABLED : MF_GRAYED),
                       static_cast<UINT_PTR>(kCommandRedo), redo.c_str());
+}
+
+void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection)
+{
+    const auto rename = [](HMENU menu, int command, UINT stringId)
+    {
+        if (!menu)
+        {
+            return;
+        }
+        const std::wstring caption = LoadStringResource(nullptr, stringId);
+        (void)ModifyMenuW(menu, static_cast<UINT>(command), MF_BYCOMMAND | MF_STRING, static_cast<UINT_PTR>(command),
+                          caption.c_str());
+    };
+    HMENU edit = _menus[static_cast<std::size_t>(MenuIndex::Edit)].get();
+    HMENU layer = _menus[static_cast<std::size_t>(MenuIndex::Layer)].get();
+    rename(edit, kCommandInvert, masksTargeted ? IDS_CMD_INVERT_MASK : IDS_CMD_INVERT);
+    rename(edit, kCommandFreeTransform, transformsSelection ? IDS_CMD_TRANSFORM_SELECTION : IDS_CMD_FREE_TRANSFORM);
+    rename(layer, kCommandDeleteLayer, masksTargeted ? IDS_CMD_DELETE_LAYER_MASK : IDS_CMD_DELETE_LAYER);
 }
 
 void ChromeHost::SyncToolVisuals() noexcept

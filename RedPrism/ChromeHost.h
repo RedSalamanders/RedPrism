@@ -236,6 +236,14 @@ class ChromeHost final
     static constexpr int kCommandUndo = 200;
     static constexpr int kCommandRedo = 201;
     static constexpr int kCommandFreeTransform = 202;
+    static constexpr int kCommandCut = 203;
+    static constexpr int kCommandCopy = 204;
+    static constexpr int kCommandCopyMerged = 205;
+    static constexpr int kCommandPaste = 206;
+    static constexpr int kCommandFillForeground = 207;
+    static constexpr int kCommandFillBackground = 208;
+    static constexpr int kCommandClearPixels = 209;
+    static constexpr int kCommandInvert = 210;
     static constexpr int kCommandNewLayer = 300;
     static constexpr int kCommandNewFolder = 301;
     static constexpr int kCommandDeleteLayer = 302;
@@ -243,6 +251,9 @@ class ChromeHost final
     static constexpr int kCommandMoveOutOfGroup = 304;
     static constexpr int kCommandFlipLayerHorizontal = 305;
     static constexpr int kCommandFlipLayerVertical = 306;
+    static constexpr int kCommandLayerViaCopy = 307;
+    static constexpr int kCommandAddMask = 308;
+    static constexpr int kCommandAddBlackMask = 309;
     static constexpr int kCommandZoomFit = 400;
     static constexpr int kCommandZoomActual = 401;
     static constexpr int kCommandZoomIn = 402;
@@ -325,6 +336,9 @@ class ChromeHost final
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
+    // Captions that follow the target, as the legacy menus did: Invert / Invert Mask, Delete Layer / Delete Layer
+    // Mask, Free Transform / Transform Selection.
+    void SetEditTargets(bool masksTargeted, bool transformsSelection);
     void SetTool(EditorTool tool) noexcept;
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active);
     void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept;
