@@ -2,10 +2,13 @@
 #include "AddressSanitizerProbe.h"
 #include "CanvasViewport.h"
 #include "CommandLine.h"
+#include "CrashDumps.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "FrameScheduler.h"
+#include "Localization.h"
 #include "Resources.h"
+#include "SettingsStore.h"
 #include "TransformOverlay.h"
 
 #include <array>
@@ -14,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <dwrite.h>
+#include <filesystem>
 #include <optional>
 #include <set>
 #include <string>
@@ -151,6 +155,19 @@ void TestCommandLine() noexcept
     Expect(!RedPrismParseCommandLine(badDemoArgs, 3, parsed, &error) && error != nullptr &&
                std::wstring_view{error} == L"sketch",
            "cli.demo-rejects-unknown");
+    wchar_t probeSwitch[] = L"--crash-probe";
+    wchar_t probeValue[] = L"C:\\dumps";
+    wchar_t* probeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeSwitch, probeValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(probeArgs, 3, parsed, &error) &&
+               parsed.crashProbeDirectory == std::wstring_view{probeValue} &&
+               RedPrismFindUnknownArgument(probeArgs, 3) == nullptr,
+           "cli.crash-probe-parse");
+    wchar_t* probeNoValue[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeSwitch};
+    parsed = {};
+    Expect(!RedPrismParseCommandLine(probeNoValue, 2, parsed, &error) && error != nullptr &&
+               std::wstring_view{error} == L"--crash-probe",
+           "cli.crash-probe-needs-a-directory");
     wchar_t selectionValue[] = L"selection";
     wchar_t* selectionArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, selectionValue};
     parsed = {};
@@ -297,7 +314,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 300> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 317> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -608,7 +625,24 @@ void TestStringTable() noexcept
                                          IDS_ERROR_FILTER,
                                          IDS_CMD_CONTENT_AWARE_FILL,
                                          IDS_ADJUST_CONTENT_FILL_HINT,
-                                         IDS_ADJUST_NO_SOURCE};
+                                         IDS_ADJUST_NO_SOURCE,
+                                         IDS_ERROR_UNKNOWN_ARGUMENT,
+                                         IDS_CRASH_PROMPT,
+                                         IDS_A11Y_MENU_BAR,
+                                         IDS_A11Y_PROJECT_TABS,
+                                         IDS_A11Y_TOOLS,
+                                         IDS_A11Y_LAYERS,
+                                         IDS_A11Y_LAYERS_SPLITTER,
+                                         IDS_A11Y_COLOR_PICKER,
+                                         IDS_A11Y_GRADIENT_START,
+                                         IDS_A11Y_GRADIENT_END,
+                                         IDS_A11Y_NOISE_DISTRIBUTION,
+                                         IDS_A11Y_CURVE_EDITOR,
+                                         IDS_A11Y_LEVELS_INPUT,
+                                         IDS_A11Y_LEVELS_OUTPUT,
+                                         IDS_A11Y_HUE_SPECTRUM,
+                                         IDS_A11Y_GRADIENT_RAMP,
+                                         IDS_A11Y_SAMPLING};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -702,6 +736,85 @@ void TestTransformOverlayGeometry() noexcept
            "overlay.distortion-midpoints");
 }
 
+// ── Crash dumps (C14) ─────────────────────────────────────────
+
+void TestCrashDumps()
+{
+    Expect(CrashDumps::DefaultDirectory().ends_with(L"\\RedPrism\\Crashes"), "crash.default-directory");
+    std::error_code error;
+    const std::filesystem::path root = std::filesystem::temp_directory_path(error) /
+                                       (L"RedPrism.HostTests.crash-" + std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::remove_all(root, error);
+    std::filesystem::create_directories(root, error);
+    bool created = true;
+    for (int index = 10; index < 22; ++index)
+    {
+        const std::wstring name = L"RedPrism-20260101-0000" + std::to_wstring(index) + L"-1.dmp";
+        created = SettingsStore::WriteFileAtomic((root / name).wstring(), "x") && created;
+    }
+    Expect(created && CrashDumps::PruneDumps(root.wstring(), 10) == 2 &&
+               !std::filesystem::exists(root / L"RedPrism-20260101-000010-1.dmp", error) &&
+               !std::filesystem::exists(root / L"RedPrism-20260101-000011-1.dmp", error) &&
+               std::filesystem::exists(root / L"RedPrism-20260101-000012-1.dmp", error) &&
+               std::filesystem::exists(root / L"RedPrism-20260101-000021-1.dmp", error) &&
+               CrashDumps::PruneDumps(root.wstring(), 10) == 0,
+           "crash.prune-keeps-newest");
+    wchar_t path[CrashDumps::kPathCapacity] = {};
+    const bool written = CrashDumps::WriteMiniDump(root.c_str(), nullptr, path, CrashDumps::kPathCapacity);
+    const std::wstring dump = path;
+    Expect(written && dump.starts_with(root.wstring() + L"\\RedPrism-") && dump.ends_with(L".dmp") &&
+               std::filesystem::file_size(dump, error) > 0,
+           "crash.dump-written");
+    Expect(CrashDumps::RecordPending(root.c_str(), path) && CrashDumps::TakePending(root.wstring()) == dump &&
+               !CrashDumps::TakePending(root.wstring()).has_value(),
+           "crash.pending-round-trip");
+    Expect(!CrashDumps::WriteMiniDump(L"", nullptr, path, CrashDumps::kPathCapacity) && path[0] == 0,
+           "crash.dump-needs-a-directory");
+    std::filesystem::remove_all(root, error);
+}
+
+// ── Localization (C14) ────────────────────────────────────────
+
+void TestLocalization()
+{
+    const std::vector<std::wstring> system{L"en-US", L"fr-FR", L"fr-FR"};
+    const std::vector<std::wstring> candidates = Localization::SatelliteCandidates(L"C:\\App\\", L"de-AT", system);
+    const std::vector<std::wstring> expected{
+        L"C:\\App\\Languages\\de-AT\\RedPrism.resources.dll", L"C:\\App\\Languages\\de\\RedPrism.resources.dll",
+        L"C:\\App\\Languages\\en-US\\RedPrism.resources.dll", L"C:\\App\\Languages\\en\\RedPrism.resources.dll",
+        L"C:\\App\\Languages\\fr-FR\\RedPrism.resources.dll", L"C:\\App\\Languages\\fr\\RedPrism.resources.dll"};
+    Expect(candidates == expected, "locale.candidates-in-order");
+    Expect(Localization::SatelliteCandidates(L"C:\\App", L"", {}).empty() &&
+               Localization::SatelliteCandidates(L"C:\\App", L"fr", {L"fr"}).size() == 1,
+           "locale.candidates-dedupe");
+    Expect(Localization::LoadSatelliteModule({L"C:\\App\\Languages\\zz\\RedPrism.resources.dll"}) == nullptr,
+           "locale.missing-satellite");
+    Expect(!Localization::SystemUiLanguages().empty() && !Localization::ExecutableDirectory().empty(),
+           "locale.system-languages");
+    std::wstring path(MAX_PATH, L'\0');
+    path.resize(GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size())));
+    const std::size_t slash = path.find_last_of(L"\\/");
+    path = (slash == std::wstring::npos ? std::wstring{} : path.substr(0, slash + 1)) + L"RedPrism.exe";
+    const wil::unique_hmodule exe{
+        LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE)};
+    if (!exe)
+    {
+        Expect(false, "locale.load-redprism-exe");
+        return;
+    }
+    // The satellite answers nullptr-module loads (HostTests.exe has no table of its own); an explicit module ignores
+    // it; without a satellite the process's own (empty) table answers.
+    SetStringResourceSatellite(exe.get());
+    const std::wstring title = LoadStringResource(nullptr, IDS_APP_TITLE);
+    SetStringResourceSatellite(GetModuleHandleW(nullptr));
+    const std::wstring explicitModule = LoadStringResource(exe.get(), IDS_APP_TITLE);
+    const std::wstring emptySatellite = LoadStringResource(nullptr, IDS_APP_TITLE);
+    SetStringResourceSatellite(nullptr);
+    Expect(!title.empty() && title == explicitModule && emptySatellite.empty() &&
+               LoadStringResource(nullptr, IDS_APP_TITLE).empty(),
+           "locale.satellite-override");
+}
+
 int wmain(int argc, wchar_t** argv)
 {
 #if defined(_DEBUG)
@@ -724,6 +837,8 @@ int wmain(int argc, wchar_t** argv)
     TestTransformOverlayGeometry();
     TestRailGlyphsExistInFluentFont();
     TestStringTable();
+    TestCrashDumps();
+    TestLocalization();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

@@ -10,10 +10,28 @@
 // arguments; a resource string is never a printf format. `module` is the module that owns the table
 // (RedPrism.exe: nullptr; tests that load the exe as a data file pass that handle).
 
+// A satellite string table (Common/Localization.h) answers nullptr-module loads first; an id it lacks falls back
+// to the executable's own table. An explicit module is read as given.
+inline HMODULE g_stringResourceSatellite = nullptr;
+
+inline void SetStringResourceSatellite(HMODULE module) noexcept
+{
+    g_stringResourceSatellite = module;
+}
+
 [[nodiscard]] inline std::wstring LoadStringResource(HMODULE module, UINT id)
 {
     const wchar_t* text = nullptr;
-    const int length = LoadStringW(module, id, reinterpret_cast<wchar_t*>(&text), 0);
+    int length = 0;
+    if (module == nullptr && g_stringResourceSatellite != nullptr)
+    {
+        length = LoadStringW(g_stringResourceSatellite, id, reinterpret_cast<wchar_t*>(&text), 0);
+    }
+    if (length <= 0 || text == nullptr)
+    {
+        text = nullptr;
+        length = LoadStringW(module, id, reinterpret_cast<wchar_t*>(&text), 0);
+    }
     if (length <= 0 || text == nullptr)
     {
         return {};

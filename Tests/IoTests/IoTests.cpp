@@ -1,6 +1,7 @@
 #include "Document.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "SettingsStore.h"
 
 #include <cmath>
 #include <crtdbg.h>
@@ -551,6 +552,111 @@ void TestSaveRejectsInvalidDocument()
 }
 } // namespace
 
+// ── Settings store (C14) ──────────────────────────────────────
+
+[[nodiscard]] std::string FileText(const std::wstring& path)
+{
+    std::string bytes;
+    return SettingsStore::ReadFileBytes(path, bytes) ? bytes : std::string{};
+}
+
+void TestSettingsStore()
+{
+    Expect(std::wstring_view{SettingsStore::FileName(true)} == L"settings.debug.json" &&
+               std::wstring_view{SettingsStore::FileName(false)} == L"settings.json",
+           "settings.file-names");
+    const std::wstring directory = SettingsStore::DefaultDirectory();
+    Expect(directory.ends_with(L"\\RedPrism") && SettingsStore::DefaultPath(false) == directory + L"\\settings.json",
+           "settings.default-paths");
+
+    const std::optional<AppSettings> minimal = SettingsStore::Parse("{\"schema\":1}");
+    Expect(minimal.has_value() && minimal.value() == AppSettings{}, "settings.parse-minimal-is-defaults");
+    const std::optional<AppSettings> full = SettingsStore::Parse(
+        R"({"schema":1,"theme":"dark","language":"fr-FR","layersPanelWidth":300.5,"sampleRing":false,)"
+        R"("jpegQuality":0.65,"window":{"x":10,"y":20,"width":800,"height":600,"maximized":true},"future":[1,2]})");
+    Expect(full.has_value() && full->theme == ThemePreference::Dark && full->language == L"fr-FR" &&
+               full->layersPanelWidth == 300.5 && !full->sampleRing && full->jpegQuality == 0.65 &&
+               full->window == WindowPlacementSetting{true, 10, 20, 800, 600, true},
+           "settings.parse-fields");
+    const std::optional<AppSettings> odd = SettingsStore::Parse(
+        R"({"schema":3,"theme":"neon","language":"not a tag!","layersPanelWidth":5,"sampleRing":"yes",)"
+        R"("jpegQuality":7,"window":{"x":0,"y":0,"width":10,"height":10}})");
+    Expect(odd.has_value() && odd->theme == ThemePreference::System && odd->language.empty() &&
+               odd->layersPanelWidth == AppSettings::kLayersPanelMin && odd->sampleRing && odd->jpegQuality == 1.0 &&
+               !odd->window.valid,
+           "settings.parse-unusable-values-fall-back");
+    Expect(!SettingsStore::Parse("").has_value() && !SettingsStore::Parse("[1]").has_value() &&
+               !SettingsStore::Parse("{}").has_value() && !SettingsStore::Parse("{\"schema\":0}").has_value() &&
+               !SettingsStore::Parse("{\"schema\":\"1\"}").has_value() &&
+               !SettingsStore::Parse("{\"schema\":1").has_value() && !SettingsStore::Parse("null").has_value(),
+           "settings.parse-rejects");
+
+    AppSettings changed;
+    changed.theme = ThemePreference::Light;
+    changed.language = L"de";
+    changed.layersPanelWidth = 321;
+    changed.sampleRing = false;
+    changed.jpegQuality = 0.5;
+    changed.window = WindowPlacementSetting{true, -5, 7, 1024, 768, false};
+    const std::string text = SettingsStore::Serialize(changed);
+    const std::optional<AppSettings> back = SettingsStore::Parse(text);
+    Expect(back.has_value() && back.value() == changed && text.find("\"schema\": 1") != std::string::npos &&
+               text.back() == '\n',
+           "settings.serialize-round-trip");
+    const std::string merged = SettingsStore::Serialize(changed, R"({"schema":2,"future":{"x":1},"theme":"dark"})");
+    Expect(merged.find("\"future\"") != std::string::npos && merged.find("\"schema\": 2") != std::string::npos &&
+               merged.find("\"theme\": \"light\"") != std::string::npos && merged.find("\"dark\"") == std::string::npos,
+           "settings.serialize-keeps-unknown-and-newer-schema");
+    Expect(SettingsStore::Serialize(AppSettings{}, text).find("\"window\"") == std::string::npos,
+           "settings.serialize-drops-an-unplaced-window");
+    Expect(SettingsStore::Parse(SettingsStore::Serialize(changed, "{ not json")) == changed,
+           "settings.serialize-ignores-invalid-existing");
+
+    std::error_code error;
+    const std::filesystem::path root =
+        std::filesystem::path(ScratchRoot()) / (L"settings-" + std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::remove_all(root, error);
+    const std::wstring path = (root / L"settings.json").wstring();
+    const SettingsLoadResult missing = SettingsStore::LoadCold(path);
+    Expect(missing.status == SettingsLoadStatus::Missing && missing.templateWritten &&
+               missing.settings == AppSettings{} && SettingsStore::Parse(FileText(path)) == AppSettings{},
+           "settings.cold-missing-writes-template");
+    const bool brokenWritten = SettingsStore::WriteFileAtomic(path, "{ nope");
+    const SettingsLoadResult invalid = SettingsStore::LoadCold(path);
+    Expect(brokenWritten && invalid.status == SettingsLoadStatus::Invalid && !invalid.backupPath.empty() &&
+               FileText(invalid.backupPath) == "{ nope" && invalid.templateWritten &&
+               invalid.settings == AppSettings{} && SettingsStore::Parse(FileText(path)) == AppSettings{},
+           "settings.cold-invalid-backs-up-and-resets");
+    const bool brokenAgain = SettingsStore::WriteFileAtomic(path, "{ nope again");
+    Expect(brokenAgain && !SettingsStore::LoadLive(path).has_value() && FileText(path) == "{ nope again",
+           "settings.live-invalid-keeps-the-file");
+    Expect(SettingsStore::WriteFileAtomic(path, SettingsStore::Serialize(changed)) &&
+               SettingsStore::LoadLive(path) == changed &&
+               !SettingsStore::LoadLive((root / L"none.json").wstring()).has_value(),
+           "settings.live-valid-and-missing");
+    std::wstring backup;
+    Expect(SettingsStore::WriteFileAtomic(path, "broken") && SettingsStore::Save(path, changed, &backup) &&
+               !backup.empty() && FileText(backup) == "broken" && SettingsStore::LoadLive(path) == changed,
+           "settings.save-over-invalid-backs-up");
+    Expect(SettingsStore::WriteFileAtomic(path, R"({"schema":1,"custom":true})") &&
+               SettingsStore::Save(path, changed) && FileText(path).find("\"custom\": true") != std::string::npos &&
+               SettingsStore::LoadLive(path) == changed,
+           "settings.save-keeps-unknown-fields");
+    bool temporaryLeft = false;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(root, error))
+    {
+        temporaryLeft = temporaryLeft || entry.path().wstring().find(L".tmp-") != std::wstring::npos;
+    }
+    Expect(!temporaryLeft, "settings.save-leaves-no-temporary");
+    const std::wstring nested = (root / L"deeper" / L"dir" / L"settings.json").wstring();
+    Expect(SettingsStore::Save(nested, changed) && SettingsStore::LoadLive(nested) == changed,
+           "settings.save-creates-the-directory");
+    const SettingsLoadResult unreadable = SettingsStore::LoadCold((root / L"deeper").wstring());
+    Expect(unreadable.status == SettingsLoadStatus::Unreadable && unreadable.settings == AppSettings{},
+           "settings.cold-unreadable-keeps-defaults");
+    std::filesystem::remove_all(root, error);
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -578,6 +684,7 @@ int wmain()
     TestVersionGatesAndRejects();
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
+    TestSettingsStore();
     if (gFailures != 0)
     {
         std::printf("%d test(s) failed.\n", gFailures);

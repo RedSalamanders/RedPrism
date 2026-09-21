@@ -94,6 +94,9 @@
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
+    <ClCompile Include="..\..\Common\SettingsStore.cpp" />
+    <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\..\Common\Localization.cpp" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
