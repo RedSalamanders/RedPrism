@@ -39,6 +39,12 @@ the pin. Do not float onto sibling `main`.
   the library assumed: translate it by the owner's client origin minus `DipPointToScreenPoint({0, 0})`
   (`ChromeHost::MenuAnchorScreen`), and hit-test the canvas hole minus the floating cards through one helper
   (`ChromeHost::IsCanvasPoint`) for pointer routing and cursors alike.
+- A DxUi press held across a frame is cancelled when the library's focus leaves another control or a layout
+  write (`SetBounds`, `SetVisible`, `SetPressedVisual`, `SetChecked`, a value) reaches the tree while the pointer
+  is down. Release DxUi's focus before dispatching a chrome press (`ChromeHost::ReleaseFocusForPress`), write
+  layout only on change (`PlaceControl`, `ShowControl`), never re-issue a pressed or checked look every sync, and
+  keep accessibility attach/update calls out of a press. Mark the active tool with a toolbar toggle's checked state,
+  not `SetPressedVisual` on a button. The self-test holds rail presses across frames to keep this true.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
 

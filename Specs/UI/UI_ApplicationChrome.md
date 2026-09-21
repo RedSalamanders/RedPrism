@@ -91,6 +91,17 @@ the installed Segoe Fluent Icons font and that keys, glyphs and names are unique
 Tool keys apply when the canvas has focus; Space pans while held. X swaps the foreground and background wells and D
 resets them to black over white, the legacy canvas key bindings.
 
+The rail buttons are DxUi toggle buttons; the checked one is the active tool, and `SyncToolVisuals` writes a
+change only. Three rules keep a mouse press alive across the frames it spans (DxUi cancels a press held across a
+frame when its focus leaves another control or a layout write reaches the tree): a press on the chrome first
+releases DxUi's focus (`ChromeHost::ReleaseFocusForPress`; a text edit commits when the press lands outside its
+control and continues when it lands inside), the arrange paths write bounds and visibility only when they change
+(`PlaceControl`, `ShowControl`), and the pressed looks of the adjustment panel's eyedroppers and targeting button
+change only when their state does. The accessibility placement flushes and the UIA attachment wait for the pointer
+to be up. The self-test clicks rail buttons through the pointer path: plainly, with the window focused, under a
+tooltip, and held across frames after a tool switch, after a click on another rail button and with the opacity
+stepper focused.
+
 ## Move tool
 
 With the Move tool the header is the transform inspector and the canvas shows the active layer's box through
