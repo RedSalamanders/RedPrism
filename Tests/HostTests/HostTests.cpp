@@ -158,6 +158,11 @@ void TestCommandLine() noexcept
     parsed = {};
     Expect(RedPrismParseCommandLine(brushArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{brushValue},
            "cli.demo-brush");
+    wchar_t retouchValue[] = L"retouch";
+    wchar_t* retouchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, retouchValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(retouchArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{retouchValue},
+           "cli.demo-retouch");
     wchar_t benchSwitch[] = L"--bench";
     wchar_t* benchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, brushValue};
     parsed = {};
@@ -284,7 +289,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 170> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 204> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -465,7 +470,41 @@ void TestStringTable() noexcept
                                          IDS_BRUSH_MASK_WHITE,
                                          IDS_BRUSH_MASK_TIP,
                                          IDS_BRUSH_COLOR,
-                                         IDS_BRUSH_MASK_NOTE};
+                                         IDS_BRUSH_MASK_NOTE,
+                                         IDS_ERROR_CLONE_SOURCE,
+                                         IDS_ERROR_SMEAR_MASK,
+                                         IDS_ERROR_SHAPE_SIZE,
+                                         IDS_HEAL_TYPE_TIP,
+                                         IDS_HEAL_CONTENT_AWARE,
+                                         IDS_HEAL_CREATE_TEXTURE,
+                                         IDS_HEAL_PROXIMITY_MATCH,
+                                         IDS_CLONE_ALIGNED,
+                                         IDS_CLONE_ALIGNED_TIP,
+                                         IDS_CLONE_THIS_LAYER,
+                                         IDS_CLONE_ALL_LAYERS,
+                                         IDS_CLONE_SAMPLE_TIP,
+                                         IDS_CLONE_SOURCE_NOTE,
+                                         IDS_SMEAR_LIQUIFY,
+                                         IDS_SMEAR_BLUR,
+                                         IDS_SMEAR_SMUDGE,
+                                         IDS_SMEAR_MODE_TIP,
+                                         IDS_BRUSH_STRENGTH,
+                                         IDS_GRADIENT_LINEAR,
+                                         IDS_GRADIENT_RADIAL,
+                                         IDS_GRADIENT_SHAPE_TIP,
+                                         IDS_GRADIENT_FG_BG,
+                                         IDS_GRADIENT_FG_TRANSPARENT,
+                                         IDS_GRADIENT_COLORS_TIP,
+                                         IDS_GRADIENT_REVERSE,
+                                         IDS_GRADIENT_OPACITY_TIP,
+                                         IDS_SHAPE_RECTANGLE,
+                                         IDS_SHAPE_ELLIPSE,
+                                         IDS_SHAPE_KIND_TIP,
+                                         IDS_SHAPE_RADIUS,
+                                         IDS_SHAPE_RADIUS_TIP,
+                                         IDS_SHAPE_FILL,
+                                         IDS_SHAPE_FILL_TIP,
+                                         IDS_CMD_SAMPLE_RING};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

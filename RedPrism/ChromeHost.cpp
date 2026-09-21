@@ -300,6 +300,9 @@ void ChromeHost::BuildMenus() noexcept
         AppendSeparator(view);
         AppendCommand(view, kCommandZoomIn, IDS_CMD_ZOOM_IN);
         AppendCommand(view, kCommandZoomOut, IDS_CMD_ZOOM_OUT);
+        AppendSeparator(view);
+        AppendCommand(view, kCommandSampleRing, IDS_CMD_SAMPLE_RING);
+        (void)CheckMenuItem(view, static_cast<UINT>(kCommandSampleRing), MF_BYCOMMAND | MF_CHECKED);
     }
     if (HMENU help = _menus[static_cast<std::size_t>(MenuIndex::Help)].get())
     {
@@ -382,6 +385,8 @@ HRESULT ChromeHost::Build() noexcept
         BuildTransformHeader(*root);
         BuildSelectionHeader(*root);
         BuildBrushHeader(*root);
+        BuildGradientHeader(*root);
+        BuildShapeHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
         _opacity->SetMinimum(0.0);
@@ -532,6 +537,8 @@ void ChromeHost::Arrange() noexcept
     ArrangeTransformHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeSelectionHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeBrushHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    ArrangeGradientHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    ArrangeShapeHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     if (_overlay)
     {
         _overlay->SetBounds(D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
@@ -834,9 +841,17 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
     {
         _brushHeader->SetVisible(EditorToolIsBrush(tool));
     }
+    if (_gradientHeader)
+    {
+        _gradientHeader->SetVisible(tool == EditorTool::Gradient);
+    }
+    if (_shapeHeader)
+    {
+        _shapeHeader->SetVisible(tool == EditorTool::Shape);
+    }
     if (_header)
     {
-        _header->SetVisible(tool != EditorTool::Move && !EditorToolIsSelection(tool) && !EditorToolIsBrush(tool));
+        _header->SetVisible(GenericHeaderWanted(tool));
         _header->SetText(LoadStringResource(nullptr, EditorToolNameId(_tool)));
     }
 }
@@ -1573,6 +1588,26 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
                             BrushAction::SetOpacity);
     _brushMaskPaint = combo({{L"black", IDS_BRUSH_MASK_BLACK}, {L"white", IDS_BRUSH_MASK_WHITE}}, IDS_BRUSH_MASK_TIP,
                             BrushAction::SetMaskPaint);
+    _brushHealMode = combo({{L"content-aware", IDS_HEAL_CONTENT_AWARE},
+                            {L"create-texture", IDS_HEAL_CREATE_TEXTURE},
+                            {L"proximity-match", IDS_HEAL_PROXIMITY_MATCH}},
+                           IDS_HEAL_TYPE_TIP, BrushAction::SetHealMode);
+    _brushCloneAligned = _brushHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, IDS_CLONE_ALIGNED));
+    _brushCloneAligned->SetTooltipText(LoadStringResource(nullptr, IDS_CLONE_ALIGNED_TIP));
+    _brushCloneAligned->SetChecked(true);
+    _brushCloneAligned->SetOnToggled(
+        [this](bool value)
+        {
+            if (!_syncingBrush && _onBrush)
+            {
+                _onBrush(BrushAction::SetCloneAligned, value ? 1.0 : 0.0);
+            }
+        });
+    _brushCloneSample = combo({{L"layer", IDS_CLONE_THIS_LAYER}, {L"all", IDS_CLONE_ALL_LAYERS}}, IDS_CLONE_SAMPLE_TIP,
+                              BrushAction::SetCloneSample);
+    _brushSmearMode = combo({{L"liquify", IDS_SMEAR_LIQUIFY}, {L"blur", IDS_SMEAR_BLUR}, {L"smudge", IDS_SMEAR_SMUDGE}},
+                            IDS_SMEAR_MODE_TIP, BrushAction::SetSmearMode);
+    _brushSourceNote = _brushHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_CLONE_SOURCE_NOTE));
     _brushColorLabel = _brushHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_BRUSH_COLOR));
     // The same foreground color and picker as the rail's well.
     _brushColor = _brushHeader->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
@@ -1590,7 +1625,7 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
     _brushHeader->SetVisible(EditorToolIsBrush(_tool));
     if (_header)
     {
-        _header->SetVisible(_tool != EditorTool::Move && !EditorToolIsSelection(_tool) && !EditorToolIsBrush(_tool));
+        _header->SetVisible(GenericHeaderWanted(_tool));
     }
 }
 
@@ -1617,20 +1652,35 @@ void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bo
             rightEdge -= 50.0f + kGapDip;
         }
     }
+    if (_brushSourceNote)
+    {
+        const bool fits = state.tool == EditorTool::Clone && !state.cloneHasSource && rightEdge - 170.0f > left + 80.0f;
+        _brushSourceNote->SetVisible(fits);
+        if (fits)
+        {
+            _brushSourceNote->SetBounds(D2D1::RectF(rightEdge - 170.0f, rowTop, rightEdge, rowBottom));
+            rightEdge -= 170.0f + kGapDip;
+        }
+    }
     struct Slot
     {
         DxUi::Control* control;
         float width;
         bool wanted;
     };
-    const std::array<Slot, 8> slots{Slot{_brushTitle, 72.0f, true},
-                                    Slot{_brushMode, 104.0f, state.tool == EditorTool::Brush},
-                                    Slot{_brushSize, 118.0f, true},
-                                    Slot{_brushHardness, 150.0f, true},
-                                    Slot{_brushOpacity, 142.0f, true},
-                                    Slot{_brushMaskPaint, 150.0f, state.maskSelected},
-                                    Slot{_brushColorLabel, 40.0f, !state.maskSelected},
-                                    Slot{_brushColor, 34.0f, !state.maskSelected}};
+    const bool colorWanted = !state.maskSelected && state.tool != EditorTool::Clone && state.tool != EditorTool::Smear;
+    const std::array<Slot, 12> slots{Slot{_brushTitle, 92.0f, true},
+                                     Slot{_brushMode, 104.0f, state.tool == EditorTool::Brush},
+                                     Slot{_brushSmearMode, 112.0f, state.tool == EditorTool::Smear},
+                                     Slot{_brushHealMode, 150.0f, state.tool == EditorTool::Heal},
+                                     Slot{_brushCloneAligned, 84.0f, state.tool == EditorTool::Clone},
+                                     Slot{_brushCloneSample, 118.0f, state.tool == EditorTool::Clone},
+                                     Slot{_brushSize, 118.0f, true},
+                                     Slot{_brushHardness, 150.0f, true},
+                                     Slot{_brushOpacity, 142.0f, true},
+                                     Slot{_brushMaskPaint, 150.0f, state.maskSelected},
+                                     Slot{_brushColorLabel, 40.0f, colorWanted},
+                                     Slot{_brushColor, 34.0f, colorWanted}};
     float cursor = left + 4.0f;
     bool room = true;
     for (const Slot& slot : slots)
@@ -1679,6 +1729,17 @@ void ChromeHost::SetBrushInspector(const BrushInspectorState& state) noexcept
     _brushMaskPaint->SetSelectedIndex(state.maskPaintWhite ? 1u : 0u);
     _brushMode->SetEnabled(state.enabled);
     _brushMaskPaint->SetEnabled(state.enabled);
+    _brushHealMode->SetSelectedIndex(static_cast<size_t>(std::clamp(state.healMode, 0, 2)));
+    _brushHealMode->SetEnabled(state.enabled);
+    _brushCloneAligned->SetChecked(state.cloneAligned);
+    _brushCloneAligned->SetEnabled(state.enabled);
+    _brushCloneSample->SetSelectedIndex(state.cloneAllLayers ? 1u : 0u);
+    _brushCloneSample->SetEnabled(state.enabled);
+    _brushSmearMode->SetSelectedIndex(static_cast<size_t>(std::clamp(state.smearMode, 0, 2)));
+    _brushSmearMode->SetEnabled(state.enabled);
+    // Smear calls its opacity Strength.
+    _brushOpacity->SetLabel(
+        LoadStringResource(nullptr, state.tool == EditorTool::Smear ? IDS_BRUSH_STRENGTH : IDS_BRUSH_OPACITY), 54.0f);
     _brushColor->SetSwatchValue(state.foregroundArgb);
     _brushColor->SetEnabled(state.enabled);
     _syncingBrush = false;
@@ -1698,4 +1759,421 @@ void ChromeHost::SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor
         cursor->radius *= toDip;
     }
     _overlay->SetBrushCursor(cursor);
+}
+
+bool ChromeHost::GenericHeaderWanted(EditorTool tool) noexcept
+{
+    return tool != EditorTool::Move && !EditorToolIsSelection(tool) && !EditorToolIsBrush(tool) &&
+           tool != EditorTool::Gradient && tool != EditorTool::Shape;
+}
+
+void ChromeHost::SetGradientHandler(std::function<void(GradientAction, double)> handler)
+{
+    _onGradient = std::move(handler);
+}
+
+void ChromeHost::SetShapeHandler(std::function<void(ShapeAction, double)> handler)
+{
+    _onShape = std::move(handler);
+}
+
+void ChromeHost::BuildGradientHeader(DxUi::Panel& root)
+{
+    _gradientHeader = root.AddChild<DxUi::Panel>();
+    _gradientTitle = _gradientHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_TOOL_GRADIENT));
+    _gradientTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+    const auto combo =
+        [this](std::initializer_list<std::pair<const wchar_t*, UINT>> items, UINT tipId, GradientAction action)
+    {
+        DxUi::ComboBox* control = _gradientHeader->AddChild<DxUi::ComboBox>();
+        std::vector<DxUi::ComboBox::Item> entries;
+        for (const auto& [value, id] : items)
+        {
+            entries.push_back(DxUi::ComboBox::Item{value, LoadStringResource(nullptr, id)});
+        }
+        control->SetItems(std::move(entries));
+        control->SetSelectedIndex(0);
+        control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetOnSelectionChanged(
+            [this, action](size_t index)
+            {
+                if (!_syncingGradient && _onGradient)
+                {
+                    _onGradient(action, static_cast<double>(index));
+                }
+            });
+        return control;
+    };
+    _gradientShape = combo({{L"linear", IDS_GRADIENT_LINEAR}, {L"radial", IDS_GRADIENT_RADIAL}}, IDS_GRADIENT_SHAPE_TIP,
+                           GradientAction::SetShape);
+    // The two end colors as swatches (the transparent end shows the checker); clicking opens the foreground picker.
+    for (DxUi::ColorSwatch** swatch : {&_gradientStart, &_gradientEnd})
+    {
+        *swatch = _gradientHeader->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
+        (*swatch)->SetTooltipText(LoadStringResource(nullptr, IDS_GRADIENT_COLORS_TIP));
+        (*swatch)->SetOnClick(
+            [this]
+            {
+                if (_onGradient)
+                {
+                    _onGradient(GradientAction::OpenColor, 0.0);
+                }
+            });
+    }
+    _gradientStyle = combo(
+        {{L"foreground-background", IDS_GRADIENT_FG_BG}, {L"foreground-transparent", IDS_GRADIENT_FG_TRANSPARENT}},
+        IDS_GRADIENT_COLORS_TIP, GradientAction::SetStyle);
+    _gradientReverse = _gradientHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, IDS_GRADIENT_REVERSE));
+    _gradientReverse->SetOnToggled(
+        [this](bool value)
+        {
+            if (!_syncingGradient && _onGradient)
+            {
+                _onGradient(GradientAction::SetReversed, value ? 1.0 : 0.0);
+            }
+        });
+    _gradientOpacity = _gradientHeader->AddChild<DxUi::NumericStepper>();
+    _gradientOpacity->SetLabel(LoadStringResource(nullptr, IDS_BRUSH_OPACITY), 54.0f);
+    _gradientOpacity->SetUnit(LoadStringResource(nullptr, IDS_UNIT_PERCENT), 14.0f);
+    _gradientOpacity->SetMinimum(1.0);
+    _gradientOpacity->SetMaximum(100.0);
+    _gradientOpacity->SetStep(1.0);
+    _gradientOpacity->SetLargeStep(10.0);
+    _gradientOpacity->SetDecimals(0);
+    _gradientOpacity->SetValue(100.0);
+    _gradientOpacity->SetTooltipText(LoadStringResource(nullptr, IDS_GRADIENT_OPACITY_TIP));
+    _gradientOpacity->SetOnChange(
+        [this](DxUi::NumericStepperChange change)
+        {
+            if (!_syncingGradient && _onGradient)
+            {
+                _onGradient(GradientAction::SetOpacity, change.value);
+            }
+        });
+    _gradientMaskNote = _gradientHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_BRUSH_MASK_NOTE));
+    const auto button = [this](UINT labelId, GradientAction action)
+    {
+        DxUi::Button* control = _gradientHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, labelId));
+        control->SetOnClick(
+            [this, action]
+            {
+                if (_onGradient)
+                {
+                    _onGradient(action, 0.0);
+                }
+            });
+        return control;
+    };
+    _gradientCancel = button(IDS_TRANSFORM_CANCEL, GradientAction::Cancel);
+    _gradientApply = button(IDS_TRANSFORM_APPLY, GradientAction::Apply);
+    _gradientHeader->SetVisible(_tool == EditorTool::Gradient);
+}
+
+void ChromeHost::ArrangeGradientHeader(float left, float top, float right, float bottom) noexcept
+{
+    if (!_gradientHeader)
+    {
+        return;
+    }
+    _gradientHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    constexpr float kRowDip = 28.0f;
+    constexpr float kGapDip = 6.0f;
+    const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
+    const float rowBottom = rowTop + kRowDip;
+    const GradientInspectorState& state = _gradientInspector;
+    float rightEdge = right - 4.0f;
+    struct Pinned
+    {
+        DxUi::Control* control;
+        float width;
+        bool wanted;
+    };
+    const std::array<Pinned, 3> pinned{Pinned{_gradientApply, 72.0f, state.pending},
+                                       Pinned{_gradientCancel, 72.0f, state.pending},
+                                       Pinned{_gradientMaskNote, 50.0f, state.maskSelected}};
+    for (const Pinned& item : pinned)
+    {
+        if (item.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = item.wanted && rightEdge - item.width > left + 80.0f;
+        item.control->SetVisible(fits);
+        if (fits)
+        {
+            item.control->SetBounds(D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
+            rightEdge -= item.width + kGapDip;
+        }
+    }
+    struct Slot
+    {
+        DxUi::Control* control;
+        float width;
+        bool inset;
+    };
+    const std::array<Slot, 7> slots{Slot{_gradientTitle, 78.0f, false},   Slot{_gradientShape, 104.0f, false},
+                                    Slot{_gradientStart, 30.0f, true},    Slot{_gradientEnd, 30.0f, true},
+                                    Slot{_gradientStyle, 200.0f, false},  Slot{_gradientReverse, 88.0f, false},
+                                    Slot{_gradientOpacity, 142.0f, false}};
+    float cursor = left + 4.0f;
+    bool room = true;
+    for (const Slot& slot : slots)
+    {
+        if (slot.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = room && cursor + slot.width <= rightEdge;
+        slot.control->SetVisible(fits);
+        if (fits)
+        {
+            const float inset = slot.inset ? 4.0f : 0.0f;
+            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            cursor += slot.width + (slot.control == _gradientStart ? 2.0f : kGapDip);
+        }
+        else
+        {
+            room = false;
+        }
+    }
+}
+
+void ChromeHost::SetGradientInspector(const GradientInspectorState& state) noexcept
+{
+    _gradientInspector = state;
+    if (!_gradientHeader)
+    {
+        return;
+    }
+    // Values only; the next Prepare arranges the slots the state wants.
+    _syncingGradient = true;
+    _gradientShape->SetSelectedIndex(static_cast<size_t>(std::clamp(state.shape, 0, 1)));
+    _gradientShape->SetEnabled(state.enabled);
+    _gradientStyle->SetSelectedIndex(static_cast<size_t>(std::clamp(state.style, 0, 1)));
+    _gradientStyle->SetEnabled(state.enabled);
+    _gradientReverse->SetChecked(state.reversed);
+    _gradientReverse->SetEnabled(state.enabled);
+    _gradientOpacity->SetEnabled(state.enabled);
+    if (!_gradientOpacity->IsEditing())
+    {
+        _gradientOpacity->SetValue(state.opacity);
+    }
+    _gradientStart->SetSwatchValue(state.startArgb);
+    _gradientEnd->SetSwatchValue(state.endArgb);
+    _gradientStart->SetEnabled(state.enabled);
+    _gradientEnd->SetEnabled(state.enabled);
+    _gradientCancel->SetEnabled(state.pending);
+    _gradientApply->SetEnabled(state.pending);
+    _syncingGradient = false;
+}
+
+void ChromeHost::BuildShapeHeader(DxUi::Panel& root)
+{
+    _shapeHeader = root.AddChild<DxUi::Panel>();
+    _shapeTitle = _shapeHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_TOOL_SHAPE));
+    _shapeTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+    _shapeKind = _shapeHeader->AddChild<DxUi::ComboBox>();
+    _shapeKind->SetItems({DxUi::ComboBox::Item{L"rectangle", LoadStringResource(nullptr, IDS_SHAPE_RECTANGLE)},
+                          DxUi::ComboBox::Item{L"ellipse", LoadStringResource(nullptr, IDS_SHAPE_ELLIPSE)}});
+    _shapeKind->SetSelectedIndex(0);
+    _shapeKind->SetTooltipText(LoadStringResource(nullptr, IDS_SHAPE_KIND_TIP));
+    _shapeKind->SetOnSelectionChanged(
+        [this](size_t index)
+        {
+            if (!_syncingShape && _onShape)
+            {
+                _onShape(ShapeAction::SetKind, static_cast<double>(index));
+            }
+        });
+    _shapeRadius = _shapeHeader->AddChild<DxUi::NumericStepper>();
+    _shapeRadius->SetLabel(LoadStringResource(nullptr, IDS_SHAPE_RADIUS), 50.0f);
+    _shapeRadius->SetUnit(LoadStringResource(nullptr, IDS_UNIT_PIXELS), 18.0f);
+    _shapeRadius->SetMinimum(0.0);
+    _shapeRadius->SetMaximum(5000.0);
+    _shapeRadius->SetStep(1.0);
+    _shapeRadius->SetLargeStep(10.0);
+    _shapeRadius->SetDecimals(0);
+    _shapeRadius->SetValue(0.0);
+    _shapeRadius->SetTooltipText(LoadStringResource(nullptr, IDS_SHAPE_RADIUS_TIP));
+    _shapeRadius->SetOnChange(
+        [this](DxUi::NumericStepperChange change)
+        {
+            if (!_syncingShape && _onShape)
+            {
+                _onShape(ShapeAction::SetRadius, change.value);
+            }
+        });
+    _shapeFillLabel = _shapeHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_SHAPE_FILL));
+    _shapeFill = _shapeHeader->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
+    _shapeFill->SetAccessibleName(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
+    _shapeFill->SetTooltipText(LoadStringResource(nullptr, IDS_SHAPE_FILL_TIP));
+    _shapeFill->SetOnClick(
+        [this]
+        {
+            if (_onShape)
+            {
+                _onShape(ShapeAction::OpenColor, 0.0);
+            }
+        });
+    _shapeHeader->SetVisible(_tool == EditorTool::Shape);
+}
+
+void ChromeHost::ArrangeShapeHeader(float left, float top, float right, float bottom) noexcept
+{
+    if (!_shapeHeader)
+    {
+        return;
+    }
+    _shapeHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    constexpr float kRowDip = 28.0f;
+    constexpr float kGapDip = 6.0f;
+    const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
+    const float rowBottom = rowTop + kRowDip;
+    const float rightEdge = right - 4.0f;
+    struct Slot
+    {
+        DxUi::Control* control;
+        float width;
+        bool wanted;
+    };
+    const std::array<Slot, 5> slots{Slot{_shapeTitle, 60.0f, true}, Slot{_shapeKind, 118.0f, true},
+                                    Slot{_shapeRadius, 140.0f, _shapeInspector.kind == 0},
+                                    Slot{_shapeFillLabel, 30.0f, true}, Slot{_shapeFill, 34.0f, true}};
+    float cursor = left + 4.0f;
+    bool room = true;
+    for (const Slot& slot : slots)
+    {
+        if (slot.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
+        slot.control->SetVisible(fits);
+        if (fits)
+        {
+            const float inset = slot.control == _shapeFill ? 4.0f : 0.0f;
+            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            cursor += slot.width + kGapDip;
+        }
+        else if (slot.wanted)
+        {
+            room = false;
+        }
+    }
+}
+
+void ChromeHost::SetShapeInspector(const ShapeInspectorState& state) noexcept
+{
+    _shapeInspector = state;
+    if (!_shapeHeader)
+    {
+        return;
+    }
+    _syncingShape = true;
+    _shapeKind->SetSelectedIndex(static_cast<size_t>(std::clamp(state.kind, 0, 1)));
+    _shapeKind->SetEnabled(state.enabled);
+    _shapeRadius->SetEnabled(state.enabled);
+    if (!_shapeRadius->IsEditing())
+    {
+        _shapeRadius->SetValue(state.radius);
+    }
+    _shapeFill->SetSwatchValue(state.foregroundArgb);
+    _shapeFill->SetEnabled(state.enabled);
+    _syncingShape = false;
+}
+
+void ChromeHost::SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (line.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        line->first.x *= toDip;
+        line->first.y *= toDip;
+        line->second.x *= toDip;
+        line->second.y *= toDip;
+    }
+    _overlay->SetGradientLine(line);
+}
+
+void ChromeHost::SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (draft.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        draft->rect.left *= toDip;
+        draft->rect.top *= toDip;
+        draft->rect.right *= toDip;
+        draft->rect.bottom *= toDip;
+        draft->cornerRadius *= toDip;
+    }
+    _overlay->SetShapeDraft(draft);
+}
+
+void ChromeHost::SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (ring.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        ring->center.x *= toDip;
+        ring->center.y *= toDip;
+    }
+    _overlay->SetSampleRing(ring);
+}
+
+void ChromeHost::SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (point.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        point->x *= toDip;
+        point->y *= toDip;
+    }
+    _overlay->SetCloneSource(point);
+}
+
+void ChromeHost::SetPickerColor(uint32_t argb) noexcept
+{
+    if (!_picker || !_pickerCard || !_pickerCard->IsVisible())
+    {
+        return;
+    }
+    _picker->SetCurrentColor(argb | 0xFF000000u);
+    if (DxUi::ColorSwatch* well = _pickerBackground ? _backgroundWell : _foregroundWell)
+    {
+        well->SetSwatchValue(argb | 0xFF000000u);
+    }
+    _view.MarkDirty();
+}
+
+uint32_t ChromeHost::PickerColor() const noexcept
+{
+    return _picker != nullptr ? _picker->GetCurrentColor() : _foregroundArgb;
+}
+
+void ChromeHost::SetCommandChecked(int command, bool checked) noexcept
+{
+    for (const unique_hmenu& menu : _menus)
+    {
+        if (menu)
+        {
+            (void)CheckMenuItem(menu.get(), static_cast<UINT>(command),
+                                MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
+        }
+    }
 }

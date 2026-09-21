@@ -66,10 +66,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::Demo, L"--demo", nullptr, RedPrismSwitchValue::Separate,
-                                  L"<transform|selection|brush>",
+                                  L"<transform|selection|brush|retouch>",
                                   L"Populate the new document for a screenshot: transform adds two painted layers and "
                                   L"shows the Move tool's box on the rotated one; selection adds an elliptical and a "
-                                  L"rectangular selection with the Marquee tool; brush paints strokes on a backdrop.",
+                                  L"rectangular selection with the Marquee tool; brush paints strokes on a backdrop; "
+                                  L"retouch adds a radial gradient and two shapes.",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{
             RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate, L"<brush>",
@@ -177,7 +178,8 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
         case RedPrismSwitch::Demo:
             if (index + 1 >= argumentCount || (std::wstring_view{arguments[index + 1]} != L"transform" &&
                                                std::wstring_view{arguments[index + 1]} != L"selection" &&
-                                               std::wstring_view{arguments[index + 1]} != L"brush"))
+                                               std::wstring_view{arguments[index + 1]} != L"brush" &&
+                                               std::wstring_view{arguments[index + 1]} != L"retouch"))
             {
                 if (errorToken)
                 {

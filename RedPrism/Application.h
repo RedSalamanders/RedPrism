@@ -25,6 +25,8 @@ class ChromeHost;
 enum class TransformAction : std::uint8_t;
 enum class SelectionAction : std::uint8_t;
 enum class BrushAction : std::uint8_t;
+enum class GradientAction : std::uint8_t;
+enum class ShapeAction : std::uint8_t;
 
 class Application final
 {
@@ -96,6 +98,30 @@ class Application final
     void SyncBrushCursor() noexcept;
     void DropBrushEngine() noexcept;
     [[nodiscard]] bool BrushErases() const noexcept;
+    // Retouch tools (C11): Spot Healing, Clone Stamp and Blur go through the brush pipeline with a kind; Liquify
+    // and Smudge through the warp pipeline (a document-size working copy shown through the stroke preview); the
+    // Gradient's pending raster shows through the preview until Apply; the Shape's draft and the Eyedropper's ring
+    // draw on the overlay.
+    [[nodiscard]] BrushKind BrushKindFor() const noexcept;
+    [[nodiscard]] bool WarpsWithSmear() const noexcept;
+    void BeginWarpStroke(Vec2 view) noexcept;
+    void ContinueWarpStroke(Vec2 view) noexcept;
+    void FinishWarpStroke() noexcept;
+    void CancelWarpStroke() noexcept;
+    void PushWarpTiles() noexcept;
+    void OnGradientAction(GradientAction action, double value) noexcept;
+    void BeginGradientDrag(Vec2 view) noexcept;
+    void DragGradient(Vec2 view, UINT modifiers) noexcept;
+    void EndGradientDrag() noexcept;
+    void CommitGradient() noexcept;
+    void CancelGradient() noexcept;
+    void SyncGradientPreview() noexcept;
+    void PushGradientTiles() noexcept;
+    void OnShapeAction(ShapeAction action, double value) noexcept;
+    [[nodiscard]] bool SamplesColor() const noexcept;
+    void SampleColorAt(Vec2 view) noexcept;
+    void EndColorSampling() noexcept;
+    void SyncToolOverlays() noexcept;
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
@@ -142,6 +168,13 @@ class Application final
     bool _brushDragging = false;
     std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
     std::wstring _bench;
+    bool _warpDragging = false;
+    std::optional<int> _gradientHandle; // 0 start, 1 end, while a pending line's end is dragged
+    bool _shapeDragging = false;
+    bool _samplingColor = false;
+    uint32_t _samplingOriginal = 0xFF000000u;
+    std::optional<Raster> _sampleComposite;
+    std::optional<Vec2> _samplePoint; // document point under the eyedropper while sampling
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
     std::wstring _demo;

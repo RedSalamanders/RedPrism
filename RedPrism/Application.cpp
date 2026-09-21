@@ -8,6 +8,7 @@
 #include "Resources.h"
 #include "Selection.h"
 #include "Version.h"
+#include "WarpStroke.h"
 #include "WindowCapture.h"
 
 #include <algorithm>
@@ -498,6 +499,8 @@ void SelfTestFailure(const wchar_t* message) noexcept
 
 int Application::RunSelfTest() noexcept
 {
+    // A self-test never waits on a message box: errors it provokes must report through its own checks.
+    _quietUi = true;
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     HRESULT result = RegisterWindowClass();
@@ -989,6 +992,203 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
     }
 
+    // Retouch tools: Clone Stamp copies from a source, Spot Healing blends the copy away, Smudge and Blur commit
+    // their entries, a Gradient previews until Enter and takes the digit keys, a Shape drag adds a layer, Shift-U
+    // switches the kind, Escape drops a draft, and the Eyedropper reads the canvas into the foreground.
+    {
+        OnTool(EditorTool::Brush);
+        _chrome->SetCanvasFocused(true);
+        InsertPaintedLayer(_session, L"Plate", 300, 300, Vec2{0, 0}, 0.0, 0xFF808080u);
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        const CanvasHole hole = _chrome->HolePixels();
+        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        {
+            const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
+            OnPointer(message, wParam,
+                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
+                                 static_cast<int>(std::lround(hole.top + view.y))));
+        };
+        const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
+        {
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+            std::vector<std::uint8_t> bgra;
+            UINT width = 0;
+            UINT height = 0;
+            if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
+                static_cast<UINT>(y) >= height)
+            {
+                return false;
+            }
+            const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
+            out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+            return true;
+        };
+        // A red mark to copy.
+        _session.brushMode = BrushToolMode::Paint;
+        _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1, false};
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
+        pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
+        std::array<int, 4> mark{};
+        if (_session.history.UndoName() != L"Brush Stroke" || !pixelAt(100, 100, mark) || mark[2] < 250 || mark[1] > 5)
+        {
+            SelfTestFailure(L"The red mark for the retouch block did not paint.\n");
+            return 5;
+        }
+        // Clone Stamp: its own soft tip, nothing without a source, then a stamp of the mark elsewhere.
+        OnTool(EditorTool::Clone);
+        if (_session.brushSettings.hardness != 0 || _session.brushSettings.diameter != 40)
+        {
+            SelfTestFailure(L"Clone Stamp did not get its own soft tip.\n");
+            return 5;
+        }
+        _session.brushSettings = BrushSettings{12, 1, 0, 0, 0, 1, false};
+        pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
+        pointer(WM_LBUTTONUP, 0, 200.0, 200.0);
+        if (_session.history.UndoName() != L"Brush Stroke" || _brushDragging)
+        {
+            SelfTestFailure(L"Clone Stamp stamped without a source.\n");
+            return 5;
+        }
+        _session.SetCloneSource(Vec2{100, 100});
+        pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
+        pointer(WM_LBUTTONUP, 0, 200.0, 200.0);
+        std::array<int, 4> stamped{};
+        if (_session.history.UndoName() != L"Clone Stamp" || !pixelAt(200, 200, stamped) || stamped[2] < 250 ||
+            stamped[1] > 5)
+        {
+            SelfTestFailure(L"Clone Stamp did not copy the mark.\n");
+            return 5;
+        }
+        // Spot Healing blends the stamped mark into the plate.
+        OnTool(EditorTool::Heal);
+        _session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1, false};
+        pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 200.5, 200.0);
+        pointer(WM_LBUTTONUP, 0, 200.5, 200.0);
+        std::array<int, 4> healed{};
+        if (_session.history.UndoName() != L"Spot Healing" || !pixelAt(200, 200, healed) || healed[2] - healed[1] >= 30)
+        {
+            SelfTestFailure(L"Spot Healing did not blend the mark away.\n");
+            return 5;
+        }
+        // Smear: Smudge drags the red along through a live warp; Blur commits its own entry.
+        OnTool(EditorTool::Smear);
+        _session.smearMode = SmearMode::Smudge;
+        _session.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 100.0);
+        if (!_warpDragging || _session.PendingWarp() == nullptr || !_composition.HasStroke())
+        {
+            SelfTestFailure(L"Smudge did not start a warp with a live preview.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 130.0, 100.0);
+        std::array<int, 4> smudged{};
+        if (_warpDragging || _session.history.UndoName() != L"Smudge" || !pixelAt(115, 100, smudged) ||
+            smudged[2] <= smudged[0])
+        {
+            SelfTestFailure(L"Smudge did not drag the red mark along.\n");
+            return 5;
+        }
+        _session.smearMode = SmearMode::Blur;
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
+        pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
+        if (_session.history.UndoName() != L"Blur")
+        {
+            SelfTestFailure(L"Blur did not commit.\n");
+            return 5;
+        }
+        // Gradient: a drag previews, a digit sets its opacity, Enter applies one entry.
+        OnTool(EditorTool::Gradient);
+        _session.SetForegroundColor(0xFF000000u);
+        _session.SetBackgroundColor(0xFFFFFFFFu);
+        _session.gradientSettings = GradientSettings{};
+        const int beforeGradient = _session.history.UndoCount();
+        pointer(WM_LBUTTONDOWN, 0, 10.0, 250.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
+        pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
+        std::array<int, 4> pendingPixel{};
+        if (_session.PendingGradient() == nullptr || !_composition.HasStroke() || !pixelAt(20, 250, pendingPixel) ||
+            pendingPixel[2] > 40 || _session.history.UndoCount() != beforeGradient)
+        {
+            SelfTestFailure(L"Dragging the Gradient did not show a pending line on the canvas.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('5', 0) || _session.gradientSettings.opacity != 0.5)
+        {
+            SelfTestFailure(L"The digit keys did not set the gradient opacity.\n");
+            return 5;
+        }
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingGradient() != nullptr || _composition.HasStroke() ||
+            _session.history.UndoCount() != beforeGradient + 1 || _session.history.UndoName() != L"Gradient")
+        {
+            SelfTestFailure(L"Enter did not apply the gradient as one entry.\n");
+            return 5;
+        }
+        std::array<int, 4> gradientStart{};
+        std::array<int, 4> gradientEnd{};
+        if (!pixelAt(20, 250, gradientStart) || !pixelAt(280, 250, gradientEnd) || gradientStart[2] >= gradientEnd[2])
+        {
+            SelfTestFailure(L"The committed gradient did not darken its start more than its end.\n");
+            return 5;
+        }
+        // Shape: a drag adds a filled layer, Shift-U switches the kind, Escape drops a draft.
+        OnTool(EditorTool::Shape);
+        _session.SetForegroundColor(0xFF3366CCu);
+        const std::size_t layersBefore = _session.Document().value().layers.size();
+        pointer(WM_LBUTTONDOWN, 0, 20.0, 20.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 60.0, 50.0);
+        if (!_session.PendingShape().has_value())
+        {
+            SelfTestFailure(L"Dragging the Shape did not start a draft.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 60.0, 50.0);
+        std::array<int, 4> filled{};
+        if (_session.Document().value().layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
+            _session.ActiveLayer()->name != L"Rectangle 1" || _session.history.UndoName() != L"Rectangle" ||
+            !pixelAt(40, 35, filled) || filled[0] != 0xCC || filled[1] != 0x66 || filled[2] != 0x33)
+        {
+            SelfTestFailure(L"Releasing the Shape did not add a Rectangle layer in the foreground color.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('U', MK_SHIFT) || _session.shapeKind != ShapeKind::Ellipse)
+        {
+            SelfTestFailure(L"Shift-U did not switch the shape kind.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 140.0, 140.0);
+        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingShape().has_value())
+        {
+            SelfTestFailure(L"Escape did not drop the shape draft.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 140.0, 140.0);
+        if (_session.Document().value().layers.size() != layersBefore + 1)
+        {
+            SelfTestFailure(L"A dropped shape draft still made a layer.\n");
+            return 5;
+        }
+        // Eyedropper: pressing reads the canvas into the foreground; releasing ends the sampling.
+        OnTool(EditorTool::Eyedropper);
+        _session.SetForegroundColor(0xFF000000u);
+        pointer(WM_LBUTTONDOWN, 0, 40.0, 35.0);
+        if (!_samplingColor || _session.ForegroundColor() != 0xFF3366CCu)
+        {
+            SelfTestFailure(L"The Eyedropper did not sample the shape's color.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 40.0, 35.0);
+        if (_samplingColor)
+        {
+            SelfTestFailure(L"Releasing the Eyedropper did not end sampling.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Move);
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -1199,6 +1399,8 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetTransformHandler([this](TransformAction action, double value) { OnTransformAction(action, value); });
     chrome->SetSelectionHandler([this](SelectionAction action, double value) { OnSelectionAction(action, value); });
     chrome->SetBrushHandler([this](BrushAction action, double value) { OnBrushAction(action, value); });
+    chrome->SetGradientHandler([this](GradientAction action, double value) { OnGradientAction(action, value); });
+    chrome->SetShapeHandler([this](ShapeAction action, double value) { OnShapeAction(action, value); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -1449,7 +1651,7 @@ void Application::SyncChrome() noexcept
     BrushInspectorState brush;
     brush.visible = EditorToolIsBrush(_tool);
     brush.enabled = document != nullptr;
-    brush.tool = _tool == EditorTool::Eraser ? EditorTool::Eraser : EditorTool::Brush;
+    brush.tool = EditorToolIsBrush(_tool) ? _tool : EditorTool::Brush;
     brush.mode = _session.brushMode == BrushToolMode::Erase ? 1 : 0;
     brush.size = _session.brushSettings.diameter;
     brush.hardness = _session.brushSettings.hardness * 100.0;
@@ -1457,8 +1659,41 @@ void Application::SyncChrome() noexcept
     brush.maskSelected = _session.IsMaskSelected();
     brush.maskPaintWhite = _session.maskPaintWhite;
     brush.foregroundArgb = _session.ForegroundColor();
+    brush.healMode = static_cast<int>(_session.spotHealingMode);
+    brush.cloneAligned = _session.cloneSettings.aligned;
+    brush.cloneAllLayers = _session.cloneSettings.sampleAllLayers;
+    brush.cloneHasSource = _session.cloneSource.has_value();
+    brush.smearMode = static_cast<int>(_session.smearMode);
     _chrome->SetBrushInspector(brush);
     SyncBrushCursor();
+
+    // Gradient and Shape headers.
+    const auto argbOf = [](const std::array<double, 4>& color)
+    {
+        const auto byte = [](double value)
+        { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255.0)); };
+        return (byte(color[3]) << 24) | (byte(color[0]) << 16) | (byte(color[1]) << 8) | byte(color[2]);
+    };
+    const std::array<std::array<double, 4>, 2> ends = _session.GradientColors();
+    GradientInspectorState gradient;
+    gradient.enabled = document != nullptr;
+    gradient.shape = _session.gradientSettings.shape == GradientShape::Radial ? 1 : 0;
+    gradient.style = _session.gradientSettings.style == GradientStyle::ForegroundToTransparent ? 1 : 0;
+    gradient.reversed = _session.gradientSettings.reversed;
+    gradient.opacity = _session.gradientSettings.opacity * 100.0;
+    gradient.maskSelected = _session.IsMaskSelected();
+    gradient.pending = _session.PendingGradient() != nullptr;
+    gradient.startArgb = argbOf(ends[0]);
+    gradient.endArgb = argbOf(ends[1]);
+    _chrome->SetGradientInspector(gradient);
+    ShapeInspectorState shape;
+    shape.enabled = document != nullptr;
+    shape.kind = _session.shapeKind == ShapeKind::Ellipse ? 1 : 0;
+    shape.radius = _session.shapeCornerRadius;
+    shape.foregroundArgb = _session.ForegroundColor();
+    _chrome->SetShapeInspector(shape);
+    SyncToolOverlays();
+    SyncGradientPreview();
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -1652,16 +1887,58 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         _frameInvalidated = true;
         return;
     }
+    if ((SamplesColor() || _samplingColor) && !panMode)
+    {
+        // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
+        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
+        {
+            _canvasDrag = false;
+            _samplingColor = true;
+            _samplingOriginal = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
+            _sampleComposite = WandComposite();
+            SampleColorAt(view);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && _samplingColor)
+        {
+            SampleColorAt(view);
+            return;
+        }
+        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) && _samplingColor)
+        {
+            EndColorSampling();
+            return;
+        }
+    }
     if (EditorToolIsBrush(_tool) && !panMode)
     {
         if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
         {
             _canvasDrag = false;
-            BeginBrushStroke(view, event.modifiers);
+            if (_tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0)
+            {
+                // Alt-click with Clone Stamp sets where it copies from.
+                _session.SetCloneSource(_viewport.DocumentFromView(view, documentSize));
+                SyncChrome();
+                return;
+            }
+            if (WarpsWithSmear())
+            {
+                BeginWarpStroke(view);
+            }
+            else
+            {
+                BeginBrushStroke(view, event.modifiers);
+            }
             return;
         }
         if (event.action == DxUi::PointerAction::Move)
         {
+            if (_warpDragging)
+            {
+                ContinueWarpStroke(view);
+                return;
+            }
             if (_brushDragging)
             {
                 ContinueBrushStroke(view);
@@ -1669,21 +1946,86 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             }
             _brushHover = inHole ? std::optional<Vec2>(_viewport.DocumentFromView(view, documentSize)) : std::nullopt;
             SyncBrushCursor();
+            if (_tool == EditorTool::Clone)
+            {
+                SyncToolOverlays();
+            }
         }
-        if (event.action == DxUi::PointerAction::Up && _brushDragging)
+        if (event.action == DxUi::PointerAction::Up && (_brushDragging || _warpDragging))
         {
-            ContinueBrushStroke(view);
-            FinishBrushStroke();
+            if (_warpDragging)
+            {
+                ContinueWarpStroke(view);
+                FinishWarpStroke();
+            }
+            else
+            {
+                ContinueBrushStroke(view);
+                FinishBrushStroke();
+            }
             return;
         }
         if (event.action == DxUi::PointerAction::Leave)
         {
             _brushHover.reset();
+            FinishWarpStroke();
             if (_brushDragging)
             {
                 FinishBrushStroke();
             }
             SyncBrushCursor();
+        }
+    }
+    if (_tool == EditorTool::Gradient && !panMode)
+    {
+        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
+        {
+            _canvasDrag = false;
+            BeginGradientDrag(view);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && _gradientHandle.has_value())
+        {
+            DragGradient(view, event.modifiers);
+            return;
+        }
+        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
+            _gradientHandle.has_value())
+        {
+            EndGradientDrag();
+            return;
+        }
+    }
+    if (_tool == EditorTool::Shape && !panMode)
+    {
+        const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
+        const bool square = (event.modifiers & MK_SHIFT) != 0;
+        // Unlike the Marquee, Alt has no other job here, so it draws from the center as in Photoshop.
+        const bool fromCenter = GetKeyState(VK_MENU) < 0;
+        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
+        {
+            _canvasDrag = false;
+            _session.BeginShape(pixel);
+            _shapeDragging = _session.PendingShape().has_value();
+            SyncToolOverlays();
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && _shapeDragging)
+        {
+            _session.DragShape(pixel, square, fromCenter);
+            SyncToolOverlays();
+            return;
+        }
+        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) && _shapeDragging)
+        {
+            if (event.action == DxUi::PointerAction::Up)
+            {
+                _session.DragShape(pixel, square, fromCenter);
+            }
+            _shapeDragging = false;
+            _session.FinishShape();
+            DocumentChanged();
+            return;
         }
     }
     if (EditorToolIsSelection(_tool) && !panMode)
@@ -1775,6 +2117,7 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandZoomActual:
     case ChromeHost::kCommandZoomIn:
     case ChromeHost::kCommandZoomOut:
+    case ChromeHost::kCommandSampleRing:
     case ChromeHost::kCommandAbout:
     case ChromeHost::kCommandFreeTransform:
         break;
@@ -1859,6 +2202,13 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandZoomOut:
         ZoomBy(1.0 / kCommandZoomStep);
         break;
+    case ChromeHost::kCommandSampleRing:
+        _session.showsSampleRing = !_session.showsSampleRing;
+        if (_chrome)
+        {
+            _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _session.showsSampleRing);
+        }
+        break;
     case ChromeHost::kCommandAbout:
         if (!_quietUi && _window)
         {
@@ -1939,6 +2289,16 @@ void Application::OnTool(EditorTool tool) noexcept
         _session.ClearSnapGuides();
         EndSelectionInteraction(false);
         FinishBrushStroke();
+        FinishWarpStroke();
+        CommitGradient();
+        if (_session.PendingShape().has_value())
+        {
+            _shapeDragging = false;
+            _session.CancelShape();
+        }
+        EndColorSampling();
+        _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
+        _session.ClearPendingOpacityDigit();
     }
     _tool = tool;
     SyncBrushCursor();
@@ -2018,6 +2378,32 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (virtualKey == VK_ESCAPE && (_warpDragging || _session.PendingWarp() != nullptr))
+        {
+            CancelWarpStroke();
+            return true;
+        }
+        if (virtualKey == VK_ESCAPE && _session.PendingShape().has_value())
+        {
+            _shapeDragging = false;
+            _session.CancelShape();
+            SyncToolOverlays();
+            _frameInvalidated = true;
+            return true;
+        }
+        if (_session.PendingGradient() != nullptr && (virtualKey == VK_ESCAPE || virtualKey == VK_RETURN))
+        {
+            // Escape drops the pending gradient, Enter applies it.
+            if (virtualKey == VK_ESCAPE)
+            {
+                CancelGradient();
+            }
+            else
+            {
+                CommitGradient();
+            }
+            return true;
+        }
         if (virtualKey == VK_ESCAPE && (_brushDragging || _session.PendingBrush() != nullptr))
         {
             CancelBrushStroke();
@@ -2037,14 +2423,23 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             SyncChrome();
             return true;
         }
-        if ((EditorToolIsBrush(_tool) || _tool == EditorTool::Move) && virtualKey >= '0' && virtualKey <= '9' &&
-            !shift && !control)
+        if ((EditorToolIsBrush(_tool) || _tool == EditorTool::Move || _tool == EditorTool::Gradient) &&
+            virtualKey >= '0' && virtualKey <= '9' && !shift && !control)
         {
             // Photoshop's opacity keys: brush opacity with a brush tool, the active layer's with the Move tool.
             const int digit = static_cast<int>(virtualKey - '0');
             if (EditorToolIsBrush(_tool))
             {
                 _session.TypeOpacityDigit(digit, static_cast<double>(GetTickCount64()) / 1000.0);
+            }
+            else if (_tool == EditorTool::Gradient)
+            {
+                const int percent = _session.TypedOpacityPercent(digit, static_cast<double>(GetTickCount64()) / 1000.0);
+                if (percent > 0)
+                {
+                    _session.gradientSettings.opacity = percent / 100.0;
+                    _session.RefreshGradient();
+                }
             }
             else
             {
@@ -2142,6 +2537,12 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             else if (tool == _tool && !repeat && tool == EditorTool::Lasso)
             {
                 _session.ToggleLassoKind();
+            }
+            else if (tool == _tool && !repeat && shift && tool == EditorTool::Shape)
+            {
+                // Shift-U: the Shape tool switches between Rectangle and Ellipse.
+                _shapeDragging = false;
+                _session.ToggleShapeKind();
             }
             OnTool(tool);
             return true;
@@ -2601,6 +3002,35 @@ void Application::ApplyDemo() noexcept
         _session.brushSettings = BrushSettings{60, 0.5, 0.90, 0.54, 0.18, 1, false};
         _brushHover = Vec2{880, 430};
         OnTool(EditorTool::Brush);
+        return;
+    }
+    if (_demo == L"retouch")
+    {
+        // A backdrop, a radial gradient on a layer above it, a rounded rectangle and an ellipse, and the Shape header.
+        InsertPaintedLayer(_session, L"Backdrop", 620, 400, Vec2{160, 120}, 0.0, 0xFF2F6FB0u);
+        _session.AddBlankLayer();
+        _session.SetForegroundColor(0xFFFFFFFFu);
+        _session.gradientSettings.shape = GradientShape::Radial;
+        _session.gradientSettings.style = GradientStyle::ForegroundToTransparent;
+        if (_session.BeginGradient(Vec2{470, 320}))
+        {
+            _session.MoveGradient(std::nullopt, Vec2{760, 320});
+            _session.EndGradientDrag();
+            _session.CommitGradient();
+        }
+        _session.SetForegroundColor(0xFFE58A2Eu);
+        _session.shapeCornerRadius = 28;
+        _session.BeginShape(Vec2{230, 200});
+        _session.DragShape(Vec2{450, 330}, false, false);
+        _session.FinishShape();
+        _session.SetForegroundColor(0xFF3AA66Bu);
+        _session.shapeKind = ShapeKind::Ellipse;
+        _session.BeginShape(Vec2{520, 180});
+        _session.DragShape(Vec2{720, 340}, false, false);
+        _session.FinishShape();
+        _session.shapeKind = ShapeKind::Rectangle;
+        _session.SetForegroundColor(0xFFE58A2Eu);
+        OnTool(EditorTool::Shape);
     }
 }
 
@@ -2925,6 +3355,10 @@ bool Application::ApplyCanvasCursor() noexcept
         cursor = IDC_HAND;
     }
     else if (_tool == EditorTool::Zoom)
+    {
+        cursor = IDC_CROSS;
+    }
+    else if (_samplingColor || SamplesColor() || _tool == EditorTool::Gradient || _tool == EditorTool::Shape)
     {
         cursor = IDC_CROSS;
     }
@@ -3352,6 +3786,21 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
             _chrome->OpenColorPicker(false);
         }
         break;
+    case BrushAction::SetHealMode:
+        _session.spotHealingMode = value >= 1.5   ? SpotHealingMode::ProximityMatch
+                                   : value >= 0.5 ? SpotHealingMode::CreateTexture
+                                                  : SpotHealingMode::ContentAware;
+        break;
+    case BrushAction::SetCloneAligned:
+        _session.cloneSettings.aligned = value >= 0.5;
+        break;
+    case BrushAction::SetCloneSample:
+        _session.cloneSettings.sampleAllLayers = value >= 0.5;
+        break;
+    case BrushAction::SetSmearMode:
+        FinishWarpStroke();
+        _session.smearMode = value >= 1.5 ? SmearMode::Smudge : value >= 0.5 ? SmearMode::Blur : SmearMode::Liquify;
+        break;
     }
     SyncChrome();
     _frameInvalidated = true;
@@ -3366,8 +3815,19 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     // The stroke's coverage and its preview live on the current device.
     BindCompositionDevice();
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const bool erase = BrushErases();
+    const BrushKind kind = BrushKindFor();
     const bool couldPaint = _session.CanPaint();
+    if (kind == BrushKind::Clone && !_session.CloneStrokeOffset(pixel).has_value())
+    {
+        ShowError(IDS_ERROR_CLONE_SOURCE);
+        return;
+    }
+    std::optional<Raster> composite;
+    if (kind == BrushKind::Clone && _session.cloneSettings.sampleAllLayers)
+    {
+        composite = WandComposite();
+    }
+    const Raster* sample = composite.has_value() ? &composite.value() : nullptr;
     bool begun = false;
     if ((modifiers & MK_SHIFT) != 0)
     {
@@ -3375,7 +3835,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         const std::optional<Vec2> start = _session.ShiftLineStart();
         if (start.has_value())
         {
-            begun = _session.BeginBrush(start.value(), erase);
+            begun = _session.BeginBrush(start.value(), kind, sample);
             if (begun)
             {
                 _session.ContinueBrush(pixel);
@@ -3384,12 +3844,15 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     }
     if (!begun)
     {
-        begun = _session.BeginBrush(pixel, erase);
+        begun = _session.BeginBrush(pixel, kind, sample);
     }
     const BrushStroke* stroke = _session.PendingBrush();
     if (!begun || stroke == nullptr)
     {
-        if (couldPaint)
+        // Spot Healing and Clone Stamp have nothing to do on a mask; anything else that could paint ran out of
+        // budget.
+        const bool maskRefusal = _session.IsMaskSelected() && (kind == BrushKind::Heal || kind == BrushKind::Clone);
+        if (couldPaint && !maskRefusal)
         {
             ShowError(IDS_ERROR_BRUSH_BUDGET);
         }
@@ -3483,9 +3946,13 @@ void Application::FinishBrushStroke() noexcept
         return;
     }
     _brushDragging = false;
+    // Spot Healing rewrites the tiles after the last preview update, so its result uploads on its own instead of
+    // adopting the working texture, which still shows the wash.
+    const BrushStroke* pending = _session.PendingBrush();
+    const bool healing = pending != nullptr && pending->Settings().healing;
     _session.FinishBrush();
     const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
-    if (commit.has_value())
+    if (commit.has_value() && !healing)
     {
         _composition.EndStroke(&commit->image, commit->x, commit->y);
     }
@@ -3658,4 +4125,488 @@ int Application::RunBenchmark() noexcept
     BenchmarkReport(report);
     CloseMainWindow();
     return 0;
+}
+
+// ── Retouch tools (C11) ───────────────────────────────────────────────────
+
+namespace
+{
+// Shift constrains a gradient line to 45° steps around the other end, as in Photoshop.
+[[nodiscard]] Vec2 Snapped(Vec2 point, Vec2 anchor) noexcept
+{
+    const double dx = point.x - anchor.x;
+    const double dy = point.y - anchor.y;
+    const double length = std::hypot(dx, dy);
+    const double step = 3.14159265358979323846 / 4.0;
+    const double angle = std::round(std::atan2(dy, dx) / step) * step;
+    return Vec2{anchor.x + std::cos(angle) * length, anchor.y + std::sin(angle) * length};
+}
+
+// The stroke preview a raster edit shows through: its grid, placement and the pixels it started from.
+[[nodiscard]] CanvasRenderer::StrokePreview PreviewFor(const BrushStroke& stroke)
+{
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = stroke.LayerID();
+    preview.mask = stroke.IsMask();
+    preview.width = stroke.Width();
+    preview.height = stroke.Height();
+    preview.transform = stroke.PaintTransform();
+    preview.fill = stroke.FillValue();
+    const Raster& source = stroke.SourceImage();
+    if (source.HasStorage() && source.Width() == stroke.SourceRect().width &&
+        source.Height() == stroke.SourceRect().height)
+    {
+        preview.source = source;
+        preview.sourceX = stroke.SourceRect().x;
+        preview.sourceY = stroke.SourceRect().y;
+    }
+    else if (source.HasStorage())
+    {
+        // A uniform mask stretched over the grid is its one value everywhere.
+        std::uint8_t uniform = preview.fill;
+        source.ReadRegion(0, 0, 1, 1, &uniform, source.Channels(), preview.fill);
+        preview.fill = uniform;
+    }
+    return preview;
+}
+} // namespace
+
+BrushKind Application::BrushKindFor() const noexcept
+{
+    switch (_tool)
+    {
+    case EditorTool::Eraser:
+        return BrushKind::Erase;
+    case EditorTool::Heal:
+        return BrushKind::Heal;
+    case EditorTool::Clone:
+        return BrushKind::Clone;
+    case EditorTool::Smear:
+        return BrushKind::Blur;
+    default:
+        return _session.brushMode == BrushToolMode::Erase ? BrushKind::Erase : BrushKind::Paint;
+    }
+}
+
+bool Application::WarpsWithSmear() const noexcept
+{
+    return _tool == EditorTool::Smear && _session.smearMode != SmearMode::Blur;
+}
+
+void Application::BeginWarpStroke(Vec2 view) noexcept
+{
+    if (!_session.Document().has_value() || _warpDragging || _brushDragging)
+    {
+        return;
+    }
+    BindCompositionDevice();
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    if (_session.IsMaskSelected() && _session.CanPaint())
+    {
+        ShowError(IDS_ERROR_SMEAR_MASK);
+        return;
+    }
+    if (!_session.BeginWarp(pixel))
+    {
+        return;
+    }
+    WarpStroke* warp = _session.MutableWarp();
+    const ImageLayer* layer = _session.ActiveLayer();
+    if (warp == nullptr || layer == nullptr)
+    {
+        _session.CancelWarp();
+        return;
+    }
+    // The working copy is document-sized: it shows placed over the whole canvas in the layer's stead.
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = layer->id;
+    preview.mask = false;
+    preview.width = warp->Width();
+    preview.height = warp->Height();
+    preview.transform.origin = Vec2{0, 0};
+    preview.transform.size = Vec2{static_cast<double>(warp->Width()), static_cast<double>(warp->Height())};
+    preview.source = warp->Image();
+    preview.sourceX = 0;
+    preview.sourceY = 0;
+    preview.fill = 0;
+    (void)_composition.BeginStroke(preview);
+    _warpDragging = true;
+    _brushHover = pixel;
+    PushWarpTiles();
+    SyncBrushCursor();
+}
+
+void Application::PushWarpTiles() noexcept
+{
+    WarpStroke* warp = _session.MutableWarp();
+    if (warp == nullptr || !_composition.HasStroke())
+    {
+        _frameInvalidated = true;
+        return;
+    }
+    const std::vector<RasterTile> tiles = warp->TakeChangedTiles();
+    if (!tiles.empty())
+    {
+        (void)_composition.UpdateStrokeTiles(tiles);
+    }
+    _frameInvalidated = true;
+}
+
+void Application::ContinueWarpStroke(Vec2 view) noexcept
+{
+    if (!_warpDragging)
+    {
+        return;
+    }
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    _brushHover = pixel;
+    _session.ContinueWarp(pixel);
+    PushWarpTiles();
+    SyncBrushCursor();
+}
+
+void Application::FinishWarpStroke() noexcept
+{
+    if (!_warpDragging)
+    {
+        return;
+    }
+    _warpDragging = false;
+    _session.FinishWarp();
+    // The working copy sat on the document grid, not the layer's: the committed raster uploads on its own.
+    static_cast<void>(_session.TakeLastBrushCommit());
+    _composition.EndStroke(nullptr, 0, 0);
+    DocumentChanged();
+}
+
+void Application::CancelWarpStroke() noexcept
+{
+    if (!_warpDragging && _session.PendingWarp() == nullptr)
+    {
+        return;
+    }
+    _warpDragging = false;
+    _session.CancelWarp();
+    _composition.EndStroke(nullptr, 0, 0);
+    DocumentChanged();
+}
+
+void Application::OnGradientAction(GradientAction action, double value) noexcept
+{
+    switch (action)
+    {
+    case GradientAction::SetShape:
+        _session.gradientSettings.shape = value >= 0.5 ? GradientShape::Radial : GradientShape::Linear;
+        break;
+    case GradientAction::SetStyle:
+        _session.gradientSettings.style =
+            value >= 0.5 ? GradientStyle::ForegroundToTransparent : GradientStyle::ForegroundToBackground;
+        break;
+    case GradientAction::SetReversed:
+        _session.gradientSettings.reversed = value >= 0.5;
+        break;
+    case GradientAction::SetOpacity:
+        if (std::isfinite(value))
+        {
+            _session.gradientSettings.opacity = std::clamp(value, 1.0, 100.0) / 100.0;
+        }
+        break;
+    case GradientAction::Cancel:
+        CancelGradient();
+        return;
+    case GradientAction::Apply:
+        CommitGradient();
+        return;
+    case GradientAction::OpenColor:
+        if (_chrome)
+        {
+            _chrome->OpenColorPicker(false);
+        }
+        break;
+    }
+    _session.RefreshGradient();
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::BeginGradientDrag(Vec2 view) noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
+    BindCompositionDevice();
+    const GradientEdit* pending = _session.PendingGradient();
+    if (pending != nullptr && pending->HasLine())
+    {
+        // A press near an end of the pending line drags that end.
+        const double reach = 10.0 * (_window ? GetDpiForWindow(_window.get()) : 96u) / 96.0;
+        const Vec2 start = _viewport.ViewFromDocument(pending->start, DocumentSize());
+        const Vec2 end = _viewport.ViewFromDocument(pending->end, DocumentSize());
+        if (std::hypot(view.x - end.x, view.y - end.y) <= reach)
+        {
+            _gradientHandle = 1;
+            return;
+        }
+        if (std::hypot(view.x - start.x, view.y - start.y) <= reach)
+        {
+            _gradientHandle = 0;
+            return;
+        }
+    }
+    if (!_session.BeginGradient(_viewport.DocumentFromView(view, DocumentSize())))
+    {
+        return;
+    }
+    _gradientHandle = 1;
+    SyncGradientPreview();
+    SyncToolOverlays();
+}
+
+void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
+{
+    const GradientEdit* pending = _session.PendingGradient();
+    if (!_gradientHandle.has_value() || pending == nullptr)
+    {
+        return;
+    }
+    Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    if ((modifiers & MK_SHIFT) != 0)
+    {
+        pixel = Snapped(pixel, _gradientHandle.value() == 0 ? pending->end : pending->start);
+    }
+    if (_gradientHandle.value() == 0)
+    {
+        _session.MoveGradient(pixel, std::nullopt);
+    }
+    else
+    {
+        _session.MoveGradient(std::nullopt, pixel);
+    }
+    SyncGradientPreview();
+    SyncToolOverlays();
+}
+
+void Application::EndGradientDrag() noexcept
+{
+    _gradientHandle.reset();
+    _session.EndGradientDrag();
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::CommitGradient() noexcept
+{
+    if (_session.PendingGradient() == nullptr)
+    {
+        return;
+    }
+    _gradientHandle.reset();
+    _session.CommitGradient();
+    DocumentChanged();
+}
+
+void Application::CancelGradient() noexcept
+{
+    if (_session.PendingGradient() == nullptr)
+    {
+        return;
+    }
+    _gradientHandle.reset();
+    _session.CancelGradient();
+    DocumentChanged();
+}
+
+void Application::SyncGradientPreview() noexcept
+{
+    // The pending raster shows through the stroke preview; once it is gone the preview ends, adopting a commit the
+    // session made (Apply, Enter, or a tool, layer or target switch).
+    GradientEdit* pending = _session.MutableGradient();
+    if (pending != nullptr && pending->raster)
+    {
+        if (!_composition.HasStroke())
+        {
+            BindCompositionDevice();
+            (void)_composition.BeginStroke(PreviewFor(*pending->raster));
+        }
+        PushGradientTiles();
+        return;
+    }
+    if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
+        _session.PendingWarp() == nullptr)
+    {
+        const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
+        if (commit.has_value())
+        {
+            _composition.EndStroke(&commit->image, commit->x, commit->y);
+        }
+        else
+        {
+            _composition.EndStroke(nullptr, 0, 0);
+        }
+        _frameInvalidated = true;
+    }
+}
+
+void Application::PushGradientTiles() noexcept
+{
+    GradientEdit* pending = _session.MutableGradient();
+    if (pending == nullptr || !pending->raster || !_composition.HasStroke())
+    {
+        return;
+    }
+    BrushStroke& raster = *pending->raster;
+    std::vector<RasterTile> tiles;
+    if (_composition.StrokeTextureMissing())
+    {
+        tiles = raster.Patches();
+        static_cast<void>(raster.TakeChanged());
+    }
+    else
+    {
+        for (const std::size_t index : raster.TakeChanged())
+        {
+            const BrushStroke::Tile& tile = raster.Tiles()[index];
+            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
+        }
+    }
+    if (!tiles.empty())
+    {
+        (void)_composition.UpdateStrokeTiles(tiles);
+        _frameInvalidated = true;
+    }
+}
+
+void Application::OnShapeAction(ShapeAction action, double value) noexcept
+{
+    switch (action)
+    {
+    case ShapeAction::SetKind:
+        _shapeDragging = false;
+        _session.CancelShape();
+        _session.shapeKind = value >= 0.5 ? ShapeKind::Ellipse : ShapeKind::Rectangle;
+        break;
+    case ShapeAction::SetRadius:
+        if (std::isfinite(value))
+        {
+            _session.shapeCornerRadius = std::clamp(std::round(value), 0.0, 5000.0);
+        }
+        break;
+    case ShapeAction::OpenColor:
+        if (_chrome)
+        {
+            _chrome->OpenColorPicker(false);
+        }
+        break;
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+bool Application::SamplesColor() const noexcept
+{
+    if (_tool == EditorTool::Eyedropper)
+    {
+        return true;
+    }
+    // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    return alt && (_tool == EditorTool::Brush || _tool == EditorTool::Heal || _tool == EditorTool::Gradient) &&
+           !_brushDragging && !_gradientHandle.has_value();
+}
+
+void Application::SampleColorAt(Vec2 view) noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    _samplePoint = pixel;
+    if (_sampleComposite.has_value())
+    {
+        const std::optional<uint32_t> color = DocumentSession::SampleCompositeColor(_sampleComposite.value(), pixel);
+        if (color.has_value())
+        {
+            if (_chrome && _chrome->ColorPickerOpen())
+            {
+                _chrome->SetPickerColor(color.value());
+            }
+            else if (_session.PendingBrush() == nullptr)
+            {
+                _session.SetForegroundColor(color.value());
+            }
+        }
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::EndColorSampling() noexcept
+{
+    if (!_samplingColor)
+    {
+        return;
+    }
+    _samplingColor = false;
+    _sampleComposite.reset();
+    _samplePoint.reset();
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::SyncToolOverlays() noexcept
+{
+    if (!_chrome)
+    {
+        return;
+    }
+    const bool hasDocument = _session.Document().has_value();
+    const Vec2 size = DocumentSize();
+    const auto viewPoint = [&](Vec2 document)
+    {
+        const Vec2 view = _viewport.ViewFromDocument(document, size);
+        return D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
+    };
+    std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line;
+    if (const GradientEdit* pending = _session.PendingGradient();
+        hasDocument && pending != nullptr && pending->HasLine() && _tool == EditorTool::Gradient)
+    {
+        line = std::make_pair(viewPoint(pending->start), viewPoint(pending->end));
+    }
+    _chrome->SetGradientLine(line);
+    std::optional<CanvasOverlay::ShapeDraftOverlay> draft;
+    if (const std::optional<ShapeDraft>& shape = _session.PendingShape();
+        hasDocument && shape.has_value() && shape->rect.maxX > shape->rect.minX && shape->rect.maxY > shape->rect.minY)
+    {
+        const D2D1_POINT_2F a = viewPoint(Vec2{shape->rect.minX, shape->rect.minY});
+        const D2D1_POINT_2F b = viewPoint(Vec2{shape->rect.maxX, shape->rect.maxY});
+        CanvasOverlay::ShapeDraftOverlay overlay;
+        overlay.ellipse = shape->kind == ShapeKind::Ellipse;
+        overlay.rect = D2D1::RectF(a.x, a.y, b.x, b.y);
+        overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.PointsPerPixel());
+        overlay.argb = _session.ForegroundColor();
+        draft = overlay;
+    }
+    _chrome->SetShapeDraft(draft);
+    std::optional<CanvasOverlay::SampleRing> ring;
+    if (hasDocument && _samplingColor && _samplePoint.has_value() && _session.showsSampleRing)
+    {
+        CanvasOverlay::SampleRing sample;
+        sample.center = viewPoint(_samplePoint.value());
+        sample.originalArgb = _samplingOriginal;
+        sample.sampledArgb = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
+        ring = sample;
+    }
+    _chrome->SetSampleRing(ring);
+    std::optional<D2D1_POINT_2F> source;
+    if (hasDocument && _tool == EditorTool::Clone && _session.cloneSource.has_value())
+    {
+        const std::optional<Vec2> point = _session.CloneSamplePoint(_brushHover.value_or(_session.cloneSource.value()));
+        if (point.has_value())
+        {
+            source = viewPoint(point.value());
+        }
+    }
+    _chrome->SetCloneSourceMark(source);
 }

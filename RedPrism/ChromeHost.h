@@ -91,6 +91,10 @@ enum class BrushAction : std::uint8_t
     SetOpacity,
     SetMaskPaint,
     OpenColor,
+    SetHealMode,
+    SetCloneAligned,
+    SetCloneSample,
+    SetSmearMode,
 };
 
 struct BrushInspectorState
@@ -104,6 +108,54 @@ struct BrushInspectorState
     double opacity = 100;
     bool maskSelected = false;
     bool maskPaintWhite = false;
+    uint32_t foregroundArgb = 0xFF000000u;
+    // Spot Healing, Clone Stamp and Smear (C11).
+    int healMode = 0; // Content-Aware, Create Texture, Proximity Match
+    bool cloneAligned = true;
+    bool cloneAllLayers = false;
+    bool cloneHasSource = false;
+    int smearMode = 0; // Liquify, Blur, Smudge
+};
+
+// The Gradient header (C11): shape, the two end colors, style, Reverse, opacity, and Cancel / Apply while a line is
+// pending.
+enum class GradientAction : std::uint8_t
+{
+    SetShape,
+    SetStyle,
+    SetReversed,
+    SetOpacity,
+    Cancel,
+    Apply,
+    OpenColor,
+};
+
+struct GradientInspectorState
+{
+    bool enabled = false;
+    int shape = 0; // Linear, Radial
+    int style = 1; // Foreground to Background, Foreground to Transparent
+    bool reversed = false;
+    double opacity = 100;
+    bool maskSelected = false;
+    bool pending = false;
+    uint32_t startArgb = 0xFF000000u;
+    uint32_t endArgb = 0x00000000u; // alpha 0: the transparent end
+};
+
+// The Shape header (C11): kind, corner radius (rectangles) and the fill swatch.
+enum class ShapeAction : std::uint8_t
+{
+    SetKind,
+    SetRadius,
+    OpenColor,
+};
+
+struct ShapeInspectorState
+{
+    bool enabled = false;
+    int kind = 0; // Rectangle, Ellipse
+    double radius = 0;
     uint32_t foregroundArgb = 0xFF000000u;
 };
 
@@ -195,6 +247,7 @@ class ChromeHost final
     static constexpr int kCommandZoomActual = 401;
     static constexpr int kCommandZoomIn = 402;
     static constexpr int kCommandZoomOut = 403;
+    static constexpr int kCommandSampleRing = 404;
     static constexpr int kCommandAbout = 500;
     static constexpr int kCommandFlipCanvasHorizontal = 600;
     static constexpr int kCommandFlipCanvasVertical = 601;
@@ -255,6 +308,20 @@ class ChromeHost final
     void SetBrushInspector(const BrushInspectorState& state) noexcept;
     // The tip circle over the canvas, in canvas-hole pixels (nullopt hides it).
     void SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor) noexcept;
+    // The Gradient and Shape headers (C11), and the tool overlays in canvas-hole pixels (nullopt hides each).
+    void SetGradientHandler(std::function<void(GradientAction, double)> handler);
+    void SetGradientInspector(const GradientInspectorState& state) noexcept;
+    void SetShapeHandler(std::function<void(ShapeAction, double)> handler);
+    void SetShapeInspector(const ShapeInspectorState& state) noexcept;
+    void SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept;
+    void SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept;
+    void SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept;
+    void SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept;
+    // The eyedropper loads a sampled color into the open picker (its swatch previews it; OK commits it).
+    void SetPickerColor(uint32_t argb) noexcept;
+    [[nodiscard]] uint32_t PickerColor() const noexcept;
+    // A checkable View menu item (Sample Ring).
+    void SetCommandChecked(int command, bool checked) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
@@ -339,6 +406,12 @@ class ChromeHost final
     void ArrangeSelectionHeader(float left, float top, float right, float bottom) noexcept;
     void BuildBrushHeader(DxUi::Panel& root);
     void ArrangeBrushHeader(float left, float top, float right, float bottom) noexcept;
+    void BuildGradientHeader(DxUi::Panel& root);
+    void ArrangeGradientHeader(float left, float top, float right, float bottom) noexcept;
+    void BuildShapeHeader(DxUi::Panel& root);
+    void ArrangeShapeHeader(float left, float top, float right, float bottom) noexcept;
+    // The plain title header stands in for tools without a header of their own.
+    [[nodiscard]] static bool GenericHeaderWanted(EditorTool tool) noexcept;
     void BuildMenus() noexcept;
     void OpenMenu(size_t index, POINT screen, bool keyboard) noexcept;
     void SyncToolVisuals() noexcept;
@@ -414,6 +487,32 @@ class ChromeHost final
     DxUi::Label* _brushColorLabel = nullptr;
     DxUi::ColorSwatch* _brushColor = nullptr;
     DxUi::Label* _brushMaskNote = nullptr;
+    DxUi::ComboBox* _brushHealMode = nullptr;
+    DxUi::Checkbox* _brushCloneAligned = nullptr;
+    DxUi::ComboBox* _brushCloneSample = nullptr;
+    DxUi::ComboBox* _brushSmearMode = nullptr;
+    DxUi::Label* _brushSourceNote = nullptr;
+    DxUi::Panel* _gradientHeader = nullptr;
+    DxUi::Label* _gradientTitle = nullptr;
+    DxUi::ComboBox* _gradientShape = nullptr;
+    DxUi::ColorSwatch* _gradientStart = nullptr;
+    DxUi::ColorSwatch* _gradientEnd = nullptr;
+    DxUi::ComboBox* _gradientStyle = nullptr;
+    DxUi::Checkbox* _gradientReverse = nullptr;
+    DxUi::NumericStepper* _gradientOpacity = nullptr;
+    DxUi::Label* _gradientMaskNote = nullptr;
+    DxUi::Button* _gradientCancel = nullptr;
+    DxUi::Button* _gradientApply = nullptr;
+    GradientInspectorState _gradientInspector;
+    bool _syncingGradient = false;
+    DxUi::Panel* _shapeHeader = nullptr;
+    DxUi::Label* _shapeTitle = nullptr;
+    DxUi::ComboBox* _shapeKind = nullptr;
+    DxUi::NumericStepper* _shapeRadius = nullptr;
+    DxUi::Label* _shapeFillLabel = nullptr;
+    DxUi::ColorSwatch* _shapeFill = nullptr;
+    ShapeInspectorState _shapeInspector;
+    bool _syncingShape = false;
     BrushInspectorState _brushInspector;
     bool _syncingBrush = false;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
@@ -428,6 +527,8 @@ class ChromeHost final
     std::function<void(TransformAction, double)> _onTransform;
     std::function<void(SelectionAction, double)> _onSelection;
     std::function<void(BrushAction, double)> _onBrush;
+    std::function<void(GradientAction, double)> _onGradient;
+    std::function<void(ShapeAction, double)> _onShape;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;

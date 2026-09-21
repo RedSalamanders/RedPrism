@@ -88,10 +88,18 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
     return tool == EditorTool::Marquee || tool == EditorTool::Lasso || tool == EditorTool::Wand;
 }
 
-// The tools that paint with a tip: the Brush (which can erase) and the Eraser.
+// The tools that work through a brush tip: the Brush (which can erase), the Eraser, Spot Healing, Clone Stamp and
+// Smear (whose Liquify and Smudge modes warp instead of paint).
 [[nodiscard]] constexpr bool EditorToolIsBrush(EditorTool tool) noexcept
 {
-    return tool == EditorTool::Brush || tool == EditorTool::Eraser;
+    return tool == EditorTool::Brush || tool == EditorTool::Eraser || tool == EditorTool::Heal ||
+           tool == EditorTool::Clone || tool == EditorTool::Smear;
+}
+
+// Tools that keep their own tip size, hardness and opacity (Clone Stamp and Smear); the rest share one.
+[[nodiscard]] constexpr int EditorToolTipFamily(EditorTool tool) noexcept
+{
+    return tool == EditorTool::Clone ? 1 : tool == EditorTool::Smear ? 2 : 0;
 }
 
 // Segoe Fluent Icons code points. HostTests proves every glyph exists in the installed icon font.

@@ -46,6 +46,30 @@ void CanvasOverlay::SetBrushCursor(std::optional<BrushCursor> cursor) noexcept
     RequestInvalidate();
 }
 
+void CanvasOverlay::SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept
+{
+    _gradientLine = line;
+    RequestInvalidate();
+}
+
+void CanvasOverlay::SetShapeDraft(std::optional<ShapeDraftOverlay> draft) noexcept
+{
+    _shapeDraft = draft;
+    RequestInvalidate();
+}
+
+void CanvasOverlay::SetSampleRing(std::optional<SampleRing> ring) noexcept
+{
+    _sampleRing = ring;
+    RequestInvalidate();
+}
+
+void CanvasOverlay::SetCloneSource(std::optional<D2D1_POINT_2F> point) noexcept
+{
+    _cloneSource = point;
+    RequestInvalidate();
+}
+
 D2D1_RECT_F CanvasOverlay::GetHitBounds() const noexcept
 {
     return D2D1::RectF();
@@ -77,6 +101,7 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     PaintSelection(dc, host, bounds);
     PaintDraft(dc, host, bounds);
     PaintBrushCursor(dc, host, bounds);
+    PaintTools(dc, host, bounds);
     PaintTransform(dc, host, bounds);
     dc->PopAxisAlignedClip();
 }
@@ -251,6 +276,88 @@ void CanvasOverlay::PaintBrushCursor(ID2D1DeviceContext* dc, DxUi::ControlHost& 
     const D2D1_ELLIPSE ring = D2D1::Ellipse(center, cursor.radius, cursor.radius);
     dc->DrawEllipse(ring, white, 2.5f);
     dc->DrawEllipse(ring, black, 1.0f);
+}
+
+namespace
+{
+[[nodiscard]] D2D1_COLOR_F ColorFromArgb(uint32_t argb, float alpha = 1.0f) noexcept
+{
+    return D2D1::ColorF(((argb >> 16) & 0xFFu) / 255.0f, ((argb >> 8) & 0xFFu) / 255.0f, (argb & 0xFFu) / 255.0f,
+                        alpha);
+}
+} // namespace
+
+void CanvasOverlay::PaintTools(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
+{
+    ID2D1SolidColorBrush* white = host.GetSolidBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f));
+    ID2D1SolidColorBrush* black = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    ID2D1SolidColorBrush* shadow = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.6f));
+    const auto at = [&](D2D1_POINT_2F point) { return D2D1::Point2F(bounds.left + point.x, bounds.top + point.y); };
+    if (_shapeDraft.has_value())
+    {
+        const ShapeDraftOverlay& draft = _shapeDraft.value();
+        const D2D1_RECT_F rect = D2D1::RectF(bounds.left + draft.rect.left, bounds.top + draft.rect.top,
+                                             bounds.left + draft.rect.right, bounds.top + draft.rect.bottom);
+        ID2D1SolidColorBrush* fill = host.GetSolidBrush(ColorFromArgb(draft.argb));
+        if (draft.ellipse)
+        {
+            const D2D1_ELLIPSE ellipse =
+                D2D1::Ellipse(D2D1::Point2F((rect.left + rect.right) / 2.0f, (rect.top + rect.bottom) / 2.0f),
+                              (rect.right - rect.left) / 2.0f, (rect.bottom - rect.top) / 2.0f);
+            dc->FillEllipse(ellipse, fill);
+            dc->DrawEllipse(ellipse, shadow, 1.0f);
+        }
+        else
+        {
+            const float radius =
+                std::min({draft.cornerRadius, (rect.right - rect.left) / 2.0f, (rect.bottom - rect.top) / 2.0f});
+            const D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(rect, radius, radius);
+            dc->FillRoundedRectangle(rounded, fill);
+            dc->DrawRoundedRectangle(rounded, shadow, 1.0f);
+        }
+    }
+    if (_gradientLine.has_value())
+    {
+        // A dark line under a white one, with a handle at each end.
+        const D2D1_POINT_2F start = at(_gradientLine->first);
+        const D2D1_POINT_2F end = at(_gradientLine->second);
+        dc->DrawLine(start, end, shadow, 3.0f);
+        dc->DrawLine(start, end, white, 1.0f);
+        for (const D2D1_POINT_2F& handle : {start, end})
+        {
+            const D2D1_ELLIPSE knob = D2D1::Ellipse(handle, 5.0f, 5.0f);
+            dc->FillEllipse(knob, white);
+            dc->DrawEllipse(knob, black, 1.0f);
+        }
+    }
+    if (_cloneSource.has_value())
+    {
+        // Where Clone Stamp is copying from: a crosshair that reads on any pixels.
+        const D2D1_POINT_2F center = at(_cloneSource.value());
+        constexpr float kArm = 8.0f;
+        for (const auto& [brush, width] : {std::pair<ID2D1SolidColorBrush*, float>{white, 2.5f}, {black, 1.0f}})
+        {
+            dc->DrawLine(D2D1::Point2F(center.x - kArm, center.y), D2D1::Point2F(center.x + kArm, center.y), brush,
+                         width);
+            dc->DrawLine(D2D1::Point2F(center.x, center.y - kArm), D2D1::Point2F(center.x, center.y + kArm), brush,
+                         width);
+        }
+    }
+    if (_sampleRing.has_value())
+    {
+        // Legacy SampleRingOverlay: a gray ring, the new color on its upper half, the previous one below.
+        const D2D1_POINT_2F center = at(_sampleRing->center);
+        const D2D1_ELLIPSE ring = D2D1::Ellipse(center, 43.0f, 43.0f);
+        dc->DrawEllipse(ring, host.GetSolidBrush(D2D1::ColorF(0.45f, 0.45f, 0.45f, 1.0f)), 24.0f);
+        dc->PushAxisAlignedClip(D2D1::RectF(center.x - 60.0f, center.y - 60.0f, center.x + 60.0f, center.y),
+                                D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        dc->DrawEllipse(ring, host.GetSolidBrush(ColorFromArgb(_sampleRing->sampledArgb)), 16.0f);
+        dc->PopAxisAlignedClip();
+        dc->PushAxisAlignedClip(D2D1::RectF(center.x - 60.0f, center.y, center.x + 60.0f, center.y + 60.0f),
+                                D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        dc->DrawEllipse(ring, host.GetSolidBrush(ColorFromArgb(_sampleRing->originalArgb)), 16.0f);
+        dc->PopAxisAlignedClip();
+    }
 }
 
 void CanvasOverlay::PaintTransform(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const
