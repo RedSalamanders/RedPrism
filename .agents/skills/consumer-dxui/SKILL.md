@@ -24,9 +24,11 @@ the pin. Do not float onto sibling `main`.
 ## Facts about the pinned library (read the pinned sources under `.build/dependencies/DxUi/source/<commit>`)
 
 - `Toolbar` is a `Panel`: it lays out nothing. Set every child's bounds in `ChromeHost::Arrange`.
-- `Toggle::Paint` draws a switch even for `ButtonVariant::IconOnly`. A latched tool button is an icon-only `Button`
-  plus `SetPressedVisual(true)`; `Button::OnMouseUp` clears `_pressed` before invoking the click, so re-apply the
-  latch in the click handler and on every `Prepare`.
+- `Toggle::Paint` draws a switch even for `ButtonVariant::IconOnly`, and `Toolbar::AddToggleButton` gives that
+  switch (the rail lost its glyphs once). A latched tool button is an icon-only `Button` plus `SetPressedVisual(true)`;
+  `Button::OnMouseUp` clears `_pressed` before invoking the click, so sync the latch from `DebugIsPressed()` once the
+  pointer is up (`ChromeHost::SyncToolVisuals` defers while `_pointerPressed`), never on every `Prepare` and never
+  during a press.
 - Icon-only buttons draw `_text` with `FontRole::Icon` (Segoe Fluent Icons). Pass a code point that exists;
   `HostTests` checks the rail glyphs against the installed font.
 - `Panel` paints no background; the embedded surface is cleared transparent and composited with premultiplied
@@ -43,8 +45,9 @@ the pin. Do not float onto sibling `main`.
   write (`SetBounds`, `SetVisible`, `SetPressedVisual`, `SetChecked`, a value) reaches the tree while the pointer
   is down. Release DxUi's focus before dispatching a chrome press (`ChromeHost::ReleaseFocusForPress`), write
   layout only on change (`PlaceControl`, `ShowControl`), never re-issue a pressed or checked look every sync, and
-  keep accessibility attach/update calls out of a press. Mark the active tool with a toolbar toggle's checked state,
-  not `SetPressedVisual` on a button. The self-test holds rail presses across frames to keep this true.
+  keep accessibility attach/update calls out of a press. Mark the active tool with `SetPressedVisual` written only
+  between presses, never with a toolbar toggle (a switch). The self-test holds rail presses across frames to keep
+  this true.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
 

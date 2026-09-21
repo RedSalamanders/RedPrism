@@ -31,13 +31,13 @@ own.
 
 | Function | Legacy owner | Status |
 | --- | --- | --- |
-| File › New Canvas… (size sheet, clipboard size suggestion) | `NewCanvasSheet.swift`, `ProjectWorkspace.newCanvas` | stub |
+| File › New Canvas… (size sheet, clipboard size suggestion) | `NewCanvasSheet.swift`, `ProjectWorkspace.newCanvas` | done |
 | File › Import Images… (several files as layers) | `EditorSession.importImages` | done |
 | File › Close Project (save prompt, empty shell) | `ProjectController.close`, `EditorSession.clearProject` | done |
 | "Save changes?" before New, Open, Close Project, Exit | `ProjectController.confirmReplacement` | done |
 | An image opened as a layer or as a new project | new (legacy adds a layer on a tab and opens a project per dock drop) | done |
-| Image › Canvas Size… (anchor, units, relative, extension color) | `CanvasSizeSheet.swift`, `CanvasResizer.swift`, `CanvasSize.swift` | stub |
-| Image › Image Size… (resample, resolution, units, sampling) | `ImageSizeSheet.swift`, `ImageResizer.swift` | stub |
+| Image › Canvas Size… (anchor, units, relative, extension color) | `CanvasSizeSheet.swift`, `CanvasResizer.swift`, `CanvasSize.swift` | done |
+| Image › Image Size… (resample, resolution, units, sampling) | `ImageSizeSheet.swift`, `ImageResizer.swift` | done |
 | Layer › Group Selected Layers | `LayerGroups.groupSelectedLayers` | done |
 | Layer › Rename Layer… | `EditorSession.renameLayer`, `NativeLayerList` inline editor | stub (the model edit exists) |
 | Layer › Move Layer Up / Down (Ctrl+] / Ctrl+[) | `EditorSession.moveActiveLayer` | done |
@@ -53,7 +53,7 @@ own.
 - [x] Slice 1 — policy and files: `ShowNotImplemented`, the full menu surface with stubs, the image-open prompt,
       the save prompt, Import Images…, Close Project, Move Layer Up/Down, Group Selected Layers, the clipping
       toggle; specs, self-test, DocumentTests
-- [ ] Slice 2 — sizes: `ResizeCanvas` / `ResizeImage` in Common with the legacy `CanvasSizeTests` /
+- [x] Slice 2 — sizes: `ResizeCanvas` / `ResizeImage` in Common with the legacy `CanvasSizeTests` /
       `ImageSizeTests` goldens; the New Canvas, Canvas Size and Image Size cards
 - [ ] Slice 3 — Crop tool: `CropGeometry` / `CropDrag` / `CropSnap` with the legacy `CropTests` goldens, the frame
       overlay, the header, Apply / Cancel

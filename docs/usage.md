@@ -9,7 +9,7 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--self-test` | Hidden WARP smoke (used by `test.ps1`) |
 | `--screenshot <png>` | Capture without activation, then exit |
 | `--dpi 96\|144` | Layout DPI for `--screenshot` |
-| `--demo transform\|selection\|brush\|retouch\|adjust` | Populate the new document for a `--screenshot` |
+| `--demo transform\|selection\|brush\|retouch\|adjust\|canvassize` | Populate the new document for a `--screenshot` (`canvassize` opens the Canvas Size card) |
 | `--bench brush` | Run the brush benchmark (4K document, 40 and 800 px strokes, blank and opaque layers), print `BRUSH BENCH` lines and exit |
 | `--help` | Print the catalog and exit 0 |
 
@@ -39,6 +39,7 @@ after the save prompt); Import Images… always adds layers. A drop of several i
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
 | Ctrl+] / Ctrl+[ / Ctrl+Alt+G / F2 / Ctrl+E | Move the layer up / down among its siblings, clip it to the layer below (again releases), rename it, merge down (rename and merge say they are not implemented yet) |
+| Enter / Escape | OK / Cancel the open New Canvas, Canvas Size or Image Size card (canvas focused) |
 | Delete | Clear the selected pixels; without a selection delete the targeted mask, or the layer (canvas focused) |
 | Shift+Delete | Content-Aware Fill: synthesize the selected pixels from the surrounding image of the layer (also on the Edit menu; OK applies one undo step) |
 | Ctrl+X / Ctrl+C / Ctrl+Shift+C / Ctrl+V | Cut, copy, copy merged, paste in place as a new layer (another app's image pastes centered) |

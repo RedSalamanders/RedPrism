@@ -403,6 +403,46 @@ remaining target with random donors. The result blends through the selection cov
 unselected and opaque) sets `FilterEdit::previewFailed`: the panel says so, `CommitFilter` refuses and keeps the
 edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK records `Content-Aware Fill`.
 
+## Canvas size, image size and crop (C16)
+
+`Common/CanvasSize.*` ports `CanvasSize.swift`, `CanvasResizer.swift` and `ImageResizer.swift`.
+
+- `CanvasSizeDraft` (the Canvas Size card's numbers): `Displayed(axis)` shows the pixels (minus the original when
+  `relative`) in the unit — pixels, percent of the original, inches or centimeters at the document resolution;
+  `Set(value, axis)` converts back, adds the original when relative, and moves the other axis by the original
+  ratio when `locked`; `Valid` needs both rounded sides in 1…30 000.
+- `CanvasSizeOptions::Offset(from)`: `contentOffset` when given (the crop), else `floor((new − old) · (anchor % 3)
+  / 2)` horizontally and `floor((new − old) · (anchor / 3) / 2)` vertically for the row-major anchor 0…8: floor
+  puts the extra pixel right/bottom when expanding and takes it from the left/top when shrinking around the center.
+- `ResizeCanvas`: sides 1…30 000 and anchor 0…8 (else `TooLarge`), a finite offset within ±1 000 000 (else
+  `Invalid`); the same size with no offset is `Unchanged`. Every layer's origin and every placed mask move by the
+  offset (an invalid transform is `TooLarge`) and the selection outline is dropped. A `fill` while growing adds a
+  bottom layer `Canvas Extension` of the new size, opaque in the color with the old canvas cut out, so the old
+  transparency stays; it counts against the 100-megapixel and 10 000-layer limits (`TooLarge`) and needs finite
+  0…1 components (`Invalid`). Shrinking never adds a fill; a transparent resize allocates nothing.
+- `ImageSizeDraft` (the Image Size card's numbers): with `resample`, `Set` converts the unit to pixels and moves
+  the other axis by the current ratio when `locked`; without it the pixels stay and the resolution follows the
+  typed print size (`pixels / value`, centimeters through 2.54). `SetResolution` scales the pixels with it in
+  inches or centimeters while resampling; `SetResample(false)` restores the original pixels, locks the ratio and
+  turns a pixel or percent unit into inches; `Valid` needs a finite resolution 1…9 600, rounded sides 1…30 000
+  and, when resampling, at most 100 megapixels.
+- `ResizeImage`: sides 1…30 000 and resolution 1…9 600 (else `TooLarge`); the same size changes only the
+  resolution; otherwise at most 100 megapixels. Each layer rasterizes on its own at the document scale (`sx = new
+  / old` per axis): the box its four transformed corners span after scaling, floored and ceiled to whole pixels,
+  becomes its upright transform with the chosen sampling (rotation and flips baked into the pixels; a
+  nonuniformly scaled rotated layer shears, which width/height/angle cannot hold). A pixel layer draws its image
+  through pixel → document → scale → box (`RenderPlacedImage`: Nearest picks the nearest source pixel, Smooth
+  samples bilinearly, High also averages up to a 4×4 grid per pixel when the map shrinks the image) into a new
+  asset with a fresh thumbnail and stops being a live shape; masks on their own placement and 1×1 uniform masks
+  keep their pixels with the placement scaled (`Placing` of the scaled unit map), other masks rasterize the same
+  way with 0 beyond their pixels (`RenderPlacedMask`); folders and adjustment layers keep only the box. Layer
+  pixels and mask pixels each stay within 100 megapixels (`TooLarge`); a failed allocation is `Memory`.
+- `DocumentSession::ApplyDocumentSize(document, name)` installs a resized document (same id) as one entry named
+  `Canvas Size`, `Image Size` or `Crop`, dropping any outline draft and keeping the active layer.
+
+The Crop tool's model (`CropGeometry`, `CropDrag`, `CropSnap`) follows in slice 3 of
+[`Completeness_2026-09-21.md`](../Plans/WIP/Completeness_2026-09-21.md).
+
 ## Validation
 
 `DocumentTests`: geometry (`transform.*`)
@@ -431,6 +471,16 @@ Retouch: `DocumentTests` `heal.*` (the legacy `SpotHealingTests` blemish for eve
 (`CloneStampTests`), `blur.*`, `smudge.*`, `liquify.*` and `warp.*` (own goldens: a softened edge, carried color, a
 pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`), `shape.*` (`ShapeToolTests` plus the redraw on
 scaling) and `eyedropper.*`. The WARP self-test drives each tool through `Application`.
+
+Sizes: `DocumentTests` `canvasdraft.*` (the legacy `CanvasSizeTests` draft case plus the anchor offsets),
+`canvas.*` (every anchor's offset for growing and shrinking with the source and transform kept, the colored
+extension's cut-out applied and undone through the session, the allocation-free transparent resize, no fill on a
+shrink, the over-budget fill, the unchanged same size), `imagedraft.*` (the Image Size sheet's math) and
+`imagesize.*` (the legacy `ImageSizeTests`: layer identity and the nearest pixels, undo restoring the source
+raster, the resolution-only change, the rotated hidden layer's box, the rejected size; plus a mask rasterized and
+a placed mask's scaled placement). The WARP self-test drives Canvas Size (percent, locked, anchored top-left, a
+white extension growing from the bottom-right anchor, Escape), Image Size (nearest, 300 ppi) and New Canvas
+through the cards' actions and keys.
 
 Pixel edits: `DocumentTests` `edit.*` (the legacy `SelectionEditTests`: brush and gradient clipped to the selection,
 an empty selection edits nothing, fills, Clear and the Delete key, mask fills, the clip on scaled layers, masks from

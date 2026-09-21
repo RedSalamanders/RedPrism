@@ -43,6 +43,10 @@ invoked instead of doing nothing.
   15°). Moves snap to the canvas and the other layers unless Ctrl is held. Alt-drag duplicates, arrows nudge,
   Ctrl+T opens Free Transform with the header's numbers; Enter or Apply commits, Escape or Cancel discards. The
   Image menu flips the canvas, the Layer menu flips the layer.
+- **Sizes**: File › New Canvas… asks for a size (an image on the clipboard suggests its own), Image › Canvas Size…
+  grows or shrinks the canvas around an anchor in pixels, percent, inches or centimeters (relative or absolute,
+  ratio locked or free) with a transparent or colored extension, and Image › Image Size… resamples every layer
+  (nearest, smooth or high quality) or changes only the resolution; each is one undo step.
 - **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
   pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
@@ -92,6 +96,7 @@ Empty-document harness captures:
 - [Brush demo](screenshots/brush-96.png) (`--demo brush`)
 - [Retouch demo](screenshots/retouch-96.png) (`--demo retouch`)
 - [Adjust demo](screenshots/adjust-96.png) (`--demo adjust`)
+- [Canvas Size card](screenshots/canvassize-96.png) (`--demo canvassize`)
 
 Filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

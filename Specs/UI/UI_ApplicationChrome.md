@@ -91,8 +91,10 @@ the installed Segoe Fluent Icons font and that keys, glyphs and names are unique
 Tool keys apply when the canvas has focus; Space pans while held. X swaps the foreground and background wells and D
 resets them to black over white, the legacy canvas key bindings.
 
-The rail buttons are DxUi toggle buttons; the checked one is the active tool, and `SyncToolVisuals` writes a
-change only. Three rules keep a mouse press alive across the frames it spans (DxUi cancels a press held across a
+The rail buttons are icon-only DxUi buttons (a DxUi toggle paints as a switch, glyph or not); the active tool's
+button carries the pressed look as its latch, and `SyncToolVisuals` writes a latch only between presses — while a
+press is in flight it defers to the release — and only when a button's own pressed state differs (DxUi clears it on
+release). Three rules keep a mouse press alive across the frames it spans (DxUi cancels a press held across a
 frame when its focus leaves another control or a layout write reaches the tree): a press on the chrome first
 releases DxUi's focus (`ChromeHost::ReleaseFocusForPress`; a text edit commits when the press lands outside its
 control and continues when it lands inside), the arrange paths write bounds and visibility only when they change
@@ -315,9 +317,6 @@ function. The functions still awaiting an implementation are:
 
 | Function | Reached from |
 | --- | --- |
-| New Canvas… | File menu |
-| Canvas Size… | Image menu |
-| Image Size… | Image menu |
 | Rename Layer… | Layer menu, F2 |
 | Merge Down | Layer menu, Ctrl+E |
 | Crop | the rail (C): choosing the tool raises the notice and keeps the previous tool |
@@ -381,9 +380,28 @@ tabs, rail, splitter, picker and the drawn adjustment controls from `IDS_A11Y_*`
 tree from the window root (at least eight named elements) and resolves a point under the menu bar. Detaching the
 chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`, `UiaDisconnectProvider`).
 
+## Size cards
+
+New Canvas…, Canvas Size… and Image Size… open a card (`ChromeHost::BuildSizeCard`, a `CardPanel` floating over the
+canvas hole at the layers side like the adjustment panel; a point on it is chrome). The `Application` owns the draft
+(`SizeDialog`: a `CanvasSizeDraft`, an `ImageSizeDraft`, the anchor, the extension choice and its custom color, the
+New Canvas size) and mirrors it through `SetSizeCard`; every control reports one `SizeAction` with one value, a typed
+number counting when committed (Enter, a step button, the focus leaving) so a locked ratio never follows a
+half-typed value. Enter is the card's OK and Escape its Cancel (the card's default and cancel buttons inside it, the
+accelerators with the canvas focused); a tool switch or a document on its way out cancels the card. Apply resizes
+through `ResizeCanvas` / `ResizeImage` ([`Document_Tools.md`](../Document/Document_Tools.md)) as one `Canvas Size` /
+`Image Size` entry and fits the viewport; `TooLarge` reports `IDS_ERROR_TOO_LARGE`, any other failure
+`IDS_ERROR_RESIZE`; an unchanged size closes the card.
+
+| Card | Rows |
+| --- | --- |
+| New Canvas | The hint, Width and Height in pixels (1…30 000, else the invalid note replaces the sRGB note and Create Canvas is disabled), Open Project… and Import Image… (they close the card and run the command), Cancel, Create Canvas: after the save prompt a fresh unmodified untitled document with one blank layer. The size starts at 1920×1080, then the last typed size; an image on the clipboard suggests its size when the card opens |
+| Canvas Size | Current W × H and its uncompressed RGBA size, Units (Pixels, Percent, Inches, Centimeters), Width and Height in the unit (three decimals, two for percent), Relative to current dimensions, Lock original aspect ratio (locking settles the height on the width), the New size line or the invalid note, the 3×3 anchor grid (pressed = chosen, named for accessibility, the name and hint beside it), Canvas extension (Transparent, Foreground, Background, Black, White, Custom: the color picker opens on the custom color and the swatch shows it; Cancel restores the previous custom color), Cancel, OK |
+| Image Size | Current W × H, Units (only Inches and Centimeters without resampling), Width and Height, Lock aspect ratio (disabled without resampling), Resolution in pixels/inch (1…9 600), Resample, Sampling (Nearest, Smooth, High quality) while resampling, the note (pixels resize, or only the print size changes), the Result line or the invalid note, Cancel, Resize |
+
 ## Files
 
-New creates a 1280×800 blank layer and marks history saved (New Canvas… will ask for a size; see the list above).
+New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
 layer above the active one, in one `Import Images` history entry (`Import Image` for a single file); with no
 document open the first image becomes the document (see below) and the rest join it.
