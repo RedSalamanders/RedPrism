@@ -290,10 +290,10 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 
 | Menu | Commands |
 | --- | --- |
-| File | New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As (Ctrl+Shift+S), Export PNG, Export JPEG, Exit |
+| File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG…, Export JPEG…; Close Project (Ctrl+W); Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
-| Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Add Mask, Add Black Mask (from the selection when there is one), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…, Flip Layer Horizontal, Flip Layer Vertical |
+| Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size…, Image Size…; Flip Canvas Horizontal, Flip Canvas Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down (Ctrl+E); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
@@ -301,6 +301,30 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 
 StatusStrip shows zoom percent, document size, and the current tool with its key. The tab title is the file name
 (or Untitled) with a dirty mark when history is modified.
+
+## Unimplemented functions
+
+The shell exposes the documented command surface through menus and the tool rail. A function that has no implementation yet MUST, when invoked, show
+the localized notice `IDS_NOT_IMPLEMENTED` ("{0} is not implemented yet.", the function named by its own caption
+without its mnemonic, accelerator column or ellipsis) through `Application::ShowNotImplemented`, and change nothing
+else: no document, history, selection, tool or viewport change, no side effect before or after the notice. The
+notice is an OK box owned by the main window, shown from the message loop after the command or click that raised
+it returns (never from inside a DxUi dispatch); quiet runs (`--self-test`, `--screenshot`, `--bench`) count it
+instead of showing it. A stub leaves with its implementation, and the notice never appears for an implemented
+function. The functions still awaiting an implementation are:
+
+| Function | Reached from |
+| --- | --- |
+| New Canvas… | File menu |
+| Canvas Size… | Image menu |
+| Image Size… | Image menu |
+| Rename Layer… | Layer menu, F2 |
+| Merge Down | Layer menu, Ctrl+E |
+| Crop | the rail (C): choosing the tool raises the notice and keeps the previous tool |
+
+The self-test invokes each of them under quiet UI and checks that the notice count rises by one while the document,
+the history and the tool stay as they were. [`Completeness_2026-09-21.md`](../Plans/WIP/Completeness_2026-09-21.md)
+tracks the implementations.
 
 ## Layers panel
 
@@ -359,10 +383,33 @@ chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`,
 
 ## Files
 
-New creates a 1280×800 blank layer and marks history saved. Open/Save use `IFileDialog`. Dropped files (long paths
-included) open a `.prism` or exploded folder, or import an image onto the current document as one undo step
-(`Import Image`). Load failures report the `ProjectIoStatus` through a localized message (unsupported version names
-the version); `--screenshot` runs suppress dialogs.
+New creates a 1280×800 blank layer and marks history saved (New Canvas… will ask for a size; see the list above).
+Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
+layer above the active one, in one `Import Images` history entry (`Import Image` for a single file); with no
+document open the first image becomes the document (see below) and the rest join it.
+
+An image (PNG, JPEG, TIFF, HEIC) chosen through File › Open or dropped on the window is not imported silently: the
+shell asks, in a task dialog owned by the main window (`IDS_OPEN_IMAGE_TITLE`, `IDS_OPEN_IMAGE_TEXT`), whether to
+**Add as Layer** (the default: the image becomes a layer above the active layer as one `Import Image` entry and the
+canvas keeps its size) or to open it as a **New Project** (the current document is replaced by a document of the
+image's size holding the image as its only layer, the history reset and marked saved, no path, the viewport
+fitted); Cancel changes nothing. A drop of several files asks once for the batch (`IDS_OPEN_IMAGES_TITLE`): New
+Project takes the first image and the others join it as layers; projects in the batch open as projects first. With
+no document open an image opens as a new project without asking. Quiet runs take a forced answer (Add as Layer
+unless the self-test sets another). Import failures report `IDS_ERROR_IMPORT_IMAGE` or `IDS_ERROR_TOO_LARGE` once
+for the batch and keep the images that loaded.
+
+Before a document is replaced or dropped — New, New Canvas…, Open (a project or a new-project image), Close
+Project, Exit and the window's close button — a modified document asks `IDS_CONFIRM_SAVE_TITLE` ("Save changes to
+<name>?") with Save, Don't Save and Cancel: Save runs the Save command and proceeds only when it saved, Don't Save
+proceeds, Cancel keeps everything as it was. Quiet runs never ask (they proceed, or take the self-test's forced
+answer). Close Project (Ctrl+W) leaves the shell without a document: the status strip shows `—`, the layers panel is
+empty, the canvas hole shows the clear color and the document commands do nothing; New, Open, Import Images… and a
+drop start the next document.
+
+Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Load failures
+report the `ProjectIoStatus` through a localized message (unsupported version names the version); `--screenshot`
+runs suppress dialogs.
 
 ## Validation
 

@@ -101,6 +101,17 @@ bottom-to-top order.
   group, delete (a folder deletes its descendants; clips onto deleted sources are released; the next neighbor
   becomes active, or nothing when the document empties; the canvas size is kept).
 - Opacity/blend (groups skipped), clipping link (`CanLinkMask` runs the graph validation on a copy).
+- Move up/down (`MoveActiveLayer(±1)`, legacy `EditorSession.moveActiveLayer`): the active layer swaps places with
+  its next sibling in the same parent as one `Reorder Layers` entry; `CanMoveActiveLayer` says whether that sibling
+  exists. Group the selection (`GroupSelectedLayers`, legacy `LayerGroups.groupSelectedLayers`): the selected roots
+  (a selected folder carries its subtree) move into a new `Folder N` placed at the topmost selected branch of their
+  common parent, an empty selection makes an empty folder, the folder becomes active and its parent uncollapses;
+  one `Group Layers` entry, refused when the hierarchy would not validate. Clipping toggle (`ToggleClippingMask`,
+  legacy `LiveLayerMask.toggleClippingMask`): a clipped layer releases (`Release Clipping Mask`); otherwise a
+  non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself
+  (`Create Clipping Mask`); `CanToggleClippingMask` mirrors the legacy gate.
+- `ClearDocument` drops the document, the active layer and selection, the collapsed set, every draft and pending
+  edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
 - Nested `BeginEdit`/`EndEdit` follow `DocumentHistory`; every edit is one undo step.
 
 ## Validation

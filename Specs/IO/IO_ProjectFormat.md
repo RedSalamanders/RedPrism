@@ -17,6 +17,9 @@ A project is either:
 1. A ZIP archive whose name ends in `.prism` (Windows file, same layout as the Mac package), or
 2. An exploded directory containing `manifest.json` and `images/`.
 
+`PathLooksLikeZipProject` is true for a directory-less path named `.prism` and for an existing file that starts
+with a ZIP signature (`PK` 03 04, 05 06 or 07 08); any other file (an image dropped on the window) is not a project.
+
 ZIP I/O uses libzip through `unique_zip` (`zip_discard` on abandon, `zip_close` only on commit). Handles are never
 left raw. ZIP members are opened with `zip_source_win32w_create`. Reparse points and `..` path segments in asset names
 are rejected (`ProjectIoStatus::Invalid`).

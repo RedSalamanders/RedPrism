@@ -22,7 +22,7 @@ rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) C
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| (none) | — | — | No plan is active: every phase of the port is recorded under `Done/`; the next plan is indexed here before it authorizes work |
+| [`Completeness_2026-09-21.md`](Completeness_2026-09-21.md) | ACTIVE | `UI/UI_ApplicationChrome.md`, `Document/Document_Model.md`, `Document/Document_Tools.md` | C16: the whole legacy command surface, a message for every unimplemented function, images opened as a layer or a new project |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be

@@ -24,17 +24,21 @@ version 7. A project the app cannot open (unsupported version, damaged metadata,
 
 ## Images
 
-PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) import onto the canvas as a new layer named after
-the file; an empty document takes the image size. Export PNG (with transparency) or JPEG (opaque, quality 0.8) from
-the File menu.
+PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) open through File › Open, File › Import Images…
+(several at once) or a drop on the window. Open and a drop ask whether the image is added as a layer named after
+the file above the active layer, or opened as a new project of the image's size (the current project is replaced
+after the save prompt); Import Images… always adds layers. A drop of several images asks once. Close Project
+(Ctrl+W) leaves the window empty until the next New, Open, import or drop. Export PNG (with transparency) or JPEG
+(opaque, quality 0.8) from the File menu.
 
 ## Keyboard reference
 
 | Keys | Action |
 | --- | --- |
-| Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S | New, open, save, save as |
+| Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S / Ctrl+W | New, open, save, save as, close project (a modified project asks to save first) |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
+| Ctrl+] / Ctrl+[ / Ctrl+Alt+G / F2 / Ctrl+E | Move the layer up / down among its siblings, clip it to the layer below (again releases), rename it, merge down (rename and merge say they are not implemented yet) |
 | Delete | Clear the selected pixels; without a selection delete the targeted mask, or the layer (canvas focused) |
 | Shift+Delete | Content-Aware Fill: synthesize the selected pixels from the surrounding image of the layer (also on the Edit menu; OK applies one undo step) |
 | Ctrl+X / Ctrl+C / Ctrl+Shift+C / Ctrl+V | Cut, copy, copy merged, paste in place as a new layer (another app's image pastes centered) |

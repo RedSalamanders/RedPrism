@@ -23,8 +23,11 @@ executable is unsigned in this version, so SmartScreen may ask once.
 ## Shell
 
 One window: menu bar, document tab, tool rail with the foreground/background wells, canvas, layers splitter,
-layers panel with the opacity stepper, status strip. New / Open / Save use the
-common file dialog. Drop a `.prism` package, an exploded project folder, or an image onto the window.
+layers panel with the opacity stepper, status strip. New / Open / Save use the common file dialog. Drop a `.prism`
+package, an exploded project folder, or images onto the window. An image opened or dropped asks whether it becomes
+a layer of the current project or a new project of its own size; a modified project asks to save before it is
+replaced or closed. The menus list every function of the Mac app; one that is not implemented yet says so when
+invoked instead of doing nothing.
 
 - **Tool rail**: sixteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
   E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom, A no tool). Keys apply
@@ -43,9 +46,11 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
 - **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
   pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
-  (Ctrl+Shift+N) or folder (Ctrl+G), copies the selection or the layer to a new layer (Ctrl+J), deletes the active
-  layer or its targeted mask (Delete, without a selection), toggles its visibility, moves it out of its folder
-  (Ctrl+Shift+G), or adds a mask (white, or black; from the selection when there is one).
+  (Ctrl+Shift+N) or folder (Ctrl+G), wraps the active layer in a folder (Group Selected Layers), copies the
+  selection or the layer to a new layer (Ctrl+J), deletes the active layer or its targeted mask (Delete, without a
+  selection), toggles its visibility, moves it up or down among its siblings (Ctrl+] / Ctrl+[) or out of its folder
+  (Ctrl+Shift+G), clips it to the layer below or releases the clip (Ctrl+Alt+G), or adds a mask (white, or black;
+  from the selection when there is one).
 - **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert. Cut, Copy, Copy Merged and
   Paste (Ctrl+X, Ctrl+C, Ctrl+Shift+C, Ctrl+V) move pixels between layers and other apps (a paste lands in place as a
   new layer); Fill with the foreground (Alt+Backspace) or background (Ctrl+Backspace) color, Clear Selection Pixels
