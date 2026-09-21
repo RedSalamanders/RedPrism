@@ -31,6 +31,7 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 | --- | --- |
 | Class | `RedPrism.Window` |
 | Title | `RedPrism` |
+| Icon | The embedded `RedPrism/res/RedPrism.ico` supplies the large and small window-class icons; the same resource is visible on the executable. |
 | Style | `WS_OVERLAPPEDWINDOW \| WS_CLIPCHILDREN` |
 | Extended | `WS_EX_APPWINDOW \| WS_EX_NOREDIRECTIONBITMAP` |
 | Binding | `Application*` at `WM_NCCREATE`; destroy via `wil::unique_hwnd::reset()` |

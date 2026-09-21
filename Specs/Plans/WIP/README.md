@@ -16,12 +16,13 @@ recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 T
 [`Retouch_2026-09-20.md`](../Done/Retouch_2026-09-20.md), C9b Pixel edits in
 [`PixelEdits_2026-09-21.md`](../Done/PixelEdits_2026-09-21.md), C12 Adjust and filter in
 [`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md) C13 Smart operations (Remove Background
-rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) and C14 Product hardening in
-[`ProductHardening_2026-09-20.md`](../Done/ProductHardening_2026-09-20.md).
+rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) C14 Product hardening in
+[`ProductHardening_2026-09-20.md`](../Done/ProductHardening_2026-09-20.md) and C15 Packaging in
+[`Packaging_2026-09-20.md`](../Done/Packaging_2026-09-20.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`Packaging_2026-09-20.md`](Packaging_2026-09-20.md) | `ACTIVE` | `Build_Packaging` (create in C15) | Portable ZIP and version stamp |
+| (none) | — | — | No plan is active: every phase of the port is recorded under `Done/`; the next plan is indexed here before it authorizes work |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be

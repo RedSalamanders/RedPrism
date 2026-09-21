@@ -117,6 +117,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
+| `.\package.ps1 [-Platform] [-SkipBuild] [-SkipSmoke]` | Release build, the portable ZIP with its `.sha256`, the clean-extraction smoke ([`Build_Packaging.md`](Build_Packaging.md)) |
 | `.\validate-skills.ps1` | Repository skill frontmatter and body checks |
 
 `build.ps1` locates MSBuild from `MSBUILD_EXE_PATH`, `PATH`, or vswhere (including prerelease VS 2026). Every MSBuild

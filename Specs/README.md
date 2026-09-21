@@ -50,6 +50,7 @@ When a spec, implementation, test, or document disagrees:
 | Domain | Start with |
 | --- | --- |
 | Build | [`Build/Build_Toolchain.md`](Build/Build_Toolchain.md) |
+| Packaging (from C15) | [`Build/Build_Packaging.md`](Build/Build_Packaging.md) |
 | Architecture | [`Core/Core_Architecture.md`](Core/Core_Architecture.md) |
 | Performance | [`Core/Core_PerformanceAndResources.md`](Core/Core_PerformanceAndResources.md) |
 | DxUi pin (from C2) | [`Core/Core_DxUiIntegration.md`](Core/Core_DxUiIntegration.md) |

@@ -645,7 +645,7 @@ Indexed 2026-09-20:
 | **C12 Adjust/filter** | [`AdjustFilter_2026-09-20.md`](AdjustFilter_2026-09-20.md) (done) |
 | **C13 Smart ops** | [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) (done; Remove Background rejected for v1, the decision recorded there) |
 | **C14 Product hardening** | [`ProductHardening_2026-09-20.md`](ProductHardening_2026-09-20.md) (done) |
-| **C15 Packaging** | [`Packaging_2026-09-20.md`](../WIP/Packaging_2026-09-20.md) |
+| **C15 Packaging** | [`Packaging_2026-09-20.md`](Packaging_2026-09-20.md) (done) |
 
 | Phase | Outcome | Depends on |
 | --- | --- | --- |

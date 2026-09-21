@@ -13,6 +13,13 @@ Windows-native raster composition (Direct3D 11 + DxUi). This guide is not a beha
 
 `--screenshot <png> [--dpi 96|144] [--warp]` captures the titled window without activating it.
 
+## Install
+
+Releases are portable ZIPs from `.\package.ps1` (`RedPrism-<version>-<x64|ARM64>.zip` with a `.sha256` beside it):
+extract the folder anywhere and run `RedPrism.exe`. The Visual C++ runtime is inside; Windows 10 or later supplies
+the rest. Nothing is installed or registered; settings and crash reports live under `%LocalAppData%\RedPrism`. The
+executable is unsigned in this version, so SmartScreen may ask once.
+
 ## Shell
 
 One window: menu bar, document tab, tool rail with the foreground/background wells, canvas, layers splitter,
