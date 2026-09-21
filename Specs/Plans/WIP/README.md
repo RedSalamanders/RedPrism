@@ -10,12 +10,12 @@ Add every direct WIP plan to this table exactly once. Use `ACTIVE` for executabl
 The Windows DirectX port master program is historical:
 [`WindowsDirectXPort_2026-09-20.md`](../Done/WindowsDirectXPort_2026-09-20.md). The C0–C7 review and the DxUi editor-control adoption are
 recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 Transform is recorded in
-[`Transform_2026-09-20.md`](../Done/Transform_2026-09-20.md) and C9 Selection in
-[`Selection_2026-09-20.md`](../Done/Selection_2026-09-20.md).
+[`Transform_2026-09-20.md`](../Done/Transform_2026-09-20.md), C9 Selection in
+[`Selection_2026-09-20.md`](../Done/Selection_2026-09-20.md) and C10 Brush in
+[`Brush_2026-09-20.md`](../Done/Brush_2026-09-20.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`Brush_2026-09-20.md`](Brush_2026-09-20.md) | `ACTIVE` | [`Core_PerformanceAndResources`](../../Core/Core_PerformanceAndResources.md); [`Document_Tools`](../../Document/Document_Tools.md) | Compute brush + eraser, RasterSnapshot budgets |
 | [`Retouch_2026-09-20.md`](Retouch_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Clone, heal, smear, gradient, shape, eyedropper |
 | [`AdjustFilter_2026-09-20.md`](AdjustFilter_2026-09-20.md) | `ACTIVE` | [`Rendering_Composition`](../../Rendering/Rendering_Composition.md) | Adjustment layers and filters; HSL blends |
 | [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Content-aware fill; Remove Background decision |

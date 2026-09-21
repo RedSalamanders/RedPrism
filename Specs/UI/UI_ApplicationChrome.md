@@ -148,6 +148,36 @@ Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. The Select menu adds
 Selection for the active layer. The selection contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
+## Brush tools
+
+The Brush and Eraser share one header (`ChromeHost::BuildBrushHeader`, mirrored from the session through
+`BrushInspectorState`, never re-laid out from a chrome callback): the tool name; for the Brush a Mode (Paint /
+Erase); Size (1–2000 px), Hardness (0–100 %) and Opacity (1–100 %) steppers; and, while the active layer's mask is
+selected, Paint (Black - Hide / White - Reveal) with a `Mask` note pinned right, otherwise Color with the foreground
+`ColorSwatch`, which opens the color picker like the rail's well. Strings are `IDS_BRUSH_*`; the budget error is
+`IDS_ERROR_BRUSH_BUDGET`.
+
+`CanvasOverlay` draws the tip as a ring of the brush diameter around the pointer (a white 2.5 DIP line under a
+black 1 DIP one; a crosshair when the ring would be under 4 DIP across) whenever a brush tool is over the canvas of
+a document, and the system cursor is hidden there so the ring reads alone; over the chrome, outside the hole and
+without a document the arrow or crosshair returns. The ring follows the zoom.
+
+Pointer rules in the hole (`Application::BeginBrushStroke` / `ContinueBrushStroke` / `FinishBrushStroke`): a left
+press starts a stroke on the active layer, or on its mask when the mask is selected (Shift-click paints a straight
+line from the end of the previous stroke on that target); moving adds samples and shows them at once through the
+composition's stroke preview; release, the pointer leaving the window and switching tools each commit one history
+entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke. The Eraser and the Brush's Erase mode both
+erase; a mask is never erased but painted black or white. A stroke over the pixel budget or an engine failure is
+dropped with `IDS_ERROR_BRUSH_BUDGET`. A press does nothing on a folder without its mask, a hidden or adjustment
+layer, a disabled mask or an empty selection.
+
+Keys with the canvas focused: B chooses the Brush and E the Eraser; `[` and `]` step the size by a fifth (at least
+one pixel); Shift-`[` and Shift-`]` step the hardness by quarters; 1–9 set the opacity to 10–90 % and 0 to 100 %,
+two digits within 0.6 s make a two-digit percent (with the Move tool a digit sets the active layer's opacity the
+same way); Escape cancels a stroke in progress. The stroke contract lives in
+[`Rendering_Brush.md`](../Rendering/Rendering_Brush.md), the session API in
+[`Document_Tools.md`](../Document/Document_Tools.md).
+
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
@@ -220,4 +250,8 @@ painted layer's pixels exactly with the wand, drives Ctrl+Shift+I, Ctrl+A and Ct
 Enter, expands from the header and cancels an outline with Escape. `--screenshot ... --demo transform` writes
 `docs/screenshots/transform-96.png`: two painted layers, the rotated one's box and the transform header;
 `--demo selection` writes `docs/screenshots/selection-96.png`: an elliptical and a rectangular selection with the
-Marquee's header. Keyboard Escape leaves the canvas. `HostTests` covers tool tables, glyphs and the string table.
+Marquee's header; `--demo brush` writes `docs/screenshots/brush-96.png`: a backdrop with soft, hard, translucent
+and erased strokes under the Brush header and the tip cursor. With the brush tools the self-test paints a stroke
+through the compute engine (a live preview, then one sparse `Brush Stroke` entry drawn from the adopted texture),
+erases it, drives `[` `]` Shift-`[` and a digit, and cancels a stroke with Escape. Keyboard Escape leaves the
+canvas. `HostTests` covers tool tables, glyphs and the string table.

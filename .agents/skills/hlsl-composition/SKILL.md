@@ -1,6 +1,6 @@
 ---
 name: hlsl-composition
-description: Change or extend the RedPrism document-space GPU composition and its build-time HLSL (layer passes, coverage textures, clipping stacks, blend modes, blit). Use for CanvasRenderer and RedPrism/Shaders work; not for swap-chain or window code.
+description: Change or extend the RedPrism document-space GPU composition and its build-time HLSL (layer passes, coverage textures, clipping stacks, blend modes, blit, the brush compute kernel). Use for CanvasRenderer and RedPrism/Shaders work; not for swap-chain or window code.
 ---
 
 # HLSL composition
@@ -13,6 +13,10 @@ Read `Specs/Rendering/Rendering_Composition.md` first; it is the contract and th
 - One fullscreen triangle (`CompositionVertex.hlsl`), one layer pixel shader (`CompositionPixel.hlsl`) selected by
   `passMode`, one blit shader (`CompositionBlit.hlsl`). Add a pass mode before adding a shader; add a shader only for
   a different output contract (compute, different targets).
+- The brush is the one compute shader (`BrushCoverage.hlsl`, `cs_5_0`, driven by `GpuBrushCoverage`): one dispatch
+  per 256² tile in 16 × 16 groups, structured buffers for the segments, the settled density and the `uint` preview,
+  constants per tile through `Map` `DISCARD`, only the preview read back. The CPU kernel in `Common/BrushStroke.cpp`
+  is its golden (within 2/255); change both together and keep `Rendering_Brush.md` current.
 - HLSL compiles at build time through the `FxCompile` items in `RedPrism/RedPrism.vcxproj` **and**
   `Tests/CompositionTests/CompositionTests.vcxproj` (both embed the bytecode headers). Warnings are errors: give every
   helper a single return variable (`X4000 potentially uninitialized`) and keep loops bounded.
@@ -40,6 +44,9 @@ Read `Specs/Rendering/Rendering_Composition.md` first; it is the contract and th
   `Compose`; per-frame work belongs in `BlitToTarget`, which must stay allocation-free.
 - `TextureFor` caches by `Raster::Identity()` and keeps the `Raster` alive; the sweep at the end of `Compose` releases
   textures the composition did not use. Keep that invariant when adding new texture kinds.
+- A stroke in progress draws from a working texture (`BeginStroke` / `UpdateStrokeTiles` / `EndStroke`, adopted into
+  the cache on commit) and sparse rasters assemble on the GPU (`CreateSparseTexture`); both are per-edit work, never
+  per-frame, and never a full-canvas upload per pointer update.
 - Surfaces (canvas, stack, coverage) are released by `ReleaseDocumentSurfaces` when the window hides; the self-test
   asserts `CanvasSurfaceBytes() == 0` afterwards.
 

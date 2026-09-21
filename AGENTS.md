@@ -32,7 +32,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 | [build-redprism](.agents/skills/build-redprism/SKILL.md) | `build.ps1`, `test.ps1`, configurations, outputs |
 | [test-harness](.agents/skills/test-harness/SKILL.md) | In-process tests, goldens, WARP fixtures, harness screenshots |
 | [direct3d11-rendering](.agents/skills/direct3d11-rendering/SKILL.md) | Device, swap chain, Present, WARP, device loss |
-| [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, build-time HLSL |
+| [hlsl-composition](.agents/skills/hlsl-composition/SKILL.md) | Document-space passes, coverage, clipping stacks, the brush compute shader, build-time HLSL |
 | [win32-windowing](.agents/skills/win32-windowing/SKILL.md) | HWND, WndProc, DPI, message loop |
 | [performance-resources](.agents/skills/performance-resources/SKILL.md) | Idle, allocation, GPU submit, bounded storage |
 | [wil-raii](.agents/skills/wil-raii/SKILL.md) | WIL handles and COM |
@@ -49,9 +49,10 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 | --- | --- |
 | `Application` | HWND, messages, DPI, command line, frame scheduling, files, commands, `DocumentSession`, `CanvasViewport`, `CanvasRenderer` |
 | `Renderer` | D3D11 device, swap chain, Present, occlusion, adapter-of-monitor, frame order (chrome layout → canvas → chrome) |
-| `CanvasRenderer` | Document-space GPU passes, coverage textures, clipping stacks, raster residency; borrows the device |
-| `ChromeHost` | DxUi EmbeddedHost shell: menus, rail with palette wells, tabs, Move-tool and selection-tool headers, layers with splitter and opacity stepper, status, color picker card, canvas overlay (transform box, marching ants, lasso draft); strings from resources |
-| Document (`Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, transform editing (drag geometry, snapping, warp), selection (Clipper2 booleans, coverage, wand and mask tracing), `.prism` I/O, WIC — never GPU device ownership |
+| `CanvasRenderer` | Document-space GPU passes, coverage textures, clipping stacks, raster residency, sparse-raster assembly and the brush stroke preview; borrows the device |
+| `GpuBrushCoverage` | The brush compute engine (`BrushCoverage.hlsl`) on the application device: per-tile density and preview buffers, readback of the preview only |
+| `ChromeHost` | DxUi EmbeddedHost shell: menus, rail with palette wells, tabs, Move-tool, selection-tool and brush headers, layers with splitter and opacity stepper, status, color picker card, canvas overlay (transform box, marching ants, lasso draft, brush tip); strings from resources |
+| Document (`Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection`, `BrushStroke`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, sparse rasters, transform editing (drag geometry, snapping, warp), selection (Clipper2 booleans, coverage, wand and mask tracing), brush strokes (tiles, CPU kernel, snapshots), `.prism` I/O, WIC — never GPU device ownership |
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
 
 ## Mandatory rules

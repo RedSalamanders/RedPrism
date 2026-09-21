@@ -12,11 +12,12 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
 | Executable | Scope | Notes |
 | --- | --- | --- |
 | `HostTests` | Pure functions of the host (`AdapterSelection.h`, `FrameScheduler.h`, `CommandLine.h`, `EditorTool.h`), DirectWrite glyph presence, STRINGTABLE of `RedPrism.exe` | No window, no device; `--asan-probe` is the sanitizer probe |
-| `DocumentTests` | `Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection` (Clipper2) | CPU only |
+| `DocumentTests` | `Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection` (Clipper2), `BrushStroke` (sparse rasters, the CPU kernel) | CPU only |
 | `IoTests` | `ProjectStore`, `ImageCodecs` | Needs COM (`CoInitializeEx`), writes under `%TEMP%\RedPrism.IoTests` |
-| `CompositionTests` | `CanvasRenderer`, `CanvasViewport` | Creates its own WARP device; reads pixels back |
+| `CompositionTests` | `CanvasRenderer`, `CanvasViewport`, `GpuBrushCoverage` (the compute brush against the CPU kernel), sparse upload and stroke preview | Creates its own WARP device; reads pixels back |
 | `RedPrism.exe --self-test --warp` | Window + swap chain + chrome + composition lifetime | Hidden; exit 0 only when every assertion holds |
 | `RedPrism.exe --screenshot` | Harness captures for docs and specs | `Common/WindowCapture.cpp`; never Computer Use |
+| `RedPrism.exe --bench brush` | The legacy 4K brush benchmark on the selected device (`--warp` for WARP) | Prints `BRUSH BENCH` lines; record them under `Specs/TestRuns/`, never as a gate |
 
 ## Style
 
@@ -31,6 +32,9 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
   `MinimalManifest(version, extraLayerFields, extraRootFields)` injects overrides first so yyjson's first-key-wins
   lookup sees them.
 - Negative cases assert the exact `ProjectIoStatus` / `ImageCodecStatus` / `DocumentStatus`, not just failure.
+- Brush goldens compare the two coverage engines, sparse and dense sampling, and stroke against source-over
+  coverage within a named tolerance (2/255) rather than against fixed pixels; "never materialized" is asserted with
+  `Raster::IsMaterialized()` after commit, thumbnail, display and the next stroke.
 - Never sleep, poll, or rely on wall-clock timing in a test; the screenshot delay lives in the application, not in
   tests.
 - ASan Debug runs the same executables; parser and tile code must pass there before a phase closes.

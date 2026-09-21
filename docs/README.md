@@ -43,6 +43,11 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
   the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
   mask as the selection.
+- **Brush and Eraser**: B paints with the foreground color, E erases (the Brush's header also has an Erase mode).
+  The header sets the size, hardness and opacity; `[` and `]` step the size, Shift-`[` and Shift-`]` the hardness,
+  digits the opacity. Shift-click draws a straight line from the last stroke. With a layer mask selected the brush
+  paints it black (hide) or white (reveal). Strokes show as you draw and commit on release as one undo step that
+  shares every untouched tile with the previous state.
 
 Empty-document harness captures:
 
@@ -50,6 +55,7 @@ Empty-document harness captures:
 - [144 DPI](screenshots/empty-shell-144.png)
 - [Move tool demo](screenshots/transform-96.png) (`--demo transform`)
 - [Selection demo](screenshots/selection-96.png) (`--demo selection`)
+- [Brush demo](screenshots/brush-96.png) (`--demo brush`)
 
-Brush, retouch and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
+Retouch and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

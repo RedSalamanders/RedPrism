@@ -45,6 +45,15 @@ matching Swift `CGImage ===`. Formats: BGRA8888 (premultiplied, B,G,R,A byte ord
 the codecs and the composition use) and Gray8 masks. Consumers that cache by `Raster::Identity()` MUST hold the
 `Raster` (a strong reference) for as long as the cache entry lives; a freed address can be reused by another image.
 
+A raster is contiguous or sparse (C10). A sparse raster is an unchanged *base* placed in its grid, disjoint
+replacement *tiles* (`RasterTile`: a window into shared pixels at a grid position) and a *fill* byte for pixels
+neither reaches. `MakeSparse` builds one; `Replacing(source, tiles, crop)` writes tiles of a working grid over a
+source and crops the result, splitting older tiles around newer ones so the list stays disjoint while the base and
+every untouched tile stay shared; `Crop` copies a region; `ReadRegion` samples any raster without assembling it
+(thumbnails use it); `ForEachStorage` visits the base and every tile once (history counts bytes that way).
+`Data()` assembles a contiguous copy on first use and keeps it (`IsMaterialized`); consumers that can read tiles
+(the composition, the brush, thumbnails) MUST NOT call it. Identity is the storage itself, sparse or not.
+
 `LayerTransform` matches archived behavioral reference: origin, size, clockwise rotation
 degrees, flipX/flipY, sampling. Valid when all values are finite, size is 1…300 000 per side, and
 `abs(origin) ≤ 1 000 000`. Its geometry helpers (`Point`, `Contains`, `Corners`, `Following`, `Mirrored`, …), the
@@ -95,7 +104,8 @@ bottom-to-top order.
 
 `Tests/DocumentTests` MUST cover cycles, missing parents, raster-as-parent, group+image, group opacity/blend, v1
 groups, v4/v6 masks, adjustment-on-group, clipping cycles, canvas/name limits, mask placement helpers, collapsed
-rows, clip release on delete, and the legacy insertion/deletion/naming semantics.
+rows, clip release on delete, the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill,
+`Replacing` splits, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
 
 ```powershell
 .\test.ps1 -Platform x64 -Configuration Debug

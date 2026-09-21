@@ -79,6 +79,11 @@ Burn follow the PDF / Core Image definition, never Core Graphics. Hue, Saturatio
 - Uploaded rasters are cached by `Raster::Identity()` and keep their storage alive while cached, so a freed address
   can never alias a different image. Every composition releases entries it did not use, which bounds GPU residency to
   the rasters of the current document.
+- Sparse rasters (C10) upload through GPU assembly (`CreateSparseTexture`: clear to the fill, copy the base's cached
+  texture, write the tiles, generate mips), so their CPU copy stays unassembled. A brush stroke in progress draws
+  from a working texture updated tile by tile (`BeginStroke` / `UpdateStrokeTiles`) and adopted into the cache on
+  commit (`EndStroke`), as [`Rendering_Brush.md`](Rendering_Brush.md) specifies; it counts in `CanvasSurfaceBytes`
+  and is dropped with the surfaces.
 - Canvas surfaces: two BGRA8 canvases, two BGRA8 stack surfaces (allocated on the first clipping stack), and a pool
   of R8 coverage textures reused across compositions. `CanvasSurfaceBytes()` reports all of them. Hidden, minimized,
   or occluded documents drop them (`ReleaseDocumentSurfaces`, `CanvasSurfaceBytes() == 0`) and MUST NOT Present.
@@ -108,3 +113,5 @@ here so goldens are not silently rebaselined:
 | Transform (`renderingRotatesScalesAndFlipsWithoutReplacingPixels`) | 8×8 red/blue at (8,8) 16×16 rot 90: (16,12) red, (16,20) blue; flipX → (16,12) blue; 4× scale and flipY keep columns |
 | Residency and caching | settled document not re-composited; `InvalidateDocument` re-composites; hidden surfaces 0; device-loss recreate; resize rebuilds |
 | Viewport (`CompositionTests.swift`) | round trip at zoom 0.25/1/3.75 and backing 1/2 within 1e-6; cursor pixel fixed under zoom; fit margin ≤ 704×504 in 800×600 at 2×; resize keeps the center; limits 0.001 and 32 |
+| Sparse upload and stroke preview (C10, `sparse.*`, `stroke.*`) | an assembled sparse raster renders like its contiguous twin; the preview texture builds from source and fill, takes tile updates, previews masks, is adopted on commit and rebuilt after a reset |
+| Compute brush (C10, `gpubrush.*`) | kernel tiles and a session stroke through `GpuBrushCoverage` match the CPU engine within 2/255 per pixel; tile buffers are released after `EndStroke` |

@@ -1,10 +1,10 @@
-# Document tools: transform (C8) and selection (C9)
+# Document tools: transform (C8), selection (C9) and brush (C10)
 
 Status: current normative contract (created with C8; later tool phases extend it)
 Last reviewed: 2026-09-21
-Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `DocumentSession` transform and selection members in
-`Common/Document.*`, `RedPrism/TransformOverlay.h`, `RedPrism/CanvasOverlay.*`, the Move-tool and selection-tool
-code in `RedPrism/Application.cpp`
+Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush members),
+`DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
+`RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`
 
 ## Scope
 
@@ -190,6 +190,35 @@ clamped inside the placed box, transparent outside it); a folder or blank layer 
 canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without the canvas
 clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
 
+## Brush session (C10)
+
+The stroke model, the coverage engines, the commit and the live preview live in
+[`Rendering_Brush.md`](../Rendering/Rendering_Brush.md); this is the session's contract. Brush state on
+`DocumentSession`: `brushSettings` (`BrushSettings`: diameter 1–2000 px, default 40; hardness 0–1, default 1;
+straight red/green/blue 0–1, default black; opacity 0.01–1, default 1; `IsValid` gates every field), `brushMode`
+(Paint default, Erase: the Brush tool's own erase mode) and `maskPaintWhite` (default false: a mask is painted
+black, hiding). `CanPaint` needs a document, no pending transform, no stroke in progress, an active layer that is
+visible with its ancestors and is not an adjustment layer (a folder only through its mask), an enabled mask when the
+mask is selected, and no explicitly empty selection.
+
+- `SetBrushEngine(engine)` chooses the coverage engine for later strokes (nullptr: the CPU kernel); the host binds
+  its compute engine with the device and drops it with the device.
+- `BeginBrush(point, erase)` starts a stroke on the active layer, or on its mask when the mask is selected (a mask is
+  never erased: it is painted black or white per `maskPaintWhite`), clipped to the selection's coverage when one
+  exists, with the layer's pixel budget (`RasterEditPixelLimit`); false when painting cannot start or the first
+  sample already fails. `ContinueBrush(point)` appends a sample; a budget or engine failure drops the stroke
+  (`PendingBrush` becomes null). `FinishBrush` settles the tail and records one entry (`Brush Stroke`, `Erase`,
+  `Paint Mask`) unless nothing was painted or the layer's pixels or transform changed under the stroke;
+  `TakeLastBrushCommit` hands the host that commit (raster and grid rectangle) once, for the preview's adoption.
+  `CancelBrush` drops the stroke. Undo and Redo of a stroke share every untouched tile.
+- `ShiftLineStart` is the last sample of the previous stroke on the same layer or mask, for Shift-click lines.
+- `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
+  `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
+  opacity typing (1–9 set 10–90 %, 0 sets 100 %, a second digit within 0.6 s makes a two-digit percent, never below
+  1 %). All three ignore keys while a stroke is in progress.
+- `AddLayerMask(revealing)` gives the active layer a uniform 1×1 mask (`Add Reveal-All Mask` / `Add Hide-All Mask`)
+  and selects it; `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
+
 ## Validation
 
 `DocumentTests`: geometry (`transform.*`)
@@ -207,3 +236,9 @@ Selection: `DocumentTests` `geometry.*` (Clipper2 booleans, holes, offsets, elli
 `wandsession.*` (the legacy `MagicWandTests` cases plus the layer sampler). The WARP self-test drives a Marquee
 drag, a Shift add, the M key, an outline move, a deselecting click, a wand click with exact bounds, Ctrl+Shift+I,
 Ctrl+A, Ctrl+D, a polygonal lasso closed with Enter, Expand from the header and Escape through `Application`.
+
+Brush: `DocumentTests` `sparse.*`, `kernel.*`, `brush.*`, the brush `mask.*` cases, `opacity.*`, `accumulate.*`,
+`ripple.*`, `curve.*`, `tail.*`, `crossing.*`, `snapshot.*`, `ridges.*`, `bounds.*`, `budget.*`, `reject.*`,
+`line.*`, `keys.*`, `expand.*` and `clip.*` (the legacy `BrushStrokeTests`, `BrushIntersectionTests`,
+`RasterSnapshotTests` and mask painting cases), listed in [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md).
+The WARP self-test paints, erases, keys and cancels a stroke through `Application`.

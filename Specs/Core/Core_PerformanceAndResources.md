@@ -58,7 +58,7 @@ that makes them impossible.
 | GPU raster residency (C6) | Bounded to the rasters the last composition used; entries keep their `Raster` alive so identities never alias |
 | Compose/Present after warmup (C6) | No heap on the blit/Present path; composition may allocate transient CPU bookkeeping only when the document changed |
 | Dirty DxUi prep (C2) | Stay within DxUi Release ≤ 64 allocs/frame |
-| Brush (C10) | Tile 256²; mouse-up MUST NOT materialize a contiguous bitmap |
+| Brush (C10) | Tile 256²; mouse-up MUST NOT materialize a contiguous bitmap; changed tiles only per pointer update; history retains only the tiles a stroke replaced; measured per run under `Specs/TestRuns/` ([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)) |
 
 Fail-closed performance sandboxes live at `X:\RedPrism.Perf` (any local drive letter plus an ownership marker), never
 under repository `.build/`. C1 does not yet create that tree.
