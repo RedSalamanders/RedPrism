@@ -464,19 +464,16 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     _context->OMSetRenderTargets(1, renderTargets, nullptr);
     _context->ClearRenderTargetView(_renderTarget.get(), kClearColor.data());
 
+    // Order: chrome layout (the hole), then the document into the hole, then the chrome surface over it. The DxUi
+    // surface is transparent where no control paints, so tooltips and popups that overlap the canvas stay visible.
+    D3D11_VIEWPORT viewportDx{};
+    viewportDx.Width = static_cast<float>(_width);
+    viewportDx.Height = static_cast<float>(_height);
+    viewportDx.MaxDepth = 1.0f;
     if (chrome)
     {
-        HRESULT chromeResult = chrome->Prepare(
+        const HRESULT chromeResult = chrome->Prepare(
             _width, _height, _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window)));
-        if (FAILED(chromeResult))
-        {
-            return chromeResult;
-        }
-        D3D11_VIEWPORT viewportDx{};
-        viewportDx.Width = static_cast<float>(_width);
-        viewportDx.Height = static_cast<float>(_height);
-        viewportDx.MaxDepth = 1.0f;
-        chromeResult = chrome->Composite(_context.get(), viewportDx);
         if (FAILED(chromeResult))
         {
             return chromeResult;
@@ -496,6 +493,16 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
         if (FAILED(composeResult))
         {
             return composeResult;
+        }
+        _context->OMSetRenderTargets(1, renderTargets, nullptr);
+    }
+
+    if (chrome)
+    {
+        const HRESULT chromeResult = chrome->Composite(_context.get(), viewportDx);
+        if (FAILED(chromeResult))
+        {
+            return chromeResult;
         }
     }
 

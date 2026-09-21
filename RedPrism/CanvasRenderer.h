@@ -13,6 +13,13 @@
 #include <wil/com.h>
 #pragma warning(pop)
 
+// Document-space GPU composition (Rendering_Composition.md). Borrows the application device; owns no swap chain.
+//
+// Composition happens only when the document changed (InvalidateDocument) or the canvas surfaces were rebuilt.
+// Each visible pixel layer is one fullscreen pass into ping-pong canvas textures. Coverage that another layer
+// depends on (live clipping sources, folder masks) is rendered once per composition into pooled R8 textures in
+// document space, exactly as the legacy LiveMaskRenderer / FolderMaskClip define it. A clipping stack (a base plus
+// the contiguous clipped layers above it) composites through a scratch stack surface that keeps the base alpha.
 class CanvasRenderer final
 {
   public:
@@ -25,12 +32,25 @@ class CanvasRenderer final
     HRESULT CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context) noexcept;
     void ReleaseDeviceResources() noexcept;
     void ReleaseDocumentSurfaces() noexcept;
+    // The next Compose re-renders every layer. Cheap; the application calls it after every document edit.
+    void InvalidateDocument() noexcept
+    {
+        _documentDirty = true;
+    }
     HRESULT Compose(const CanvasDocument& document) noexcept;
     HRESULT BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
                          const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                          float holeHeight) noexcept;
     HRESULT Readback(std::vector<std::uint8_t>& bgra, UINT& width, UINT& height) noexcept;
     [[nodiscard]] std::uint64_t CanvasSurfaceBytes() const noexcept;
+    [[nodiscard]] std::uint64_t CompositeCount() const noexcept
+    {
+        return _compositeCount;
+    }
+    [[nodiscard]] std::size_t CoverageTextureCount() const noexcept
+    {
+        return _coverage.size();
+    }
     [[nodiscard]] bool HasDevice() const noexcept
     {
         return static_cast<bool>(_device);
@@ -41,12 +61,40 @@ class CanvasRenderer final
     }
 
   private:
+    enum class Pass : std::uint32_t
+    {
+        Layer = 0,
+        StackBegin = 1,
+        StackChild = 2,
+        StackResolve = 3,
+        LayerCoverage = 4,
+        MaskCoverage = 5,
+    };
+
+    enum Flags : std::uint32_t
+    {
+        kFlagHasMask = 1u,
+        kFlagHasLive = 2u,
+        kFlagHasFolder = 4u,
+        kFlagMaskPlaced = 8u,
+    };
+
     struct GpuTexture
     {
         wil::com_ptr_nothrow<ID3D11Texture2D> texture;
         wil::com_ptr_nothrow<ID3D11ShaderResourceView> srv;
+        // Uploaded rasters keep their storage alive so a freed address cannot alias a different image; entries the
+        // last composition did not use are released, which bounds residency to the current document.
+        Raster keepAlive;
+        std::uint64_t lastUse = 0;
         int width = 0;
         int height = 0;
+    };
+
+    struct Surface
+    {
+        GpuTexture texture;
+        wil::com_ptr_nothrow<ID3D11RenderTargetView> rtv;
     };
 
     struct LayerConstants
@@ -54,17 +102,18 @@ class CanvasRenderer final
         float canvasSize[2]{};
         float layerCenter[2]{};
         float layerSize[2]{};
-        float rotationSin = 0;
-        float rotationCos = 1;
-        float flipSign[2]{1, 1};
+        float layerSinCos[2]{0, 1};
+        float layerFlip[2]{1, 1};
+        float maskCenter[2]{};
+        float maskSize[2]{1, 1};
+        float maskSinCos[2]{0, 1};
+        float maskFlip[2]{1, 1};
+        float maskBackground = 1;
+        float opacity = 1;
         std::uint32_t blendMode = 0;
         std::uint32_t filterMode = 1;
-        float opacity = 1;
-        std::uint32_t hasMask = 0;
-        std::uint32_t hasLiveMask = 0;
-        std::uint32_t hasFolderMask = 0;
-        float pad[2]{};
-        float padEnd[2]{};
+        std::uint32_t passMode = 0;
+        std::uint32_t flags = 0;
     };
 
     struct BlitConstants
@@ -79,11 +128,33 @@ class CanvasRenderer final
         float pad[4]{};
     };
 
+    struct PassInputs
+    {
+        ID3D11ShaderResourceView* source = nullptr;
+        ID3D11ShaderResourceView* dest = nullptr;
+        ID3D11ShaderResourceView* mask = nullptr;
+        ID3D11ShaderResourceView* live = nullptr;
+        ID3D11ShaderResourceView* folder = nullptr;
+    };
+
+    static constexpr int kNoCoverage = -1;
+
     HRESULT CreateCanvas(UINT width, UINT height) noexcept;
+    HRESULT CreateSurface(UINT width, UINT height, DXGI_FORMAT format, Surface& surface) noexcept;
+    HRESULT EnsureStackSurfaces() noexcept;
+    HRESULT AcquireCoverage(int& index) noexcept;
     HRESULT UploadRaster(const Raster& raster, GpuTexture& gpu, bool gray) noexcept;
     GpuTexture* TextureFor(const Raster& raster, bool gray) noexcept;
-    HRESULT DrawLayer(const ImageLayer& layer, const ImageLayer* liveSource, const ImageLayer* folderSource,
-                      ID3D11RenderTargetView* destRtv, ID3D11ShaderResourceView* destSrv) noexcept;
+    HRESULT RunPass(const LayerConstants& constants, const PassInputs& inputs, ID3D11RenderTargetView* target) noexcept;
+    void FillLayerConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs, bool& ok) noexcept;
+    HRESULT LayerCoverage(const Guid& id, int depth, int& index) noexcept;
+    HRESULT GroupCoverage(const Guid& groupId, int depth, int& index) noexcept;
+    HRESULT DrawLayerPass(const ImageLayer& layer, Pass pass, ID3D11ShaderResourceView* destSrv,
+                          ID3D11RenderTargetView* destRtv, int liveCoverage, int folderCoverage) noexcept;
+    HRESULT DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount,
+                      int folderCoverage) noexcept;
+    [[nodiscard]] const ImageLayer* Find(const Guid& id) const noexcept;
+    void SwapCanvas() noexcept;
 
     ID3D11Device* _device = nullptr;
     ID3D11DeviceContext* _context = nullptr;
@@ -95,12 +166,21 @@ class CanvasRenderer final
     wil::com_ptr_nothrow<ID3D11RasterizerState> _rasterizer;
     wil::com_ptr_nothrow<ID3D11Buffer> _layerConstants;
     wil::com_ptr_nothrow<ID3D11Buffer> _blitConstants;
-    GpuTexture _ping;
-    GpuTexture _pong;
-    wil::com_ptr_nothrow<ID3D11RenderTargetView> _pingRtv;
-    wil::com_ptr_nothrow<ID3D11RenderTargetView> _pongRtv;
+    Surface _canvas[2];
+    Surface _stack[2];
+    std::vector<Surface> _coverage;
+    std::size_t _coverageUsed = 0;
     std::unordered_map<const void*, GpuTexture> _rasters;
+    std::unordered_map<Guid, const ImageLayer*> _byId;
+    std::unordered_map<Guid, int> _liveCoverageIndex;
+    std::unordered_map<Guid, int> _groupCoverageIndex;
+    std::vector<Guid> _renderIds;
+    std::vector<std::uint8_t> _consumed;
     UINT _canvasWidth = 0;
     UINT _canvasHeight = 0;
-    bool _pingIsFront = true;
+    int _front = 0;
+    int _stackFront = 0;
+    std::uint64_t _compositeCount = 0;
+    std::uint64_t _composeId = 0;
+    bool _documentDirty = true;
 };

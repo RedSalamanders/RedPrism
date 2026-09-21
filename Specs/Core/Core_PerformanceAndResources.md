@@ -54,7 +54,9 @@ that makes them impossible.
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | Visible DxUi surfaces (C2) | Library cap (64 MiB visible, 0 when hidden) |
 | Hidden document GPU (C6) | 0 canvas surface bytes; no Prepare/Composite |
-| Compose/Present after warmup (C6) | No heap on the canvas path |
+| Composition (C6) | Only when the document changed or surfaces were rebuilt; a settled document composites 0 times per frame (`--self-test` proves it) |
+| GPU raster residency (C6) | Bounded to the rasters the last composition used; entries keep their `Raster` alive so identities never alias |
+| Compose/Present after warmup (C6) | No heap on the blit/Present path; composition may allocate transient CPU bookkeeping only when the document changed |
 | Dirty DxUi prep (C2) | Stay within DxUi Release ≤ 64 allocs/frame |
 | Brush (C10) | Tile 256²; mouse-up MUST NOT materialize a contiguous bitmap |
 
