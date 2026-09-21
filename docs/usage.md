@@ -34,6 +34,9 @@ the File menu.
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Delete | New layer, new folder, move out of folder, delete layer |
 | X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |
+| Ctrl+T / Enter / Escape | Free Transform; apply / cancel a pending transform (canvas focused) |
+| Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool |
+| Alt-drag / Ctrl-drag handle / Shift | Duplicate while moving / distort / constrain an axis, snap rotation to 15°, free the ratio |
 | Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- | Fit, actual pixels, zoom in, zoom out |
 | V M L W C B E J S R G U I H Z A | Tools (canvas focused) |
 | Space (held) | Pan |

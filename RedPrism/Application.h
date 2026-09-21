@@ -5,9 +5,14 @@
 #include "Document.h"
 #include "EditorTool.h"
 #include "Renderer.h"
+#include "TransformEdit.h"
+#include "TransformOverlay.h"
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <windows.h>
 
 #pragma warning(push)
@@ -16,11 +21,13 @@
 #pragma warning(pop)
 
 class ChromeHost;
+enum class TransformAction : std::uint8_t;
 
 class Application final
 {
   public:
-    Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi) noexcept;
+    Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
+                const wchar_t* demo = nullptr) noexcept;
     ~Application();
 
     Application(const Application&) = delete;
@@ -53,6 +60,15 @@ class Application final
     void OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     void OnCommand(int command) noexcept;
     void OnTool(EditorTool tool) noexcept;
+    // Move tool (C8, Specs/Document/Document_Tools.md): header actions, pointer drags, cursor and the demo document.
+    void OnTransformAction(TransformAction action, double value) noexcept;
+    void ChangeTransform(const std::function<void(LayerTransform&)>& update) noexcept;
+    void BeginTransformDrag(Vec2 view, UINT modifiers) noexcept;
+    void ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept;
+    void EndTransformDrag() noexcept;
+    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(Vec2 pixel, bool control) const;
+    [[nodiscard]] bool ApplyCanvasCursor() noexcept;
+    void ApplyDemo() noexcept;
     bool HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
@@ -83,6 +99,10 @@ class Application final
     bool _canvasDrag = false;
     bool _opacityEditing = false;
     bool _layoutDirty = false;
+    bool _duplicateOnDrag = false;
+    std::optional<TransformDrag> _transformDrag;
+    std::optional<TransformOverlayGeometry> _overlayGeometry;
+    std::wstring _demo;
     bool _quietUi = false;
     bool _forceWarp = false;
     bool _classRegistered = false;

@@ -12,6 +12,7 @@ enum class RedPrismSwitch : uint8_t
     SelfTest,
     Screenshot,
     Dpi,
+    Demo,
     Count,
 };
 
@@ -38,6 +39,7 @@ struct RedPrismCommandLine final
     bool selfTest = false;
     const wchar_t* screenshotPath = nullptr;
     uint32_t screenshotDpi = 0;
+    const wchar_t* demo = nullptr;
 };
 
 inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help", L"-h", L"/?", L"-?"};
@@ -60,6 +62,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::Dpi, L"--dpi", nullptr, RedPrismSwitchValue::Separate, L"<96|144>",
                                   L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
+                                  L"Diagnostics"},
+        RedPrismCommandLineSwitch{RedPrismSwitch::Demo, L"--demo", nullptr, RedPrismSwitchValue::Separate,
+                                  L"<transform>",
+                                  L"Populate the new document for a screenshot: transform adds two painted layers and "
+                                  L"shows the Move tool's box on the rotated one.",
                                   L"Diagnostics"},
     };
 
@@ -159,6 +166,17 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 return false;
             }
             parsed.screenshotPath = arguments[++index];
+            break;
+        case RedPrismSwitch::Demo:
+            if (index + 1 >= argumentCount || std::wstring_view{arguments[index + 1]} != L"transform")
+            {
+                if (errorToken)
+                {
+                    *errorToken = index + 1 < argumentCount ? arguments[index + 1] : arguments[index];
+                }
+                return false;
+            }
+            parsed.demo = arguments[++index];
             break;
         case RedPrismSwitch::Dpi:
             if (index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')

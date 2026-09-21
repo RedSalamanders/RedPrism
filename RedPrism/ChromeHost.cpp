@@ -1,5 +1,6 @@
 #include "ChromeHost.h"
 
+#include "CanvasOverlay.h"
 #include "Resources.h"
 #include "ThemePalette.h"
 
@@ -152,6 +153,23 @@ void ChromeHost::Detach() noexcept
     _opacity = nullptr;
     _pickerCard = nullptr;
     _picker = nullptr;
+    _overlay = nullptr;
+    _transformHeader = nullptr;
+    _transformTitle = nullptr;
+    _autoSelect = nullptr;
+    _showControls = nullptr;
+    _lockRatio = nullptr;
+    _transformX = nullptr;
+    _transformY = nullptr;
+    _transformWidth = nullptr;
+    _transformHeight = nullptr;
+    _transformScale = nullptr;
+    _transformAngle = nullptr;
+    _sampling = nullptr;
+    _flipHorizontal = nullptr;
+    _flipVertical = nullptr;
+    _transformCancel = nullptr;
+    _transformApply = nullptr;
     _toolButtons.fill(nullptr);
     for (unique_hmenu& menu : _menus)
     {
@@ -210,6 +228,11 @@ void ChromeHost::SetLayoutHandler(std::function<void()> handler)
     _onLayout = std::move(handler);
 }
 
+void ChromeHost::SetTransformHandler(std::function<void(TransformAction, double)> handler)
+{
+    _onTransform = std::move(handler);
+}
+
 void ChromeHost::BuildMenus() noexcept
 {
     for (unique_hmenu& menu : _menus)
@@ -232,6 +255,13 @@ void ChromeHost::BuildMenus() noexcept
     {
         AppendCommand(edit, kCommandUndo, IDS_CMD_UNDO);
         AppendCommand(edit, kCommandRedo, IDS_CMD_REDO);
+        AppendSeparator(edit);
+        AppendCommand(edit, kCommandFreeTransform, IDS_CMD_FREE_TRANSFORM);
+    }
+    if (HMENU image = _menus[static_cast<std::size_t>(MenuIndex::Image)].get())
+    {
+        AppendCommand(image, kCommandFlipCanvasHorizontal, IDS_CMD_FLIP_CANVAS_HORIZONTAL);
+        AppendCommand(image, kCommandFlipCanvasVertical, IDS_CMD_FLIP_CANVAS_VERTICAL);
     }
     if (HMENU layer = _menus[static_cast<std::size_t>(MenuIndex::Layer)].get())
     {
@@ -241,6 +271,9 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(layer, kCommandDeleteLayer, IDS_CMD_DELETE_LAYER);
         AppendCommand(layer, kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY);
         AppendCommand(layer, kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP);
+        AppendSeparator(layer);
+        AppendCommand(layer, kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL);
+        AppendCommand(layer, kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL);
     }
     if (HMENU view = _menus[static_cast<std::size_t>(MenuIndex::View)].get())
     {
@@ -328,6 +361,7 @@ HRESULT ChromeHost::Build() noexcept
         _foregroundWell->SetTooltipText(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
         _foregroundWell->SetOnClick([this] { OpenColorPicker(false); });
         _header = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, EditorToolNameId(_tool)));
+        BuildTransformHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
         _opacity->SetMinimum(0.0);
@@ -361,6 +395,8 @@ HRESULT ChromeHost::Build() noexcept
         _status->SetSections({DxUi::StatusStrip::Section{std::wstring{}, 80.0f},
                               DxUi::StatusStrip::Section{std::wstring{}, 140.0f},
                               DxUi::StatusStrip::Section{std::wstring{}, 0.0f}});
+        // The overlay draws the transform box over the hole and is never hit.
+        _overlay = root->AddChild<CanvasOverlay>();
         // The splitter spans canvas and layers; only its separator (plus slop) is hittable, so it goes above them.
         _splitter = root->AddChild<DxUi::Splitter>();
         _splitter->SetMinimumFirstPane(kCanvasMinDip);
@@ -472,6 +508,11 @@ void ChromeHost::Arrange() noexcept
     if (_header)
     {
         _header->SetBounds(D2D1::RectF(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom));
+    }
+    ArrangeTransformHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    if (_overlay)
+    {
+        _overlay->SetBounds(D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
     }
     if (_layersTitle)
     {
@@ -759,6 +800,14 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
 {
     _tool = tool;
     SyncToolVisuals();
+    if (_transformHeader)
+    {
+        _transformHeader->SetVisible(tool == EditorTool::Move);
+    }
+    if (_header)
+    {
+        _header->SetVisible(tool != EditorTool::Move);
+    }
     if (_header)
     {
         _header->SetText(LoadStringResource(nullptr, EditorToolNameId(_tool)));
@@ -887,4 +936,270 @@ bool ChromeHost::NeedsAnimation() const noexcept
 DxUi::EmbeddedStatistics ChromeHost::Statistics() const noexcept
 {
     return _view.GetStatistics();
+}
+
+// ── Move tool header (transform inspector) and canvas overlay ────────────
+
+void ChromeHost::BuildTransformHeader(DxUi::Panel& root)
+{
+    _transformHeader = root.AddChild<DxUi::Panel>();
+    _transformTitle = _transformHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_TRANSFORM_TITLE));
+    _transformTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+    const auto stepper = [this](UINT labelId, float labelWidth, UINT unitId, float unitWidth, double minimum,
+                                double maximum, std::uint8_t decimals, TransformAction action)
+    {
+        DxUi::NumericStepper* control = _transformHeader->AddChild<DxUi::NumericStepper>();
+        control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        if (unitId != 0)
+        {
+            control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
+        }
+        control->SetMinimum(minimum);
+        control->SetMaximum(maximum);
+        control->SetStep(1.0);
+        control->SetLargeStep(10.0);
+        control->SetDecimals(decimals);
+        control->SetOnChange(
+            [this, action](DxUi::NumericStepperChange change)
+            {
+                if (!_syncingInspector && _onTransform)
+                {
+                    _onTransform(action, change.value);
+                }
+            });
+        return control;
+    };
+    _transformX = stepper(IDS_TRANSFORM_X, 14.0f, 0, 0.0f, -1.0e6, 1.0e6, 0, TransformAction::SetX);
+    _transformY = stepper(IDS_TRANSFORM_Y, 14.0f, 0, 0.0f, -1.0e6, 1.0e6, 0, TransformAction::SetY);
+    _transformWidth = stepper(IDS_TRANSFORM_WIDTH, 14.0f, 0, 0.0f, 1.0, 300000.0, 0, TransformAction::SetWidth);
+    _transformHeight = stepper(IDS_TRANSFORM_HEIGHT, 14.0f, 0, 0.0f, 1.0, 300000.0, 0, TransformAction::SetHeight);
+    _lockRatio = _transformHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, IDS_TRANSFORM_LOCK));
+    _lockRatio->SetTooltipText(LoadStringResource(nullptr, IDS_TRANSFORM_LOCK_RATIO));
+    _lockRatio->SetChecked(true);
+    _lockRatio->SetOnToggled(
+        [this](bool checked)
+        {
+            if (!_syncingInspector && _onTransform)
+            {
+                _onTransform(TransformAction::LockRatio, checked ? 1.0 : 0.0);
+            }
+        });
+    _transformScale =
+        stepper(IDS_TRANSFORM_SCALE, 38.0f, IDS_UNIT_PERCENT, 14.0f, 1.0, 10000.0, 1, TransformAction::SetScale);
+    _transformScale->SetTooltipText(LoadStringResource(nullptr, IDS_TRANSFORM_SCALE_TIP));
+    _transformAngle =
+        stepper(IDS_TRANSFORM_ANGLE, 40.0f, IDS_UNIT_DEGREES, 12.0f, -360.0, 360.0, 0, TransformAction::SetRotation);
+    _flipHorizontal =
+        _transformHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_TRANSFORM_FLIP_HORIZONTAL));
+    _flipHorizontal->SetOnClick(
+        [this]
+        {
+            if (_onTransform)
+            {
+                _onTransform(TransformAction::FlipHorizontal, 0.0);
+            }
+        });
+    _flipVertical = _transformHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_TRANSFORM_FLIP_VERTICAL));
+    _flipVertical->SetOnClick(
+        [this]
+        {
+            if (_onTransform)
+            {
+                _onTransform(TransformAction::FlipVertical, 0.0);
+            }
+        });
+    _sampling = _transformHeader->AddChild<DxUi::ComboBox>();
+    _sampling->SetItems({DxUi::ComboBox::Item{L"nearest", LoadStringResource(nullptr, IDS_TRANSFORM_SAMPLING_NEAREST)},
+                         DxUi::ComboBox::Item{L"smooth", LoadStringResource(nullptr, IDS_TRANSFORM_SAMPLING_SMOOTH)},
+                         DxUi::ComboBox::Item{L"high", LoadStringResource(nullptr, IDS_TRANSFORM_SAMPLING_HIGH)}});
+    _sampling->SetSelectedIndex(2);
+    _sampling->SetOnSelectionChanged(
+        [this](size_t index)
+        {
+            if (!_syncingInspector && _onTransform)
+            {
+                _onTransform(TransformAction::SetSampling, static_cast<double>(index));
+            }
+        });
+    _autoSelect = _transformHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, IDS_TRANSFORM_AUTO_SELECT));
+    _autoSelect->SetTooltipText(LoadStringResource(nullptr, IDS_TRANSFORM_AUTO_SELECT_TIP));
+    _autoSelect->SetOnToggled(
+        [this](bool checked)
+        {
+            if (!_syncingInspector && _onTransform)
+            {
+                _onTransform(TransformAction::AutoSelect, checked ? 1.0 : 0.0);
+            }
+        });
+    _showControls =
+        _transformHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, IDS_TRANSFORM_SHOW_CONTROLS));
+    _showControls->SetTooltipText(LoadStringResource(nullptr, IDS_TRANSFORM_SHOW_CONTROLS_TIP));
+    _showControls->SetChecked(true);
+    _showControls->SetOnToggled(
+        [this](bool checked)
+        {
+            if (!_syncingInspector && _onTransform)
+            {
+                _onTransform(TransformAction::ShowControls, checked ? 1.0 : 0.0);
+            }
+        });
+    _transformCancel = _transformHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_TRANSFORM_CANCEL));
+    _transformCancel->SetOnClick(
+        [this]
+        {
+            if (_onTransform)
+            {
+                _onTransform(TransformAction::Cancel, 0.0);
+            }
+        });
+    _transformApply = _transformHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_TRANSFORM_APPLY));
+    _transformApply->SetPrimary(true);
+    _transformApply->SetOnClick(
+        [this]
+        {
+            if (_onTransform)
+            {
+                _onTransform(TransformAction::Apply, 0.0);
+            }
+        });
+    _transformHeader->SetVisible(_tool == EditorTool::Move);
+    if (_header)
+    {
+        _header->SetVisible(_tool != EditorTool::Move);
+    }
+}
+
+void ChromeHost::ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept
+{
+    if (!_transformHeader)
+    {
+        return;
+    }
+    _transformHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    constexpr float kRowDip = 28.0f;
+    constexpr float kGapDip = 6.0f;
+    constexpr float kButtonDip = 64.0f;
+    const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
+    const float rowBottom = rowTop + kRowDip;
+    // Apply and Cancel pin to the right; the rest runs left to right in priority order and stops when out of room.
+    float rightEdge = right - 4.0f;
+    const bool pinned = right - left > 3.0f * kButtonDip;
+    for (DxUi::Button* button : {_transformApply, _transformCancel})
+    {
+        if (button == nullptr)
+        {
+            continue;
+        }
+        button->SetVisible(pinned);
+        if (pinned)
+        {
+            button->SetBounds(D2D1::RectF(rightEdge - kButtonDip, rowTop, rightEdge, rowBottom));
+            rightEdge -= kButtonDip + kGapDip;
+        }
+    }
+    struct Slot
+    {
+        DxUi::Control* control;
+        float width;
+    };
+    const std::array<Slot, 13> slots{
+        Slot{_transformTitle, 80.0f},  Slot{_transformX, 92.0f},      Slot{_transformY, 92.0f},
+        Slot{_transformWidth, 92.0f},  Slot{_transformHeight, 92.0f}, Slot{_lockRatio, 60.0f},
+        Slot{_transformScale, 136.0f}, Slot{_transformAngle, 116.0f}, Slot{_flipHorizontal, 64.0f},
+        Slot{_flipVertical, 64.0f},    Slot{_sampling, 130.0f},       Slot{_autoSelect, 104.0f},
+        Slot{_showControls, 122.0f}};
+    float cursor = left + 4.0f;
+    bool room = true;
+    for (const Slot& slot : slots)
+    {
+        if (slot.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = room && cursor + slot.width <= rightEdge;
+        slot.control->SetVisible(fits);
+        if (fits)
+        {
+            slot.control->SetBounds(D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
+            cursor += slot.width + kGapDip;
+        }
+        else
+        {
+            room = false;
+        }
+    }
+}
+
+void ChromeHost::SetTransformInspector(const TransformInspectorState& state) noexcept
+{
+    _inspector = state;
+    if (!_transformHeader)
+    {
+        return;
+    }
+    _syncingInspector = true;
+    _transformTitle->SetText(
+        LoadStringResource(nullptr, state.targetsMask ? IDS_TRANSFORM_MASK_TITLE : IDS_TRANSFORM_TITLE));
+    const bool numbers = state.enabled && !state.distorted;
+    const auto sync = [&](DxUi::NumericStepper* stepper, double value)
+    {
+        stepper->SetEnabled(numbers);
+        if (!stepper->IsEditing())
+        {
+            stepper->SetValue(value);
+        }
+    };
+    sync(_transformX, state.x);
+    sync(_transformY, state.y);
+    sync(_transformWidth, state.width);
+    sync(_transformHeight, state.height);
+    sync(_transformScale, state.scale);
+    sync(_transformAngle, state.rotation);
+    _lockRatio->SetEnabled(numbers);
+    _lockRatio->SetChecked(state.lockRatio);
+    _sampling->SetEnabled(numbers);
+    _sampling->SetSelectedIndex(static_cast<size_t>(std::clamp(state.sampling, 0, 2)));
+    _flipHorizontal->SetEnabled(numbers);
+    _flipVertical->SetEnabled(numbers);
+    _autoSelect->SetChecked(state.autoSelect);
+    _showControls->SetChecked(state.showControls);
+    _transformCancel->SetEnabled(state.editing);
+    _transformApply->SetEnabled(state.editing);
+    _syncingInspector = false;
+}
+
+void ChromeHost::SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry,
+                                     const std::vector<float>& guideXs, const std::vector<float>& guideYs) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+    std::optional<CanvasOverlay::Geometry> converted;
+    if (geometry.has_value())
+    {
+        CanvasOverlay::Geometry result;
+        for (std::size_t index = 0; index < 8; ++index)
+        {
+            result.handles[index] = D2D1::Point2F(static_cast<float>(geometry->handles[index].x) * toDip,
+                                                  static_cast<float>(geometry->handles[index].y) * toDip);
+        }
+        result.rotation = D2D1::Point2F(static_cast<float>(geometry->rotationHandle.x) * toDip,
+                                        static_cast<float>(geometry->rotationHandle.y) * toDip);
+        result.showsRotation = geometry->showsRotation;
+        converted = result;
+    }
+    std::vector<float> xs;
+    std::vector<float> ys;
+    for (const float x : guideXs)
+    {
+        xs.push_back(x * toDip);
+    }
+    for (const float y : guideYs)
+    {
+        ys.push_back(y * toDip);
+    }
+    _overlay->SetGeometry(converted);
+    _overlay->SetGuides(std::move(xs), std::move(ys));
 }

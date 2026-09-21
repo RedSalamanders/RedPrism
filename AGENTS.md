@@ -51,8 +51,8 @@ reference only and is never a build input.
 | `Application` | HWND, messages, DPI, command line, frame scheduling, files, commands, `DocumentSession`, `CanvasViewport`, `CanvasRenderer` |
 | `Renderer` | D3D11 device, swap chain, Present, occlusion, adapter-of-monitor, frame order (chrome layout → canvas → chrome) |
 | `CanvasRenderer` | Document-space GPU passes, coverage textures, clipping stacks, raster residency; borrows the device |
-| `ChromeHost` | DxUi EmbeddedHost shell: menus, rail, tabs, layers, status; app-owned DIP layout; strings from resources |
-| Document (`Common/Document.*`, `DocumentHistory`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, `.prism` I/O, WIC — never GPU device ownership |
+| `ChromeHost` | DxUi EmbeddedHost shell: menus, rail with palette wells, tabs, Move-tool header, layers with splitter and opacity stepper, status, color picker card, canvas overlay; strings from resources |
+| Document (`Common/Document.*`, `DocumentHistory`, `TransformEdit`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, transform editing (drag geometry, snapping, warp), `.prism` I/O, WIC — never GPU device ownership |
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
 
 ## Mandatory rules

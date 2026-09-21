@@ -2,6 +2,7 @@
 
 #include "Document.h"
 #include "EditorTool.h"
+#include "TransformOverlay.h"
 
 #include <array>
 #include <d3d11.h>
@@ -23,6 +24,8 @@
 
 using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu>;
 
+class CanvasOverlay;
+
 // The canvas hole in physical pixels: the rectangle the document composition blits into.
 struct CanvasHole
 {
@@ -39,6 +42,45 @@ enum class ChromeEditPhase : std::uint8_t
     Preview,
     Commit,
     Cancel,
+};
+
+// What the Move tool's header asks of the host. Numeric actions carry the typed value; flags carry 0 or 1.
+enum class TransformAction : std::uint8_t
+{
+    SetX,
+    SetY,
+    SetWidth,
+    SetHeight,
+    SetScale,
+    SetRotation,
+    SetSampling,
+    FlipHorizontal,
+    FlipVertical,
+    Apply,
+    Cancel,
+    AutoSelect,
+    ShowControls,
+    LockRatio,
+};
+
+// The Move tool's header state: the numbers describe the edited transform (draft or active layer).
+struct TransformInspectorState
+{
+    bool visible = false;
+    bool enabled = false;   // a transformable layer or a pending edit
+    bool editing = false;   // a pending edit: Apply and Cancel are live
+    bool distorted = false; // while distorted the handles are the controls; numbers are read-only
+    bool targetsMask = false;
+    double x = 0;
+    double y = 0;
+    double width = 1;
+    double height = 1;
+    double scale = 100;
+    double rotation = 0;
+    int sampling = 2;
+    bool autoSelect = false;
+    bool showControls = true;
+    bool lockRatio = true;
 };
 
 // Editor chrome on the one HWND: MenuBar, document tabs, tool rail with the palette wells, tool header, layers
@@ -75,16 +117,21 @@ class ChromeHost final
     static constexpr int kCommandExit = 106;
     static constexpr int kCommandUndo = 200;
     static constexpr int kCommandRedo = 201;
+    static constexpr int kCommandFreeTransform = 202;
     static constexpr int kCommandNewLayer = 300;
     static constexpr int kCommandNewFolder = 301;
     static constexpr int kCommandDeleteLayer = 302;
     static constexpr int kCommandToggleLayerVisibility = 303;
     static constexpr int kCommandMoveOutOfGroup = 304;
+    static constexpr int kCommandFlipLayerHorizontal = 305;
+    static constexpr int kCommandFlipLayerVertical = 306;
     static constexpr int kCommandZoomFit = 400;
     static constexpr int kCommandZoomActual = 401;
     static constexpr int kCommandZoomIn = 402;
     static constexpr int kCommandZoomOut = 403;
     static constexpr int kCommandAbout = 500;
+    static constexpr int kCommandFlipCanvasHorizontal = 600;
+    static constexpr int kCommandFlipCanvasVertical = 601;
 
     enum class MenuIndex : std::size_t
     {
@@ -120,6 +167,12 @@ class ChromeHost final
     void SetOpacityHandler(std::function<void(double, ChromeEditPhase)> handler);
     // The canvas hole changed from inside chrome (splitter drag or keyboard); the host re-syncs the viewport.
     void SetLayoutHandler(std::function<void()> handler);
+    // The Move tool's header: typed numbers, flips, sampling, Apply/Cancel and the toggles.
+    void SetTransformHandler(std::function<void(TransformAction, double)> handler);
+    void SetTransformInspector(const TransformInspectorState& state) noexcept;
+    // The transform box in canvas-hole pixels (nullopt hides it) and snap guides in canvas-hole pixels.
+    void SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry, const std::vector<float>& guideXs,
+                             const std::vector<float>& guideYs) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
@@ -198,6 +251,8 @@ class ChromeHost final
     HRESULT Build() noexcept;
     void Arrange() noexcept;
     void ArrangePicker() noexcept;
+    void BuildTransformHeader(DxUi::Panel& root);
+    void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildMenus() noexcept;
     void OpenMenu(size_t index, POINT screen, bool keyboard) noexcept;
     void SyncToolVisuals() noexcept;
@@ -226,6 +281,25 @@ class ChromeHost final
     DxUi::NumericStepper* _opacity = nullptr;
     DxUi::CardPanel* _pickerCard = nullptr;
     DxUi::ColorPicker* _picker = nullptr;
+    CanvasOverlay* _overlay = nullptr;
+    DxUi::Panel* _transformHeader = nullptr;
+    DxUi::Label* _transformTitle = nullptr;
+    DxUi::Checkbox* _autoSelect = nullptr;
+    DxUi::Checkbox* _showControls = nullptr;
+    DxUi::Checkbox* _lockRatio = nullptr;
+    DxUi::NumericStepper* _transformX = nullptr;
+    DxUi::NumericStepper* _transformY = nullptr;
+    DxUi::NumericStepper* _transformWidth = nullptr;
+    DxUi::NumericStepper* _transformHeight = nullptr;
+    DxUi::NumericStepper* _transformScale = nullptr;
+    DxUi::NumericStepper* _transformAngle = nullptr;
+    DxUi::ComboBox* _sampling = nullptr;
+    DxUi::Button* _flipHorizontal = nullptr;
+    DxUi::Button* _flipVertical = nullptr;
+    DxUi::Button* _transformCancel = nullptr;
+    DxUi::Button* _transformApply = nullptr;
+    TransformInspectorState _inspector;
+    bool _syncingInspector = false;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
@@ -235,6 +309,7 @@ class ChromeHost final
     std::function<void(uint32_t, uint32_t)> _onPalette;
     std::function<void(double, ChromeEditPhase)> _onOpacity;
     std::function<void()> _onLayout;
+    std::function<void(TransformAction, double)> _onTransform;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;

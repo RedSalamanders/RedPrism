@@ -210,10 +210,54 @@ struct FilterStrings
 }
 } // namespace
 
-Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath,
-                         uint32_t screenshotDpi) noexcept
+namespace
+{
+// A solid premultiplied BGRA raster for the demo document and the self-test.
+[[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb)
+{
+    const std::uint8_t alpha = static_cast<std::uint8_t>(argb >> 24);
+    const auto premultiply = [alpha](std::uint32_t channel)
+    { return static_cast<std::uint8_t>((channel & 0xFFu) * alpha / 255u); };
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
+    for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
+    {
+        bytes[index] = premultiply(argb);
+        bytes[index + 1] = premultiply(argb >> 8);
+        bytes[index + 2] = premultiply(argb >> 16);
+        bytes[index + 3] = alpha;
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+// A painted layer added on top as one Import Image history entry, then made active.
+Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin,
+                        double rotation, std::uint32_t argb)
+{
+    if (!session.Document().has_value())
+    {
+        return Guid{};
+    }
+    ImageLayer layer = ImageLayer::Blank(name, Vec2{static_cast<double>(width), static_cast<double>(height)});
+    const Raster raster = SolidRaster(width, height, argb);
+    layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
+    layer.transform.origin = origin;
+    layer.transform.rotation = rotation;
+    session.BeginEdit(L"Import Image");
+    session.Document().value().layers.push_back(layer);
+    session.EndEdit();
+    session.SelectLayer(layer.id);
+    return layer.id;
+}
+} // namespace
+
+Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
+                         const wchar_t* demo) noexcept
     : _instance(instance), _forceWarp(forceWarp)
 {
+    if (demo != nullptr && demo[0] != L'\0')
+    {
+        _demo = demo;
+    }
     if (screenshotPath && screenshotPath[0] != L'\0')
     {
         _screenshotPath = screenshotPath;
@@ -393,7 +437,7 @@ int Application::Run(int showCommand) noexcept
             SyncChrome();
         }
         BindCompositionDevice();
-        const CanvasDocument* document = _session.Document().has_value() ? &_session.Document().value() : nullptr;
+        const CanvasDocument* document = _session.DisplayDocument();
         result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
         if (FAILED(result))
         {
@@ -505,7 +549,7 @@ int Application::RunSelfTest() noexcept
 
     BindCompositionDevice();
     SyncChrome();
-    const CanvasDocument* document = _session.Document().has_value() ? &_session.Document().value() : nullptr;
+    const CanvasDocument* document = _session.DisplayDocument();
     result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result))
     {
@@ -640,6 +684,75 @@ int Application::RunSelfTest() noexcept
             _session.history.UndoName() != L"Layer Opacity")
         {
             SelfTestFailure(L"The opacity stepper did not record an undoable edit.\n");
+            return 5;
+        }
+    }
+
+    // Move tool: the transform box, a pointer drag, Free Transform with the header actions, flips and keys are wired.
+    {
+        InsertPaintedLayer(_session, L"Painted", 200, 150, Vec2{300, 200}, 0.0, 0xFF2F6FB0u);
+        DocumentChanged();
+        if (!_overlayGeometry.has_value())
+        {
+            SelfTestFailure(L"The Move tool did not show a transform box for a painted layer.\n");
+            return 5;
+        }
+        const CanvasHole hole = _chrome->HolePixels();
+        const ImageLayer* layer = _session.ActiveLayer();
+        const LayerTransform before = layer->transform;
+        const Vec2 center = _viewport.ViewFromDocument(before.Center(), DocumentSize());
+        const auto pointer = [&](UINT message, double x, double y)
+        { OnPointer(message, 0, MAKELPARAM(static_cast<int>(hole.left + x), static_cast<int>(hole.top + y))); };
+        pointer(WM_LBUTTONDOWN, center.x, center.y);
+        pointer(WM_MOUSEMOVE, center.x + 40.0, center.y + 24.0);
+        pointer(WM_LBUTTONUP, center.x + 40.0, center.y + 24.0);
+        layer = _session.ActiveLayer();
+        if (_transformDrag.has_value() || layer == nullptr || layer->transform.origin.x <= before.origin.x ||
+            layer->transform.origin.y <= before.origin.y || _session.PendingTransformEdit().has_value() ||
+            _session.history.UndoName() != L"Transform Layer")
+        {
+            SelfTestFailure(L"Dragging with the Move tool did not move the layer as one history entry.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandFreeTransform);
+        OnTransformAction(TransformAction::SetRotation, 30.0);
+        if (!_session.PendingTransformEdit().has_value() || _session.PendingTransformEdit()->draft.rotation != 30.0 ||
+            _session.ActiveLayer()->transform.rotation != 0.0)
+        {
+            SelfTestFailure(L"Free Transform did not preview a typed rotation.\n");
+            return 5;
+        }
+        OnTransformAction(TransformAction::Apply, 0.0);
+        if (_session.PendingTransformEdit().has_value() || _session.ActiveLayer()->transform.rotation != 30.0)
+        {
+            SelfTestFailure(L"Apply did not commit the typed rotation.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandFreeTransform);
+        OnTransformAction(TransformAction::SetX, 999.0);
+        _chrome->SetCanvasFocused(true);
+        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
+            _session.ActiveLayer()->transform.origin.x == 999.0)
+        {
+            SelfTestFailure(L"Escape did not cancel the pending transform.\n");
+            return 5;
+        }
+        const double x = _session.ActiveLayer()->transform.origin.x;
+        if (!HandleAccelerator(VK_RIGHT, MK_SHIFT) || _session.ActiveLayer()->transform.origin.x != x + 10.0)
+        {
+            SelfTestFailure(L"Shift+Right did not nudge the layer by ten pixels.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandFlipCanvasHorizontal);
+        if (!_session.ActiveLayer()->transform.flipX || _session.history.UndoName() != L"Flip Canvas Horizontal")
+        {
+            SelfTestFailure(L"Flip Canvas Horizontal did not mirror the layer.\n");
+            return 5;
+        }
+        OnCommand(ChromeHost::kCommandFlipLayerVertical);
+        if (!_session.ActiveLayer()->transform.flipY || _session.history.UndoName() != L"Flip Vertical")
+        {
+            SelfTestFailure(L"Flip Layer Vertical did not mirror the layer.\n");
             return 5;
         }
     }
@@ -851,6 +964,7 @@ HRESULT Application::InitializeChrome() noexcept
             _layoutDirty = true;
             _frameInvalidated = true;
         });
+    chrome->SetTransformHandler([this](TransformAction action, double value) { OnTransformAction(action, value); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -860,6 +974,7 @@ HRESULT Application::InitializeChrome() noexcept
 HRESULT Application::InitializeDocument() noexcept
 {
     _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
+    ApplyDemo();
     _session.history.MarkSaved();
     _documentPath.clear();
     _tool = EditorTool::Move;
@@ -900,7 +1015,7 @@ void Application::SyncChrome() noexcept
     _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
                               _session.history.CanRedo());
-    const CanvasDocument* document = _session.Document().has_value() ? &_session.Document().value() : nullptr;
+    const CanvasDocument* document = _session.DisplayDocument();
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
     std::wstring size = document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, document->width, document->height)
@@ -921,6 +1036,101 @@ void Application::SyncChrome() noexcept
     const CanvasHole hole = _chrome->HolePixels();
     _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
                      DocumentSize());
+
+    // The Move tool's box, snap guides and header follow the pending edit or the active layer.
+    std::optional<TransformOverlayGeometry> geometry;
+    std::vector<float> guideXs;
+    std::vector<float> guideYs;
+    TransformInspectorState inspector;
+    inspector.visible = _tool == EditorTool::Move;
+    if (document != nullptr && inspector.visible)
+    {
+        const Vec2 documentSize = DocumentSize();
+        const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+        const ImageLayer* active = _session.ActiveLayer();
+        const bool shows = _session.showsTransformControls || (edit.has_value() && edit->persistent);
+        std::optional<LayerTransform> value;
+        if (edit.has_value())
+        {
+            value = edit->draft;
+        }
+        else if (active != nullptr)
+        {
+            value = _session.EditedTransform(*active);
+        }
+        if (shows)
+        {
+            if ((edit.has_value() && edit->group.has_value()) || (!edit.has_value() && _session.TransformsAsGroup()))
+            {
+                if (edit.has_value() && edit->corners.has_value())
+                {
+                    geometry = TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
+                }
+                else
+                {
+                    const std::optional<LayerTransform> box =
+                        edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
+                    if (box.has_value())
+                    {
+                        geometry = TransformOverlayGeometry::FromTransform(box.value(), _viewport, documentSize);
+                    }
+                }
+            }
+            else if (active != nullptr && active->asset.has_value() && !active->isGroup && _session.CanTransform())
+            {
+                if (edit.has_value() && edit->layerID == active->id && edit->corners.has_value())
+                {
+                    geometry = TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
+                }
+                else
+                {
+                    geometry = TransformOverlayGeometry::FromTransform(_session.EditedTransform(*active), _viewport,
+                                                                       documentSize);
+                }
+            }
+        }
+        for (const double x : _session.LastSnapGuides().xs)
+        {
+            guideXs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{x, 0.0}, documentSize).x));
+        }
+        for (const double y : _session.LastSnapGuides().ys)
+        {
+            guideYs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{0.0, y}, documentSize).y));
+        }
+        inspector.enabled = _session.CanTransform() || edit.has_value();
+        inspector.editing = edit.has_value();
+        inspector.distorted = edit.has_value() && edit->corners.has_value();
+        inspector.targetsMask = _session.TransformTargetsMask();
+        if (value.has_value())
+        {
+            const std::optional<Vec2> pixels = _session.TransformPixelSize();
+            Vec2 pixelSize = value->size;
+            if (pixels.has_value())
+            {
+                pixelSize = pixels.value();
+            }
+            else if (active != nullptr && active->asset.has_value() && active->asset->image.HasStorage())
+            {
+                pixelSize = Vec2{static_cast<double>(active->asset->image.Width()),
+                                 static_cast<double>(active->asset->image.Height())};
+            }
+            inspector.x = value->origin.x;
+            inspector.y = value->origin.y;
+            inspector.width = value->size.x;
+            inspector.height = value->size.y;
+            inspector.scale = value->ScalePercent(pixelSize);
+            inspector.rotation = value->rotation;
+            inspector.sampling = value->sampling == LayerSampling::Nearest  ? 0
+                                 : value->sampling == LayerSampling::Smooth ? 1
+                                                                            : 2;
+        }
+        inspector.autoSelect = _session.transformAutoSelect;
+        inspector.showControls = _session.showsTransformControls;
+        inspector.lockRatio = _session.locksTransformRatio;
+    }
+    _overlayGeometry = geometry;
+    _chrome->SetTransformOverlay(geometry, guideXs, guideYs);
+    _chrome->SetTransformInspector(inspector);
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -1093,6 +1303,27 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         _frameInvalidated = true;
         return;
     }
+    if (_tool == EditorTool::Move && !panMode)
+    {
+        if (event.action == DxUi::PointerAction::Down && inHole)
+        {
+            _canvasDrag = false;
+            BeginTransformDrag(view, event.modifiers);
+            _frameInvalidated = true;
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && _transformDrag.has_value())
+        {
+            ContinueTransformDrag(view, event.modifiers);
+            return;
+        }
+        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
+            _transformDrag.has_value())
+        {
+            EndTransformDrag();
+            return;
+        }
+    }
     if (event.action == DxUi::PointerAction::Down && inHole)
     {
         _canvasDrag = true;
@@ -1130,6 +1361,23 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    // Commands that change layers or files settle a pending transform first; view, history and About do not.
+    switch (command)
+    {
+    case ChromeHost::kCommandUndo:
+    case ChromeHost::kCommandRedo:
+    case ChromeHost::kCommandZoomFit:
+    case ChromeHost::kCommandZoomActual:
+    case ChromeHost::kCommandZoomIn:
+    case ChromeHost::kCommandZoomOut:
+    case ChromeHost::kCommandAbout:
+    case ChromeHost::kCommandFreeTransform:
+        break;
+    default:
+        _transformDrag.reset();
+        _session.CommitTransform();
+        break;
+    }
     switch (command)
     {
     case ChromeHost::kCommandNew:
@@ -1215,6 +1463,30 @@ void Application::OnCommand(int command) noexcept
             MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
         }
         break;
+    case ChromeHost::kCommandFreeTransform:
+        if (_tool != EditorTool::Move)
+        {
+            OnTool(EditorTool::Move);
+        }
+        _session.BeginTransform(true);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandFlipLayerHorizontal:
+        _session.FlipLayers(true);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandFlipLayerVertical:
+        _session.FlipLayers(false);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandFlipCanvasHorizontal:
+        _session.FlipCanvas(true);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandFlipCanvasVertical:
+        _session.FlipCanvas(false);
+        DocumentChanged();
+        break;
     default:
         break;
     }
@@ -1222,6 +1494,14 @@ void Application::OnCommand(int command) noexcept
 
 void Application::OnTool(EditorTool tool) noexcept
 {
+    if (tool != _tool)
+    {
+        // Switching tools settles a pending transform, as selecting another layer does.
+        _transformDrag.reset();
+        _duplicateOnDrag = false;
+        _session.CommitTransform();
+        _session.ClearSnapGuides();
+    }
     _tool = tool;
     if (_chrome)
     {
@@ -1254,6 +1534,9 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
         case 'Y':
             OnCommand(ChromeHost::kCommandRedo);
             return true;
+        case 'T':
+            OnCommand(ChromeHost::kCommandFreeTransform);
+            return true;
         case 'G':
             OnCommand(shift ? ChromeHost::kCommandMoveOutOfGroup : ChromeHost::kCommandNewFolder);
             return true;
@@ -1283,6 +1566,31 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (virtualKey == VK_ESCAPE && (_transformDrag.has_value() || _session.PendingTransformEdit().has_value()))
+        {
+            _transformDrag.reset();
+            _duplicateOnDrag = false;
+            _session.CancelTransform();
+            DocumentChanged();
+            return true;
+        }
+        if (virtualKey == VK_RETURN && _session.PendingTransformEdit().has_value())
+        {
+            _transformDrag.reset();
+            _session.CommitTransform();
+            DocumentChanged();
+            return true;
+        }
+        if (_tool == EditorTool::Move &&
+            (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP || virtualKey == VK_DOWN))
+        {
+            // Arrow keys nudge by a pixel, ten with Shift; a pending edit moves its draft, otherwise the move commits.
+            const double step = shift ? 10.0 : 1.0;
+            _session.NudgeLayer(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
+                                virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
+            DocumentChanged();
+            return true;
+        }
         if (virtualKey == VK_DELETE)
         {
             OnCommand(ChromeHost::kCommandDeleteLayer);
@@ -1588,6 +1896,12 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
             _frameInvalidated = true;
         }
         break;
+    case WM_SETCURSOR:
+        if (LOWORD(lParam) == HTCLIENT && ApplyCanvasCursor())
+        {
+            return TRUE;
+        }
+        break;
     case WM_CHAR:
         if (_chrome && _chrome->DispatchCharacter(static_cast<wchar_t>(wParam), KeyModifiers()))
         {
@@ -1688,4 +2002,386 @@ LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noex
     SyncChrome();
     _frameInvalidated = true;
     return 0;
+}
+
+// ── Move tool (C8) ───────────────────────────────────────────────────────
+
+void Application::ApplyDemo() noexcept
+{
+    if (_demo != L"transform" || !_session.Document().has_value())
+    {
+        return;
+    }
+    // Two painted layers, the active one rotated, so the documentation screenshot shows the Move tool's box.
+    InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
+    InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 20.0, 0xFFE58A2Eu);
+}
+
+void Application::OnTransformAction(TransformAction action, double value) noexcept
+{
+    switch (action)
+    {
+    case TransformAction::Apply:
+        _transformDrag.reset();
+        _session.CommitTransform();
+        DocumentChanged();
+        return;
+    case TransformAction::Cancel:
+        _transformDrag.reset();
+        _session.CancelTransform();
+        DocumentChanged();
+        return;
+    case TransformAction::AutoSelect:
+        _session.transformAutoSelect = value != 0.0;
+        SyncChrome();
+        return;
+    case TransformAction::ShowControls:
+        _session.showsTransformControls = value != 0.0;
+        SyncChrome();
+        _frameInvalidated = true;
+        return;
+    case TransformAction::LockRatio:
+        _session.locksTransformRatio = value != 0.0;
+        SyncChrome();
+        return;
+    case TransformAction::FlipHorizontal:
+        ChangeTransform([](LayerTransform& transform) { transform.flipX = !transform.flipX; });
+        return;
+    case TransformAction::FlipVertical:
+        ChangeTransform([](LayerTransform& transform) { transform.flipY = !transform.flipY; });
+        return;
+    case TransformAction::SetX:
+        ChangeTransform([value](LayerTransform& transform) { transform.origin.x = value; });
+        return;
+    case TransformAction::SetY:
+        ChangeTransform([value](LayerTransform& transform) { transform.origin.y = value; });
+        return;
+    case TransformAction::SetWidth:
+        if (value >= 1.0)
+        {
+            const bool lock = _session.locksTransformRatio;
+            ChangeTransform(
+                [value, lock](LayerTransform& transform)
+                {
+                    if (lock)
+                    {
+                        transform.size.y *= value / transform.size.x;
+                    }
+                    transform.size.x = value;
+                });
+        }
+        return;
+    case TransformAction::SetHeight:
+        if (value >= 1.0)
+        {
+            const bool lock = _session.locksTransformRatio;
+            ChangeTransform(
+                [value, lock](LayerTransform& transform)
+                {
+                    if (lock)
+                    {
+                        transform.size.x *= value / transform.size.y;
+                    }
+                    transform.size.y = value;
+                });
+        }
+        return;
+    case TransformAction::SetScale:
+        if (value > 0.0)
+        {
+            // 100 % draws the layer's pixels 1:1 (a blank layer's size before this edit, so typing never compounds).
+            const std::optional<Vec2> pixels = _session.TransformPixelSize();
+            ChangeTransform(
+                [value, pixels](LayerTransform& transform)
+                {
+                    transform = transform.ScaledToPercent(value, pixels.has_value() ? pixels.value() : transform.size);
+                });
+        }
+        return;
+    case TransformAction::SetRotation:
+        ChangeTransform([value](LayerTransform& transform) { transform.rotation = std::fmod(value, 360.0); });
+        return;
+    case TransformAction::SetSampling:
+        ChangeTransform(
+            [value](LayerTransform& transform)
+            {
+                transform.sampling = value <= 0.5   ? LayerSampling::Nearest
+                                     : value <= 1.5 ? LayerSampling::Smooth
+                                                    : LayerSampling::High;
+            });
+        return;
+    }
+}
+
+void Application::ChangeTransform(const std::function<void(LayerTransform&)>& update) noexcept
+{
+    if (!_session.PendingTransformEdit().has_value())
+    {
+        _session.BeginTransform(true);
+    }
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    // Numbers describe an ordinary transform; while distorted, the handles are the controls.
+    if (!edit.has_value() || edit->corners.has_value() || !update)
+    {
+        return;
+    }
+    LayerTransform value = edit->draft;
+    update(value);
+    _session.PreviewTransform(value);
+    DocumentChanged();
+}
+
+std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(Vec2 pixel, bool control) const
+{
+    if (!_session.Document().has_value())
+    {
+        return std::nullopt;
+    }
+    const CanvasDocument& document = _session.Document().value();
+    // The top-most visible pixel layer under the pointer.
+    std::optional<Guid> underPointer;
+    const std::vector<Guid> order = RenderLayerIds(document);
+    for (auto it = order.rbegin(); it != order.rend() && !underPointer.has_value(); ++it)
+    {
+        for (const ImageLayer& layer : document.layers)
+        {
+            if (layer.id == *it)
+            {
+                if (layer.asset.has_value() && _session.DisplayedTransform(layer).Contains(pixel))
+                {
+                    underPointer = layer.id;
+                }
+                break;
+            }
+        }
+    }
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    const ImageLayer* active = _session.ActiveLayer();
+    const bool activeUsable = active != nullptr && active->asset.has_value() && !active->isGroup &&
+                              !_session.TransformsAsGroup() && _session.CanTransform();
+    const bool picks = !edit.has_value();
+    // Ctrl picks the layer under the pointer; otherwise the active layer, unless auto-select finds another layer
+    // under a press outside it. A press on empty canvas still drags the active layer.
+    if (control && picks && underPointer.has_value())
+    {
+        return std::make_pair(underPointer.value(), true);
+    }
+    if (_session.TransformsAsGroup() && _session.ActiveLayerID().has_value())
+    {
+        const std::optional<LayerTransform> box =
+            edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
+        if ((box.has_value() && box->Contains(pixel)) || !(picks && _session.transformAutoSelect) ||
+            !underPointer.has_value())
+        {
+            return std::make_pair(_session.ActiveLayerID().value(), false);
+        }
+    }
+    if (activeUsable && _session.EditedTransform(*active).Contains(pixel))
+    {
+        return std::make_pair(active->id, false);
+    }
+    if (picks && (_session.transformAutoSelect || control) && underPointer.has_value())
+    {
+        return std::make_pair(underPointer.value(), true);
+    }
+    if (activeUsable)
+    {
+        return std::make_pair(active->id, false);
+    }
+    return std::nullopt;
+}
+
+void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    const bool control = (modifiers & MK_CONTROL) != 0;
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    std::optional<TransformHit> hit;
+    if (_overlayGeometry.has_value())
+    {
+        hit = _overlayGeometry->Hit(view);
+    }
+    TransformDrag::Mode mode = TransformDrag::Mode::Move;
+    int handle = -1;
+    if (hit.has_value())
+    {
+        mode = hit->mode;
+        handle = hit->handle;
+    }
+    else
+    {
+        const std::optional<std::pair<Guid, bool>> target = TransformPressLayer(pixel, control);
+        if (!target.has_value())
+        {
+            return;
+        }
+        if (target->second)
+        {
+            _session.SelectLayer(target->first);
+        }
+    }
+    // Alt-dragging the body duplicates the layer once the pointer moves.
+    _duplicateOnDrag = mode == TransformDrag::Mode::Move && alt;
+    if (!_session.PendingTransformEdit().has_value())
+    {
+        _session.BeginTransform(false);
+    }
+    // Ctrl-dragging a handle distorts, as in Photoshop; once distorted, handles keep distorting.
+    if (mode == TransformDrag::Mode::Resize && _session.PendingTransformEdit().has_value() &&
+        (control || _session.PendingTransformEdit()->corners.has_value()))
+    {
+        _session.BeginDistort();
+        if (_session.PendingTransformEdit()->corners.has_value())
+        {
+            mode = TransformDrag::Mode::Distort;
+        }
+    }
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    if (!edit.has_value())
+    {
+        return;
+    }
+    _transformDrag = TransformDrag{mode, handle, edit->draft, pixel, edit->corners};
+    SyncChrome();
+}
+
+void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
+{
+    if (!_transformDrag.has_value() || !_session.Document().has_value())
+    {
+        return;
+    }
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    const bool shift = (modifiers & MK_SHIFT) != 0;
+    const bool control = (modifiers & MK_CONTROL) != 0;
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    if (_duplicateOnDrag)
+    {
+        _duplicateOnDrag = false;
+        _session.BeginDuplicateTransform();
+    }
+    const std::optional<std::array<Vec2, 4>> corners = _transformDrag->Corners(pixel, shift);
+    if (corners.has_value())
+    {
+        _session.PreviewCorners(corners.value());
+    }
+    else
+    {
+        // Dragging, scaling and rotating land on whole pixels and degrees; typed values stay exact. Moving snaps
+        // to the canvas and the other layers unless Ctrl is held; resizing and rotating are left alone.
+        LayerTransform draft = _transformDrag->Updated(pixel, _session.locksTransformRatio, shift, alt).Rounded();
+        if (_transformDrag->mode == TransformDrag::Mode::Move && !control)
+        {
+            std::unordered_set<Guid> moving;
+            const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+            if (edit.has_value())
+            {
+                if (edit->group.has_value())
+                {
+                    for (const auto& [id, original] : edit->group->originals)
+                    {
+                        moving.insert(id);
+                    }
+                }
+                else
+                {
+                    moving.insert(edit->layerID);
+                }
+            }
+            draft = _session.SnappedMove(draft, moving,
+                                         TransformSnap::kDistanceDip / std::max(_viewport.PointsPerPixel(), 0.0001));
+        }
+        _session.PreviewTransform(draft);
+    }
+    DocumentChanged();
+}
+
+void Application::EndTransformDrag() noexcept
+{
+    _duplicateOnDrag = false;
+    _transformDrag.reset();
+    _session.ClearSnapGuides();
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    if (edit.has_value() && !edit->persistent)
+    {
+        _session.CommitTransform();
+    }
+    DocumentChanged();
+}
+
+bool Application::ApplyCanvasCursor() noexcept
+{
+    if (!_window || !_chrome)
+    {
+        return false;
+    }
+    POINT point{};
+    if (!GetCursorPos(&point) || !ScreenToClient(_window.get(), &point))
+    {
+        return false;
+    }
+    const CanvasHole hole = _chrome->HolePixels();
+    const bool inHole = point.x >= hole.left && point.y >= hole.top && point.x < hole.left + hole.width &&
+                        point.y < hole.top + hole.height;
+    if (!inHole && !_transformDrag.has_value())
+    {
+        return false;
+    }
+    LPCWSTR cursor = IDC_ARROW;
+    const Vec2 view{static_cast<double>(point.x) - hole.left, static_cast<double>(point.y) - hole.top};
+    if (_spacePan || _tool == EditorTool::Hand)
+    {
+        cursor = IDC_HAND;
+    }
+    else if (_tool == EditorTool::Zoom)
+    {
+        cursor = IDC_CROSS;
+    }
+    else if (_tool == EditorTool::Move)
+    {
+        std::optional<TransformHit> hit;
+        if (_transformDrag.has_value())
+        {
+            hit = TransformHit{_transformDrag->mode, _transformDrag->handle};
+        }
+        else if (_overlayGeometry.has_value())
+        {
+            hit = _overlayGeometry->Hit(view);
+        }
+        const bool control = GetKeyState(VK_CONTROL) < 0;
+        if (hit.has_value())
+        {
+            const bool distorting = hit->mode == TransformDrag::Mode::Distort ||
+                                    (hit->mode == TransformDrag::Mode::Resize &&
+                                     (control || (_session.PendingTransformEdit().has_value() &&
+                                                  _session.PendingTransformEdit()->corners.has_value())));
+            if (distorting || hit->mode == TransformDrag::Mode::Rotate)
+            {
+                cursor = IDC_CROSS;
+            }
+            else if (hit->mode == TransformDrag::Mode::Resize)
+            {
+                const int direction =
+                    _overlayGeometry.has_value() ? _overlayGeometry->ResizeCursorDirection(hit->handle) : 0;
+                cursor = direction == 0   ? IDC_SIZEWE
+                         : direction == 1 ? IDC_SIZENWSE
+                         : direction == 2 ? IDC_SIZENS
+                                          : IDC_SIZENESW;
+            }
+            else
+            {
+                cursor = IDC_SIZEALL;
+            }
+        }
+        else if (TransformPressLayer(_viewport.DocumentFromView(view, DocumentSize()), control).has_value())
+        {
+            cursor = IDC_SIZEALL;
+        }
+    }
+    SetCursor(LoadCursorW(nullptr, cursor));
+    return true;
 }

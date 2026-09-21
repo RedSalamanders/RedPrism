@@ -28,6 +28,11 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
 - **Layers**: drag the 6 DIP splitter (or use Left/Right, Shift, Home/End while it has focus) to size the panel
   between 160 and 480 DIP; the canvas keeps at least 200 DIP. The title row's stepper edits the active layer's
   opacity (type, Up/Down, buttons) as one undo step.
+- **Move tool**: drag the active layer (or the layer under the pointer with Ctrl or Auto Select), pull a handle to
+  resize (Alt about the center, Shift for a free ratio, Ctrl to distort), turn the knob to rotate (Shift snaps to
+  15°). Moves snap to the canvas and the other layers unless Ctrl is held. Alt-drag duplicates, arrows nudge,
+  Ctrl+T opens Free Transform with the header's numbers; Enter or Apply commits, Escape or Cancel discards. The
+  Image menu flips the canvas, the Layer menu flips the layer.
 - **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
   pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer

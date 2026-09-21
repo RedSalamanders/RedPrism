@@ -9,16 +9,16 @@ Add every direct WIP plan to this table exactly once. Use `ACTIVE` for executabl
 
 The Windows DirectX port master program is historical:
 [`WindowsDirectXPort_2026-09-20.md`](../Done/WindowsDirectXPort_2026-09-20.md). The C0–C7 review and the DxUi editor-control adoption are
-recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md).
+recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 Transform is recorded in
+[`Transform_2026-09-20.md`](../Done/Transform_2026-09-20.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`Transform_2026-09-20.md`](Transform_2026-09-20.md) | `ACTIVE` | [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md); `Document_Tools` (create in C8) | Move/scale/rotate/flip/distort, snapping, guides, numeric inspector |
-| [`Selection_2026-09-20.md`](Selection_2026-09-20.md) | `ACTIVE` | [`Document_Model`](../../Document/Document_Model.md); `Document_Tools` | Marquee, lasso, wand, boolean ops, outline |
-| [`Brush_2026-09-20.md`](Brush_2026-09-20.md) | `ACTIVE` | [`Core_PerformanceAndResources`](../../Core/Core_PerformanceAndResources.md); `Document_Tools` | Compute brush + eraser, RasterSnapshot budgets |
-| [`Retouch_2026-09-20.md`](Retouch_2026-09-20.md) | `ACTIVE` | `Document_Tools` | Clone, heal, smear, gradient, shape, eyedropper |
+| [`Selection_2026-09-20.md`](Selection_2026-09-20.md) | `ACTIVE` | [`Document_Model`](../../Document/Document_Model.md); [`Document_Tools`](../../Document/Document_Tools.md) | Marquee, lasso, wand, boolean ops, outline |
+| [`Brush_2026-09-20.md`](Brush_2026-09-20.md) | `ACTIVE` | [`Core_PerformanceAndResources`](../../Core/Core_PerformanceAndResources.md); [`Document_Tools`](../../Document/Document_Tools.md) | Compute brush + eraser, RasterSnapshot budgets |
+| [`Retouch_2026-09-20.md`](Retouch_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Clone, heal, smear, gradient, shape, eyedropper |
 | [`AdjustFilter_2026-09-20.md`](AdjustFilter_2026-09-20.md) | `ACTIVE` | [`Rendering_Composition`](../../Rendering/Rendering_Composition.md) | Adjustment layers and filters; HSL blends |
-| [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) | `ACTIVE` | `Document_Tools` | Content-aware fill; Remove Background decision |
+| [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Content-aware fill; Remove Background decision |
 | [`ProductHardening_2026-09-20.md`](ProductHardening_2026-09-20.md) | `ACTIVE` | settings/crash specs (create in C14); [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md) | Settings, minidumps, localization, UIA |
 | [`Packaging_2026-09-20.md`](Packaging_2026-09-20.md) | `ACTIVE` | `Build_Packaging` (create in C15) | Portable ZIP and version stamp |
 

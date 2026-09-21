@@ -130,7 +130,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
     const std::unique_ptr<Application> application{
-        new (std::nothrow) Application(instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi)};
+        new (std::nothrow) Application(instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo)};
     if (!application)
     {
         if (uninitializeCom)

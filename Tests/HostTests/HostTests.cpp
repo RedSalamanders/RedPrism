@@ -1,13 +1,18 @@
 #include "AdapterSelection.h"
 #include "AddressSanitizerProbe.h"
+#include "CanvasViewport.h"
 #include "CommandLine.h"
+#include "Document.h"
 #include "EditorTool.h"
 #include "FrameScheduler.h"
 #include "Resources.h"
+#include "TransformOverlay.h"
 
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <dwrite.h>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -100,6 +105,7 @@ void TestCommandLine() noexcept
     Expect(RedPrismFindSwitch(L"--self-test") != nullptr, "cli.self-test");
     Expect(RedPrismFindSwitch(L"--screenshot") != nullptr, "cli.screenshot");
     Expect(RedPrismFindSwitch(L"--dpi") != nullptr, "cli.dpi");
+    Expect(RedPrismFindSwitch(L"--demo") != nullptr, "cli.demo");
     Expect(RedPrismFindSwitch(L"--no-such") == nullptr, "cli.unknown-switch");
 
     wchar_t unknown[] = L"--no-such";
@@ -128,6 +134,19 @@ void TestCommandLine() noexcept
     Expect(!RedPrismParseCommandLine(badArgs, 3, parsed, &error) && error != nullptr &&
                std::wstring_view{error} == L"120",
            "cli.dpi-rejects-other-values");
+
+    wchar_t demoSwitch[] = L"--demo";
+    wchar_t demoValue[] = L"transform";
+    wchar_t* demoArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, png, demoSwitch, demoValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(demoArgs, 5, parsed, &error) && parsed.demo == std::wstring_view{demoValue},
+           "cli.demo-parse");
+    wchar_t badDemo[] = L"brush";
+    wchar_t* badDemoArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, badDemo};
+    parsed = {};
+    Expect(!RedPrismParseCommandLine(badDemoArgs, 3, parsed, &error) && error != nullptr &&
+               std::wstring_view{error} == L"brush",
+           "cli.demo-rejects-unknown");
 
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
@@ -244,109 +263,137 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 91> kIds{IDS_APP_TITLE,
-                                        IDS_UNTITLED,
-                                        IDS_DIRTY_MARK,
-                                        IDS_STATUS_ZOOM,
-                                        IDS_STATUS_SIZE,
-                                        IDS_STATUS_TOOL,
-                                        IDS_STATUS_NO_DOCUMENT,
-                                        IDS_LAYERS_TITLE,
-                                        IDS_LAYER_HIDDEN_SUFFIX,
+    constexpr std::array<UINT, 119> kIds{IDS_APP_TITLE,
+                                         IDS_UNTITLED,
+                                         IDS_DIRTY_MARK,
+                                         IDS_STATUS_ZOOM,
+                                         IDS_STATUS_SIZE,
+                                         IDS_STATUS_TOOL,
+                                         IDS_STATUS_NO_DOCUMENT,
+                                         IDS_LAYERS_TITLE,
+                                         IDS_LAYER_HIDDEN_SUFFIX,
 
-                                        IDS_LAYER_OPACITY,
+                                         IDS_LAYER_OPACITY,
 
-                                        IDS_PALETTE_FOREGROUND,
+                                         IDS_PALETTE_FOREGROUND,
 
-                                        IDS_PALETTE_BACKGROUND,
+                                         IDS_PALETTE_BACKGROUND,
 
-                                        IDS_PICKER_NEW,
+                                         IDS_PICKER_NEW,
 
-                                        IDS_PICKER_CURRENT,
+                                         IDS_PICKER_CURRENT,
 
-                                        IDS_PICKER_HEX,
+                                         IDS_PICKER_HEX,
 
-                                        IDS_PICKER_RED,
+                                         IDS_PICKER_RED,
 
-                                        IDS_PICKER_GREEN,
+                                         IDS_PICKER_GREEN,
 
-                                        IDS_PICKER_BLUE,
+                                         IDS_PICKER_BLUE,
 
-                                        IDS_PICKER_OK,
+                                         IDS_PICKER_OK,
 
-                                        IDS_PICKER_CANCEL,
-                                        IDS_MENU_FILE,
-                                        IDS_MENU_EDIT,
-                                        IDS_MENU_IMAGE,
-                                        IDS_MENU_LAYER,
-                                        IDS_MENU_SELECT,
-                                        IDS_MENU_FILTER,
-                                        IDS_MENU_VIEW,
-                                        IDS_MENU_HELP,
-                                        IDS_CMD_NEW,
-                                        IDS_CMD_OPEN,
-                                        IDS_CMD_SAVE,
-                                        IDS_CMD_SAVE_AS,
-                                        IDS_CMD_EXPORT_PNG,
-                                        IDS_CMD_EXPORT_JPEG,
-                                        IDS_CMD_UNDO,
-                                        IDS_CMD_REDO,
-                                        IDS_CMD_NEW_LAYER,
-                                        IDS_CMD_NEW_FOLDER,
-                                        IDS_CMD_DELETE_LAYER,
-                                        IDS_CMD_TOGGLE_LAYER_VISIBILITY,
-                                        IDS_CMD_MOVE_OUT_OF_GROUP,
-                                        IDS_CMD_ZOOM_FIT,
-                                        IDS_CMD_ZOOM_ACTUAL,
-                                        IDS_CMD_ZOOM_IN,
-                                        IDS_CMD_ZOOM_OUT,
-                                        IDS_CMD_ABOUT,
-                                        IDS_CMD_EXIT,
-                                        IDS_CMD_UNDO_NAMED,
-                                        IDS_CMD_REDO_NAMED,
-                                        IDS_TOOL_MOVE,
-                                        IDS_TOOL_MARQUEE,
-                                        IDS_TOOL_LASSO,
-                                        IDS_TOOL_WAND,
-                                        IDS_TOOL_CROP,
-                                        IDS_TOOL_BRUSH,
-                                        IDS_TOOL_ERASER,
-                                        IDS_TOOL_HEAL,
-                                        IDS_TOOL_CLONE,
-                                        IDS_TOOL_SMEAR,
-                                        IDS_TOOL_GRADIENT,
-                                        IDS_TOOL_SHAPE,
-                                        IDS_TOOL_EYEDROPPER,
-                                        IDS_TOOL_HAND,
-                                        IDS_TOOL_ZOOM,
-                                        IDS_TOOL_IDLE,
-                                        IDS_TOOL_TOOLTIP,
-                                        IDS_ERROR_OPEN_PROJECT,
-                                        IDS_ERROR_IMPORT_IMAGE,
-                                        IDS_ERROR_SAVE_PROJECT,
-                                        IDS_ERROR_FLATTEN,
-                                        IDS_ERROR_READBACK,
-                                        IDS_ERROR_EXPORT_JPEG,
-                                        IDS_ERROR_EXPORT_PNG,
-                                        IDS_ERROR_START_GENERIC,
-                                        IDS_ERROR_START_WINDOW,
-                                        IDS_ERROR_START_GRAPHICS,
-                                        IDS_ERROR_UNSUPPORTED_VERSION,
-                                        IDS_ERROR_TOO_LARGE,
-                                        IDS_ERROR_MISSING_IMAGE,
-                                        IDS_FILTER_PROJECT,
-                                        IDS_FILTER_IMAGES,
-                                        IDS_FILTER_ALL,
-                                        IDS_FILTER_EXPLODED,
-                                        IDS_FILTER_JPEG,
-                                        IDS_FILTER_PNG,
-                                        IDS_DEFAULT_PROJECT_NAME,
-                                        IDS_DEFAULT_EXPORT_JPEG,
-                                        IDS_DEFAULT_EXPORT_PNG,
-                                        IDS_ABOUT_TEXT,
-                                        IDS_COMMAND_LINE_CAPTION,
+                                         IDS_PICKER_CANCEL,
+                                         IDS_MENU_FILE,
+                                         IDS_MENU_EDIT,
+                                         IDS_MENU_IMAGE,
+                                         IDS_MENU_LAYER,
+                                         IDS_MENU_SELECT,
+                                         IDS_MENU_FILTER,
+                                         IDS_MENU_VIEW,
+                                         IDS_MENU_HELP,
+                                         IDS_CMD_NEW,
+                                         IDS_CMD_OPEN,
+                                         IDS_CMD_SAVE,
+                                         IDS_CMD_SAVE_AS,
+                                         IDS_CMD_EXPORT_PNG,
+                                         IDS_CMD_EXPORT_JPEG,
+                                         IDS_CMD_UNDO,
+                                         IDS_CMD_REDO,
+                                         IDS_CMD_NEW_LAYER,
+                                         IDS_CMD_NEW_FOLDER,
+                                         IDS_CMD_DELETE_LAYER,
+                                         IDS_CMD_TOGGLE_LAYER_VISIBILITY,
+                                         IDS_CMD_MOVE_OUT_OF_GROUP,
+                                         IDS_CMD_ZOOM_FIT,
+                                         IDS_CMD_ZOOM_ACTUAL,
+                                         IDS_CMD_ZOOM_IN,
+                                         IDS_CMD_ZOOM_OUT,
+                                         IDS_CMD_ABOUT,
+                                         IDS_CMD_EXIT,
+                                         IDS_CMD_UNDO_NAMED,
+                                         IDS_CMD_REDO_NAMED,
+                                         IDS_CMD_FREE_TRANSFORM,
+                                         IDS_CMD_FLIP_LAYER_HORIZONTAL,
+                                         IDS_CMD_FLIP_LAYER_VERTICAL,
+                                         IDS_CMD_FLIP_CANVAS_HORIZONTAL,
+                                         IDS_CMD_FLIP_CANVAS_VERTICAL,
+                                         IDS_TOOL_MOVE,
+                                         IDS_TOOL_MARQUEE,
+                                         IDS_TOOL_LASSO,
+                                         IDS_TOOL_WAND,
+                                         IDS_TOOL_CROP,
+                                         IDS_TOOL_BRUSH,
+                                         IDS_TOOL_ERASER,
+                                         IDS_TOOL_HEAL,
+                                         IDS_TOOL_CLONE,
+                                         IDS_TOOL_SMEAR,
+                                         IDS_TOOL_GRADIENT,
+                                         IDS_TOOL_SHAPE,
+                                         IDS_TOOL_EYEDROPPER,
+                                         IDS_TOOL_HAND,
+                                         IDS_TOOL_ZOOM,
+                                         IDS_TOOL_IDLE,
+                                         IDS_TOOL_TOOLTIP,
+                                         IDS_ERROR_OPEN_PROJECT,
+                                         IDS_ERROR_IMPORT_IMAGE,
+                                         IDS_ERROR_SAVE_PROJECT,
+                                         IDS_ERROR_FLATTEN,
+                                         IDS_ERROR_READBACK,
+                                         IDS_ERROR_EXPORT_JPEG,
+                                         IDS_ERROR_EXPORT_PNG,
+                                         IDS_ERROR_START_GENERIC,
+                                         IDS_ERROR_START_WINDOW,
+                                         IDS_ERROR_START_GRAPHICS,
+                                         IDS_ERROR_UNSUPPORTED_VERSION,
+                                         IDS_ERROR_TOO_LARGE,
+                                         IDS_ERROR_MISSING_IMAGE,
+                                         IDS_FILTER_PROJECT,
+                                         IDS_FILTER_IMAGES,
+                                         IDS_FILTER_ALL,
+                                         IDS_FILTER_EXPLODED,
+                                         IDS_FILTER_JPEG,
+                                         IDS_FILTER_PNG,
+                                         IDS_DEFAULT_PROJECT_NAME,
+                                         IDS_DEFAULT_EXPORT_JPEG,
+                                         IDS_DEFAULT_EXPORT_PNG,
+                                         IDS_ABOUT_TEXT,
+                                         IDS_COMMAND_LINE_CAPTION,
 
-                                        IDS_UNIT_PERCENT};
+                                         IDS_UNIT_PERCENT,
+                                         IDS_UNIT_DEGREES,
+                                         IDS_TRANSFORM_TITLE,
+                                         IDS_TRANSFORM_MASK_TITLE,
+                                         IDS_TRANSFORM_AUTO_SELECT,
+                                         IDS_TRANSFORM_AUTO_SELECT_TIP,
+                                         IDS_TRANSFORM_SHOW_CONTROLS,
+                                         IDS_TRANSFORM_SHOW_CONTROLS_TIP,
+                                         IDS_TRANSFORM_X,
+                                         IDS_TRANSFORM_Y,
+                                         IDS_TRANSFORM_WIDTH,
+                                         IDS_TRANSFORM_HEIGHT,
+                                         IDS_TRANSFORM_LOCK_RATIO,
+                                         IDS_TRANSFORM_SCALE,
+                                         IDS_TRANSFORM_SCALE_TIP,
+                                         IDS_TRANSFORM_ANGLE,
+                                         IDS_TRANSFORM_SAMPLING_NEAREST,
+                                         IDS_TRANSFORM_SAMPLING_SMOOTH,
+                                         IDS_TRANSFORM_SAMPLING_HIGH,
+                                         IDS_TRANSFORM_FLIP_HORIZONTAL,
+                                         IDS_TRANSFORM_FLIP_VERTICAL,
+                                         IDS_TRANSFORM_APPLY,
+                                         IDS_TRANSFORM_CANCEL,
+                                         IDS_TRANSFORM_LOCK};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -370,6 +417,76 @@ void TestStringTable() noexcept
 }
 } // namespace
 
+// Ported from legacy TransformTests: hover regions and document mapping of the Move tool's box.
+void TestTransformOverlayGeometry() noexcept
+{
+    const auto closeTo = [](Vec2 a, Vec2 b) { return std::abs(a.x - b.x) < 0.0001 && std::abs(a.y - b.y) < 0.0001; };
+    CanvasViewport viewport;
+    const Vec2 size{1000, 800};
+    viewport.Resize(Vec2{1000, 800}, 1.0, size);
+    viewport.SetZoom(1.0, viewport.Center(), size);
+    LayerTransform transform;
+    transform.origin = Vec2{100, 100};
+    transform.size = Vec2{400, 300};
+    transform.rotation = 37;
+    const TransformOverlayGeometry geometry = TransformOverlayGeometry::FromTransform(transform, viewport, size);
+    bool edges = true;
+    constexpr std::array<std::array<int, 3>, 4> kEdges{{{0, 2, 1}, {2, 4, 3}, {4, 6, 5}, {6, 0, 7}}};
+    for (const std::array<int, 3>& edge : kEdges)
+    {
+        const Vec2 a = geometry.handles[static_cast<size_t>(edge[0])];
+        const Vec2 b = geometry.handles[static_cast<size_t>(edge[1])];
+        const std::optional<TransformHit> hit = geometry.Hit(Vec2{a.x * 0.75 + b.x * 0.25, a.y * 0.75 + b.y * 0.25});
+        edges = edges && hit.has_value() && hit->mode == TransformDrag::Mode::Resize && hit->handle == edge[2];
+    }
+    Expect(edges, "overlay.rotated-edges-hit-their-handle");
+    bool corners = true;
+    for (const int index : {0, 2, 4, 6})
+    {
+        const std::optional<TransformHit> hit = geometry.Hit(geometry.handles[static_cast<size_t>(index)]);
+        corners = corners && hit.has_value() && hit->mode == TransformDrag::Mode::Resize && hit->handle == index;
+    }
+    Expect(corners, "overlay.corners-hit");
+    const std::optional<TransformHit> rotate = geometry.Hit(geometry.rotationHandle);
+    Expect(rotate.has_value() && rotate->mode == TransformDrag::Mode::Rotate, "overlay.rotation-knob-hit");
+    Expect(!geometry.Hit(viewport.ViewFromDocument(transform.Center(), size)).has_value(), "overlay.center-misses");
+
+    CanvasViewport zoomed;
+    zoomed.Resize(Vec2{900, 600}, 2.0, size);
+    zoomed.SetZoom(1.5, Vec2{300, 200}, size);
+    zoomed.Translate(Vec2{57, -30});
+    LayerTransform turned;
+    turned.origin = Vec2{100, 200};
+    turned.size = Vec2{100, 50};
+    turned.rotation = 90;
+    const TransformOverlayGeometry mapped = TransformOverlayGeometry::FromTransform(turned, zoomed, size);
+    Expect(closeTo(zoomed.DocumentFromView(mapped.handles[4], size), turned.Point(Vec2{1, 1})),
+           "overlay.document-mapping");
+    Expect(turned.Contains(turned.Center()) && turned.Contains(Vec2{150, 265}) && !turned.Contains(Vec2{190, 225}),
+           "overlay.rotated-contains");
+    bool handles = true;
+    for (int index = 0; index < 8; ++index)
+    {
+        const std::optional<TransformHit> hit = mapped.Hit(mapped.handles[static_cast<size_t>(index)]);
+        handles = handles && hit.has_value() && hit->mode == TransformDrag::Mode::Resize && hit->handle == index;
+    }
+    Expect(handles, "overlay.zoomed-handles-hit");
+    Expect(mapped.Hit(mapped.rotationHandle).has_value() &&
+               mapped.Hit(mapped.rotationHandle)->mode == TransformDrag::Mode::Rotate,
+           "overlay.zoomed-rotation-hit");
+
+    LayerTransform upright;
+    upright.size = Vec2{100, 100};
+    const TransformOverlayGeometry axisAligned = TransformOverlayGeometry::FromTransform(upright, viewport, size);
+    Expect(axisAligned.ResizeCursorDirection(3) == 0 && axisAligned.ResizeCursorDirection(1) == 2 &&
+               axisAligned.ResizeCursorDirection(4) == 1 && axisAligned.ResizeCursorDirection(2) == 3,
+           "overlay.resize-cursor-directions");
+    const std::array<Vec2, 4> shape{Vec2{10, 10}, Vec2{60, 10}, Vec2{30, 30}, Vec2{10, 30}};
+    const TransformOverlayGeometry distorted = TransformOverlayGeometry::FromCorners(shape, viewport, size);
+    Expect(!distorted.showsRotation && closeTo(distorted.handles[3], viewport.ViewFromDocument(Vec2{45, 20}, size)),
+           "overlay.distortion-midpoints");
+}
+
 int wmain(int argc, wchar_t** argv)
 {
     if (argc > 1 && std::wstring_view{argv[1]} == L"--asan-probe")
@@ -381,6 +498,7 @@ int wmain(int argc, wchar_t** argv)
     TestFrameScheduler();
     TestCommandLine();
     TestEditorTools();
+    TestTransformOverlayGeometry();
     TestRailGlyphsExistInFluentFont();
     TestStringTable();
     if (gFailures != 0)

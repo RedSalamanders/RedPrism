@@ -83,6 +83,30 @@ the installed Segoe Fluent Icons font and that keys, glyphs and names are unique
 Tool keys apply when the canvas has focus; Space pans while held. X swaps the foreground and background wells and D
 resets them to black over white, the legacy canvas key bindings.
 
+## Move tool
+
+With the Move tool the header is the transform inspector and the canvas shows the active layer's box through
+`CanvasOverlay`, a DxUi control over the hole that is never hit: eight handles, a rotation knob 28 DIP above the
+top edge, a dark outline under the accent line, and accent snap guides across the hole while a move is snapped.
+The box follows `DocumentSession::EditedTransform` (the pending draft, the group box, or the mask placement) and
+hides when Show Controls is off unless a persistent edit is pending. The header holds, left to right as room
+allows with Cancel and Apply pinned right: the title (`Transform` / `Transform Mask`), X, Y, W, H (whole pixels),
+Lock (aspect ratio), Scale (% of the layer's pixels, one decimal), Angle (whole degrees), Flip H, Flip V, Sampling,
+Auto Select and Show Controls. Typing a number opens a persistent edit and previews it; Apply commits, Cancel
+discards; while a distortion is pending the numbers are read-only.
+
+Pointer rules in the hole (`Application::OnPointer`, geometry from `TransformOverlay.h`): a press on a handle
+resizes (Alt about the center; Shift inverts the ratio lock; Ctrl, or an already distorted edit, distorts), on the
+knob rotates (Shift snaps to 15°), anywhere else drags the layer a press would move: the layer under the pointer
+with Ctrl or Auto Select, else the active layer, even from empty canvas. Alt-drag duplicates. Moves snap unless
+Ctrl is held; drags land on whole pixels and degrees and commit on release. Cursors: the resize arrows follow the
+box's rotation, the knob and a distortion show a cross, a movable layer shows the four-way arrow.
+
+Keys with the canvas focused: arrows nudge by one pixel (Shift ten), Enter applies and Escape cancels a pending
+edit, Ctrl+T starts Free Transform (a persistent edit) and selects the Move tool. Undo during a pending edit cancels
+it; switching tools or selecting another layer commits it. The transform contract itself lives in
+[`Document_Tools.md`](../Document/Document_Tools.md).
+
 The bottom 48 DIP of the rail hold the palette wells: the background `ColorSwatch` behind, the foreground in front
 (26 DIP squares offset 14 DIP, the legacy palette layout), each with a tooltip and accessible name. Clicking a well
 opens the color picker for that well.
@@ -90,14 +114,15 @@ opens the color picker for that well.
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
-`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. Image, Select and
-Filter fill in with C8–C13.
+`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. Select and Filter fill in
+with C9–C13.
 
 | Menu | Commands |
 | --- | --- |
 | File | New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As (Ctrl+Shift+S), Export PNG, Export JPEG, Exit |
-| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Delete Layer (Delete, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G) |
+| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Free Transform (Ctrl+T) |
+| Image | Flip Canvas Horizontal, Flip Canvas Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Delete Layer (Delete, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Flip Layer Horizontal, Flip Layer Vertical |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-) |
 | Help | About RedPrism (version from `Common/Version.h`) |
 
@@ -149,5 +174,8 @@ show the populated rail. `--self-test --warp` composites chrome, proves a settle
 through `DispatchPointer` (layers +40 DIP, hole narrower after the layout re-sync), opens the picker from the
 foreground well and commits a sampled color into the session, cancels a background edit without changing it, swaps
 and resets with X and D, commits 50 % through the opacity stepper as one `Layer Opacity` undo entry, then proves
-0 DxUi and 0 canvas surface bytes when hidden. Keyboard Escape leaves the canvas. `HostTests` covers tool
+0 DxUi and 0 canvas surface bytes when hidden. With a painted layer it also drags the layer with the Move
+tool (one `Transform Layer` entry), previews a typed rotation through Free Transform until Apply, cancels with
+Escape, nudges with Shift+Right and flips the canvas and the layer. `--screenshot ... --demo transform` writes
+`docs/screenshots/transform-96.png`: two painted layers, the rotated one's box and the transform header. Keyboard Escape leaves the canvas. `HostTests` covers tool
 tables, glyphs and the string table.

@@ -142,13 +142,18 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 $shotDir = Join-Path $repoRoot '.build\screenshots'
 New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
-foreach ($dpi in @(96, 144)) {
-    $shotPath = Join-Path $shotDir "empty-shell-$dpi-$Platform-$($Configuration -replace '\s','').png"
+foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ dpi = 96; demo = 'transform' })) {
+    $dpi = $shotCase.dpi
+    $demo = $shotCase.demo
+    $shotName = if ($demo) { "$demo-$dpi" } else { "empty-shell-$dpi" }
+    $shotPath = Join-Path $shotDir "$shotName-$Platform-$($Configuration -replace '\s','').png"
     Remove-Item -LiteralPath $shotPath -ErrorAction SilentlyContinue
-    $shotLog = Join-Path $outputRoot "RedPrism.screenshot-$dpi.log"
-    $shotErr = Join-Path $outputRoot "RedPrism.screenshot-$dpi.err.log"
+    $shotLog = Join-Path $outputRoot "RedPrism.screenshot-$shotName.log"
+    $shotErr = Join-Path $outputRoot "RedPrism.screenshot-$shotName.err.log"
     Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
-    $shot = Start-Process -FilePath $executable -ArgumentList @('--screenshot', $shotPath, '--warp', '--dpi', "$dpi") `
+    $shotArgs = @('--screenshot', $shotPath, '--warp', '--dpi', "$dpi")
+    if ($demo) { $shotArgs += @('--demo', $demo) }
+    $shot = Start-Process -FilePath $executable -ArgumentList $shotArgs `
         -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
     if (-not $shot.WaitForExit(60000)) {
         $shot.Kill()
