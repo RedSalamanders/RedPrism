@@ -36,13 +36,19 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
 - **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
   pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
-  (Ctrl+Shift+N) or folder (Ctrl+G), deletes the active layer (Delete), toggles its visibility, or moves it out of
-  its folder (Ctrl+Shift+G).
-- **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert.
+  (Ctrl+Shift+N) or folder (Ctrl+G), copies the selection or the layer to a new layer (Ctrl+J), deletes the active
+  layer or its targeted mask (Delete, without a selection), toggles its visibility, moves it out of its folder
+  (Ctrl+Shift+G), or adds a mask (white, or black; from the selection when there is one).
+- **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert. Cut, Copy, Copy Merged and
+  Paste (Ctrl+X, Ctrl+C, Ctrl+Shift+C, Ctrl+V) move pixels between layers and other apps (a paste lands in place as a
+  new layer); Fill with the foreground (Alt+Backspace) or background (Ctrl+Backspace) color, Clear Selection Pixels
+  (Delete) and Invert (Ctrl+I) edit the selection, or the whole layer or mask without one.
 - **Selection**: the Marquee (M, rectangle or ellipse), Lasso (L, freehand or polygonal) and Magic Wand (W) draw
   outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
   the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
-  mask as the selection.
+  mask as the selection. Ctrl-drag inside a selection moves its pixels (Alt duplicates), Ctrl+arrows nudge them,
+  Ctrl+T transforms them on a floating layer that merges back, Layer via Copy (Ctrl+J) copies them to a layer, and
+  Add Mask or Add Black Mask on the Layer menu turns the selection into a mask.
 - **Brush and Eraser**: B paints with the foreground color, E erases (the Brush's header also has an Erase mode).
   The header sets the size, hardness and opacity; `[` and `]` step the size, Shift-`[` and Shift-`]` the hardness,
   digits the opacity. Shift-click draws a straight line from the last stroke. With a layer mask selected the brush

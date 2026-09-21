@@ -116,12 +116,28 @@ working copy lived on the document grid, not the layer's).
 
 `PaintCanvas` fills tiles without segments: every tile the canvas and the selection's bounds cover starts from its
 original content and takes a per-pixel shade at the pixel's document center, clipped to the canvas and the selection
-coverage (`FillGradient` for the Gradient tool; `Fill` and `ClearPixels` for later edits). Redrawing restarts from
-the original, so a moved line never accumulates.
+coverage (`FillGradient` for the Gradient tool; `Fill`, `ClearPixels` and `Invert` for the pixel edits). Redrawing
+restarts from the original, so a moved line never accumulates.
 
 Smudge and Liquify work on `WarpStroke`, a document-size copy of the layer as shown, dab by dab (the weight follows
 the hardness, at most 0.98, with a smoothstep rim); the host shows the copy through the stroke preview on the
 document grid (256² tiles marked dirty per dab) and the session paints the result into the layer along the dabs.
+
+## Pixel edits (C9b)
+
+`PaintCanvas` takes a mode: `Over` (the shade over the pixels: fills, gradients), `DestinationOut` (clears through
+the coverage) and `Invert` (premultiplied: each color becomes alpha − color, a mask 255 − value; without a selection
+it covers every pixel the layer has, on or off the canvas). `Fill`, `ClearPixels` and `Invert` wrap them.
+
+`LiftSelection` copies the layer's pixels under the selection out of the original, faded by the coverage;
+`MoveLifted(offset, duplicate)` rebuilds every tile the pixels leave or land on (and any tile an earlier preview
+changed) from the original: the selection becomes a hole (the pixels times one minus the coverage, unless
+duplicating) and the lifted pixels land `offset` document pixels away, source-over (exact for whole pixels on an
+unscaled layer, bilinear otherwise), so a preview never accumulates and the pixels along a soft edge add back to the
+original. The session's `PixelMove` keeps the raster; the host shows it through the stroke preview like a gradient
+(`BeginStroke` from `PreviewFor`, the changed tiles per pointer update) and the commit adopts the working texture,
+so a move never re-uploads the layer per pointer update. The session's other edits (fills, Clear, Invert, nudges)
+commit at once and upload through the sparse path.
 
 ## Budgets
 
@@ -151,7 +167,9 @@ pixels, hard edges, soft falloff, cancel), `mask.*` brush cases (paint white/bla
 source-over coverage, repeated flushes), `snapshot.*` / `ridges.*` (a 2000² document with a 400 px tip: mouse-up and
 the next stroke never materialize, history retains only replaced tiles), `bounds.*` / `budget.*` (alpha bounds,
 transform after growth, the pixel limit), `reject.*` / `line.*` / `keys.*` (invalid settings and points, Shift lines,
-size / hardness / opacity keys), `expand.*` (paint beyond the layer grows it) and `clip.*` (selection-clipped paint).
+size / hardness / opacity keys), `expand.*` (paint beyond the layer grows it) and `clip.*` (selection-clipped paint);
+the pixel edit cases (`edit.*`, `pixelmove.*`, `clipboard.*`, `floating.*`) are listed in
+[`Document_Tools.md`](../Document/Document_Tools.md).
 
 `CompositionTests` (WARP): `sparse.*` (a sparse raster uploads through the GPU assembly path and matches the
 assembled bytes), `stroke.*` (preview texture creation from source and fill, tile updates, mask previews, adoption

@@ -103,8 +103,10 @@ Ctrl is held; drags land on whole pixels and degrees and commit on release. Curs
 box's rotation, the knob and a distortion show a cross, a movable layer shows the four-way arrow.
 
 Keys with the canvas focused: arrows nudge by one pixel (Shift ten), Enter applies and Escape cancels a pending
-edit, Ctrl+T starts Free Transform (a persistent edit) and selects the Move tool. Undo during a pending edit cancels
-it; switching tools or selecting another layer commits it. The transform contract itself lives in
+edit, Ctrl+T starts Free Transform (a persistent edit) and selects the Move tool; with a non-empty selection it
+transforms the selected pixels instead (`TransformCommand`: a `Floating Selection` layer that merges back as one
+`Transform Selection` entry on Apply or Enter, restored exactly by Escape or Undo, the outline following the handles
+and a distortion). Undo during a pending edit cancels it; switching tools or selecting another layer commits it. The transform contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 The bottom 48 DIP of the rail hold the palette wells: the background `ColorSwatch` behind, the foreground in front
@@ -132,20 +134,28 @@ line over a dark one. Outline and draft changes re-composite chrome only, never 
 Pointer rules in the hole (`Application::SelectionPress` / `SelectionPointerMove` / `SelectionRelease`): the
 modifiers at the press pick the mode (Shift adds, Alt subtracts). In New mode a press inside a non-empty selection
 moves its outline (Shift keeps the move on the axis it has gone further along; one `Move Selection` entry), and a
-press released without moving deselects (with the wand, it selects afresh from that pixel). Otherwise the Marquee
+press released without moving deselects (with the wand, it selects afresh from that pixel). A Ctrl press inside the
+selection lifts its pixels instead (Alt duplicates): the drag shows them through the stroke preview with the outline
+following (Shift keeps one axis), release commits one `Move Pixels` / `Duplicate Pixels` entry drawn from the adopted
+texture, and Escape or capture loss drops it (`BeginPixelDrag` / `DragPixels` / `FinishPixelDrag`). Otherwise the Marquee
 starts a whole-pixel box and reshapes it as the pointer or Shift moves; a Shift held from the press means Add and
 squares the box only once let go and pressed again. The freehand Lasso follows the pointer and closes on release;
 the polygonal Lasso adds a corner per click, tracks the cursor, and closes on a click within 8 DIP of the first corner,
 a double-click (system double-click time and distance) or Enter; Backspace or Delete removes the last corner,
 Escape drops the outline. The wand selects on the press. Capture loss ends a drag; a polygonal outline survives it.
-Cursors: a crosshair, or the four-way arrow over a selection the press would move (the legacy add/subtract badges
-wait on custom cursors). Switching tools drops a draft and ends an outline move.
+Cursors: a crosshair, or the four-way arrow over a selection the press would move or Ctrl-move (the legacy
+add/subtract and move-pixels badges wait on custom cursors). Switching tools drops a draft and ends an outline move.
 
 Keys with the canvas focused: M chooses the Marquee and, pressed again, switches Rectangle and Ellipse; L chooses
 the Lasso and, pressed again, switches Freehand and Polygonal (holding the key does not keep switching; the choice
 stays while the project is open). Arrows nudge a non-empty selection by one pixel (Shift ten) with a selection tool.
 Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. The Select menu adds Load Layer Selection and Load Mask
-Selection for the active layer. The selection contract itself lives in
+Selection for the active layer. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
+Delete clears them, and without a selection deletes the targeted mask, or the layer; Ctrl+X, Ctrl+C, Ctrl+Shift+C
+and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
+PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
+system clipboard changed since that copy); Alt+Backspace and Ctrl+Backspace fill with the foreground and background
+colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 ## Brush tools
@@ -221,9 +231,9 @@ with C12.
 | Menu | Commands |
 | --- | --- |
 | File | New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As (Ctrl+Shift+S), Export PNG, Export JPEG, Exit |
-| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Free Transform (Ctrl+T) |
+| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels; Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
 | Image | Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Delete Layer (Delete, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Flip Layer Horizontal, Flip Layer Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Add Mask, Add Black Mask (from the selection when there is one), Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
 | Help | About RedPrism (version from `Common/Version.h`) |

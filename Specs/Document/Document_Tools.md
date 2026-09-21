@@ -266,7 +266,62 @@ composite)`; the kernels, the tile composition and the warp model live in
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
   document pixel (nullopt outside or over transparency); `showsSampleRing` (default on) shows the comparison ring.
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
-  one (inside its folder) in one entry, the base for shapes and later pastes.
+  one (inside its folder) in one entry, the base for shapes and pastes.
+
+## Pixel edits (C9b)
+
+The selection edits of the legacy `SelectionEdits.swift`, `FloatingSelection.swift` and `SelectionClipboard.swift`:
+raster edits built on the brush stroke's canvas passes and lifted pixels
+([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)), each one history entry through `CommitStroke` (which can
+apply a moved outline inside the same entry). `CanEditPixels` is `CanPaint`: a paintable active layer or targeted
+mask, no pending transform or stroke, and no explicitly empty selection.
+
+- **Fill** (`FillSelection(source)`; `Fill` / `Fill Mask`): the selection, or the whole canvas without one, takes the
+  foreground or background color; an explicitly empty selection changes nothing. A mask has its own palette: black
+  hides and white reveals, the foreground per `maskPaintWhite` and the background the other, so the default
+  foreground fill hides the selected area.
+- **Clear** (`ClearSelectedPixels`; `Clear`): with a selection, the selected image pixels become transparent
+  through the selection coverage (soft edges fade; the clip follows a scaled layer); on a mask the selection fills
+  with the background color, as in Photoshop. `DeleteKeyPressed`: Clear with a selection, otherwise
+  `DeleteLayerOrMask` (`DeleteLayerMask`, `Delete Layer Mask`, when the mask is targeted, else `DeleteLayer`).
+- **Invert** (`CanInvert`, `InvertPixels`; `Invert` / `Invert Mask`): colors invert keeping transparency
+  (premultiplied, each channel becomes alpha − channel) and a mask flips, inside the selection or across the whole
+  layer (its off-canvas pixels too) without one. Available in every tool: a pending transform commits and a pending
+  gradient applies first. A uniform 1×1 mask with a selection expands to the layer grid. Not on a group's pixels, a
+  hidden layer, an adjustment layer or a disabled mask.
+- **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):
+  `BeginPixelMove(duplicate)` cuts the selected image pixels out of the layer through the coverage (false without a
+  non-empty selection, with a mask targeted, or over no pixels); `MovePixels(dx, dy)` previews them a whole-pixel
+  offset away (the hole stays unless duplicating; the raster's tiles feed the host's stroke preview);
+  `FinishPixelMove` commits the raster and the moved outline as one `Move Pixels` / `Duplicate Pixels` entry (a zero
+  offset commits nothing); `CancelPixelMove` drops it; `NudgePixels(dx, dy)` is one entry per press.
+  `DisplayedSelection` is the outline to draw: during a move the original shifted by the offset; while transforming
+  selected pixels, the outline mapped through the handles (`FloatingSelectionMap`) or the distortion's homography.
+- **Masks from the selection** (`AddMask(revealing)`): with a selection, a mask on the layer's own pixel grid (the
+  loops mapped through the layer transform and rasterized with the selection's antialiasing): revealing hides the
+  selected area (`255 − coverage`), otherwise shows only it; the selection is dropped and the mask targeted, one
+  `Add Mask from Selection` entry. Without a selection, `AddLayerMask` (`Add Reveal-All Mask` / `Add Hide-All Mask`).
+  Nothing on a layer that already has a mask, or during a transform.
+- **Floating selection transform** (`TransformEdit::floating`, `FloatingTransform`): `CanTransformSelection` needs a
+  non-empty selection, a paintable image layer (not its mask) and no pending edit; `TransformCommand` (Ctrl+T)
+  starts it, else `BeginTransform`. `BeginSelectionTransform` opens a `Transform Selection` entry, clears the
+  selected pixels and inserts a `Floating Selection` layer above the source (the selected pixels at their place,
+  the source's opacity and blend mode) as the pending persistent edit. `CommitTransform` with an unchanged draft and
+  no distortion restores the document exactly (no entry, so soft selection edges never pick up a seam); otherwise it
+  merges the floating pixels into the source (bilinear through the draft, a distortion warped first), growing the
+  layer and a mask on its grid where they extend past it (a uniform mask stays), moves the outline with them,
+  removes the floating layer and reactivates the source, one entry. `CancelTransform` (Escape, Undo) restores the
+  document and the active layer.
+- **Clipboard** (`PixelClipboard`: the pixels and their document origin): `SelectionCopyRegion` is the selection's
+  bounds (the canvas without one) rounded with a 0.001 tolerance and clipped to the canvas; `CanCopyPixels` needs
+  an image layer or a targeted mask and no explicitly empty selection; `RenderSelectedPixels(layer, mask)` crops the
+  layer as shown (a mask as opaque gray) to the region through the selection coverage; `CanCopyMerged` needs a
+  layer with pixels and `RenderMergedPixels(composite)` crops the host's document-size composite the same way.
+  `CopySelection` and `CopyMergedSelection(composite)` keep the copy on the session (`Clipboard`); `CutSelection`
+  copies then clears; `CanPaste` / `Paste` insert the copy in place as a new layer (`Layer N`; `Paste`; the selection
+  dropped); `PasteImage(image)` centers another app's pixels; `LayerViaCopy` copies the selection to a new layer
+  without the clipboard (`Layer via Copy`), or `DuplicateActiveLayer` without one. `NextLayerName` is the first
+  unused `Layer N`.
 
 ## Validation
 
@@ -296,3 +351,15 @@ Retouch: `DocumentTests` `heal.*` (the legacy `SpotHealingTests` blemish for eve
 (`CloneStampTests`), `blur.*`, `smudge.*`, `liquify.*` and `warp.*` (own goldens: a softened edge, carried color, a
 pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`), `shape.*` (`ShapeToolTests` plus the redraw on
 scaling) and `eyedropper.*`. The WARP self-test drives each tool through `Application`.
+
+Pixel edits: `DocumentTests` `edit.*` (the legacy `SelectionEditTests`: brush and gradient clipped to the selection,
+an empty selection edits nothing, fills, Clear and the Delete key, mask fills, the clip on scaled layers, masks from
+the selection on the layer grid, mask deletion, invert keeping transparency, inside the selection, on masks, on a
+uniform mask with a selection and after a pending gradient), `pixelmove.*` (moves and duplicates as one entry with
+the outline, nudges, masks refusing, the outline never at its old spot, the preview tiles), `clipboard.*` (the
+legacy `SelectionClipboardTests`: copy and paste in place, cut, layer via copy, a lasso-shaped copy, copy merged
+with a hand-built composite, an external paste centered) and `floating.*` (Ctrl+T on a selection as one entry with
+the outline following the handles, Escape restoring exactly, an unchanged transform leaving soft edges untouched,
+growth past the layer edge, Undo dropping the edit). The WARP self-test drives the Edit menu, the clipboard keys, a
+Ctrl-drag through the live preview, Ctrl+Right, Delete, Ctrl+T with Escape and Enter, Ctrl+J, Add Mask and
+Ctrl+Shift+C through `Application`.

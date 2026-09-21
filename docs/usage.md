@@ -34,9 +34,13 @@ the File menu.
 | --- | --- |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S | New, open, save, save as |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
-| Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Delete | New layer, new folder, move out of folder, delete layer |
+| Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
+| Delete | Clear the selected pixels; without a selection delete the targeted mask, or the layer (canvas focused) |
+| Ctrl+X / Ctrl+C / Ctrl+Shift+C / Ctrl+V | Cut, copy, copy merged, paste in place as a new layer (another app's image pastes centered) |
+| Alt+Backspace / Ctrl+Backspace / Ctrl+I | Fill the selection (or the whole layer) with the foreground / background color; invert the layer or its mask |
 | X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |
-| Ctrl+T / Enter / Escape | Free Transform; apply / cancel a pending transform (canvas focused) |
+| Ctrl+T / Enter / Escape | Free Transform, or Transform Selection with a selection (the selected pixels float and merge back); apply / cancel a pending transform (canvas focused) |
+| Ctrl-drag / Ctrl+Alt-drag / Ctrl+Arrows | Move / duplicate the selected pixels with a selection tool; nudge them by 1 (Shift 10) in any tool |
 | Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool; nudge the selection outline with a selection tool |
 | M / L (again) | Switch the Marquee between Rectangle and Ellipse / the Lasso between Freehand and Polygonal |
 | Shift-drag / Alt-drag | Add to / subtract from the selection; a fresh Shift during a Marquee drag squares it |
