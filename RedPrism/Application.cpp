@@ -1437,6 +1437,10 @@ int Application::RunSelfTest() noexcept
     {
         return crop;
     }
+    if (const int edits = RunLayerEditsSelfTest(); edits != 0)
+    {
+        return edits;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -1677,6 +1681,8 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetGradientHandler([this](GradientAction action, double value) { OnGradientAction(action, value); });
     chrome->SetShapeHandler([this](ShapeAction action, double value) { OnShapeAction(action, value); });
     chrome->SetCropHandler([this](CropAction action, double value) { OnCropAction(action, value); });
+    chrome->SetLayerInvokeHandler([this](Guid id) { OnLayerInvoked(id); });
+    chrome->SetRenameHandler([this](std::optional<std::wstring> name) { OnRename(std::move(name)); });
     chrome->SetAdjustHandler([this](AdjustAction action, double value) { OnAdjustAction(action, value); });
     chrome->SetCurveHandler([this](std::vector<CurvePoint> points) { OnCurveChanged(std::move(points)); });
     chrome->SetBandHandler([this](int index, double degrees) { OnBandChanged(index, degrees); });
@@ -1735,10 +1741,15 @@ void Application::SyncChrome() noexcept
     _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
                               _session.history.CanRedo());
-    _chrome->SetEditTargets(_session.IsMaskSelected() && _session.ActiveLayer() != nullptr &&
-                                _session.ActiveLayer()->mask.has_value(),
-                            _session.CanTransformSelection(),
-                            _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value());
+    _chrome->SetEditTargets(
+        _session.IsMaskSelected() && _session.ActiveLayer() != nullptr && _session.ActiveLayer()->mask.has_value(),
+        _session.CanTransformSelection(),
+        _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID.has_value(),
+        [&]
+        {
+            const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
+            return !plan.has_value() ? 0 : plan->action == L"Merge Group" ? 1 : plan->action == L"Merge Layers" ? 2 : 0;
+        }());
     SyncAdjustPanel();
     SyncSizeCard();
     const CanvasDocument* document = _session.DisplayDocument();
@@ -2466,7 +2477,6 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandAbout:
     case ChromeHost::kCommandFreeTransform:
     case ChromeHost::kCommandRenameLayer:
-    case ChromeHost::kCommandMergeDown:
         break;
     default:
         _transformDrag.reset();
@@ -2501,7 +2511,7 @@ void Application::OnCommand(int command) noexcept
         DocumentChanged();
         break;
     case ChromeHost::kCommandRenameLayer:
-        ShowNotImplemented(IDS_CMD_RENAME_LAYER);
+        RenameActiveLayer();
         break;
     case ChromeHost::kCommandMoveLayerUp:
         _session.MoveActiveLayer(1);
@@ -2519,7 +2529,7 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandMergeDown:
-        ShowNotImplemented(IDS_CMD_MERGE_DOWN);
+        MergeLayersCommand();
         break;
     case ChromeHost::kCommandSave:
         (void)SaveDocument(false);

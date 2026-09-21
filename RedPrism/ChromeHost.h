@@ -468,6 +468,13 @@ class ChromeHost final
     void SetToolHandler(std::function<void(EditorTool)> handler);
     void SetLayerHandler(std::function<void(Guid)> handler);
     void SetLayerExpandHandler(std::function<void(Guid, bool)> handler);
+    // A double-click on a layer row (C16): the host renames it.
+    void SetLayerInvokeHandler(std::function<void(Guid)> handler);
+    // The Rename Layer card (C16): opened on a name; the handler gets the committed name, nullopt on cancel.
+    void SetRenameHandler(std::function<void(std::optional<std::wstring>)> handler);
+    void OpenRenameCard(const std::wstring& name) noexcept;
+    void CloseRenameCard(bool commit) noexcept;
+    [[nodiscard]] bool RenameCardOpen() const noexcept;
     // Committed palette (foreground, background) after the picker's OK or Enter.
     void SetPaletteHandler(std::function<void(uint32_t, uint32_t)> handler);
     // Active layer opacity in 0…1 from the stepper: typing previews, Enter/blur/buttons commit, Escape cancels.
@@ -533,7 +540,8 @@ class ChromeHost final
     // Captions that follow the target, as the legacy menus did: Invert / Invert Mask, Delete Layer / Delete Layer
     // Mask, Free Transform / Transform Selection.
     // `clipped`: the active layer clips to a base, so the Layer menu offers Release Clipping Mask.
-    void SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped);
+    // `merge`: what Ctrl+E would do (0 Merge Down, 1 Merge Group, 2 Merge Layers), for the Layer menu's caption.
+    void SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped, int merge);
     void SetTool(EditorTool tool) noexcept;
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active);
     void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept;
@@ -636,10 +644,12 @@ class ChromeHost final
         std::wstring hiddenPattern;
         std::function<void(Guid)>* onLayer = nullptr;
         std::function<void(Guid, bool)>* onExpand = nullptr;
+        std::function<void(Guid)>* onInvoke = nullptr;
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;
         void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;
+        void OnTreeItemInvoked(uint64_t itemId) override;
     };
 
     HRESULT BindDevice(ID3D11Device* device) noexcept;
@@ -798,6 +808,16 @@ class ChromeHost final
     std::function<void(EditorTool)> _onTool;
     std::function<void(Guid)> _onLayer;
     std::function<void(Guid, bool)> _onExpand;
+    std::function<void(Guid)> _onLayerInvoke;
+    // ChromeHostRename.cpp: the Rename Layer card.
+    void BuildRenameCard(DxUi::Panel& root);
+    void ArrangeRenameCard(float right, float top) noexcept;
+    DxUi::CardPanel* _renameCard = nullptr;
+    DxUi::Label* _renameTitle = nullptr;
+    DxUi::TextField* _renameField = nullptr;
+    DxUi::Button* _renameCancel = nullptr;
+    DxUi::Button* _renameOk = nullptr;
+    std::function<void(std::optional<std::wstring>)> _onRename;
     std::function<void(uint32_t, uint32_t)> _onPalette;
     std::function<void(double, ChromeEditPhase)> _onOpacity;
     std::function<void()> _onLayout;

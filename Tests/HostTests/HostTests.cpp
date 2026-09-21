@@ -325,7 +325,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 403> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 407> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -739,7 +739,11 @@ void TestStringTable() noexcept
                                          IDS_CROP_16_9,
                                          IDS_CROP_SIZE,
                                          IDS_CROP_APPLY,
-                                         IDS_CROP_RATIO_TIP};
+                                         IDS_CROP_RATIO_TIP,
+                                         IDS_RENAME_TITLE,
+                                         IDS_RENAME_NAME,
+                                         IDS_CMD_MERGE_GROUP,
+                                         IDS_CMD_MERGE_LAYERS};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

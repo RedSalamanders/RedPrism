@@ -450,4 +450,8 @@ BEGIN
     IDS_CROP_SIZE                   "{0} × {1} px"
     IDS_CROP_APPLY                  "Apply Crop"
     IDS_CROP_RATIO_TIP              "Keep the frame to a ratio; Original is the canvas ratio. Alt grows the frame from its center"
+    IDS_RENAME_TITLE                "Rename Layer"
+    IDS_RENAME_NAME                 "Layer name"
+    IDS_CMD_MERGE_GROUP             "M&erge Group\tCtrl+E"
+    IDS_CMD_MERGE_LAYERS            "M&erge Layers\tCtrl+E"
 END

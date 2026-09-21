@@ -155,6 +155,8 @@ void ChromeHost::Detach() noexcept
     _pickerCard = nullptr;
     _adjustCard = nullptr;
     _sizeCard = nullptr;
+    _renameCard = nullptr;
+    _renameField = nullptr;
     _sizeAnchors.fill(nullptr);
     _curveEditor = nullptr;
     _levelsInput = nullptr;
@@ -507,6 +509,7 @@ HRESULT ChromeHost::Build() noexcept
         _layers->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_LAYERS));
         _treeModel.onLayer = &_onLayer;
         _treeModel.onExpand = &_onExpand;
+        _treeModel.onInvoke = &_onLayerInvoke;
         _layers->SetModel(&_treeModel);
         _layers->SetDelegate(&_treeModel);
         _status = root->AddChild<DxUi::StatusStrip>();
@@ -525,6 +528,7 @@ HRESULT ChromeHost::Build() noexcept
         // with premultiplied alpha. The picker comes last so it opens above the panel.
         BuildAdjustPanel(*root);
         BuildSizeCard(*root);
+        BuildRenameCard(*root);
         _pickerCard = root->AddChild<DxUi::CardPanel>();
         _pickerCard->SetCornerRadius(8.0f);
         _pickerCard->SetVisible(false);
@@ -697,6 +701,7 @@ void ChromeHost::Arrange() noexcept
     }
     ArrangeAdjustPanel(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangeSizeCard(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
+    ArrangeRenameCard(layersLeft - kSplitterWidthDip, headerBottom);
     ArrangePicker();
 }
 
@@ -982,6 +987,10 @@ bool ChromeHost::IsCanvasPoint(float xPixels, float yPixels) const noexcept
     {
         return false;
     }
+    if (RenameCardOpen() && covers(_renameCard->GetBounds()))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -1076,7 +1085,7 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
                       static_cast<UINT_PTR>(kCommandRedo), redo.c_str());
 }
 
-void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped)
+void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped, int merge)
 {
     const auto rename = [](HMENU menu, int command, UINT stringId)
     {
@@ -1094,6 +1103,8 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bo
     rename(edit, kCommandFreeTransform, transformsSelection ? IDS_CMD_TRANSFORM_SELECTION : IDS_CMD_FREE_TRANSFORM);
     rename(layer, kCommandDeleteLayer, masksTargeted ? IDS_CMD_DELETE_LAYER_MASK : IDS_CMD_DELETE_LAYER);
     rename(layer, kCommandClipToggle, clipped ? IDS_CMD_CLIP_RELEASE : IDS_CMD_CLIP_CREATE);
+    rename(layer, kCommandMergeDown,
+           merge == 1 ? IDS_CMD_MERGE_GROUP : (merge == 2 ? IDS_CMD_MERGE_LAYERS : IDS_CMD_MERGE_DOWN));
 }
 
 void ChromeHost::SyncToolVisuals() noexcept
@@ -1266,6 +1277,11 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     _inDispatch = false;
     if (handledKey)
     {
+        return true;
+    }
+    if (down && virtualKey == VK_ESCAPE && RenameCardOpen())
+    {
+        CloseRenameCard(false);
         return true;
     }
     if (down && virtualKey == VK_ESCAPE && ColorPickerOpen())

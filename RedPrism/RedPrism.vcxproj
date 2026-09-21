@@ -164,12 +164,14 @@
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />
+    <ClCompile Include="ApplicationLayerEdits.cpp" />
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="ApplicationSize.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />
     <ClCompile Include="ChromeHostCrop.cpp" />
+    <ClCompile Include="ChromeHostRename.cpp" />
     <ClCompile Include="ChromeHostSize.cpp" />
     <ClCompile Include="BrushCompute.cpp" />
     <ClCompile Include="CanvasRenderer.cpp" />

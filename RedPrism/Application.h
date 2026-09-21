@@ -194,6 +194,12 @@ class Application final
     void SyncCropChrome() noexcept;
     [[nodiscard]] LPCWSTR CropCursor(Vec2 view) const noexcept;
     int RunCropSelfTest() noexcept;
+    // ApplicationLayerEdits.cpp (C16): the Rename Layer card and Merge Down through the composition.
+    void RenameActiveLayer() noexcept;
+    void OnLayerInvoked(Guid id) noexcept;
+    void OnRename(std::optional<std::wstring> name) noexcept;
+    void MergeLayersCommand() noexcept;
+    int RunLayerEditsSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
     void SampleColorAt(Vec2 view) noexcept;
     void EndColorSampling() noexcept;

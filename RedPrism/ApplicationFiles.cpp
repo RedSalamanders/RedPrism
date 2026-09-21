@@ -515,22 +515,17 @@ int Application::RunFilesSelfTest() noexcept
         ReportFilesSelfTestFailure(L"Ctrl+Alt+G did not clip the layer to the one below and release it.\n");
         return 5;
     }
-    // Every function still awaiting an implementation raises the notice count by one and changes nothing.
-    constexpr std::array<std::pair<int, const wchar_t*>, 2> kStubs{
-        {{ChromeHost::kCommandRenameLayer, L"Rename Layer"}, {ChromeHost::kCommandMergeDown, L"Merge Down"}}};
-    for (const auto& [command, name] : kStubs)
+    // No exposed function awaits an implementation any more (Specs/UI/UI_ApplicationChrome.md lists none); the
+    // notice path itself stays honest: raising it under quiet UI counts and changes nothing.
     {
         const int notices = _notImplementedCount;
         const std::optional<CanvasDocument> before = _session.Document();
         const int undoCount = _session.history.UndoCount();
-        const EditorTool tool = _tool;
-        OnCommand(command);
+        ShowNotImplemented(IDS_CMD_MERGE_DOWN);
         if (_notImplementedCount != notices + 1 || _session.Document() != before ||
-            _session.history.UndoCount() != undoCount || _tool != tool)
+            _session.history.UndoCount() != undoCount)
         {
-            ReportFilesSelfTestFailure(std::format(L"{} is not implemented and did not say so, or changed something "
-                                                   L"(notices {} -> {}).\n",
-                                                   name, notices, _notImplementedCount));
+            ReportFilesSelfTestFailure(L"The not-implemented notice changed the document or was not counted.\n");
             return 5;
         }
     }
