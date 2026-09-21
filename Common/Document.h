@@ -10,6 +10,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 inline constexpr int kMaxCanvasSide = 30'000;
@@ -467,7 +468,22 @@ struct HierarchyEntry
     int depth = 0;
     bool visible = true;
     bool isGroup = false;
+    bool collapsed = false;
 };
+
+// What a mask shows beyond its pixels once placed apart from its layer: 1 (reveal) or 0 (hide), whichever most
+// of its edge is, read from the thumbnail (legacy LayerMask.background). A missing thumbnail reveals.
+[[nodiscard]] double MaskEdgeBackground(const Raster& thumbnail) noexcept;
+
+// Where a mask's pixels sit on the document: its own placement, else the layer's transform.
+[[nodiscard]] inline LayerTransform MaskTransform(const ImageLayer& layer) noexcept
+{
+    if (layer.mask.has_value() && layer.mask.value().placement.has_value())
+    {
+        return layer.mask.value().placement.value();
+    }
+    return layer.transform;
+}
 
 [[nodiscard]] std::wstring TrimWide(std::wstring_view text);
 [[nodiscard]] bool NameUtf8LengthOk(std::wstring_view name) noexcept;
@@ -598,6 +614,36 @@ class DocumentSession
     [[nodiscard]] std::vector<HierarchyEntry> LayerRows() const;
     [[nodiscard]] bool CanPlaceLayer(const Guid& id, const std::optional<Guid>& parent) const;
 
+    // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
+    // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
+    static constexpr uint32_t kDefaultForegroundArgb = 0xFF000000u;
+    static constexpr uint32_t kDefaultBackgroundArgb = 0xFFFFFFFFu;
+    [[nodiscard]] uint32_t ForegroundColor() const noexcept
+    {
+        return _foregroundArgb;
+    }
+    [[nodiscard]] uint32_t BackgroundColor() const noexcept
+    {
+        return _backgroundArgb;
+    }
+    void SetForegroundColor(uint32_t argb) noexcept
+    {
+        _foregroundArgb = argb | 0xFF000000u;
+    }
+    void SetBackgroundColor(uint32_t argb) noexcept
+    {
+        _backgroundArgb = argb | 0xFF000000u;
+    }
+    void SwapPaletteColors() noexcept
+    {
+        std::swap(_foregroundArgb, _backgroundArgb);
+    }
+    void ResetPaletteColors() noexcept
+    {
+        _foregroundArgb = kDefaultForegroundArgb;
+        _backgroundArgb = kDefaultBackgroundArgb;
+    }
+
   private:
     void Restore(const DocumentHistory::Snapshot& snapshot);
     static void AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers);
@@ -609,4 +655,6 @@ class DocumentSession
     std::optional<Guid> _activeLayerID;
     std::unordered_set<Guid> _selected;
     std::unordered_set<Guid> _collapsed;
+    uint32_t _foregroundArgb = kDefaultForegroundArgb;
+    uint32_t _backgroundArgb = kDefaultBackgroundArgb;
 };

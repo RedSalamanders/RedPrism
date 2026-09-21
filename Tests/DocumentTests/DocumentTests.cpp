@@ -1,6 +1,7 @@
 #include "Document.h"
 
 #include <cstdio>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -360,6 +361,153 @@ void TestSelection()
     document.selection = empty;
     Expect(document.selection.value().IsEmpty(), "selection.empty-outline");
 }
+
+[[nodiscard]] Raster Gray(int width, int height, std::initializer_list<std::uint8_t> values)
+{
+    std::vector<std::uint8_t> pixels(values);
+    pixels.resize(static_cast<std::size_t>(width * height), 0);
+    return Raster::Make(width, height, RasterFormat::Gray8, pixels.data(), pixels.size());
+}
+
+void TestMaskPlacementHelpers()
+{
+    // Legacy LayerMask.background: the edge majority of the thumbnail decides what a placed mask shows beyond
+    // its pixels.
+    Expect(MaskEdgeBackground(Gray(2, 2, {255, 0, 128, 255})) == 1.0, "mask.background-mostly-white");
+    Expect(MaskEdgeBackground(Gray(2, 2, {0, 0, 0, 0})) == 0.0, "mask.background-black");
+    Expect(MaskEdgeBackground(Gray(1, 1, {128})) == 1.0, "mask.background-half-rounds-up");
+    Expect(MaskEdgeBackground(Gray(1, 1, {127})) == 0.0, "mask.background-below-half");
+    Expect(MaskEdgeBackground(Gray(3, 3, {0, 0, 0, 0, 255, 0, 0, 0, 0})) == 0.0, "mask.background-ignores-interior");
+    Expect(MaskEdgeBackground(Raster{}) == 1.0, "mask.background-missing-thumbnail-reveals");
+    Expect(MaskEdgeBackground(Raster::Make(1, 1, RasterFormat::Bgra8888)) == 1.0, "mask.background-color-reveals");
+
+    ImageLayer layer = RasterLayer(4, 4, L"Paint");
+    layer.transform.origin = Vec2{3, 5};
+    Expect(MaskTransform(layer) == layer.transform, "mask.transform-without-mask");
+    layer.mask = LayerMask{RasterAsset{Gray(1, 1, {255}), Gray(1, 1, {255}), L"Layer Mask"}, true, std::nullopt, true};
+    Expect(MaskTransform(layer) == layer.transform, "mask.transform-linked-follows-layer");
+    LayerTransform placement = layer.transform;
+    placement.origin.x = 9;
+    layer.mask.value().placement = placement;
+    layer.mask.value().linked = false;
+    Expect(MaskTransform(layer) == placement, "mask.transform-placed");
+    Expect(!(layer.mask.value() == LayerMask{layer.mask.value().asset, true, std::nullopt, true}),
+           "mask.placement-affects-equality");
+}
+
+void TestCollapsedRows()
+{
+    DocumentSession session;
+    session.CreateDocument(10, 10);
+    session.AddGroup();
+    const Guid folder = session.ActiveLayerID().value();
+    session.AddBlankLayer();
+    std::vector<HierarchyEntry> rows = session.LayerRows();
+    Expect(rows.size() == 2 && rows[0].isGroup && !rows[0].collapsed, "rows.expanded-flag");
+    session.CollapsedGroupIDs().insert(folder);
+    rows = session.LayerRows();
+    Expect(rows.size() == 1 && rows[0].collapsed && rows[0].isGroup, "rows.collapsed-flag");
+    Expect(!HierarchyEntries(session.Document().value().layers)[0].collapsed, "rows.default-not-collapsed");
+}
+
+void TestDeleteClearsClipping()
+{
+    DocumentSession session;
+    session.CreateDocument(2, 2);
+    session.AddBlankLayer();
+    const Guid source = session.ActiveLayerID().value();
+    session.AddBlankLayer();
+    const Guid target = session.ActiveLayerID().value();
+    Expect(session.LinkMask(source, target), "delete.link");
+    session.DeleteLayer(source);
+    const ImageLayer* remaining = Find(session.Document(), target);
+    Expect(remaining != nullptr && !remaining->maskSourceID.has_value(), "delete.source-clears-clip");
+    session.Undo();
+    remaining = Find(session.Document(), target);
+    Expect(remaining != nullptr && remaining->maskSourceID == source, "delete.undo-restores-clip");
+}
+
+void TestNamingAndInsertion()
+{
+    // Legacy LayerTests.blankLayersAreTransparentAndInsertedAboveSelection.
+    DocumentSession session;
+    session.CreateDocument(800, 600);
+    for (int i = 0; i < 3; ++i)
+    {
+        session.AddBlankLayer();
+    }
+    const Guid first = session.Document().value().layers.front().id;
+    session.SelectLayer(first);
+    session.AddBlankLayer();
+    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    Expect(layers.size() == 4 && layers[0].name == L"Layer 1" && layers[1].name == L"Layer 4" &&
+               layers[2].name == L"Layer 2" && layers[3].name == L"Layer 3",
+           "insert.above-selection");
+    Expect(layers[1].id == session.ActiveLayerID().value() && !layers[1].asset.has_value() &&
+               layers[1].transform.size == Vec2{800, 600} && layers[1].transform.origin == Vec2{},
+           "insert.blank-layer-shape");
+    // Legacy: with a folder selected, the new layer goes to the top of the folder's contents.
+    session.SelectLayer(std::nullopt);
+    session.AddGroup();
+    const Guid folder = session.ActiveLayerID().value();
+    session.AddBlankLayer();
+    const Guid inner1 = session.ActiveLayerID().value();
+    session.SelectLayer(folder);
+    session.AddBlankLayer();
+    const Guid inner2 = session.ActiveLayerID().value();
+    const std::vector<ImageLayer>& after = session.Document().value().layers;
+    std::size_t index1 = 0;
+    std::size_t index2 = 0;
+    for (std::size_t i = 0; i < after.size(); ++i)
+    {
+        if (after[i].id == inner1)
+        {
+            index1 = i;
+        }
+        if (after[i].id == inner2)
+        {
+            index2 = i;
+        }
+    }
+    Expect(index2 == index1 + 1 && after[index2].parentID == folder, "insert.folder-selected-goes-on-top");
+    // Deletion chooses the neighbor (legacy deletionPreservesCanvasAndChoosesNeighbor).
+    DocumentSession three;
+    three.CreateDocument(800, 600);
+    for (int i = 0; i < 3; ++i)
+    {
+        three.AddBlankLayer();
+    }
+    const std::vector<ImageLayer> before = three.Document().value().layers;
+    three.SelectLayer(before[1].id);
+    three.DeleteLayer(before[0].id);
+    Expect(three.ActiveLayerID() == before[1].id, "delete.keeps-active-when-other-deleted");
+    three.DeleteLayer(before[1].id);
+    Expect(three.ActiveLayerID() == before[2].id, "delete.chooses-neighbor");
+    three.DeleteLayer(before[2].id);
+    Expect(!three.ActiveLayerID().has_value() && three.Document().value().layers.empty() &&
+               three.Document().value().width == 800,
+           "delete.last-layer-keeps-canvas");
+}
+void TestPaletteColors()
+{
+    DocumentSession session;
+    Expect(session.ForegroundColor() == DocumentSession::kDefaultForegroundArgb &&
+               session.BackgroundColor() == DocumentSession::kDefaultBackgroundArgb,
+           "palette.defaults");
+    session.SetForegroundColor(0x00336699u);
+    Expect(session.ForegroundColor() == 0xFF336699u, "palette.opaque");
+    session.SwapPaletteColors();
+    Expect(session.ForegroundColor() == 0xFFFFFFFFu && session.BackgroundColor() == 0xFF336699u, "palette.swap");
+    session.CreateDocument(8, 8, true);
+    const bool couldUndo = session.history.CanUndo();
+    const bool modified = session.history.IsModified();
+    session.ResetPaletteColors();
+    Expect(session.ForegroundColor() == DocumentSession::kDefaultForegroundArgb &&
+               session.BackgroundColor() == DocumentSession::kDefaultBackgroundArgb,
+           "palette.reset");
+    Expect(session.history.CanUndo() == couldUndo && session.history.IsModified() == modified,
+           "palette.outside-history");
+}
 } // namespace
 
 int wmain()
@@ -375,6 +523,11 @@ int wmain()
     TestHistoryBounds();
     TestHistoryTrim256MiB();
     TestSelection();
+    TestMaskPlacementHelpers();
+    TestCollapsedRows();
+    TestDeleteClearsClipping();
+    TestNamingAndInsertion();
+    TestPaletteColors();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

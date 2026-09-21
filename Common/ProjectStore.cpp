@@ -4,6 +4,7 @@
 #include "ZipOwner.h"
 
 #include <algorithm>
+#include <array>
 #include <climits>
 #include <cmath>
 #include <cstring>
@@ -289,6 +290,13 @@ struct Manifest
     return transform.IsValid();
 }
 
+// The adjustment payload mirrors the Swift Codable shapes exactly (LayerAdjustment.swift, Levels.swift, Curves.swift,
+// HueSaturation.swift, ImageAdjustments.swift). `levels` and `curves` are always written; `hsvSettings`,
+// `exposureSettings`, `gradientMapSettings` and `grainSettings` only when the record carries them, so older readers
+// and older files stay byte-compatible. Swift encodes a dictionary keyed by a String-backed enum that is not
+// CodingKeyRepresentable as an unkeyed array of alternating keys and values; `adjustments` and `bands` use that
+// form on disk. Reading also accepts a plain object keyed by range name.
+
 [[nodiscard]] bool ParseLevelRange(yyjson_val* object, LevelRange& range)
 {
     if (object == nullptr || !yyjson_is_obj(object))
@@ -299,6 +307,254 @@ struct Manifest
            GetNumber(object, "white", range.white, false) &&
            GetNumber(object, "outputBlack", range.outputBlack, false) &&
            GetNumber(object, "outputWhite", range.outputWhite, false);
+}
+
+[[nodiscard]] bool ParseLevelsChannel(yyjson_val* object, LevelsChannel& channel)
+{
+    std::string name;
+    if (!GetString(object, "channel", name, false))
+    {
+        return false;
+    }
+    if (name.empty())
+    {
+        return true;
+    }
+    const std::optional<LevelsChannel> parsed = LevelsChannelFromName(name);
+    if (!parsed.has_value())
+    {
+        return false;
+    }
+    channel = parsed.value();
+    return true;
+}
+
+[[nodiscard]] bool ParseLevels(yyjson_val* object, LevelsSettings& levels)
+{
+    if (object == nullptr || !yyjson_is_obj(object) || !ParseLevelsChannel(object, levels.channel))
+    {
+        return false;
+    }
+    yyjson_val* ranges = yyjson_obj_get(object, "ranges");
+    if (ranges == nullptr)
+    {
+        return true;
+    }
+    if (!yyjson_is_arr(ranges) || yyjson_arr_size(ranges) != levels.ranges.size())
+    {
+        return false;
+    }
+    std::size_t index = 0;
+    std::size_t count = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(ranges, index, count, item)
+    {
+        LevelRange range{};
+        if (!ParseLevelRange(item, range))
+        {
+            return false;
+        }
+        levels.ranges[index] = range;
+    }
+    return true;
+}
+
+[[nodiscard]] bool ParseCurves(yyjson_val* object, CurvesSettings& curves)
+{
+    if (object == nullptr || !yyjson_is_obj(object) || !ParseLevelsChannel(object, curves.channel))
+    {
+        return false;
+    }
+    yyjson_val* channels = yyjson_obj_get(object, "channels");
+    if (channels == nullptr)
+    {
+        return true;
+    }
+    if (!yyjson_is_arr(channels) || yyjson_arr_size(channels) != curves.channels.size())
+    {
+        return false;
+    }
+    std::size_t channelIndex = 0;
+    std::size_t channelCount = 0;
+    yyjson_val* channel = nullptr;
+    yyjson_arr_foreach(channels, channelIndex, channelCount, channel)
+    {
+        if (!yyjson_is_arr(channel) || yyjson_arr_size(channel) > 32)
+        {
+            return false;
+        }
+        std::vector<CurvePoint> points;
+        points.reserve(yyjson_arr_size(channel));
+        std::size_t pointIndex = 0;
+        std::size_t pointCount = 0;
+        yyjson_val* point = nullptr;
+        yyjson_arr_foreach(channel, pointIndex, pointCount, point)
+        {
+            CurvePoint value{};
+            if (!yyjson_is_obj(point) || !GetNumber(point, "x", value.x, true) || !GetNumber(point, "y", value.y, true))
+            {
+                return false;
+            }
+            points.push_back(value);
+        }
+        curves.channels[channelIndex] = std::move(points);
+    }
+    return true;
+}
+
+[[nodiscard]] bool ParseRangeAdjustment(yyjson_val* object, RangeAdjustment& value)
+{
+    return object != nullptr && yyjson_is_obj(object) && GetNumber(object, "hue", value.hue, false) &&
+           GetNumber(object, "saturation", value.saturation, false) &&
+           GetNumber(object, "lightness", value.lightness, false);
+}
+
+[[nodiscard]] bool ParseHueBand(yyjson_val* object, HueBand& band)
+{
+    return object != nullptr && yyjson_is_obj(object) && GetNumber(object, "falloffStart", band.falloffStart, true) &&
+           GetNumber(object, "rangeStart", band.rangeStart, true) &&
+           GetNumber(object, "rangeEnd", band.rangeEnd, true) && GetNumber(object, "falloffEnd", band.falloffEnd, true);
+}
+
+// A Swift `[ColorRange: T]`: an alternating [key, value, key, value] array, or an object keyed by range name.
+template <typename T, typename Parser>
+[[nodiscard]] bool ParseRangeDictionary(yyjson_val* container,
+                                        std::array<T, static_cast<std::size_t>(ColorRange::Count)>& out,
+                                        Parser&& parser)
+{
+    if (container == nullptr)
+    {
+        return true;
+    }
+    if (yyjson_is_obj(container))
+    {
+        std::size_t index = 0;
+        std::size_t count = 0;
+        yyjson_val* key = nullptr;
+        yyjson_val* value = nullptr;
+        yyjson_obj_foreach(container, index, count, key, value)
+        {
+            const std::optional<ColorRange> range = ColorRangeFromName(yyjson_get_str(key));
+            if (!range.has_value())
+            {
+                return false;
+            }
+            T parsed{};
+            if (!parser(value, parsed))
+            {
+                return false;
+            }
+            out[static_cast<std::size_t>(range.value())] = parsed;
+        }
+        return true;
+    }
+    if (!yyjson_is_arr(container))
+    {
+        return false;
+    }
+    const std::size_t size = yyjson_arr_size(container);
+    if (size % 2 != 0)
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < size; index += 2)
+    {
+        yyjson_val* key = yyjson_arr_get(container, index);
+        yyjson_val* value = yyjson_arr_get(container, index + 1);
+        if (!yyjson_is_str(key))
+        {
+            return false;
+        }
+        const std::optional<ColorRange> range = ColorRangeFromName(yyjson_get_str(key));
+        if (!range.has_value())
+        {
+            return false;
+        }
+        T parsed{};
+        if (!parser(value, parsed))
+        {
+            return false;
+        }
+        out[static_cast<std::size_t>(range.value())] = parsed;
+    }
+    return true;
+}
+
+[[nodiscard]] bool ParseHsvSettings(yyjson_val* object, HueSaturationSettings& settings)
+{
+    if (object == nullptr || !yyjson_is_obj(object))
+    {
+        return false;
+    }
+    std::string range;
+    if (!GetString(object, "range", range, false))
+    {
+        return false;
+    }
+    if (!range.empty())
+    {
+        const std::optional<ColorRange> parsed = ColorRangeFromName(range);
+        if (!parsed.has_value())
+        {
+            return false;
+        }
+        settings.range = parsed.value();
+    }
+    if (!GetBool(object, "colorize", settings.colorize, false) ||
+        !GetBool(object, "invertRange", settings.invertRange, false))
+    {
+        return false;
+    }
+    settings.adjustments = {};
+    return ParseRangeDictionary(yyjson_obj_get(object, "adjustments"), settings.adjustments, ParseRangeAdjustment) &&
+           ParseRangeDictionary(yyjson_obj_get(object, "bands"), settings.bands, ParseHueBand);
+}
+
+[[nodiscard]] bool ParseExposure(yyjson_val* object, ExposureSettings& exposure)
+{
+    return object != nullptr && yyjson_is_obj(object) && GetNumber(object, "exposure", exposure.exposure, false) &&
+           GetNumber(object, "offset", exposure.offset, false) && GetNumber(object, "gamma", exposure.gamma, false);
+}
+
+[[nodiscard]] bool ParseAdjustmentColor(yyjson_val* object, AdjustmentColor& color)
+{
+    return object != nullptr && yyjson_is_obj(object) && GetNumber(object, "red", color.red, true) &&
+           GetNumber(object, "green", color.green, true) && GetNumber(object, "blue", color.blue, true);
+}
+
+[[nodiscard]] bool ParseGradientMap(yyjson_val* object, GradientMapSettings& gradient)
+{
+    if (object == nullptr || !yyjson_is_obj(object) || !GetBool(object, "reversed", gradient.reversed, false))
+    {
+        return false;
+    }
+    if (yyjson_val* shadows = yyjson_obj_get(object, "shadows");
+        shadows != nullptr && !ParseAdjustmentColor(shadows, gradient.shadows))
+    {
+        return false;
+    }
+    if (yyjson_val* highlights = yyjson_obj_get(object, "highlights");
+        highlights != nullptr && !ParseAdjustmentColor(highlights, gradient.highlights))
+    {
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool ParseGrain(yyjson_val* object, GrainSettings& grain)
+{
+    if (object == nullptr || !yyjson_is_obj(object) || !GetNumber(object, "amount", grain.amount, false) ||
+        !GetNumber(object, "size", grain.size, false) || !GetNumber(object, "roughness", grain.roughness, false))
+    {
+        return false;
+    }
+    double seed = static_cast<double>(grain.seed);
+    if (!GetNumber(object, "seed", seed, false) || seed < 0 || seed > 4294967295.0 || seed != std::floor(seed))
+    {
+        return false;
+    }
+    grain.seed = static_cast<std::uint32_t>(seed);
+    return true;
 }
 
 [[nodiscard]] bool ParseAdjustment(yyjson_val* object, LayerAdjustment& adjustment)
@@ -317,11 +573,63 @@ struct Manifest
     {
         return false;
     }
+    adjustment = {};
     adjustment.kind = parsedKind.value();
-    (void)GetNumber(object, "hue", adjustment.hue, false);
-    (void)GetNumber(object, "saturation", adjustment.saturation, false);
-    (void)GetNumber(object, "lightness", adjustment.lightness, false);
-    (void)GetBool(object, "colorize", adjustment.colorize, false);
+    if (!GetNumber(object, "hue", adjustment.hue, false) ||
+        !GetNumber(object, "saturation", adjustment.saturation, false) ||
+        !GetNumber(object, "lightness", adjustment.lightness, false) ||
+        !GetBool(object, "colorize", adjustment.colorize, false))
+    {
+        return false;
+    }
+    if (yyjson_val* hsv = yyjson_obj_get(object, "hsvSettings"); hsv != nullptr && !yyjson_is_null(hsv))
+    {
+        HueSaturationSettings settings{};
+        if (!ParseHsvSettings(hsv, settings))
+        {
+            return false;
+        }
+        adjustment.hsvSettings = settings;
+    }
+    if (yyjson_val* levels = yyjson_obj_get(object, "levels");
+        levels != nullptr && !ParseLevels(levels, adjustment.levels))
+    {
+        return false;
+    }
+    if (yyjson_val* curves = yyjson_obj_get(object, "curves");
+        curves != nullptr && !ParseCurves(curves, adjustment.curves))
+    {
+        return false;
+    }
+    if (yyjson_val* exposure = yyjson_obj_get(object, "exposureSettings");
+        exposure != nullptr && !yyjson_is_null(exposure))
+    {
+        ExposureSettings settings{};
+        if (!ParseExposure(exposure, settings))
+        {
+            return false;
+        }
+        adjustment.exposureSettings = settings;
+    }
+    if (yyjson_val* gradient = yyjson_obj_get(object, "gradientMapSettings");
+        gradient != nullptr && !yyjson_is_null(gradient))
+    {
+        GradientMapSettings settings{};
+        if (!ParseGradientMap(gradient, settings))
+        {
+            return false;
+        }
+        adjustment.gradientMapSettings = settings;
+    }
+    if (yyjson_val* grain = yyjson_obj_get(object, "grainSettings"); grain != nullptr && !yyjson_is_null(grain))
+    {
+        GrainSettings settings{};
+        if (!ParseGrain(grain, settings))
+        {
+            return false;
+        }
+        adjustment.grainSettings = settings;
+    }
     return adjustment.IsValid();
 }
 
@@ -417,7 +725,8 @@ struct Manifest
     }
     LayerMask mask{};
     mask.enabled = maskEnabled;
-    if (yyjson_obj_get(object, "maskPlacement") != nullptr)
+    const bool hasMaskPlacement = yyjson_obj_get(object, "maskPlacement") != nullptr;
+    if (hasMaskPlacement)
     {
         LayerTransform placement{};
         if (!ParseTransform(yyjson_obj_get(object, "maskPlacement"), placement))
@@ -427,7 +736,8 @@ struct Manifest
         mask.placement = placement;
     }
     bool linked = true;
-    if (yyjson_obj_get(object, "maskLinked") != nullptr && !GetBool(object, "maskLinked", linked, true))
+    const bool hasMaskLinked = yyjson_obj_get(object, "maskLinked") != nullptr;
+    if (hasMaskLinked && !GetBool(object, "maskLinked", linked, true))
     {
         return false;
     }
@@ -436,8 +746,9 @@ struct Manifest
     {
         record.layer.mask = mask;
     }
-    else if (hasMaskEnabled)
+    else if (hasMaskEnabled || hasMaskPlacement || hasMaskLinked)
     {
+        // Mask metadata without a mask file is damaged (ProjectStore.validate).
         return false;
     }
     if (yyjson_obj_get(object, "shape") != nullptr)
@@ -606,12 +917,133 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
     return object;
 }
 
+[[nodiscard]] yyjson_mut_val* WriteLevelRange(yyjson_mut_doc* doc, const LevelRange& range)
+{
+    yyjson_mut_val* object = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_real(doc, object, "black", range.black);
+    yyjson_mut_obj_add_real(doc, object, "gamma", range.gamma);
+    yyjson_mut_obj_add_real(doc, object, "outputBlack", range.outputBlack);
+    yyjson_mut_obj_add_real(doc, object, "outputWhite", range.outputWhite);
+    yyjson_mut_obj_add_real(doc, object, "white", range.white);
+    return object;
+}
+
+[[nodiscard]] yyjson_mut_val* WriteLevels(yyjson_mut_doc* doc, const LevelsSettings& levels)
+{
+    yyjson_mut_val* object = yyjson_mut_obj(doc);
+    AddStr(doc, object, "channel", LevelsChannelName(levels.channel));
+    yyjson_mut_val* ranges = yyjson_mut_arr(doc);
+    for (const LevelRange& range : levels.ranges)
+    {
+        yyjson_mut_arr_append(ranges, WriteLevelRange(doc, range));
+    }
+    yyjson_mut_obj_add_val(doc, object, "ranges", ranges);
+    return object;
+}
+
+[[nodiscard]] yyjson_mut_val* WriteCurves(yyjson_mut_doc* doc, const CurvesSettings& curves)
+{
+    yyjson_mut_val* object = yyjson_mut_obj(doc);
+    AddStr(doc, object, "channel", LevelsChannelName(curves.channel));
+    yyjson_mut_val* channels = yyjson_mut_arr(doc);
+    for (const std::vector<CurvePoint>& points : curves.channels)
+    {
+        yyjson_mut_val* channel = yyjson_mut_arr(doc);
+        for (const CurvePoint& point : points)
+        {
+            yyjson_mut_val* value = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_real(doc, value, "x", point.x);
+            yyjson_mut_obj_add_real(doc, value, "y", point.y);
+            yyjson_mut_arr_append(channel, value);
+        }
+        yyjson_mut_arr_append(channels, channel);
+    }
+    yyjson_mut_obj_add_val(doc, object, "channels", channels);
+    return object;
+}
+
+[[nodiscard]] yyjson_mut_val* WriteHsvSettings(yyjson_mut_doc* doc, const HueSaturationSettings& settings)
+{
+    yyjson_mut_val* object = yyjson_mut_obj(doc);
+    // Swift writes `[ColorRange: T]` as an alternating key/value array; order is fixed here for stable diffs.
+    yyjson_mut_val* adjustments = yyjson_mut_arr(doc);
+    yyjson_mut_val* bands = yyjson_mut_arr(doc);
+    for (std::size_t index = 0; index < static_cast<std::size_t>(ColorRange::Count); ++index)
+    {
+        const char* name = ColorRangeName(static_cast<ColorRange>(index));
+        const RangeAdjustment& adjustment = settings.adjustments[index];
+        yyjson_mut_arr_add_strcpy(doc, adjustments, name);
+        yyjson_mut_val* value = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_real(doc, value, "hue", adjustment.hue);
+        yyjson_mut_obj_add_real(doc, value, "lightness", adjustment.lightness);
+        yyjson_mut_obj_add_real(doc, value, "saturation", adjustment.saturation);
+        yyjson_mut_arr_append(adjustments, value);
+        const HueBand& band = settings.bands[index];
+        yyjson_mut_arr_add_strcpy(doc, bands, name);
+        yyjson_mut_val* bandValue = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_real(doc, bandValue, "falloffEnd", band.falloffEnd);
+        yyjson_mut_obj_add_real(doc, bandValue, "falloffStart", band.falloffStart);
+        yyjson_mut_obj_add_real(doc, bandValue, "rangeEnd", band.rangeEnd);
+        yyjson_mut_obj_add_real(doc, bandValue, "rangeStart", band.rangeStart);
+        yyjson_mut_arr_append(bands, bandValue);
+    }
+    yyjson_mut_obj_add_val(doc, object, "adjustments", adjustments);
+    yyjson_mut_obj_add_val(doc, object, "bands", bands);
+    yyjson_mut_obj_add_bool(doc, object, "colorize", settings.colorize);
+    yyjson_mut_obj_add_bool(doc, object, "invertRange", settings.invertRange);
+    AddStr(doc, object, "range", ColorRangeName(settings.range));
+    return object;
+}
+
+[[nodiscard]] yyjson_mut_val* WriteAdjustmentColor(yyjson_mut_doc* doc, const AdjustmentColor& color)
+{
+    yyjson_mut_val* object = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_real(doc, object, "blue", color.blue);
+    yyjson_mut_obj_add_real(doc, object, "green", color.green);
+    yyjson_mut_obj_add_real(doc, object, "red", color.red);
+    return object;
+}
+
 [[nodiscard]] yyjson_mut_val* WriteAdjustment(yyjson_mut_doc* doc, const LayerAdjustment& adjustment)
 {
     yyjson_mut_val* object = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_bool(doc, object, "colorize", adjustment.colorize);
+    yyjson_mut_obj_add_val(doc, object, "curves", WriteCurves(doc, adjustment.curves));
+    if (adjustment.exposureSettings.has_value())
+    {
+        const ExposureSettings& exposure = adjustment.exposureSettings.value();
+        yyjson_mut_val* value = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_real(doc, value, "exposure", exposure.exposure);
+        yyjson_mut_obj_add_real(doc, value, "gamma", exposure.gamma);
+        yyjson_mut_obj_add_real(doc, value, "offset", exposure.offset);
+        yyjson_mut_obj_add_val(doc, object, "exposureSettings", value);
+    }
+    if (adjustment.gradientMapSettings.has_value())
+    {
+        const GradientMapSettings& gradient = adjustment.gradientMapSettings.value();
+        yyjson_mut_val* value = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_val(doc, value, "highlights", WriteAdjustmentColor(doc, gradient.highlights));
+        yyjson_mut_obj_add_bool(doc, value, "reversed", gradient.reversed);
+        yyjson_mut_obj_add_val(doc, value, "shadows", WriteAdjustmentColor(doc, gradient.shadows));
+        yyjson_mut_obj_add_val(doc, object, "gradientMapSettings", value);
+    }
+    if (adjustment.grainSettings.has_value())
+    {
+        const GrainSettings& grain = adjustment.grainSettings.value();
+        yyjson_mut_val* value = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_real(doc, value, "amount", grain.amount);
+        yyjson_mut_obj_add_real(doc, value, "roughness", grain.roughness);
+        yyjson_mut_obj_add_uint(doc, value, "seed", grain.seed);
+        yyjson_mut_obj_add_real(doc, value, "size", grain.size);
+        yyjson_mut_obj_add_val(doc, object, "grainSettings", value);
+    }
+    if (adjustment.hsvSettings.has_value())
+    {
+        yyjson_mut_obj_add_val(doc, object, "hsvSettings", WriteHsvSettings(doc, adjustment.hsvSettings.value()));
+    }
     yyjson_mut_obj_add_real(doc, object, "hue", adjustment.hue);
     AddStr(doc, object, "kind", AdjustmentKindName(adjustment.kind));
+    yyjson_mut_obj_add_val(doc, object, "levels", WriteLevels(doc, adjustment.levels));
     yyjson_mut_obj_add_real(doc, object, "lightness", adjustment.lightness);
     yyjson_mut_obj_add_real(doc, object, "saturation", adjustment.saturation);
     return object;

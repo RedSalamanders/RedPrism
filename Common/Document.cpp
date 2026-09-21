@@ -558,7 +558,10 @@ DocumentStatus ValidateDocument(const CanvasDocument& document, int formatVersio
         const int maskVersion = layer.isGroup ? 6 : 4;
         if (layer.mask.has_value())
         {
-            if (formatVersion < maskVersion || !LayerMask::IsValid(layer.mask.value().asset.image))
+            // Pixels arrive after manifest validation (ProjectStore attaches assets later), so the format check
+            // applies once storage exists; the decoder rejects non-Gray8 masks on the way in.
+            const Raster& maskImage = layer.mask.value().asset.image;
+            if (formatVersion < maskVersion || (maskImage.HasStorage() && !LayerMask::IsValid(maskImage)))
             {
                 return DocumentStatus::Invalid;
             }
@@ -646,8 +649,9 @@ std::vector<HierarchyEntry> HierarchyEntries(const std::vector<ImageLayer>& laye
         {
             const ImageLayer& layer = layers[index];
             const bool effective = visible && layer.visible;
-            result.push_back(HierarchyEntry{layer.id, layer.name, depth, effective, layer.isGroup});
-            if (layer.isGroup && collapsed.find(layer.id) == collapsed.end())
+            const bool isCollapsed = layer.isGroup && collapsed.find(layer.id) != collapsed.end();
+            result.push_back(HierarchyEntry{layer.id, layer.name, depth, effective, layer.isGroup, isCollapsed});
+            if (layer.isGroup && !isCollapsed)
             {
                 self(self, layer.id, depth + 1, effective);
             }
@@ -1258,4 +1262,31 @@ void DocumentSession::ReleaseDetachedClipping(std::vector<ImageLayer>& layers)
             layer.maskSourceID.reset();
         }
     }
+}
+
+double MaskEdgeBackground(const Raster& thumbnail) noexcept
+{
+    if (!thumbnail.HasStorage() || thumbnail.Format() != RasterFormat::Gray8 || thumbnail.Data() == nullptr)
+    {
+        return 1.0;
+    }
+    const int width = thumbnail.Width();
+    const int height = thumbnail.Height();
+    const int stride = thumbnail.Stride();
+    const std::uint8_t* data = thumbnail.Data();
+    std::uint64_t total = 0;
+    std::uint64_t count = 0;
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            if (y == 0 || y == height - 1 || x == 0 || x == width - 1)
+            {
+                total +=
+                    data[static_cast<std::size_t>(y) * static_cast<std::size_t>(stride) + static_cast<std::size_t>(x)];
+                ++count;
+            }
+        }
+    }
+    return total * 2 >= count * 255 ? 1.0 : 0.0;
 }
