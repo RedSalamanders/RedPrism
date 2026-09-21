@@ -64,7 +64,8 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   (inside the selection) in a panel with a live preview; OK applies one undo step. The Layer menu adds adjustment
   layers of the same kinds that stay live over everything beneath them (or their clipping base) and edit through
   the same panels. Shift+= and Shift+- step a layer's blend mode; Hue, Saturation, Color and Luminosity blend as in
-  Photoshop.
+  Photoshop. Edit › Content-Aware Fill (Shift+Delete) fills a selection from the surrounding pixels of the layer,
+  growing the layer when the selection reaches past its edge; the panel says when nothing opaque surrounds it.
 
 Empty-document harness captures:
 

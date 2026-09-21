@@ -14,12 +14,12 @@ recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 T
 [`Selection_2026-09-20.md`](../Done/Selection_2026-09-20.md), C10 Brush in
 [`Brush_2026-09-20.md`](../Done/Brush_2026-09-20.md), C11 Retouch in
 [`Retouch_2026-09-20.md`](../Done/Retouch_2026-09-20.md), C9b Pixel edits in
-[`PixelEdits_2026-09-21.md`](../Done/PixelEdits_2026-09-21.md) and C12 Adjust and filter in
-[`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md).
+[`PixelEdits_2026-09-21.md`](../Done/PixelEdits_2026-09-21.md), C12 Adjust and filter in
+[`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md) and C13 Smart operations (Remove Background
+rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) | `ACTIVE` | [`Document_Tools`](../../Document/Document_Tools.md) | Content-aware fill; Remove Background decision |
 | [`ProductHardening_2026-09-20.md`](ProductHardening_2026-09-20.md) | `ACTIVE` | settings/crash specs (create in C14); [`UI_ApplicationChrome`](../../UI/UI_ApplicationChrome.md) | Settings, minidumps, localization, UIA |
 | [`Packaging_2026-09-20.md`](Packaging_2026-09-20.md) | `ACTIVE` | `Build_Packaging` (create in C15) | Portable ZIP and version stamp |
 

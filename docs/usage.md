@@ -36,6 +36,7 @@ the File menu.
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
 | Delete | Clear the selected pixels; without a selection delete the targeted mask, or the layer (canvas focused) |
+| Shift+Delete | Content-Aware Fill: synthesize the selected pixels from the surrounding image of the layer (also on the Edit menu; OK applies one undo step) |
 | Ctrl+X / Ctrl+C / Ctrl+Shift+C / Ctrl+V | Cut, copy, copy merged, paste in place as a new layer (another app's image pastes centered) |
 | Alt+Backspace / Ctrl+Backspace / Ctrl+I | Fill the selection (or the whole layer) with the foreground / background color; invert the layer or its mask |
 | X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |

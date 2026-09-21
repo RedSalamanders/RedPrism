@@ -382,6 +382,27 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
 - `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
   wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
 
+## Content-aware fill (C13)
+
+The legacy `ContentFill.swift` and `Rendering/ContentFill.c`: Edit › Content-Aware Fill… (Shift+Delete) synthesizes
+the selected pixels of the active image layer from its unselected opaque pixels through the filter panel session
+above (`FilterKind::ContentAwareFill`, no settings; Remove Background is not in v1, see the C13 plan's decision).
+`CanContentAwareFill` is `CanAdjustColors` with a selection that has area. `BeginFilter(ContentAwareFill)` grows
+the layer's grid to the selection's canvas bounds (`GrowFilterGrid`, whole layer pixels, the grown transform kept
+centered as for a blur, which now grows through the same helper) so a selection reaching past the layer's edge
+fills new pixels; the preview renders at full size (a smaller copy would change the synthesis) and shows through
+`DisplayDocument` like any filter. `Adjust::ContentFill(bgra, width, height, stride, mask, maskStride)` is the C
+kernel number for number: selected pixels (coverage nonzero) are targets, unselected pixels with alpha 255 are
+known, donors are the known pixels whose whole patch (radius 2 when both sides are at least 5 px, else 0) is
+known; targets bordering known pixels are queued first; each dequeued pixel scores 28 candidates — 4 offsets
+propagated from its neighbours' choices and 24 random donors from the linear congruential generator `state ×
+1664525 + 1013904223` seeded with `0x6d2b79f5` — by the mean squared difference over the known patch pixels of
+all four channels, refines the best by random jitters of 64, 32 … 1, copies that donor's four bytes, becomes
+known and queues its selected neighbours; a selected area touching only transparency restarts from the first
+remaining target with random donors. The result blends through the selection coverage. No donor (nothing
+unselected and opaque) sets `FilterEdit::previewFailed`: the panel says so, `CommitFilter` refuses and keeps the
+edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK records `Content-Aware Fill`.
+
 ## Validation
 
 `DocumentTests`: geometry (`transform.*`)
@@ -439,3 +460,10 @@ keeping alpha, every kind's editor keeping pixels dynamic and supporting cancel,
 the GPU ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)). The WARP self-test drives Ctrl+L with a
 preview, Escape and Enter, the Filter menu's Gaussian Blur, a Hue/Saturation adjustment layer edited live and kept
 with Enter, and Shift+= through `Application`.
+
+Content-aware fill: `DocumentTests` `smart.*` ports the legacy `SmartEditTests` (four-pixel stripes continue
+through a filled block, at least 114 of its 120 pixels within 1 of the stripe value; a flat background with a red
+block reconstructs within 1 everywhere as one `Content-Aware Fill` entry and undoes to the identical raster; Cancel
+and a no-source fill leave the original and the failed fill refuses to commit; no selection refuses) and adds the
+grown grid (a selection past a 40 × 30 layer's edge fills a 50 × 36 layer with opaque pixels). The WARP self-test
+drives Shift+Delete, Enter and the no-source refusal through `Application`.

@@ -151,7 +151,8 @@ the Lasso and, pressed again, switches Freehand and Polygonal (holding the key d
 stays while the project is open). Arrows nudge a non-empty selection by one pixel (Shift ten) with a selection tool.
 Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. The Select menu adds Load Layer Selection and Load Mask
 Selection for the active layer. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
-Delete clears them, and without a selection deletes the targeted mask, or the layer; Ctrl+X, Ctrl+C, Ctrl+Shift+C
+Delete clears them, and without a selection deletes the targeted mask, or the layer; Shift+Delete opens
+Content-Aware Fill on them ([`Document_Tools.md`](../Document/Document_Tools.md)); Ctrl+X, Ctrl+C, Ctrl+Shift+C
 and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
 PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
 system clipboard changed since that copy); Alt+Backspace and Ctrl+Backspace fill with the foreground and background
@@ -249,6 +250,9 @@ for radius, distance, amount, gamma and grain size, so the small values get most
   restores it, OK keeps it, the palette is untouched) and Reverse. **Grain**: Amount, Size, Roughness.
 - **Gaussian Blur**: Radius. **Motion Blur**: Angle, Distance. **Add Noise**: Amount, Uniform / Gaussian,
   Monochromatic. **Lens Correction**: Remove Distortion with its hint.
+- **Content-Aware Fill** (the Edit menu, Shift+Delete; C13): a hint only. When nothing unselected and opaque
+  surrounds the selection the card adds the legacy no-source message under it and OK is disabled; Enter is refused
+  by the session, Escape closes, and a tool switch drops the failed fill instead of applying it.
 
 Pointer input on the card belongs to the chrome (`DispatchPointer` excludes it from the hole). The Image and Filter
 menus, the Layer menu's `New Adjustment Layer` submenu (Levels, Curves, Hue/Saturation, Exposure, Gradient Map,
@@ -265,7 +269,7 @@ The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts 
 | Menu | Commands |
 | --- | --- |
 | File | New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As (Ctrl+Shift+S), Export PNG, Export JPEG, Exit |
-| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels; Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
+| Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
 | Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Flip Canvas Horizontal, Flip Canvas Vertical |
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Add Mask, Add Black Mask (from the selection when there is one), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…, Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |

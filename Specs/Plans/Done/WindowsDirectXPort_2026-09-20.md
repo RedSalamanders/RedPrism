@@ -643,7 +643,7 @@ Indexed 2026-09-20:
 | **C10 Brush** | [`Brush_2026-09-20.md`](Brush_2026-09-20.md) (done) |
 | **C11 Retouch** | [`Retouch_2026-09-20.md`](Retouch_2026-09-20.md) (done) |
 | **C12 Adjust/filter** | [`AdjustFilter_2026-09-20.md`](AdjustFilter_2026-09-20.md) (done) |
-| **C13 Smart ops** | [`SmartOps_2026-09-20.md`](../WIP/SmartOps_2026-09-20.md) |
+| **C13 Smart ops** | [`SmartOps_2026-09-20.md`](SmartOps_2026-09-20.md) (done; Remove Background rejected for v1, the decision recorded there) |
 | **C14 Product hardening** | [`ProductHardening_2026-09-20.md`](../WIP/ProductHardening_2026-09-20.md) |
 | **C15 Packaging** | [`Packaging_2026-09-20.md`](../WIP/Packaging_2026-09-20.md) |
 
