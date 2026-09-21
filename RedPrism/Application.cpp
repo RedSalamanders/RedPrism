@@ -4,8 +4,12 @@
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "Resources.h"
+#include "Version.h"
 #include "WindowCapture.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <format>
 #include <new>
@@ -13,6 +17,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <string_view>
+#include <vector>
 #include <windowsx.h>
 
 #pragma warning(push)
@@ -25,6 +30,8 @@ namespace
 constexpr int kDefaultClientWidth = 1280;
 constexpr int kDefaultClientHeight = 800;
 constexpr UINT kScreenshotDelayMilliseconds = 800;
+constexpr double kWheelZoomStep = 1.1;
+constexpr double kCommandZoomStep = 1.25;
 
 [[nodiscard]] SIZE ScaleDefaultClientSize(UINT dpi) noexcept
 {
@@ -68,34 +75,50 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 {
     if (path.empty())
     {
-        return L"Untitled";
+        return LoadStringResource(nullptr, IDS_UNTITLED);
     }
     const size_t slash = path.find_last_of(L"\\/");
     return slash == std::wstring::npos ? path : path.substr(slash + 1);
 }
 
-[[nodiscard]] bool PickOpenPath(HWND owner, std::wstring& path) noexcept
+[[nodiscard]] bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept
 {
-    wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
+    if (text.size() < suffix.size())
     {
         return false;
     }
-    const COMDLG_FILTERSPEC filters[] = {
-        {L"RedPrism project", L"*.prism"},
-        {L"Images", L"*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.heic;*.heif"},
-        {L"All files", L"*.*"},
-    };
-    (void)dialog->SetFileTypes(static_cast<UINT>(std::size(filters)), filters);
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
-    {
-        return false;
-    }
+    const std::wstring_view tail = text.substr(text.size() - suffix.size());
+    return CompareStringOrdinal(tail.data(), static_cast<int>(tail.size()), suffix.data(),
+                                static_cast<int>(suffix.size()), TRUE) == CSTR_EQUAL;
+}
+
+[[nodiscard]] bool LooksLikeProjectPath(const wchar_t* path) noexcept
+{
+    const DWORD attributes = GetFileAttributesW(path);
+    const bool directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    return directory || EndsWithNoCase(path, L".prism") || PathLooksLikeZipProject(path);
+}
+
+struct FilterStrings
+{
+    std::wstring project;
+    std::wstring images;
+    std::wstring all;
+    std::wstring exploded;
+    std::wstring jpeg;
+    std::wstring png;
+};
+
+[[nodiscard]] FilterStrings LoadFilterStrings()
+{
+    return FilterStrings{
+        LoadStringResource(nullptr, IDS_FILTER_PROJECT), LoadStringResource(nullptr, IDS_FILTER_IMAGES),
+        LoadStringResource(nullptr, IDS_FILTER_ALL),     LoadStringResource(nullptr, IDS_FILTER_EXPLODED),
+        LoadStringResource(nullptr, IDS_FILTER_JPEG),    LoadStringResource(nullptr, IDS_FILTER_PNG)};
+}
+
+[[nodiscard]] bool ReadDialogResult(IFileDialog* dialog, std::wstring& path) noexcept
+{
     wil::com_ptr_nothrow<IShellItem> item;
     if (FAILED(dialog->GetResult(item.put())) || !item)
     {
@@ -108,6 +131,32 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
     }
     path = file.get();
     return !path.empty();
+}
+
+[[nodiscard]] bool PickOpenPath(HWND owner, std::wstring& path) noexcept
+{
+    wil::com_ptr_nothrow<IFileOpenDialog> dialog;
+    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+    if (FAILED(result) || !dialog)
+    {
+        return false;
+    }
+    const FilterStrings strings = LoadFilterStrings();
+    const COMDLG_FILTERSPEC filters[] = {
+        {strings.project.c_str(), L"*.prism"},
+        {strings.images.c_str(), L"*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.heic;*.heif"},
+        {strings.all.c_str(), L"*.*"},
+    };
+    (void)dialog->SetFileTypes(static_cast<UINT>(std::size(filters)), filters);
+    FILEOPENDIALOGOPTIONS options = 0;
+    (void)dialog->GetOptions(&options);
+    (void)dialog->SetOptions(options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+    result = dialog->Show(owner);
+    if (FAILED(result))
+    {
+        return false;
+    }
+    return ReadDialogResult(dialog.get(), path);
 }
 
 [[nodiscard]] bool PickSavePath(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
@@ -139,84 +188,24 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
     {
         return false;
     }
-    wil::com_ptr_nothrow<IShellItem> item;
-    if (FAILED(dialog->GetResult(item.put())) || !item)
-    {
-        return false;
-    }
-    wil::unique_cotaskmem_string file;
-    if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, file.put())))
-    {
-        return false;
-    }
-    path = file.get();
-    return !path.empty();
+    return ReadDialogResult(dialog.get(), path);
 }
 
-[[nodiscard]] EditorTool ToolFromVirtualKey(UINT virtualKey) noexcept
+[[nodiscard]] UINT LoadErrorStringId(ProjectIoStatus status) noexcept
 {
-    switch (virtualKey)
+    switch (status)
     {
-    case 'V':
-        return EditorTool::Move;
-    case 'M':
-        return EditorTool::Marquee;
-    case 'L':
-        return EditorTool::Lasso;
-    case 'W':
-        return EditorTool::Wand;
-    case 'C':
-        return EditorTool::Crop;
-    case 'B':
-        return EditorTool::Brush;
-    case 'E':
-        return EditorTool::Eraser;
-    case 'J':
-        return EditorTool::Heal;
-    case 'S':
-        return EditorTool::Clone;
-    case 'R':
-        return EditorTool::Smear;
-    case 'G':
-        return EditorTool::Gradient;
-    case 'U':
-        return EditorTool::Shape;
-    case 'I':
-        return EditorTool::Eyedropper;
-    case 'H':
-        return EditorTool::Hand;
-    case 'Z':
-        return EditorTool::Zoom;
-    case 'A':
-        return EditorTool::Idle;
+    case ProjectIoStatus::UnsupportedVersion:
+        return IDS_ERROR_UNSUPPORTED_VERSION;
+    case ProjectIoStatus::TooLarge:
+        return IDS_ERROR_TOO_LARGE;
+    case ProjectIoStatus::MissingImage:
+        return IDS_ERROR_MISSING_IMAGE;
+    case ProjectIoStatus::Ok:
+    case ProjectIoStatus::Invalid:
+    case ProjectIoStatus::Encode:
     default:
-        return EditorTool::Idle;
-    }
-}
-
-[[nodiscard]] bool IsToolVirtualKey(UINT virtualKey) noexcept
-{
-    switch (virtualKey)
-    {
-    case 'V':
-    case 'M':
-    case 'L':
-    case 'W':
-    case 'C':
-    case 'B':
-    case 'E':
-    case 'J':
-    case 'S':
-    case 'R':
-    case 'G':
-    case 'U':
-    case 'I':
-    case 'H':
-    case 'Z':
-    case 'A':
-        return true;
-    default:
-        return false;
+        return IDS_ERROR_OPEN_PROJECT;
     }
 }
 } // namespace
@@ -397,6 +386,12 @@ int Application::Run(int showCommand) noexcept
         {
             (void)_chrome->AdvanceAnimation(GetTickCount64());
         }
+        if (_layoutDirty)
+        {
+            // A splitter change moved the canvas hole; re-sync the viewport before the frame that shows it.
+            _layoutDirty = false;
+            SyncChrome();
+        }
         BindCompositionDevice();
         const CanvasDocument* document = _session.Document().has_value() ? &_session.Document().value() : nullptr;
         result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
@@ -427,6 +422,30 @@ int Application::Run(int showCommand) noexcept
     return FAILED(_runtimeFailure) ? 5 : 0;
 }
 
+// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr so test logs name the check.
+void SelfTestFailure(const wchar_t* message) noexcept
+{
+    OutputDebugStringW(message);
+    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
+    if (error == nullptr || error == INVALID_HANDLE_VALUE)
+    {
+        return;
+    }
+    const int length = static_cast<int>(wcslen(message));
+    const int size = WideCharToMultiByte(CP_UTF8, 0, message, length, nullptr, 0, nullptr, nullptr);
+    if (size <= 0)
+    {
+        return;
+    }
+    std::string utf8(static_cast<size_t>(size), '\0');
+    if (WideCharToMultiByte(CP_UTF8, 0, message, length, utf8.data(), size, nullptr, nullptr) != size)
+    {
+        return;
+    }
+    DWORD written = 0;
+    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
+}
+
 int Application::RunSelfTest() noexcept
 {
     _screenshotDpi = 0;
@@ -434,14 +453,14 @@ int Application::RunSelfTest() noexcept
     HRESULT result = RegisterWindowClass();
     if (FAILED(result))
     {
-        OutputDebugStringW(L"RegisterWindowClass failed.\n");
+        SelfTestFailure(L"RegisterWindowClass failed.\n");
         return 2;
     }
 
     result = CreateMainWindow(false);
     if (FAILED(result))
     {
-        OutputDebugStringW(L"CreateMainWindow failed.\n");
+        SelfTestFailure(L"CreateMainWindow failed.\n");
         return 2;
     }
 
@@ -455,32 +474,32 @@ int Application::RunSelfTest() noexcept
         clientBounds.right - clientBounds.left != expectedClientSize.cx ||
         clientBounds.bottom - clientBounds.top != expectedClientSize.cy)
     {
-        OutputDebugStringW(L"The default client area does not match the current monitor DPI.\n");
+        SelfTestFailure(L"The default client area does not match the current monitor DPI.\n");
         return 2;
     }
 
     result = InitializeRenderer();
     if (FAILED(result))
     {
-        OutputDebugStringW(L"Renderer initialization failed.\n");
+        SelfTestFailure(L"Renderer initialization failed.\n");
         return 5;
     }
     if (!_renderer.IsWarp())
     {
-        OutputDebugStringW(L"Self-test requires a WARP device.\n");
+        SelfTestFailure(L"Self-test requires a WARP device.\n");
         return 5;
     }
 
     result = InitializeChrome();
     if (FAILED(result))
     {
-        OutputDebugStringW(L"DxUi chrome initialization failed.\n");
+        SelfTestFailure(L"DxUi chrome initialization failed.\n");
         return 5;
     }
     result = InitializeDocument();
     if (FAILED(result))
     {
-        OutputDebugStringW(L"Document initialization failed.\n");
+        SelfTestFailure(L"Document initialization failed.\n");
         return 5;
     }
 
@@ -490,19 +509,139 @@ int Application::RunSelfTest() noexcept
     result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
     if (FAILED(result))
     {
-        OutputDebugStringW(L"Self-test Present failed.\n");
+        SelfTestFailure(L"Self-test Present failed.\n");
         return 5;
     }
     const DxUi::EmbeddedStatistics visible = _chrome->Statistics();
     if (visible.surfaceBytes == 0 || visible.composites == 0)
     {
-        OutputDebugStringW(L"Visible DxUi chrome did not allocate a surface or composite.\n");
+        SelfTestFailure(L"Visible DxUi chrome did not allocate a surface or composite.\n");
         return 5;
     }
     if (visible.surfaceBytes > (64ull * 1024ull * 1024ull))
     {
-        OutputDebugStringW(L"Visible DxUi chrome exceeded the 64 MiB surface cap.\n");
+        SelfTestFailure(L"Visible DxUi chrome exceeded the 64 MiB surface cap.\n");
         return 5;
+    }
+    if (_composition.CanvasSurfaceBytes() == 0)
+    {
+        SelfTestFailure(L"Visible document did not allocate canvas surfaces.\n");
+        return 5;
+    }
+    // A settled document must not re-composite: the second frame reuses the canvas.
+    const std::uint64_t composites = _composition.CompositeCount();
+    result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
+    if (FAILED(result) || _composition.CompositeCount() != composites)
+    {
+        SelfTestFailure(L"A settled document was re-composited.\n");
+        return 5;
+    }
+
+    // The DxUi splitter, palette wells with the color picker, and the opacity stepper are wired to the session.
+    {
+        const float scale = static_cast<float>(windowDpi) / 96.0f;
+        const CanvasHole before = _chrome->HolePixels();
+        const float beforeWidth = _chrome->LayersWidthDip();
+        const D2D1_RECT_F separator = _chrome->SplitterBoundsDip();
+        const float centerX = (separator.left + separator.right) * 0.5f;
+        const float centerY = (separator.top + separator.bottom) * 0.5f;
+        DxUi::PointerEvent pointer{};
+        pointer.action = DxUi::PointerAction::Down;
+        pointer.xPixels = centerX * scale;
+        pointer.yPixels = centerY * scale;
+        if (!_chrome->DispatchPointer(pointer))
+        {
+            SelfTestFailure(L"The layers splitter did not take the pointer press.\n");
+            return 5;
+        }
+        pointer.action = DxUi::PointerAction::Move;
+        pointer.xPixels = (centerX - 40.0f) * scale;
+        if (!_chrome->DispatchPointer(pointer))
+        {
+            SelfTestFailure(L"The layers splitter did not take the pointer move.\n");
+            return 5;
+        }
+        pointer.action = DxUi::PointerAction::Up;
+        if (!_chrome->DispatchPointer(pointer))
+        {
+            SelfTestFailure(L"The layers splitter did not take the pointer release.\n");
+            return 5;
+        }
+        if (!_layoutDirty)
+        {
+            SelfTestFailure(L"The layers splitter did not report a layout change.\n");
+            return 5;
+        }
+        if (std::fabs(_chrome->LayersWidthDip() - (beforeWidth + 40.0f)) > 0.5f)
+        {
+            const std::wstring text =
+                std::format(L"The layers splitter did not resize the panel: {} DIP, expected {} DIP.\n",
+                            _chrome->LayersWidthDip(), beforeWidth + 40.0f);
+            SelfTestFailure(text.c_str());
+            return 5;
+        }
+        _layoutDirty = false;
+        SyncChrome();
+        if (_chrome->HolePixels().width >= before.width)
+        {
+            SelfTestFailure(L"The canvas hole did not follow the splitter.\n");
+            return 5;
+        }
+
+        const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(false);
+        pointer.action = DxUi::PointerAction::Down;
+        pointer.xPixels = (well.left + well.right) * 0.5f * scale;
+        pointer.yPixels = (well.top + well.bottom) * 0.5f * scale;
+        bool handled = _chrome->DispatchPointer(pointer);
+        pointer.action = DxUi::PointerAction::Up;
+        handled = _chrome->DispatchPointer(pointer) && handled;
+        if (!handled || !_chrome->ColorPickerOpen())
+        {
+            SelfTestFailure(L"The foreground well did not open the color picker.\n");
+            return 5;
+        }
+        _chrome->SampleColor(0xFF336699u);
+        _chrome->CloseColorPicker(true);
+        if (_chrome->ColorPickerOpen() || _session.ForegroundColor() != 0xFF336699u)
+        {
+            SelfTestFailure(L"The color picker did not commit the foreground color.\n");
+            return 5;
+        }
+        _chrome->OpenColorPicker(true);
+        _chrome->SampleColor(0xFF112233u);
+        _chrome->CloseColorPicker(false);
+        if (_chrome->ColorPickerOpen() || _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"Cancelling the color picker changed the palette.\n");
+            return 5;
+        }
+        // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
+        _chrome->SetCanvasFocused(true);
+        if (!HandleAccelerator('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
+            _session.BackgroundColor() != 0xFF336699u)
+        {
+            SelfTestFailure(L"X did not swap the palette.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('D', 0) || _chrome->ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
+            _chrome->BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"D did not reset the palette into the wells.\n");
+            return 5;
+        }
+
+        if (!_chrome->RequestLayerOpacity(50.0))
+        {
+            SelfTestFailure(L"The opacity stepper refused a value.\n");
+            return 5;
+        }
+        const ImageLayer* layer = _session.ActiveLayer();
+        if (layer == nullptr || std::fabs(layer->opacity - 0.5) > 1e-9 || !_session.history.CanUndo() ||
+            _session.history.UndoName() != L"Layer Opacity")
+        {
+            SelfTestFailure(L"The opacity stepper did not record an undoable edit.\n");
+            return 5;
+        }
     }
 
     _chrome->SetVisible(false);
@@ -510,12 +649,12 @@ int Application::RunSelfTest() noexcept
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
     if (hidden.surfaceBytes != 0)
     {
-        OutputDebugStringW(L"Hidden DxUi chrome retained a cached surface.\n");
+        SelfTestFailure(L"Hidden DxUi chrome retained a cached surface.\n");
         return 5;
     }
     if (_composition.CanvasSurfaceBytes() != 0)
     {
-        OutputDebugStringW(L"Hidden composition retained canvas surfaces.\n");
+        SelfTestFailure(L"Hidden composition retained canvas surfaces.\n");
         return 5;
     }
 
@@ -554,7 +693,8 @@ HRESULT Application::CreateMainWindow(bool visible) noexcept
         return result;
     }
 
-    const HWND window = CreateWindowExW(extendedStyle, kWindowClassName, L"RedPrism", windowStyle, CW_USEDEFAULT,
+    const std::wstring title = LoadStringResource(nullptr, IDS_APP_TITLE);
+    const HWND window = CreateWindowExW(extendedStyle, kWindowClassName, title.c_str(), windowStyle, CW_USEDEFAULT,
                                         CW_USEDEFAULT, windowSize.cx, windowSize.cy, nullptr, nullptr, _instance, this);
     if (!window)
     {
@@ -637,6 +777,80 @@ HRESULT Application::InitializeChrome() noexcept
             SyncChrome();
             _frameInvalidated = true;
         });
+    chrome->SetLayerExpandHandler(
+        [this](Guid id, bool expanded)
+        {
+            if (expanded)
+            {
+                _session.CollapsedGroupIDs().erase(id);
+            }
+            else
+            {
+                _session.CollapsedGroupIDs().insert(id);
+            }
+            SyncChrome();
+            _frameInvalidated = true;
+        });
+    chrome->SetPaletteHandler(
+        [this](uint32_t foreground, uint32_t background)
+        {
+            // Reached from inside a DxUi callback: sync chrome on the next frame rather than re-entering Prepare.
+            _session.SetForegroundColor(foreground);
+            _session.SetBackgroundColor(background);
+            _layoutDirty = true;
+            _frameInvalidated = true;
+        });
+    chrome->SetOpacityHandler(
+        [this](double opacity, ChromeEditPhase phase)
+        {
+            ImageLayer* layer = _session.ActiveLayer();
+            if (layer == nullptr || layer->isGroup)
+            {
+                return;
+            }
+            const double clamped = std::min(1.0, std::max(0.0, opacity));
+            switch (phase)
+            {
+            case ChromeEditPhase::Preview:
+                // One history entry spans the whole typed edit; the snapshot is taken before the first preview.
+                if (!_opacityEditing)
+                {
+                    _session.BeginEdit(L"Layer Opacity");
+                    _opacityEditing = true;
+                }
+                layer->opacity = clamped;
+                break;
+            case ChromeEditPhase::Commit:
+                if (_opacityEditing)
+                {
+                    layer->opacity = clamped;
+                    _session.EndEdit();
+                    _opacityEditing = false;
+                }
+                else
+                {
+                    _session.SetOpacity(clamped);
+                }
+                break;
+            case ChromeEditPhase::Cancel:
+            default:
+                // Restoring the start value makes the pending snapshot equal to the document: no entry is recorded.
+                if (_opacityEditing)
+                {
+                    layer->opacity = clamped;
+                    _session.EndEdit();
+                    _opacityEditing = false;
+                }
+                break;
+            }
+            DocumentChanged();
+        });
+    chrome->SetLayoutHandler(
+        [this]
+        {
+            _layoutDirty = true;
+            _frameInvalidated = true;
+        });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -654,8 +868,25 @@ HRESULT Application::InitializeDocument() noexcept
         _chrome->SetTool(_tool);
     }
     BindCompositionDevice();
-    SyncChrome();
+    DocumentChanged();
     return S_OK;
+}
+
+Vec2 Application::DocumentSize() const noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return Vec2{1, 1};
+    }
+    return Vec2{static_cast<double>(_session.Document().value().width),
+                static_cast<double>(_session.Document().value().height)};
+}
+
+void Application::DocumentChanged() noexcept
+{
+    _composition.InvalidateDocument();
+    SyncChrome();
+    _frameInvalidated = true;
 }
 
 void Application::SyncChrome() noexcept
@@ -667,23 +898,29 @@ void Application::SyncChrome() noexcept
     const bool dirty = _session.history.IsModified();
     _chrome->SetDocumentTitle(FileTitle(_documentPath), dirty);
     _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
+    _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
+                              _session.history.CanRedo());
     const CanvasDocument* document = _session.Document().has_value() ? &_session.Document().value() : nullptr;
     const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
-    const std::wstring zoom = std::format(L"{}%", percent);
-    const std::wstring size =
-        document ? std::format(L"{} × {}", document->width, document->height) : std::wstring{L"—"};
-    const std::wstring tool = std::format(L"{} ({})", EditorToolName(_tool), EditorToolKey(_tool));
-    _chrome->SetStatus(zoom, size, tool);
+    std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
+    std::wstring size = document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, document->width, document->height)
+                                 : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
+    std::wstring tool =
+        FormatStringResource(nullptr, IDS_STATUS_TOOL, LoadStringResource(nullptr, EditorToolNameId(_tool)),
+                             std::wstring(1, EditorToolKey(_tool)));
+    _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
     _chrome->SetTool(_tool);
+    _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor());
+    const ImageLayer* activeLayer = _session.ActiveLayer();
+    _chrome->SetActiveLayerOpacity(
+        activeLayer != nullptr && !activeLayer->isGroup ? std::optional<double>(activeLayer->opacity) : std::nullopt);
 
     const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi)
                                           : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
     (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi > 0.0f ? dpi : 96.0f);
     const CanvasHole hole = _chrome->HolePixels();
-    const Vec2 documentSize =
-        document ? Vec2{static_cast<double>(document->width), static_cast<double>(document->height)} : Vec2{1, 1};
     _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
-                     documentSize);
+                     DocumentSize());
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -775,6 +1012,13 @@ void Application::CheckDeviceAdapter() noexcept
     }
 }
 
+void Application::ZoomBy(double factor) noexcept
+{
+    _viewport.SetZoom(_viewport.zoom * factor, _viewport.Center(), DocumentSize());
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
 void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     if (!_chrome)
@@ -838,15 +1082,12 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     const CanvasHole hole = _chrome->HolePixels();
     const bool inHole = event.xPixels >= hole.left && event.yPixels >= hole.top &&
                         event.xPixels < hole.left + hole.width && event.yPixels < hole.top + hole.height;
-    const Vec2 documentSize = _session.Document().has_value()
-                                  ? Vec2{static_cast<double>(_session.Document().value().width),
-                                         static_cast<double>(_session.Document().value().height)}
-                                  : Vec2{1, 1};
+    const Vec2 documentSize = DocumentSize();
     const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
     const bool panMode = _spacePan || _tool == EditorTool::Hand;
     if (event.action == DxUi::PointerAction::Wheel && inHole)
     {
-        const double factor = event.wheelDelta > 0 ? 1.1 : (1.0 / 1.1);
+        const double factor = event.wheelDelta > 0 ? kWheelZoomStep : (1.0 / kWheelZoomStep);
         _viewport.SetZoom(_viewport.zoom * factor, view, documentSize);
         SyncChrome();
         _frameInvalidated = true;
@@ -909,15 +1150,70 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandExportJpeg:
         ExportFlattened(true);
         break;
+    case ChromeHost::kCommandExit:
+        if (_window)
+        {
+            PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+        }
+        break;
     case ChromeHost::kCommandUndo:
         _session.Undo();
-        SyncChrome();
-        _frameInvalidated = true;
+        DocumentChanged();
         break;
     case ChromeHost::kCommandRedo:
         _session.Redo();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandNewLayer:
+        _session.AddBlankLayer();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandNewFolder:
+        _session.AddGroup();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandDeleteLayer:
+        if (_session.ActiveLayerID().has_value())
+        {
+            _session.DeleteLayer(_session.ActiveLayerID().value());
+            DocumentChanged();
+        }
+        break;
+    case ChromeHost::kCommandToggleLayerVisibility:
+        if (_session.ActiveLayerID().has_value())
+        {
+            _session.ToggleVisibility(_session.ActiveLayerID().value());
+            DocumentChanged();
+        }
+        break;
+    case ChromeHost::kCommandMoveOutOfGroup:
+        _session.MoveActiveLayerOutOfGroup();
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandZoomFit:
+        _viewport.Fit(DocumentSize());
         SyncChrome();
         _frameInvalidated = true;
+        break;
+    case ChromeHost::kCommandZoomActual:
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        _frameInvalidated = true;
+        break;
+    case ChromeHost::kCommandZoomIn:
+        ZoomBy(kCommandZoomStep);
+        break;
+    case ChromeHost::kCommandZoomOut:
+        ZoomBy(1.0 / kCommandZoomStep);
+        break;
+    case ChromeHost::kCommandAbout:
+        if (!_quietUi && _window)
+        {
+            const std::wstring text =
+                FormatStringResource(nullptr, IDS_ABOUT_TEXT, std::wstring(L"" REDPRISM_VERSION_STRING_W));
+            const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+            MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
+        }
         break;
     default:
         break;
@@ -939,51 +1235,80 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
 {
     const bool control = (modifiers & MK_CONTROL) != 0;
     const bool shift = (modifiers & MK_SHIFT) != 0;
-    if (control && virtualKey == 'N')
+    if (control)
     {
-        NewDocument();
-        return true;
-    }
-    if (control && virtualKey == 'O')
-    {
-        OpenDocument();
-        return true;
-    }
-    if (control && virtualKey == 'S')
-    {
-        SaveDocument(shift);
-        return true;
-    }
-    if (control && virtualKey == 'Z')
-    {
-        if (shift)
+        switch (virtualKey)
         {
-            _session.Redo();
+        case 'N':
+            OnCommand(shift ? ChromeHost::kCommandNewLayer : ChromeHost::kCommandNew);
+            return true;
+        case 'O':
+            OnCommand(ChromeHost::kCommandOpen);
+            return true;
+        case 'S':
+            OnCommand(shift ? ChromeHost::kCommandSaveAs : ChromeHost::kCommandSave);
+            return true;
+        case 'Z':
+            OnCommand(shift ? ChromeHost::kCommandRedo : ChromeHost::kCommandUndo);
+            return true;
+        case 'Y':
+            OnCommand(ChromeHost::kCommandRedo);
+            return true;
+        case 'G':
+            OnCommand(shift ? ChromeHost::kCommandMoveOutOfGroup : ChromeHost::kCommandNewFolder);
+            return true;
+        case '0':
+            OnCommand(ChromeHost::kCommandZoomFit);
+            return true;
+        case '1':
+            OnCommand(ChromeHost::kCommandZoomActual);
+            return true;
+        case VK_OEM_PLUS:
+        case VK_ADD:
+            OnCommand(ChromeHost::kCommandZoomIn);
+            return true;
+        case VK_OEM_MINUS:
+        case VK_SUBTRACT:
+            OnCommand(ChromeHost::kCommandZoomOut);
+            return true;
+        default:
+            break;
         }
-        else
-        {
-            _session.Undo();
-        }
-        SyncChrome();
-        _frameInvalidated = true;
-        return true;
-    }
-    if (control && virtualKey == 'Y')
-    {
-        _session.Redo();
-        SyncChrome();
-        _frameInvalidated = true;
-        return true;
+        return false;
     }
     if (virtualKey == VK_SPACE)
     {
         _spacePan = true;
         return true;
     }
-    if (!control && _chrome && _chrome->CanvasFocused() && IsToolVirtualKey(virtualKey))
+    if (_chrome && _chrome->CanvasFocused())
     {
-        OnTool(ToolFromVirtualKey(virtualKey));
-        return true;
+        if (virtualKey == VK_DELETE)
+        {
+            OnCommand(ChromeHost::kCommandDeleteLayer);
+            return true;
+        }
+        if (virtualKey == 'X' || virtualKey == 'D')
+        {
+            // Legacy palette keys: X swaps foreground and background, D restores black over white.
+            if (virtualKey == 'X')
+            {
+                _session.SwapPaletteColors();
+            }
+            else
+            {
+                _session.ResetPaletteColors();
+            }
+            SyncChrome();
+            _frameInvalidated = true;
+            return true;
+        }
+        const EditorTool tool = EditorToolFromKey(static_cast<wchar_t>(virtualKey));
+        if (tool != EditorTool::Count)
+        {
+            OnTool(tool);
+            return true;
+        }
     }
     return false;
 }
@@ -994,8 +1319,7 @@ void Application::NewDocument() noexcept
     _session.history.MarkSaved();
     _documentPath.clear();
     _viewport.followsFit = true;
-    SyncChrome();
-    _frameInvalidated = true;
+    DocumentChanged();
 }
 
 void Application::OpenDocument() noexcept
@@ -1012,36 +1336,49 @@ void Application::OpenDocument() noexcept
     OpenPath(path.c_str());
 }
 
+void Application::ShowError(UINT stringId) noexcept
+{
+    if (_quietUi || !_window)
+    {
+        return;
+    }
+    const std::wstring text = LoadStringResource(nullptr, stringId);
+    const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+    MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
+}
+
 void Application::OpenPath(const wchar_t* path) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
         return;
     }
-    const std::wstring_view view{path};
-    const DWORD attributes = GetFileAttributesW(path);
-    const bool directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    const bool project =
-        PathLooksLikeZipProject(path) || view.ends_with(L".prism") || view.ends_with(L".PRISM") || directory;
-    if (project)
+    if (LooksLikeProjectPath(path))
     {
         const ProjectLoadResult loaded = LoadProject(path);
         if (loaded.status != ProjectIoStatus::Ok || !loaded.document.width)
         {
-            if (!_quietUi)
+            if (loaded.status == ProjectIoStatus::UnsupportedVersion && !_quietUi && _window)
             {
-                MessageBoxW(_window.get(), L"RedPrism could not open that project.", L"RedPrism", MB_OK | MB_ICONERROR);
+                const std::wstring text =
+                    FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, loaded.formatVersion);
+                const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+                MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
+            }
+            else
+            {
+                ShowError(LoadErrorStringId(loaded.status));
             }
             return;
         }
         _session.history.Reset();
         _session.Document() = loaded.document;
         _session.SelectLayer(loaded.activeLayerID);
+        _session.CollapsedGroupIDs().clear();
         _session.history.MarkSaved();
         _documentPath = path;
         _viewport.followsFit = true;
-        SyncChrome();
-        _frameInvalidated = true;
+        DocumentChanged();
         return;
     }
 
@@ -1050,19 +1387,17 @@ void Application::OpenPath(const wchar_t* path) noexcept
         _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
     }
     std::optional<Guid> active = _session.ActiveLayerID();
+    _session.BeginEdit(L"Import Image");
     const ProjectIoStatus status = ImportImageOnto(_session.Document().value(), path, active);
+    _session.SelectLayer(active);
+    _session.EndEdit();
     if (status != ProjectIoStatus::Ok)
     {
-        if (!_quietUi)
-        {
-            MessageBoxW(_window.get(), L"RedPrism could not import that image.", L"RedPrism", MB_OK | MB_ICONERROR);
-        }
+        ShowError(status == ProjectIoStatus::TooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
         return;
     }
-    _session.SelectLayer(active);
     _viewport.followsFit = true;
-    SyncChrome();
-    _frameInvalidated = true;
+    DocumentChanged();
 }
 
 void Application::SaveDocument(bool saveAs) noexcept
@@ -1078,25 +1413,23 @@ void Application::SaveDocument(bool saveAs) noexcept
         {
             return;
         }
+        const FilterStrings strings = LoadFilterStrings();
         const COMDLG_FILTERSPEC filters[] = {
-            {L"RedPrism project", L"*.prism"},
-            {L"Exploded project folder", L"*.*"},
+            {strings.project.c_str(), L"*.prism"},
+            {strings.exploded.c_str(), L"*.*"},
         };
-        if (!PickSavePath(_window.get(), L"Untitled.prism", L"prism", filters, 2, path))
+        const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_PROJECT_NAME);
+        if (!PickSavePath(_window.get(), defaultName.c_str(), L"prism", filters, 2, path))
         {
             return;
         }
     }
-    const bool zip = PathLooksLikeZipProject(path.c_str()) || std::wstring_view{path}.ends_with(L".prism") ||
-                     std::wstring_view{path}.ends_with(L".PRISM");
+    const bool zip = PathLooksLikeZipProject(path.c_str()) || EndsWithNoCase(path, L".prism");
     const ProjectIoStatus status =
         SaveProject(path.c_str(), _session.Document().value(), _session.ActiveLayerID(), zip);
     if (status != ProjectIoStatus::Ok)
     {
-        if (!_quietUi)
-        {
-            MessageBoxW(_window.get(), L"RedPrism could not save the project.", L"RedPrism", MB_OK | MB_ICONERROR);
-        }
+        ShowError(status == ProjectIoStatus::TooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT);
         return;
     }
     _documentPath = std::move(path);
@@ -1114,10 +1447,7 @@ void Application::ExportFlattened(bool jpeg) noexcept
     BindCompositionDevice();
     if (FAILED(_composition.Compose(_session.Document().value())))
     {
-        if (!_quietUi)
-        {
-            MessageBoxW(_window.get(), L"RedPrism could not flatten the document.", L"RedPrism", MB_OK | MB_ICONERROR);
-        }
+        ShowError(IDS_ERROR_FLATTEN);
         return;
     }
     std::vector<std::uint8_t> bgra;
@@ -1125,44 +1455,37 @@ void Application::ExportFlattened(bool jpeg) noexcept
     UINT height = 0;
     if (FAILED(_composition.Readback(bgra, width, height)) || width == 0 || height == 0)
     {
-        if (!_quietUi)
-        {
-            MessageBoxW(_window.get(), L"RedPrism could not read the flattened image.", L"RedPrism",
-                        MB_OK | MB_ICONERROR);
-        }
+        ShowError(IDS_ERROR_READBACK);
         return;
     }
     const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
                                        bgra.data(), bgra.size());
+    const FilterStrings strings = LoadFilterStrings();
     std::wstring path;
     if (jpeg)
     {
-        const COMDLG_FILTERSPEC filters[] = {{L"JPEG image", L"*.jpg;*.jpeg"}};
-        if (!PickSavePath(_window.get(), L"Export.jpg", L"jpg", filters, 1, path))
+        const COMDLG_FILTERSPEC filters[] = {{strings.jpeg.c_str(), L"*.jpg;*.jpeg"}};
+        const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_EXPORT_JPEG);
+        if (!PickSavePath(_window.get(), defaultName.c_str(), L"jpg", filters, 1, path))
         {
             return;
         }
         if (ExportDocumentJpeg(raster, JpegExportOptions{0.8, _session.Document().value().resolution}, path.c_str()) !=
             ProjectIoStatus::Ok)
         {
-            if (!_quietUi)
-            {
-                MessageBoxW(_window.get(), L"RedPrism could not export JPEG.", L"RedPrism", MB_OK | MB_ICONERROR);
-            }
+            ShowError(IDS_ERROR_EXPORT_JPEG);
         }
         return;
     }
-    const COMDLG_FILTERSPEC filters[] = {{L"PNG image", L"*.png"}};
-    if (!PickSavePath(_window.get(), L"Export.png", L"png", filters, 1, path))
+    const COMDLG_FILTERSPEC filters[] = {{strings.png.c_str(), L"*.png"}};
+    const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_EXPORT_PNG);
+    if (!PickSavePath(_window.get(), defaultName.c_str(), L"png", filters, 1, path))
     {
         return;
     }
     if (ExportDocumentPng(raster, _session.Document().value().resolution, path.c_str()) != ProjectIoStatus::Ok)
     {
-        if (!_quietUi)
-        {
-            MessageBoxW(_window.get(), L"RedPrism could not export PNG.", L"RedPrism", MB_OK | MB_ICONERROR);
-        }
+        ShowError(IDS_ERROR_EXPORT_PNG);
     }
 }
 
@@ -1220,10 +1543,15 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_DROPFILES:
     {
         const HDROP drop = reinterpret_cast<HDROP>(wParam);
-        wchar_t path[MAX_PATH]{};
-        if (DragQueryFileW(drop, 0, path, MAX_PATH) != 0)
+        const UINT length = DragQueryFileW(drop, 0, nullptr, 0);
+        if (length != 0)
         {
-            OpenPath(path);
+            std::wstring path(static_cast<std::size_t>(length) + 1, L'\0');
+            if (DragQueryFileW(drop, 0, path.data(), length + 1) != 0)
+            {
+                path.resize(length);
+                OpenPath(path.c_str());
+            }
         }
         DragFinish(drop);
         return 0;

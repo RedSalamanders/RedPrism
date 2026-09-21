@@ -115,9 +115,13 @@ if ($unknown.ExitCode -ne 2) {
 }
 
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
-$selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -Wait -PassThru
+$selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
+Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
+$selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -Wait -PassThru `
+    -RedirectStandardError $selfTestErr
 if ($selfTest.ExitCode -ne 0) {
-    throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode)."
+    $selfTestText = Get-Content -LiteralPath $selfTestErr -Raw -ErrorAction SilentlyContinue
+    throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). $selfTestText"
 }
 
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan

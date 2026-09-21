@@ -3,9 +3,11 @@
 #include "Document.h"
 #include "EditorTool.h"
 
+#include <array>
 #include <d3d11.h>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -21,6 +23,7 @@
 
 using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu>;
 
+// The canvas hole in physical pixels: the rectangle the document composition blits into.
 struct CanvasHole
 {
     float left = 0;
@@ -29,6 +32,18 @@ struct CanvasHole
     float height = 0;
 };
 
+// Phase of a chrome-driven edit that previews live and settles on commit or cancel (the DxUi phases, app-typed so
+// Application never names a DxUi enum).
+enum class ChromeEditPhase : std::uint8_t
+{
+    Preview,
+    Commit,
+    Cancel,
+};
+
+// Editor chrome on the one HWND: MenuBar, document tabs, tool rail with the palette wells, tool header, layers
+// splitter, layers panel with the opacity stepper, status strip, and the color picker card. Owns one DxUi
+// EmbeddedHost that borrows the application device. Every visible string comes from the STRINGTABLE.
 class ChromeHost final
 {
   public:
@@ -37,10 +52,19 @@ class ChromeHost final
     static constexpr float kHeaderHeightDip = 36.0f;
     static constexpr float kStatusHeightDip = 24.0f;
     static constexpr float kRailWidthDip = 48.0f;
-    static constexpr float kSplitterWidthDip = 6.0f;
+    static constexpr float kToolButtonDip = 40.0f;
+    static constexpr float kToolGapDip = 2.0f;
+    static constexpr float kSplitterWidthDip = DxUi::Splitter::kDefaultThicknessDip;
+    static constexpr float kCanvasMinDip = 200.0f;
     static constexpr float kLayersMinDip = 160.0f;
     static constexpr float kLayersMaxDip = 480.0f;
     static constexpr float kLayersDefaultDip = 240.0f;
+    static constexpr float kLayersTitleDip = 32.0f;
+    static constexpr float kOpacityWidthDip = 96.0f;
+    static constexpr float kWellDip = 26.0f;
+    static constexpr float kWellOffsetDip = 14.0f;
+    static constexpr float kWellBlockDip = 48.0f;
+    static constexpr float kPickerMarginDip = 8.0f;
 
     static constexpr int kCommandNew = 100;
     static constexpr int kCommandOpen = 101;
@@ -48,8 +72,32 @@ class ChromeHost final
     static constexpr int kCommandSaveAs = 103;
     static constexpr int kCommandExportPng = 104;
     static constexpr int kCommandExportJpeg = 105;
+    static constexpr int kCommandExit = 106;
     static constexpr int kCommandUndo = 200;
     static constexpr int kCommandRedo = 201;
+    static constexpr int kCommandNewLayer = 300;
+    static constexpr int kCommandNewFolder = 301;
+    static constexpr int kCommandDeleteLayer = 302;
+    static constexpr int kCommandToggleLayerVisibility = 303;
+    static constexpr int kCommandMoveOutOfGroup = 304;
+    static constexpr int kCommandZoomFit = 400;
+    static constexpr int kCommandZoomActual = 401;
+    static constexpr int kCommandZoomIn = 402;
+    static constexpr int kCommandZoomOut = 403;
+    static constexpr int kCommandAbout = 500;
+
+    enum class MenuIndex : std::size_t
+    {
+        File = 0,
+        Edit,
+        Image,
+        Layer,
+        Select,
+        Filter,
+        View,
+        Help,
+        Count,
+    };
 
     ChromeHost() = default;
     ~ChromeHost();
@@ -65,10 +113,30 @@ class ChromeHost final
     void SetCommandHandler(std::function<void(int)> handler);
     void SetToolHandler(std::function<void(EditorTool)> handler);
     void SetLayerHandler(std::function<void(Guid)> handler);
+    void SetLayerExpandHandler(std::function<void(Guid, bool)> handler);
+    // Committed palette (foreground, background) after the picker's OK or Enter.
+    void SetPaletteHandler(std::function<void(uint32_t, uint32_t)> handler);
+    // Active layer opacity in 0…1 from the stepper: typing previews, Enter/blur/buttons commit, Escape cancels.
+    void SetOpacityHandler(std::function<void(double, ChromeEditPhase)> handler);
+    // The canvas hole changed from inside chrome (splitter drag or keyboard); the host re-syncs the viewport.
+    void SetLayoutHandler(std::function<void()> handler);
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
+    void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
     void SetTool(EditorTool tool) noexcept;
     void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active);
+    void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept;
+    // nullopt disables the stepper (no active raster layer). Ignored while the user is typing into it.
+    void SetActiveLayerOpacity(std::optional<double> opacity) noexcept;
+    // Persisted layers width; clamped by the splitter on the next Prepare.
+    void SetLayersWidth(float widthDip) noexcept;
+    void OpenColorPicker(bool background) noexcept;
+    // Host-driven close (Escape fallback, self-test): commits or cancels the open picker.
+    void CloseColorPicker(bool commit) noexcept;
+    // Host eyedropper result while the picker is open (previews, does not commit).
+    void SampleColor(uint32_t argb) noexcept;
+    // Self-test hook: one committed stepper change, as the increment button would produce.
+    [[nodiscard]] bool RequestLayerOpacity(double percent) noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -95,6 +163,21 @@ class ChromeHost final
     {
         _canvasFocused = focused;
     }
+    [[nodiscard]] bool ColorPickerOpen() const noexcept;
+    [[nodiscard]] uint32_t ForegroundColor() const noexcept
+    {
+        return _foregroundArgb;
+    }
+    [[nodiscard]] uint32_t BackgroundColor() const noexcept
+    {
+        return _backgroundArgb;
+    }
+    // Rail button bounds in DIP (index order of EditorTool); tests and the harness use it to prove layout.
+    [[nodiscard]] D2D1_RECT_F ToolButtonBoundsDip(EditorTool tool) const noexcept;
+    // Separator bar of the layers splitter, palette wells, and the picker card, in DIP, for the same purpose.
+    [[nodiscard]] D2D1_RECT_F SplitterBoundsDip() const noexcept;
+    [[nodiscard]] D2D1_RECT_F PaletteWellBoundsDip(bool background) const noexcept;
+    [[nodiscard]] D2D1_RECT_F ColorPickerBoundsDip() const noexcept;
 
   private:
     class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
@@ -102,26 +185,34 @@ class ChromeHost final
       public:
         std::vector<HierarchyEntry> rows;
         std::optional<Guid> active;
+        std::wstring hiddenPattern;
         std::function<void(Guid)>* onLayer = nullptr;
+        std::function<void(Guid, bool)>* onExpand = nullptr;
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;
+        void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;
     };
 
     HRESULT BindDevice(ID3D11Device* device) noexcept;
     HRESULT Build() noexcept;
     void Arrange() noexcept;
+    void ArrangePicker() noexcept;
     void BuildMenus() noexcept;
     void OpenMenu(size_t index, POINT screen, bool keyboard) noexcept;
-    [[nodiscard]] bool HitSplitter(float xDip, float yDip) const noexcept;
+    void SyncToolVisuals() noexcept;
+    void OnSplitterChange(DxUi::SplitterChange change) noexcept;
+    void OnPickerChange(DxUi::ColorPickerChange change) noexcept;
+    void FinishPicker(bool commit, uint32_t argb) noexcept;
+    [[nodiscard]] float WidthDip() const noexcept;
+    [[nodiscard]] float HeightDip() const noexcept;
 
     DxUi::EmbeddedHost _view;
     std::shared_ptr<DxUi::GraphicsDevice> _graphics;
     void* _requestContext = nullptr;
     void (*_requestFrame)(void*) noexcept = nullptr;
     HWND _owner = nullptr;
-    unique_hmenu _fileMenu;
-    unique_hmenu _editMenu;
+    std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
     DxUi::MenuBar* _menu = nullptr;
     DxUi::TabControl* _tabs = nullptr;
     DxUi::Toolbar* _rail = nullptr;
@@ -129,19 +220,30 @@ class ChromeHost final
     DxUi::Tree* _layers = nullptr;
     DxUi::StatusStrip* _status = nullptr;
     DxUi::Label* _layersTitle = nullptr;
-    std::vector<DxUi::Toggle*> _toolButtons;
+    DxUi::Splitter* _splitter = nullptr;
+    DxUi::ColorSwatch* _foregroundWell = nullptr;
+    DxUi::ColorSwatch* _backgroundWell = nullptr;
+    DxUi::NumericStepper* _opacity = nullptr;
+    DxUi::CardPanel* _pickerCard = nullptr;
+    DxUi::ColorPicker* _picker = nullptr;
+    std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
     std::function<void(EditorTool)> _onTool;
     std::function<void(Guid)> _onLayer;
+    std::function<void(Guid, bool)> _onExpand;
+    std::function<void(uint32_t, uint32_t)> _onPalette;
+    std::function<void(double, ChromeEditPhase)> _onOpacity;
+    std::function<void()> _onLayout;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;
     float _layersWidthDip = kLayersDefaultDip;
-    bool _draggingSplitter = false;
-    float _dragStartX = 0;
-    float _dragStartWidth = kLayersDefaultDip;
+    float _preferredLayersWidthDip = kLayersDefaultDip;
+    uint32_t _foregroundArgb = 0xFF000000u;
+    uint32_t _backgroundArgb = 0xFFFFFFFFu;
     EditorTool _tool = EditorTool::Move;
+    bool _pickerBackground = false;
     bool _canvasFocused = true;
     bool _attached = false;
 };

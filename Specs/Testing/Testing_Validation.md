@@ -1,13 +1,13 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-21
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
 
 This contract owns how RedPrism is proven. Domain specs name the behavior; this file names the gates that MUST pass
-before a phase is Done. Screenshot policy for later chrome lives here so C7 does not invent a second rule.
+before a phase is Done. Screenshot policy for chrome lives here so later phases do not invent a second rule.
 
 ## Entrypoint
 
@@ -18,24 +18,31 @@ entrypoint's success exit code and MUST NOT be reused as the pass/fail signal fo
 
 ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 binaries are produced by `build.ps1` only.
 
-## C1 gates
+## Gates
 
 | Gate | Pass condition |
 | --- | --- |
 | Version identity | `RedPrism.exe` `OriginalFilename` is `RedPrism.exe` and `ProductName` is `RedPrism` |
-| HostTests | `HostTests.exe` exit 0 (adapter-of-monitor, frame-action selection, command catalog) |
+| HostTests | `HostTests.exe` exit 0: adapter-of-monitor, frame-action selection (including display-off), command catalog and `--dpi` rejection, `EditorTool` key/glyph/name tables, every rail glyph present in Segoe Fluent Icons (skipped with a `SKIP` line when the font is absent), every STRINGTABLE id loaded from `RedPrism.exe` as a data file with positional placeholders only |
 | ASan Debug only | `HostTests.exe --asan-probe` MUST NOT exit 0 and the captured log MUST contain `AddressSanitizer: heap-use-after-free`. An ordinary crash without that diagnostic is a failed probe. |
-| Help | `RedPrism.exe --help` exit 0; redirected stdout contains `--self-test` |
+| Help | `RedPrism.exe --help` exit 0; redirected stdout contains `--self-test` and `--dpi` |
 | Unknown switch | `RedPrism.exe --no-such-switch` exit 2 |
-| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0; visible DxUi surface then 0 when hidden |
-| DocumentTests | `DocumentTests.exe` exit 0 (graph, `ProjectStore`-identical validation, history budget) |
-| CompositionTests | `CompositionTests.exe` exit 0 (viewport mapping, WARP Multiply and Color Dodge goldens, device-loss recreate, hidden canvas bytes 0) |
-| IoTests | `IoTests.exe` exit 0 (v7 exploded/ZIP round-trip, path-traversal reject, 4 MiB manifest reject, missing HEIF clean error) |
+| WARP self-test | Hidden `RedPrism.exe --self-test --warp` exit 0: visible DxUi surface within 64 MiB with ≥ 1 composite, canvas surfaces allocated, a second frame does not re-composite the settled document, a splitter drag through `DispatchPointer` widens the layers panel by 40 DIP and narrows the hole after the layout re-sync, the foreground well opens the picker and a sampled color commits into the session palette, a cancelled background edit leaves it, X/D swap and reset, the opacity stepper records one `Layer Opacity` undo entry at 50 %, then 0 DxUi bytes and 0 canvas bytes when hidden |
+| DocumentTests | `DocumentTests.exe` exit 0 (graph, `ProjectStore`-identical validation, history budget, mask placement helpers, collapsed rows, clip release on delete, legacy insertion/deletion/naming semantics) |
+| CompositionTests | `CompositionTests.exe` exit 0: the golden table in [`Rendering_Composition.md`](../Rendering/Rendering_Composition.md) (blend modes, order, raster masks with placement, live masks and chains, clipping stacks, folder masks, transforms, residency and caching, viewport) |
+| IoTests | `IoTests.exe` exit 0: the list in [`IO_ProjectFormat.md`](../IO/IO_ProjectFormat.md) plus PNG/Gray8/JPEG codec round trips, HEIF clean error, import onto a document |
 | Provenance | `DxUi.provenance.json` matches the lock; wrong-pin fixtures are rejected |
 | Build presentation | Framed pixel-art banner identity, even scene geometry, and interactive-terminal selection |
-| Harness screenshot | `--screenshot <png> --warp --dpi 96` and `--dpi 144` each write a PNG of the empty-document shell, or exit 8 when capture is unavailable |
+| Harness screenshot | `--screenshot <png> --warp --dpi 96` and `--dpi 144` each write a PNG of the empty-document shell (populated rail), or exit 8 when capture is unavailable |
 
 `ASAN_OPTIONS` for the probe is `halt_on_error=1:abort_on_error=0:detect_leaks=0`.
+
+## Test style
+
+Tests are in-process executables under `Tests/` with one `Expect(condition, "suite.case")` per observable fact,
+`PASS`/`FAIL` lines on stdout, and a nonzero exit on any failure. Goldens are numbers taken from the legacy Swift
+tests, never "looks fine". GPU tests create their own WARP device; nothing in `Tests/` opens a visible window. Fixture
+trees are materialized under `%TEMP%\RedPrism.IoTests`; a test that writes a file removes any stale copy first.
 
 ## Later gates (record now, implement with the feature)
 
@@ -45,8 +52,7 @@ ARM64 runtime qualification requires a native ARM64 host. Cross-built ARM64 bina
 | C14 | Settings, crash, localization, UIA |
 | C15 | Portable ZIP packaging |
 
-In-process tests live under `Tests/` and are invoked by `test.ps1`. GUI tests default to no-activation. Interactive
-desktop focus requires an explicit lease in a later spec.
+GUI tests default to no-activation. Interactive desktop focus requires an explicit lease in a later spec.
 
 ## Screenshots
 
@@ -62,13 +68,13 @@ letter plus a directory ownership marker), never repository `.build/` as a data 
 
 Skill or `AGENTS.md` edits MUST pass `.\validate-skills.ps1` in the same change.
 
-## Required local matrix for C1 closeout
+## Required local matrix for a closeout
 
 ```powershell
 .\validate-skills.ps1
-.\build.ps1 -Platform x64 -Configuration Debug
-.\build.ps1 -Platform x64 -Configuration Release
-.\build.ps1 -Platform x64 -Configuration "ASan Debug"
+.\format.ps1 -Check
 .\test.ps1 -Platform x64 -Configuration Debug
+.\test.ps1 -Platform x64 -Configuration Release
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
+.\build.ps1 -Platform ARM64 -Configuration Debug
 ```

@@ -15,14 +15,30 @@ Windows-native raster composition (Direct3D 11 + DxUi). This guide is not a beha
 
 ## Shell
 
-One window: menu, document tab, tool rail, canvas, layers, status. New / Open / Save use the common file dialog.
-Drop a `.prism` package, an exploded project folder, or an image onto the window. Photoshop-style tool keys
-(V/M/L/W/C/B/E/J/S/R/G/U/I/H/Z, A idle) apply when the canvas has focus; Escape returns focus to chrome.
-Space pans. Wheel zooms.
+One window: menu bar, document tab, tool rail with the foreground/background wells, canvas, layers splitter,
+layers panel with the opacity stepper, status strip. New / Open / Save use the
+common file dialog. Drop a `.prism` package, an exploded project folder, or an image onto the window.
+
+- **Tool rail**: sixteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
+  E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom, A no tool). Keys apply
+  when the canvas has focus; Escape returns focus to chrome. Hover a button for its name and key.
+- **Palette**: the two wells at the bottom of the rail are the foreground (front) and background (behind) colors.
+  Click one to open the color picker (saturation/value field, hue strip, R/G/B, hex); OK or Enter commits, Cancel or
+  Escape restores. X swaps the wells, D resets them to black over white.
+- **Layers**: drag the 6 DIP splitter (or use Left/Right, Shift, Home/End while it has focus) to size the panel
+  between 160 and 480 DIP; the canvas keeps at least 200 DIP. The title row's stepper edits the active layer's
+  opacity (type, Up/Down, buttons) as one undo step.
+- **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
+  pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
+- **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
+  (Ctrl+Shift+N) or folder (Ctrl+G), deletes the active layer (Delete), toggles its visibility, or moves it out of
+  its folder (Ctrl+Shift+G).
+- **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert.
 
 Empty-document harness captures:
 
 - [96 DPI](screenshots/empty-shell-96.png)
 - [144 DPI](screenshots/empty-shell-144.png)
 
-Transform, selection, brush, and filters are later phases (indexed plans under `Specs/Plans/WIP/`).
+Transform, selection, brush, and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
+[usage.md](usage.md) for the command line and file formats.

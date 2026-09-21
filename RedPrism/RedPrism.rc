@@ -2,6 +2,8 @@
 #include "../Common/Version.h"
 #include <windows.h>
 
+#pragma code_page(65001)
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION REDPRISM_VERSION_NUMERIC
  PRODUCTVERSION REDPRISM_VERSION_NUMERIC
@@ -33,4 +35,105 @@ BEGIN
     BEGIN
         VALUE "Translation", 0x0409, 1200
     END
+END
+
+// All chrome strings. Positional placeholders only ({0}, {1}); never printf specs.
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE                   "RedPrism"
+    IDS_UNTITLED                    "Untitled"
+    IDS_DIRTY_MARK                  "{0} •"
+    IDS_STATUS_ZOOM                 "{0}%"
+    IDS_STATUS_SIZE                 "{0} × {1}"
+    IDS_STATUS_TOOL                 "{0} ({1})"
+    IDS_STATUS_NO_DOCUMENT          "—"
+    IDS_LAYERS_TITLE                "Layers"
+    IDS_LAYER_HIDDEN_SUFFIX         "{0} (hidden)"
+    IDS_LAYER_OPACITY               "Layer opacity"
+    IDS_PALETTE_FOREGROUND          "Foreground color"
+    IDS_PALETTE_BACKGROUND          "Background color"
+    IDS_PICKER_NEW                  "New"
+    IDS_PICKER_CURRENT              "Current"
+    IDS_PICKER_HEX                  "Hex"
+    IDS_PICKER_RED                  "R"
+    IDS_PICKER_GREEN                "G"
+    IDS_PICKER_BLUE                 "B"
+    IDS_PICKER_OK                   "OK"
+    IDS_PICKER_CANCEL               "Cancel"
+
+    IDS_MENU_FILE                   "File"
+    IDS_MENU_EDIT                   "Edit"
+    IDS_MENU_IMAGE                  "Image"
+    IDS_MENU_LAYER                  "Layer"
+    IDS_MENU_SELECT                 "Select"
+    IDS_MENU_FILTER                 "Filter"
+    IDS_MENU_VIEW                   "View"
+    IDS_MENU_HELP                   "Help"
+
+    IDS_CMD_NEW                     "&New\tCtrl+N"
+    IDS_CMD_OPEN                    "&Open...\tCtrl+O"
+    IDS_CMD_SAVE                    "&Save\tCtrl+S"
+    IDS_CMD_SAVE_AS                 "Save &As...\tCtrl+Shift+S"
+    IDS_CMD_EXPORT_PNG              "Export &PNG..."
+    IDS_CMD_EXPORT_JPEG             "Export &JPEG..."
+    IDS_CMD_UNDO                    "&Undo\tCtrl+Z"
+    IDS_CMD_REDO                    "&Redo\tCtrl+Shift+Z"
+    IDS_CMD_NEW_LAYER               "New &Layer\tCtrl+Shift+N"
+    IDS_CMD_NEW_FOLDER              "New &Folder\tCtrl+G"
+    IDS_CMD_DELETE_LAYER            "&Delete Layer\tDelete"
+    IDS_CMD_TOGGLE_LAYER_VISIBILITY "Toggle &Visibility"
+    IDS_CMD_MOVE_OUT_OF_GROUP       "Move &Out of Folder\tCtrl+Shift+G"
+    IDS_CMD_ZOOM_FIT                "&Fit on Screen\tCtrl+0"
+    IDS_CMD_ZOOM_ACTUAL             "&Actual Pixels\tCtrl+1"
+    IDS_CMD_ZOOM_IN                 "Zoom &In\tCtrl++"
+    IDS_CMD_ZOOM_OUT                "Zoom &Out\tCtrl+-"
+    IDS_CMD_ABOUT                   "&About RedPrism"
+    IDS_CMD_EXIT                    "E&xit\tAlt+F4"
+    IDS_CMD_UNDO_NAMED              "&Undo {0}\tCtrl+Z"
+    IDS_CMD_REDO_NAMED              "&Redo {0}\tCtrl+Shift+Z"
+
+    IDS_TOOL_MOVE                   "Move"
+    IDS_TOOL_MARQUEE                "Marquee"
+    IDS_TOOL_LASSO                  "Lasso"
+    IDS_TOOL_WAND                   "Magic Wand"
+    IDS_TOOL_CROP                   "Crop"
+    IDS_TOOL_BRUSH                  "Brush"
+    IDS_TOOL_ERASER                 "Eraser"
+    IDS_TOOL_HEAL                   "Spot Healing Brush"
+    IDS_TOOL_CLONE                  "Clone Stamp"
+    IDS_TOOL_SMEAR                  "Smear"
+    IDS_TOOL_GRADIENT               "Gradient"
+    IDS_TOOL_SHAPE                  "Shape"
+    IDS_TOOL_EYEDROPPER             "Eyedropper"
+    IDS_TOOL_HAND                   "Hand"
+    IDS_TOOL_ZOOM                   "Zoom"
+    IDS_TOOL_IDLE                   "No Tool"
+    IDS_TOOL_TOOLTIP                "{0} ({1})"
+
+    IDS_ERROR_OPEN_PROJECT          "RedPrism could not open that project."
+    IDS_ERROR_IMPORT_IMAGE          "RedPrism could not import that image."
+    IDS_ERROR_SAVE_PROJECT          "RedPrism could not save the project."
+    IDS_ERROR_FLATTEN               "RedPrism could not flatten the document."
+    IDS_ERROR_READBACK              "RedPrism could not read the flattened image."
+    IDS_ERROR_EXPORT_JPEG           "RedPrism could not export JPEG."
+    IDS_ERROR_EXPORT_PNG            "RedPrism could not export PNG."
+    IDS_ERROR_START_GENERIC         "RedPrism could not start. See the debugger output."
+    IDS_ERROR_START_WINDOW          "RedPrism could not create its window. See the debugger output."
+    IDS_ERROR_START_GRAPHICS        "RedPrism could not complete graphics initialization or rendering. See the debugger output."
+    IDS_ERROR_UNSUPPORTED_VERSION   "This project uses format version {0}. RedPrism supports versions 1–7."
+    IDS_ERROR_TOO_LARGE             "This project exceeds the supported canvas, layer, file-size, or 100-megapixel image limit."
+    IDS_ERROR_MISSING_IMAGE         "An image inside the project is missing or damaged. The current document has not been replaced."
+
+    IDS_FILTER_PROJECT              "RedPrism project"
+    IDS_FILTER_IMAGES               "Images"
+    IDS_FILTER_ALL                  "All files"
+    IDS_FILTER_EXPLODED             "Exploded project folder"
+    IDS_FILTER_JPEG                 "JPEG image"
+    IDS_FILTER_PNG                  "PNG image"
+    IDS_DEFAULT_PROJECT_NAME        "Untitled.prism"
+    IDS_DEFAULT_EXPORT_JPEG         "Export.jpg"
+    IDS_DEFAULT_EXPORT_PNG          "Export.png"
+    IDS_ABOUT_TEXT                  "RedPrism {0}\nWindows raster composition. Direct3D 11, DxUi, WIC."
+    IDS_COMMAND_LINE_CAPTION        "RedPrism command line"
+    IDS_UNIT_PERCENT                "%"
 END

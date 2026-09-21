@@ -44,6 +44,7 @@ class Application final
     HRESULT InitializeChrome() noexcept;
     HRESULT InitializeDocument() noexcept;
     void SyncChrome() noexcept;
+    void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
     void CloseMainWindow() noexcept;
     bool WaitUntilMessage() noexcept;
@@ -58,6 +59,9 @@ class Application final
     void SaveDocument(bool saveAs) noexcept;
     void ExportFlattened(bool jpeg) noexcept;
     void OpenPath(const wchar_t* path) noexcept;
+    void ZoomBy(double factor) noexcept;
+    void ShowError(UINT stringId) noexcept;
+    [[nodiscard]] Vec2 DocumentSize() const noexcept;
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnSize(HWND window, UINT width, UINT height) noexcept;
     LRESULT OnDpiChanged(HWND window, const RECT* suggestedBounds) noexcept;
@@ -77,6 +81,8 @@ class Application final
     POINT _lastPointer{};
     bool _spacePan = false;
     bool _canvasDrag = false;
+    bool _opacityEditing = false;
+    bool _layoutDirty = false;
     bool _quietUi = false;
     bool _forceWarp = false;
     bool _classRegistered = false;

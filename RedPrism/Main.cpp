@@ -1,5 +1,7 @@
 #include "Application.h"
 #include "CommandLine.h"
+#include "Resources.h"
+#include "resource.h"
 
 #include <memory>
 #include <new>
@@ -75,7 +77,8 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
         OutputDebugStringW(text.c_str());
         return;
     }
-    MessageBoxW(nullptr, text.c_str(), L"RedPrism command line", MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
+    const std::wstring caption = LoadStringResource(nullptr, IDS_COMMAND_LINE_CAPTION);
+    MessageBoxW(nullptr, text.c_str(), caption.c_str(), MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
 }
 
 int RunApplication(HINSTANCE instance, int showCommand) noexcept
@@ -140,19 +143,21 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const int exitCode = parsed.selfTest ? application->RunSelfTest() : application->Run(showCommand);
     if (exitCode != 0 && !parsed.selfTest && parsed.screenshotPath == nullptr)
     {
-        const wchar_t* message = L"RedPrism could not start. See the debugger output.";
+        UINT messageId = IDS_ERROR_START_GENERIC;
         switch (exitCode)
         {
         case 2:
-            message = L"RedPrism could not create its window. See the debugger output.";
+            messageId = IDS_ERROR_START_WINDOW;
             break;
         case 5:
-            message = L"RedPrism could not complete graphics initialization or rendering. See the debugger output.";
+            messageId = IDS_ERROR_START_GRAPHICS;
             break;
         default:
             break;
         }
-        MessageBoxW(nullptr, message, L"RedPrism", MB_OK | MB_ICONERROR);
+        const std::wstring message = LoadStringResource(nullptr, messageId);
+        const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
+        MessageBoxW(nullptr, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
     }
     if (uninitializeCom)
     {

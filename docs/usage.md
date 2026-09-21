@@ -11,5 +11,30 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--dpi 96\|144` | Layout DPI for `--screenshot` |
 | `--help` | Print the catalog and exit 0 |
 
-Projects are ZIP `.prism` files or exploded folders (`manifest.json` + `images/`). PNG, JPEG, TIFF, and HEIC (when
-WIC provides HEIF) import onto the canvas. Export PNG or JPEG from the File menu.
+## Projects
+
+Projects are ZIP `.prism` files or exploded folders (`manifest.json` + `images/`), the project package layout,
+format versions 1–7. Everything the Mac app stores round-trips: layers and folders, opacity and blend modes, raster
+masks (including masks moved apart from their layer and unlinked masks), clipping masks, adjustment layers with
+their Hue/Saturation, Levels, Curves, Exposure, Gradient Map and Grain settings, and shape metadata. Saving writes
+version 7. A project the app cannot open (unsupported version, damaged metadata, missing image, over the 30 000 px
+/ 100-megapixel limits) is reported and the current document is left untouched.
+
+## Images
+
+PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) import onto the canvas as a new layer named after
+the file; an empty document takes the image size. Export PNG (with transparency) or JPEG (opaque, quality 0.8) from
+the File menu.
+
+## Keyboard reference
+
+| Keys | Action |
+| --- | --- |
+| Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S | New, open, save, save as |
+| Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
+| Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Delete | New layer, new folder, move out of folder, delete layer |
+| X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |
+| Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- | Fit, actual pixels, zoom in, zoom out |
+| V M L W C B E J S R G U I H Z A | Tools (canvas focused) |
+| Space (held) | Pan |
+| Escape | Focus chrome |
