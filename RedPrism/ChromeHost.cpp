@@ -1,6 +1,5 @@
 #include "ChromeHost.h"
 
-#include "CanvasOverlay.h"
 #include "Resources.h"
 #include "ThemePalette.h"
 
@@ -233,6 +232,11 @@ void ChromeHost::SetTransformHandler(std::function<void(TransformAction, double)
     _onTransform = std::move(handler);
 }
 
+void ChromeHost::SetSelectionHandler(std::function<void(SelectionAction, double)> handler)
+{
+    _onSelection = std::move(handler);
+}
+
 void ChromeHost::BuildMenus() noexcept
 {
     for (unique_hmenu& menu : _menus)
@@ -274,6 +278,15 @@ void ChromeHost::BuildMenus() noexcept
         AppendSeparator(layer);
         AppendCommand(layer, kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL);
         AppendCommand(layer, kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL);
+    }
+    if (HMENU select = _menus[static_cast<std::size_t>(MenuIndex::Select)].get())
+    {
+        AppendCommand(select, kCommandSelectAll, IDS_CMD_SELECT_ALL);
+        AppendCommand(select, kCommandDeselect, IDS_CMD_DESELECT);
+        AppendCommand(select, kCommandInverse, IDS_CMD_INVERSE);
+        AppendSeparator(select);
+        AppendCommand(select, kCommandLoadLayerSelection, IDS_CMD_LOAD_LAYER_SELECTION);
+        AppendCommand(select, kCommandLoadMaskSelection, IDS_CMD_LOAD_MASK_SELECTION);
     }
     if (HMENU view = _menus[static_cast<std::size_t>(MenuIndex::View)].get())
     {
@@ -362,6 +375,7 @@ HRESULT ChromeHost::Build() noexcept
         _foregroundWell->SetOnClick([this] { OpenColorPicker(false); });
         _header = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, EditorToolNameId(_tool)));
         BuildTransformHeader(*root);
+        BuildSelectionHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
         _opacity->SetMinimum(0.0);
@@ -510,6 +524,7 @@ void ChromeHost::Arrange() noexcept
         _header->SetBounds(D2D1::RectF(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom));
     }
     ArrangeTransformHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    ArrangeSelectionHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     if (_overlay)
     {
         _overlay->SetBounds(D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
@@ -804,12 +819,13 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
     {
         _transformHeader->SetVisible(tool == EditorTool::Move);
     }
-    if (_header)
+    if (_selectionHeader)
     {
-        _header->SetVisible(tool != EditorTool::Move);
+        _selectionHeader->SetVisible(EditorToolIsSelection(tool));
     }
     if (_header)
     {
+        _header->SetVisible(tool != EditorTool::Move && !EditorToolIsSelection(tool));
         _header->SetText(LoadStringResource(nullptr, EditorToolNameId(_tool)));
     }
 }
@@ -1202,4 +1218,286 @@ void ChromeHost::SetTransformOverlay(const std::optional<TransformOverlayGeometr
     }
     _overlay->SetGeometry(converted);
     _overlay->SetGuides(std::move(xs), std::move(ys));
+}
+
+void ChromeHost::BuildSelectionHeader(DxUi::Panel& root)
+{
+    _selectionHeader = root.AddChild<DxUi::Panel>();
+    _selectionTitle = _selectionHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_TOOL_MARQUEE));
+    _selectionTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+    const auto combo =
+        [this](std::initializer_list<std::pair<const wchar_t*, UINT>> items, UINT tipId, SelectionAction action)
+    {
+        DxUi::ComboBox* control = _selectionHeader->AddChild<DxUi::ComboBox>();
+        std::vector<DxUi::ComboBox::Item> entries;
+        for (const auto& [value, id] : items)
+        {
+            entries.push_back(DxUi::ComboBox::Item{value, LoadStringResource(nullptr, id)});
+        }
+        control->SetItems(std::move(entries));
+        control->SetSelectedIndex(0);
+        control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetOnSelectionChanged(
+            [this, action](size_t index)
+            {
+                if (!_syncingSelection && _onSelection)
+                {
+                    _onSelection(action, static_cast<double>(index));
+                }
+            });
+        return control;
+    };
+    const auto checkbox = [this](UINT labelId, UINT tipId, bool checked, SelectionAction action)
+    {
+        DxUi::Checkbox* control = _selectionHeader->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, labelId));
+        control->SetTooltipText(LoadStringResource(nullptr, tipId));
+        control->SetChecked(checked);
+        control->SetOnToggled(
+            [this, action](bool value)
+            {
+                if (!_syncingSelection && _onSelection)
+                {
+                    _onSelection(action, value ? 1.0 : 0.0);
+                }
+            });
+        return control;
+    };
+    const auto stepper = [this](UINT labelId, float labelWidth, UINT unitId, float unitWidth, double minimum,
+                                double maximum, double value, SelectionAction action)
+    {
+        DxUi::NumericStepper* control = _selectionHeader->AddChild<DxUi::NumericStepper>();
+        control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        if (unitId != 0)
+        {
+            control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
+        }
+        control->SetMinimum(minimum);
+        control->SetMaximum(maximum);
+        control->SetStep(1.0);
+        control->SetLargeStep(10.0);
+        control->SetDecimals(0);
+        control->SetValue(value);
+        control->SetOnChange(
+            [this, action](DxUi::NumericStepperChange change)
+            {
+                if (!_syncingSelection && _onSelection)
+                {
+                    _onSelection(action, change.value);
+                }
+            });
+        return control;
+    };
+    const auto button = [this](UINT labelId, SelectionAction action)
+    {
+        DxUi::Button* control = _selectionHeader->AddChild<DxUi::Button>(LoadStringResource(nullptr, labelId));
+        control->SetOnClick(
+            [this, action]
+            {
+                if (_onSelection)
+                {
+                    _onSelection(action, 0.0);
+                }
+            });
+        return control;
+    };
+    _marqueeShape = combo({{L"rectangle", IDS_SELECTION_RECTANGLE}, {L"ellipse", IDS_SELECTION_ELLIPSE}},
+                          IDS_SELECTION_SHAPE_TIP, SelectionAction::SetMarqueeKind);
+    _lassoShape = combo({{L"freehand", IDS_SELECTION_FREEHAND}, {L"polygonal", IDS_SELECTION_POLYGONAL}},
+                        IDS_SELECTION_LASSO_TIP, SelectionAction::SetLassoKind);
+    _selectionMode = combo({{L"new", IDS_SELECTION_MODE_NEW},
+                            {L"add", IDS_SELECTION_MODE_ADD},
+                            {L"subtract", IDS_SELECTION_MODE_SUBTRACT}},
+                           IDS_SELECTION_MODE_TIP, SelectionAction::SetMode);
+    _wandTolerance = stepper(IDS_WAND_TOLERANCE, 60.0f, 0, 0.0f, 0.0, 255.0, 32.0, SelectionAction::SetTolerance);
+    _wandTolerance->SetTooltipText(LoadStringResource(nullptr, IDS_WAND_TOLERANCE_TIP));
+    _wandSampleSize = combo(
+        {{L"point", IDS_WAND_POINT_SAMPLE}, {L"three", IDS_WAND_THREE_BY_THREE}, {L"five", IDS_WAND_FIVE_BY_FIVE}},
+        IDS_WAND_SAMPLE_SIZE_TIP, SelectionAction::SetSampleSize);
+    _wandSample = combo({{L"layer", IDS_WAND_THIS_LAYER}, {L"all", IDS_WAND_ALL_LAYERS}}, IDS_WAND_SAMPLE_TIP,
+                        SelectionAction::SetSampleAllLayers);
+    _wandContiguous = checkbox(IDS_WAND_CONTIGUOUS, IDS_WAND_CONTIGUOUS_TIP, true, SelectionAction::SetContiguous);
+    _selectionAntialias =
+        checkbox(IDS_SELECTION_ANTIALIAS, IDS_SELECTION_ANTIALIAS_TIP, true, SelectionAction::SetAntialias);
+    _expandButton = button(IDS_SELECTION_EXPAND, SelectionAction::Expand);
+    _expandButton->SetTooltipText(
+        FormatStringResource(nullptr, IDS_SELECTION_MODIFY_TIP, LoadStringResource(nullptr, IDS_SELECTION_EXPAND)));
+    _expandAmount =
+        stepper(IDS_SELECTION_EXPAND, 0.0f, IDS_UNIT_PIXELS, 18.0f, 1.0,
+                static_cast<double>(DocumentSession::kSelectionModifyLimit), 1.0, SelectionAction::SetExpandAmount);
+    _contractButton = button(IDS_SELECTION_CONTRACT, SelectionAction::Contract);
+    _contractButton->SetTooltipText(
+        FormatStringResource(nullptr, IDS_SELECTION_MODIFY_TIP, LoadStringResource(nullptr, IDS_SELECTION_CONTRACT)));
+    _contractAmount =
+        stepper(IDS_SELECTION_CONTRACT, 0.0f, IDS_UNIT_PIXELS, 18.0f, 1.0,
+                static_cast<double>(DocumentSession::kSelectionModifyLimit), 1.0, SelectionAction::SetContractAmount);
+    _selectionEmpty = _selectionHeader->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_SELECTION_EMPTY));
+    _deselectButton = button(IDS_SELECTION_DESELECT, SelectionAction::Deselect);
+    _selectionHeader->SetVisible(EditorToolIsSelection(_tool));
+    if (_header)
+    {
+        _header->SetVisible(_tool != EditorTool::Move && !EditorToolIsSelection(_tool));
+    }
+}
+
+void ChromeHost::ArrangeSelectionHeader(float left, float top, float right, float bottom) noexcept
+{
+    if (!_selectionHeader)
+    {
+        return;
+    }
+    _selectionHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    constexpr float kRowDip = 28.0f;
+    constexpr float kGapDip = 6.0f;
+    const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
+    const float rowBottom = rowTop + kRowDip;
+    const SelectionInspectorState& state = _selectionInspector;
+    // Deselect and the empty note pin to the right; the rest runs left to right and stops when out of room.
+    float rightEdge = right - 4.0f;
+    struct Pinned
+    {
+        DxUi::Control* control;
+        float width;
+        bool wanted;
+    };
+    const std::array<Pinned, 2> pinned{Pinned{_deselectButton, 80.0f, state.hasSelection},
+                                       Pinned{_selectionEmpty, 110.0f, state.hasSelection && state.isEmpty}};
+    for (const Pinned& item : pinned)
+    {
+        if (item.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = item.wanted && rightEdge - item.width > left + 80.0f;
+        item.control->SetVisible(fits);
+        if (fits)
+        {
+            item.control->SetBounds(D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
+            rightEdge -= item.width + kGapDip;
+        }
+    }
+    const bool marquee = state.tool == EditorTool::Marquee;
+    const bool lasso = state.tool == EditorTool::Lasso;
+    const bool wand = state.tool == EditorTool::Wand;
+    struct Slot
+    {
+        DxUi::Control* control;
+        float width;
+        bool wanted;
+    };
+    const std::array<Slot, 13> slots{Slot{_selectionTitle, 92.0f, true},
+                                     Slot{_marqueeShape, 118.0f, marquee},
+                                     Slot{_lassoShape, 118.0f, lasso},
+                                     Slot{_selectionMode, 106.0f, true},
+                                     Slot{_wandTolerance, 150.0f, wand},
+                                     Slot{_wandSampleSize, 150.0f, wand},
+                                     Slot{_wandSample, 118.0f, wand},
+                                     Slot{_wandContiguous, 104.0f, wand},
+                                     Slot{_selectionAntialias, 94.0f, state.antialiasVisible},
+                                     Slot{_expandButton, 70.0f, true},
+                                     Slot{_expandAmount, 90.0f, true},
+                                     Slot{_contractButton, 78.0f, true},
+                                     Slot{_contractAmount, 90.0f, true}};
+    float cursor = left + 4.0f;
+    bool room = true;
+    for (const Slot& slot : slots)
+    {
+        if (slot.control == nullptr)
+        {
+            continue;
+        }
+        const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
+        slot.control->SetVisible(fits);
+        if (fits)
+        {
+            slot.control->SetBounds(D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
+            cursor += slot.width + kGapDip;
+        }
+        else if (slot.wanted)
+        {
+            room = false;
+        }
+    }
+}
+
+void ChromeHost::SetSelectionInspector(const SelectionInspectorState& state) noexcept
+{
+    _selectionInspector = state;
+    if (!_selectionHeader)
+    {
+        return;
+    }
+    // Values only: the next Prepare arranges the slots the state wants (never SetBounds from a chrome callback).
+    _syncingSelection = true;
+    _selectionTitle->SetText(LoadStringResource(nullptr, EditorToolNameId(state.tool)));
+    _marqueeShape->SetSelectedIndex(static_cast<size_t>(std::clamp(state.marqueeKind, 0, 1)));
+    _lassoShape->SetSelectedIndex(static_cast<size_t>(std::clamp(state.lassoKind, 0, 1)));
+    _selectionMode->SetSelectedIndex(static_cast<size_t>(std::clamp(state.mode, 0, 2)));
+    const auto sync = [](DxUi::NumericStepper* stepper, double value, bool enabled)
+    {
+        stepper->SetEnabled(enabled);
+        if (!stepper->IsEditing())
+        {
+            stepper->SetValue(value);
+        }
+    };
+    sync(_wandTolerance, state.tolerance, state.enabled);
+    _wandSampleSize->SetSelectedIndex(static_cast<size_t>(std::clamp(state.sampleSize, 0, 2)));
+    _wandSample->SetSelectedIndex(state.sampleAllLayers ? 1u : 0u);
+    _wandContiguous->SetChecked(state.contiguous);
+    _selectionAntialias->SetChecked(state.antialiased);
+    for (DxUi::Control* control :
+         {static_cast<DxUi::Control*>(_marqueeShape), static_cast<DxUi::Control*>(_lassoShape),
+          static_cast<DxUi::Control*>(_selectionMode), static_cast<DxUi::Control*>(_wandSampleSize),
+          static_cast<DxUi::Control*>(_wandSample), static_cast<DxUi::Control*>(_wandContiguous),
+          static_cast<DxUi::Control*>(_selectionAntialias)})
+    {
+        control->SetEnabled(state.enabled);
+    }
+    sync(_expandAmount, state.expandAmount, state.canModify);
+    sync(_contractAmount, state.contractAmount, state.canModify);
+    _expandButton->SetEnabled(state.canModify);
+    _contractButton->SetEnabled(state.canModify);
+    _deselectButton->SetEnabled(state.enabled && state.hasSelection);
+    _syncingSelection = false;
+}
+
+void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+    for (std::vector<D2D1_POINT_2F>& loop : loops)
+    {
+        for (D2D1_POINT_2F& point : loop)
+        {
+            point.x *= toDip;
+            point.y *= toDip;
+        }
+    }
+    _overlay->SetSelectionOutline(std::move(loops));
+}
+
+void ChromeHost::SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept
+{
+    if (!_overlay)
+    {
+        return;
+    }
+    if (draft.has_value())
+    {
+        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
+        for (D2D1_POINT_2F& point : draft->points)
+        {
+            point.x *= toDip;
+            point.y *= toDip;
+        }
+        if (draft->cursor.has_value())
+        {
+            draft->cursor->x *= toDip;
+            draft->cursor->y *= toDip;
+        }
+    }
+    _overlay->SetDraft(std::move(draft));
 }

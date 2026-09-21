@@ -82,6 +82,12 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
     return IDS_TOOL_MOVE;
 }
 
+// The tools that draw or move a selection outline (legacy NavigationTool.isSelectionTool).
+[[nodiscard]] constexpr bool EditorToolIsSelection(EditorTool tool) noexcept
+{
+    return tool == EditorTool::Marquee || tool == EditorTool::Lasso || tool == EditorTool::Wand;
+}
+
 // Segoe Fluent Icons code points. HostTests proves every glyph exists in the installed icon font.
 [[nodiscard]] constexpr wchar_t EditorToolGlyph(EditorTool tool) noexcept
 {

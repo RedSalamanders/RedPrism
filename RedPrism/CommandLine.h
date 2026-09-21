@@ -64,9 +64,10 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Override layout DPI for --screenshot (empty-document shell at 96 or 144).",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::Demo, L"--demo", nullptr, RedPrismSwitchValue::Separate,
-                                  L"<transform>",
+                                  L"<transform|selection>",
                                   L"Populate the new document for a screenshot: transform adds two painted layers and "
-                                  L"shows the Move tool's box on the rotated one.",
+                                  L"shows the Move tool's box on the rotated one; selection adds an elliptical and a "
+                                  L"rectangular selection with the Marquee tool.",
                                   L"Diagnostics"},
     };
 
@@ -168,7 +169,8 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             parsed.screenshotPath = arguments[++index];
             break;
         case RedPrismSwitch::Demo:
-            if (index + 1 >= argumentCount || std::wstring_view{arguments[index + 1]} != L"transform")
+            if (index + 1 >= argumentCount || (std::wstring_view{arguments[index + 1]} != L"transform" &&
+                                               std::wstring_view{arguments[index + 1]} != L"selection"))
             {
                 if (errorToken)
                 {

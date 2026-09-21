@@ -5,6 +5,7 @@
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
 #include "Resources.h"
+#include "Selection.h"
 #include "Version.h"
 #include "WindowCapture.h"
 
@@ -757,6 +758,127 @@ int Application::RunSelfTest() noexcept
         }
     }
 
+    // Selection tools: a marquee drag, Shift adding, M switching the shape, an outline move, a click deselecting,
+    // the wand, the Select menu keys, a polygonal lasso closed with Enter, Expand from the header and Escape.
+    {
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        SyncChrome();
+        const CanvasHole hole = _chrome->HolePixels();
+        const auto pointer = [&](UINT message, WPARAM wParam, double documentX, double documentY)
+        {
+            const Vec2 view = _viewport.ViewFromDocument(Vec2{documentX, documentY}, DocumentSize());
+            OnPointer(message, wParam,
+                      MAKELPARAM(static_cast<int>(std::lround(hole.left + view.x)),
+                                 static_cast<int>(std::lround(hole.top + view.y))));
+        };
+        const auto bounds = [&]() -> std::optional<SelectionBounds>
+        {
+            const std::optional<DocumentSelection>& selection = _session.Selection();
+            return selection.has_value() ? selection->Bounds() : std::nullopt;
+        };
+        const auto closeTo = [](double a, double b) { return std::fabs(a - b) <= 2.0; };
+        OnTool(EditorTool::Marquee);
+        _chrome->SetCanvasFocused(true);
+        pointer(WM_LBUTTONDOWN, 0, 40.0, 40.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 120.0, 100.0);
+        pointer(WM_LBUTTONUP, 0, 120.0, 100.0);
+        std::optional<SelectionBounds> box = bounds();
+        if (!box.has_value() || !closeTo(box->minX, 40.0) || !closeTo(box->minY, 40.0) || !closeTo(box->maxX, 120.0) ||
+            !closeTo(box->maxY, 100.0) || _session.history.UndoName() != L"Rectangular Marquee" ||
+            _session.PendingLasso().has_value())
+        {
+            SelfTestFailure(L"Dragging the Marquee did not select a whole-pixel rectangle.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, MK_SHIFT, 200.0, 40.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON | MK_SHIFT, 280.0, 100.0);
+        pointer(WM_LBUTTONUP, MK_SHIFT, 280.0, 100.0);
+        box = bounds();
+        if (!box.has_value() || !closeTo(box->minX, 40.0) || !closeTo(box->maxX, 280.0) || !closeTo(box->maxY, 100.0))
+        {
+            SelfTestFailure(L"Shift-dragging the Marquee did not add a second rectangle.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('M', 0, false) || _session.marqueeKind != LassoKind::Ellipse ||
+            !HandleAccelerator('M', 0, true) || _session.marqueeKind != LassoKind::Ellipse ||
+            !HandleAccelerator('M', 0, false) || _session.marqueeKind != LassoKind::Rectangle)
+        {
+            SelfTestFailure(L"M did not switch the Marquee's shape exactly once per press.\n");
+            return 5;
+        }
+        const double before = box->minX;
+        pointer(WM_LBUTTONDOWN, 0, 60.0, 60.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 90.0, 70.0);
+        pointer(WM_LBUTTONUP, 0, 90.0, 70.0);
+        box = bounds();
+        if (!box.has_value() || !closeTo(box->minX, before + 30.0) ||
+            _session.history.UndoName() != L"Move Selection" || _session.IsMovingSelection())
+        {
+            SelfTestFailure(L"Dragging inside the selection did not move its outline as one entry.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
+        pointer(WM_LBUTTONUP, 0, 100.0, 70.0);
+        if (_session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
+        {
+            SelfTestFailure(L"A click inside the selection did not deselect.\n");
+            return 5;
+        }
+        InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
+        DocumentChanged();
+        OnTool(EditorTool::Wand);
+        pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
+        pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
+        box = bounds();
+        if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
+            _session.history.UndoName() != L"Magic Wand")
+        {
+            SelfTestFailure(L"The Magic Wand did not select the painted layer's pixels exactly.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
+            !HandleAccelerator('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
+            bounds() != SelectionBounds{0.0, 0.0, DocumentSize().x, DocumentSize().y} ||
+            !HandleAccelerator('D', MK_CONTROL) || _session.Selection().has_value() ||
+            _session.history.UndoName() != L"Deselect")
+        {
+            SelfTestFailure(L"Ctrl+Shift+I, Ctrl+A and Ctrl+D did not drive the Select menu.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Lasso);
+        _session.lassoKind = LassoKind::Polygonal;
+        pointer(WM_LBUTTONDOWN, 0, 300.0, 300.0);
+        pointer(WM_LBUTTONUP, 0, 300.0, 300.0);
+        pointer(WM_LBUTTONDOWN, 0, 400.0, 300.0);
+        pointer(WM_LBUTTONUP, 0, 400.0, 300.0);
+        pointer(WM_LBUTTONDOWN, 0, 400.0, 400.0);
+        pointer(WM_LBUTTONUP, 0, 400.0, 400.0);
+        if (!_session.PendingLasso().has_value() || _session.PendingLasso()->points.size() != 3 ||
+            !HandleAccelerator(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
+            _session.history.UndoName() != L"Polygonal Lasso")
+        {
+            SelfTestFailure(L"Polygonal lasso clicks and Enter did not close an outline.\n");
+            return 5;
+        }
+        OnSelectionAction(SelectionAction::SetExpandAmount, 5.0);
+        OnSelectionAction(SelectionAction::Expand, 0.0);
+        box = bounds();
+        if (_session.history.UndoName() != L"Expand Selection" || !box.has_value() || !closeTo(box->minX, 295.0))
+        {
+            SelfTestFailure(L"Expand from the header did not grow the selection by five pixels.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
+        pointer(WM_LBUTTONUP, 0, 500.0, 500.0);
+        if (!_session.PendingLasso().has_value() || !HandleAccelerator(VK_ESCAPE, 0) ||
+            _session.PendingLasso().has_value())
+        {
+            SelfTestFailure(L"Escape did not cancel the lasso outline in progress.\n");
+            return 5;
+        }
+        OnTool(EditorTool::Move);
+    }
+
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
     const DxUi::EmbeddedStatistics hidden = _chrome->Statistics();
@@ -965,6 +1087,7 @@ HRESULT Application::InitializeChrome() noexcept
             _frameInvalidated = true;
         });
     chrome->SetTransformHandler([this](TransformAction action, double value) { OnTransformAction(action, value); });
+    chrome->SetSelectionHandler([this](SelectionAction action, double value) { OnSelectionAction(action, value); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
@@ -974,14 +1097,15 @@ HRESULT Application::InitializeChrome() noexcept
 HRESULT Application::InitializeDocument() noexcept
 {
     _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
-    ApplyDemo();
-    _session.history.MarkSaved();
-    _documentPath.clear();
     _tool = EditorTool::Move;
     if (_chrome)
     {
         _chrome->SetTool(_tool);
     }
+    // A demo may pick its own tool; its layers and selection count as saved.
+    ApplyDemo();
+    _session.history.MarkSaved();
+    _documentPath.clear();
     BindCompositionDevice();
     DocumentChanged();
     return S_OK;
@@ -1131,6 +1255,84 @@ void Application::SyncChrome() noexcept
     _overlayGeometry = geometry;
     _chrome->SetTransformOverlay(geometry, guideXs, guideYs);
     _chrome->SetTransformInspector(inspector);
+
+    // Selection tools: the header mirrors the session; the outline shows in every tool.
+    SelectionInspectorState selection;
+    selection.visible = EditorToolIsSelection(_tool);
+    selection.enabled = document != nullptr;
+    selection.tool = selection.visible ? _tool : EditorTool::Marquee;
+    selection.marqueeKind = _session.marqueeKind == LassoKind::Ellipse ? 1 : 0;
+    selection.lassoKind = _session.lassoKind == LassoKind::Polygonal ? 1 : 0;
+    selection.mode = static_cast<int>(_session.DisplayedSelectionMode());
+    selection.antialiasVisible = _tool == EditorTool::Lasso || _tool == EditorTool::Wand ||
+                                 (_tool == EditorTool::Marquee && _session.marqueeKind == LassoKind::Ellipse);
+    selection.antialiased = _session.selectionAntialiased;
+    selection.tolerance = _session.wandSettings.tolerance;
+    selection.sampleSize = static_cast<int>(_session.wandSettings.sampleSize);
+    selection.sampleAllLayers = _session.wandSettings.sampleAllLayers;
+    selection.contiguous = _session.wandSettings.contiguous;
+    selection.canModify = _session.CanModifySelection();
+    selection.expandAmount = _session.selectionExpandAmount;
+    selection.contractAmount = _session.selectionContractAmount;
+    const std::optional<DocumentSelection>& current = _session.Selection();
+    selection.hasSelection = current.has_value();
+    selection.isEmpty = current.has_value() && current->IsEmpty();
+    _chrome->SetSelectionInspector(selection);
+    const Vec2 documentSize = DocumentSize();
+    const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
+    const double scale = _viewport.PointsPerPixel();
+    // The outline geometry is rebuilt only when the selection or the view mapping changes.
+    if (document == nullptr)
+    {
+        if (_overlaySelection.has_value())
+        {
+            _overlaySelection.reset();
+            _chrome->SetSelectionOutline({});
+        }
+    }
+    else if (current != _overlaySelection || origin != _overlayOrigin || scale != _overlayScale)
+    {
+        std::vector<std::vector<D2D1_POINT_2F>> loops;
+        if (current.has_value())
+        {
+            loops.reserve(current->loops.size());
+            for (const SelectionLoop& loop : current->loops)
+            {
+                std::vector<D2D1_POINT_2F> converted;
+                converted.reserve(loop.size());
+                for (const Vec2& point : loop)
+                {
+                    converted.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
+                                                      static_cast<float>(origin.y + point.y * scale)));
+                }
+                loops.push_back(std::move(converted));
+            }
+        }
+        _overlaySelection = current;
+        _overlayOrigin = origin;
+        _overlayScale = scale;
+        _chrome->SetSelectionOutline(std::move(loops));
+    }
+    std::optional<CanvasOverlay::Draft> draft;
+    if (document != nullptr && _session.PendingLasso().has_value())
+    {
+        const LassoDraft& pending = _session.PendingLasso().value();
+        CanvasOverlay::Draft converted;
+        converted.kind = pending.kind;
+        converted.points.reserve(pending.points.size());
+        for (const Vec2& point : pending.points)
+        {
+            converted.points.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
+                                                     static_cast<float>(origin.y + point.y * scale)));
+        }
+        if (pending.cursor.has_value())
+        {
+            converted.cursor = D2D1::Point2F(static_cast<float>(origin.x + pending.cursor->x * scale),
+                                             static_cast<float>(origin.y + pending.cursor->y * scale));
+        }
+        draft = std::move(converted);
+    }
+    _chrome->SetLassoDraft(std::move(draft));
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -1302,6 +1504,28 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         SyncChrome();
         _frameInvalidated = true;
         return;
+    }
+    if (EditorToolIsSelection(_tool) && !panMode)
+    {
+        if (event.action == DxUi::PointerAction::Down && inHole)
+        {
+            _canvasDrag = false;
+            SelectionPress(view, event.modifiers, point);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && SelectionPointerMove(view, event.modifiers))
+        {
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Up && (_selectionDragStart.has_value() || _lassoDragging))
+        {
+            SelectionRelease(view);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Leave)
+        {
+            EndSelectionInteraction(true);
+        }
     }
     if (_tool == EditorTool::Move && !panMode)
     {
@@ -1487,6 +1711,37 @@ void Application::OnCommand(int command) noexcept
         _session.FlipCanvas(false);
         DocumentChanged();
         break;
+    case ChromeHost::kCommandSelectAll:
+        EndSelectionInteraction(false);
+        _session.SelectAll();
+        SelectionChanged();
+        break;
+    case ChromeHost::kCommandDeselect:
+        EndSelectionInteraction(false);
+        _session.Deselect();
+        SelectionChanged();
+        break;
+    case ChromeHost::kCommandInverse:
+        EndSelectionInteraction(false);
+        _session.InvertSelection();
+        SelectionChanged();
+        break;
+    case ChromeHost::kCommandLoadLayerSelection:
+        EndSelectionInteraction(false);
+        if (_session.ActiveLayerID().has_value())
+        {
+            static_cast<void>(_session.LoadLayerSelection(_session.ActiveLayerID().value()));
+        }
+        SelectionChanged();
+        break;
+    case ChromeHost::kCommandLoadMaskSelection:
+        EndSelectionInteraction(false);
+        if (_session.ActiveLayerID().has_value())
+        {
+            static_cast<void>(_session.LoadMaskSelection(_session.ActiveLayerID().value()));
+        }
+        SelectionChanged();
+        break;
     default:
         break;
     }
@@ -1501,6 +1756,7 @@ void Application::OnTool(EditorTool tool) noexcept
         _duplicateOnDrag = false;
         _session.CommitTransform();
         _session.ClearSnapGuides();
+        EndSelectionInteraction(false);
     }
     _tool = tool;
     if (_chrome)
@@ -1511,7 +1767,7 @@ void Application::OnTool(EditorTool tool) noexcept
     _frameInvalidated = true;
 }
 
-bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
+bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat) noexcept
 {
     const bool control = (modifiers & MK_CONTROL) != 0;
     const bool shift = (modifiers & MK_SHIFT) != 0;
@@ -1537,6 +1793,19 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
         case 'T':
             OnCommand(ChromeHost::kCommandFreeTransform);
             return true;
+        case 'A':
+            OnCommand(ChromeHost::kCommandSelectAll);
+            return true;
+        case 'D':
+            OnCommand(ChromeHost::kCommandDeselect);
+            return true;
+        case 'I':
+            if (shift)
+            {
+                OnCommand(ChromeHost::kCommandInverse);
+                return true;
+            }
+            break;
         case 'G':
             OnCommand(shift ? ChromeHost::kCommandMoveOutOfGroup : ChromeHost::kCommandNewFolder);
             return true;
@@ -1566,6 +1835,38 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
     }
     if (_chrome && _chrome->CanvasFocused())
     {
+        if (_session.PendingLasso().has_value() &&
+            (virtualKey == VK_ESCAPE || virtualKey == VK_RETURN || virtualKey == VK_BACK || virtualKey == VK_DELETE))
+        {
+            // Escape drops the outline, Enter closes it, Backspace or Delete removes the last polygonal corner.
+            if (virtualKey == VK_ESCAPE)
+            {
+                _session.CancelLasso();
+            }
+            else if (virtualKey == VK_RETURN)
+            {
+                _session.FinishLasso();
+            }
+            else
+            {
+                _session.RemoveLastLassoPoint();
+            }
+            _lassoDragging = false;
+            _marqueeDragPixel.reset();
+            SelectionChanged();
+            return true;
+        }
+        if (EditorToolIsSelection(_tool) && !_session.PendingLasso().has_value() && _session.Selection().has_value() &&
+            !_session.Selection()->IsEmpty() &&
+            (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP || virtualKey == VK_DOWN))
+        {
+            // Arrow keys move the outline by a pixel, ten with Shift; each press is one entry.
+            const double step = shift ? 10.0 : 1.0;
+            _session.NudgeSelection(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
+                                    virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
+            SelectionChanged();
+            return true;
+        }
         if (virtualKey == VK_ESCAPE && (_transformDrag.has_value() || _session.PendingTransformEdit().has_value()))
         {
             _transformDrag.reset();
@@ -1614,6 +1915,16 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept
         const EditorTool tool = EditorToolFromKey(static_cast<wchar_t>(virtualKey));
         if (tool != EditorTool::Count)
         {
+            // M or L pressed again switches the Marquee's shape or the Lasso's kind; holding the key does not keep
+            // switching, and the choice stays as last set while the project is open.
+            if (tool == _tool && !repeat && tool == EditorTool::Marquee)
+            {
+                _session.ToggleMarqueeKind();
+            }
+            else if (tool == _tool && !repeat && tool == EditorTool::Lasso)
+            {
+                _session.ToggleLassoKind();
+            }
             OnTool(tool);
             return true;
         }
@@ -1679,6 +1990,8 @@ void Application::OpenPath(const wchar_t* path) noexcept
             }
             return;
         }
+        // The loaded project replaces the document: no outline in progress or outline move may carry over.
+        EndSelectionInteraction(false);
         _session.history.Reset();
         _session.Document() = loaded.document;
         _session.SelectLayer(loaded.activeLayerID);
@@ -1875,7 +2188,8 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         return 0;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
-        if (HandleAccelerator(static_cast<UINT>(wParam), KeyModifiers()))
+        UpdateSelectionModifiers();
+        if (HandleAccelerator(static_cast<UINT>(wParam), KeyModifiers(), (lParam & 0x40000000) != 0))
         {
             return 0;
         }
@@ -1886,6 +2200,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         break;
     case WM_KEYUP:
     case WM_SYSKEYUP:
+        UpdateSelectionModifiers();
         if (static_cast<UINT>(wParam) == VK_SPACE)
         {
             _spacePan = false;
@@ -2008,13 +2323,30 @@ LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noex
 
 void Application::ApplyDemo() noexcept
 {
-    if (_demo != L"transform" || !_session.Document().has_value())
+    if (!_session.Document().has_value())
     {
         return;
     }
-    // Two painted layers, the active one rotated, so the documentation screenshot shows the Move tool's box.
-    InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
-    InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 20.0, 0xFFE58A2Eu);
+    if (_demo == L"transform")
+    {
+        // Two painted layers, the active one rotated, so the documentation screenshot shows the Move tool's box.
+        InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
+        InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 20.0, 0xFFE58A2Eu);
+        return;
+    }
+    if (_demo == L"selection")
+    {
+        // The same layers with an elliptical marquee plus a rectangle, so the screenshot shows the outline and the
+        // Marquee's header.
+        InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
+        InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 0.0, 0xFFE58A2Eu);
+        _session.marqueeKind = LassoKind::Ellipse;
+        _session.ApplySelection(SelectionGeometry::Ellipse(180, 160, 380, 260), SelectionMode::New,
+                                L"Elliptical Marquee");
+        _session.ApplySelection(SelectionGeometry::Rect(640, 380, 220, 130), SelectionMode::Add,
+                                L"Rectangular Marquee");
+        OnTool(EditorTool::Marquee);
+    }
 }
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
@@ -2341,6 +2673,20 @@ bool Application::ApplyCanvasCursor() noexcept
     {
         cursor = IDC_CROSS;
     }
+    else if (EditorToolIsSelection(_tool))
+    {
+        // A crosshair draws; over the selection in New mode (and while moving it) the four-way arrow moves the
+        // outline. The add/subtract badges of the legacy cursors wait on custom cursors.
+        const bool shift = GetKeyState(VK_SHIFT) < 0;
+        const bool alt = GetKeyState(VK_MENU) < 0;
+        const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+        cursor = IDC_CROSS;
+        if (_selectionDragStart.has_value() ||
+            (_session.LassoCursorMode(shift, alt) == SelectionMode::New && _session.CanMoveSelection(pixel)))
+        {
+            cursor = IDC_SIZEALL;
+        }
+    }
     else if (_tool == EditorTool::Move)
     {
         std::optional<TransformHit> hit;
@@ -2384,4 +2730,321 @@ bool Application::ApplyCanvasCursor() noexcept
     }
     SetCursor(LoadCursorW(nullptr, cursor));
     return true;
+}
+
+void Application::OnSelectionAction(SelectionAction action, double value) noexcept
+{
+    const auto whole = [value](int minimum, int maximum)
+    { return std::clamp(static_cast<int>(std::lround(value)), minimum, maximum); };
+    switch (action)
+    {
+    case SelectionAction::SetMarqueeKind:
+        EndSelectionInteraction(false);
+        _session.marqueeKind = value >= 0.5 ? LassoKind::Ellipse : LassoKind::Rectangle;
+        break;
+    case SelectionAction::SetLassoKind:
+        EndSelectionInteraction(false);
+        _session.lassoKind = value >= 0.5 ? LassoKind::Polygonal : LassoKind::Freehand;
+        break;
+    case SelectionAction::SetMode:
+        _session.selectionModeChoice = static_cast<SelectionMode>(whole(0, 2));
+        break;
+    case SelectionAction::SetAntialias:
+        _session.selectionAntialiased = value != 0.0;
+        break;
+    case SelectionAction::SetTolerance:
+        _session.wandSettings.tolerance = whole(0, 255);
+        break;
+    case SelectionAction::SetSampleSize:
+        _session.wandSettings.sampleSize = static_cast<WandSampleSize>(whole(0, 2));
+        break;
+    case SelectionAction::SetSampleAllLayers:
+        _session.wandSettings.sampleAllLayers = value != 0.0;
+        break;
+    case SelectionAction::SetContiguous:
+        _session.wandSettings.contiguous = value != 0.0;
+        break;
+    case SelectionAction::SetExpandAmount:
+        _session.selectionExpandAmount = whole(1, DocumentSession::kSelectionModifyLimit);
+        break;
+    case SelectionAction::Expand:
+        _session.ExpandSelection(_session.selectionExpandAmount);
+        break;
+    case SelectionAction::SetContractAmount:
+        _session.selectionContractAmount = whole(1, DocumentSession::kSelectionModifyLimit);
+        break;
+    case SelectionAction::Contract:
+        _session.ContractSelection(_session.selectionContractAmount);
+        break;
+    case SelectionAction::Deselect:
+        EndSelectionInteraction(false);
+        _session.Deselect();
+        break;
+    }
+    SelectionChanged();
+}
+
+void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
+    // A second press within the system double-click time and distance closes a polygonal outline.
+    const ULONGLONG now = GetTickCount64();
+    const bool doubleClick = now - _lastPressTick <= GetDoubleClickTime() &&
+                             std::abs(client.x - _lastPressPoint.x) <= GetSystemMetrics(SM_CXDOUBLECLK) &&
+                             std::abs(client.y - _lastPressPoint.y) <= GetSystemMetrics(SM_CYDOUBLECLK);
+    _lastPressTick = now;
+    _lastPressPoint = client;
+    const Vec2 documentSize = DocumentSize();
+    const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
+    const bool shift = (modifiers & MK_SHIFT) != 0;
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    // A Shift held at the press means Add; for the Marquee it squares only once pressed afresh.
+    _marqueeConstrainArmed = !shift;
+    _marqueeDragPixel.reset();
+    const std::optional<LassoDraft>& draft = _session.PendingLasso();
+    if (draft.has_value() && draft->kind == LassoKind::Polygonal && !draft->points.empty())
+    {
+        // Polygonal adds a corner per click and closes on a click near the first corner or a double-click.
+        const Vec2 first = _viewport.ViewFromDocument(draft->points.front(), documentSize);
+        const double closeDistance = 8.0 * std::max(1.0, _viewport.backingScale);
+        if (doubleClick ||
+            (draft->points.size() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
+        {
+            _session.FinishLasso();
+        }
+        else
+        {
+            _session.ExtendLasso(pixel);
+        }
+        SelectionChanged();
+        return;
+    }
+    const SelectionMode mode = _session.SelectionModeFor(shift, alt);
+    // In New mode, dragging inside the selection moves its outline instead of drawing.
+    if (mode == SelectionMode::New && _session.CanMoveSelection(pixel) && _session.BeginSelectionMove())
+    {
+        _selectionDragStart = pixel;
+        _selectionMoveDelta = {};
+        SelectionChanged();
+        return;
+    }
+    if (_tool == EditorTool::Wand)
+    {
+        RunMagicWand(pixel, mode);
+        return;
+    }
+    if (_tool == EditorTool::Marquee)
+    {
+        _session.BeginMarquee(pixel, mode);
+    }
+    else
+    {
+        _session.BeginLasso(pixel, mode);
+    }
+    _lassoDragging = _session.PendingLasso().has_value();
+    SelectionChanged();
+}
+
+bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
+{
+    if (!_session.Document().has_value())
+    {
+        return false;
+    }
+    const bool shift = (modifiers & MK_SHIFT) != 0;
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    // Keys may have changed while the pointer was elsewhere; the header shows the mode a press would use.
+    bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    if (_selectionDragStart.has_value())
+    {
+        // Shift keeps the move on one axis: whichever way the drag has gone further.
+        double dx = pixel.x - _selectionDragStart->x;
+        double dy = pixel.y - _selectionDragStart->y;
+        if (shift)
+        {
+            if (std::fabs(dx) >= std::fabs(dy))
+            {
+                dy = 0.0;
+            }
+            else
+            {
+                dx = 0.0;
+            }
+        }
+        _selectionMoveDelta = Vec2{std::round(dx), std::round(dy)};
+        _session.MoveSelection(dx, dy);
+        SelectionChanged();
+        return true;
+    }
+    const std::optional<LassoDraft>& draft = _session.PendingLasso();
+    if (draft.has_value())
+    {
+        switch (draft->kind)
+        {
+        case LassoKind::Freehand:
+            if (_lassoDragging)
+            {
+                _session.ExtendLasso(pixel);
+            }
+            break;
+        case LassoKind::Polygonal:
+            _session.MoveLassoCursor(pixel);
+            break;
+        case LassoKind::Rectangle:
+        case LassoKind::Ellipse:
+            if (_lassoDragging)
+            {
+                // Shift squares the box, except a Shift already held when the drag began (it chose Add) until it
+                // has been let go and pressed again.
+                if (!shift)
+                {
+                    _marqueeConstrainArmed = true;
+                }
+                _marqueeDragPixel = pixel;
+                _session.DragMarquee(pixel, _marqueeConstrainArmed && shift, false);
+            }
+            break;
+        }
+        SelectionChanged();
+        return true;
+    }
+    if (changed)
+    {
+        SelectionChanged();
+    }
+    return false;
+}
+
+void Application::SelectionRelease(Vec2 view) noexcept
+{
+    static_cast<void>(view);
+    if (_selectionDragStart.has_value())
+    {
+        const Vec2 start = _selectionDragStart.value();
+        const bool moved = _selectionMoveDelta.x != 0.0 || _selectionMoveDelta.y != 0.0;
+        _selectionDragStart.reset();
+        _session.EndSelectionMove();
+        if (!moved && _tool == EditorTool::Wand)
+        {
+            // The wand's click inside the selection selects afresh from that pixel.
+            RunMagicWand(start, SelectionMode::New);
+            return;
+        }
+        if (!moved)
+        {
+            // A click without a drag deselects, as anywhere else with the lasso.
+            _session.Deselect();
+        }
+        SelectionChanged();
+        return;
+    }
+    const std::optional<LassoDraft>& draft = _session.PendingLasso();
+    if (draft.has_value() && draft->kind != LassoKind::Polygonal)
+    {
+        _session.FinishLasso();
+    }
+    _lassoDragging = false;
+    _marqueeDragPixel.reset();
+    SelectionChanged();
+}
+
+void Application::EndSelectionInteraction(bool keepDraft) noexcept
+{
+    // Capture lost or a tool change: a polygonal outline survives a pointer leave, a drag does not.
+    const std::optional<LassoDraft>& draft = _session.PendingLasso();
+    if (draft.has_value() && (!keepDraft || draft->kind != LassoKind::Polygonal))
+    {
+        _session.CancelLasso();
+    }
+    if (_session.IsMovingSelection())
+    {
+        _session.EndSelectionMove();
+    }
+    _selectionDragStart.reset();
+    _lassoDragging = false;
+    _marqueeDragPixel.reset();
+    SelectionChanged();
+}
+
+void Application::UpdateSelectionModifiers() noexcept
+{
+    if (!EditorToolIsSelection(_tool))
+    {
+        return;
+    }
+    const bool shift = GetKeyState(VK_SHIFT) < 0;
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
+    // A Marquee drag reshapes as Shift goes down or up, without waiting for the pointer to move.
+    if (_marqueeDragPixel.has_value() && _lassoDragging)
+    {
+        if (!shift)
+        {
+            _marqueeConstrainArmed = true;
+        }
+        _session.DragMarquee(_marqueeDragPixel.value(), _marqueeConstrainArmed && shift, false);
+        changed = true;
+    }
+    if (changed)
+    {
+        SelectionChanged();
+    }
+}
+
+void Application::SelectionChanged() noexcept
+{
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
+{
+    std::optional<Raster> composite;
+    if (_session.wandSettings.sampleAllLayers)
+    {
+        composite = WandComposite();
+        if (!composite.has_value())
+        {
+            ShowError(IDS_ERROR_READBACK);
+            return;
+        }
+    }
+    const WandFailure failure = _session.MagicWand(pixel, mode, composite.has_value() ? &composite.value() : nullptr);
+    if (failure != WandFailure::None)
+    {
+        ShowError(failure == WandFailure::TooDetailed ? IDS_ERROR_WAND_DETAILED : IDS_ERROR_WAND_MEMORY);
+    }
+    SelectionChanged();
+}
+
+std::optional<Raster> Application::WandComposite() noexcept
+{
+    // Every visible layer as shown on the canvas: the composition's flattened readback at document size.
+    if (!_session.Document().has_value())
+    {
+        return std::nullopt;
+    }
+    BindCompositionDevice();
+    if (FAILED(_composition.Compose(_session.Document().value())))
+    {
+        return std::nullopt;
+    }
+    std::vector<std::uint8_t> bgra;
+    UINT width = 0;
+    UINT height = 0;
+    if (FAILED(_composition.Readback(bgra, width, height)) || width == 0 || height == 0)
+    {
+        return std::nullopt;
+    }
+    const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
+                                       bgra.data(), bgra.size());
+    if (!raster.HasStorage())
+    {
+        return std::nullopt;
+    }
+    return raster;
 }

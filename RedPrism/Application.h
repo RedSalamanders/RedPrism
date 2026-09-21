@@ -22,6 +22,7 @@
 
 class ChromeHost;
 enum class TransformAction : std::uint8_t;
+enum class SelectionAction : std::uint8_t;
 
 class Application final
 {
@@ -69,7 +70,18 @@ class Application final
     [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(Vec2 pixel, bool control) const;
     [[nodiscard]] bool ApplyCanvasCursor() noexcept;
     void ApplyDemo() noexcept;
-    bool HandleAccelerator(UINT virtualKey, UINT modifiers) noexcept;
+    // Selection tools (C9, Specs/Document/Document_Tools.md): header actions, pointer rules, keys and the wand's
+    // composite sample. Outline and draft changes touch chrome only; the canvas never re-composites for them.
+    void OnSelectionAction(SelectionAction action, double value) noexcept;
+    void SelectionPress(Vec2 view, UINT modifiers, POINT client) noexcept;
+    [[nodiscard]] bool SelectionPointerMove(Vec2 view, UINT modifiers) noexcept;
+    void SelectionRelease(Vec2 view) noexcept;
+    void EndSelectionInteraction(bool keepDraft) noexcept;
+    void UpdateSelectionModifiers() noexcept;
+    void SelectionChanged() noexcept;
+    void RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept;
+    [[nodiscard]] std::optional<Raster> WandComposite() noexcept;
+    bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
     void SaveDocument(bool saveAs) noexcept;
@@ -102,6 +114,16 @@ class Application final
     bool _duplicateOnDrag = false;
     std::optional<TransformDrag> _transformDrag;
     std::optional<TransformOverlayGeometry> _overlayGeometry;
+    std::optional<Vec2> _selectionDragStart;
+    Vec2 _selectionMoveDelta{};
+    std::optional<Vec2> _marqueeDragPixel;
+    bool _marqueeConstrainArmed = true;
+    bool _lassoDragging = false;
+    ULONGLONG _lastPressTick = 0;
+    POINT _lastPressPoint{};
+    std::optional<DocumentSelection> _overlaySelection;
+    Vec2 _overlayOrigin{};
+    double _overlayScale = 0.0;
     std::wstring _demo;
     bool _quietUi = false;
     bool _forceWarp = false;

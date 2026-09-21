@@ -147,6 +147,12 @@ void TestCommandLine() noexcept
     Expect(!RedPrismParseCommandLine(badDemoArgs, 3, parsed, &error) && error != nullptr &&
                std::wstring_view{error} == L"brush",
            "cli.demo-rejects-unknown");
+    wchar_t selectionValue[] = L"selection";
+    wchar_t* selectionArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, selectionValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(selectionArgs, 3, parsed, &error) &&
+               parsed.demo == std::wstring_view{selectionValue},
+           "cli.demo-selection");
 
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
@@ -263,7 +269,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 119> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 155> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -393,7 +399,43 @@ void TestStringTable() noexcept
                                          IDS_TRANSFORM_FLIP_VERTICAL,
                                          IDS_TRANSFORM_APPLY,
                                          IDS_TRANSFORM_CANCEL,
-                                         IDS_TRANSFORM_LOCK};
+                                         IDS_TRANSFORM_LOCK,
+                                         IDS_CMD_SELECT_ALL,
+                                         IDS_CMD_DESELECT,
+                                         IDS_CMD_INVERSE,
+                                         IDS_CMD_LOAD_LAYER_SELECTION,
+                                         IDS_CMD_LOAD_MASK_SELECTION,
+                                         IDS_ERROR_WAND_DETAILED,
+                                         IDS_ERROR_WAND_MEMORY,
+                                         IDS_UNIT_PIXELS,
+                                         IDS_SELECTION_RECTANGLE,
+                                         IDS_SELECTION_ELLIPSE,
+                                         IDS_SELECTION_FREEHAND,
+                                         IDS_SELECTION_POLYGONAL,
+                                         IDS_SELECTION_MODE_NEW,
+                                         IDS_SELECTION_MODE_ADD,
+                                         IDS_SELECTION_MODE_SUBTRACT,
+                                         IDS_SELECTION_SHAPE_TIP,
+                                         IDS_SELECTION_LASSO_TIP,
+                                         IDS_SELECTION_MODE_TIP,
+                                         IDS_SELECTION_ANTIALIAS,
+                                         IDS_SELECTION_ANTIALIAS_TIP,
+                                         IDS_SELECTION_EXPAND,
+                                         IDS_SELECTION_CONTRACT,
+                                         IDS_SELECTION_MODIFY_TIP,
+                                         IDS_SELECTION_DESELECT,
+                                         IDS_SELECTION_EMPTY,
+                                         IDS_WAND_TOLERANCE,
+                                         IDS_WAND_TOLERANCE_TIP,
+                                         IDS_WAND_POINT_SAMPLE,
+                                         IDS_WAND_THREE_BY_THREE,
+                                         IDS_WAND_FIVE_BY_FIVE,
+                                         IDS_WAND_SAMPLE_SIZE_TIP,
+                                         IDS_WAND_THIS_LAYER,
+                                         IDS_WAND_ALL_LAYERS,
+                                         IDS_WAND_SAMPLE_TIP,
+                                         IDS_WAND_CONTIGUOUS,
+                                         IDS_WAND_CONTIGUOUS_TIP};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

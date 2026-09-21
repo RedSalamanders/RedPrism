@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CanvasOverlay.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "TransformOverlay.h"
@@ -23,8 +24,6 @@
 #pragma warning(pop)
 
 using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu>;
-
-class CanvasOverlay;
 
 // The canvas hole in physical pixels: the rectangle the document composition blits into.
 struct CanvasHole
@@ -61,6 +60,47 @@ enum class TransformAction : std::uint8_t
     AutoSelect,
     ShowControls,
     LockRatio,
+};
+
+// What the selection tools' header asks of the host. Numeric actions carry the typed value or the chosen index;
+// flags carry 0 or 1; Expand, Contract and Deselect carry nothing.
+enum class SelectionAction : std::uint8_t
+{
+    SetMarqueeKind,
+    SetLassoKind,
+    SetMode,
+    SetAntialias,
+    SetTolerance,
+    SetSampleSize,
+    SetSampleAllLayers,
+    SetContiguous,
+    SetExpandAmount,
+    Expand,
+    SetContractAmount,
+    Contract,
+    Deselect,
+};
+
+// The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
+struct SelectionInspectorState
+{
+    bool visible = false;
+    bool enabled = false; // a document is open
+    EditorTool tool = EditorTool::Marquee;
+    int marqueeKind = 0; // 0 rectangle, 1 ellipse
+    int lassoKind = 0;   // 0 freehand, 1 polygonal
+    int mode = 0;        // displayed mode: 0 new, 1 add, 2 subtract
+    bool antialiasVisible = true;
+    bool antialiased = true;
+    int tolerance = 32;
+    int sampleSize = 0; // 0 point, 1 three by three, 2 five by five
+    bool sampleAllLayers = false;
+    bool contiguous = true;
+    bool canModify = false;
+    int expandAmount = 1;
+    int contractAmount = 1;
+    bool hasSelection = false;
+    bool isEmpty = false;
 };
 
 // The Move tool's header state: the numbers describe the edited transform (draft or active layer).
@@ -132,6 +172,11 @@ class ChromeHost final
     static constexpr int kCommandAbout = 500;
     static constexpr int kCommandFlipCanvasHorizontal = 600;
     static constexpr int kCommandFlipCanvasVertical = 601;
+    static constexpr int kCommandSelectAll = 700;
+    static constexpr int kCommandDeselect = 701;
+    static constexpr int kCommandInverse = 702;
+    static constexpr int kCommandLoadLayerSelection = 703;
+    static constexpr int kCommandLoadMaskSelection = 704;
 
     enum class MenuIndex : std::size_t
     {
@@ -173,6 +218,12 @@ class ChromeHost final
     // The transform box in canvas-hole pixels (nullopt hides it) and snap guides in canvas-hole pixels.
     void SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry, const std::vector<float>& guideXs,
                              const std::vector<float>& guideYs) noexcept;
+    // The selection tools' header: kinds, mode, wand settings, Anti-alias, Expand / Contract and Deselect.
+    void SetSelectionHandler(std::function<void(SelectionAction, double)> handler);
+    void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
+    // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
+    void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
+    void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
@@ -253,6 +304,8 @@ class ChromeHost final
     void ArrangePicker() noexcept;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
+    void BuildSelectionHeader(DxUi::Panel& root);
+    void ArrangeSelectionHeader(float left, float top, float right, float bottom) noexcept;
     void BuildMenus() noexcept;
     void OpenMenu(size_t index, POINT screen, bool keyboard) noexcept;
     void SyncToolVisuals() noexcept;
@@ -300,6 +353,24 @@ class ChromeHost final
     DxUi::Button* _transformApply = nullptr;
     TransformInspectorState _inspector;
     bool _syncingInspector = false;
+    DxUi::Panel* _selectionHeader = nullptr;
+    DxUi::Label* _selectionTitle = nullptr;
+    DxUi::ComboBox* _marqueeShape = nullptr;
+    DxUi::ComboBox* _lassoShape = nullptr;
+    DxUi::ComboBox* _selectionMode = nullptr;
+    DxUi::NumericStepper* _wandTolerance = nullptr;
+    DxUi::ComboBox* _wandSampleSize = nullptr;
+    DxUi::ComboBox* _wandSample = nullptr;
+    DxUi::Checkbox* _wandContiguous = nullptr;
+    DxUi::Checkbox* _selectionAntialias = nullptr;
+    DxUi::Button* _expandButton = nullptr;
+    DxUi::NumericStepper* _expandAmount = nullptr;
+    DxUi::Button* _contractButton = nullptr;
+    DxUi::NumericStepper* _contractAmount = nullptr;
+    DxUi::Label* _selectionEmpty = nullptr;
+    DxUi::Button* _deselectButton = nullptr;
+    SelectionInspectorState _selectionInspector;
+    bool _syncingSelection = false;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
@@ -310,6 +381,7 @@ class ChromeHost final
     std::function<void(double, ChromeEditPhase)> _onOpacity;
     std::function<void()> _onLayout;
     std::function<void(TransformAction, double)> _onTransform;
+    std::function<void(SelectionAction, double)> _onSelection;
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;
