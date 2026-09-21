@@ -14,8 +14,12 @@
       "version>=": "0.12.0"
     },
     {
-        "name": "libzip",
-        "default-features": false
+      "name": "libzip",
+      "default-features": false
+    },
+    {
+      "name": "clipper2",
+      "version>=": "2.0.1"
     }
   ]
 }

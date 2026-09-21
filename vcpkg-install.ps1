@@ -1,11 +1,14 @@
 <#!
 .SYNOPSIS
-Installs the RedPrism vcpkg manifest dependencies for x64, ARM64, or both.
+Installs the RedPrism vcpkg manifest dependencies for x64, ARM64, or both. -Asan installs the x64 tree the
+`ASan Debug` configuration links (every library instrumented by AddressSanitizer, overlay triplet x64-windows-asan).
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('x64', 'ARM64', 'All')]
-    [string] $Platform = 'x64'
+    [string] $Platform = 'x64',
+
+    [switch] $Asan
 )
 
 Set-StrictMode -Version Latest
@@ -86,10 +89,18 @@ if (-not (Test-Path -LiteralPath $vcpkg -PathType Leaf) -or $stampedCommit -ne $
     Set-Content -LiteralPath $toolStampPath -Value $commit -Encoding ascii
 }
 
+if ($Asan -and $Platform -ne 'x64') {
+    throw 'The sanitized dependency tree is built for x64 only.'
+}
+$overlayTriplets = Join-Path $repoRoot 'Build\vcpkg-triplets'
 $platforms = if ($Platform -eq 'All') { @('x64', 'ARM64') } else { @($Platform) }
 foreach ($targetPlatform in $platforms) {
     $platformScope = $targetPlatform.ToLowerInvariant()
     $triplet = if ($targetPlatform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
+    if ($Asan) {
+        $platformScope = 'x64-asan'
+        $triplet = 'x64-windows-asan'
+    }
     $installRoot = Join-Path $buildRoot "vcpkg_installed\$platformScope"
     $buildTreesRoot = Join-Path $buildRoot "vcpkg_buildtrees\$platformScope"
     $packagesRoot = Join-Path $buildRoot "vcpkg_packages\$platformScope"
@@ -103,7 +114,8 @@ foreach ($targetPlatform in $platforms) {
         "--x-install-root=$installRoot",
         "--x-buildtrees-root=$buildTreesRoot",
         "--x-packages-root=$packagesRoot",
-        "--downloads-root=$downloadsRoot"
+        "--downloads-root=$downloadsRoot",
+        "--overlay-triplets=$overlayTriplets"
     )
     & $vcpkg @arguments
     if ($LASTEXITCODE -ne 0) {

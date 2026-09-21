@@ -8,8 +8,11 @@
     <TargetName>$(MSBuildProjectName)</TargetName>
 
     <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='ARM64'">arm64</RedPrismVcpkgPlatformScope>
+    <!-- ASan Debug links the sanitized dependency tree (vcpkg-install.ps1 -Asan, overlay triplet x64-windows-asan). -->
+    <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='x64' and '$(Configuration)'=='ASan Debug'">x64-asan</RedPrismVcpkgPlatformScope>
     <RedPrismVcpkgPlatformScope Condition="'$(RedPrismVcpkgPlatformScope)'==''">x64</RedPrismVcpkgPlatformScope>
     <RedPrismVcpkgTriplet Condition="'$(Platform)'=='ARM64'">arm64-windows</RedPrismVcpkgTriplet>
+    <RedPrismVcpkgTriplet Condition="'$(Platform)'=='x64' and '$(Configuration)'=='ASan Debug'">x64-windows-asan</RedPrismVcpkgTriplet>
     <RedPrismVcpkgTriplet Condition="'$(RedPrismVcpkgTriplet)'==''">x64-windows</RedPrismVcpkgTriplet>
     <VcpkgManifestRoot>$(MSBuildThisFileDirectory)</VcpkgManifestRoot>
     <VcpkgInstalledDir>$(RedPrismBuildRoot)vcpkg_installed\$(RedPrismVcpkgPlatformScope)\</VcpkgInstalledDir>

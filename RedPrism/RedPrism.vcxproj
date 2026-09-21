@@ -85,7 +85,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -102,7 +102,7 @@
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d2d1.lib;dwrite.lib;ole32.lib;shell32.lib;uuid.lib;powrprof.lib;advapi32.lib;shcore.lib;user32.lib;gdi32.lib;windowscodecs.lib;dwmapi.lib;windowsapp.lib;yyjson.lib;rpcrt4.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -111,6 +111,7 @@
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
+    <ClInclude Include="..\Common\Selection.h" />
     <ClInclude Include="..\Common\DocumentHistory.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
@@ -134,6 +135,7 @@
     <ClCompile Include="..\Common\WindowCapture.cpp" />
     <ClCompile Include="..\Common\Document.cpp" />
     <ClCompile Include="..\Common\TransformEdit.cpp" />
+    <ClCompile Include="..\Common\Selection.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />

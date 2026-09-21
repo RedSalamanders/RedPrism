@@ -771,6 +771,7 @@ void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 
 void DocumentSession::Undo()
 {
+    _lassoDraft.reset();
     // A pending transform is not in history yet: the first Undo discards it, as Escape would.
     if (_transformEdit.has_value())
     {
@@ -786,6 +787,7 @@ void DocumentSession::Undo()
 
 void DocumentSession::Redo()
 {
+    _lassoDraft.reset();
     if (_transformEdit.has_value())
     {
         CancelTransform();
@@ -821,6 +823,7 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     {
         return;
     }
+    _lassoDraft.reset();
     BeginEdit(L"New Canvas");
     CanvasDocument document;
     document.id = Guid::Generate();
@@ -2196,15 +2199,19 @@ void DocumentSession::FlipCanvas(bool horizontally)
     }
     if (document.selection.has_value())
     {
-        for (Vec2& point : document.selection->outline)
+        // Mirrored points run the other way round; the nonzero rule does not mind.
+        for (SelectionLoop& loop : document.selection->loops)
         {
-            if (horizontally)
+            for (Vec2& point : loop)
             {
-                point.x = document.width - point.x;
-            }
-            else
-            {
-                point.y = document.height - point.y;
+                if (horizontally)
+                {
+                    point.x = document.width - point.x;
+                }
+                else
+                {
+                    point.y = document.height - point.y;
+                }
             }
         }
     }

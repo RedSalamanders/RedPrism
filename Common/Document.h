@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -475,16 +476,123 @@ struct LayerMask
 [[nodiscard]] std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const LayerTransform& from,
                                                                 const LayerTransform& to) noexcept;
 
+// Selection (C9, Specs/Document/Document_Tools.md): closed loops in document pixels under the nonzero winding rule,
+// Clipper2-normalized (outer loops and holes) except a wand or mask trace, whose pixel-edge loops already are.
+using SelectionLoop = std::vector<Vec2>;
+
+struct SelectionBounds
+{
+    double minX = 0;
+    double minY = 0;
+    double maxX = 0;
+    double maxY = 0;
+    [[nodiscard]] double Width() const noexcept
+    {
+        return maxX - minX;
+    }
+    [[nodiscard]] double Height() const noexcept
+    {
+        return maxY - minY;
+    }
+    [[nodiscard]] bool operator==(const SelectionBounds&) const noexcept = default;
+};
+
+// A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
+// means no selection; a selection with no area is an explicit empty selection, which later edits must treat as
+// "touch nothing", never as "touch everything".
 struct DocumentSelection
 {
     bool antialiased = true;
-    bool empty = false;
-    std::vector<Vec2> outline;
+    std::vector<SelectionLoop> loops;
     [[nodiscard]] bool operator==(const DocumentSelection&) const noexcept = default;
+    [[nodiscard]] std::optional<SelectionBounds> Bounds() const noexcept
+    {
+        std::optional<SelectionBounds> bounds;
+        for (const SelectionLoop& loop : loops)
+        {
+            for (const Vec2& point : loop)
+            {
+                if (!std::isfinite(point.x) || !std::isfinite(point.y))
+                {
+                    continue;
+                }
+                if (!bounds.has_value())
+                {
+                    bounds = SelectionBounds{point.x, point.y, point.x, point.y};
+                    continue;
+                }
+                bounds->minX = std::min(bounds->minX, point.x);
+                bounds->minY = std::min(bounds->minY, point.y);
+                bounds->maxX = std::max(bounds->maxX, point.x);
+                bounds->maxY = std::max(bounds->maxY, point.y);
+            }
+        }
+        return bounds;
+    }
     [[nodiscard]] bool IsEmpty() const noexcept
     {
-        return empty || outline.size() < 3;
+        const std::optional<SelectionBounds> bounds = Bounds();
+        return !bounds.has_value() || !(bounds->Width() > 0.0) || !(bounds->Height() > 0.0);
     }
+};
+
+enum class LassoKind : std::uint8_t
+{
+    Freehand,
+    Polygonal,
+    // The Marquee's outlines; not offered in the Lasso's Freehand/Polygonal choice.
+    Rectangle,
+    Ellipse,
+};
+
+enum class SelectionMode : std::uint8_t
+{
+    New,
+    Add,
+    Subtract,
+};
+
+// A lasso outline being drawn, in document pixels. `cursor` is the polygonal lasso's rubber-band end point;
+// `anchor` the Marquee's starting corner, in whole pixels.
+struct LassoDraft
+{
+    std::vector<Vec2> points;
+    std::optional<Vec2> cursor;
+    SelectionMode mode = SelectionMode::New;
+    LassoKind kind = LassoKind::Freehand;
+    std::optional<Vec2> anchor;
+};
+
+enum class WandSampleSize : std::uint8_t
+{
+    Point,
+    ThreeByThree,
+    FiveByFive,
+};
+
+// The Magic Wand's header settings.
+struct WandSettings
+{
+    // How far (0–255) each channel may differ from the sampled color and still be selected.
+    int tolerance = 32;
+    WandSampleSize sampleSize = WandSampleSize::Point;
+    // Only similar pixels connected to the clicked one, rather than every similar pixel.
+    bool contiguous = true;
+    // Read the visible composite rather than just the active layer.
+    bool sampleAllLayers = false;
+    // Pixels either side of the click that are averaged into the color to match.
+    [[nodiscard]] int Radius() const noexcept
+    {
+        return static_cast<int>(sampleSize);
+    }
+    [[nodiscard]] bool operator==(const WandSettings&) const noexcept = default;
+};
+
+enum class WandFailure : std::uint8_t
+{
+    None,
+    TooDetailed,
+    Memory,
 };
 
 struct ImageLayer
@@ -759,6 +867,80 @@ class DocumentSession
     bool transformAutoSelect = false;
     bool showsTransformControls = true;
 
+    // Selection (C9, Specs/Document/Document_Tools.md). Outlines live in the document, so history covers them;
+    // drafts, the outline-move origin and the header settings are session state.
+    [[nodiscard]] bool CanEditSelection() const noexcept;
+    [[nodiscard]] const std::optional<DocumentSelection>& Selection() const noexcept;
+    // Shift adds, Alt (with or without Shift) subtracts; otherwise the header choice.
+    [[nodiscard]] SelectionMode SelectionModeFor(bool shift, bool option) const noexcept;
+    // The mode the cursor advertises: an outline in progress keeps its starting mode.
+    [[nodiscard]] SelectionMode LassoCursorMode(bool shift, bool option) const noexcept;
+    // What the header highlights: the same rule, using the tracked held keys.
+    [[nodiscard]] SelectionMode DisplayedSelectionMode() const noexcept;
+    // True when the displayed mode changed.
+    bool UpdateHeldSelectionKeys(bool shift, bool option) noexcept;
+    [[nodiscard]] const std::optional<LassoDraft>& PendingLasso() const noexcept
+    {
+        return _lassoDraft;
+    }
+    // The Marquee starts at a whole-pixel anchor in the current marquee kind; the Lasso in the current lasso kind.
+    void BeginMarquee(Vec2 point, SelectionMode mode);
+    void BeginLasso(Vec2 point, SelectionMode mode);
+    // Marquee drag snapped to whole pixels: `square` evens the sides, `fromCenter` grows around the anchor.
+    void DragMarquee(Vec2 point, bool square, bool fromCenter);
+    // Adds an outline point; points closer than a quarter pixel are skipped.
+    void ExtendLasso(Vec2 point);
+    void MoveLassoCursor(std::optional<Vec2> point) noexcept;
+    void RemoveLastLassoPoint();
+    void CancelLasso() noexcept;
+    // Closes the outline and combines it with the selection; a click enclosing nothing deselects in New mode.
+    void FinishLasso();
+    void ToggleMarqueeKind() noexcept;
+    void ToggleLassoKind() noexcept;
+    // `shape` clipped to the canvas, combined by `mode` (subtracting from no selection changes nothing), one entry.
+    void ApplySelection(const std::vector<SelectionLoop>& shape, SelectionMode mode, std::wstring name);
+    // One history entry when the value differs.
+    void SetSelection(std::optional<DocumentSelection> value, std::wstring name);
+    // True where dragging in New mode would move the selection outline.
+    [[nodiscard]] bool CanMoveSelection(Vec2 point) const;
+    // Moves the outline only (never pixels); the whole drag is one `Move Selection` entry.
+    [[nodiscard]] bool BeginSelectionMove();
+    // Whole-pixel offsets from the drag's start; the outline is not re-clipped, so it can leave and come back.
+    void MoveSelection(double dx, double dy);
+    void EndSelectionMove();
+    [[nodiscard]] bool IsMovingSelection() const noexcept
+    {
+        return _selectionMoveOrigin.has_value();
+    }
+    // Arrow keys: 1 px, or 10 with Shift; each press is one entry.
+    void NudgeSelection(double dx, double dy);
+    // Expand / Contract need a non-empty selection and no outline in progress.
+    [[nodiscard]] bool CanModifySelection() const noexcept;
+    void ExpandSelection(int amount);
+    void ContractSelection(int amount);
+    void SelectAll();
+    void Deselect();
+    void InvertSelection();
+    // A mask's black (hidden) areas, or a layer's pixels at least 50 % opaque, become the selection; false when
+    // there is nothing to trace.
+    bool LoadMaskSelection(const Guid& id, SelectionMode mode = SelectionMode::New);
+    bool LoadLayerSelection(const Guid& id, SelectionMode mode = SelectionMode::New);
+    // Selects pixels similar to the one at `point`, read from `composite` (the visible canvas at document size,
+    // required when `wandSettings.sampleAllLayers`) or the active layer's own pixels as placed. One entry.
+    WandFailure MagicWand(Vec2 point, SelectionMode mode, const Raster* composite = nullptr);
+    // What the wand reads at document size: the composite, or the active layer's pixels without its mask; a
+    // folder or blank layer reads as transparent.
+    [[nodiscard]] Raster WandSample(const Raster* composite) const;
+    LassoKind lassoKind = LassoKind::Freehand;
+    LassoKind marqueeKind = LassoKind::Rectangle;
+    SelectionMode selectionModeChoice = SelectionMode::New;
+    std::optional<SelectionMode> heldSelectionMode;
+    bool selectionAntialiased = true;
+    WandSettings wandSettings;
+    int selectionExpandAmount = 1;
+    int selectionContractAmount = 1;
+    static constexpr int kSelectionModifyLimit = 500;
+
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
     // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
     static constexpr uint32_t kDefaultForegroundArgb = 0xFF000000u;
@@ -809,4 +991,6 @@ class DocumentSession
     std::uint64_t _editRevision = 0;
     mutable std::uint64_t _displayRevision = 0;
     mutable std::optional<CanvasDocument> _displayCopy;
+    std::optional<LassoDraft> _lassoDraft;
+    std::optional<DocumentSelection> _selectionMoveOrigin;
 };

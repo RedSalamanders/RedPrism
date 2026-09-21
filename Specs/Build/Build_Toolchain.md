@@ -45,7 +45,7 @@ MUST refuse to run on a non-ARM64 host.
 | --- | --- |
 | Binaries | `.build/<Platform>/<Configuration>/` |
 | Intermediates | `.build/Intermediate/<Platform>/<Configuration>/<Project>/` |
-| vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64>/` |
+| vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64\|x64-asan>/` |
 | vcpkg tool checkout | `.build/vcpkg-tool/` |
 | MSBuild logs | `.build/logs/` |
 
@@ -85,13 +85,17 @@ only a process whose `Win32_Process.ExecutablePath`, after absolute-path normali
 | WIL | `version>="1.0.260126.7"` |
 | yyjson | `version>="0.12.0"` |
 | libzip | `default-features: false` (zlib is restored as its dependency) |
+| Clipper2 | `version>="2.0.1"` (static `Clipper2.lib`; no runtime DLL) |
 
-C0–C4 used WIL and yyjson only. C5 adds libzip. onnxruntime is a later product decision. `curl`, `webview2`,
+C0–C4 used WIL and yyjson only. C5 adds libzip; C9 adds Clipper2 for selection booleans and offsets. onnxruntime is a later product decision. `curl`, `webview2`,
 `aws-sdk-cpp`, `sqlite3`, `7zip`, `ftxui`, `pe-parse`, `libjpeg-turbo`, `libpng`, and `libraw` MUST NOT be added by
 this contract.
 
 `vcpkg-install.ps1` clones the pinned tooling under `.build/vcpkg-tool/`, bootstraps it, and installs into the
-platform-scoped tree. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
+platform-scoped tree. `ASan Debug` links its own tree (`vcpkg-install.ps1 -Asan`, `.build/vcpkg_installed/x64-asan/`):
+the overlay triplet `Build/vcpkg-triplets/x64-windows-asan.cmake` builds every dependency with `/fsanitize=address`
+(its chainloaded toolchain drops vcpkg's `/RTC1`), so a static library such as Clipper2 carries the same STL container
+annotations as the sanitized application and DxUi objects and links cleanly. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
 are wired from that tree. `Directory.Build.targets` copies `yyjson.dll`, `zip.dll`, and the zlib runtime (`z.dll` /
 `zd.dll` or `zlib1.dll`) next to `RedPrism.exe`, `HostTests.exe`, `IoTests.exe`, and `CompositionTests.exe`.
 
@@ -108,7 +112,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 
 | Script | Duty |
 | --- | --- |
-| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All]` | Restore WIL, yyjson, and libzip |
+| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan]` | Restore WIL, yyjson, libzip, and Clipper2 (`-Asan`: the sanitized x64 tree) |
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64]` | Restore the exact DxUi pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |

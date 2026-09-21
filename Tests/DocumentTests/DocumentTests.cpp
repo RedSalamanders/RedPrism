@@ -1,13 +1,16 @@
 #include "Document.h"
+#include "Selection.h"
 #include "TransformEdit.h"
 
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <initializer_list>
 #include <limits>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -362,10 +365,13 @@ void TestSelection()
     document.width = 8;
     document.height = 8;
     Expect(!document.selection.has_value(), "selection.none");
-    DocumentSelection empty;
-    empty.empty = true;
-    document.selection = empty;
+    document.selection = DocumentSelection{};
     Expect(document.selection.value().IsEmpty(), "selection.empty-outline");
+    document.selection = DocumentSelection{true, SelectionGeometry::Rect(1, 1, 0, 4)};
+    Expect(document.selection.value().IsEmpty(), "selection.zero-area-is-empty");
+    document.selection = DocumentSelection{true, SelectionGeometry::Rect(1, 1, 3, 4)};
+    Expect(!document.selection.value().IsEmpty() && document.selection.value().Bounds() == SelectionBounds{1, 1, 4, 5},
+           "selection.bounds");
 }
 
 [[nodiscard]] Raster Gray(int width, int height, std::initializer_list<std::uint8_t> values)
@@ -1022,9 +1028,10 @@ void TestFlipCommands()
                NearPoint(session.ActiveLayer()->transform.Center(), before.Center()) &&
                session.history.UndoName() == L"Flip Vertical",
            "flip.layer-about-center");
-    session.Document().value().selection = DocumentSelection{true, false, {Vec2{10, 10}, Vec2{50, 10}, Vec2{50, 40}}};
+    session.Document().value().selection =
+        DocumentSelection{true, {SelectionLoop{Vec2{10, 10}, Vec2{50, 10}, Vec2{50, 40}}}};
     session.FlipCanvas(true);
-    Expect(session.Document().value().selection->outline[0] == Vec2{390, 10}, "flip.canvas-selection");
+    Expect(session.Document().value().selection->loops[0][0] == Vec2{390, 10}, "flip.canvas-selection");
 }
 
 void TestDistortWarp()
@@ -1106,6 +1113,866 @@ void TestDistortWarp()
                    static_cast<int>(20 - trimmed.origin.y)) == 255,
            "distort.trimmed-pixels-stay");
 }
+
+// ── Selection (C9) ────────────────────────────────────────────────────────
+
+[[nodiscard]] int CoverageAt(const std::optional<DocumentSelection>& selection, int width, int height, int x, int y)
+{
+    if (!selection.has_value())
+    {
+        return -1;
+    }
+    const Raster coverage = SelectionGeometry::Coverage(selection->loops, width, height, selection->antialiased);
+    if (!coverage.HasStorage() || x < 0 || y < 0 || x >= width || y >= height)
+    {
+        return -1;
+    }
+    return coverage.Data()[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
+                           static_cast<std::size_t>(x)];
+}
+
+[[nodiscard]] std::vector<Vec2> Square(double x, double y, double size)
+{
+    return {Vec2{x, y}, Vec2{x + size, y}, Vec2{x + size, y + size}, Vec2{x, y + size}};
+}
+
+[[nodiscard]] bool NearBounds(const std::optional<DocumentSelection>& selection, double x, double y, double width,
+                              double height, double epsilon = 0.01)
+{
+    if (!selection.has_value())
+    {
+        return false;
+    }
+    const std::optional<SelectionBounds> bounds = selection->Bounds();
+    return bounds.has_value() && Near(bounds->minX, x, epsilon) && Near(bounds->minY, y, epsilon) &&
+           Near(bounds->Width(), width, epsilon) && Near(bounds->Height(), height, epsilon);
+}
+
+DocumentSession SelectionSession(int width = 100, int height = 100)
+{
+    DocumentSession session;
+    session.CreateDocument(width, height, true);
+    return session;
+}
+
+void Lasso(DocumentSession& session, const std::vector<Vec2>& points, SelectionMode mode = SelectionMode::New)
+{
+    session.BeginLasso(points[0], mode);
+    for (std::size_t index = 1; index < points.size(); ++index)
+    {
+        session.ExtendLasso(points[index]);
+    }
+    session.FinishLasso();
+}
+
+void Marquee(DocumentSession& session, Vec2 from, Vec2 to, SelectionMode mode = SelectionMode::New, bool square = false,
+             bool fromCenter = false)
+{
+    session.BeginMarquee(from, mode);
+    session.DragMarquee(to, square, fromCenter);
+    session.FinishLasso();
+}
+
+void TestSelectionGeometry()
+{
+    const std::vector<SelectionLoop> a = SelectionGeometry::Rect(0, 0, 10, 10);
+    const std::vector<SelectionLoop> b = SelectionGeometry::Rect(5, 5, 10, 10);
+    const std::optional<SelectionBounds> united = SelectionGeometry::Bounds(SelectionGeometry::Union(a, b));
+    Expect(united == SelectionBounds{0, 0, 15, 15} && SelectionGeometry::Union(a, b).size() == 1, "geometry.union");
+    const std::vector<SelectionLoop> difference = SelectionGeometry::Subtract(a, b);
+    Expect(SelectionGeometry::Bounds(difference) == SelectionBounds{0, 0, 10, 10} &&
+               SelectionGeometry::Contains(difference, Vec2{2, 2}) &&
+               !SelectionGeometry::Contains(difference, Vec2{7, 7}),
+           "geometry.subtract");
+    Expect(SelectionGeometry::Bounds(SelectionGeometry::Intersect(a, b)) == SelectionBounds{5, 5, 10, 10},
+           "geometry.intersect");
+    Expect(SelectionGeometry::Subtract(a, a).empty() && SelectionGeometry::Intersect(a, {}).empty(),
+           "geometry.empty-results");
+    // A hole: the ring keeps its center out under the nonzero rule, whichever way the inner loop runs.
+    const std::vector<SelectionLoop> ring =
+        SelectionGeometry::Subtract(SelectionGeometry::Rect(0, 0, 30, 30), SelectionGeometry::Rect(10, 10, 10, 10));
+    Expect(ring.size() == 2 && !SelectionGeometry::Contains(ring, Vec2{15, 15}) &&
+               SelectionGeometry::Contains(ring, Vec2{5, 15}) && SelectionGeometry::Contains(ring, Vec2{0, 0}),
+           "geometry.ring-contains");
+    const std::vector<SelectionLoop> grown = SelectionGeometry::Offset(SelectionGeometry::Rect(40, 40, 20, 20), 5);
+    const std::optional<SelectionBounds> grownBounds = SelectionGeometry::Bounds(grown);
+    Expect(grownBounds.has_value() && Near(grownBounds->minX, 35, 0.01) && Near(grownBounds->Width(), 30, 0.01) &&
+               !SelectionGeometry::Contains(grown, Vec2{35.5, 35.5}) &&
+               SelectionGeometry::Contains(grown, Vec2{50, 36}),
+           "geometry.offset-rounds-corners");
+    const std::optional<SelectionBounds> shrunk = SelectionGeometry::Bounds(SelectionGeometry::Offset(grown, -8));
+    Expect(shrunk.has_value() && Near(shrunk->minX, 43, 0.01) && Near(shrunk->Width(), 14, 0.01),
+           "geometry.offset-inward");
+    Expect(SelectionGeometry::Offset(SelectionGeometry::Rect(0, 0, 10, 10), -6).empty(), "geometry.offset-collapses");
+    const std::vector<SelectionLoop> oval = SelectionGeometry::Ellipse(10, 20, 60, 40);
+    Expect(SelectionGeometry::Bounds(oval) == SelectionBounds{10, 20, 70, 60} &&
+               SelectionGeometry::Contains(oval, Vec2{40, 40}) && !SelectionGeometry::Contains(oval, Vec2{11, 21}),
+           "geometry.ellipse");
+    const std::vector<SelectionLoop> moved = SelectionGeometry::Translated(a, 3, -4);
+    Expect(SelectionGeometry::Bounds(moved) == SelectionBounds{3, -4, 13, 6}, "geometry.translated");
+    Expect(SelectionGeometry::Bounds(SelectionGeometry::Transformed(a, Affine2::Scale(2, 3))) ==
+               SelectionBounds{0, 0, 20, 30},
+           "geometry.transformed");
+    const SelectionBounds box = DragBox(Vec2{10, 10}, Vec2{40.4, 20.6}, false, false);
+    Expect(box == SelectionBounds{10, 10, 40, 21}, "geometry.dragbox-rounds");
+    Expect(DragBox(Vec2{10, 10}, Vec2{40, 20}, true, false) == SelectionBounds{10, 10, 40, 40},
+           "geometry.dragbox-square");
+    Expect(DragBox(Vec2{50, 50}, Vec2{60, 55}, false, true) == SelectionBounds{40, 45, 60, 55},
+           "geometry.dragbox-centered");
+    Expect(DragBox(Vec2{50, 50}, Vec2{45, 58}, true, true) == SelectionBounds{42, 42, 58, 58},
+           "geometry.dragbox-square-centered");
+    Expect(DragBox(Vec2{60, 70}, Vec2{20.2, 30.3}, false, false) == SelectionBounds{20, 30, 60, 70},
+           "geometry.dragbox-any-direction");
+}
+
+void TestSelectionCoverage()
+{
+    const DocumentSelection rect{true, SelectionGeometry::Rect(20, 30, 40, 41)};
+    Expect(CoverageAt(rect, 100, 100, 20, 30) == 255 && CoverageAt(rect, 100, 100, 19, 30) == 0 &&
+               CoverageAt(rect, 100, 100, 59, 70) == 255 && CoverageAt(rect, 100, 100, 60, 70) == 0 &&
+               CoverageAt(rect, 100, 100, 59, 71) == 0,
+           "coverage.rect-exact");
+    // A half-pixel edge covers half a pixel when antialiased and follows the center when not.
+    const DocumentSelection half{true, SelectionGeometry::Rect(10.5, 10, 10, 10)};
+    Expect(CoverageAt(half, 40, 40, 10, 15) == 128 && CoverageAt(half, 40, 40, 20, 15) == 128 &&
+               CoverageAt(half, 40, 40, 15, 15) == 255,
+           "coverage.half-pixel-edge");
+    // Hard edges follow pixel centers: an edge at 10.3 takes pixel 10 (center 10.5), one at 20.3 leaves pixel 20.
+    const DocumentSelection hardPart{false, SelectionGeometry::Rect(10.3, 10, 10, 10)};
+    Expect(CoverageAt(hardPart, 40, 40, 9, 15) == 0 && CoverageAt(hardPart, 40, 40, 10, 15) == 255 &&
+               CoverageAt(hardPart, 40, 40, 19, 15) == 255 && CoverageAt(hardPart, 40, 40, 20, 15) == 0,
+           "coverage.hard-center-rule");
+    // A center exactly on an edge counts for the left and top edges only, as Direct3D rasterizes.
+    const DocumentSelection hardHalf{false, SelectionGeometry::Rect(10.5, 10, 10, 10)};
+    Expect(CoverageAt(hardHalf, 40, 40, 10, 15) == 255 && CoverageAt(hardHalf, 40, 40, 20, 15) == 0,
+           "coverage.hard-top-left-rule");
+    // Legacy antialiasingControlsEdgeCoverage: pixels where x + y = 99 straddle the diagonal x + y = 100.
+    const std::vector<SelectionLoop> triangle{{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 100}}};
+    const DocumentSelection soft{true, triangle};
+    const DocumentSelection hard{false, triangle};
+    bool partial = false;
+    bool onlyHard = true;
+    for (int x = 0; x < 100; ++x)
+    {
+        const int value = CoverageAt(soft, 100, 100, x, 99 - x);
+        partial = partial || (value > 0 && value < 255);
+        const int hardValue = CoverageAt(hard, 100, 100, x, 99 - x);
+        onlyHard = onlyHard && (hardValue == 0 || hardValue == 255);
+    }
+    Expect(partial && CoverageAt(soft, 100, 100, 10, 10) == 255 && CoverageAt(soft, 100, 100, 90, 90) == 0,
+           "coverage.antialiased-diagonal");
+    Expect(onlyHard && CoverageAt(hard, 100, 100, 10, 10) == 255, "coverage.hard-diagonal");
+    // Pixels straddling the diagonal are exactly half covered: (x, 99 - x) has x + y + 1 = 100 through its center.
+    Expect(CoverageAt(soft, 100, 100, 30, 69) == 128, "coverage.diagonal-half");
+    // Off-canvas geometry still covers the canvas pixels it overlaps.
+    const DocumentSelection outside{true, SelectionGeometry::Rect(-15, 10, 20, 20)};
+    Expect(CoverageAt(outside, 100, 100, 0, 20) == 255 && CoverageAt(outside, 100, 100, 4, 20) == 255 &&
+               CoverageAt(outside, 100, 100, 5, 20) == 0,
+           "coverage.off-canvas");
+    // A hole and an overlapping second loop under the nonzero rule.
+    const DocumentSelection ring{true, SelectionGeometry::Subtract(SelectionGeometry::Rect(0, 0, 30, 30),
+                                                                   SelectionGeometry::Rect(10, 10, 10, 10))};
+    Expect(CoverageAt(ring, 30, 30, 15, 15) == 0 && CoverageAt(ring, 30, 30, 5, 15) == 255 &&
+               CoverageAt(ring, 30, 30, 9, 9) == 255 && CoverageAt(ring, 30, 30, 10, 10) == 0,
+           "coverage.ring");
+    Expect(!SelectionGeometry::Coverage({}, 0, 4, true).HasStorage() &&
+               CoverageAt(DocumentSelection{}, 4, 4, 1, 1) == 0,
+           "coverage.empty");
+}
+
+void TestSelectionSession()
+{
+    // Legacy replaceAddAndSubtractCombineOutlines.
+    DocumentSession session = SelectionSession();
+    Lasso(session, Square(10, 10, 40));
+    Expect(CoverageAt(session.Selection(), 100, 100, 30, 30) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 70, 70) == 0,
+           "selection.replace");
+    Lasso(session, Square(50, 50, 40), SelectionMode::Add);
+    Expect(CoverageAt(session.Selection(), 100, 100, 30, 30) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 70, 70) == 255,
+           "selection.add");
+    Lasso(session, Square(20, 20, 20), SelectionMode::Subtract);
+    Expect(CoverageAt(session.Selection(), 100, 100, 30, 30) == 0 &&
+               CoverageAt(session.Selection(), 100, 100, 15, 15) == 255,
+           "selection.subtract");
+    Lasso(session, Square(60, 10, 20));
+    Expect(CoverageAt(session.Selection(), 100, 100, 70, 20) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 70, 70) == 0 &&
+               CoverageAt(session.Selection(), 100, 100, 15, 15) == 0,
+           "selection.replace-again");
+    // Legacy modifiersPickModeAndSelectionIsClippedToCanvas.
+    Expect(session.SelectionModeFor(false, false) == SelectionMode::New &&
+               session.SelectionModeFor(true, false) == SelectionMode::Add &&
+               session.SelectionModeFor(true, true) == SelectionMode::Subtract &&
+               session.SelectionModeFor(false, true) == SelectionMode::Subtract,
+           "selection.modifiers");
+    Lasso(session, Square(-50, -50, 100));
+    Expect(NearBounds(session.Selection(), 0, 0, 50, 50), "selection.clipped-to-canvas");
+    // Legacy emptySelectionIsDistinctFromNoSelection.
+    DocumentSession empty = SelectionSession();
+    Lasso(empty, Square(0, 0, 50), SelectionMode::Subtract);
+    Expect(!empty.Selection().has_value(), "selection.subtract-from-nothing");
+    Lasso(empty, Square(10, 10, 20));
+    Lasso(empty, Square(0, 0, 60), SelectionMode::Subtract);
+    Expect(empty.Selection().has_value() && empty.Selection()->IsEmpty() &&
+               CoverageAt(empty.Selection(), 100, 100, 20, 20) == 0,
+           "selection.empty-is-distinct");
+    empty.Deselect();
+    Expect(!empty.Selection().has_value(), "selection.deselect");
+    // Legacy clickDeselectsAndSelectionStepsUndo.
+    DocumentSession steps = SelectionSession();
+    const int count = steps.history.UndoCount();
+    Lasso(steps, Square(10, 10, 40));
+    Expect(steps.history.UndoCount() == count + 1 && steps.history.UndoName() == L"Lasso", "selection.undo-entry");
+    Lasso(steps, {Vec2{5, 5}});
+    Expect(!steps.Selection().has_value() && steps.history.UndoName() == L"Deselect", "selection.click-deselects");
+    steps.Undo();
+    Expect(steps.Selection().has_value() && !steps.Selection()->IsEmpty(), "selection.undo-restores");
+    steps.Undo();
+    Expect(!steps.Selection().has_value(), "selection.undo-again");
+    steps.Redo();
+    Expect(CoverageAt(steps.Selection(), 100, 100, 30, 30) == 255, "selection.redo");
+    // Legacy polygonalCornersCanBeRemovedAndClosed.
+    DocumentSession polygon = SelectionSession();
+    polygon.lassoKind = LassoKind::Polygonal;
+    polygon.BeginLasso(Vec2{10, 10}, SelectionMode::New);
+    polygon.ExtendLasso(Vec2{90, 10});
+    polygon.ExtendLasso(Vec2{50, 50}); // Misplaced corner.
+    polygon.RemoveLastLassoPoint();
+    polygon.ExtendLasso(Vec2{90, 90});
+    polygon.ExtendLasso(Vec2{10, 90});
+    Expect(polygon.PendingLasso().has_value() && polygon.PendingLasso()->points.size() == 4 &&
+               polygon.PendingLasso()->kind == LassoKind::Polygonal,
+           "selection.polygonal-points");
+    polygon.FinishLasso();
+    Expect(polygon.history.UndoName() == L"Polygonal Lasso" &&
+               CoverageAt(polygon.Selection(), 100, 100, 80, 80) == 255 &&
+               CoverageAt(polygon.Selection(), 100, 100, 5, 50) == 0,
+           "selection.polygonal-closed");
+    polygon.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    polygon.CancelLasso();
+    Expect(!polygon.PendingLasso().has_value() && polygon.Selection().has_value() && !polygon.Selection()->IsEmpty(),
+           "selection.cancel-keeps");
+    polygon.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    polygon.RemoveLastLassoPoint();
+    Expect(!polygon.PendingLasso().has_value(), "selection.remove-last-point-ends-draft");
+    // Points closer than a quarter pixel are skipped.
+    polygon.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    polygon.ExtendLasso(Vec2{1.1, 1.1});
+    polygon.ExtendLasso(Vec2{5, 5});
+    Expect(polygon.PendingLasso()->points.size() == 2, "selection.skips-close-points");
+    polygon.CancelLasso();
+    // Legacy antialiasingControlsEdgeCoverage: the flag at the time of the outline sticks to it.
+    DocumentSession aliased = SelectionSession();
+    const std::vector<Vec2> triangle{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 100}};
+    Lasso(aliased, triangle);
+    Expect(aliased.Selection()->antialiased, "selection.antialiased-default");
+    aliased.selectionAntialiased = false;
+    Lasso(aliased, triangle);
+    Expect(!aliased.Selection()->antialiased && CoverageAt(aliased.Selection(), 100, 100, 30, 68) == 255 &&
+               CoverageAt(aliased.Selection(), 100, 100, 30, 70) == 0 &&
+               CoverageAt(aliased.Selection(), 100, 100, 70, 30) == 0,
+           "selection.hard-edges");
+    // Legacy selectAllInverseAndToolSwitchCancelsDraft.
+    DocumentSession all = SelectionSession();
+    all.SelectAll();
+    Expect(all.history.UndoName() == L"Select All" && CoverageAt(all.Selection(), 100, 100, 0, 0) == 255 &&
+               CoverageAt(all.Selection(), 100, 100, 99, 99) == 255,
+           "selection.select-all");
+    Lasso(all, Square(0, 0, 50));
+    all.InvertSelection();
+    Expect(all.history.UndoName() == L"Inverse" && CoverageAt(all.Selection(), 100, 100, 25, 25) == 0 &&
+               CoverageAt(all.Selection(), 100, 100, 75, 75) == 255,
+           "selection.inverse");
+    // Legacy cursorBadgeFollowsModifiersButKeepsAnOutlinesStartingMode.
+    DocumentSession modes = SelectionSession();
+    Expect(modes.LassoCursorMode(false, false) == SelectionMode::New &&
+               modes.LassoCursorMode(true, false) == SelectionMode::Add &&
+               modes.LassoCursorMode(false, true) == SelectionMode::Subtract,
+           "selection.cursor-mode");
+    modes.selectionModeChoice = SelectionMode::Add;
+    Expect(modes.LassoCursorMode(false, false) == SelectionMode::Add, "selection.cursor-choice");
+    modes.BeginLasso(Vec2{5, 5}, SelectionMode::Subtract);
+    Expect(modes.LassoCursorMode(false, false) == SelectionMode::Subtract &&
+               modes.LassoCursorMode(true, false) == SelectionMode::Subtract,
+           "selection.cursor-keeps-draft-mode");
+    modes.CancelLasso();
+    modes.selectionModeChoice = SelectionMode::New;
+    Expect(modes.UpdateHeldSelectionKeys(true, false) && modes.DisplayedSelectionMode() == SelectionMode::Add &&
+               modes.selectionModeChoice == SelectionMode::New,
+           "selection.held-shift");
+    Expect(modes.UpdateHeldSelectionKeys(true, true) && modes.DisplayedSelectionMode() == SelectionMode::Subtract,
+           "selection.held-option");
+    Expect(modes.UpdateHeldSelectionKeys(false, false) && modes.DisplayedSelectionMode() == SelectionMode::New &&
+               !modes.UpdateHeldSelectionKeys(false, false),
+           "selection.held-released");
+    // A pending transform blocks selection edits; Undo drops an outline in progress.
+    DocumentSession blocked = SelectionSession();
+    InsertPainted(blocked, 20, 20, Vec2{0, 0});
+    blocked.BeginTransform(true);
+    Expect(!blocked.CanEditSelection(), "selection.transform-blocks");
+    blocked.SelectAll();
+    Expect(!blocked.Selection().has_value(), "selection.transform-blocks-select-all");
+    blocked.CancelTransform();
+    blocked.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    blocked.Undo();
+    Expect(!blocked.PendingLasso().has_value(), "selection.undo-drops-draft");
+    // No document: nothing happens.
+    DocumentSession none;
+    none.SelectAll();
+    none.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    Expect(!none.Selection().has_value() && !none.PendingLasso().has_value() && !none.CanModifySelection(),
+           "selection.no-document");
+}
+
+void TestSelectionMove()
+{
+    // Legacy draggingMovesTheOutlineInWholePixelsAsOneUndo.
+    DocumentSession session = SelectionSession();
+    Lasso(session, Square(10, 10, 20));
+    Expect(session.CanMoveSelection(Vec2{20, 20}) && !session.CanMoveSelection(Vec2{60, 60}), "move.can-move-inside");
+    const int count = session.history.UndoCount();
+    Expect(session.BeginSelectionMove(), "move.begin");
+    session.MoveSelection(10.4, 29.6);
+    session.MoveSelection(40.2, 40.4);
+    session.EndSelectionMove();
+    Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Move Selection",
+           "move.one-entry");
+    Expect(NearBounds(session.Selection(), 50, 50, 20, 20) &&
+               CoverageAt(session.Selection(), 100, 100, 55, 55) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 15, 15) == 0,
+           "move.whole-pixels");
+    session.Undo();
+    Expect(NearBounds(session.Selection(), 10, 10, 20, 20), "move.undo");
+    // Legacy movingOffCanvasAndBackKeepsTheWholeShape.
+    Expect(session.BeginSelectionMove(), "move.begin-off");
+    session.MoveSelection(-25, 0);
+    session.EndSelectionMove();
+    Expect(CoverageAt(session.Selection(), 100, 100, 0, 20) == 255 && NearBounds(session.Selection(), -15, 10, 20, 20),
+           "move.off-canvas-not-clipped");
+    Expect(session.BeginSelectionMove(), "move.begin-back");
+    session.MoveSelection(25, 0);
+    session.EndSelectionMove();
+    Expect(NearBounds(session.Selection(), 10, 10, 20, 20), "move.back-intact");
+    // Legacy arrowNudgesAndMoveIsOnlyForNewModeOnARealSelection.
+    DocumentSession nudge = SelectionSession();
+    Expect(!nudge.BeginSelectionMove(), "move.nothing-selected");
+    Lasso(nudge, Square(10, 10, 20));
+    const int before = nudge.history.UndoCount();
+    nudge.NudgeSelection(1, 0);
+    nudge.NudgeSelection(0, -10);
+    Expect(NearBounds(nudge.Selection(), 11, 0, 20, 20) && nudge.history.UndoCount() == before + 2, "move.nudge");
+    nudge.BeginLasso(Vec2{5, 5}, SelectionMode::Add);
+    Expect(!nudge.CanMoveSelection(Vec2{20, 10}), "move.not-while-drafting");
+    nudge.CancelLasso();
+    Lasso(nudge, Square(0, 0, 60), SelectionMode::Subtract);
+    Expect(nudge.Selection()->IsEmpty() && !nudge.BeginSelectionMove() && !nudge.IsMovingSelection(),
+           "move.empty-cannot-move");
+    // A second BeginSelectionMove during a move is refused; MoveSelection without one does nothing.
+    DocumentSession twice = SelectionSession();
+    Lasso(twice, Square(10, 10, 20));
+    twice.MoveSelection(5, 5);
+    Expect(NearBounds(twice.Selection(), 10, 10, 20, 20), "move.needs-begin");
+    Expect(twice.BeginSelectionMove() && !twice.BeginSelectionMove() && twice.IsMovingSelection(), "move.once");
+    twice.EndSelectionMove();
+    Expect(!twice.IsMovingSelection(), "move.ended");
+}
+
+void TestSelectionModify()
+{
+    // Legacy expandAndContractGrowAndShrinkTheOutline.
+    DocumentSession session = SelectionSession();
+    Expect(!session.CanModifySelection(), "modify.nothing");
+    Lasso(session, Square(40, 40, 20));
+    Expect(session.CanModifySelection(), "modify.can");
+    session.ExpandSelection(5);
+    Expect(session.history.UndoName() == L"Expand Selection" && NearBounds(session.Selection(), 35, 35, 30, 30) &&
+               CoverageAt(session.Selection(), 100, 100, 37, 50) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 33, 50) == 0,
+           "modify.expand");
+    session.ContractSelection(8);
+    Expect(session.history.UndoName() == L"Contract Selection" && NearBounds(session.Selection(), 43, 43, 14, 14),
+           "modify.contract");
+    session.Undo();
+    Expect(NearBounds(session.Selection(), 35, 35, 30, 30), "modify.undo");
+    // Legacy expandStaysOnCanvasAndContractCanEmptyTheSelection.
+    DocumentSession edges = SelectionSession();
+    edges.SelectAll();
+    edges.ExpandSelection(10);
+    Expect(NearBounds(edges.Selection(), 0, 0, 100, 100), "modify.expand-stays-on-canvas");
+    edges.ContractSelection(10);
+    Expect(CoverageAt(edges.Selection(), 100, 100, 5, 50) == 0 &&
+               CoverageAt(edges.Selection(), 100, 100, 50, 50) == 255,
+           "modify.contract-from-edges");
+    edges.ContractSelection(45);
+    Expect(edges.Selection().has_value() && edges.Selection()->IsEmpty() && !edges.CanModifySelection(),
+           "modify.contract-empties");
+    // Out-of-range amounts and drafts are refused.
+    DocumentSession limits = SelectionSession();
+    Lasso(limits, Square(40, 40, 20));
+    const int count = limits.history.UndoCount();
+    limits.ExpandSelection(0);
+    limits.ExpandSelection(501);
+    limits.ContractSelection(-1);
+    limits.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    Expect(!limits.CanModifySelection(), "modify.draft-blocks");
+    limits.ExpandSelection(5);
+    limits.CancelLasso();
+    Expect(limits.history.UndoCount() == count && NearBounds(limits.Selection(), 40, 40, 20, 20), "modify.limits");
+}
+
+// A mask with a black square (hidden) and a white square hole inside it, as the legacy maskedLayer fixture.
+Guid MaskedLayer(DocumentSession& session)
+{
+    const Guid id = session.ActiveLayerID().value();
+    std::vector<std::uint8_t> bytes(100u * 100u, 255);
+    for (int y = 30; y < 70; ++y)
+    {
+        for (int x = 20; x < 60; ++x)
+        {
+            const bool hole = x >= 30 && x < 40 && y >= 40 && y < 50;
+            bytes[static_cast<std::size_t>(y) * 100u + static_cast<std::size_t>(x)] = hole ? 255 : 0;
+        }
+    }
+    const Raster mask = Raster::Make(100, 100, RasterFormat::Gray8, bytes.data(), bytes.size());
+    for (ImageLayer& layer : session.Document().value().layers)
+    {
+        if (layer.id == id)
+        {
+            layer.mask = LayerMask{RasterAsset{mask, mask, L"mask"}, true, std::nullopt, true};
+        }
+    }
+    return id;
+}
+
+void TestSelectionLoad()
+{
+    // Legacy cmdClickingAMaskSelectsItsBlackAreas.
+    DocumentSession session = SelectionSession();
+    const Guid id = MaskedLayer(session);
+    Expect(session.LoadMaskSelection(id) && session.history.UndoName() == L"Load Mask Selection", "load.mask-entry");
+    Expect(CoverageAt(session.Selection(), 100, 100, 25, 35) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 35, 45) == 0 &&
+               CoverageAt(session.Selection(), 100, 100, 80, 80) == 0,
+           "load.mask-black-areas");
+    Expect(CoverageAt(session.Selection(), 100, 100, 59, 69) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 60, 70) == 0,
+           "load.mask-exact-edges");
+    Lasso(session, Square(80, 80, 10));
+    Expect(session.LoadMaskSelection(id, SelectionMode::Add) &&
+               CoverageAt(session.Selection(), 100, 100, 85, 85) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 25, 35) == 255,
+           "load.mask-add");
+    Expect(session.LoadMaskSelection(id, SelectionMode::Subtract) &&
+               CoverageAt(session.Selection(), 100, 100, 85, 85) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 25, 35) == 0,
+           "load.mask-subtract");
+    // Legacy maskSelectionFollowsTheLayerTransformAndIgnoresAllWhiteMasks.
+    DocumentSession scaled = SelectionSession(200, 200);
+    const Guid scaledId = MaskedLayer(scaled);
+    for (ImageLayer& layer : scaled.Document().value().layers)
+    {
+        if (layer.id == scaledId)
+        {
+            layer.transform.origin = Vec2{0, 0};
+            layer.transform.size = Vec2{200, 200};
+        }
+    }
+    Expect(scaled.LoadMaskSelection(scaledId) && NearBounds(scaled.Selection(), 40, 60, 80, 80),
+           "load.mask-follows-transform");
+    scaled.Deselect();
+    scaled.AddBlankLayer();
+    const Guid blank = scaled.ActiveLayerID().value();
+    const Raster white = GrayRaster(1, 1, 255);
+    for (ImageLayer& layer : scaled.Document().value().layers)
+    {
+        if (layer.id == blank)
+        {
+            layer.mask = LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
+        }
+    }
+    Expect(!scaled.LoadMaskSelection(blank) && !scaled.Selection().has_value(), "load.mask-all-white-ignored");
+    Expect(!scaled.LoadMaskSelection(Guid::Generate()), "load.mask-unknown-layer");
+    // Legacy cmdClickingALayerSelectsItsOpaquePixels: a 50 × 50 image, opaque ring around a transparent center,
+    // one faint (25 %) corner pixel, placed at 2× scale.
+    DocumentSession layers = SelectionSession(200, 200);
+    std::vector<std::uint8_t> ring(50u * 50u * 4u, 0);
+    for (int y = 10; y < 40; ++y)
+    {
+        for (int x = 10; x < 40; ++x)
+        {
+            if (x >= 20 && x < 30 && y >= 20 && y < 30)
+            {
+                continue;
+            }
+            std::uint8_t* pixel = ring.data() + (static_cast<std::size_t>(y) * 50u + static_cast<std::size_t>(x)) * 4u;
+            pixel[2] = 255;
+            pixel[3] = 255;
+        }
+    }
+    ring[2] = 64;
+    ring[3] = 64;
+    const Raster ringRaster = Raster::Make(50, 50, RasterFormat::Bgra8888, ring.data(), ring.size());
+    ImageLayer ringLayer = RasterLayer(50, 50, L"Ring");
+    ringLayer.asset->image = ringRaster;
+    ringLayer.asset->thumbnail = ringRaster;
+    ringLayer.transform.origin = Vec2{50, 50};
+    ringLayer.transform.size = Vec2{100, 100};
+    layers.Document().value().layers.push_back(ringLayer);
+    layers.SelectLayer(ringLayer.id);
+    Expect(layers.LoadLayerSelection(ringLayer.id) && layers.history.UndoName() == L"Load Layer Selection" &&
+               NearBounds(layers.Selection(), 70, 70, 60, 60),
+           "load.layer-scaled-bounds");
+    Expect(CoverageAt(layers.Selection(), 200, 200, 75, 75) == 255 &&
+               CoverageAt(layers.Selection(), 200, 200, 100, 100) == 0 &&
+               CoverageAt(layers.Selection(), 200, 200, 50, 50) == 0,
+           "load.layer-opaque-threshold");
+    Lasso(layers, Square(0, 0, 20));
+    Expect(layers.LoadLayerSelection(ringLayer.id, SelectionMode::Add) &&
+               CoverageAt(layers.Selection(), 200, 200, 10, 10) == 255 &&
+               CoverageAt(layers.Selection(), 200, 200, 75, 75) == 255,
+           "load.layer-add");
+    layers.AddBlankLayer();
+    const std::optional<DocumentSelection> before = layers.Selection();
+    Expect(!layers.LoadLayerSelection(layers.ActiveLayerID().value()) && layers.Selection() == before,
+           "load.blank-layer-selects-nothing");
+    layers.AddGroup();
+    Expect(!layers.LoadLayerSelection(layers.ActiveLayerID().value()), "load.group-selects-nothing");
+    // A flipped placement maps the traced pixels through the flip.
+    DocumentSession flipped = SelectionSession(200, 200);
+    ImageLayer flippedLayer = RasterLayer(50, 50, L"Ring");
+    flippedLayer.asset->image = ringRaster;
+    flippedLayer.asset->thumbnail = ringRaster;
+    flippedLayer.transform.origin = Vec2{0, 0};
+    flippedLayer.transform.size = Vec2{50, 50};
+    flippedLayer.transform.flipX = true;
+    flipped.Document().value().layers.push_back(flippedLayer);
+    flipped.SelectLayer(flippedLayer.id);
+    Expect(flipped.LoadLayerSelection(flippedLayer.id) && CoverageAt(flipped.Selection(), 200, 200, 49, 0) == 0 &&
+               CoverageAt(flipped.Selection(), 200, 200, 15, 15) == 255,
+           "load.layer-flipped");
+}
+
+void TestMarquee()
+{
+    // Legacy marqueeDrawsWholePixelRectanglesInAnyDirection.
+    DocumentSession session = SelectionSession();
+    Marquee(session, Vec2{60.4, 70.6}, Vec2{20.2, 30.3});
+    Expect(session.history.UndoName() == L"Rectangular Marquee" && NearBounds(session.Selection(), 20, 30, 40, 41),
+           "marquee.whole-pixels");
+    Expect(CoverageAt(session.Selection(), 100, 100, 20, 30) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 19, 30) == 0,
+           "marquee.exact");
+    Marquee(session, Vec2{80, 80}, Vec2{90, 90}, SelectionMode::Add);
+    Expect(CoverageAt(session.Selection(), 100, 100, 85, 85) == 255 &&
+               CoverageAt(session.Selection(), 100, 100, 40, 50) == 255,
+           "marquee.add");
+    Marquee(session, Vec2{30, 40}, Vec2{50, 60}, SelectionMode::Subtract);
+    Expect(CoverageAt(session.Selection(), 100, 100, 40, 50) == 0 &&
+               CoverageAt(session.Selection(), 100, 100, 25, 35) == 255,
+           "marquee.subtract");
+    Marquee(session, Vec2{5, 5}, Vec2{5, 5}); // A click deselects.
+    Expect(!session.Selection().has_value(), "marquee.click-deselects");
+    // Legacy marqueeShiftMakesSquaresAndCenteredDragsGrowFromTheAnchor.
+    Marquee(session, Vec2{10, 10}, Vec2{40, 20}, SelectionMode::New, true);
+    Expect(NearBounds(session.Selection(), 10, 10, 30, 30), "marquee.square");
+    Marquee(session, Vec2{50, 50}, Vec2{60, 55}, SelectionMode::New, false, true);
+    Expect(NearBounds(session.Selection(), 40, 45, 20, 10), "marquee.from-center");
+    Marquee(session, Vec2{50, 50}, Vec2{45, 58}, SelectionMode::New, true, true);
+    Expect(NearBounds(session.Selection(), 42, 42, 16, 16), "marquee.square-from-center");
+    // Legacy marqueeEllipseSelectsAnOvalInItsBoxAndShiftMakesACircle.
+    DocumentSession oval = SelectionSession();
+    oval.marqueeKind = LassoKind::Ellipse;
+    oval.BeginMarquee(Vec2{10, 20}, SelectionMode::New);
+    oval.DragMarquee(Vec2{70, 60}, false, false);
+    Expect(oval.PendingLasso().has_value() && oval.PendingLasso()->kind == LassoKind::Ellipse &&
+               oval.PendingLasso()->points.size() == 4,
+           "marquee.ellipse-draft");
+    oval.FinishLasso();
+    Expect(oval.history.UndoName() == L"Elliptical Marquee" && NearBounds(oval.Selection(), 10, 20, 60, 40, 0.5),
+           "marquee.ellipse-bounds");
+    Expect(CoverageAt(oval.Selection(), 100, 100, 40, 40) == 255 && CoverageAt(oval.Selection(), 100, 100, 11, 21) == 0,
+           "marquee.ellipse-coverage");
+    oval.BeginMarquee(Vec2{5, 5}, SelectionMode::New);
+    oval.DragMarquee(Vec2{45, 25}, true, false);
+    oval.FinishLasso();
+    const std::optional<SelectionBounds> circle = oval.Selection()->Bounds();
+    Expect(circle.has_value() && Near(circle->Width(), circle->Height(), 0.5), "marquee.circle");
+    oval.ToggleMarqueeKind();
+    Expect(oval.marqueeKind == LassoKind::Rectangle, "marquee.toggle-kind");
+    oval.BeginMarquee(Vec2{5, 5}, SelectionMode::New);
+    oval.ToggleLassoKind();
+    Expect(oval.lassoKind == LassoKind::Polygonal && !oval.PendingLasso().has_value(), "marquee.toggle-cancels-draft");
+    // The Marquee never extends like a lasso; a drag without a marquee draft does nothing.
+    DocumentSession stray = SelectionSession();
+    stray.DragMarquee(Vec2{10, 10}, false, false);
+    stray.BeginLasso(Vec2{1, 1}, SelectionMode::New);
+    stray.DragMarquee(Vec2{50, 50}, false, false);
+    Expect(stray.PendingLasso()->points.size() == 1, "marquee.drag-needs-marquee-draft");
+}
+
+// Premultiplied BGRA pixels, top row first.
+[[nodiscard]] Raster PixelImage(int width, int height,
+                                const std::function<std::array<std::uint8_t, 4>(int, int)>& color)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::array<std::uint8_t, 4> pixel = color(x, y);
+            std::uint8_t* out =
+                bytes.data() +
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * 4u;
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                out[channel] = pixel[static_cast<std::size_t>(channel)];
+            }
+        }
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+// Pixel indices (y × width + x) an outline covers, hard-edged.
+[[nodiscard]] std::set<int> Pixels(const std::optional<std::vector<SelectionLoop>>& outline, int width, int height)
+{
+    std::set<int> result;
+    if (!outline.has_value())
+    {
+        return result;
+    }
+    const Raster coverage = SelectionGeometry::Coverage(outline.value(), width, height, false);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            if (coverage.Data()[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
+                                static_cast<std::size_t>(x)] >= 128)
+            {
+                result.insert(y * width + x);
+            }
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::set<int> Block(int column0, int column1, int row0, int row1, int width)
+{
+    std::set<int> result;
+    for (int y = row0; y < row1; ++y)
+    {
+        for (int x = column0; x < column1; ++x)
+        {
+            result.insert(y * width + x);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] WandSettings Wand(int tolerance = 32, WandSampleSize size = WandSampleSize::Point, bool contiguous = true)
+{
+    WandSettings settings;
+    settings.tolerance = tolerance;
+    settings.sampleSize = size;
+    settings.contiguous = contiguous;
+    return settings;
+}
+
+void TestWandKernel()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    // Legacy contiguousStopsAtOtherColorsWhileNonContiguousFindsEveryMatch.
+    const Raster stripes = PixelImage(10, 4, [&](int x, int) { return x < 3 || x >= 6 ? red : blue; });
+    const std::set<int> left = Block(0, 3, 0, 4, 10);
+    std::set<int> both = left;
+    both.merge(Block(6, 10, 0, 4, 10));
+    Expect(Pixels(MagicWand::Select(stripes, Vec2{1.5, 2.5}, Wand()), 10, 4) == left, "wand.contiguous");
+    Expect(Pixels(MagicWand::Select(stripes, Vec2{1.5, 2.5}, Wand(32, WandSampleSize::Point, false)), 10, 4) == both,
+           "wand.everywhere");
+    const Raster banded = PixelImage(4, 3, [&](int, int y) { return y == 0 ? red : blue; });
+    Expect(Pixels(MagicWand::Select(banded, Vec2{1, 0}, Wand()), 4, 3) == std::set<int>{0, 1, 2, 3},
+           "wand.rows-upright");
+    Expect(!MagicWand::Select(banded, Vec2{9, 0}, Wand()).has_value() &&
+               !MagicWand::Select(banded, Vec2{-1, 0}, Wand()).has_value(),
+           "wand.outside-image");
+    // Legacy toleranceAppliesToEveryChannelIncludingAlpha.
+    const std::array<std::array<std::uint8_t, 4>, 4> columns{
+        std::array<std::uint8_t, 4>{100, 100, 100, 255}, std::array<std::uint8_t, 4>{132, 100, 100, 255},
+        std::array<std::uint8_t, 4>{133, 100, 100, 255}, std::array<std::uint8_t, 4>{100, 100, 100, 222}};
+    const Raster row = PixelImage(4, 1, [&](int x, int) { return columns[static_cast<std::size_t>(x)]; });
+    const auto run = [&](int tolerance)
+    { return Pixels(MagicWand::Select(row, Vec2{0.5, 0.5}, Wand(tolerance, WandSampleSize::Point, false)), 4, 1); };
+    Expect(run(0) == std::set<int>{0} && run(32) == std::set<int>{0, 1} && run(33) == std::set<int>{0, 1, 2, 3},
+           "wand.tolerance-per-channel");
+    // Legacy sampleSizeAveragesThePixelsAroundTheClick.
+    const Raster dot = PixelImage(5, 5,
+                                  [](int x, int y)
+                                  {
+                                      return x == 2 && y == 2 ? std::array<std::uint8_t, 4>{255, 255, 255, 255}
+                                                              : std::array<std::uint8_t, 4>{0, 0, 0, 255};
+                                  });
+    Expect(Pixels(MagicWand::Select(dot, Vec2{2.5, 2.5}, Wand(10, WandSampleSize::Point, false)), 5, 5) ==
+               std::set<int>{12},
+           "wand.point-sample");
+    // A 3 × 3 average is gray 28: black is within 30 of it, the white center is not.
+    std::set<int> allButCenter = Block(0, 5, 0, 5, 5);
+    allButCenter.erase(12);
+    Expect(Pixels(MagicWand::Select(dot, Vec2{2.5, 2.5}, Wand(30, WandSampleSize::ThreeByThree, false)), 5, 5) ==
+               allButCenter,
+           "wand.averaged-sample");
+    Expect(Wand(30, WandSampleSize::FiveByFive).Radius() == 2, "wand.sample-radius");
+    // Legacy outlinesReproduceTheirPixelsWithHolesAndCornerTouches.
+    const int width = 8;
+    const int height = 6;
+    std::vector<std::uint8_t> mask(static_cast<std::size_t>(width * height), 0);
+    for (int y = 0; y < 3; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            if (!(x == 1 && y == 1))
+            {
+                mask[static_cast<std::size_t>(y * width + x)] = 255;
+            }
+        }
+    }
+    mask[static_cast<std::size_t>(4 * width + 5)] = 255;
+    mask[static_cast<std::size_t>(5 * width + 6)] = 255;
+    std::set<int> expected;
+    for (int index = 0; index < width * height; ++index)
+    {
+        if (mask[static_cast<std::size_t>(index)] != 0)
+        {
+            expected.insert(index);
+        }
+    }
+    const std::optional<std::vector<SelectionLoop>> traced = MagicWand::Trace(mask, width, height);
+    Expect(traced.has_value() && Pixels(traced, width, height) == expected, "wand.trace-holes-and-corners");
+    // Outer loops run clockwise (positive signed area in y-down coordinates), holes counterclockwise.
+    bool orientation = traced.has_value() && traced->size() == 4;
+    if (orientation)
+    {
+        int positive = 0;
+        for (const SelectionLoop& loop : traced.value())
+        {
+            double area = 0;
+            for (std::size_t index = 0; index < loop.size(); ++index)
+            {
+                const Vec2 a = loop[index];
+                const Vec2 b = loop[(index + 1) % loop.size()];
+                area += a.x * b.y - b.x * a.y;
+            }
+            positive += area > 0 ? 1 : 0;
+        }
+        orientation = positive == 3;
+    }
+    Expect(orientation, "wand.trace-orientation");
+    Expect(!MagicWand::Trace(std::vector<std::uint8_t>(4, 0), 2, 2).has_value() &&
+               !MagicWand::Trace(std::vector<std::uint8_t>(3, 255), 2, 2).has_value(),
+           "wand.trace-empty");
+    WandFailure failure = WandFailure::TooDetailed;
+    Expect(MagicWand::Trace(std::vector<std::uint8_t>(4, 255), 2, 2, &failure).has_value() &&
+               failure == WandFailure::None,
+           "wand.trace-reports-no-failure");
+    // MaskTracing thresholds: dark (< 128) for masks, opaque (>= 128 alpha) for layers.
+    const Raster gray = Gray(2, 2, {0, 127, 128, 255});
+    Expect(Pixels(MaskTracing::DarkPixels(gray), 2, 2) == std::set<int>{0, 1}, "wand.mask-dark-threshold");
+    const Raster alpha = PixelImage(
+        2, 2,
+        [](int x, int y)
+        {
+            const std::uint8_t a = static_cast<std::uint8_t>(x + 2 * y == 0 ? 127 : x + 2 * y == 1 ? 128 : 255);
+            return std::array<std::uint8_t, 4>{a, 0, 0, a};
+        });
+    Expect(Pixels(MaskTracing::OpaquePixels(alpha), 2, 2) == std::set<int>{1, 2, 3}, "wand.layer-opaque-threshold");
+    Expect(!MaskTracing::DarkPixels(Raster{}).has_value() && !MaskTracing::OpaquePixels(gray).has_value(),
+           "wand.tracing-rejects-formats");
+    // The layer sampler places pixels 1:1 at whole offsets and honors a flip.
+    LayerTransform placement;
+    placement.origin = Vec2{2, 1};
+    placement.size = Vec2{4, 3};
+    const Raster halves = PixelImage(4, 3, [&](int x, int) { return x < 2 ? red : blue; });
+    const Raster placed = RenderLayerPixels(halves, placement, 8, 6);
+    const auto pixelAt = [&](const Raster& image, int x, int y)
+    {
+        const std::uint8_t* p = image.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride()) +
+                                static_cast<std::size_t>(x) * 4u;
+        return std::array<std::uint8_t, 4>{p[0], p[1], p[2], p[3]};
+    };
+    Expect(placed.Width() == 8 && pixelAt(placed, 2, 1) == red && pixelAt(placed, 5, 3) == blue &&
+               pixelAt(placed, 1, 1)[3] == 0 && pixelAt(placed, 6, 1)[3] == 0 && pixelAt(placed, 3, 4)[3] == 0,
+           "wand.sampler-places-pixels");
+    placement.flipX = true;
+    const Raster flipped = RenderLayerPixels(halves, placement, 8, 6);
+    Expect(pixelAt(flipped, 2, 1) == blue && pixelAt(flipped, 5, 3) == red, "wand.sampler-flips");
+    placement.flipX = false;
+    placement.size = Vec2{8, 6};
+    placement.origin = Vec2{0, 0};
+    const Raster scaled = RenderLayerPixels(halves, placement, 8, 6);
+    Expect(pixelAt(scaled, 0, 0) == red && pixelAt(scaled, 7, 5) == blue && pixelAt(scaled, 3, 2)[0] > 0 &&
+               pixelAt(scaled, 3, 2)[2] > 0,
+           "wand.sampler-scales-bilinear");
+}
+
+void TestWandSession()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
+    // Legacy theWandReadsTheActiveLayerOrEveryVisibleLayerAndCombinesModes.
+    DocumentSession session;
+    session.CreateDocument(20, 10, false);
+    const Raster halves = PixelImage(20, 10, [&](int x, int) { return x < 10 ? red : blue; });
+    ImageLayer layer = RasterLayer(20, 10, L"Halves");
+    layer.asset->image = halves;
+    layer.asset->thumbnail = halves;
+    session.Document().value().layers.push_back(layer);
+    session.SelectLayer(layer.id);
+    session.AddBlankLayer();
+    const std::set<int> left = Block(0, 10, 0, 10, 20);
+    const auto selected = [&]
+    { return session.Selection().has_value() ? Pixels(session.Selection()->loops, 20, 10) : std::set<int>{}; };
+    // The blank active layer is transparent everywhere, so the whole canvas matches.
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::New) == WandFailure::None && selected().size() == 200 &&
+               session.history.UndoName() == L"Magic Wand",
+           "wandsession.blank-layer-matches-all");
+    session.wandSettings.sampleAllLayers = true;
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::New) == WandFailure::None && selected().size() == 200,
+           "wandsession.all-layers-needs-composite");
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::New, &halves) == WandFailure::None && selected() == left,
+           "wandsession.all-layers");
+    const int count = session.history.UndoCount();
+    Expect(session.MagicWand(Vec2{15, 5}, SelectionMode::Add, &halves) == WandFailure::None &&
+               selected().size() == 200 && session.history.UndoCount() == count + 1,
+           "wandsession.add");
+    std::set<int> right = Block(10, 20, 0, 10, 20);
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::Subtract, &halves) == WandFailure::None && selected() == right,
+           "wandsession.subtract");
+    session.Undo();
+    Expect(selected().size() == 200, "wandsession.undo");
+    // The active layer's own pixels, placed by its transform.
+    session.wandSettings.sampleAllLayers = false;
+    session.SelectLayer(layer.id);
+    Expect(session.MagicWand(Vec2{15, 5}, SelectionMode::New) == WandFailure::None && selected() == right,
+           "wandsession.active-layer");
+    // Nothing matched in New mode deselects; outside the canvas nothing happens.
+    session.wandSettings.tolerance = 0;
+    session.wandSettings.sampleAllLayers = true;
+    const Raster clear = PixelImage(20, 10, [](int, int) { return std::array<std::uint8_t, 4>{0, 0, 0, 0}; });
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::New, &halves) == WandFailure::None && selected() == left,
+           "wandsession.tolerance-zero");
+    const int before = session.history.UndoCount();
+    Expect(session.MagicWand(Vec2{25, 5}, SelectionMode::New, &halves) == WandFailure::None &&
+               session.history.UndoCount() == before,
+           "wandsession.outside-canvas");
+    static_cast<void>(clear);
+    // A composite of the wrong size is refused rather than read.
+    const Raster wrongSize = PixelImage(4, 4, [](int, int) { return std::array<std::uint8_t, 4>{0, 0, 0, 0}; });
+    Expect(session.MagicWand(Vec2{2, 2}, SelectionMode::New, &wrongSize) == WandFailure::None && selected() == left,
+           "wandsession.wrong-composite-ignored");
+    // Add mode clips to the canvas and keeps the selection; the header defaults match the legacy settings.
+    Expect(WandSettings{} == WandSettings{32, WandSampleSize::Point, true, false}, "wandsession.defaults");
+}
 } // namespace
 
 int wmain()
@@ -1135,6 +2002,15 @@ int wmain()
     TestMaskTransform();
     TestFlipCommands();
     TestDistortWarp();
+    TestSelectionGeometry();
+    TestSelectionCoverage();
+    TestSelectionSession();
+    TestSelectionMove();
+    TestSelectionModify();
+    TestSelectionLoad();
+    TestMarquee();
+    TestWandKernel();
+    TestWandSession();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);
