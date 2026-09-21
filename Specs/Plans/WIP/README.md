@@ -17,12 +17,14 @@ recorded in [`PortReview_2026-09-21.md`](../Done/PortReview_2026-09-21.md). C8 T
 [`PixelEdits_2026-09-21.md`](../Done/PixelEdits_2026-09-21.md), C12 Adjust and filter in
 [`AdjustFilter_2026-09-20.md`](../Done/AdjustFilter_2026-09-20.md) C13 Smart operations (Remove Background
 rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) C14 Product hardening in
-[`ProductHardening_2026-09-20.md`](../Done/ProductHardening_2026-09-20.md) and C15 Packaging in
-[`Packaging_2026-09-20.md`](../Done/Packaging_2026-09-20.md).
+[`ProductHardening_2026-09-20.md`](../Done/ProductHardening_2026-09-20.md) C15 Packaging in
+[`Packaging_2026-09-20.md`](../Done/Packaging_2026-09-20.md) and C16 Completeness (the whole legacy command surface, the
+unimplemented-function notice, images opened as a layer or a new project, the size cards, the Crop tool, rename and
+merge) in [`Completeness_2026-09-21.md`](../Done/Completeness_2026-09-21.md).
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`Completeness_2026-09-21.md`](Completeness_2026-09-21.md) | ACTIVE | `UI/UI_ApplicationChrome.md`, `Document/Document_Model.md`, `Document/Document_Tools.md` | C16: the whole legacy command surface, a message for every unimplemented function, images opened as a layer or a new project |
+| (none) | — | — | No plan is active: every phase of the port is recorded under `Done/`; the next plan is indexed here before it authorizes work |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be

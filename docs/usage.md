@@ -38,7 +38,7 @@ after the save prompt); Import Images… always adds layers. A drop of several i
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S / Ctrl+W | New, open, save, save as, close project (a modified project asks to save first) |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
-| Ctrl+] / Ctrl+[ / Ctrl+Alt+G / F2 / Ctrl+E | Move the layer up / down among its siblings, clip it to the layer below (again releases), rename it, merge down (rename and merge say they are not implemented yet) |
+| Ctrl+] / Ctrl+[ / Ctrl+Alt+G / F2 / Ctrl+E | Move the layer up / down among its siblings, clip it to the layer below (again releases), rename it (double-click its row also does), merge it down onto the layer beneath (a folder merges into one layer) |
 | Enter / Escape | OK / Cancel the open New Canvas, Canvas Size or Image Size card (canvas focused) |
 | Enter / Escape / Alt-drag | Apply / drop the Crop tool's frame; Alt resizes or draws the frame about its center (canvas focused) |
 | Delete | Clear the selected pixels; without a selection delete the targeted mask, or the layer (canvas focused) |

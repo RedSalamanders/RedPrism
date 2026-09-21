@@ -317,7 +317,7 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG…, Export JPEG…; Close Project (Ctrl+W); Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
 | Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size…, Image Size…; Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down (Ctrl+E); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
@@ -335,16 +335,10 @@ else: no document, history, selection, tool or viewport change, no side effect b
 notice is an OK box owned by the main window, shown from the message loop after the command or click that raised
 it returns (never from inside a DxUi dispatch); quiet runs (`--self-test`, `--screenshot`, `--bench`) count it
 instead of showing it. A stub leaves with its implementation, and the notice never appears for an implemented
-function. The functions still awaiting an implementation are:
-
-| Function | Reached from |
-| --- | --- |
-| Rename Layer… | Layer menu, F2 |
-| Merge Down | Layer menu, Ctrl+E |
-
-The self-test invokes each of them under quiet UI and checks that the notice count rises by one while the document,
-the history and the tool stay as they were. [`Completeness_2026-09-21.md`](../Plans/WIP/Completeness_2026-09-21.md)
-tracks the implementations.
+function. No exposed function awaits an implementation since C16 closed
+([`Completeness_2026-09-21.md`](../Plans/Done/Completeness_2026-09-21.md)); a function surfaced ahead of its
+implementation joins a table here until it lands. The self-test raises the notice under quiet UI and checks that
+the count rises by one while the document and the history stay as they were.
 
 ## Layers panel
 
@@ -353,6 +347,20 @@ effective visibility is off, a folder glyph for groups, and depth indentation. S
 toggling a group's expander updates `DocumentSession::CollapsedGroupIDs` (rows carry `HierarchyEntry::collapsed`).
 Tree has no drag API on the current DxUi pin; reorder stays a later interaction (C8) rather than a second retained
 toolkit.
+
+Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`IDxTreeDelegate::OnTreeItemInvoked`, which
+selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
+holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK
+commits the name through `DocumentSession::RenameLayer` (trimmed, a blank name ignored) as one `Rename Layer`
+entry, Escape or Cancel leaves it. Merge (C16, legacy `LayerMerge.swift`): Ctrl+E follows
+`DocumentSession::PlanMerge` — the active layer merges with the layer beneath it in its folder (`Merge Down`), a
+folder merges its contents and goes (`Merge Group`), several selected layers merge together (`Merge Layers`); the
+Layer menu's caption names the plan. The host composites the planned layers alone — cut loose from any parent or
+clipping source outside the plan — through the canvas composition (`Compose` on that subset, `Readback`, the
+document invalidated before and after) and `DocumentSession::MergeLayers` installs the result trimmed to its
+pixels in the anchor's place, named after the plan, with layers clipped to any merged layer clipping to it, as one
+entry; a failed composite reports `IDS_ERROR_FLATTEN`. The self-test renames through typed characters and Enter,
+leaves a name alone on Escape, and merges a blue layer down onto a red one into one 14 × 14 layer.
 
 The 32 DIP title row holds the `Layers` label and a `DxUi::NumericStepper` (0–100 %, step 1, Shift 10, unit `%`,
 accessible name `Layer opacity`) bound to the active raster layer's opacity. Typing previews live; Enter, focus

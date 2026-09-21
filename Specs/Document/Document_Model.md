@@ -110,6 +110,13 @@ bottom-to-top order.
   legacy `LiveLayerMask.toggleClippingMask`): a clipped layer releases (`Release Clipping Mask`); otherwise a
   non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself
   (`Create Clipping Mask`); `CanToggleClippingMask` mirrors the legacy gate.
+- Merge (`PlanMerge`, `MergeLayers`, legacy `LayerMerge.swift`): the plan lists the layers to merge in stacking
+  order, the ids that go, the result's name (the lower layer's, the folder's or the top selected one's), its
+  parent, the anchor whose slot it takes and the action name (`Merge Down`, `Merge Group`, `Merge Layers`); no plan
+  for the bottom layer of a folder, a folder without pixel layers or a selection without one. `MergeLayers(plan,
+  composite)` takes the document-sized composite the host rendered, trims it to its pixels (`TrimmedToAlpha`),
+  places the result at the anchor's slot with clips onto merged layers re-targeted, validates the hierarchy and
+  the clip graph, and records one entry named by the plan; a plan whose layers are gone is refused.
 - `ClearDocument` drops the document, the active layer and selection, the collapsed set, every draft and pending
   edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
 - Nested `BeginEdit`/`EndEdit` follow `DocumentHistory`; every edit is one undo step.

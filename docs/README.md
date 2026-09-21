@@ -55,10 +55,11 @@ invoked instead of doing nothing.
   pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
   (Ctrl+Shift+N) or folder (Ctrl+G), wraps the active layer in a folder (Group Selected Layers), copies the
-  selection or the layer to a new layer (Ctrl+J), deletes the active layer or its targeted mask (Delete, without a
-  selection), toggles its visibility, moves it up or down among its siblings (Ctrl+] / Ctrl+[) or out of its folder
-  (Ctrl+Shift+G), clips it to the layer below or releases the clip (Ctrl+Alt+G), or adds a mask (white, or black;
-  from the selection when there is one).
+  selection or the layer to a new layer (Ctrl+J), renames it (F2, or double-click its row), deletes the active
+  layer or its targeted mask (Delete, without a selection), toggles its visibility, moves it up or down among its
+  siblings (Ctrl+] / Ctrl+[) or out of its folder (Ctrl+Shift+G), clips it to the layer below or releases the clip
+  (Ctrl+Alt+G), merges it down onto the layer beneath (or a folder into one layer; Ctrl+E), or adds a mask (white,
+  or black; from the selection when there is one).
 - **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert. Cut, Copy, Copy Merged and
   Paste (Ctrl+X, Ctrl+C, Ctrl+Shift+C, Ctrl+V) move pixels between layers and other apps (a paste lands in place as a
   new layer); Fill with the foreground (Alt+Backspace) or background (Ctrl+Backspace) color, Clear Selection Pixels
