@@ -4,6 +4,7 @@
 #include "CanvasRenderer.h"
 #include "CanvasSize.h"
 #include "CanvasViewport.h"
+#include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "Renderer.h"
@@ -31,6 +32,7 @@ enum class BrushAction : std::uint8_t;
 enum class GradientAction : std::uint8_t;
 enum class ShapeAction : std::uint8_t;
 enum class AdjustAction : std::uint8_t;
+enum class CropAction : std::uint8_t;
 enum class SizeAction : std::uint8_t;
 enum class SizeCardKind : std::uint8_t;
 enum class ChromeEditPhase : std::uint8_t;
@@ -181,6 +183,17 @@ class Application final
     void SyncGradientPreview() noexcept;
     void PushGradientTiles() noexcept;
     void OnShapeAction(ShapeAction action, double value) noexcept;
+    // ApplicationCrop.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Crop tool"): the frame's drags, the header's
+    // actions, Enter / Escape, the cursor and the self-test.
+    void BeginCropDrag(Vec2 view) noexcept;
+    void ContinueCropDrag(Vec2 view) noexcept;
+    void EndCropDrag() noexcept;
+    void ApplyCrop() noexcept;
+    void CancelCropFrame() noexcept;
+    void OnCropAction(CropAction action, double value) noexcept;
+    void SyncCropChrome() noexcept;
+    [[nodiscard]] LPCWSTR CropCursor(Vec2 view) const noexcept;
+    int RunCropSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
     void SampleColorAt(Vec2 view) noexcept;
     void EndColorSampling() noexcept;
@@ -242,6 +255,7 @@ class Application final
     bool _layoutDirty = false;
     bool _duplicateOnDrag = false;
     std::optional<TransformDrag> _transformDrag;
+    std::optional<CropDrag> _cropDrag;
     std::optional<TransformOverlayGeometry> _overlayGeometry;
     std::optional<Vec2> _selectionDragStart;
     Vec2 _selectionMoveDelta{};

@@ -1433,6 +1433,10 @@ int Application::RunSelfTest() noexcept
     {
         return sizes;
     }
+    if (const int crop = RunCropSelfTest(); crop != 0)
+    {
+        return crop;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -1672,6 +1676,7 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetBrushHandler([this](BrushAction action, double value) { OnBrushAction(action, value); });
     chrome->SetGradientHandler([this](GradientAction action, double value) { OnGradientAction(action, value); });
     chrome->SetShapeHandler([this](ShapeAction action, double value) { OnShapeAction(action, value); });
+    chrome->SetCropHandler([this](CropAction action, double value) { OnCropAction(action, value); });
     chrome->SetAdjustHandler([this](AdjustAction action, double value) { OnAdjustAction(action, value); });
     chrome->SetCurveHandler([this](std::vector<CurvePoint> points) { OnCurveChanged(std::move(points)); });
     chrome->SetBandHandler([this](int index, double degrees) { OnBandChanged(index, degrees); });
@@ -1977,6 +1982,7 @@ void Application::SyncChrome() noexcept
     shape.radius = _session.shapeCornerRadius;
     shape.foregroundArgb = _session.ForegroundColor();
     _chrome->SetShapeInspector(shape);
+    SyncCropChrome();
     SyncToolOverlays();
     SyncGradientPreview();
 }
@@ -2307,6 +2313,30 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             _gradientHandle.has_value())
         {
             EndGradientDrag();
+            return;
+        }
+    }
+    if (_tool == EditorTool::Crop && !panMode)
+    {
+        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
+        {
+            _canvasDrag = false;
+            BeginCropDrag(view);
+            return;
+        }
+        if (event.action == DxUi::PointerAction::Move && _cropDrag.has_value())
+        {
+            ContinueCropDrag(view);
+            return;
+        }
+        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
+            _cropDrag.has_value())
+        {
+            if (event.action == DxUi::PointerAction::Up)
+            {
+                ContinueCropDrag(view);
+            }
+            EndCropDrag();
             return;
         }
     }
@@ -2756,26 +2786,22 @@ void Application::SettleInteractions(bool applyPanels) noexcept
         CancelPixelDrag();
     }
     CancelSizeCard();
+    _cropDrag.reset();
+    _session.CancelCrop();
 }
 
 void Application::OnTool(EditorTool tool) noexcept
 {
-    if (tool == EditorTool::Crop)
-    {
-        // Not implemented yet (Specs/UI/UI_ApplicationChrome.md "Unimplemented functions"): the notice, and the
-        // tool stays as it was.
-        ShowNotImplemented(IDS_TOOL_CROP);
-        if (_chrome)
-        {
-            _chrome->SetTool(_tool);
-        }
-        return;
-    }
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
         SettleInteractions(true);
         _session.SwitchBrushTipFamily(EditorToolTipFamily(_tool), EditorToolTipFamily(tool));
+        if (tool == EditorTool::Crop)
+        {
+            // The Crop tool starts with the whole canvas framed (legacy selectTool).
+            _session.SetCropFrame(_session.VisibleCropRect());
+        }
         _session.ClearPendingOpacityDigit();
     }
     _tool = tool;
@@ -2961,6 +2987,19 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         if (virtualKey == VK_ESCAPE && (_warpDragging || _session.PendingWarp() != nullptr))
         {
             CancelWarpStroke();
+            return true;
+        }
+        if (_tool == EditorTool::Crop && (virtualKey == VK_RETURN || virtualKey == VK_ESCAPE))
+        {
+            // Enter applies the crop frame, Escape drops it (the whole canvas frames again).
+            if (virtualKey == VK_ESCAPE)
+            {
+                CancelCropFrame();
+            }
+            else
+            {
+                ApplyCrop();
+            }
             return true;
         }
         if (virtualKey == VK_ESCAPE && _session.PendingShape().has_value())
@@ -3622,6 +3661,15 @@ void Application::ApplyDemo() noexcept
             DocumentChanged();
         }
     }
+    if (_demo == L"crop")
+    {
+        // The transform layers with the Crop tool framing the card and part of the backdrop.
+        InsertPaintedLayer(_session, L"Backdrop", 520, 340, Vec2{110, 120}, 0.0, 0xFF2F6FB0u);
+        InsertPaintedLayer(_session, L"Card", 340, 220, Vec2{560, 320}, 20.0, 0xFFE58A2Eu);
+        OnTool(EditorTool::Crop);
+        _session.SetCropFrame(CropRect{360, 200, 640, 400});
+        return;
+    }
     if (_demo == L"canvassize")
     {
         // The transform layers with the Canvas Size card open at a relative, anchored, white-extended size.
@@ -4013,6 +4061,10 @@ bool Application::ApplyCanvasCursor() noexcept
         {
             cursor = IDC_SIZEALL;
         }
+    }
+    else if (_tool == EditorTool::Crop)
+    {
+        cursor = CropCursor(view);
     }
     else if (_tool == EditorTool::Move)
     {

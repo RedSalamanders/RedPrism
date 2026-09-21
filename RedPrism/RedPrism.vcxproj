@@ -115,6 +115,7 @@
     <ClInclude Include="..\Common\BrushStroke.h" />
     <ClInclude Include="..\Common\Adjust.h" />
     <ClInclude Include="..\Common\CanvasSize.h" />
+    <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
     <ClInclude Include="..\Common\DocumentHistory.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
@@ -151,6 +152,7 @@
     <ClCompile Include="..\Common\Adjust.cpp" />
     <ClCompile Include="..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
+    <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />
@@ -160,12 +162,14 @@
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
+    <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="ApplicationSize.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />
+    <ClCompile Include="ChromeHostCrop.cpp" />
     <ClCompile Include="ChromeHostSize.cpp" />
     <ClCompile Include="BrushCompute.cpp" />
     <ClCompile Include="CanvasRenderer.cpp" />

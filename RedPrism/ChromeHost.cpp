@@ -165,6 +165,7 @@ void ChromeHost::Detach() noexcept
     _picker = nullptr;
     _overlay = nullptr;
     _transformHeader = nullptr;
+    _cropHeader = nullptr;
     _transformTitle = nullptr;
     _autoSelect = nullptr;
     _showControls = nullptr;
@@ -476,6 +477,7 @@ HRESULT ChromeHost::Build() noexcept
         BuildBrushHeader(*root);
         BuildGradientHeader(*root);
         BuildShapeHeader(*root);
+        BuildCropHeader(*root);
         _layersTitle = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_LAYERS_TITLE));
         _opacity = root->AddChild<DxUi::NumericStepper>();
         _opacity->SetAccessibleName(LoadStringResource(nullptr, IDS_LAYER_OPACITY));
@@ -670,6 +672,7 @@ void ChromeHost::Arrange() noexcept
     ArrangeBrushHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeGradientHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeShapeHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
+    ArrangeCropHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     if (_overlay)
     {
         PlaceControl(_overlay, D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
@@ -1138,6 +1141,10 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
     if (_shapeHeader)
     {
         _shapeHeader->SetVisible(tool == EditorTool::Shape);
+    }
+    if (_cropHeader)
+    {
+        _cropHeader->SetVisible(tool == EditorTool::Crop);
     }
     if (_header)
     {
@@ -2139,7 +2146,7 @@ void ChromeHost::SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor
 bool ChromeHost::GenericHeaderWanted(EditorTool tool) noexcept
 {
     return tool != EditorTool::Move && !EditorToolIsSelection(tool) && !EditorToolIsBrush(tool) &&
-           tool != EditorTool::Gradient && tool != EditorTool::Shape;
+           tool != EditorTool::Gradient && tool != EditorTool::Shape && tool != EditorTool::Crop;
 }
 
 void ChromeHost::SetGradientHandler(std::function<void(GradientAction, double)> handler)

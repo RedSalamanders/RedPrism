@@ -188,6 +188,11 @@ void TestCommandLine() noexcept
     parsed = {};
     Expect(RedPrismParseCommandLine(retouchArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{retouchValue},
            "cli.demo-retouch");
+    wchar_t cropValue[] = L"crop";
+    wchar_t* cropArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, cropValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(cropArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{cropValue},
+           "cli.demo-crop");
     wchar_t canvasSizeValue[] = L"canvassize";
     wchar_t* canvasSizeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, canvasSizeValue};
     parsed = {};
@@ -320,7 +325,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 394> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 403> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -725,7 +730,16 @@ void TestStringTable() noexcept
                                          IDS_SIZE_RESIZE,
                                          IDS_ERROR_RESIZE,
                                          IDS_SIZE_MEGABYTES,
-                                         IDS_SIZE_KILOBYTES};
+                                         IDS_SIZE_KILOBYTES,
+                                         IDS_CROP_RATIO,
+                                         IDS_CROP_FREE,
+                                         IDS_CROP_ORIGINAL,
+                                         IDS_CROP_1_1,
+                                         IDS_CROP_4_3,
+                                         IDS_CROP_16_9,
+                                         IDS_CROP_SIZE,
+                                         IDS_CROP_APPLY,
+                                         IDS_CROP_RATIO_TIP};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);

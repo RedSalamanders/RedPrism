@@ -166,6 +166,23 @@ struct ShapeInspectorState
     uint32_t foregroundArgb = 0xFF000000u;
 };
 
+// The Crop header (C16): the ratio choice, the frame's size, Cancel and Apply Crop.
+enum class CropAction : std::uint8_t
+{
+    SetRatio, // 0 free, 1 original, 2 1:1, 3 4:3, 4 16:9
+    Cancel,
+    Apply,
+};
+
+struct CropInspectorState
+{
+    bool enabled = false; // a document is open
+    int ratio = 0;
+    bool hasFrame = false;
+    int width = 0;
+    int height = 0;
+};
+
 // The adjustment panel (C12, Specs/UI/UI_ApplicationChrome.md): which editor it shows and every value the session
 // holds for it, mirrored through SetAdjustInspector; its controls report changes as actions with one value.
 enum class AdjustPanelKind : std::uint8_t
@@ -479,6 +496,10 @@ class ChromeHost final
     void SetGradientInspector(const GradientInspectorState& state) noexcept;
     void SetShapeHandler(std::function<void(ShapeAction, double)> handler);
     void SetShapeInspector(const ShapeInspectorState& state) noexcept;
+    // The Crop header (C16) and the shade outside the crop frame (canvas-hole pixels; nullopt clears it).
+    void SetCropHandler(std::function<void(CropAction, double)> handler);
+    void SetCropInspector(const CropInspectorState& state) noexcept;
+    void SetCropShade(std::optional<D2D1_RECT_F> framePixels) noexcept;
     // The adjustment panel (C12): actions with a value, the curve editor's points, a spectrum band handle, and the
     // Gradient Map's color picks (the picker's phase, the color and which end).
     void SetAdjustHandler(std::function<void(AdjustAction, double)> handler);
@@ -748,6 +769,19 @@ class ChromeHost final
     GradientInspectorState _gradientInspector;
     bool _syncingGradient = false;
     DxUi::Panel* _shapeHeader = nullptr;
+    // ChromeHostCrop.cpp: the Crop header.
+    void BuildCropHeader(DxUi::Panel& root);
+    void ArrangeCropHeader(float left, float top, float right, float bottom) noexcept;
+    DxUi::Panel* _cropHeader = nullptr;
+    DxUi::Label* _cropTitle = nullptr;
+    DxUi::Label* _cropRatioLabel = nullptr;
+    DxUi::ComboBox* _cropRatio = nullptr;
+    DxUi::Label* _cropSize = nullptr;
+    DxUi::Button* _cropCancel = nullptr;
+    DxUi::Button* _cropApply = nullptr;
+    CropInspectorState _cropInspector;
+    bool _syncingCrop = false;
+    std::function<void(CropAction, double)> _onCrop;
     DxUi::Label* _shapeTitle = nullptr;
     DxUi::ComboBox* _shapeKind = nullptr;
     DxUi::NumericStepper* _shapeRadius = nullptr;

@@ -61,6 +61,8 @@ class CanvasOverlay final : public DxUi::Control
         uint32_t argb = 0xFF000000u;
     };
     void SetShapeDraft(std::optional<ShapeDraftOverlay> draft) noexcept;
+    // The crop frame (DIPs relative to the overlay): everything outside it dims.
+    void SetCropShade(std::optional<D2D1_RECT_F> frame) noexcept;
     // The eyedropper's comparison ring: the new color above, the color from before the drag below.
     struct SampleRing
     {
@@ -103,6 +105,7 @@ class CanvasOverlay final : public DxUi::Control
     std::optional<BrushCursor> _brushCursor;
     std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> _gradientLine;
     std::optional<ShapeDraftOverlay> _shapeDraft;
+    std::optional<D2D1_RECT_F> _cropShade;
     std::optional<SampleRing> _sampleRing;
     std::optional<D2D1_POINT_2F> _cloneSource;
     // Device-independent Direct2D resources, rebuilt when the outline or the factory changes.

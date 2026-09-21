@@ -535,16 +535,5 @@ int Application::RunFilesSelfTest() noexcept
         }
     }
     OnTool(EditorTool::Move);
-    {
-        const int notices = _notImplementedCount;
-        OnTool(EditorTool::Crop);
-        if (_notImplementedCount != notices + 1 || _tool != EditorTool::Move || _chrome->Tool() != EditorTool::Move)
-        {
-            ReportFilesSelfTestFailure(std::format(L"Choosing the Crop tool did not raise the notice and keep the "
-                                                   L"previous tool (notices {} -> {}, tool {}).\n",
-                                                   notices, _notImplementedCount, static_cast<int>(_tool)));
-            return 5;
-        }
-    }
     return 0;
 }

@@ -58,6 +58,12 @@ void CanvasOverlay::SetShapeDraft(std::optional<ShapeDraftOverlay> draft) noexce
     RequestInvalidate();
 }
 
+void CanvasOverlay::SetCropShade(std::optional<D2D1_RECT_F> frame) noexcept
+{
+    _cropShade = frame;
+    RequestInvalidate();
+}
+
 void CanvasOverlay::SetSampleRing(std::optional<SampleRing> ring) noexcept
 {
     _sampleRing = ring;
@@ -101,6 +107,19 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     PaintSelection(dc, host, bounds);
     PaintDraft(dc, host, bounds);
     PaintBrushCursor(dc, host, bounds);
+    if (_cropShade.has_value())
+    {
+        // Everything outside the crop frame dims, so the frame reads as the canvas to come.
+        ID2D1SolidColorBrush* dim = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.45f));
+        const D2D1_RECT_F frame = D2D1::RectF(std::clamp(bounds.left + _cropShade->left, bounds.left, bounds.right),
+                                              std::clamp(bounds.top + _cropShade->top, bounds.top, bounds.bottom),
+                                              std::clamp(bounds.left + _cropShade->right, bounds.left, bounds.right),
+                                              std::clamp(bounds.top + _cropShade->bottom, bounds.top, bounds.bottom));
+        dc->FillRectangle(D2D1::RectF(bounds.left, bounds.top, bounds.right, frame.top), dim);
+        dc->FillRectangle(D2D1::RectF(bounds.left, frame.bottom, bounds.right, bounds.bottom), dim);
+        dc->FillRectangle(D2D1::RectF(bounds.left, frame.top, frame.left, frame.bottom), dim);
+        dc->FillRectangle(D2D1::RectF(frame.right, frame.top, bounds.right, frame.bottom), dim);
+    }
     PaintTools(dc, host, bounds);
     PaintTransform(dc, host, bounds);
     dc->PopAxisAlignedClip();

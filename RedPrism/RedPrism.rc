@@ -441,4 +441,13 @@ BEGIN
     IDS_ERROR_RESIZE                "RedPrism could not resize the document."
     IDS_SIZE_MEGABYTES              "{0} MB"
     IDS_SIZE_KILOBYTES              "{0} KB"
+    IDS_CROP_RATIO                  "Ratio"
+    IDS_CROP_FREE                   "Free"
+    IDS_CROP_ORIGINAL               "Original"
+    IDS_CROP_1_1                    "1:1"
+    IDS_CROP_4_3                    "4:3"
+    IDS_CROP_16_9                   "16:9"
+    IDS_CROP_SIZE                   "{0} × {1} px"
+    IDS_CROP_APPLY                  "Apply Crop"
+    IDS_CROP_RATIO_TIP              "Keep the frame to a ratio; Original is the canvas ratio. Alt grows the frame from its center"
 END
