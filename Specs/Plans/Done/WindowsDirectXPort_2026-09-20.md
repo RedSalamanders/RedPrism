@@ -637,8 +637,8 @@ Indexed 2026-09-20:
 
 | Phase | Child plan |
 | --- | --- |
-| **C8 Transform** | [`Transform_2026-09-20.md`](../WIP/Transform_2026-09-20.md) |
-| **C9 Selection** | [`Selection_2026-09-20.md`](../WIP/Selection_2026-09-20.md) |
+| **C8 Transform** | [`Transform_2026-09-20.md`](Transform_2026-09-20.md) (done) |
+| **C9 Selection** | [`Selection_2026-09-20.md`](Selection_2026-09-20.md) (done) |
 | **C10 Brush** | [`Brush_2026-09-20.md`](../WIP/Brush_2026-09-20.md) |
 | **C11 Retouch** | [`Retouch_2026-09-20.md`](../WIP/Retouch_2026-09-20.md) |
 | **C12 Adjust/filter** | [`AdjustFilter_2026-09-20.md`](../WIP/AdjustFilter_2026-09-20.md) |

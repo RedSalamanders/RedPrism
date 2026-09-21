@@ -111,11 +111,48 @@ The bottom 48 DIP of the rail hold the palette wells: the background `ColorSwatc
 (26 DIP squares offset 14 DIP, the legacy palette layout), each with a tooltip and accessible name. Clicking a well
 opens the color picker for that well.
 
+## Selection tools
+
+The Marquee, Lasso and Magic Wand share one header (`ChromeHost::BuildSelectionHeader`, mirrored from the session
+through `SelectionInspectorState`, never re-laid out from a chrome callback): the tool name; the Marquee's Shape
+(Rectangle / Ellipse) or the Lasso's kind (Freehand / Polygonal); Mode (New / Add / Subtract, showing a held Shift
+or Alt live and the outline's starting mode while one is drawn; clicking sets the choice); for the wand Tolerance
+(0–255), Sample Size (Point Sample / 3 by 3 Average / 5 by 5 Average), This Layer / All Layers and Contiguous;
+Anti-alias for the Lasso, the wand and the elliptical Marquee (rectangles snap to whole pixels, so it does not apply);
+Expand and Contract, each with a pixel amount (1–500), enabled with a non-empty selection and no outline in progress;
+and, pinned right, Deselect when a selection exists and `Empty selection` when it encloses nothing. Every string is
+a STRINGTABLE entry (`IDS_SELECTION_*`, `IDS_WAND_*`).
+
+`CanvasOverlay` draws the selection outline in every tool as marching ants (a white line under a black 4/4 dash; the
+dash is static until an animation timer arrives), clipped to the hole, from a path geometry rebuilt only when the
+selection or the view mapping changes; and the draft being drawn (freehand and polygonal polylines, the polygonal
+rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle or ellipse) as a white
+line over a dark one. Outline and draft changes re-composite chrome only, never the document.
+
+Pointer rules in the hole (`Application::SelectionPress` / `SelectionPointerMove` / `SelectionRelease`): the
+modifiers at the press pick the mode (Shift adds, Alt subtracts). In New mode a press inside a non-empty selection
+moves its outline (Shift keeps the move on the axis it has gone further along; one `Move Selection` entry), and a
+press released without moving deselects (with the wand, it selects afresh from that pixel). Otherwise the Marquee
+starts a whole-pixel box and reshapes it as the pointer or Shift moves; a Shift held from the press means Add and
+squares the box only once let go and pressed again. The freehand Lasso follows the pointer and closes on release;
+the polygonal Lasso adds a corner per click, tracks the cursor, and closes on a click within 8 DIP of the first corner,
+a double-click (system double-click time and distance) or Enter; Backspace or Delete removes the last corner,
+Escape drops the outline. The wand selects on the press. Capture loss ends a drag; a polygonal outline survives it.
+Cursors: a crosshair, or the four-way arrow over a selection the press would move (the legacy add/subtract badges
+wait on custom cursors). Switching tools drops a draft and ends an outline move.
+
+Keys with the canvas focused: M chooses the Marquee and, pressed again, switches Rectangle and Ellipse; L chooses
+the Lasso and, pressed again, switches Freehand and Polygonal (holding the key does not keep switching; the choice
+stays while the project is open). Arrows nudge a non-empty selection by one pixel (Shift ten) with a selection tool.
+Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. The Select menu adds Load Layer Selection and Load Mask
+Selection for the active layer. The selection contract itself lives in
+[`Document_Tools.md`](../Document/Document_Tools.md).
+
 ## Menus and accelerators
 
 The MenuBar lists File, Edit, Image, Layer, Select, Filter, View, Help. Flyouts are native `HMENU`s shown through
-`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. Select and Filter fill in
-with C9–C13.
+`DxUi::ShowNativeHMenuContextMenu` (the DxUi-supported path); a menu with no items opens nothing. Filter fills in
+with C12.
 
 | Menu | Commands |
 | --- | --- |
@@ -123,6 +160,7 @@ with C9–C13.
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Free Transform (Ctrl+T) |
 | Image | Flip Canvas Horizontal, Flip Canvas Vertical |
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Delete Layer (Delete, canvas focused), Toggle Visibility, Move Out of Folder (Ctrl+Shift+G), Flip Layer Horizontal, Flip Layer Vertical |
+| Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-) |
 | Help | About RedPrism (version from `Common/Version.h`) |
 
@@ -176,6 +214,10 @@ foreground well and commits a sampled color into the session, cancels a backgrou
 and resets with X and D, commits 50 % through the opacity stepper as one `Layer Opacity` undo entry, then proves
 0 DxUi and 0 canvas surface bytes when hidden. With a painted layer it also drags the layer with the Move
 tool (one `Transform Layer` entry), previews a typed rotation through Free Transform until Apply, cancels with
-Escape, nudges with Shift+Right and flips the canvas and the layer. `--screenshot ... --demo transform` writes
-`docs/screenshots/transform-96.png`: two painted layers, the rotated one's box and the transform header. Keyboard Escape leaves the canvas. `HostTests` covers tool
-tables, glyphs and the string table.
+Escape, nudges with Shift+Right and flips the canvas and the layer. With the selection tools it drags a Marquee
+rectangle, adds one with Shift, switches the shape with M, moves the outline, deselects with a click, selects a
+painted layer's pixels exactly with the wand, drives Ctrl+Shift+I, Ctrl+A and Ctrl+D, closes a polygonal lasso with
+Enter, expands from the header and cancels an outline with Escape. `--screenshot ... --demo transform` writes
+`docs/screenshots/transform-96.png`: two painted layers, the rotated one's box and the transform header;
+`--demo selection` writes `docs/screenshots/selection-96.png`: an elliptical and a rectangular selection with the
+Marquee's header. Keyboard Escape leaves the canvas. `HostTests` covers tool tables, glyphs and the string table.

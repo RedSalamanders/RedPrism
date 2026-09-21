@@ -39,11 +39,17 @@ common file dialog. Drop a `.prism` package, an exploded project folder, or an i
   (Ctrl+Shift+N) or folder (Ctrl+G), deletes the active layer (Delete), toggles its visibility, or moves it out of
   its folder (Ctrl+Shift+G).
 - **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert.
+- **Selection**: the Marquee (M, rectangle or ellipse), Lasso (L, freehand or polygonal) and Magic Wand (W) draw
+  outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
+  the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
+  mask as the selection.
 
 Empty-document harness captures:
 
 - [96 DPI](screenshots/empty-shell-96.png)
 - [144 DPI](screenshots/empty-shell-144.png)
+- [Move tool demo](screenshots/transform-96.png) (`--demo transform`)
+- [Selection demo](screenshots/selection-96.png) (`--demo selection`)
 
-Transform, selection, brush, and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
+Brush, retouch and filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
 [usage.md](usage.md) for the command line and file formats.

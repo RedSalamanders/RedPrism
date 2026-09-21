@@ -9,6 +9,7 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--self-test` | Hidden WARP smoke (used by `test.ps1`) |
 | `--screenshot <png>` | Capture without activation, then exit |
 | `--dpi 96\|144` | Layout DPI for `--screenshot` |
+| `--demo transform\|selection` | Populate the new document for a `--screenshot` |
 | `--help` | Print the catalog and exit 0 |
 
 ## Projects
@@ -35,7 +36,11 @@ the File menu.
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Delete | New layer, new folder, move out of folder, delete layer |
 | X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |
 | Ctrl+T / Enter / Escape | Free Transform; apply / cancel a pending transform (canvas focused) |
-| Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool |
+| Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool; nudge the selection outline with a selection tool |
+| M / L (again) | Switch the Marquee between Rectangle and Ellipse / the Lasso between Freehand and Polygonal |
+| Shift-drag / Alt-drag | Add to / subtract from the selection; a fresh Shift during a Marquee drag squares it |
+| Enter / Backspace / Escape | Close a polygonal lasso / remove its last corner / drop the outline |
+| Ctrl+A / Ctrl+D / Ctrl+Shift+I | Select all, deselect, inverse |
 | Alt-drag / Ctrl-drag handle / Shift | Duplicate while moving / distort / constrain an axis, snap rotation to 15°, free the ratio |
 | Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- | Fit, actual pixels, zoom in, zoom out |
 | V M L W C B E J S R G U I H Z A | Tools (canvas focused) |

@@ -31,8 +31,9 @@ The requirements below and `ProjectStore` validation own document behavior.
 ## Types
 
 `CanvasDocument` holds `id`, integer width/height, `resolution` (default 72, finite 1…9600 when set), layers
-bottom-to-top, and optional `DocumentSelection`. Selection is part of document equality so undo covers it. It is
-not saved. `nil` means no selection; an empty outline means "touch nothing."
+bottom-to-top, and optional `DocumentSelection`: closed loops in document pixels under the nonzero winding rule plus an
+antialiasing flag ([`Document_Tools.md`](Document_Tools.md)). Selection is part of document equality so undo covers it.
+It is not saved. `nullopt` means no selection; a selection enclosing no area means "touch nothing."
 
 `ImageLayer` is a value type: `Guid` id, optional shared `Raster` asset, `LayerTransform`, name, visibility,
 optional `parentID`, `isGroup`, opacity 0…1, `LayerBlendMode`, optional `LayerMask`, optional `maskSourceID`,

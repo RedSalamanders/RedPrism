@@ -1,16 +1,18 @@
-# Document tools: transform (C8)
+# Document tools: transform (C8) and selection (C9)
 
 Status: current normative contract (created with C8; later tool phases extend it)
 Last reviewed: 2026-09-21
-Owner: `Common/TransformEdit.*`, `DocumentSession` transform members in `Common/Document.*`,
-`RedPrism/TransformOverlay.h`, `RedPrism/CanvasOverlay.*`, the Move-tool code in `RedPrism/Application.cpp`
+Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `DocumentSession` transform and selection members in
+`Common/Document.*`, `RedPrism/TransformOverlay.h`, `RedPrism/CanvasOverlay.*`, the Move-tool and selection-tool
+code in `RedPrism/Application.cpp`
 
 ## Scope
 
 This contract owns how a layer's placement is edited: the drag geometry, snapping, free distortion, the pending-edit
 lifecycle in `DocumentSession`, flips, and the rules the Move tool and its header follow. Rendering of a
 transform is the composition's job ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)); the chrome
-that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md).
+that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). Since C9 it also owns the
+selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels.
 
 ## Transform model
 
@@ -108,12 +110,100 @@ mirrors every layer and placed mask across the canvas middle and reflects the se
 `locksTransformRatio` (default on), `transformAutoSelect` (default off) and `showsTransformControls` (default on)
 are session state the header toggles; nothing here is serialized beyond the layer transforms already in `.prism`.
 
+## Selection model (C9)
+
+`DocumentSelection` is a set of closed loops in document pixels (`SelectionLoop`, a `std::vector<Vec2>`) filled by
+the nonzero winding rule, plus `antialiased`. It lives on `CanvasDocument::selection`, so history covers it and
+document equality includes it; it is never saved. `nullopt` means no selection. A selection whose loops enclose no
+area (`IsEmpty`: no finite point, or zero-width or zero-height bounds) is an explicit empty selection that later
+edits must treat as "touch nothing", never as "touch everything". Loops from the boolean operations are
+Clipper2-normalized (outer loops and holes, no overlaps) and kept to a hundredth of a pixel; wand and mask traces are
+pixel-edge loops, outer loops clockwise and holes counterclockwise in top-left coordinates, which the nonzero rule
+fills exactly.
+
+`SelectionGeometry` (`Common/Selection.*`, Clipper2 from vcpkg) provides `Rect`; `Ellipse` (a polygon with segments
+about two pixels long, a multiple of four so the extremes are exact); `Bounds`; `Union`, `Subtract` and `Intersect`
+under the nonzero rule; `Offset(delta)` (round-join inflation: a positive delta is Photoshop's Expand, a negative one
+Contract, and contracting past the middle leaves no loops); `Translated`; `Transformed(Affine2)`; `Contains`
+(nonzero winding, a point on the outline counts as inside); and `Coverage(width, height, antialiased)`, a Gray8
+raster at document resolution. Antialiased coverage is the exact area of the pixel inside the loops (signed-area
+accumulation, |winding| clamped to 1); hard coverage selects a pixel whose center lies inside, a center exactly on an
+edge counting for the left and top edges only (the Direct3D top-left rule). Geometry beyond the canvas still covers
+the canvas pixels it overlaps. `DragBox(anchor, point, square, fromCenter)` is the box a drag spans in whole pixels:
+the pointer rounds, `square` evens the sides toward the drag direction, `fromCenter` grows around the anchor.
+
+## Selection session
+
+Selection state on `DocumentSession`: `lassoKind` (Freehand default, Polygonal), `marqueeKind` (Rectangle default,
+Ellipse), `selectionModeChoice` (New default, Add, Subtract), `heldSelectionMode`, `selectionAntialiased` (default
+on), `wandSettings`, `selectionExpandAmount` and `selectionContractAmount` (1–500, default 1). `CanEditSelection`
+needs a document and no pending transform (commands settle the transform first).
+
+- `SelectionModeFor(shift, option)`: Alt subtracts (with or without Shift), Shift adds, else the header choice.
+  `LassoCursorMode` keeps an outline's starting mode; `DisplayedSelectionMode` (what the header highlights) uses the
+  tracked held keys (`UpdateHeldSelectionKeys`, true when the displayed mode changed).
+- `BeginMarquee(point, mode)` starts a draft at a whole-pixel anchor in `marqueeKind`; `DragMarquee(point, square,
+  fromCenter)` reshapes it through `DragBox`. `BeginLasso(point, mode)` starts a draft in `lassoKind`;
+  `ExtendLasso` appends a point (points closer than a quarter pixel are skipped); `MoveLassoCursor` sets the
+  polygonal rubber band; `RemoveLastLassoPoint` drops the last corner (an emptied draft ends);
+  `CancelLasso` drops the draft; `ToggleMarqueeKind` / `ToggleLassoKind` cancel the draft and switch the kind.
+  Neither begins while an outline move is in progress.
+- `FinishLasso` closes the draft and combines it: an ellipse fills the drag's whole-pixel box; fewer than three points
+  or a zero-area outline deselects in New mode and does nothing otherwise. History names: `Lasso`,
+  `Polygonal Lasso`, `Rectangular Marquee`, `Elliptical Marquee`.
+- `ApplySelection(shape, mode, name)` clips the shape to the canvas, then New replaces, Add unions, Subtract
+  subtracts (subtracting from no selection changes nothing). The result takes `selectionAntialiased`.
+  `SetSelection(value, name)` records one entry when the value differs.
+- `CanMoveSelection(point)`: a non-empty selection contains the point and no draft is in progress.
+  `BeginSelectionMove` opens one `Move Selection` entry; `MoveSelection(dx, dy)` places the original loops at the
+  rounded offset from the drag start without re-clipping (the outline can leave the canvas and come back intact);
+  `EndSelectionMove` closes the entry; `NudgeSelection` is one entry per press.
+- `CanModifySelection`: a non-empty selection and no draft. `ExpandSelection(amount)` offsets outward and clips to
+  the canvas (`Expand Selection`); `ContractSelection(amount)` offsets inward, away from the canvas edges too, and
+  can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.
+- `SelectAll` (`Select All`, antialiased), `Deselect` (`Deselect`; nothing without a selection), `InvertSelection`
+  (`Inverse`, canvas minus the selection).
+- `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
+  mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
+  layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
+  ignoring its mask, mapped through the layer transform, flips included (`Load Layer Selection`); false for a
+  folder, a blank layer or an image with no opaque pixel.
+- Undo and Redo drop a draft in progress. `FlipCanvas` mirrors the loops with the layers.
+
+## Magic Wand
+
+`WandSettings`: `tolerance` 0–255 (default 32), `sampleSize` (Point, 3 × 3, 5 × 5: the radius averaged around the
+click), `contiguous` (default on), `sampleAllLayers` (default off). `MagicWand::Mask` is the legacy `wand_mask`: the
+reference color is the rounded average over the sample square clipped to the image; a premultiplied BGRA pixel
+matches when every channel, alpha included, lies within `tolerance` of it; contiguous fills 4-connected from the
+seed with a scanline flood (nothing when the seed itself does not match), otherwise every matching pixel counts.
+`MagicWand::Trace` is `wand_trace`: directed pixel edges walked clockwise around selected pixels, turning right
+where loops meet so touching corners stay apart; more than 8 000 000 edges is `WandFailure::TooDetailed`, an
+allocation failure `WandFailure::Memory`. `MagicWand::Select(image, point, settings)` floors the point to a pixel,
+masks and traces; nullopt when nothing matches or the point is outside the image.
+
+`DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
+the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
+flattened composition readback; a missing or wrongly sized composite makes the click do nothing), otherwise the
+active layer's own pixels at its displayed transform without its mask (`RenderLayerPixels`: bilinear, edges
+clamped inside the placed box, transparent outside it); a folder or blank layer reads as transparent, so the whole
+canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without the canvas
+clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
+
 ## Validation
 
-`DocumentTests`: geometry (`transform.*`), drag modes (`drag.*`), snapping (`snap.*`), the session lifecycle
+`DocumentTests`: geometry (`transform.*`)
+, drag modes (`drag.*`), snapping (`snap.*`), the session lifecycle
 (preview keeps the document, commit/undo/redo, no-op commit, invalid previews, select-commits, undo-cancels-pending,
 nudge), duplicate (`duplicate.*`), group (`group.*`), masks (`mask.*`), flips (`flip.*`) and the warp
 (`distort.*`), each ported from the legacy `TransformTests`, `TransformPressTests`, `MaskTransformTests` and
 `DistortTests`. `HostTests` proves the overlay geometry (rotated edges, corners, rotation knob, zoomed document
 mapping, resize cursor directions, distortion midpoints). The WARP self-test drives a pointer drag, Free Transform
 with a typed rotation, Apply, Escape, Shift+arrow and both flips through `Application`.
+
+Selection: `DocumentTests` `geometry.*` (Clipper2 booleans, holes, offsets, ellipse, drag boxes), `coverage.*`
+(exact rectangles, half-pixel edges, the top-left rule, the antialiased diagonal, off-canvas loops, rings),
+`selection.*`, `move.*`, `modify.*`, `load.*`, `marquee.*` (the legacy `SelectionTests` cases) and `wand.*`,
+`wandsession.*` (the legacy `MagicWandTests` cases plus the layer sampler). The WARP self-test drives a Marquee
+drag, a Shift add, the M key, an outline move, a deselecting click, a wand click with exact bounds, Ctrl+Shift+I,
+Ctrl+A, Ctrl+D, a polygonal lasso closed with Enter, Expand from the header and Escape through `Application`.
