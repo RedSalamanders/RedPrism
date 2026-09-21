@@ -102,6 +102,8 @@ class CanvasRenderer final
         StackResolve = 3,
         LayerCoverage = 4,
         MaskCoverage = 5,
+        Adjust = 6,
+        StackAdjust = 7,
     };
 
     enum Flags : std::uint32_t
@@ -147,6 +149,13 @@ class CanvasRenderer final
         std::uint32_t filterMode = 1;
         std::uint32_t passMode = 0;
         std::uint32_t flags = 0;
+        // Adjustment passes (C12): the kind and Grain's parameters; the tables come through textures.
+        std::uint32_t adjustKind = 0;
+        float grainAmount = 0;
+        float grainSize = 1;
+        float grainRoughness = 0;
+        std::uint32_t grainSeed = 0;
+        float adjustPad[3]{};
     };
 
     struct BlitConstants
@@ -168,6 +177,19 @@ class CanvasRenderer final
         ID3D11ShaderResourceView* mask = nullptr;
         ID3D11ShaderResourceView* live = nullptr;
         ID3D11ShaderResourceView* folder = nullptr;
+        ID3D11ShaderResourceView* lut = nullptr;  // 256 x 1 RGBA32F: per-channel tables, or the gradient map
+        ID3D11ShaderResourceView* cube = nullptr; // 33^3 RGBA32F: the Hue/Saturation color cube
+    };
+
+    // An adjustment layer's lookup textures, rebuilt when its settings change and released when a composition no
+    // longer uses them.
+    struct AdjustTextures
+    {
+        LayerAdjustment value;
+        GpuTexture lut;
+        wil::com_ptr_nothrow<ID3D11Texture3D> cubeTexture;
+        wil::com_ptr_nothrow<ID3D11ShaderResourceView> cubeSrv;
+        std::uint64_t lastUse = 0;
     };
 
     static constexpr int kNoCoverage = -1;
@@ -192,6 +214,12 @@ class CanvasRenderer final
                           ID3D11RenderTargetView* destRtv, int liveCoverage, int folderCoverage) noexcept;
     HRESULT DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount,
                       int folderCoverage) noexcept;
+    // Adjustment layers (C12, Rendering_Composition.md): the composite beneath (or the stack's straight base color)
+    // reworked through the layer's tables, blend mode, opacity, mask and folder coverage.
+    void FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept;
+    HRESULT AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept;
+    HRESULT DrawAdjustPass(const ImageLayer& layer, Pass pass, ID3D11ShaderResourceView* destSrv,
+                           ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept;
     [[nodiscard]] const ImageLayer* Find(const Guid& id) const noexcept;
     void SwapCanvas() noexcept;
 
@@ -210,6 +238,7 @@ class CanvasRenderer final
     std::vector<Surface> _coverage;
     std::size_t _coverageUsed = 0;
     std::unordered_map<const void*, GpuTexture> _rasters;
+    std::unordered_map<Guid, AdjustTextures> _adjustments;
     std::optional<StrokePreview> _stroke;
     GpuTexture _strokeTexture;
     std::unordered_map<Guid, const ImageLayer*> _byId;

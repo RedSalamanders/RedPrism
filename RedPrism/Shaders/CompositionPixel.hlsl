@@ -6,6 +6,9 @@
 //   3  Stack resolve: the stack surface premultiplied and composited onto the canvas with the base blend mode.
 //   4  Layer coverage: the layer's alpha after transform, opacity, raster mask and upstream live coverage (R8).
 //   5  Mask coverage: a Gray8 mask placed by the mask transform, times the parent coverage (R8); 0 outside.
+//   6  Adjust: the composite beneath an adjustment layer reworked through its tables (C12), blended back with the
+//      layer blend mode at its opacity, mask and folder coverage; alpha is kept and transparent pixels left alone.
+//   7  Stack adjust: a clipped adjustment reworks the stack's straight base color, keeping the stack alpha.
 //
 // Coordinates: SV_POSITION.xy is the document pixel center (top-left origin, +Y down). A transform maps document
 // pixels to the unit square of the layer or mask raster: rotation is clockwise, flips mirror the unit square.
@@ -27,6 +30,12 @@ cbuffer LayerConstants : register(b0)
     uint filterMode;
     uint passMode;
     uint flags;
+    uint adjustKind;
+    float grainAmount;
+    float grainSize;
+    float grainRoughness;
+    uint grainSeed;
+    float3 adjustPad;
 };
 
 static const uint kFlagHasMask = 1u;
@@ -39,6 +48,8 @@ Texture2D<float4> g_dest : register(t1);
 Texture2D<float> g_mask : register(t2);
 Texture2D<float> g_live : register(t3);
 Texture2D<float> g_folder : register(t4);
+Texture2D<float4> g_lut : register(t5);  // 256 x 1: per-channel tables (r, g, b), or the gradient map's colors
+Texture3D<float4> g_cube : register(t6); // 33^3: the Hue/Saturation color cube
 SamplerState g_linear : register(s0);
 SamplerState g_point : register(s1);
 
@@ -97,7 +108,51 @@ float BurnChannel(float backdrop, float source)
     return result;
 }
 
-// Separable PDF blend of straight colors. Modes 9-12 (Hue, Saturation, Color, Luminosity) pass the source until C12.
+// The PDF non-separable helpers: luminosity, saturation, and the clip that keeps a shifted color in gamut.
+float Lum(float3 c)
+{
+    return dot(c, float3(0.3, 0.59, 0.11));
+}
+
+float3 ClipColor(float3 c)
+{
+    float l = Lum(c);
+    float n = min(c.r, min(c.g, c.b));
+    float x = max(c.r, max(c.g, c.b));
+    if (n < 0.0)
+    {
+        c = l + (c - l) * l / max(l - n, 1e-6);
+    }
+    if (x > 1.0)
+    {
+        c = l + (c - l) * (1.0 - l) / max(x - l, 1e-6);
+    }
+    return c;
+}
+
+float3 SetLum(float3 c, float l)
+{
+    return ClipColor(c + (l - Lum(c)));
+}
+
+float Sat(float3 c)
+{
+    return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+}
+
+float3 SetSat(float3 c, float s)
+{
+    float mx = max(c.r, max(c.g, c.b));
+    float mn = min(c.r, min(c.g, c.b));
+    float3 result = float3(0, 0, 0);
+    if (mx > mn)
+    {
+        result = (c - mn) * s / (mx - mn);
+    }
+    return result;
+}
+
+// The PDF blend of straight colors: modes 1-8 separable, 9-12 (Hue, Saturation, Color, Luminosity) non-separable.
 float3 BlendStraight(float3 backdrop, float3 source, uint mode)
 {
     float3 result = source;
@@ -135,7 +190,23 @@ float3 BlendStraight(float3 backdrop, float3 source, uint mode)
         result = float3(BurnChannel(backdrop.r, source.r), BurnChannel(backdrop.g, source.g),
                         BurnChannel(backdrop.b, source.b));
     }
-    return result;
+    else if (mode == 9)
+    {
+        result = SetLum(SetSat(source, Sat(backdrop)), Lum(backdrop));
+    }
+    else if (mode == 10)
+    {
+        result = SetLum(SetSat(backdrop, Sat(source)), Lum(backdrop));
+    }
+    else if (mode == 11)
+    {
+        result = SetLum(source, Lum(backdrop));
+    }
+    else if (mode == 12)
+    {
+        result = SetLum(backdrop, Lum(source));
+    }
+    return saturate(result);
 }
 
 float4 PremulOver(float4 src, float4 dst, uint mode)
@@ -205,11 +276,136 @@ float4 LayerColor(float2 document, int2 destPixel, bool useFolder)
     return src;
 }
 
+// ── Adjustment layers (C12) ────────────────────────────────────────────────
+
+uint Mix32(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+
+// A value in -1..1 for an integer lattice point, fixed by the point and the seed (the legacy adjust_grain).
+float Lattice(int ix, int iy, uint seed)
+{
+    uint h = Mix32(asuint(ix) * 0x9E3779B1U ^ Mix32(asuint(iy) * 0x85EBCA77U ^ seed));
+    return float(h & 0xFFFFU) / 65535.0 + float(h >> 16) / 65535.0 - 1.0;
+}
+
+// Film grain on a straight color at a document pixel center: the same brightness change on every channel,
+// strongest in the midtones, fixed in document space by the seed.
+float3 GrainStraight(float3 c, float2 document)
+{
+    float strength = min(grainAmount, 100.0) / 100.0 * 0.35 * 255.0;
+    float rough = saturate(grainRoughness / 100.0);
+    uint fineSeed = Mix32(grainSeed ^ 0xA511E9B3U);
+    float size = max(grainSize, 1e-6);
+    float u = document.x;
+    float v = document.y;
+    float cellX = floor(u / size);
+    float cellY = floor(v / size);
+    float tx = u / size - cellX;
+    float ty = v / size - cellY;
+    tx = tx * tx * (3.0 - 2.0 * tx);
+    ty = ty * ty * (3.0 - 2.0 * ty);
+    int ix = (int)cellX;
+    int iy = (int)cellY;
+    float n00 = Lattice(ix, iy, grainSeed);
+    float n10 = Lattice(ix + 1, iy, grainSeed);
+    float n01 = Lattice(ix, iy + 1, grainSeed);
+    float n11 = Lattice(ix + 1, iy + 1, grainSeed);
+    float top = n00 + (n10 - n00) * tx;
+    float bottom = n01 + (n11 - n01) * tx;
+    float smoothNoise = (top + (bottom - top) * ty) * 1.6;
+    float fine = Lattice((int)floor(u), (int)floor(v), fineSeed);
+    float noise = smoothNoise + (fine - smoothNoise) * rough;
+    float3 rgb255 = c * 255.0;
+    float level = min(1.0, dot(rgb255, float3(0.2126, 0.7152, 0.0722)) / 255.0);
+    float delta = noise * strength * (0.4 + 2.4 * level * (1.0 - level));
+    return saturate((rgb255 + delta) / 255.0);
+}
+
+// A straight color through the adjustment: the cube (Hue/Saturation), the per-channel tables (Levels, Curves,
+// Exposure, interpolated between neighboring entries), the gradient map by luminance, or grain.
+float3 AdjustStraight(float3 c, float2 document)
+{
+    float3 result = c;
+    if (adjustKind == 0)
+    {
+        float3 coordinate = c * (32.0 / 33.0) + 0.5 / 33.0;
+        result = g_cube.SampleLevel(g_linear, coordinate, 0).rgb;
+    }
+    else if (adjustKind == 4)
+    {
+        float level = round(dot(c * 255.0, float3(0.2126, 0.7152, 0.0722)));
+        result = g_lut.Load(int3((int)min(level, 255.0), 0, 0)).rgb;
+    }
+    else if (adjustKind == 5)
+    {
+        result = GrainStraight(c, document);
+    }
+    else
+    {
+        float3 u = (c * 255.0 + 0.5) / 256.0;
+        result = float3(g_lut.SampleLevel(g_linear, float2(u.r, 0.5), 0).r,
+                        g_lut.SampleLevel(g_linear, float2(u.g, 0.5), 0).g,
+                        g_lut.SampleLevel(g_linear, float2(u.b, 0.5), 0).b);
+    }
+    return saturate(result);
+}
+
+// Where the adjustment applies: its opacity, its own raster mask (through its placement) and its folders.
+float AdjustCoverage(float2 document, int2 destPixel, bool useFolder)
+{
+    float coverage = opacity;
+    if ((flags & kFlagHasMask) != 0)
+    {
+        float2 maskUv = DocumentToUnit(document, layerCenter, layerSize, layerSinCos, layerFlip);
+        if ((flags & kFlagMaskPlaced) != 0)
+        {
+            maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
+        }
+        coverage *= OutsideUnit(maskUv) ? maskBackground : SampleMask(maskUv);
+    }
+    if (useFolder && (flags & kFlagHasFolder) != 0)
+    {
+        coverage *= saturate(g_folder.Load(int3(destPixel, 0)));
+    }
+    return saturate(coverage);
+}
+
+float4 AdjustPass(float2 document, int2 destPixel, bool inStack)
+{
+    float4 dest = g_dest.Load(int3(destPixel, 0));
+    float4 result = dest;
+    // The stack holds straight color at the base alpha; the canvas holds premultiplied color.
+    float da = inStack ? 1.0 : saturate(dest.a);
+    if (da > 1e-5)
+    {
+        float3 d = saturate(dest.rgb / da);
+        float3 adjusted = AdjustStraight(d, document);
+        if (blendMode != 0)
+        {
+            adjusted = BlendStraight(d, adjusted, blendMode);
+        }
+        float coverage = AdjustCoverage(document, destPixel, !inStack);
+        result = float4(lerp(dest.rgb, adjusted * da, coverage), dest.a);
+    }
+    return result;
+}
+
 float4 PixelMain(PixelInput input) : SV_TARGET
 {
     int2 destPixel = int2(input.position.xy);
     float2 document = input.position.xy;
 
+    if (passMode == 6 || passMode == 7)
+    {
+        return AdjustPass(document, destPixel, passMode == 7);
+    }
     if (passMode == 3)
     {
         float4 stack = g_source.Load(int3(destPixel, 0));

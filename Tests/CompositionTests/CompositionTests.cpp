@@ -1,3 +1,4 @@
+#include "Adjust.h"
 #include "BrushCompute.h"
 #include "BrushStroke.h"
 #include "CanvasRenderer.h"
@@ -6,6 +7,7 @@
 
 #include <array>
 #include <cmath>
+#include <crtdbg.h>
 #include <cstdio>
 #include <cstdlib>
 #include <d3d11_1.h>
@@ -29,9 +31,11 @@ void Expect(bool condition, const char* name) noexcept
     if (condition)
     {
         std::printf("PASS %s\n", name);
+        std::fflush(stdout);
         return;
     }
     std::printf("FAIL %s\n", name);
+    std::fflush(stdout);
     ++gFailures;
 }
 
@@ -812,8 +816,255 @@ void TestGpuBrushCoverage(Harness& h)
 }
 } // namespace
 
+// ── Adjustment layers and the HSL blends (C12) ─────────────────
+
+[[nodiscard]] Raster Pixels2x2(std::initializer_list<std::array<std::uint8_t, 4>> pixels)
+{
+    std::vector<std::uint8_t> bytes;
+    for (const std::array<std::uint8_t, 4>& pixel : pixels)
+    {
+        bytes.insert(bytes.end(), pixel.begin(), pixel.end());
+    }
+    return Raster::Make(2, 2, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+}
+
+[[nodiscard]] LayerAdjustment AdjustmentOf(AdjustmentKind kind)
+{
+    LayerAdjustment adjustment;
+    adjustment.kind = kind;
+    return adjustment;
+}
+
+[[nodiscard]] ImageLayer AdjustmentLayer(const LayerAdjustment& adjustment, const wchar_t* name)
+{
+    ImageLayer layer = ImageLayer::Blank(name, Vec2{2, 2});
+    layer.adjustment = adjustment;
+    return layer;
+}
+
+// Every channel of `pixels` within `slop` of `expected`, printing both when not.
+[[nodiscard]] bool PixelsClose(const std::vector<std::uint8_t>& pixels, const std::vector<std::uint8_t>& expected,
+                               int slop, const char* label)
+{
+    bool ok = pixels.size() == expected.size();
+    for (std::size_t i = 0; ok && i < pixels.size(); ++i)
+    {
+        ok = ChannelClose(pixels[i], expected[i], slop);
+    }
+    if (!ok)
+    {
+        PrintPixels(label, pixels);
+        PrintPixels("expected", expected);
+    }
+    return ok;
+}
+
+[[nodiscard]] std::vector<std::uint8_t> RasterBytes(const Raster& raster)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(raster.Width()) *
+                                    static_cast<std::size_t>(raster.Height()) * 4u);
+    raster.ReadRegion(0, 0, raster.Width(), raster.Height(), bytes.data(), raster.Width() * 4, 0);
+    return bytes;
+}
+
+void TestAdjustmentLayers(Harness& h)
+{
+    // Legacy AdjustmentLayerTests.globalAdjustmentAffectsBelowButNotAboveAndRemainsLive.
+    {
+        CanvasDocument document = Document2x2();
+        document.layers.push_back(LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
+        LayerAdjustment levels = AdjustmentOf(AdjustmentKind::Levels);
+        levels.levels.ranges[0].outputWhite = 0;
+        document.layers.push_back(AdjustmentLayer(levels, L"Levels"));
+        std::vector<std::uint8_t> pixels = h.Render(document);
+        Expect(PixelsClose(pixels, {0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255}, 0, "levels below"),
+               "adjust.affects-below");
+        document.layers.push_back(LayerFrom(Pixels2x2({{0, 0, 255, 255}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}),
+                                            LayerBlendMode::Normal, L"Red"));
+        pixels = h.Render(document);
+        Expect(pixels.size() == 16 &&
+                   PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "red above"),
+               "adjust.not-above");
+        // The base changes: the adjustment stays live.
+        document.layers[0].asset->image = Solid(2, 2, 255, 0, 0, 255);
+        pixels = h.Render(document);
+        Expect(pixels.size() == 16 && PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {0, 0, 0, 255}, 0, "live"),
+               "adjust.remains-live");
+        document.layers[1].visible = false;
+        pixels = h.Render(document);
+        Expect(pixels.size() == 16 &&
+                   PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {255, 0, 0, 255}, 0, "hidden"),
+               "adjust.hidden-does-nothing");
+    }
+    // Legacy clippedCurveChangesOnlyItsBaseAndCopyMergedMatchesExport.
+    {
+        CanvasDocument document = Document2x2();
+        document.layers.push_back(LayerFrom(Solid(2, 2, 255, 0, 0, 255), LayerBlendMode::Normal, L"Blue"));
+        document.layers.push_back(LayerFrom(Pixels2x2({{0, 255, 0, 255}, {0, 0, 0, 0}, {0, 128, 0, 128}, {0, 0, 0, 0}}),
+                                            LayerBlendMode::Normal, L"Green"));
+        LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
+        curves.curves.channels[0] = {CurvePoint{0, 255}, CurvePoint{255, 0}};
+        ImageLayer adjustment = AdjustmentLayer(curves, L"Curves");
+        adjustment.maskSourceID = document.layers[1].id;
+        document.layers.push_back(adjustment);
+        std::vector<std::uint8_t> pixels = h.Render(document);
+        Expect(pixels.size() == 16 &&
+                   PixelsClose({pixels.begin(), pixels.begin() + 8}, {255, 0, 255, 255, 255, 0, 0, 255}, 1, "clipped"),
+               "adjust.clipped-changes-only-its-base");
+        document.layers[2].maskSourceID.reset();
+        pixels = h.Render(document);
+        Expect(pixels.size() == 16 &&
+                   PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {0, 255, 255, 255}, 1, "unclipped"),
+               "adjust.unclipped-changes-everything-below");
+    }
+    // Legacy hueOpacityAndMaskPreserveOriginalPixels.
+    {
+        CanvasDocument document = Document2x2();
+        document.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"));
+        LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
+        hsv.hue = 120;
+        document.layers.push_back(AdjustmentLayer(hsv, L"Hue"));
+        std::vector<std::uint8_t> pixels = h.Render(document);
+        Expect(pixels.size() == 16 && ChannelClose(pixels[1], 255, 8) && ChannelClose(pixels[0], 0, 8) &&
+                   ChannelClose(pixels[2], 0, 8) && pixels[3] == 255,
+               "adjust.hue-rotates");
+        document.layers[1].opacity = 0;
+        pixels = h.Render(document);
+        Expect(PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "opacity 0"),
+               "adjust.opacity-zero-keeps-pixels");
+        document.layers[1].opacity = 1;
+        document.layers[1].mask = MaskOf(Gray(1, 1, {0}));
+        pixels = h.Render(document);
+        Expect(PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "black mask"),
+               "adjust.black-mask-keeps-pixels");
+    }
+    // Legacy adjustmentBlendAndSoftMaskPreserveCoverage.
+    {
+        CanvasDocument document = Document2x2();
+        document.layers.push_back(
+            LayerFrom(Pixels2x2({{0, 0, 255, 255}, {0, 0, 128, 128}, {0, 0, 32, 32}, {0, 0, 0, 0}}),
+                      LayerBlendMode::Normal, L"Red"));
+        LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
+        hsv.hue = 120;
+        ImageLayer adjustment = AdjustmentLayer(hsv, L"Hue");
+        adjustment.blendMode = LayerBlendMode::Multiply;
+        document.layers.push_back(adjustment);
+        std::vector<std::uint8_t> pixels = h.Render(document);
+        Expect(PixelsClose(pixels, {0, 0, 0, 255, 0, 0, 0, 128, 0, 0, 0, 32, 0, 0, 0, 0}, 1, "multiply"),
+               "adjust.blend-keeps-coverage");
+        document.layers[1].blendMode = LayerBlendMode::Normal;
+        document.layers[1].mask = MaskOf(Gray(1, 1, {128}));
+        pixels = h.Render(document);
+        Expect(AlphasClose(pixels, {255, 128, 32, 0}, 0) && ChannelClose(pixels[2], 127, 3) &&
+                   ChannelClose(pixels[1], 128, 3),
+               "adjust.soft-mask-mixes");
+    }
+    // Every kind on the GPU against the CPU reference (Adjust::ApplyAdjustment).
+    {
+        const Raster base = Pixels2x2({{10, 60, 200, 255}, {120, 30, 90, 255}, {200, 200, 40, 255}, {0, 64, 32, 128}});
+        std::vector<std::pair<LayerAdjustment, int>> cases;
+        LayerAdjustment levels = AdjustmentOf(AdjustmentKind::Levels);
+        levels.levels.channel = LevelsChannel::Red;
+        Adjust::SetLevelsCurrent(levels.levels, LevelRange{20, 1.4, 230, 10, 245});
+        levels.levels.channel = LevelsChannel::Rgb;
+        Adjust::SetLevelsCurrent(levels.levels, LevelRange{0, 0.8, 255, 0, 255});
+        cases.emplace_back(levels, 1);
+        LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
+        curves.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{96, 140}, CurvePoint{255, 255}};
+        curves.curves.channels[3] = {CurvePoint{0, 30}, CurvePoint{255, 200}};
+        cases.emplace_back(curves, 1);
+        LayerAdjustment exposure = AdjustmentOf(AdjustmentKind::Exposure);
+        exposure.exposureSettings = ExposureSettings{1, 0.05, 1.5};
+        cases.emplace_back(exposure, 1);
+        LayerAdjustment map = AdjustmentOf(AdjustmentKind::GradientMap);
+        map.gradientMapSettings =
+            GradientMapSettings{AdjustmentColor{0.9, 0.1, 0.2}, AdjustmentColor{0.1, 0.3, 1}, false};
+        cases.emplace_back(map, 1);
+        LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
+        HueSaturationSettings settings = Adjust::HsvSettings(60, 30, 10);
+        settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)] = RangeAdjustment{-40, 20, -10};
+        hsv.hsvSettings = settings;
+        cases.emplace_back(hsv, 4);
+        LayerAdjustment grain = AdjustmentOf(AdjustmentKind::Grain);
+        grain.grainSettings = GrainSettings{60, 2, 40, 7};
+        cases.emplace_back(grain, 2);
+        for (const auto& [adjustment, slop] : cases)
+        {
+            CanvasDocument document = Document2x2();
+            document.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base"));
+            document.layers.push_back(AdjustmentLayer(adjustment, L"Adjustment"));
+            const std::vector<std::uint8_t> pixels = h.Render(document);
+            const std::vector<std::uint8_t> reference = RasterBytes(Adjust::ApplyAdjustment(adjustment, base));
+            Expect(PixelsClose(pixels, reference, slop,
+                               AdjustmentTitle(adjustment.kind) == nullptr ? "kind" : "gpu vs cpu"),
+                   "adjust.gpu-matches-cpu");
+        }
+    }
+    // The tables and the cube are released with the document surfaces.
+    Expect(h.composition.CanvasSurfaceBytes() > 0, "adjust.textures-counted");
+    h.composition.ReleaseDocumentSurfaces();
+    Expect(h.composition.CanvasSurfaceBytes() == 0, "adjust.textures-released");
+}
+
+void TestHslBlends(Harness& h)
+{
+    // Hue, Saturation, Color and Luminosity against the CPU PDF formulas (Adjust::BlendStraight), opaque and at
+    // half opacity (Co = (1 - as) Cb + as B over an opaque backdrop).
+    struct Case
+    {
+        std::array<std::uint8_t, 3> backdrop; // b, g, r
+        std::array<std::uint8_t, 3> source;
+        LayerBlendMode mode;
+    };
+    const std::vector<Case> cases{
+        {{128, 128, 128}, {0, 0, 255}, LayerBlendMode::Color},
+        {{0, 0, 255}, {128, 128, 128}, LayerBlendMode::Luminosity},
+        {{128, 128, 128}, {255, 0, 0}, LayerBlendMode::Hue},
+        {{0, 0, 255}, {128, 128, 128}, LayerBlendMode::Saturation},
+        {{40, 200, 90}, {220, 30, 160}, LayerBlendMode::Hue},
+        {{40, 200, 90}, {220, 30, 160}, LayerBlendMode::Saturation},
+        {{40, 200, 90}, {220, 30, 160}, LayerBlendMode::Color},
+        {{40, 200, 90}, {220, 30, 160}, LayerBlendMode::Luminosity},
+    };
+    for (const Case& test : cases)
+    {
+        for (const double opacity : {1.0, 0.5})
+        {
+            CanvasDocument document = Document2x2();
+            document.layers.push_back(LayerFrom(Solid(2, 2, test.backdrop[0], test.backdrop[1], test.backdrop[2], 255),
+                                                LayerBlendMode::Normal, L"Backdrop"));
+            document.layers.push_back(
+                LayerFrom(Solid(2, 2, test.source[0], test.source[1], test.source[2], 255), test.mode, L"Source"));
+            document.layers[1].opacity = opacity;
+            const std::vector<std::uint8_t> pixels = h.Render(document);
+            const std::array<double, 3> blended = Adjust::BlendStraight(
+                {test.backdrop[2] / 255.0, test.backdrop[1] / 255.0, test.backdrop[0] / 255.0},
+                {test.source[2] / 255.0, test.source[1] / 255.0, test.source[0] / 255.0}, test.mode);
+            std::vector<std::uint8_t> expected(16, 255);
+            for (std::size_t i = 0; i < 4; ++i)
+            {
+                for (std::size_t c = 0; c < 3; ++c)
+                {
+                    const double backdrop = test.backdrop[c] / 255.0;
+                    const double value = (1 - opacity) * backdrop + opacity * blended[2 - c];
+                    expected[i * 4 + c] = static_cast<std::uint8_t>(std::lround(value * 255));
+                }
+            }
+            Expect(PixelsClose(pixels, expected, 2, LayerBlendModeName(test.mode)), "blend.hsl-golden");
+        }
+    }
+}
+
 int wmain()
 {
+#if defined(_DEBUG)
+    // A Debug assertion reports on stderr and aborts instead of waiting on a dialog no harness can click.
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
+    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     TestViewport();
     Harness harness;
     if (harness.Ready())
@@ -829,6 +1080,8 @@ int wmain()
         TestSparseUpload(harness);
         TestStrokePreview(harness);
         TestGpuBrushCoverage(harness);
+        TestAdjustmentLayers(harness);
+        TestHslBlends(harness);
     }
     if (gFailures != 0)
     {

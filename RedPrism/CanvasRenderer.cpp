@@ -1,5 +1,7 @@
 #include "CanvasRenderer.h"
 
+#include "Adjust.h"
+
 #include "CompositionBlitPixelShader.h"
 #include "CompositionPixelShader.h"
 #include "CompositionVertexShader.h"
@@ -51,6 +53,7 @@ CanvasRenderer::~CanvasRenderer()
 void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 {
     _rasters.clear();
+    _adjustments.clear();
     _strokeTexture = {};
     _canvas[0] = {};
     _canvas[1] = {};
@@ -570,13 +573,14 @@ HRESULT CanvasRenderer::RunPass(const LayerConstants& constants, const PassInput
     ID3D11Buffer* buffers[] = {_layerConstants.get()};
     _context->VSSetConstantBuffers(0, 1, buffers);
     _context->PSSetConstantBuffers(0, 1, buffers);
-    ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live, inputs.folder};
-    _context->PSSetShaderResources(0, 5, srvs);
+    ID3D11ShaderResourceView* srvs[] = {inputs.source, inputs.dest, inputs.mask, inputs.live,
+                                        inputs.folder, inputs.lut,  inputs.cube};
+    _context->PSSetShaderResources(0, 7, srvs);
     ID3D11SamplerState* samplers[] = {_linearSampler.get(), _pointSampler.get()};
     _context->PSSetSamplers(0, 2, samplers);
     _context->Draw(3, 0);
-    ID3D11ShaderResourceView* none[] = {nullptr, nullptr, nullptr, nullptr, nullptr};
-    _context->PSSetShaderResources(0, 5, none);
+    ID3D11ShaderResourceView* none[] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    _context->PSSetShaderResources(0, 7, none);
     _context->OMSetRenderTargets(0, nullptr, nullptr);
     return S_OK;
 }
@@ -788,6 +792,189 @@ void CanvasRenderer::SwapCanvas() noexcept
     _front = 1 - _front;
 }
 
+void CanvasRenderer::FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants,
+                                           PassInputs& inputs) noexcept
+{
+    constants = {};
+    constants.canvasSize[0] = static_cast<float>(_canvasWidth);
+    constants.canvasSize[1] = static_cast<float>(_canvasHeight);
+    FillTransform(layer.transform, constants.layerCenter, constants.layerSize, constants.layerSinCos,
+                  constants.layerFlip);
+    constants.blendMode = static_cast<std::uint32_t>(layer.blendMode);
+    constants.filterMode = layer.transform.sampling == LayerSampling::Nearest ? 0u : 1u;
+    constants.opacity = static_cast<float>(layer.opacity);
+    if (HasEnabledMask(layer))
+    {
+        const LayerMask& mask = layer.mask.value();
+        ID3D11ShaderResourceView* maskView = MaskViewFor(layer);
+        if (maskView != nullptr)
+        {
+            inputs.mask = maskView;
+            constants.flags |= kFlagHasMask;
+            if (mask.placement.has_value())
+            {
+                constants.flags |= kFlagMaskPlaced;
+                FillTransform(mask.placement.value(), constants.maskCenter, constants.maskSize, constants.maskSinCos,
+                              constants.maskFlip);
+                constants.maskBackground = static_cast<float>(MaskEdgeBackground(mask.asset.thumbnail));
+            }
+        }
+    }
+}
+
+HRESULT CanvasRenderer::AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants,
+                                           PassInputs& inputs) noexcept
+{
+    if (!layer.adjustment.has_value() || !layer.adjustment->IsValid())
+    {
+        return E_INVALIDARG;
+    }
+    const LayerAdjustment& adjustment = layer.adjustment.value();
+    AdjustTextures* entry = nullptr;
+    try
+    {
+        entry = &_adjustments[layer.id];
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const bool usesLut = adjustment.kind == AdjustmentKind::Levels || adjustment.kind == AdjustmentKind::Curves ||
+                         adjustment.kind == AdjustmentKind::Exposure || adjustment.kind == AdjustmentKind::GradientMap;
+    const bool usesCube = adjustment.kind == AdjustmentKind::Hsv;
+    if (!(entry->value == adjustment) || (usesLut && !entry->lut.srv) || (usesCube && !entry->cubeSrv))
+    {
+        *entry = {};
+        entry->value = adjustment;
+        if (usesLut)
+        {
+            // Three 256-entry tables as one RGBA32F row (Levels, Curves, Exposure), or the gradient map's colors.
+            std::array<float, 256 * 4> texels{};
+            if (adjustment.kind == AdjustmentKind::GradientMap)
+            {
+                const std::array<std::uint8_t, 768> table = Adjust::GradientMapTable(adjustment.GradientMap());
+                for (std::size_t i = 0; i < 256; ++i)
+                {
+                    texels[i * 4] = table[i * 3] / 255.0f;
+                    texels[i * 4 + 1] = table[i * 3 + 1] / 255.0f;
+                    texels[i * 4 + 2] = table[i * 3 + 2] / 255.0f;
+                    texels[i * 4 + 3] = 1.0f;
+                }
+            }
+            else
+            {
+                const Adjust::ChannelTables tables =
+                    adjustment.kind == AdjustmentKind::Levels   ? Adjust::LevelsTables(adjustment.levels)
+                    : adjustment.kind == AdjustmentKind::Curves ? Adjust::CurvesTables(adjustment.curves)
+                                                                : Adjust::ExposureTables(adjustment.Exposure());
+                for (std::size_t i = 0; i < 256; ++i)
+                {
+                    texels[i * 4] = tables.values[i];
+                    texels[i * 4 + 1] = tables.values[256 + i];
+                    texels[i * 4 + 2] = tables.values[512 + i];
+                    texels[i * 4 + 3] = 1.0f;
+                }
+            }
+            D3D11_TEXTURE2D_DESC desc{};
+            desc.Width = 256;
+            desc.Height = 1;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            D3D11_SUBRESOURCE_DATA initial{};
+            initial.pSysMem = texels.data();
+            initial.SysMemPitch = 256 * 16;
+            HRESULT result = _device->CreateTexture2D(&desc, &initial, entry->lut.texture.put());
+            if (FAILED(result))
+            {
+                return result;
+            }
+            result = _device->CreateShaderResourceView(entry->lut.texture.get(), nullptr, entry->lut.srv.put());
+            if (FAILED(result))
+            {
+                return result;
+            }
+            entry->lut.width = 256;
+            entry->lut.height = 1;
+        }
+        if (usesCube)
+        {
+            std::vector<float> cube;
+            try
+            {
+                cube = Adjust::ColorCube(adjustment.ResolvedHsv());
+            }
+            catch (const std::bad_alloc&)
+            {
+                return E_OUTOFMEMORY;
+            }
+            D3D11_TEXTURE3D_DESC desc{};
+            desc.Width = Adjust::kCubeDimension;
+            desc.Height = Adjust::kCubeDimension;
+            desc.Depth = Adjust::kCubeDimension;
+            desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            D3D11_SUBRESOURCE_DATA initial{};
+            initial.pSysMem = cube.data();
+            initial.SysMemPitch = Adjust::kCubeDimension * 16;
+            initial.SysMemSlicePitch = Adjust::kCubeDimension * Adjust::kCubeDimension * 16;
+            HRESULT result = _device->CreateTexture3D(&desc, &initial, entry->cubeTexture.put());
+            if (FAILED(result))
+            {
+                return result;
+            }
+            D3D11_SHADER_RESOURCE_VIEW_DESC view{};
+            view.Format = desc.Format;
+            view.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+            view.Texture3D.MipLevels = 1;
+            result = _device->CreateShaderResourceView(entry->cubeTexture.get(), &view, entry->cubeSrv.put());
+            if (FAILED(result))
+            {
+                return result;
+            }
+        }
+    }
+    entry->lastUse = _composeId;
+    constants.adjustKind = static_cast<std::uint32_t>(adjustment.kind);
+    if (adjustment.kind == AdjustmentKind::Grain)
+    {
+        const GrainSettings grain = adjustment.Grain();
+        constants.grainAmount = static_cast<float>(grain.amount);
+        constants.grainSize = static_cast<float>(grain.size);
+        constants.grainRoughness = static_cast<float>(grain.roughness);
+        constants.grainSeed = grain.seed;
+    }
+    inputs.lut = entry->lut.srv.get();
+    inputs.cube = entry->cubeSrv.get();
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::DrawAdjustPass(const ImageLayer& layer, Pass pass, ID3D11ShaderResourceView* destSrv,
+                                         ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept
+{
+    LayerConstants constants{};
+    PassInputs inputs{};
+    FillAdjustConstants(layer, constants, inputs);
+    const HRESULT result = AdjustmentInputs(layer, constants, inputs);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    constants.passMode = static_cast<std::uint32_t>(pass);
+    inputs.dest = destSrv;
+    if (folderCoverage != kNoCoverage)
+    {
+        inputs.folder = _coverage[static_cast<std::size_t>(folderCoverage)].texture.srv.get();
+        constants.flags |= kFlagHasFolder;
+    }
+    return RunPass(constants, inputs, destRtv);
+}
+
 HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild, std::size_t childCount,
                                     int folderCoverage) noexcept
 {
@@ -806,11 +993,27 @@ HRESULT CanvasRenderer::DrawStack(const ImageLayer& base, std::size_t firstChild
     for (std::size_t offset = 0; offset < childCount; ++offset)
     {
         const ImageLayer* child = Find(_renderIds[firstChild + offset]);
-        if (child == nullptr || child->adjustment.has_value() || !child->asset.has_value())
+        if (child == nullptr)
         {
             continue;
         }
         const int back = 1 - _stackFront;
+        if (child->adjustment.has_value())
+        {
+            // A clipped adjustment reworks the base's straight color, keeping the stack alpha.
+            result = DrawAdjustPass(*child, Pass::StackAdjust, _stack[_stackFront].texture.srv.get(),
+                                    _stack[back].rtv.get(), kNoCoverage);
+            if (FAILED(result))
+            {
+                return result;
+            }
+            _stackFront = back;
+            continue;
+        }
+        if (!child->asset.has_value())
+        {
+            continue;
+        }
         result = DrawLayerPass(*child, Pass::StackChild, _stack[_stackFront].texture.srv.get(), _stack[back].rtv.get(),
                                kNoCoverage, kNoCoverage);
         if (FAILED(result))
@@ -880,8 +1083,32 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
             continue;
         }
         const ImageLayer* layer = Find(_renderIds[index]);
-        if (layer == nullptr || layer->isGroup || layer->adjustment.has_value())
+        if (layer == nullptr || layer->isGroup)
         {
+            continue;
+        }
+        if (layer->adjustment.has_value())
+        {
+            // An adjustment layer reworks the composite beneath it; a clipped one only its base, inside the stack.
+            if (!layer->maskSourceID.has_value())
+            {
+                int adjustFolder = kNoCoverage;
+                if (layer->parentID.has_value())
+                {
+                    result = GroupCoverage(layer->parentID.value(), 0, adjustFolder);
+                    if (FAILED(result))
+                    {
+                        return result;
+                    }
+                }
+                result = DrawAdjustPass(*layer, Pass::Adjust, _canvas[_front].texture.srv.get(),
+                                        _canvas[1 - _front].rtv.get(), adjustFolder);
+                if (FAILED(result))
+                {
+                    return result;
+                }
+                SwapCanvas();
+            }
             continue;
         }
         const bool painting =
@@ -950,6 +1177,17 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
         if (entry->second.lastUse != _composeId)
         {
             entry = _rasters.erase(entry);
+        }
+        else
+        {
+            ++entry;
+        }
+    }
+    for (auto entry = _adjustments.begin(); entry != _adjustments.end();)
+    {
+        if (entry->second.lastUse != _composeId)
+        {
+            entry = _adjustments.erase(entry);
         }
         else
         {
@@ -1067,6 +1305,13 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
         bytes += 2ull * pixels * 4ull;
     }
     bytes += static_cast<std::uint64_t>(_coverage.size()) * pixels;
+    for (const auto& [id, textures] : _adjustments)
+    {
+        bytes += textures.lut.texture ? 256ull * 16ull : 0ull;
+        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
+                                            Adjust::kCubeDimension * 16ull
+                                      : 0ull;
+    }
     if (_strokeTexture.texture)
     {
         bytes += static_cast<std::uint64_t>(_strokeTexture.width) * static_cast<std::uint64_t>(_strokeTexture.height) *
