@@ -1,3 +1,4 @@
+#include "Adjust.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "DocumentHistory.h"
@@ -8,8 +9,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <crtdbg.h>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
@@ -29,9 +32,11 @@ void Expect(bool condition, const char* name) noexcept
     if (condition)
     {
         std::printf("PASS %s\n", name);
+        std::fflush(stdout);
         return;
     }
     std::printf("FAIL %s\n", name);
+    std::fflush(stdout);
     ++gFailures;
 }
 
@@ -4027,8 +4032,1036 @@ void TestFloatingSelection()
     }
 }
 
+// ── Color adjustments and filters (C12) ───────────────────────
+
+// A one-row raster from premultiplied BGRA pixels.
+Raster RowRaster(const std::vector<std::array<std::uint8_t, 4>>& pixels)
+{
+    return BytesRaster(static_cast<int>(pixels.size()), 1,
+                       [&](int x, int) { return pixels[static_cast<std::size_t>(x)]; });
+}
+
+std::vector<std::uint8_t> Bytes(const Raster& raster)
+{
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(raster.Width()) *
+                                    static_cast<std::size_t>(raster.Height()) * 4u);
+    raster.ReadRegion(0, 0, raster.Width(), raster.Height(), bytes.data(), raster.Width() * 4, 0);
+    return bytes;
+}
+
+// The straight RGBA of a pixel (0 when transparent), the legacy tests' reading order.
+std::array<int, 4> StraightOf(const Raster& raster, int x, int y)
+{
+    std::array<std::uint8_t, 4> p{};
+    raster.ReadRegion(x, y, 1, 1, p.data(), 4, 0);
+    const int a = p[3];
+    const auto straight = [&](int c)
+    { return a == 0 ? 0 : std::min(255, (p[static_cast<std::size_t>(c)] * 255 + a / 2) / a); };
+    return {straight(2), straight(1), straight(0), a};
+}
+
+std::array<int, 4> ActiveStraight(const DocumentSession& session, int x, int y)
+{
+    const ImageLayer* layer = session.ActiveLayer();
+    if (layer == nullptr || !layer->asset.has_value())
+    {
+        return {0, 0, 0, 0};
+    }
+    return StraightOf(layer->asset->image, x - static_cast<int>(std::lround(layer->transform.origin.x)),
+                      y - static_cast<int>(std::lround(layer->transform.origin.y)));
+}
+
+bool Near4(const std::array<int, 4>& value, const std::array<int, 4>& target, int tolerance = 8)
+{
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        if (std::abs(value[i] - target[i]) > tolerance)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+Raster SolidStraight(int width, int height, double red, double green, double blue, double alpha = 1)
+{
+    const std::uint8_t a = static_cast<std::uint8_t>(std::lround(alpha * 255));
+    return SolidRaster(width, height, static_cast<std::uint8_t>(std::lround(blue * a)),
+                       static_cast<std::uint8_t>(std::lround(green * a)),
+                       static_cast<std::uint8_t>(std::lround(red * a)), a);
+}
+
+LayerAdjustment Adjustment(AdjustmentKind kind)
+{
+    LayerAdjustment adjustment;
+    adjustment.kind = kind;
+    return adjustment;
+}
+
+// A 40×20 canvas: left half pure red, right half mid gray, with a half-transparent blue strip.
+DocumentSession HueSession()
+{
+    DocumentSession session = PixelEditSession(40, 20);
+    InsertPixels(session,
+                 BytesRaster(40, 20,
+                             [](int x, int y) -> std::array<std::uint8_t, 4>
+                             {
+                                 if (y >= 16)
+                                 {
+                                     return {128, 0, 0, 128};
+                                 }
+                                 return x < 20 ? std::array<std::uint8_t, 4>{0, 0, 255, 255}
+                                               : std::array<std::uint8_t, 4>{128, 128, 128, 255};
+                             }),
+                 L"Colors");
+    return session;
+}
+
+// A 40×20 canvas: left half pure red, right half pure blue, both opaque.
+DocumentSession RedAndBlue()
+{
+    DocumentSession session = PixelEditSession(40, 20);
+    InsertPixels(session,
+                 BytesRaster(40, 20,
+                             [](int x, int) -> std::array<std::uint8_t, 4>
+                             {
+                                 return x < 20 ? std::array<std::uint8_t, 4>{0, 0, 255, 255}
+                                               : std::array<std::uint8_t, 4>{255, 0, 0, 255};
+                             }),
+                 L"RedBlue");
+    return session;
+}
+
+void ApplyHue(DocumentSession& session, const HueSaturationSettings& settings)
+{
+    session.BeginHueSaturation();
+    session.UpdateHueSaturation(settings, true);
+    session.CommitHueSaturation();
+}
+
+void TestLevels()
+{
+    const std::vector<std::array<std::uint8_t, 4>> ramp{{0, 0, 0, 255},       {64, 64, 64, 255}, {128, 128, 128, 255},
+                                                        {255, 255, 255, 255}, {0, 32, 64, 128},  {0, 0, 0, 0}};
+    const auto rampSession = [&]
+    {
+        DocumentSession session = PixelEditSession(6, 1);
+        InsertPixels(session, RowRaster(ramp), L"Ramp");
+        return session;
+    };
+    // Legacy identityAndChannelSelectionAreExactNoOps.
+    {
+        DocumentSession session = rampSession();
+        const CanvasDocument before = session.Document().value();
+        const Raster source = session.ActiveLayer()->asset->image;
+        Expect(Adjust::ApplyAdjustment(Adjustment(AdjustmentKind::Levels), source) == source,
+               "levels.identity-is-the-same-raster");
+        const int count = session.history.UndoCount();
+        session.BeginLevels();
+        LevelsSettings settings;
+        settings.channel = LevelsChannel::Blue;
+        session.UpdateLevels(settings, true);
+        Expect(session.PendingLevels().has_value() && !session.CanPaint(), "levels.other-edits-wait");
+        session.CommitLevels();
+        Expect(session.Document().value() == before && session.history.UndoCount() == count &&
+                   !session.PendingLevels().has_value(),
+               "levels.identity-and-channel-are-no-ops");
+    }
+    // Legacy inputClippingGammaOutputInversionAndAlpha.
+    {
+        const Raster source = RowRaster(ramp);
+        LevelsSettings settings;
+        Adjust::SetLevelsCurrent(settings, LevelRange{64, 1, 128, 0, 255});
+        LayerAdjustment levels = Adjustment(AdjustmentKind::Levels);
+        levels.levels = settings;
+        const std::vector<std::uint8_t> clipped = Bytes(Adjust::ApplyAdjustment(levels, source));
+        Expect(std::vector<std::uint8_t>(clipped.begin(), clipped.begin() + 12) ==
+                   std::vector<std::uint8_t>{0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255},
+               "levels.input-clipping");
+        Adjust::SetLevelsCurrent(settings, LevelRange{0, 2, 255, 0, 255});
+        levels.levels = settings;
+        const std::vector<std::uint8_t> brightened = Bytes(Adjust::ApplyAdjustment(levels, source));
+        Expect(std::abs(static_cast<int>(brightened[4]) - 128) <= 1 &&
+                   std::abs(static_cast<int>(brightened[8]) - 181) <= 1,
+               "levels.gamma");
+        Expect(brightened[19] == 128 && brightened[23] == 0 && brightened[16] <= 128 && brightened[17] <= 128,
+               "levels.gamma-keeps-alpha");
+        Adjust::SetLevelsCurrent(settings, LevelRange{0, 1, 255, 255, 0});
+        levels.levels = settings;
+        const std::vector<std::uint8_t> inverted = Bytes(Adjust::ApplyAdjustment(levels, source));
+        Expect(inverted[0] == 255 && inverted[12] == 0, "levels.output-inversion");
+        Expect(inverted[16] == 128 && inverted[17] == 96 && inverted[18] == 64 && inverted[19] == 128,
+               "levels.inversion-through-alpha");
+    }
+    // Legacy channelsCoexistAndUseDocumentedOrder.
+    {
+        LevelsSettings settings;
+        settings.channel = LevelsChannel::Red;
+        Adjust::SetLevelsCurrent(settings, LevelRange{0, 2, 255, 0, 255});
+        settings.channel = LevelsChannel::Rgb;
+        Adjust::SetLevelsCurrent(settings, LevelRange{40, 1, 210, 0, 255});
+        LayerAdjustment levels = Adjustment(AdjustmentKind::Levels);
+        levels.levels = settings;
+        const std::vector<std::uint8_t> result = Bytes(Adjust::ApplyAdjustment(levels, RowRaster({{64, 64, 64, 255}})));
+        const double expectedRed = Adjust::LevelRangeApply(
+            LevelRange{40, 1, 210, 0, 255}, Adjust::LevelRangeApply(LevelRange{0, 2, 255, 0, 255}, 64.0 / 255));
+        Expect(std::fabs(result[2] - expectedRed * 255) <= 1 && result[1] == result[0] && result[2] > result[1],
+               "levels.channels-coexist");
+        const LevelRange invalid = LevelRange{300, std::nan(""), -1, -100, 400}.Normalized();
+        Expect(invalid.black < invalid.white && invalid.gamma == 1 && invalid.outputBlack == 0 &&
+                   invalid.outputWhite == 255,
+               "levels.normalized");
+    }
+    // Legacy histogramExcludesTransparencyAndWeightsSelection.
+    {
+        const Raster source = RowRaster({{0, 0, 255, 255}, {0, 128, 0, 128}, {0, 0, 0, 0}});
+        const LevelsHistogram bins = Adjust::Histogram(source, nullptr);
+        Expect(bins[1][255] == 1 && std::fabs(bins[2][255] - 128.0 / 255) < 0.00001, "levels.histogram-alpha-weighted");
+        double total = 0;
+        for (const double bin : bins[0])
+        {
+            total += bin;
+        }
+        Expect(std::fabs(total - (1.0 + 128.0 / 255)) < 0.00001, "levels.histogram-total");
+        const Raster coverage =
+            Raster::Make(3, 1, RasterFormat::Gray8, std::array<std::uint8_t, 3>{255, 0, 0}.data(), 3);
+        const LevelsHistogram selected = Adjust::Histogram(source, &coverage);
+        Expect(selected[1][255] == 1 && selected[2][255] == 0, "levels.histogram-selection");
+        const Raster none = Raster::Make(3, 1, RasterFormat::Gray8, std::array<std::uint8_t, 3>{0, 0, 0}.data(), 3);
+        const LevelsHistogram empty = Adjust::Histogram(source, &none);
+        bool allZero = true;
+        for (const auto& channel : empty)
+        {
+            for (const double bin : channel)
+            {
+                allZero = allZero && bin == 0;
+            }
+        }
+        Expect(allZero, "levels.histogram-empty-selection");
+    }
+    // Legacy selectionPreviewCancelCommitUndoAndPersistence (the file round trip lives in IoTests).
+    {
+        DocumentSession session = rampSession();
+        SelectRect(session, 0, 0, 2, 1, false);
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        session.BeginLevels();
+        Expect(session.PendingLevels().has_value() && session.PendingLevels()->histogramReady,
+               "levels.histogram-ready");
+        LevelsSettings settings;
+        Adjust::SetLevelsCurrent(settings, LevelRange{0, 1, 255, 255, 0});
+        session.UpdateLevels(settings, true);
+        const std::vector<std::uint8_t> preview = Bytes(session.PendingLevels()->previewRaster);
+        Expect(preview.size() == 24 && preview[0] == 255 && preview[8] == 128 && session.Document().value() == before,
+               "levels.preview-inside-selection");
+        const CanvasDocument* shown = session.DisplayDocument();
+        Expect(shown != nullptr && shown != &session.Document().value() && shown->layers.size() == 2 &&
+                   Bytes(shown->layers.back().asset->image) == preview,
+               "levels.display-shows-preview");
+        session.UpdateLevels(settings, false);
+        Expect(!session.PendingLevels()->previewRaster.HasStorage() &&
+                   session.DisplayDocument() == &session.Document().value(),
+               "levels.preview-off");
+        session.CancelLevels();
+        Expect(session.Document().value() == before && session.history.UndoCount() == count, "levels.cancel");
+        session.BeginLevels();
+        session.UpdateLevels(settings, false);
+        session.CommitLevels();
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Levels",
+               "levels.commit-entry");
+        const Raster committed = session.ActiveLayer()->asset->image;
+        Expect(Bytes(committed) == preview, "levels.commit-matches-preview");
+        session.Undo();
+        Expect(session.Document().value() == before, "levels.undo");
+        session.Redo();
+        Expect(session.ActiveLayer()->asset->image == committed, "levels.redo");
+    }
+    // Legacy histogramDisplayKeepsDistributionVisibleBesideClippingSpikes.
+    {
+        std::array<double, 256> bins{};
+        bins.fill(100.0);
+        bins[255] = 100'000;
+        Expect(Adjust::HistogramDisplayScale(bins) == 400, "levels.display-scale-spike");
+        bins[0] = 200'000;
+        Expect(Adjust::HistogramDisplayScale(bins) == 400, "levels.display-scale-two-spikes");
+        bins[128] = 500'000;
+        Expect(Adjust::HistogramDisplayScale(bins) == 400 && bins[128] == 500'000, "levels.display-scale-inner-spike");
+        std::array<double, 256> flat{};
+        flat.fill(100.0);
+        Expect(Adjust::HistogramDisplayScale(flat) == 100, "levels.display-scale-flat");
+        std::array<double, 256> sparse{};
+        Expect(Adjust::HistogramDisplayScale(sparse) == 0, "levels.display-scale-empty");
+        sparse[255] = 50;
+        Expect(Adjust::HistogramDisplayScale(sparse) == 50, "levels.display-scale-end");
+        sparse[0] = 100;
+        Expect(Adjust::HistogramDisplayScale(sparse) == 100, "levels.display-scale-ends");
+        sparse[128] = 200;
+        Expect(Adjust::HistogramDisplayScale(sparse) == 200, "levels.display-scale-middle");
+    }
+    // Legacy autoAlgorithmsAndEyedropperCalibration.
+    {
+        LevelsHistogram bins{};
+        for (std::size_t c = 1; c <= 3; ++c)
+        {
+            bins[c][20 * c] = 100;
+            bins[c][200 + c * 10] = 100;
+        }
+        const LevelsSettings linked = Adjust::AutoLevels(LevelsAuto::Contrast, bins);
+        Expect(linked.ranges[0].black == 20 && linked.ranges[0].white == 230, "levels.auto-contrast");
+        const LevelsSettings color = Adjust::AutoLevels(LevelsAuto::Color, bins);
+        Expect(color.ranges[1].black == 20 && color.ranges[3].black == 60 && color.ranges[0] == LevelRange{},
+               "levels.auto-color");
+        Expect(Adjust::AutoLevels(LevelsAuto::Neutral, bins).ranges[1].gamma == 1, "levels.auto-neutral");
+        const LevelsHistogram empty{};
+        Expect(Adjust::LevelsIsIdentity(Adjust::AutoLevels(LevelsAuto::Contrast, empty)) &&
+                   Adjust::LevelsIsIdentity(Adjust::AutoLevels(LevelsAuto::Color, empty)) &&
+                   Adjust::LevelsIsIdentity(Adjust::AutoLevels(LevelsAuto::Neutral, empty)),
+               "levels.auto-empty");
+        const std::array<double, 3> rgb{0.25, 0.4, 0.6};
+        bool calibrated = true;
+        for (const LevelsSample mode : {LevelsSample::Black, LevelsSample::Gray, LevelsSample::White})
+        {
+            const LevelsSettings settings = Adjust::SampledLevels(LevelsSettings{}, rgb, mode);
+            const double target = mode == LevelsSample::Black ? 0 : mode == LevelsSample::White ? 1 : 0.5;
+            const LevelsChannel channels[] = {LevelsChannel::Red, LevelsChannel::Green, LevelsChannel::Blue};
+            for (std::size_t i = 0; i < 3; ++i)
+            {
+                calibrated =
+                    calibrated && std::fabs(Adjust::LevelsApply(settings, rgb[i], channels[i]) - target) < 0.0001;
+            }
+        }
+        Expect(calibrated, "levels.eyedropper-calibration");
+    }
+    // Legacy eyedropperSamplesOriginalAndRejectsTransparentPixels.
+    {
+        DocumentSession session = rampSession();
+        session.BeginLevels();
+        session.SetLevelsSampleMode(LevelsSample::Gray);
+        session.SampleLevels(Vec2{2.5, 0.5});
+        const LevelsSettings first = session.PendingLevels()->settings;
+        session.SampleLevels(Vec2{2.5, 0.5});
+        Expect(session.PendingLevels()->settings == first, "levels.sample-repeat");
+        session.SampleLevels(Vec2{5.5, 0.5});
+        Expect(session.PendingLevels()->settings == first, "levels.sample-rejects-transparent");
+        session.SampleLevels(Vec2{-1, 0.5});
+        Expect(session.PendingLevels()->settings == first, "levels.sample-rejects-outside");
+        session.CancelLevels();
+    }
+}
+
+void TestHueSaturation()
+{
+    // Legacy defaultsAreAnExactNoOp.
+    {
+        DocumentSession session = HueSession();
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        session.BeginHueSaturation();
+        Expect(session.PendingHueSaturation().has_value() && !session.CanPaint(), "hsv.other-edits-wait");
+        session.UpdateHueSaturation(HueSaturationSettings{}, true);
+        session.CommitHueSaturation();
+        Expect(session.Document().value() == before && session.history.UndoCount() == count &&
+                   !session.PendingHueSaturation().has_value() && session.CanPaint(),
+               "hsv.defaults-are-a-no-op");
+    }
+    // Legacy hueRotatesSaturationAndLightnessFollowPhotoshopRanges.
+    {
+        DocumentSession session = HueSession();
+        ApplyHue(session, Adjust::HsvSettings(120));
+        Expect(Near4(ActiveStraight(session, 5, 5), {0, 255, 0, 255}) &&
+                   Near4(ActiveStraight(session, 30, 5), {128, 128, 128, 255}),
+               "hsv.hue-rotates");
+        session.Undo();
+        ApplyHue(session, Adjust::HsvSettings(0, -100));
+        const std::array<int, 4> gray = ActiveStraight(session, 5, 5);
+        Expect(gray[0] == gray[1] && gray[1] == gray[2] && gray[3] == 255, "hsv.desaturates");
+        session.Undo();
+        ApplyHue(session, Adjust::HsvSettings(0, 0, 100));
+        Expect(Near4(ActiveStraight(session, 5, 5), {255, 255, 255, 255}), "hsv.lightness-to-white");
+        session.Undo();
+        ApplyHue(session, Adjust::HsvSettings(0, 0, -100));
+        Expect(Near4(ActiveStraight(session, 5, 5), {0, 0, 0, 255}), "hsv.lightness-to-black");
+    }
+    // Legacy colorizeGivesEverythingOneHueAndKeepsAlpha.
+    {
+        DocumentSession session = HueSession();
+        ApplyHue(session, Adjust::HsvSettings(240, 100, 0, true));
+        const std::array<int, 4> left = ActiveStraight(session, 5, 5);
+        const std::array<int, 4> right = ActiveStraight(session, 30, 5);
+        const std::array<int, 4> strip = ActiveStraight(session, 5, 18);
+        Expect(left[2] > left[0] && right[2] > right[0] && left[3] == 255 && std::abs(strip[3] - 128) <= 2,
+               "hsv.colorize");
+    }
+    // Legacy adjustmentStaysInsideTheSelectionAndIsOneUndoStep.
+    {
+        DocumentSession session = HueSession();
+        SelectRect(session, 0, 0, 10, 20, false);
+        const int count = session.history.UndoCount();
+        ApplyHue(session, Adjust::HsvSettings(120));
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Hue/Saturation" &&
+                   Near4(ActiveStraight(session, 5, 5), {0, 255, 0, 255}) &&
+                   Near4(ActiveStraight(session, 15, 5), {255, 0, 0, 255}),
+               "hsv.inside-selection");
+        session.Undo();
+        Expect(Near4(ActiveStraight(session, 5, 5), {255, 0, 0, 255}), "hsv.selection-undo");
+    }
+    // Legacy previewIsLiveDoesNotTouchTheDocumentAndNeverAccumulates.
+    {
+        DocumentSession session = HueSession();
+        const CanvasDocument before = session.Document().value();
+        const int count = session.history.UndoCount();
+        session.BeginHueSaturation();
+        session.UpdateHueSaturation(Adjust::HsvSettings(120), true);
+        Expect(Near4(StraightOf(session.PendingHueSaturation()->previewRaster, 5, 5), {0, 255, 0, 255}) &&
+                   session.Document().value() == before && session.history.UndoCount() == count,
+               "hsv.preview-live");
+        session.UpdateHueSaturation(Adjust::HsvSettings(240), true);
+        Expect(Near4(StraightOf(session.PendingHueSaturation()->previewRaster, 5, 5), {0, 0, 255, 255}),
+               "hsv.preview-never-accumulates");
+        session.UpdateHueSaturation(Adjust::HsvSettings(240), false);
+        Expect(!session.PendingHueSaturation()->previewRaster.HasStorage(), "hsv.preview-off");
+        session.CancelHueSaturation();
+        Expect(session.Document().value() == before && !session.PendingHueSaturation().has_value(), "hsv.cancel");
+        session.BeginHueSaturation();
+        session.UpdateHueSaturation(Adjust::HsvSettings(120), true);
+        session.CommitHueSaturation();
+        Expect(session.ActiveLayer()->asset->image.Width() == before.layers.back().asset->image.Width() &&
+                   Near4(ActiveStraight(session, 5, 5), {0, 255, 0, 255}),
+               "hsv.commit-full-size");
+    }
+    // Legacy bandWeightsRampThroughFalloffAndWrapAround.
+    {
+        const HueBand reds = Adjust::DefaultBand(ColorRange::Reds);
+        Expect(Adjust::BandWeight(reds, 0) == 1 && Adjust::BandWeight(reds, 345) == 1 &&
+                   Adjust::BandWeight(reds, 15) == 1,
+               "hsv.band-plateau");
+        Expect(std::fabs(Adjust::BandWeight(reds, 330) - 0.5) < 0.001 &&
+                   std::fabs(Adjust::BandWeight(reds, 30) - 0.5) < 0.001,
+               "hsv.band-shoulders");
+        Expect(Adjust::BandWeight(reds, 315) == 0 && Adjust::BandWeight(reds, 45) == 0 &&
+                   Adjust::BandWeight(reds, 180) == 0 &&
+                   Adjust::BandWeight(Adjust::DefaultBand(ColorRange::Master), 123) == 1,
+               "hsv.band-outside");
+        HueBand band = Adjust::DefaultBand(ColorRange::Greens);
+        Expect(!Adjust::BandSetHandle(band, 1, 200) && band == Adjust::DefaultBand(ColorRange::Greens),
+               "hsv.band-refuses-crossing");
+        Expect(Adjust::BandSetHandle(band, 1, 110) && band.rangeStart == 110, "hsv.band-moves-handle");
+    }
+    // Legacy colorRangesAdjustIndependently.
+    {
+        DocumentSession session = RedAndBlue();
+        HueSaturationSettings settings = Adjust::HsvSettings(60, 0, 0, false, ColorRange::Reds);
+        settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)] = RangeAdjustment{0, -100, 0};
+        ApplyHue(session, settings);
+        const std::array<int, 4> blue = ActiveStraight(session, 30, 5);
+        Expect(Near4(ActiveStraight(session, 5, 5), {255, 255, 0, 255}) && std::abs(blue[0] - blue[1]) <= 1 &&
+                   std::abs(blue[1] - blue[2]) <= 1,
+               "hsv.ranges-independent");
+    }
+    // Legacy rangesLeaveOtherHuesAloneAndInvertFlipsTheBand.
+    {
+        DocumentSession session = RedAndBlue();
+        const std::array<int, 4> before = ActiveStraight(session, 30, 5);
+        ApplyHue(session, Adjust::HsvSettings(0, 0, -100, false, ColorRange::Reds));
+        Expect(Near4(ActiveStraight(session, 5, 5), {0, 0, 0, 255}) && Near4(ActiveStraight(session, 30, 5), before),
+               "hsv.range-leaves-others");
+        session.Undo();
+        HueSaturationSettings inverted = Adjust::HsvSettings(0, 0, -100, false, ColorRange::Reds);
+        inverted.invertRange = true;
+        ApplyHue(session, inverted);
+        Expect(Near4(ActiveStraight(session, 5, 5), {255, 0, 0, 255}) &&
+                   Near4(ActiveStraight(session, 30, 5), {0, 0, 0, 255}),
+               "hsv.invert-range");
+    }
+    // Legacy slidersEditTheSelectedRangeAndTheAfterBarFollowsHueShifts.
+    {
+        HueSaturationSettings settings;
+        Adjust::RangeOf(settings).hue = 30; // Master.
+        settings.range = ColorRange::Greens;
+        Expect(Adjust::RangeOf(settings).hue == 0, "hsv.greens-start-untouched");
+        Adjust::RangeOf(settings).hue = -40;
+        Expect(settings.adjustments[static_cast<std::size_t>(ColorRange::Master)].hue == 30 &&
+                   settings.adjustments[static_cast<std::size_t>(ColorRange::Greens)].hue == -40,
+               "hsv.sliders-edit-selected-range");
+        settings.range = ColorRange::Master;
+        Expect(Adjust::RangeOf(settings).hue == 30 && !Adjust::HsvIsIdentity(settings), "hsv.master-keeps-its-value");
+        HueSaturationSettings greensOnly = Adjust::HsvSettings(60, 0, 0, false, ColorRange::Greens);
+        Expect(std::fabs(Adjust::ShiftedHue(120, greensOnly) - 180) < 0.001 &&
+                   std::fabs(Adjust::ShiftedHue(0, greensOnly)) < 0.001,
+               "hsv.after-bar");
+    }
+    // Legacy eyedroppersRecenterWidenAndNarrowTheBand.
+    {
+        DocumentSession session = RedAndBlue();
+        const Raster composite = session.ActiveLayer()->asset->image;
+        session.BeginHueSaturation();
+        session.UpdateHueSaturation(Adjust::HsvSettings(10, 0, 0, false, ColorRange::Greens), false);
+        session.SetHueSampleMode(HueSampleMode::Replace);
+        session.SampleHueRange(composite, Vec2{5, 5});
+        HueBand band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        Expect(Adjust::BandWeight(band, 0) == 1 && Adjust::BandWeight(band, 120) == 0, "hsv.eyedropper-recenters");
+        session.SetHueSampleMode(HueSampleMode::Add);
+        session.SampleHueRange(composite, Vec2{30, 5});
+        band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        Expect(Adjust::BandWeight(band, 240) == 1 && Adjust::BandWeight(band, 0) == 1, "hsv.eyedropper-widens");
+        session.SetHueSampleMode(HueSampleMode::Remove);
+        session.SampleHueRange(composite, Vec2{30, 5});
+        band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        Expect(Adjust::BandWeight(band, 240) == 0, "hsv.eyedropper-narrows");
+        session.CancelHueSaturation();
+        Expect(!session.PendingHueSaturation().has_value(), "hsv.eyedropper-cancel");
+    }
+    // Legacy targetedAdjustmentPicksTheRangeUnderTheCursor.
+    {
+        DocumentSession session = RedAndBlue();
+        const Raster composite = session.ActiveLayer()->asset->image;
+        session.BeginHueSaturation();
+        session.SetHueTargeting(true);
+        Expect(session.BeginHueTargeting(composite, Vec2{30, 5}) &&
+                   session.PendingHueSaturation()->settings.range == ColorRange::Blues,
+               "hsv.targeting-picks-blues");
+        session.DragHueTargeting(60, false);
+        Expect(session.PendingHueSaturation()
+                       ->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
+                       .saturation == 30,
+               "hsv.targeting-drag");
+        session.DragHueTargeting(20, false);
+        Expect(session.PendingHueSaturation()
+                       ->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
+                       .saturation == 10,
+               "hsv.targeting-never-accumulates");
+        session.DragHueTargeting(-40, true);
+        Expect(session.PendingHueSaturation()->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)].hue ==
+                   -20,
+               "hsv.targeting-hue");
+        session.EndHueTargeting();
+        session.CancelHueSaturation();
+        Expect(!session.PendingHueSaturation().has_value(), "hsv.targeting-cancel");
+    }
+    // Legacy samplingNeedsAColorRangeAndAColorfulPixel.
+    {
+        DocumentSession session = RedAndBlue();
+        const Raster composite = session.ActiveLayer()->asset->image;
+        session.BeginHueSaturation();
+        const HueBand untouched = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        session.SetHueSampleMode(HueSampleMode::Replace);
+        session.SampleHueRange(composite, Vec2{5, 5});
+        Expect(Adjust::BandOf(session.PendingHueSaturation()->settings) == untouched, "hsv.sampling-needs-a-range");
+        DocumentSession gray = HueSession();
+        const Raster grayComposite = gray.ActiveLayer()->asset->image;
+        gray.BeginHueSaturation();
+        gray.UpdateHueSaturation(Adjust::HsvSettings(0, 0, 0, false, ColorRange::Reds), false);
+        const HueBand before = Adjust::BandOf(gray.PendingHueSaturation()->settings);
+        gray.SetHueSampleMode(HueSampleMode::Replace);
+        gray.SampleHueRange(grayComposite, Vec2{30, 5});
+        Expect(Adjust::BandOf(gray.PendingHueSaturation()->settings) == before, "hsv.sampling-needs-a-colorful-pixel");
+    }
+}
+
+void TestImageAdjustments()
+{
+    const auto exposed = [](const Raster& image, const ExposureSettings& settings)
+    {
+        LayerAdjustment adjustment = Adjustment(AdjustmentKind::Exposure);
+        adjustment.exposureSettings = settings;
+        return Adjust::ApplyAdjustment(adjustment, image);
+    };
+    const auto mapped = [](const Raster& image, const GradientMapSettings& settings)
+    {
+        LayerAdjustment adjustment = Adjustment(AdjustmentKind::GradientMap);
+        adjustment.gradientMapSettings = settings;
+        return Adjust::ApplyAdjustment(adjustment, image);
+    };
+    const auto grained = [](const Raster& image, const GrainSettings& settings, double originX = 0, double originY = 0)
+    {
+        LayerAdjustment adjustment = Adjustment(AdjustmentKind::Grain);
+        adjustment.grainSettings = settings;
+        return Adjust::ApplyAdjustment(adjustment, image, originX, originY, 1);
+    };
+    const Raster gray = SolidStraight(4, 4, 128.0 / 255, 128.0 / 255, 128.0 / 255);
+    // Legacy exposureWorksInLinearLightWithOffsetAndGamma.
+    {
+        Expect(Bytes(exposed(gray, ExposureSettings{})) == Bytes(gray), "adjust.exposure-defaults");
+        const std::array<int, 4> brighter = StraightOf(exposed(gray, ExposureSettings{1, 0, 1}), 0, 0);
+        Expect(std::abs(brighter[0] - 176) <= 2 && brighter[0] == brighter[2], "adjust.exposure-stop");
+        const std::array<int, 4> lifted = StraightOf(exposed(gray, ExposureSettings{0, 0, 2}), 0, 0);
+        Expect(std::abs(lifted[0] - 181) <= 2, "adjust.exposure-gamma");
+        const std::array<int, 4> offset =
+            StraightOf(exposed(SolidStraight(4, 4, 0, 0, 0), ExposureSettings{0, 0.1, 1}), 0, 0);
+        Expect(std::abs(offset[0] - 89) <= 2, "adjust.exposure-offset");
+        const Raster translucent = SolidStraight(4, 4, 128.0 / 255, 128.0 / 255, 128.0 / 255, 0.5);
+        Expect(StraightOf(exposed(translucent, ExposureSettings{1, 0, 1}), 0, 0)[3] == StraightOf(translucent, 0, 0)[3],
+               "adjust.exposure-keeps-alpha");
+    }
+    // Legacy gradientMapColorsByBrightnessAndReverses.
+    {
+        GradientMapSettings settings{AdjustmentColor{1, 0, 0}, AdjustmentColor{0, 0, 1}, false};
+        Expect(StraightOf(mapped(SolidStraight(4, 4, 0, 0, 0), settings), 0, 0) == std::array<int, 4>{255, 0, 0, 255} &&
+                   StraightOf(mapped(SolidStraight(4, 4, 1, 1, 1), settings), 0, 0) ==
+                       std::array<int, 4>{0, 0, 255, 255},
+               "adjust.gradient-map-ends");
+        const std::array<int, 4> middle = StraightOf(mapped(gray, settings), 0, 0);
+        Expect(std::abs(middle[0] - 127) <= 2 && std::abs(middle[2] - 128) <= 2 && middle[1] == 0,
+               "adjust.gradient-map-middle");
+        const std::array<int, 4> translucent = StraightOf(mapped(SolidStraight(4, 4, 1, 1, 1, 0.5), settings), 0, 0);
+        Expect(translucent[2] >= 250 && translucent[0] <= 5 && std::abs(translucent[3] - 128) <= 1,
+               "adjust.gradient-map-alpha");
+        settings.reversed = true;
+        Expect(StraightOf(mapped(SolidStraight(4, 4, 0, 0, 0), settings), 0, 0) == std::array<int, 4>{0, 0, 255, 255},
+               "adjust.gradient-map-reversed");
+    }
+    // Legacy grainIsFixedInDocumentSpaceAndLeavesTransparencyAlone.
+    {
+        GrainSettings settings{60, 2, 40, 7};
+        const Raster big = SolidStraight(40, 40, 128.0 / 255, 128.0 / 255, 128.0 / 255);
+        const Raster whole = grained(big, settings);
+        std::set<int> values;
+        bool neutral = true;
+        for (int y = 0; y < 40; ++y)
+        {
+            for (int x = 0; x < 40; ++x)
+            {
+                const std::array<int, 4> p = StraightOf(whole, x, y);
+                values.insert(p[0]);
+                neutral = neutral && p[0] == p[1] && p[1] == p[2];
+            }
+        }
+        Expect(values.size() > 5 && neutral, "adjust.grain-varies-neutrally");
+        const Raster part = grained(SolidStraight(20, 20, 128.0 / 255, 128.0 / 255, 128.0 / 255), settings, 10, 10);
+        bool same = true;
+        for (int y = 0; y < 20; ++y)
+        {
+            for (int x = 0; x < 20; ++x)
+            {
+                same = same && StraightOf(part, x, y) == StraightOf(whole, x + 10, y + 10);
+            }
+        }
+        Expect(same, "adjust.grain-fixed-in-document-space");
+        GrainSettings reseeded = settings;
+        reseeded.seed = 8;
+        Expect(Bytes(grained(big, reseeded)) != Bytes(whole), "adjust.grain-reseeded");
+        Expect(Bytes(grained(gray, GrainSettings{0, 1.5, 50, 0})) == Bytes(gray), "adjust.grain-zero-amount");
+        const Raster cleared = grained(SolidStraight(4, 4, 128.0 / 255, 128.0 / 255, 128.0 / 255, 0), settings);
+        Expect(StraightOf(cleared, 1, 1)[3] == 0 && StraightOf(cleared, 3, 3)[3] == 0,
+               "adjust.grain-leaves-clear-pixels");
+    }
+    // Legacy settingsSaveAndOlderAdjustmentsStillOpen (the JSON round trip lives in IoTests).
+    {
+        LayerAdjustment grain = Adjustment(AdjustmentKind::Grain);
+        grain.grainSettings = GrainSettings{40, 3, 10, 9};
+        Expect(grain.IsValid(), "adjust.grain-valid");
+        LayerAdjustment broken = Adjustment(AdjustmentKind::Exposure);
+        broken.exposureSettings = ExposureSettings{0, 0, 0};
+        Expect(!broken.IsValid(), "adjust.exposure-invalid-gamma");
+        LayerAdjustment legacy = Adjustment(AdjustmentKind::Hsv);
+        legacy.hue = 120;
+        Expect(!legacy.hsvSettings.has_value() && Adjust::RangeOf(legacy.ResolvedHsv()).hue == 120,
+               "adjust.legacy-hsv-resolves");
+    }
+    // Legacy newAdjustmentLayersStartFromThePaletteRenderAndEditInThePanel.
+    {
+        DocumentSession session = PixelEditSession(20, 20);
+        const Raster base = SolidStraight(20, 20, 128.0 / 255, 128.0 / 255, 128.0 / 255);
+        InsertPixels(session, base, L"Gray");
+        session.SetForegroundColor(0xFFFF0000u);
+        session.SetBackgroundColor(0xFF0000FFu);
+        session.AddAdjustment(AdjustmentKind::GradientMap);
+        const Guid id = session.ActiveLayerID().value();
+        const std::optional<LayerAdjustment> adjustment = session.ActiveLayer()->adjustment;
+        Expect(adjustment.has_value() && adjustment->kind == AdjustmentKind::GradientMap &&
+                   adjustment->GradientMap().shadows == AdjustmentColor{1, 0, 0} &&
+                   adjustment->GradientMap().highlights == AdjustmentColor{0, 0, 1} &&
+                   session.AdjustmentEditingID() == id &&
+                   session.history.UndoName() == L"New Gradient Map Adjustment" &&
+                   !session.ActiveLayer()->asset.has_value(),
+               "adjust.new-gradient-map-from-palette");
+        Expect(session.BeginAdjustmentEditing(id, base) && session.PendingFilter().has_value() &&
+                   session.PendingFilter()->kind == FilterKind::GradientMap,
+               "adjust.gradient-map-edits-in-the-filter-panel");
+        session.FinishAdjustmentEditing(false);
+        const std::array<int, 4> middle = StraightOf(Adjust::ApplyAdjustment(adjustment.value(), base), 10, 10);
+        Expect(middle[0] > 100 && middle[2] > 100 && middle[1] < 20, "adjust.gradient-map-renders");
+        session.AddAdjustment(AdjustmentKind::Grain);
+        const std::uint32_t first = session.ActiveLayer()->adjustment->Grain().seed;
+        session.SetAdjustmentEditingID(std::nullopt);
+        session.AddAdjustment(AdjustmentKind::Grain);
+        int grains = 0;
+        for (const ImageLayer& layer : session.Document().value().layers)
+        {
+            grains += layer.adjustment.has_value() && layer.adjustment->kind == AdjustmentKind::Grain ? 1 : 0;
+        }
+        Expect(grains == 2 && session.ActiveLayer()->adjustment->Grain().seed != first,
+               "adjust.grain-layers-get-their-own-pattern");
+        Expect(AdjustmentFilterKind(AdjustmentKind::Exposure) == FilterKind::Exposure &&
+                   !AdjustmentFilterKind(AdjustmentKind::Levels).has_value(),
+               "adjust.filter-kinds");
+    }
+    // Legacy imageMenuExposureChangesTheLayerInOneStep.
+    {
+        DocumentSession session = PixelEditSession(8, 8);
+        InsertPixels(session, SolidStraight(8, 8, 128.0 / 255, 128.0 / 255, 128.0 / 255), L"Gray");
+        session.BeginFilter(FilterKind::Exposure);
+        Expect(session.PendingFilter().has_value(), "adjust.exposure-panel-opens");
+        FilterSettings settings = session.PendingFilter()->settings;
+        settings.exposure.exposure = 1;
+        session.UpdateFilter(settings, true);
+        const int count = session.history.UndoCount();
+        session.CommitFilter();
+        Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Exposure" &&
+                   std::abs(ActiveStraight(session, 0, 0)[0] - 176) <= 2,
+               "adjust.exposure-one-step");
+        Expect(FilterIsImageAdjustment(FilterKind::Exposure) && !FilterIsImageAdjustment(FilterKind::GaussianBlur),
+               "adjust.image-adjustment-kinds");
+    }
+}
+
+void TestFilters()
+{
+    // Legacy gaussianBlurSoftensAHardEdgeWithoutFadingTheBordersAsOneUndoStep: the blur spreads into room grown
+    // around the layer, so the layer's border softens too and the pixels are trimmed back to what is there.
+    {
+        DocumentSession session = PixelEditSession(40, 20);
+        const Guid id = InsertPixels(session,
+                                     BytesRaster(40, 20,
+                                                 [](int x, int) -> std::array<std::uint8_t, 4>
+                                                 {
+                                                     return x < 20 ? std::array<std::uint8_t, 4>{255, 255, 255, 255}
+                                                                   : std::array<std::uint8_t, 4>{0, 0, 0, 0};
+                                                 }),
+                                     L"Half");
+        session.BeginFilter(FilterKind::GaussianBlur);
+        Expect(session.PendingFilter().has_value() && !session.CanPaint(), "filter.blur-opens");
+        FilterSettings settings;
+        settings.radius = 3;
+        session.UpdateFilter(settings, true);
+        Expect(session.PendingFilter()->grownImage.HasStorage() && session.PendingFilter()->previewRaster.HasStorage(),
+               "filter.blur-grows-and-previews");
+        const int count = session.history.UndoCount();
+        session.CommitFilter();
+        Expect(!session.PendingFilter().has_value() && session.history.UndoCount() == count + 1 &&
+                   session.history.UndoName() == L"Gaussian Blur" && session.filterSettings.radius == 3,
+               "filter.blur-one-step");
+        const ImageLayer* layer = Find(session.Document(), id);
+        Expect(layer != nullptr && layer->transform.origin.x < 0 && LayerPixelOf(session, id, 10, 10)[3] == 255,
+               "filter.blur-spreads-into-grown-room");
+        const int border = LayerPixelOf(session, id, 0, 10)[3];
+        const int edge = LayerPixelOf(session, id, 20, 10)[3];
+        Expect(border > 60 && border < 200 && edge > 20 && edge < 235 && LayerPixelOf(session, id, 38, 10)[3] == 0,
+               "filter.blur-softens-edges");
+    }
+    // Legacy motionBlurStreaksAlongItsAngleCounterclockwiseFromHorizontal.
+    {
+        const Raster dot = BytesRaster(41, 41,
+                                       [](int x, int y) -> std::array<std::uint8_t, 4>
+                                       {
+                                           return x == 20 && y == 20 ? std::array<std::uint8_t, 4>{255, 255, 255, 255}
+                                                                     : std::array<std::uint8_t, 4>{0, 0, 0, 0};
+                                       });
+        const auto streak = [&](double angle)
+        {
+            FilterSettings settings;
+            settings.angle = angle;
+            settings.distance = 16;
+            return Adjust::RunFilter(FilterKind::MotionBlur, dot, settings, 1, 0);
+        };
+        const auto alpha = [](const Raster& image, int x, int y) { return StraightOf(image, x, y)[3]; };
+        const Raster horizontal = streak(0);
+        Expect(alpha(horizontal, 24, 20) > 0 && alpha(horizontal, 16, 20) > 0 && alpha(horizontal, 20, 24) == 0,
+               "filter.motion-horizontal");
+        const Raster vertical = streak(90);
+        Expect(alpha(vertical, 20, 24) > 0 && alpha(vertical, 20, 16) > 0 && alpha(vertical, 24, 20) == 0,
+               "filter.motion-vertical");
+        const Raster diagonal = streak(45);
+        Expect(alpha(diagonal, 23, 17) > 0 && alpha(diagonal, 17, 23) > 0 && alpha(diagonal, 17, 17) == 0,
+               "filter.motion-diagonal");
+    }
+    // Legacy addNoiseChangesColorButNeverAlphaAndMonochromaticKeepsGrays.
+    {
+        const Raster gray = BytesRaster(32, 8,
+                                        [](int x, int) -> std::array<std::uint8_t, 4>
+                                        {
+                                            return x < 16 ? std::array<std::uint8_t, 4>{128, 128, 128, 255}
+                                                          : std::array<std::uint8_t, 4>{0, 0, 0, 0};
+                                        });
+        const auto noisy = [&](FilterSettings settings)
+        { return Bytes(Adjust::RunFilter(FilterKind::AddNoise, gray, settings, 1, 7)); };
+        FilterSettings settings;
+        settings.amount = 10;
+        const std::vector<std::uint8_t> color = noisy(settings);
+        Expect(noisy(settings) == color, "filter.noise-same-seed");
+        bool opaqueOk = true;
+        bool clearOk = true;
+        bool differs = false;
+        std::set<int> values;
+        for (int y = 0; y < 8; ++y)
+        {
+            for (int x = 0; x < 32; ++x)
+            {
+                const std::size_t offset = (static_cast<std::size_t>(y) * 32 + static_cast<std::size_t>(x)) * 4u;
+                if (x < 16)
+                {
+                    opaqueOk = opaqueOk && color[offset + 3] == 255 && color[offset] >= 112 && color[offset] <= 144;
+                    values.insert(color[offset]);
+                    differs = differs || color[offset] != color[offset + 1];
+                }
+                else
+                {
+                    clearOk = clearOk && color[offset] == 0 && color[offset + 3] == 0;
+                }
+            }
+        }
+        Expect(opaqueOk && values.size() > 5 && differs && clearOk, "filter.noise-colors-not-alpha");
+        settings.gaussian = true;
+        settings.monochromatic = true;
+        const std::vector<std::uint8_t> mono = noisy(settings);
+        bool monoOk = true;
+        for (int y = 0; y < 8; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                const std::size_t offset = (static_cast<std::size_t>(y) * 32 + static_cast<std::size_t>(x)) * 4u;
+                monoOk = monoOk && mono[offset] == mono[offset + 1] && mono[offset + 1] == mono[offset + 2] &&
+                         mono[offset + 3] == 255;
+            }
+        }
+        Expect(monoOk, "filter.noise-monochromatic");
+    }
+    // Legacy removeDistortionBendsAboutTheCenterAndOnlyPincushionCorrectionOpensTheCorners.
+    {
+        const Raster source = BytesRaster(40, 30,
+                                          [](int x, int y) -> std::array<std::uint8_t, 4>
+                                          {
+                                              const int index = (x < 20 ? 0 : 1) + (y < 15 ? 0 : 2);
+                                              return {static_cast<std::uint8_t>(255 - index * 85), 128,
+                                                      static_cast<std::uint8_t>(index * 85), 255};
+                                          });
+        const auto distorted = [&](double distortion)
+        {
+            FilterSettings settings;
+            settings.distortion = distortion;
+            return Adjust::RunFilter(FilterKind::LensCorrection, source, settings, 1, 0);
+        };
+        const auto alpha = [](const Raster& image, int x, int y) { return StraightOf(image, x, y)[3]; };
+        const Raster original = distorted(0);
+        Expect(Bytes(original) == Bytes(source), "filter.lens-zero-copies");
+        const Raster barrel = distorted(100);
+        Expect(alpha(barrel, 0, 0) == 255 && alpha(barrel, 39, 29) == 255, "filter.lens-barrel-keeps-corners");
+        const Raster pincushion = distorted(-100);
+        Expect(alpha(pincushion, 0, 0) == 0 && alpha(pincushion, 39, 29) == 0 &&
+                   StraightOf(pincushion, 20, 15) == StraightOf(source, 20, 15),
+               "filter.lens-pincushion-opens-corners");
+    }
+}
+
+void TestAdjustmentLayers()
+{
+    // Legacy adjustmentPersistsDuplicatesAndUndoRestoresSettings (the file round trip lives in IoTests).
+    {
+        DocumentSession session = PixelEditSession(2, 2);
+        InsertPixels(session, SolidStraight(2, 2, 1, 1, 1), L"White");
+        session.AddAdjustment(AdjustmentKind::Curves);
+        session.SetAdjustmentEditingID(std::nullopt);
+        const Guid id = session.ActiveLayerID().value();
+        LayerAdjustment value = Adjustment(AdjustmentKind::Curves);
+        value.curves.channels[0].insert(value.curves.channels[0].begin() + 1, CurvePoint{128, 190});
+        session.BeginEdit(L"Edit Curves");
+        Expect(session.UpdateAdjustment(id, value), "adjustlayer.update");
+        session.EndEdit();
+        session.Undo();
+        Expect(session.ActiveLayer()->adjustment->curves == CurvesSettings{}, "adjustlayer.undo-restores-settings");
+        session.Redo();
+        Expect(session.ActiveLayer()->adjustment == value, "adjustlayer.redo");
+        session.DuplicateActiveLayer();
+        Expect(session.ActiveLayer()->adjustment == value && session.Document().value().layers.size() == 4,
+               "adjustlayer.duplicate");
+    }
+    // Legacy curvesIdentityAndImageCommandPreserveAlpha.
+    {
+        const Raster asset = BytesRaster(2, 2,
+                                         [](int x, int y) -> std::array<std::uint8_t, 4>
+                                         {
+                                             const std::uint8_t alphas[] = {255, 128, 32, 0};
+                                             const std::uint8_t a = alphas[y * 2 + x];
+                                             return {static_cast<std::uint8_t>(std::lround(0.1 * a)),
+                                                     static_cast<std::uint8_t>(std::lround(0.7 * a)),
+                                                     static_cast<std::uint8_t>(std::lround(0.4 * a)), a};
+                                         });
+        Expect(Bytes(Adjust::ApplyAdjustment(Adjustment(AdjustmentKind::Curves), asset)) == Bytes(asset),
+               "adjustlayer.curves-identity");
+        DocumentSession session = PixelEditSession(2, 2);
+        InsertPixels(session, asset, L"Fixture");
+        session.BeginFilter(FilterKind::Curves);
+        FilterSettings settings;
+        settings.curves.channels[0] = {CurvePoint{0, 255}, CurvePoint{255, 255}};
+        session.UpdateFilter(settings, true);
+        session.CommitFilter();
+        Expect(Bytes(session.ActiveLayer()->asset->image) ==
+                   std::vector<std::uint8_t>{255, 255, 255, 255, 128, 128, 128, 128, 32, 32, 32, 32, 0, 0, 0, 0},
+               "adjustlayer.curves-command-preserves-alpha");
+        session.Undo();
+        Expect(session.ActiveLayer()->asset->image == asset, "adjustlayer.curves-undo");
+    }
+    // Legacy sharedEditorsKeepPixelsDynamicAndSupportCancel, for every kind.
+    for (const AdjustmentKind kind : {AdjustmentKind::Hsv, AdjustmentKind::Levels, AdjustmentKind::Curves,
+                                      AdjustmentKind::Exposure, AdjustmentKind::GradientMap, AdjustmentKind::Grain})
+    {
+        DocumentSession session = PixelEditSession(2, 2);
+        const Raster white = SolidStraight(2, 2, 1, 1, 1);
+        const Guid baseID = InsertPixels(session, white, L"White");
+        session.AddAdjustment(kind);
+        const std::optional<Guid> id = session.AdjustmentEditingID();
+        Expect(id.has_value() && session.ActiveLayer()->adjustment.has_value(), "adjustlayer.editor-opens");
+        const LayerAdjustment created = session.ActiveLayer()->adjustment.value();
+        Expect(session.BeginAdjustmentEditing(id.value(), white) && session.AdjustmentOriginal().has_value() &&
+                   session.AdjustmentOriginal()->kind == kind,
+               "adjustlayer.editor-begins");
+        switch (kind)
+        {
+        case AdjustmentKind::Levels:
+        {
+            Expect(session.PendingLevels().has_value() && session.PendingLevels()->histogramReady &&
+                       session.PendingLevels()->histogram[0][255] == 4,
+                   "adjustlayer.levels-histogram");
+            LevelsSettings settings = session.PendingLevels()->settings;
+            settings.ranges[0].outputWhite = 0;
+            session.UpdateLevels(settings, true);
+            Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
+            session.UpdateLevels(settings, false);
+            Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
+            session.CommitLevels();
+            break;
+        }
+        case AdjustmentKind::Curves:
+        {
+            FilterSettings settings = session.PendingFilter()->settings;
+            settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
+            session.UpdateFilter(settings, true);
+            Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
+            session.CommitFilter();
+            break;
+        }
+        case AdjustmentKind::Exposure:
+        case AdjustmentKind::GradientMap:
+        case AdjustmentKind::Grain:
+        {
+            Expect(session.PendingFilter().has_value() && session.PendingFilter()->kind == AdjustmentFilterKind(kind),
+                   "adjustlayer.filter-kind");
+            FilterSettings settings = session.PendingFilter()->settings;
+            if (kind == AdjustmentKind::Exposure)
+            {
+                settings.exposure.exposure = 1;
+            }
+            else if (kind == AdjustmentKind::GradientMap)
+            {
+                settings.gradientMap.reversed = true;
+            }
+            else
+            {
+                settings.grain.amount = 70;
+            }
+            session.UpdateFilter(settings, true);
+            const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
+            Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
+                       live.Grain() == settings.grain,
+                   "adjustlayer.filter-live");
+            session.CommitFilter();
+            break;
+        }
+        case AdjustmentKind::Hsv:
+        {
+            HueSaturationSettings settings = session.PendingHueSaturation()->settings;
+            settings.range = ColorRange::Reds;
+            Adjust::RangeOf(settings).hue = 80;
+            Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
+            settings.invertRange = true;
+            session.UpdateHueSaturation(settings, true);
+            Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
+            session.CommitHueSaturation();
+            break;
+        }
+        }
+        const LayerAdjustment saved = session.ActiveLayer()->adjustment.value();
+        Expect(!session.AdjustmentEditingID().has_value() && !session.HasColorEdit() &&
+                   Find(session.Document(), baseID)->asset->image == white && !session.ActiveLayer()->asset.has_value(),
+               "adjustlayer.commit-keeps-pixels-dynamic");
+        session.SetAdjustmentEditingID(id);
+        Expect(session.BeginAdjustmentEditing(id.value(), white), "adjustlayer.reopens");
+        switch (kind)
+        {
+        case AdjustmentKind::Levels:
+            Expect(session.PendingLevels()->settings == saved.levels, "adjustlayer.reopened-levels");
+            session.UpdateLevels(LevelsSettings{}, true);
+            session.CancelLevels();
+            break;
+        case AdjustmentKind::Curves:
+        case AdjustmentKind::Exposure:
+        case AdjustmentKind::GradientMap:
+        case AdjustmentKind::Grain:
+        {
+            const FilterSettings reopened = session.PendingFilter()->settings;
+            Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
+                       reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
+                   "adjustlayer.reopened-filter");
+            session.UpdateFilter(FilterSettings{}, true);
+            session.CancelFilter();
+            break;
+        }
+        case AdjustmentKind::Hsv:
+            Expect(session.PendingHueSaturation()->settings == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
+            session.UpdateHueSaturation(HueSaturationSettings{}, true);
+            session.CancelHueSaturation();
+            break;
+        }
+        Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
+               "adjustlayer.cancel-restores");
+        session.Undo();
+        Expect(session.ActiveLayer()->adjustment == created, "adjustlayer.undo-to-created");
+        session.Redo();
+        Expect(session.ActiveLayer()->adjustment == saved, "adjustlayer.redo-to-saved");
+    }
+    // Legacy shiftPlusAndMinusStepTheActiveLayersBlendModeWhereverFocusIsExceptTextFields (the session part).
+    {
+        DocumentSession session = PixelEditSession(40, 20);
+        session.AddBlankLayer();
+        session.StepBlendMode(true);
+        Expect(session.ActiveLayer()->blendMode == LayerBlendMode::Multiply, "adjustlayer.blend-step-forward");
+        session.StepBlendMode(false);
+        session.StepBlendMode(false);
+        Expect(session.ActiveLayer()->blendMode == LayerBlendMode::Luminosity, "adjustlayer.blend-step-wraps");
+        session.Undo();
+        Expect(session.ActiveLayer()->blendMode == LayerBlendMode::Normal, "adjustlayer.blend-step-undo");
+    }
+}
+
+void TestBlends()
+{
+    const auto near3 = [](const std::array<double, 3>& a, const std::array<double, 3>& b)
+    { return std::fabs(a[0] - b[0]) < 0.002 && std::fabs(a[1] - b[1]) < 0.002 && std::fabs(a[2] - b[2]) < 0.002; };
+    const std::array<double, 3> red{1, 0, 0};
+    const std::array<double, 3> gray{0.5, 0.5, 0.5};
+    const std::array<double, 3> blue{0, 0, 1};
+    // The PDF non-separable modes: Color keeps the backdrop's luminosity, Luminosity its color, Hue takes the
+    // source hue at the backdrop's saturation, Saturation the source saturation on the backdrop's hue.
+    Expect(near3(Adjust::BlendStraight(gray, red, LayerBlendMode::Color), {1.0, 2.0 / 7, 2.0 / 7}), "blend.color");
+    Expect(near3(Adjust::BlendStraight(red, gray, LayerBlendMode::Luminosity), {1.0, 2.0 / 7, 2.0 / 7}),
+           "blend.luminosity");
+    Expect(near3(Adjust::BlendStraight(gray, blue, LayerBlendMode::Hue), gray), "blend.hue-of-gray-stays-gray");
+    Expect(near3(Adjust::BlendStraight(red, gray, LayerBlendMode::Saturation), {0.3, 0.3, 0.3}), "blend.saturation");
+    Expect(near3(Adjust::BlendStraight(gray, gray, LayerBlendMode::Multiply), {0.25, 0.25, 0.25}) &&
+               near3(Adjust::BlendStraight(gray, red, LayerBlendMode::Normal), red),
+           "blend.separable");
+}
+
 int wmain()
 {
+#if defined(_DEBUG)
+    // A Debug assertion reports on stderr and aborts instead of waiting on a dialog no harness can click.
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
+    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     TestHierarchy();
     TestLiveMask();
     TestValidate();
@@ -4087,6 +5120,12 @@ int wmain()
     TestPixelMoves();
     TestClipboard();
     TestFloatingSelection();
+    TestLevels();
+    TestHueSaturation();
+    TestImageAdjustments();
+    TestFilters();
+    TestAdjustmentLayers();
+    TestBlends();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

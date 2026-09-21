@@ -1138,6 +1138,10 @@ void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 void DocumentSession::Undo()
 {
     _lassoDraft.reset();
+    if (HasColorEdit())
+    {
+        return; // The open panel owns the document until OK or Cancel.
+    }
     // A pending gradient is not in history yet: the first Undo discards it, as Escape would.
     if (_gradient)
     {
@@ -1160,6 +1164,10 @@ void DocumentSession::Undo()
 void DocumentSession::Redo()
 {
     _lassoDraft.reset();
+    if (HasColorEdit())
+    {
+        return;
+    }
     if (_transformEdit.has_value())
     {
         CancelTransform();
@@ -2675,7 +2683,8 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
     {
         return nullptr;
     }
-    if (!_transformEdit.has_value())
+    const PreviewLayer shown = PreviewedLayer();
+    if (!_transformEdit.has_value() && !shown.raster.HasStorage())
     {
         _displayCopy.reset();
         return &_document.value();
@@ -2685,9 +2694,31 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
         return &_displayCopy.value();
     }
     _displayCopy = _document;
-    const TransformEdit& edit = _transformEdit.value();
+    if (shown.raster.HasStorage())
+    {
+        // A filter or color panel's preview shows in place of the layer's pixels; a mask on the layer's grid keeps
+        // its place when the preview's grid is a grown one.
+        for (ImageLayer& layer : _displayCopy->layers)
+        {
+            if (layer.id == shown.layerID && layer.asset.has_value())
+            {
+                if (layer.mask.has_value() && !layer.mask->placement.has_value() &&
+                    !(shown.transform == layer.transform))
+                {
+                    layer.mask->placement = layer.transform;
+                }
+                layer.asset->image = shown.raster;
+                layer.transform = shown.transform;
+            }
+        }
+    }
     for (ImageLayer& layer : _displayCopy->layers)
     {
+        if (!_transformEdit.has_value())
+        {
+            break;
+        }
+        const TransformEdit& edit = _transformEdit.value();
         const std::optional<LayerTransform> placement = DisplayedMaskPlacement(layer);
         const std::optional<LayerTransform> pending = PendingTransform(layer);
         if (pending.has_value())

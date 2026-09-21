@@ -3,7 +3,9 @@
 #include "ProjectStore.h"
 
 #include <cmath>
+#include <crtdbg.h>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -21,9 +23,11 @@ void Expect(bool condition, const char* name) noexcept
     if (condition)
     {
         std::printf("PASS %s\n", name);
+        std::fflush(stdout);
         return;
     }
     std::printf("FAIL %s\n", name);
+    std::fflush(stdout);
     ++gFailures;
 }
 
@@ -549,6 +553,14 @@ void TestSaveRejectsInvalidDocument()
 
 int wmain()
 {
+#if defined(_DEBUG)
+    // A Debug assertion reports on stderr and aborts instead of waiting on a dialog no harness can click.
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
+    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(com) && com != RPC_E_CHANGED_MODE)
     {

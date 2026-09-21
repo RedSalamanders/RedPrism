@@ -891,9 +891,7 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
 
 // ── DocumentSession ──────────────────────────────────────────────────────
 
-namespace
-{
-[[nodiscard]] bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
+bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
 {
     std::optional<Guid> current = id;
     int depth = 0;
@@ -917,11 +915,10 @@ namespace
     }
     return true;
 }
-} // namespace
 
 bool DocumentSession::CanPaint() const noexcept
 {
-    if (!_document.has_value() || _transformEdit.has_value() || _brush)
+    if (!_document.has_value() || _transformEdit.has_value() || _brush || HasColorEdit())
     {
         return false;
     }
