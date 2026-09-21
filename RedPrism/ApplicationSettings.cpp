@@ -310,6 +310,125 @@ int Application::RunProductHardeningSelfTest() noexcept
         ReportSelfTestFailure(L"The canvas hit test does not tell the hole from the rail.\n");
         return 5;
     }
+    // A rail click through the pointer path activates the tool: the Toolbar button's click reaches OnTool.
+    const auto clickRail = [&](EditorTool tool) noexcept
+    {
+        const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(tool);
+        const int x = static_cast<int>(std::lround((button.left + button.right) / 2.0f * scale));
+        const int y = static_cast<int>(std::lround((button.top + button.bottom) / 2.0f * scale));
+        OnPointer(WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+        OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+        OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+        return _tool == tool && _chrome->Tool() == tool;
+    };
+    OnTool(EditorTool::Move);
+    if (!clickRail(EditorTool::Marquee))
+    {
+        _chrome->DetachAccessibility();
+        const bool withoutAccessibility = clickRail(EditorTool::Marquee);
+        ReportSelfTestFailure(std::format(L"Clicking the Marquee rail button did not activate the tool (tool {}; "
+                                          L"without accessibility attached: {}).\n",
+                                          static_cast<int>(_tool), withoutAccessibility ? L"works" : L"fails"));
+        return 5;
+    }
+    // The same click with the keyboard focus in the window (as a user's click has), so the accessibility placement
+    // reports the chrome focused and the canvas-focus flip takes the real path.
+    const HWND previousFocus = GetFocus();
+    (void)SetFocus(_window.get());
+    const bool windowFocused = GetFocus() == _window.get();
+    OnTool(EditorTool::Move);
+    _chrome->SetCanvasFocused(true);
+    const bool focusedClick = clickRail(EditorTool::Lasso);
+    (void)SetFocus(previousFocus);
+    if (!windowFocused)
+    {
+        ReportSelfTestFailure(L"note: the hidden self-test window could not take the keyboard focus; the focused rail "
+                              L"click was not exercised.\n");
+    }
+    if (windowFocused && !focusedClick)
+    {
+        ReportSelfTestFailure(std::format(L"Clicking the Lasso rail button with the window focused did not activate "
+                                          L"the tool (tool {}).\n",
+                                          static_cast<int>(_tool)));
+        return 5;
+    }
+    // A user holds a rail button for a moment, so frames render between the press and the release: the real loop's
+    // animation step, the chrome sync and a frame. Between two clicks the loop also runs (settle), so a previous
+    // tool switch has laid out already; what a previous click leaves behind is DxUi's focus on that button.
+    const auto settle = [&]() noexcept
+    {
+        for (int frame = 0; frame < 3; ++frame)
+        {
+            Sleep(16);
+            (void)_chrome->AdvanceAnimation(GetTickCount64());
+            SyncChrome();
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        }
+    };
+    const auto heldClick = [&](EditorTool tool) noexcept
+    {
+        const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(tool);
+        const int x = static_cast<int>(std::lround((button.left + button.right) / 2.0f * scale));
+        const int y = static_cast<int>(std::lround((button.top + button.bottom) / 2.0f * scale));
+        OnPointer(WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+        OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+        settle();
+        OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+        return _tool == tool;
+    };
+    OnTool(EditorTool::Lasso);
+    OnTool(EditorTool::Move);
+    _chrome->SetCanvasFocused(true);
+    settle();
+    if (!heldClick(EditorTool::Brush))
+    {
+        ReportSelfTestFailure(std::format(L"Clicking the Brush rail button after a tool switch, with frames between "
+                                          L"press and release, did not activate the tool (tool {}).\n",
+                                          static_cast<int>(_tool)));
+        return 5;
+    }
+    OnTool(EditorTool::Move);
+    _chrome->SetCanvasFocused(true);
+    settle();
+    const bool lassoClicked = clickRail(EditorTool::Lasso);
+    settle();
+    if (!lassoClicked || !heldClick(EditorTool::Wand))
+    {
+        ReportSelfTestFailure(std::format(L"Clicking a rail button after another rail click, with frames between "
+                                          L"press and release, did not activate the tool (tool {}).\n",
+                                          static_cast<int>(_tool)));
+        return 5;
+    }
+    OnTool(EditorTool::Move);
+    _chrome->SetCanvasFocused(true);
+    _chrome->FocusLayerOpacityForTest();
+    settle();
+    if (!heldClick(EditorTool::Brush))
+    {
+        ReportSelfTestFailure(L"Clicking the Brush rail button after the opacity stepper had the focus did not "
+                              L"activate the tool.\n");
+        return 5;
+    }
+    // A user hovers before clicking, so the button's tooltip is showing at the moment of the click.
+    OnTool(EditorTool::Move);
+    {
+        const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(EditorTool::Wand);
+        const int x = static_cast<int>(std::lround((button.left + button.right) / 2.0f * scale));
+        const int y = static_cast<int>(std::lround((button.top + button.bottom) / 2.0f * scale));
+        OnPointer(WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+        const bool tooltip = _chrome->ForceTooltipForTest();
+        OnPointer(WM_MOUSEMOVE, 0, MAKELPARAM(x + 1, y));
+        OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x + 1, y));
+        OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x + 1, y));
+        if (_tool != EditorTool::Wand)
+        {
+            ReportSelfTestFailure(std::format(L"Clicking the Wand rail button under its tooltip did not activate the "
+                                              L"tool (tool {}; tooltip shown: {}).\n",
+                                              static_cast<int>(_tool), tooltip ? L"yes" : L"no"));
+            return 5;
+        }
+    }
+    OnTool(EditorTool::Move);
     _chrome->OpenColorPicker(false);
     (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     const D2D1_RECT_F card = _chrome->ColorPickerBoundsDip();

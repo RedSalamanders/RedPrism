@@ -380,7 +380,7 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
     {
         if (control != nullptr)
         {
-            control->SetBounds(D2D1::RectF(innerLeft, y, innerRight, y + height));
+            PlaceControl(control, D2D1::RectF(innerLeft, y, innerRight, y + height));
         }
         y += height + kRowGapDip;
     };
@@ -391,10 +391,10 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         {
             return;
         }
-        entry.label->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + kLabelWidthDip, y + kRowDip));
-        entry.slider->SetBounds(
-            D2D1::RectF(innerLeft + kLabelWidthDip + 4.0f, y, innerRight - kStepperWidthDip - 8.0f, y + kRowDip));
-        entry.stepper->SetBounds(D2D1::RectF(innerRight - kStepperWidthDip, y, innerRight, y + kRowDip));
+        PlaceControl(entry.label, D2D1::RectF(innerLeft, y, innerLeft + kLabelWidthDip, y + kRowDip));
+        PlaceControl(entry.slider, D2D1::RectF(innerLeft + kLabelWidthDip + 4.0f, y,
+                                               innerRight - kStepperWidthDip - 8.0f, y + kRowDip));
+        PlaceControl(entry.stepper, D2D1::RectF(innerRight - kStepperWidthDip, y, innerRight, y + kRowDip));
         y += kRowDip + kRowGapDip;
     };
     const auto placeButtons = [&](std::span<DxUi::Button* const> buttons, float height)
@@ -406,7 +406,7 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         {
             if (control != nullptr)
             {
-                control->SetBounds(D2D1::RectF(x, y, x + each, y + height));
+                PlaceControl(control, D2D1::RectF(x, y, x + each, y + height));
             }
             x += each + gap;
         }
@@ -420,14 +420,14 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         place(_adjustChannel, kRowDip);
         place(_levelsInput, kHistogramDip + LevelsBar::kHandleRowDip);
         const float third = (innerRight - innerLeft - 12.0f) / 3.0f;
-        _levelsBlack->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
-        _levelsGamma->SetBounds(D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
-        _levelsWhite->SetBounds(D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
+        PlaceControl(_levelsBlack, D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
+        PlaceControl(_levelsGamma, D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
+        PlaceControl(_levelsWhite, D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
         y += kRowDip + kRowGapDip;
         place(_levelsOutput, kOutputRampDip + LevelsBar::kHandleRowDip);
         const float half = (innerRight - innerLeft - 6.0f) / 2.0f;
-        _levelsOutBlack->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
-        _levelsOutWhite->SetBounds(D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
+        PlaceControl(_levelsOutBlack, D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
+        PlaceControl(_levelsOutWhite, D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
         y += kRowDip + kRowGapDip;
         placeButtons(_levelsSample, kRowDip);
         placeButtons(_levelsAuto, kRowDip);
@@ -436,12 +436,12 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
     case AdjustPanelKind::HueSaturation:
     {
         const bool spectrum = state.hsv.range != ColorRange::Master && !state.hsv.colorize;
-        _hueRange->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
+        PlaceControl(_hueRange, D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
         float x = innerRight;
         for (DxUi::Button* control : {_hueTargeting, _hueSample[2], _hueSample[1], _hueSample[0]})
         {
             const float buttonWidth = 50.0f;
-            control->SetBounds(D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
+            PlaceControl(control, D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
             x -= buttonWidth + 4.0f;
         }
         y += kRowDip + kRowGapDip;
@@ -473,10 +473,10 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         case FilterKind::GradientMap:
         {
             place(_gradientRamp, kRampDip);
-            _mapShadows->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + 24.0f, y + 24.0f));
-            _mapShadowsLabel->SetBounds(D2D1::RectF(innerLeft + 30.0f, y, innerLeft + 130.0f, y + 24.0f));
-            _mapHighlights->SetBounds(D2D1::RectF(innerLeft + 150.0f, y, innerLeft + 174.0f, y + 24.0f));
-            _mapHighlightsLabel->SetBounds(D2D1::RectF(innerLeft + 180.0f, y, innerRight, y + 24.0f));
+            PlaceControl(_mapShadows, D2D1::RectF(innerLeft, y, innerLeft + 24.0f, y + 24.0f));
+            PlaceControl(_mapShadowsLabel, D2D1::RectF(innerLeft + 30.0f, y, innerLeft + 130.0f, y + 24.0f));
+            PlaceControl(_mapHighlights, D2D1::RectF(innerLeft + 150.0f, y, innerLeft + 174.0f, y + 24.0f));
+            PlaceControl(_mapHighlightsLabel, D2D1::RectF(innerLeft + 180.0f, y, innerRight, y + 24.0f));
             y += 24.0f + kRowGapDip;
             place(_mapReverse, 24.0f);
             break;
@@ -520,11 +520,11 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         place(_adjustNote, kNoteDip);
     }
     const float buttonWidth = 90.0f;
-    _adjustCancel->SetBounds(D2D1::RectF(innerLeft, y, innerLeft + buttonWidth, y + 30.0f));
-    _adjustApply->SetBounds(D2D1::RectF(innerRight - buttonWidth, y, innerRight, y + 30.0f));
+    PlaceControl(_adjustCancel, D2D1::RectF(innerLeft, y, innerLeft + buttonWidth, y + 30.0f));
+    PlaceControl(_adjustApply, D2D1::RectF(innerRight - buttonWidth, y, innerRight, y + 30.0f));
     y += 30.0f + kCardPaddingDip;
     const float cardBottom = std::min(y, bottom - kMarginDip);
-    _adjustCard->SetBounds(D2D1::RectF(left, top + kMarginDip, left + width, cardBottom));
+    PlaceControl(_adjustCard, D2D1::RectF(left, top + kMarginDip, left + width, cardBottom));
 }
 
 void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
@@ -581,7 +581,9 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             _levelsOutWhite->SetValue(range.outputWhite);
             for (int index = 0; index < 3; ++index)
             {
-                _levelsSample[static_cast<std::size_t>(index)]->SetPressedVisual(state.levelsSample == index + 1);
+                SetPressedVisualIfChanged(_levelsSample[static_cast<std::size_t>(index)],
+                                          _levelsSamplePressed[static_cast<std::size_t>(index)],
+                                          state.levelsSample == index + 1);
                 _levelsAuto[static_cast<std::size_t>(index)]->SetEnabled(state.histogramReady);
             }
         }
@@ -651,9 +653,11 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             saturationRow.stepper->SetMinimum(state.hsv.colorize ? 0 : -100);
             for (int index = 0; index < 3; ++index)
             {
-                _hueSample[static_cast<std::size_t>(index)]->SetPressedVisual(state.hueSample == index + 1);
+                SetPressedVisualIfChanged(_hueSample[static_cast<std::size_t>(index)],
+                                          _hueSamplePressed[static_cast<std::size_t>(index)],
+                                          state.hueSample == index + 1);
             }
-            _hueTargeting->SetPressedVisual(state.targeting);
+            SetPressedVisualIfChanged(_hueTargeting, _hueTargetingPressed, state.targeting);
             _spectrum->SetSettings(state.hsv);
             _hueInvert->SetChecked(state.hsv.invertRange);
             _hueColorize->SetChecked(state.hsv.colorize);

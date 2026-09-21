@@ -459,6 +459,10 @@ class ChromeHost final
     void SampleColor(uint32_t argb) noexcept;
     // Self-test hook: one committed stepper change, as the increment button would produce.
     [[nodiscard]] bool RequestLayerOpacity(double percent) noexcept;
+    // Self-test hook: shows the tooltip of the hovered control at once, as the hover delay would; true when one shows.
+    [[nodiscard]] bool ForceTooltipForTest() noexcept;
+    // Self-test hook: DxUi's focus on the layer opacity stepper, as a click on it would leave it.
+    void FocusLayerOpacityForTest() noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -492,7 +496,7 @@ class ChromeHost final
     void SetCanvasFocused(bool focused) noexcept
     {
         _canvasFocused = focused;
-        UpdateAccessibilityPlacement();
+        _accessibilityPlacementDirty = true;
     }
     // The chrome palette (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system high-contrast colors.
     void SetTheme(const DxUi::ThemePalette& palette) noexcept;
@@ -508,6 +512,8 @@ class ChromeHost final
     void AttachAccessibility() noexcept;
     void DetachAccessibility() noexcept;
     [[nodiscard]] LRESULT HandleGetObject(WPARAM wParam, LPARAM lParam) noexcept;
+    // Marks the placement (client rectangle, keyboard focus in the chrome) for the next Prepare and asks for a
+    // frame: DxUi is never re-entered from a pointer, key or focus path.
     void UpdateAccessibilityPlacement() noexcept;
     [[nodiscard]] IRawElementProviderFragmentRoot* AccessibilityRoot() const noexcept; // not add-referenced
     [[nodiscard]] HRESULT AccessibilityStatus() const noexcept // the last attach attempt (S_FALSE: none yet)
@@ -581,7 +587,19 @@ class ChromeHost final
     wil::com_ptr_nothrow<WindowAccessibilityRoot> _accessibilityRoot;
     std::shared_ptr<ChromeAccessibilitySite> _accessibilitySite;
     HRESULT _accessibilityStatus = S_FALSE;
+    // Layout writes only when something changes: DxUi reacts to every SetBounds/SetVisible, and the arrange paths
+    // run every frame, including between a press and its release.
+    static void PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds) noexcept;
+    static void ShowControl(DxUi::Control* control, bool visible) noexcept;
+    // A pressed look only when it changes: a button's transition restarted every sync cancels presses held across
+    // frames.
+    static void SetPressedVisualIfChanged(DxUi::Button* button, bool& current, bool pressed) noexcept;
+    void ReleaseFocusForPress(const DxUi::PointerEvent& event) noexcept;
     [[nodiscard]] DxUi::EmbeddedAccessibilityPlacement AccessibilityPlacement() const noexcept;
+    void FlushAccessibilityPlacement() noexcept;
+    bool _accessibilityPlacementDirty = false;
+    bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
+    bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
     std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
     DxUi::MenuBar* _menu = nullptr;
     DxUi::TabControl* _tabs = nullptr;
@@ -671,7 +689,7 @@ class ChromeHost final
     bool _syncingShape = false;
     BrushInspectorState _brushInspector;
     bool _syncingBrush = false;
-    std::array<DxUi::Button*, kEditorToolCount> _toolButtons{};
+    std::array<DxUi::Toggle*, kEditorToolCount> _toolButtons{}; // the active tool is the checked one
     LayerTreeModel _treeModel;
     std::function<void(int)> _onCommand;
     std::function<void(EditorTool)> _onTool;
@@ -732,10 +750,13 @@ class ChromeHost final
     DxUi::NumericStepper* _levelsOutBlack = nullptr;
     DxUi::NumericStepper* _levelsOutWhite = nullptr;
     std::array<DxUi::Button*, 3> _levelsSample{};
+    std::array<bool, 3> _levelsSamplePressed{};
     std::array<DxUi::Button*, 3> _levelsAuto{};
     DxUi::ComboBox* _hueRange = nullptr;
     std::array<DxUi::Button*, 3> _hueSample{};
+    std::array<bool, 3> _hueSamplePressed{};
     DxUi::Button* _hueTargeting = nullptr;
+    bool _hueTargetingPressed = false;
     SpectrumEditor* _spectrum = nullptr;
     DxUi::Checkbox* _hueInvert = nullptr;
     DxUi::Checkbox* _hueColorize = nullptr;

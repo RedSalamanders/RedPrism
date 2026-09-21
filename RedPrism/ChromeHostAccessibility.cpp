@@ -228,6 +228,7 @@ void ChromeHost::AttachAccessibility() noexcept
     root->SetChromeHasFocus(!_canvasFocused && GetFocus() == _owner);
     _accessibilityRoot = std::move(root);
     _accessibilitySite = std::move(site);
+    _accessibilityPlacementDirty = false;
 }
 
 void ChromeHost::DetachAccessibility() noexcept
@@ -283,6 +284,16 @@ DxUi::EmbeddedAccessibilityPlacement ChromeHost::AccessibilityPlacement() const 
 
 void ChromeHost::UpdateAccessibilityPlacement() noexcept
 {
+    _accessibilityPlacementDirty = true;
+    if (_requestFrame != nullptr)
+    {
+        _requestFrame(_requestContext);
+    }
+}
+
+void ChromeHost::FlushAccessibilityPlacement() noexcept
+{
+    _accessibilityPlacementDirty = false;
     if (!_accessibilitySite || !_attached)
     {
         return;

@@ -428,11 +428,18 @@ HRESULT ChromeHost::Build() noexcept
             const std::wstring name = LoadStringResource(nullptr, EditorToolNameId(tool));
             const std::wstring tooltip =
                 FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, name, std::wstring(1, EditorToolKey(tool)));
-            DxUi::Button* button = _rail->AddButton(tooltip, std::wstring(1, EditorToolGlyph(tool)));
+            // A toggle whose checked look marks the active tool: a plain button's SetPressedVisual shares the press
+            // machinery, and its transition after a tool switch cancels the next press held across a frame.
+            DxUi::Toggle* button = _rail->AddToggleButton(tooltip, std::wstring(1, EditorToolGlyph(tool)));
             button->SetAccessibleName(name);
-            button->SetOnClick(
-                [this, tool]
+            button->SetOnToggled(
+                [this, tool, button](bool checked)
                 {
+                    if (!checked)
+                    {
+                        button->SetChecked(true); // the active tool stays active; another tool replaces it
+                        return;
+                    }
                     SetTool(tool);
                     if (_onTool)
                     {
@@ -550,6 +557,37 @@ D2D1_RECT_F ChromeHost::ToolButtonBoundsDip(EditorTool tool) const noexcept
     return D2D1::RectF(inset, top, inset + kToolButtonDip, top + kToolButtonDip);
 }
 
+void ChromeHost::PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds) noexcept
+{
+    if (control == nullptr)
+    {
+        return;
+    }
+    const D2D1_RECT_F current = control->GetBounds();
+    if (current.left != bounds.left || current.top != bounds.top || current.right != bounds.right ||
+        current.bottom != bounds.bottom)
+    {
+        control->SetBounds(bounds);
+    }
+}
+
+void ChromeHost::SetPressedVisualIfChanged(DxUi::Button* button, bool& current, bool pressed) noexcept
+{
+    if (button != nullptr && current != pressed)
+    {
+        button->SetPressedVisual(pressed);
+        current = pressed;
+    }
+}
+
+void ChromeHost::ShowControl(DxUi::Control* control, bool visible) noexcept
+{
+    if (control != nullptr && control->IsVisible() != visible)
+    {
+        control->SetVisible(visible);
+    }
+}
+
 void ChromeHost::Arrange() noexcept
 {
     if (!_menu)
@@ -560,7 +598,7 @@ void ChromeHost::Arrange() noexcept
     const float heightDip = HeightDip();
     if (auto* root = _view.Controls().GetRoot())
     {
-        root->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
+        PlaceControl(root, D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
     }
     const float menuBottom = kMenuHeightDip;
     const float tabBottom = menuBottom + kTabHeightDip;
@@ -570,7 +608,7 @@ void ChromeHost::Arrange() noexcept
     if (_splitter)
     {
         // The splitter owns the clamp: canvas minimum, layers minimum and maximum, and the persisted preference.
-        _splitter->SetBounds(D2D1::RectF(kRailWidthDip, tabBottom, widthDip, statusTop));
+        PlaceControl(_splitter, D2D1::RectF(kRailWidthDip, tabBottom, widthDip, statusTop));
         _splitter->SetMinimumFirstPane(std::max(kCanvasMinDip, extent - kLayersMaxDip - kSplitterWidthDip));
         _splitter->SetMinimumSecondPane(kLayersMinDip);
         _splitter->SetPosition(extent - _preferredLayersWidthDip - kSplitterWidthDip);
@@ -581,36 +619,37 @@ void ChromeHost::Arrange() noexcept
         _layersWidthDip = std::min(kLayersMaxDip, std::max(kLayersMinDip, _preferredLayersWidthDip));
     }
     const float layersLeft = widthDip - _layersWidthDip;
-    _menu->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, menuBottom));
+    PlaceControl(_menu, D2D1::RectF(0.0f, 0.0f, widthDip, menuBottom));
     if (_tabs)
     {
-        _tabs->SetBounds(D2D1::RectF(0.0f, menuBottom, widthDip, tabBottom));
+        PlaceControl(_tabs, D2D1::RectF(0.0f, menuBottom, widthDip, tabBottom));
     }
     if (_rail)
     {
-        _rail->SetBounds(D2D1::RectF(0.0f, tabBottom, kRailWidthDip, statusTop));
+        PlaceControl(_rail, D2D1::RectF(0.0f, tabBottom, kRailWidthDip, statusTop));
         const float wellTop = std::max(tabBottom, statusTop - kWellBlockDip);
         for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
-            if (DxUi::Button* button = _toolButtons[index])
+            if (DxUi::Toggle* button = _toolButtons[index])
             {
                 const D2D1_RECT_F bounds = ToolButtonBoundsDip(EditorToolAt(index));
-                button->SetBounds(bounds);
-                button->SetVisible(bounds.bottom <= wellTop - kToolGapDip);
+                PlaceControl(button, bounds);
+                ShowControl(button, bounds.bottom <= wellTop - kToolGapDip);
             }
         }
         if (_backgroundWell)
         {
-            _backgroundWell->SetBounds(PaletteWellBoundsDip(true));
+            PlaceControl(_backgroundWell, PaletteWellBoundsDip(true));
         }
         if (_foregroundWell)
         {
-            _foregroundWell->SetBounds(PaletteWellBoundsDip(false));
+            PlaceControl(_foregroundWell, PaletteWellBoundsDip(false));
         }
     }
     if (_header)
     {
-        _header->SetBounds(D2D1::RectF(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom));
+        PlaceControl(_header,
+                     D2D1::RectF(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom));
     }
     ArrangeTransformHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     ArrangeSelectionHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
@@ -619,25 +658,25 @@ void ChromeHost::Arrange() noexcept
     ArrangeShapeHeader(kRailWidthDip + 8.0f, tabBottom, layersLeft - kSplitterWidthDip, headerBottom);
     if (_overlay)
     {
-        _overlay->SetBounds(D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
+        PlaceControl(_overlay, D2D1::RectF(kRailWidthDip, headerBottom, layersLeft - kSplitterWidthDip, statusTop));
     }
     if (_layersTitle)
     {
         const float titleRight = std::max(layersLeft + 4.0f, widthDip - kOpacityWidthDip - 8.0f);
-        _layersTitle->SetBounds(D2D1::RectF(layersLeft + 4.0f, tabBottom, titleRight, tabBottom + kLayersTitleDip));
+        PlaceControl(_layersTitle, D2D1::RectF(layersLeft + 4.0f, tabBottom, titleRight, tabBottom + kLayersTitleDip));
     }
     if (_opacity)
     {
-        _opacity->SetBounds(D2D1::RectF(widthDip - 4.0f - kOpacityWidthDip, tabBottom + 2.0f, widthDip - 4.0f,
-                                        tabBottom + kLayersTitleDip - 2.0f));
+        PlaceControl(_opacity, D2D1::RectF(widthDip - 4.0f - kOpacityWidthDip, tabBottom + 2.0f, widthDip - 4.0f,
+                                           tabBottom + kLayersTitleDip - 2.0f));
     }
     if (_layers)
     {
-        _layers->SetBounds(D2D1::RectF(layersLeft, tabBottom + kLayersTitleDip, widthDip, statusTop));
+        PlaceControl(_layers, D2D1::RectF(layersLeft, tabBottom + kLayersTitleDip, widthDip, statusTop));
     }
     if (_status)
     {
-        _status->SetBounds(D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
+        PlaceControl(_status, D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
     }
     ArrangeAdjustPanel(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangePicker();
@@ -653,10 +692,10 @@ void ChromeHost::ArrangePicker() noexcept
     const float top = kMenuHeightDip + kTabHeightDip + kHeaderHeightDip + kPickerMarginDip;
     const float width = DxUi::ColorPicker::kDefaultWidthDip + 2.0f * kPickerMarginDip;
     const float height = DxUi::ColorPicker::kDefaultHeightDip + 2.0f * kPickerMarginDip;
-    _pickerCard->SetBounds(D2D1::RectF(left, top, left + width, top + height));
-    _picker->SetBounds(D2D1::RectF(left + kPickerMarginDip, top + kPickerMarginDip,
-                                   left + kPickerMarginDip + DxUi::ColorPicker::kDefaultWidthDip,
-                                   top + kPickerMarginDip + DxUi::ColorPicker::kDefaultHeightDip));
+    PlaceControl(_pickerCard, D2D1::RectF(left, top, left + width, top + height));
+    PlaceControl(_picker, D2D1::RectF(left + kPickerMarginDip, top + kPickerMarginDip,
+                                      left + kPickerMarginDip + DxUi::ColorPicker::kDefaultWidthDip,
+                                      top + kPickerMarginDip + DxUi::ColorPicker::kDefaultHeightDip));
 }
 
 D2D1_RECT_F ChromeHost::SplitterBoundsDip() const noexcept
@@ -1016,9 +1055,11 @@ void ChromeHost::SyncToolVisuals() noexcept
 {
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
-        if (DxUi::Button* button = _toolButtons[index])
+        DxUi::Toggle* button = _toolButtons[index];
+        const bool checked = EditorToolAt(index) == _tool;
+        if (button != nullptr && button->IsChecked() != checked)
         {
-            button->SetPressedVisual(EditorToolAt(index) == _tool);
+            button->SetChecked(checked);
         }
     }
 }
@@ -1089,10 +1130,15 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
     SyncToolVisuals();
     Arrange();
     const HRESULT prepared = _view.Prepare(widthPixels, heightPixels, _dpi);
-    if (SUCCEEDED(prepared) && _owner != nullptr && !_accessibilitySite)
+    // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
+    // Its accessibility calls cancel a press in progress, so both wait for the pointer to be up.
+    if (SUCCEEDED(prepared) && _owner != nullptr && !_accessibilitySite && !_pointerPressed && !_inDispatch)
     {
-        // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
         AttachAccessibility();
+    }
+    else if (SUCCEEDED(prepared) && _accessibilityPlacementDirty && !_inDispatch && !_pointerPressed)
+    {
+        FlushAccessibilityPlacement();
     }
     return prepared;
 }
@@ -1116,15 +1162,27 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     if (inHole && event.action == DxUi::PointerAction::Down)
     {
         _canvasFocused = true;
-        UpdateAccessibilityPlacement();
+        _accessibilityPlacementDirty = true;
         return false;
     }
     if (!inHole && event.action == DxUi::PointerAction::Down)
     {
         _canvasFocused = false;
-        UpdateAccessibilityPlacement();
+        _accessibilityPlacementDirty = true;
+        ReleaseFocusForPress(event);
     }
-    return _view.DispatchPointer(event);
+    if (event.action == DxUi::PointerAction::Down)
+    {
+        _pointerPressed = true;
+    }
+    else if (event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave)
+    {
+        _pointerPressed = false;
+    }
+    _inDispatch = true;
+    const bool handled = _view.DispatchPointer(event);
+    _inDispatch = false;
+    return handled;
 }
 
 bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcept
@@ -1136,10 +1194,13 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     if (down && virtualKey == VK_ESCAPE && _canvasFocused)
     {
         _canvasFocused = false;
-        UpdateAccessibilityPlacement();
+        _accessibilityPlacementDirty = true;
         return true;
     }
-    if (_view.DispatchKey(virtualKey, down, modifiers))
+    _inDispatch = true;
+    const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
+    _inDispatch = false;
+    if (handledKey)
     {
         return true;
     }
@@ -1152,9 +1213,61 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     return false;
 }
 
+// A press moves DxUi's focus to the pressed control, and a layout pass while that move is pending cancels the
+// press: the release then goes nowhere and a rail button never activates (the WARP self-test holds a press across
+// frames). So the focus leaves before the press and the press moves it from nothing. A text edit commits when the
+// press lands outside its control, as a click elsewhere commits it anyway; inside, it continues.
+void ChromeHost::ReleaseFocusForPress(const DxUi::PointerEvent& event) noexcept
+{
+    DxUi::ControlHost& controls = _view.Controls();
+    DxUi::Control* focused = controls.GetFocusControl();
+    if (focused == nullptr)
+    {
+        return;
+    }
+    if (controls.HasActiveTextInput())
+    {
+        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+        const D2D1_RECT_F bounds = focused->GetBounds();
+        const float x = event.xPixels / scale;
+        const float y = event.yPixels / scale;
+        if (x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom)
+        {
+            return;
+        }
+        controls.CommitFocusedTextInput();
+    }
+    controls.SetFocusControl(nullptr);
+}
+
+void ChromeHost::FocusLayerOpacityForTest() noexcept
+{
+    if (_attached && _opacity != nullptr)
+    {
+        _view.Controls().SetFocusControl(_opacity);
+    }
+}
+
+bool ChromeHost::ForceTooltipForTest() noexcept
+{
+    if (!_attached)
+    {
+        return false;
+    }
+    (void)_view.Controls().DebugAdvanceTooltipDelayForTest();
+    return _view.Controls().HasTooltip();
+}
+
 bool ChromeHost::DispatchCharacter(wchar_t character, UINT modifiers) noexcept
 {
-    return _attached && _view.DispatchCharacter(character, modifiers);
+    if (!_attached)
+    {
+        return false;
+    }
+    _inDispatch = true;
+    const bool handled = _view.DispatchCharacter(character, modifiers);
+    _inDispatch = false;
+    return handled;
 }
 
 bool ChromeHost::AdvanceAnimation(uint64_t nowTickMs) noexcept
@@ -1316,7 +1429,7 @@ void ChromeHost::ArrangeTransformHeader(float left, float top, float right, floa
     {
         return;
     }
-    _transformHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    PlaceControl(_transformHeader, D2D1::RectF(left, top, right, bottom));
     constexpr float kRowDip = 28.0f;
     constexpr float kGapDip = 6.0f;
     constexpr float kButtonDip = 64.0f;
@@ -1331,10 +1444,10 @@ void ChromeHost::ArrangeTransformHeader(float left, float top, float right, floa
         {
             continue;
         }
-        button->SetVisible(pinned);
+        ShowControl(button, pinned);
         if (pinned)
         {
-            button->SetBounds(D2D1::RectF(rightEdge - kButtonDip, rowTop, rightEdge, rowBottom));
+            PlaceControl(button, D2D1::RectF(rightEdge - kButtonDip, rowTop, rightEdge, rowBottom));
             rightEdge -= kButtonDip + kGapDip;
         }
     }
@@ -1358,10 +1471,10 @@ void ChromeHost::ArrangeTransformHeader(float left, float top, float right, floa
             continue;
         }
         const bool fits = room && cursor + slot.width <= rightEdge;
-        slot.control->SetVisible(fits);
+        ShowControl(slot.control, fits);
         if (fits)
         {
-            slot.control->SetBounds(D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
+            PlaceControl(slot.control, D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
             cursor += slot.width + kGapDip;
         }
         else
@@ -1573,7 +1686,7 @@ void ChromeHost::ArrangeSelectionHeader(float left, float top, float right, floa
     {
         return;
     }
-    _selectionHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    PlaceControl(_selectionHeader, D2D1::RectF(left, top, right, bottom));
     constexpr float kRowDip = 28.0f;
     constexpr float kGapDip = 6.0f;
     const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
@@ -1596,10 +1709,10 @@ void ChromeHost::ArrangeSelectionHeader(float left, float top, float right, floa
             continue;
         }
         const bool fits = item.wanted && rightEdge - item.width > left + 80.0f;
-        item.control->SetVisible(fits);
+        ShowControl(item.control, fits);
         if (fits)
         {
-            item.control->SetBounds(D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
+            PlaceControl(item.control, D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
             rightEdge -= item.width + kGapDip;
         }
     }
@@ -1634,10 +1747,10 @@ void ChromeHost::ArrangeSelectionHeader(float left, float top, float right, floa
             continue;
         }
         const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
-        slot.control->SetVisible(fits);
+        ShowControl(slot.control, fits);
         if (fits)
         {
-            slot.control->SetBounds(D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
+            PlaceControl(slot.control, D2D1::RectF(cursor, rowTop, cursor + slot.width, rowBottom));
             cursor += slot.width + kGapDip;
         }
         else if (slot.wanted)
@@ -1840,7 +1953,7 @@ void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bo
     {
         return;
     }
-    _brushHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    PlaceControl(_brushHeader, D2D1::RectF(left, top, right, bottom));
     constexpr float kRowDip = 28.0f;
     constexpr float kGapDip = 6.0f;
     const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
@@ -1850,20 +1963,20 @@ void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bo
     if (_brushMaskNote)
     {
         const bool fits = state.maskSelected && rightEdge - 50.0f > left + 80.0f;
-        _brushMaskNote->SetVisible(fits);
+        ShowControl(_brushMaskNote, fits);
         if (fits)
         {
-            _brushMaskNote->SetBounds(D2D1::RectF(rightEdge - 50.0f, rowTop, rightEdge, rowBottom));
+            PlaceControl(_brushMaskNote, D2D1::RectF(rightEdge - 50.0f, rowTop, rightEdge, rowBottom));
             rightEdge -= 50.0f + kGapDip;
         }
     }
     if (_brushSourceNote)
     {
         const bool fits = state.tool == EditorTool::Clone && !state.cloneHasSource && rightEdge - 170.0f > left + 80.0f;
-        _brushSourceNote->SetVisible(fits);
+        ShowControl(_brushSourceNote, fits);
         if (fits)
         {
-            _brushSourceNote->SetBounds(D2D1::RectF(rightEdge - 170.0f, rowTop, rightEdge, rowBottom));
+            PlaceControl(_brushSourceNote, D2D1::RectF(rightEdge - 170.0f, rowTop, rightEdge, rowBottom));
             rightEdge -= 170.0f + kGapDip;
         }
     }
@@ -1895,11 +2008,11 @@ void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bo
             continue;
         }
         const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
-        slot.control->SetVisible(fits);
+        ShowControl(slot.control, fits);
         if (fits)
         {
             const float inset = slot.control == _brushColor ? 4.0f : 0.0f;
-            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            PlaceControl(slot.control, D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
             cursor += slot.width + kGapDip;
         }
         else if (slot.wanted)
@@ -2084,7 +2197,7 @@ void ChromeHost::ArrangeGradientHeader(float left, float top, float right, float
     {
         return;
     }
-    _gradientHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    PlaceControl(_gradientHeader, D2D1::RectF(left, top, right, bottom));
     constexpr float kRowDip = 28.0f;
     constexpr float kGapDip = 6.0f;
     const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
@@ -2107,10 +2220,10 @@ void ChromeHost::ArrangeGradientHeader(float left, float top, float right, float
             continue;
         }
         const bool fits = item.wanted && rightEdge - item.width > left + 80.0f;
-        item.control->SetVisible(fits);
+        ShowControl(item.control, fits);
         if (fits)
         {
-            item.control->SetBounds(D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
+            PlaceControl(item.control, D2D1::RectF(rightEdge - item.width, rowTop, rightEdge, rowBottom));
             rightEdge -= item.width + kGapDip;
         }
     }
@@ -2133,11 +2246,11 @@ void ChromeHost::ArrangeGradientHeader(float left, float top, float right, float
             continue;
         }
         const bool fits = room && cursor + slot.width <= rightEdge;
-        slot.control->SetVisible(fits);
+        ShowControl(slot.control, fits);
         if (fits)
         {
             const float inset = slot.inset ? 4.0f : 0.0f;
-            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            PlaceControl(slot.control, D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
             cursor += slot.width + (slot.control == _gradientStart ? 2.0f : kGapDip);
         }
         else
@@ -2235,7 +2348,7 @@ void ChromeHost::ArrangeShapeHeader(float left, float top, float right, float bo
     {
         return;
     }
-    _shapeHeader->SetBounds(D2D1::RectF(left, top, right, bottom));
+    PlaceControl(_shapeHeader, D2D1::RectF(left, top, right, bottom));
     constexpr float kRowDip = 28.0f;
     constexpr float kGapDip = 6.0f;
     const float rowTop = top + (bottom - top - kRowDip) / 2.0f;
@@ -2259,11 +2372,11 @@ void ChromeHost::ArrangeShapeHeader(float left, float top, float right, float bo
             continue;
         }
         const bool fits = slot.wanted && room && cursor + slot.width <= rightEdge;
-        slot.control->SetVisible(fits);
+        ShowControl(slot.control, fits);
         if (fits)
         {
             const float inset = slot.control == _shapeFill ? 4.0f : 0.0f;
-            slot.control->SetBounds(D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
+            PlaceControl(slot.control, D2D1::RectF(cursor, rowTop + inset, cursor + slot.width, rowBottom - inset));
             cursor += slot.width + kGapDip;
         }
         else if (slot.wanted)
