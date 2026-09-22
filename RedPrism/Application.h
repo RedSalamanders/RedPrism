@@ -204,7 +204,7 @@ class Application final
     void SampleColorAt(Vec2 view) noexcept;
     void EndColorSampling() noexcept;
     void SyncToolOverlays() noexcept;
-    bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
+    bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false, UINT scanCode = 0) noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
     [[nodiscard]] bool SaveDocument(bool saveAs) noexcept;
@@ -232,6 +232,7 @@ class Application final
     void SettleInteractions(bool applyPanels) noexcept;
     void ShowNotImplemented(UINT captionId) noexcept;
     void ShowNotImplementedNotice(UINT captionId) noexcept;
+    void ShowUnavailable(UINT captionId) noexcept;
     int RunFilesSelfTest() noexcept;
     void ZoomBy(double factor) noexcept;
     void ShowError(UINT stringId) noexcept;
@@ -256,6 +257,7 @@ class Application final
     EditorTool _tool = EditorTool::Move;
     POINT _lastPointer{};
     bool _spacePan = false;
+    bool _acceleratorShift = false;
     bool _canvasDrag = false;
     bool _opacityEditing = false;
     bool _layoutDirty = false;

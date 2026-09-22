@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="fade" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="currentColor" />
+      <stop offset="1" stop-color="currentColor" stop-opacity="0.08" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="16" height="16" rx="1.5" fill="url(#fade)" stroke="currentColor" stroke-width="1.25" />
+</svg>

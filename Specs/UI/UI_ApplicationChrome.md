@@ -54,42 +54,53 @@ only its separator is hittable, so the hole and the panel beneath keep their own
 commits, Escape or capture loss restores the drag start; Left/Right step 8 DIP (Shift 32), Home/End go to the
 limits. The splitter owns the clamp (canvas ≥ 200 DIP, layers 160–480 DIP); `ChromeHost` keeps the preferred width
 across resizes and reports every change through the layout handler, and the host re-syncs the viewport on the next
-frame. Pane bounds are applied on the next `Prepare`, never inside the change callback: in an EmbeddedHost a bounds
-change during a captured drag invalidates the interaction revision and the next pointer event would cancel the drag.
-There is no app-owned split geometry any more.
+frame. Pane bounds are applied on the next `Prepare`, never inside the change callback. That layout keeps the drag
+while the splitter stays enabled and visible. There is no app-owned split geometry any more.
 
 ## Tool rail
 
-The rail is a DxUi `Toolbar` holding sixteen icon-only `Button`s in `EditorTool` order (Move, Marquee, Lasso, Magic
-Wand, Crop, Brush, Eraser, Spot Healing Brush, Clone Stamp, Smear, Gradient, Shape, Eyedropper, Hand, Zoom, No Tool).
+The rail is a DxUi `Toolbar` holding fifteen icon-only `Button`s in `EditorTool` order (Move, Marquee, Lasso, Magic
+Wand, Crop, Brush, Eraser, Spot Healing Brush, Clone Stamp, Smear, Gradient, Shape, Eyedropper, Hand, Zoom).
 `Toolbar` is a plain panel with no automatic layout and `Toggle` paints a switch, so the host lays the buttons out
-itself: 40 DIP squares inset 4 DIP, 2 DIP apart, top to bottom from the tab band (`ChromeHost::ToolButtonBoundsDip`),
-hidden when they would overlap the palette wells or the status strip. The selected tool is the button with the pressed visual
-(`Button::SetPressedVisual`), re-applied on every `Prepare`. Each button carries a Segoe Fluent Icons glyph
-(`EditorToolGlyph`), a tooltip `"<name> (<key>)"` and an accessible name. `HostTests` proves every glyph exists in
-the installed Segoe Fluent Icons font and that keys, glyphs and names are unique.
+itself: 48 DIP wide by 40 DIP tall, flush with the rail so a hover or click on the left edge hits the tool, the
+glyph centered, 2 DIP apart, top to bottom from the tab band (`ChromeHost::ToolButtonBoundsDip`),
+hidden when they would overlap the palette wells or the status strip. When at least one tool does not fit, the last
+slot that still fits is a More button (`ellipsis-vertical`, `IDS_MORE_TOOLS`) and the tools that do not fit move
+into a card opened from that button, to the right of the rail. Choosing a tool, pressing Escape, or clicking
+outside the card closes it. The selected tool is the button with the pressed visual
+(`Button::SetPressedVisual`), re-applied on every `Prepare`. Each tool button strokes its SVG at about 22 DIP in the
+button text color. Lucide icons keep their upstream paths and are drawn with a 1.25 stroke (the shipped files use 2,
+which is too heavy at this size). The bandage is the Lucide icon rotated 45°. Smear uses Lucide `droplet`. Gradient
+and Shape are authored pictures (`RedPrism/Icons/gradient.svg`, a currentColor fade, and `shape.svg`, a square
+overlapping a circle), not Lucide files. Segoe Fluent Icons (`EditorToolGlyph`) are the fallback when that
+document cannot be created, drawn with DxUi `FontRole::Icon` when that font is installed and with a Unicode
+stand-in otherwise. A tooltip is `"<name> (<key>)"` and the accessible name is the tool. `HostTests` proves every
+Fluent fallback glyph exists in the installed icon font and that keys, glyphs and names are unique. The self-test
+creates all fifteen documents and requires every visible tool button to draw its icon. A tool that does not fit
+the rail is created but not drawn until More opens it. The self-test opens More when the rail overflows, chooses
+the first hidden tool from the card, and returns to Move.
 
-| Tool | Key | Glyph |
-| --- | --- | --- |
-| Move | V | U+E7C2 |
-| Marquee | M | U+EF20 |
-| Lasso | L | U+EC87 |
-| Magic Wand | W | U+F4A5 |
-| Crop | C | U+E7A8 |
-| Brush | B | U+E70F |
-| Eraser | E | U+E75C |
-| Spot Healing Brush | J | U+E90F |
-| Clone Stamp | S | U+E8C8 |
-| Smear | R | U+EA99 |
-| Gradient | G | U+EB42 |
-| Shape | U | U+E7FB |
-| Eyedropper | I | U+EF3C |
-| Hand | H | U+E7C9 |
-| Zoom | Z | U+E71E |
-| No Tool | A | U+E711 |
+| Tool | Key | Lucide | Fluent fallback |
+| --- | --- | --- | --- |
+| Move | V | move | U+E759 |
+| Marquee | M | square-dashed | U+EF20 |
+| Lasso | L | lasso | U+F1BE |
+| Magic Wand | W | wand-sparkles | U+F4A5 |
+| Crop | C | crop | U+E7A8 |
+| Brush | B | brush | U+E76D |
+| Eraser | E | eraser | U+E75C |
+| Spot Healing Brush | J | bandage | U+E95E |
+| Clone Stamp | S | stamp | U+E8C8 |
+| Smear | R | droplet | U+F271 |
+| Gradient | G | authored gradient | U+EF90 |
+| Shape | U | authored square and circle | U+E739 |
+| Eyedropper | I | pipette | U+EF3C |
+| Hand | H | hand | U+EB8A |
+| Zoom | Z | search | U+E8A3 |
 
-Tool keys apply when the canvas has focus; Space pans while held. X swaps the foreground and background wells and D
-resets them to black over white, the legacy canvas key bindings.
+Tool keys apply when the canvas has focus; Space pans while held. X and D are palette commands
+(`kCommandSwapPalette`, `kCommandResetPalette`), not anonymous keys: the canvas key and the rail hot zone both
+call `Application::OnCommand`.
 
 The rail buttons are icon-only DxUi buttons (a DxUi toggle paints as a switch, glyph or not); the active tool's
 button carries the pressed look as its latch, and `SyncToolVisuals` writes a latch only between presses — while a
@@ -130,9 +141,14 @@ transforms the selected pixels instead (`TransformCommand`: a `Floating Selectio
 and a distortion). Undo during a pending edit cancels it; switching tools or selecting another layer commits it. The transform contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
-The bottom 48 DIP of the rail hold the palette wells: the background `ColorSwatch` behind, the foreground in front
-(26 DIP squares offset 14 DIP, the legacy palette layout), each with a tooltip and accessible name. Clicking a well
-opens the color picker for that well.
+The bottom 48 DIP of the rail are one palette control. The foreground and background squares, 20 DIP each, overlap
+by 6 DIP, foreground in front, so both colors stay readable. Clicking a square opens the color picker for that
+color. The step leaves two 14 DIP dark notches, and each notch is the icon and its hotspot. `move-diagonal-2` fills
+the notch at the black square's top-right and swaps the two colors (the same exchange as X). `rotate-ccw` fills the
+notch under the black square and left of the white one, and restores black over white (the same reset as D).
+Neither notch covers a swatch, so the glyph stays on the rail and a click there does not open the picker. Hover and
+press fill that notch; the glyph stays on top. Both have tooltips and accessible names (`IDS_PALETTE_SWAP`,
+`IDS_PALETTE_RESET`).
 
 ## Selection tools
 
@@ -146,11 +162,12 @@ Expand and Contract, each with a pixel amount (1–500), enabled with a non-empt
 and, pinned right, Deselect when a selection exists and `Empty selection` when it encloses nothing. Every string is
 a STRINGTABLE entry (`IDS_SELECTION_*`, `IDS_WAND_*`).
 
-`CanvasOverlay` draws the selection outline in every tool as marching ants (a white line under a black 4/4 dash; the
-dash is static until an animation timer arrives), clipped to the hole, from a path geometry rebuilt only when the
-selection or the view mapping changes; and the draft being drawn (freehand and polygonal polylines, the polygonal
-rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle or ellipse) as a white
-line over a dark one. Outline and draft changes re-composite chrome only, never the document.
+`CanvasOverlay` draws the selection outline in every tool as marching ants (a white line under a black 4/4 dash).
+The dash offset advances one cycle every 400 ms while a non-empty outline is showing and the window is visible,
+powered, and not occluded; the path geometry is rebuilt only when the selection or the view mapping changes. A
+settled document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
+polylines, the polygonal rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle
+or ellipse) is a white line over a dark one. Outline and draft changes re-composite chrome only, never the document.
 
 Pointer rules in the hole (`Application::SelectionPress` / `SelectionPointerMove` / `SelectionRelease`): the
 modifiers at the press pick the mode (Shift adds, Alt subtracts). In New mode a press inside a non-empty selection
@@ -208,7 +225,7 @@ The Brush and Eraser share one header (`ChromeHost::BuildBrushHeader`, mirrored 
 `BrushInspectorState`, never re-laid out from a chrome callback): the tool name; for the Brush a Mode (Paint /
 Erase); Size (1–2000 px), Hardness (0–100 %) and Opacity (1–100 %) steppers; and, while the active layer's mask is
 selected, Paint (Black - Hide / White - Reveal) with a `Mask` note pinned right, otherwise Color with the foreground
-`ColorSwatch`, which opens the color picker like the rail's well. Strings are `IDS_BRUSH_*`; the budget error is
+`ColorSwatch`, which opens the color picker like the rail's well. The stroke paints that foreground color. Strings are `IDS_BRUSH_*`; the budget error is
 `IDS_ERROR_BRUSH_BUDGET`.
 
 `CanvasOverlay` draws the tip as a ring of the brush diameter around the pointer (a white 2.5 DIP line under a
@@ -238,8 +255,9 @@ Spot Healing, Clone Stamp and Smear share the brush header (`BrushInspectorState
 (Content-Aware / Create Texture / Proximity Match) for Spot Healing; Aligned and This Layer / All Layers for Clone
 Stamp, with `Alt-click to set the source` pinned right until a source exists; Mode (Liquify / Blur / Smudge) for
 Smear, whose opacity is labelled Strength. Neither Clone Stamp nor Smear shows the color swatch. The tip ring is
-their cursor; Clone Stamp adds a crosshair at the point it copies from, following the pointer once a stroke fixed
-the offset. Pointer rules: Alt-click with Clone Stamp sets the source; a press starts a stroke of the tool's kind
+their cursor, except while Alt is held with Clone Stamp: the ring hides and the system cursor becomes a crosshair,
+so the click that sets the source is waiting. Clone Stamp adds a crosshair at the point it copies from. The crosshair stays on the source until a
+stroke fixes the offset, then follows the pointer while that stroke is dragged and afterwards. Pointer rules: Alt-click with Clone Stamp sets the source; a press starts a stroke of the tool's kind
 (Smear's Liquify and Smudge start a warp instead, shown live through the stroke preview), Shift-click a line;
 release, leaving the window or a tool switch commits, Escape drops; a stroke on a mask does nothing for Spot Healing
 and Clone Stamp and reports `IDS_ERROR_SMEAR_MASK` for Liquify and Smudge; Clone Stamp without a source reports
@@ -320,10 +338,47 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
-| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
+| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default), Keyboard Shortcuts |
 | Help | About RedPrism (version from `Common/Version.h`) |
 
-StatusStrip shows zoom percent, document size, and the current tool with its key. The tab title is the file name
+Every finished user action is a command, with no exception for an action whose only control is local. A canvas key,
+a menu item, and a rail hot zone are the same kind of action. Each one MUST have one stable integer id declared on
+`ChromeHost` (`kCommand…`). The id is the name a settings override will use; the id does not change when the chord
+does. `ChromeHost::CommandShortcuts` is the default chord for every id, including a command that has no menu row,
+and the caption's tab column is that chord. The Keyboard Shortcuts card lists those rows. A key, menu item, or
+control runs the action only by calling `Application::OnCommand` with that id. The key or the control does not call
+the session operation itself. Swap foreground and background is `kCommandSwapPalette` (default X). Restore black
+over white is `kCommandResetPalette` (default D). The settings document does not store chord overrides yet; when it
+does, each override names one of these ids. A letter chord (`Ctrl+S`, `V`, `X`) is the virtual key of that
+letter, so it follows the key that the active layout labels with that letter. It is not a fixed column on a US
+keyboard. The chords whose legend is not a letter are a physical key instead, set-1 scan code, the same rule
+RedSalamander uses for zoom. The Keyboard Shortcuts card and the menu accelerator column show a position key by the name the active layout
+gives that scan code (`GetKeyNameTextW`). A letter or digit stays the character, because that chord follows the
+key that produces it. Named keys (arrows, Delete, F2, Backspace) use the layout's name for that key. The catalog
+chord stays the canonical label the self-test compares to the STRINGTABLE. A layout change retitles the displayed
+key and does not move the binding. Numpad `+` and `-` stay `VK_ADD` and `VK_SUBTRACT`, separate from the number row.
+
+| Command | Shown chord | Identity |
+| --- | --- | --- |
+| Zoom In | Ctrl++ | number row, scan `0x0D`, the key immediately left of Backspace (US `=` / `+`); also numpad `+` |
+| Zoom Out | Ctrl+- | number row, scan `0x0C`, the key immediately right of `0` (US `-` / `_`); also numpad `-` |
+| Next Blend Mode | Shift+= | the same number-row plus key, scan `0x0D` |
+| Previous Blend Mode | Shift+- | the same number-row minus key, scan `0x0C` |
+| Larger / Smaller Brush | `]` / `[` | scans `0x1B` and `0x1A` (US `]` and `[`) |
+| Harder / Softer Brush | Shift+`]` / Shift+`[` | those same bracket keys |
+| Move Layer Up / Down | Ctrl+`]` / Ctrl+`[` | those same bracket keys |
+| Zoom Fit / Actual Pixels | Ctrl+0 / Ctrl+1 | the number-row digit keys |
+| Arrows, Delete, F2, Space, Backspace, Enter, Escape | as labeled | those named keys |
+
+Choosing a tool (`kCommandSelectToolBase` plus the `EditorTool` index),
+nudging the selection, the layer, or the selected pixels, a smaller or larger brush, a softer or harder brush,
+the previous or next blend mode, and the Delete key (`kCommandDeleteKey`) are commands in that same catalog.
+Shift on a nudge command steps by ten. Holding Space to pan, typing into an open edit, and Escape or Enter that
+confirms or cancels an edit already under way are gestures of that edit, not separate commands.
+
+View › Keyboard Shortcuts lists every command in `ChromeHost::CommandShortcuts`, menu rows and local commands alike.
+The self-test checks each STRINGTABLE tab column against that catalog. StatusStrip shows zoom percent, document size,
+and the current tool with its key. The tab title is the file name
 (or Untitled) with a dirty mark when history is modified.
 
 ## Unimplemented functions
@@ -332,10 +387,12 @@ The shell exposes the documented command surface through menus and the tool rail
 the localized notice `IDS_NOT_IMPLEMENTED` ("{0} is not implemented yet.", the function named by its own caption
 without its mnemonic, accelerator column or ellipsis) through `Application::ShowNotImplemented`, and change nothing
 else: no document, history, selection, tool or viewport change, no side effect before or after the notice. The
-notice is an OK box owned by the main window, shown from the message loop after the command or click that raised
-it returns (never from inside a DxUi dispatch); quiet runs (`--self-test`, `--screenshot`, `--bench`) count it
-instead of showing it. A stub leaves with its implementation, and the notice never appears for an implemented
-function. No exposed function awaits an implementation since C16 closed
+notice is a card over the canvas (`ChromeHost::ShowNotice`), not a message box, shown from the message loop after
+the command or click that raised it returns (never from inside a DxUi dispatch). OK or Escape dismisses it. Quiet
+runs (`--self-test`, `--screenshot`, `--bench`) count it instead of showing it. A color or filter command that
+cannot run on the active layer shows the same card with `IDS_CMD_UNAVAILABLE` ("{0} cannot be used on this layer.")
+and does not open an empty panel. A stub leaves with its implementation, and the not-implemented notice never
+appears for an implemented function. No exposed function awaits an implementation since C16 closed
 ([`Completeness_2026-09-21.md`](../Plans/Done/Completeness_2026-09-21.md)); a function surfaced ahead of its
 implementation joins a table here until it lands. The self-test raises the notice under quiet UI and checks that
 the count rises by one while the document and the history stay as they were.
@@ -343,10 +400,11 @@ the count rises by one while the document and the history stay as they were.
 ## Layers panel
 
 The layers Tree lists rows top-first (`DocumentSession::LayerRows`): names, `(hidden)` annotation for rows whose
-effective visibility is off, a folder glyph for groups, and depth indentation. Selecting a row selects the layer;
-toggling a group's expander updates `DocumentSession::CollapsedGroupIDs` (rows carry `HierarchyEntry::collapsed`).
-Tree has no drag API on the current DxUi pin; reorder stays a later interaction (C8) rather than a second retained
-toolkit.
+effective visibility is off, a folder glyph for groups (Segoe Fluent Icons when that font is installed), and depth
+indentation. Selecting a row selects the layer; toggling a group's expander updates
+`DocumentSession::CollapsedGroupIDs` (rows carry `HierarchyEntry::collapsed`). Dragging a row previews an insertion
+line and, on release, calls `DocumentSession::PlaceLayer`: the top or bottom of a row inserts beside it, the middle
+of a folder drops inside it, and Escape or capture loss cancels. A folder cannot be dropped into its own descendant.
 
 Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`IDxTreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
@@ -373,9 +431,11 @@ the user is typing in it.
 
 The palette (opaque ARGB foreground and background) is session state outside history
 (`DocumentSession::ForegroundColor` / `BackgroundColor`, `SwapPaletteColors`, `ResetPaletteColors`), as the legacy
-brush settings were. Clicking a well opens the `DxUi::ColorPicker` on a `CardPanel` floating over the canvas hole,
-8 DIP right of the rail and below the tool header; chrome composites over the canvas with premultiplied alpha, so the
-card is visible there. The picker edits the clicked well: field and hue-strip drags, typed R/G/B, six-digit hex and
+brush settings were. A brush stroke paints that foreground color; swapping or resetting changes the next stroke. The rail hot zones and the default keys run `kCommandSwapPalette` and `kCommandResetPalette`.
+Clicking a well opens the `DxUi::ColorPicker` on a `CardPanel` just above that well, 8 DIP
+right of the rail, so the card sits beside the palette instead of under the tool header. If the card would leave
+the window it stays below the tabs and above the status strip. Chrome composites over the canvas with premultiplied
+alpha, so the card is visible there. The picker edits the clicked well: field and hue-strip drags, typed R/G/B, six-digit hex and
 host-sampled colors (`ChromeHost::SampleColor`, the eyedropper feed) preview into the well; OK or Enter commit and
 notify the palette handler; Cancel, Escape (also when a picker child has focus) or capture loss restore the well.
 Pointer input inside the card belongs to chrome even though it lies in the hole; a canvas click outside it focuses

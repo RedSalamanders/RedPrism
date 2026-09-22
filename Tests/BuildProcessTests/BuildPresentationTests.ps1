@@ -81,3 +81,50 @@ if ($plainTrueColor) {
 }
 
 Write-Host 'PASS build presentation banner identity'
+
+$validated = 'DxUi update available: pinned aaaaaaaaaaaa, available bbbbbbbbbbbb. https://example . Update lock on a branch and run the product regressions. (Checked 2026-09-22 09:00:00Z)'
+$unvalidated = 'DxUi main bbbbbbbbbbbb has no successful completed validation; keep pinned aaaaaaaaaaaa. (Checked 2026-09-22 09:00:00Z)'
+$unavailable = 'DxUi update check unavailable; the exact pinned dependency remains selected. (Checked 2026-09-22 09:00:00Z)'
+if ((Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $validated) -ne 'Yellow' -or
+    (Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $unvalidated) -ne 'Red' -or
+    (Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $unavailable) -ne 'DarkYellow' -or
+    (Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice 'DxUi pin and main diverge; review lock before any change.') -ne 'DarkYellow' -or
+    $null -ne (Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice '   ')) {
+    throw 'DxUi update notices did not keep the RedSalamander severity colors.'
+}
+if ((Format-RedPrismDxUiUpdateNotice -Notice $validated) -ne $validated -or
+    $null -ne (Format-RedPrismDxUiUpdateNotice -Notice '')) {
+    throw 'DxUi update notice text was rewritten or a blank notice was shown.'
+}
+
+$buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw
+$restoreScript = Get-Content -LiteralPath (Join-Path $repo 'restore-dxui.ps1') -Raw
+if ($buildScript -notmatch 'restore-dxui\.ps1''\) -Platform \$Platform -MSBuildPath \$msbuild -CheckUpdates' -or
+    $restoreScript -notmatch 'Show-DxUiUpdateNotice -LockFile \$pinPath') {
+    throw 'The RedPrism build does not request the DxUi update advisory.'
+}
+
+Write-Host 'PASS DxUi update notice'
+
+$lucideLockPath = Join-Path $repo 'Dependencies\Lucide.lock.json'
+$lucideLock = Get-Content -LiteralPath $lucideLockPath -Raw | ConvertFrom-Json
+if ($lucideLock.repository -ne 'https://github.com/lucide-icons/lucide' -or
+    $lucideLock.commit -notmatch '^[0-9a-f]{40}$' -or $lucideLock.license -ne 'ISC') {
+    throw 'Lucide.lock.json is not the pinned ISC Lucide commit.'
+}
+$lucideLicense = Get-Content -LiteralPath (Join-Path $repo 'ThirdParty\Lucide\LICENSE') -Raw
+if ($lucideLicense -notmatch 'ISC License' -or $lucideLicense -notmatch 'Cole Bemis') {
+    throw 'ThirdParty/Lucide/LICENSE is missing the ISC grant or the Feather MIT notice.'
+}
+foreach ($icon in $lucideLock.icons) {
+    $svg = Join-Path $repo "ThirdParty\Lucide\icons\$icon.svg"
+    if (-not (Test-Path -LiteralPath $svg)) {
+        throw "Lucide tool icon is missing: $icon.svg"
+    }
+}
+$packageScript = Get-Content -LiteralPath (Join-Path $repo 'package.ps1') -Raw
+if ($packageScript -notmatch 'ThirdParty\\Lucide\\LICENSE') {
+    throw 'The package does not ship the Lucide license.'
+}
+
+Write-Host 'PASS Lucide pin and license'

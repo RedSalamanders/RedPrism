@@ -331,6 +331,21 @@ int Application::RunProductHardeningSelfTest() noexcept
                                           static_cast<int>(_tool), withoutAccessibility ? L"works" : L"fails"));
         return 5;
     }
+    // The padding to the left of the glyph is part of the button: a press there activates the same tool.
+    OnTool(EditorTool::Move);
+    {
+        const D2D1_RECT_F marquee = _chrome->ToolButtonBoundsDip(EditorTool::Marquee);
+        const int x = static_cast<int>(std::lround(scale));
+        const int y = static_cast<int>(std::lround((marquee.top + marquee.bottom) / 2.0f * scale));
+        OnPointer(WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+        OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+        OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+        if (_tool != EditorTool::Marquee || _chrome->Tool() != EditorTool::Marquee)
+        {
+            ReportSelfTestFailure(L"The left edge of the rail did not activate the Marquee.\n");
+            return 5;
+        }
+    }
     // The same click with the keyboard focus in the window (as a user's click has), so the accessibility placement
     // reports the chrome focused and the canvas-focus flip takes the real path.
     const HWND previousFocus = GetFocus();

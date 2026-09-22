@@ -238,6 +238,16 @@ void TestSessionGroups()
            "session.delete-folder-undo");
     Expect(Find(session.Document(), child) != nullptr && Find(session.Document(), child)->parentID == inner,
            "session.delete-folder-undo-parent");
+
+    DocumentSession order;
+    order.CreateDocument(32, 32, true);
+    const Guid lower = order.ActiveLayerID().value();
+    order.AddBlankLayer();
+    const Guid upper = order.ActiveLayerID().value();
+    Expect(order.PlaceLayer(upper, std::nullopt, lower, false, true), "session.place-before");
+    Expect(order.Document().has_value() && order.Document()->layers.front().id == upper, "session.place-before-order");
+    order.Undo();
+    Expect(order.Document().has_value() && order.Document()->layers.back().id == upper, "session.place-before-undo");
 }
 
 void TestHiddenParent()
@@ -521,14 +531,21 @@ void TestPaletteColors()
            "palette.defaults");
     session.SetForegroundColor(0x00336699u);
     Expect(session.ForegroundColor() == 0xFF336699u, "palette.opaque");
+    Expect(session.brushSettings.red == 0x33 / 255.0 && session.brushSettings.green == 0x66 / 255.0 &&
+               session.brushSettings.blue == 0x99 / 255.0,
+           "palette.foreground-is-brush-color");
     session.SwapPaletteColors();
     Expect(session.ForegroundColor() == 0xFFFFFFFFu && session.BackgroundColor() == 0xFF336699u, "palette.swap");
+    Expect(session.brushSettings.red == 1.0 && session.brushSettings.green == 1.0 && session.brushSettings.blue == 1.0,
+           "palette.swap-paints-white");
     session.CreateDocument(8, 8, true);
     const bool couldUndo = session.history.CanUndo();
     const bool modified = session.history.IsModified();
     session.ResetPaletteColors();
     Expect(session.ForegroundColor() == DocumentSession::kDefaultForegroundArgb &&
-               session.BackgroundColor() == DocumentSession::kDefaultBackgroundArgb,
+               session.BackgroundColor() == DocumentSession::kDefaultBackgroundArgb &&
+               session.brushSettings.red == 0.0 && session.brushSettings.green == 0.0 &&
+               session.brushSettings.blue == 0.0,
            "palette.reset");
     Expect(session.history.CanUndo() == couldUndo && session.history.IsModified() == modified,
            "palette.outside-history");
@@ -2224,6 +2241,15 @@ void TestBrushStroke()
     Expect(!session.ActiveLayer()->asset.has_value(), "brush.undo");
     session.Redo();
     Expect(session.ActiveLayer()->asset.has_value(), "brush.redo");
+    // The palette foreground is the paint color, including when the brush channels were set earlier.
+    DocumentSession colored;
+    colored.CreateDocument(80, 80, false);
+    colored.AddBlankLayer();
+    colored.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    colored.SetForegroundColor(0xFF00FF00u);
+    Expect(colored.BeginBrush(Vec2{40, 40}), "brush.foreground-begin");
+    const std::array<std::uint8_t, 4> green = StrokePixel(*colored.PendingBrush(), 40, 40);
+    Expect(green[0] == 0 && green[1] == 255 && green[2] == 0 && green[3] == 255, "brush.paints-foreground");
 }
 
 void TestBrushSoftAndCancel()
@@ -5809,6 +5835,105 @@ void TestMerge()
     Expect(!group.MergeLayers(groupPlan.value(), composite), "merge.stale-plan-refused");
 }
 
+void TestPendingEdits()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
+    // Undo during a brush stroke drops the stroke and leaves history where it was. Finish then paints nothing.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const int count = session.history.UndoCount();
+        const CanvasDocument before = session.Document().value();
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        Expect(session.BeginBrush(Vec2{10, 10}), "pending.brush-begins");
+        session.Undo();
+        Expect(session.PendingBrush() == nullptr && session.history.UndoCount() == count &&
+                   session.Document().value() == before,
+               "pending.undo-cancels-brush");
+        session.FinishBrush();
+        Expect(session.history.UndoCount() == count && ActivePixel(session, 10, 10) == red,
+               "pending.finish-after-undo");
+    }
+    // Redo during a gradient drops the gradient. A second Redo still restores the undone entry.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        session.SetOpacity(0.5);
+        session.Undo();
+        Expect(session.history.RedoName() == L"Layer Opacity", "pending.redo-armed");
+        Expect(session.BeginGradient(Vec2{1, 1}), "pending.gradient-begins");
+        session.Redo();
+        Expect(session.PendingGradient() == nullptr && session.history.RedoName() == L"Layer Opacity",
+               "pending.redo-cancels-gradient");
+        session.Redo();
+        Expect(session.history.RedoName().empty() && session.ActiveLayer() != nullptr &&
+                   std::fabs(session.ActiveLayer()->opacity - 0.5) < 1e-9,
+               "pending.second-redo-restores");
+    }
+    // Warp, a pixel move and a crop frame are the same kind of pending edit.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        const int count = session.history.UndoCount();
+        Expect(session.BeginWarp(Vec2{10, 10}), "pending.warp-begins");
+        session.Undo();
+        Expect(session.PendingWarp() == nullptr && session.history.UndoCount() == count, "pending.undo-cancels-warp");
+        SelectRect(session, 0, 0, 20, 20, false);
+        Expect(session.BeginPixelMove(), "pending.pixel-move-begins");
+        session.Undo();
+        Expect(session.PendingPixelMove() == nullptr && session.history.UndoName() == L"Select",
+               "pending.undo-cancels-pixel-move");
+        session.SetCropFrame(CropRect{5, 5, 40, 20});
+        const int cropped = session.history.UndoCount();
+        session.Undo();
+        Expect(!session.CropFrame().has_value() && session.history.UndoCount() == cropped, "pending.undo-cancels-crop");
+    }
+    // Cut on a hidden layer, and Cut while a color panel is open, leaves the clipboard and the pixels alone.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 0, 0, 20, 20, false);
+        session.ToggleVisibility(session.ActiveLayerID().value());
+        session.CutSelection();
+        Expect(!session.Clipboard().has_value() && ActivePixel(session, 5, 5) == red,
+               "pending.cut-hidden-keeps-pixels");
+        session.ToggleVisibility(session.ActiveLayerID().value());
+        session.BeginLevels();
+        Expect(session.PendingLevels().has_value(), "pending.levels-open");
+        session.CutSelection();
+        Expect(!session.Clipboard().has_value() && session.PendingLevels().has_value() &&
+                   ActivePixel(session, 5, 5) == red,
+               "pending.cut-during-levels-keeps-pixels");
+        session.CancelLevels();
+    }
+    // A paintable cut clears and publishes one clipboard.
+    {
+        DocumentSession session = PixelEditSession();
+        TwoColorLayer(session);
+        SelectRect(session, 0, 0, 20, 20, false);
+        session.CutSelection();
+        Expect(session.Clipboard().has_value() && session.history.UndoName() == L"Clear" &&
+                   ActivePixel(session, 5, 5)[3] == 0,
+               "pending.cut-clears");
+    }
+    // A selection over transparent pixels lifts nothing to clear, so the float is not inserted.
+    {
+        DocumentSession session = PixelEditSession();
+        session.SetForegroundColor(0xFFFF0000u);
+        SelectRect(session, 0, 0, 10, 10, false);
+        session.FillSelection(FillSource::Foreground);
+        session.Deselect();
+        SelectRect(session, 50, 10, 15, 10, false);
+        const std::size_t layers = session.Document().value().layers.size();
+        const int count = session.history.UndoCount();
+        session.BeginSelectionTransform();
+        Expect(!session.PendingTransformEdit().has_value() && session.Document().value().layers.size() == layers &&
+                   session.history.UndoCount() == count && session.history.UndoName() == L"Select" &&
+                   ActivePixel(session, 5, 5) == red,
+               "pending.float-aborts-when-clear-paints-nothing");
+    }
+}
+
 int wmain()
 {
 #if defined(_DEBUG)
@@ -5893,6 +6018,7 @@ int wmain()
     TestImageResize();
     TestCrop();
     TestMerge();
+    TestPendingEdits();
     if (gFailures != 0)
     {
         std::printf("%d document tests failed.\n", gFailures);

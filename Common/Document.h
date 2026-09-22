@@ -1206,8 +1206,11 @@ class DocumentSession
     void AddGroup();
     void RenameLayer(const Guid& id, std::wstring_view name);
     void ToggleVisibility(const Guid& id);
+    // `above` inserts just after that sibling (visually above it in the top-first list). `before` inserts just
+    // in front of that sibling instead (visually below it). `atBottom` is the root's bottom when `above` is empty.
     [[nodiscard]] bool PlaceLayer(const Guid& id, const std::optional<Guid>& parent,
-                                  const std::optional<Guid>& above = std::nullopt, bool atBottom = false);
+                                  const std::optional<Guid>& above = std::nullopt, bool atBottom = false,
+                                  bool before = false);
     void MoveActiveLayerOutOfGroup();
     // C16 (Specs/Document/Document_Model.md "Session edits"): the Layer menu's ordering, grouping and clipping
     // toggle, and the empty state after Close Project.
@@ -1526,7 +1529,8 @@ class DocumentSession
     void FillSelection(FillSource source);
     // Delete with a selection: image pixels become transparent (`Clear`); on a mask the selection fills with the
     // background color, as in Photoshop.
-    void ClearSelectedPixels();
+    // True when the selection was cleared as a history entry. False leaves the document unchanged.
+    bool ClearSelectedPixels();
     // The Delete key: clears the selection when there is one; otherwise deletes the targeted mask, or the layer.
     void DeleteKeyPressed();
     void DeleteLayerOrMask();
@@ -1741,6 +1745,7 @@ class DocumentSession
     void SetForegroundColor(uint32_t argb) noexcept
     {
         _foregroundArgb = argb | 0xFF000000u;
+        ApplyForegroundToBrush();
         RefreshGradient();
     }
     void SetBackgroundColor(uint32_t argb) noexcept
@@ -1751,16 +1756,27 @@ class DocumentSession
     void SwapPaletteColors() noexcept
     {
         std::swap(_foregroundArgb, _backgroundArgb);
+        ApplyForegroundToBrush();
         RefreshGradient();
     }
     void ResetPaletteColors() noexcept
     {
         _foregroundArgb = kDefaultForegroundArgb;
         _backgroundArgb = kDefaultBackgroundArgb;
+        ApplyForegroundToBrush();
         RefreshGradient();
     }
 
   private:
+    // The brush paints these channels. The palette foreground is that color, as in the legacy session.
+    void ApplyForegroundToBrush() noexcept
+    {
+        brushSettings.red = static_cast<double>((_foregroundArgb >> 16) & 0xFFu) / 255.0;
+        brushSettings.green = static_cast<double>((_foregroundArgb >> 8) & 0xFFu) / 255.0;
+        brushSettings.blue = static_cast<double>(_foregroundArgb & 0xFFu) / 255.0;
+    }
+    // True when Undo/Redo should not move history: an open color panel, or a pending edit that this call drops.
+    [[nodiscard]] bool CancelPendingEdit();
     void Restore(const DocumentHistory::Snapshot& snapshot);
     static void AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers);
     static void ReleaseDetachedClipping(std::vector<ImageLayer>& layers);

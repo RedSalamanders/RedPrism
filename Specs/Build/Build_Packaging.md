@@ -36,6 +36,7 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | Dependency DLLs | The executable's import table, walked transitively with `dumpbin /dependents`: a name found next to the executable (vcpkg's app-local copies: `yyjson.dll`, `zip.dll`, `z.dll`) or in the Visual C++ redistributable CRT folder is staged and walked in turn; every other import is Windows' own. Without `dumpbin` every DLL next to the executable and the standard CRT set are staged instead |
 | Visual C++ CRT | App-local from the installed Visual Studio's `VC\Redist\MSVC\<version>\<platform>\Microsoft.VC*.CRT` (`vcruntime140*.dll`, `msvcp140*.dll` as imported). Release links `/MD`; the Debug CRT is not redistributable, so a package is always Release. The Universal CRT ships with Windows 10 and later and is not staged |
 | `ThirdPartyNotices\<port>.txt` | vcpkg's `share/<port>/copyright` for `yyjson`, `libzip`, `zlib`, `clipper2` and `wil` |
+| `ThirdPartyNotices\lucide.txt` | `ThirdParty/Lucide/LICENSE` (ISC, plus the MIT notice for the Feather-derived icons) |
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
 | `Languages\<tag>\RedPrism.resources.dll` | Not staged in v1 (no translation exists); a release with one adds the folder ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), Strings) |
 

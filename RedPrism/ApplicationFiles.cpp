@@ -138,8 +138,20 @@ void Application::ShowNotImplementedNotice(UINT captionId) noexcept
         return;
     }
     const std::wstring text = FormatStringResource(nullptr, IDS_NOT_IMPLEMENTED, CaptionName(captionId));
-    const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
-    MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
+    if (_chrome)
+    {
+        _chrome->ShowNotice(text);
+    }
+}
+
+void Application::ShowUnavailable(UINT captionId) noexcept
+{
+    if (_quietUi || !_chrome)
+    {
+        return;
+    }
+    const std::wstring text = FormatStringResource(nullptr, IDS_CMD_UNAVAILABLE, CaptionName(captionId));
+    _chrome->ShowNotice(text);
 }
 
 Application::ImageOpenChoice Application::PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept
@@ -166,6 +178,9 @@ Application::ImageOpenChoice Application::PromptImageOpen(const std::wstring& fi
 
 bool Application::ConfirmDiscardChanges() noexcept
 {
+    // A stroke still in progress is not a history entry. Settle it before the prompt so Save writes it and a
+    // clean document plus a live stroke still counts as modified.
+    SettleInteractions(false);
     if (!_session.Document().has_value() || !_session.history.IsModified())
     {
         return true;

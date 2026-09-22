@@ -185,6 +185,7 @@ foreach ($port in 'yyjson', 'libzip', 'zlib', 'clipper2', 'wil') {
         Write-Warning "No vcpkg copyright file for $port under $share"
     }
 }
+Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty\Lucide\LICENSE') -Destination (Join-Path $notices 'lucide.txt')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
 

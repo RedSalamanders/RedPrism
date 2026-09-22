@@ -196,7 +196,10 @@ clip (they already lie on it); Add and Subtract go through `ApplySelection`. One
 The stroke model, the coverage engines, the commit and the live preview live in
 [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md); this is the session's contract. Brush state on
 `DocumentSession`: `brushSettings` (`BrushSettings`: diameter 1–2000 px, default 40; hardness 0–1, default 1;
-straight red/green/blue 0–1, default black; opacity 0.01–1, default 1; `IsValid` gates every field), `brushMode`
+straight red/green/blue 0–1, default black; opacity 0.01–1, default 1; `IsValid` gates every field). The red,
+green and blue channels are the foreground color: `SetForegroundColor`, `SwapPaletteColors` and `ResetPaletteColors`
+write them,
+and a stroke copies them when it begins (a mask still paints black or white). `brushMode`
 (Paint default, Erase: the Brush tool's own erase mode) and `maskPaintWhite` (default false: a mask is painted
 black, hiding). `CanPaint` needs a document, no pending transform, no stroke in progress, an active layer that is
 visible with its ancestors and is not an adjustment layer (a folder only through its mask), an enabled mask when the
@@ -211,7 +214,9 @@ mask is selected, and no explicitly empty selection.
   (`PendingBrush` becomes null). `FinishBrush` settles the tail and records one entry (`Brush Stroke`, `Erase`,
   `Paint Mask`) unless nothing was painted or the layer's pixels or transform changed under the stroke;
   `TakeLastBrushCommit` hands the host that commit (raster and grid rectangle) once, for the preview's adoption.
-  `CancelBrush` drops the stroke. Undo and Redo of a stroke share every untouched tile.
+  `CancelBrush` drops the stroke. The first Undo or Redo while a stroke, warp, pixel move, shape draft or crop
+  frame is pending drops that edit and does not move history; a committed stroke's Undo and Redo still share
+  every untouched tile.
 - `ShiftLineStart` is the last sample of the previous stroke on the same layer or mask, for Shift-click lines.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
   `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
@@ -318,10 +323,12 @@ mask, no pending transform or stroke, and no explicitly empty selection.
   layer as shown (a mask as opaque gray) to the region through the selection coverage; `CanCopyMerged` needs a
   layer with pixels and `RenderMergedPixels(composite)` crops the host's document-size composite the same way.
   `CopySelection` and `CopyMergedSelection(composite)` keep the copy on the session (`Clipboard`); `CutSelection`
-  copies then clears; `CanPaste` / `Paste` insert the copy in place as a new layer (`Layer N`; `Paste`; the selection
-  dropped); `PasteImage(image)` centers another app's pixels; `LayerViaCopy` copies the selection to a new layer
-  without the clipboard (`Layer via Copy`), or `DuplicateActiveLayer` without one. `NextLayerName` is the first
-  unused `Layer N`.
+  copies then clears, and when the clear does not paint (`CanPaint` is false, or the clear allocates nothing) the
+  clipboard is left as it was and the pixels stay; `CanPaste` / `Paste` insert the copy in place as a new layer
+  (`Layer N`; `Paste`; the selection dropped); `PasteImage(image)` centers another app's pixels; `LayerViaCopy`
+  copies the selection to a new layer without the clipboard (`Layer via Copy`), or `DuplicateActiveLayer` without
+  one. `NextLayerName` is the first unused `Layer N`. `BeginSelectionTransform` restores the document and records
+  nothing when `ClearSelectedPixels` does not paint.
 
 ## Color adjustments and filters (C12)
 

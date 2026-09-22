@@ -14,6 +14,15 @@ lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orche
 DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxUi.lock.json` into
 `.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. See [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
 
+Lucide is the tool-rail picture source. It is not a vcpkg port and not an icon font. `Dependencies/Lucide.lock.json`
+names `https://github.com/lucide-icons/lucide` and one commit. `ThirdParty/Lucide/icons/` holds only the tool SVGs
+copied from that commit, and `ThirdParty/Lucide/LICENSE` is the ISC license plus the MIT notice for icons derived
+from Feather. The app does not clone the Lucide repository, does not take its npm packages, and does not build a
+private icon font. The rail strokes those SVGs with Direct2D (`LucideToolButton`) at stroke width 1.25 and rotates
+the bandage 45°. The palette hot zones use `rotate-ccw` and `move-diagonal-2` from the same pin. Gradient and Shape
+use authored SVGs under `RedPrism/Icons/`. Segoe Fluent Icons remain the fallback glyph. A newer Lucide commit is
+adopted by replacing the locked files and the lock together.
+
 ## Toolchain
 
 | Item | Required value |
@@ -99,7 +108,12 @@ annotations as the sanitized application and DxUi objects and links cleanly. The
 are wired from that tree. `Directory.Build.targets` copies `yyjson.dll`, `zip.dll`, and the zlib runtime (`z.dll` /
 `zd.dll` or `zlib1.dll`) next to `RedPrism.exe`, `HostTests.exe`, `IoTests.exe`, and `CompositionTests.exe`.
 
-`build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform before MSBuild.
+`build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform before MSBuild, then
+`restore-dxui.ps1 -CheckUpdates`. That check compares the lock with DxUi `main` and prints one advisory. It does
+not change the pin and does not fail a restore whose pin is valid. A newer `main` commit with a successful completed
+`ci.yml` push run is yellow (`DxUi update available: pinned <old>, available <new>`). A newer `main` commit without
+that validation is red. A pin ahead of or diverged from `main`, and a lookup that cannot run, are dark yellow. The
+same pin is quiet. Colors are presentation only.
 
 ## Version stamp
 
@@ -113,7 +127,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | Script | Duty |
 | --- | --- |
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan]` | Restore WIL, yyjson, libzip, and Clipper2 (`-Asan`: the sanitized x64 tree) |
-| `.\restore-dxui.ps1 [-Platform x64\|ARM64]` | Restore the exact DxUi pin |
+| `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |

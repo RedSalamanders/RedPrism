@@ -21,8 +21,10 @@ A project is either:
 with a ZIP signature (`PK` 03 04, 05 06 or 07 08); any other file (an image dropped on the window) is not a project.
 
 ZIP I/O uses libzip through `unique_zip` (`zip_discard` on abandon, `zip_close` only on commit). Handles are never
-left raw. ZIP members are opened with `zip_source_win32w_create`. Reparse points and `..` path segments in asset names
-are rejected (`ProjectIoStatus::Invalid`).
+left raw. ZIP members are opened with `zip_source_win32w_create`. `..` in an asset name is rejected. An exploded
+asset or `manifest.json` is rejected when any path component after the project root is a reparse point
+(`ExplodedMemberPathAllowed`, `ProjectIoStatus::Invalid`). A missing file is `MissingImage`, not a reparse failure.
+A truncated, empty, or non-ZIP `.prism` is `Invalid` or `MissingImage` and yields no layers.
 
 Atomic save: exploded projects write into `dest.saving`, then rotate `dest` → `dest.old` and `dest.saving` → `dest`.
 ZIP projects write `path.tmp` then `ReplaceFileW`. A save that fails validation writes nothing and leaves the previous

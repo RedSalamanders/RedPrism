@@ -39,8 +39,9 @@ A `BrushStroke` edits one layer's image, or its mask, on a pixel grid of its own
 - **Selection clip**: while a selection exists the stroke multiplies its coverage by the selection's coverage
   raster (antialiased or hard, `SelectionGeometry::Coverage`), sampled at the grid pixel's document position; an
   empty selection paints nothing.
-- **Tile composition** (CPU, only the tiles the segments touch, 256 × 256 of the grid): paint is
-  `color × coverage` over the tile's base pixels (the layer's pixels, or the fill beyond them), erase is
+- **Tile composition** (CPU, only the tiles the segments touch, 256 × 256 of the grid): paint is the foreground
+  color (`brushSettings` red, green and blue, copied when the stroke begins) times coverage over the tile's base
+  pixels (the layer's pixels, or the fill beyond them), erase is
   `base × (1 − coverage)`, and a mask is painted toward white or black (`maskPaintWhite`) in Gray8. Each tile keeps
   its base, its settled density, its 0–255 preview coverage and its composed image; `TakeChanged` hands the host the
   tiles whose image changed since the last call.

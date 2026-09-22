@@ -90,8 +90,25 @@ bool Application::BeginColorEdit(int command) noexcept
     default:
         return false;
     }
+    if (!_session.HasColorEdit())
+    {
+        UINT captionId = 0;
+        for (const ChromeHost::CommandShortcutDefault& row : ChromeHost::CommandShortcuts())
+        {
+            if (row.command == command)
+            {
+                captionId = row.captionId;
+                break;
+            }
+        }
+        if (captionId != 0)
+        {
+            ShowUnavailable(captionId);
+        }
+        return false;
+    }
     DocumentChanged();
-    return _session.HasColorEdit();
+    return true;
 }
 
 void Application::AddAdjustmentLayer(int command) noexcept

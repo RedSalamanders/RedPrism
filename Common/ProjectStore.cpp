@@ -1257,8 +1257,9 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
 
 [[nodiscard]] ProjectIoStatus LoadExploded(const std::wstring& root, Manifest& manifest)
 {
+    const auto attributes = [](const std::wstring& path) -> std::uint32_t { return GetFileAttributesW(path.c_str()); };
     const std::wstring metadata = root + L"\\manifest.json";
-    if (!PathIsInside(root, FullPath(metadata.c_str())))
+    if (!ExplodedMemberPathAllowed(root, FullPath(metadata.c_str()), attributes))
     {
         return ProjectIoStatus::Invalid;
     }
@@ -1278,7 +1279,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
                         {
                             const std::wstring path = root + L"\\images\\" + Utf8ToWide(file);
                             const std::wstring full = FullPath(path.c_str());
-                            if (!PathIsInside(root, full) || HasReparse(full.c_str()))
+                            if (!ExplodedMemberPathAllowed(root, full, attributes))
                             {
                                 return ProjectIoStatus::Invalid;
                             }

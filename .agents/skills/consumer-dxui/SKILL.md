@@ -11,8 +11,12 @@ the pin. Do not float onto sibling `main`.
 ## Pin
 
 - Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 2, and `targets: ["DxUi"]`. Current pin: `7e3be94c9e3caa46d2997d28ce2251fbb9556619` (DxUi branch
-  `codex/editor-consumer-controls`; move to the merge commit once it lands on `main`).
+  commit, `apiRevision` 2, and `targets: ["DxUi"]`. Current pin: `c403052bad26c97ba23995e136672c32c85ccbfc` (merge of
+  DxUi pull request 19 on `main`).
+- `build.ps1` passes `-CheckUpdates` to `restore-dxui.ps1`. The pinned `Show-DxUiUpdateNotice` prints one advisory
+  when DxUi `main` is not the lock. It does not edit the lock or fail a valid restore. Yellow means a validated
+  newer `main`; red means `main` moved without a successful `ci.yml` run; dark yellow means the pin is ahead,
+  diverged, or the lookup failed. The same pin is quiet.
 - Restore into an isolated `.build/dependencies/DxUi/` fingerprint. Restore clones from `Z:\src\DxUi` when that
   checkout already contains the commit, so a library commit made locally is consumable before it is pushed. Do not
   checkout, reset, or edit `Z:\src\DxUi` from RedPrism restore.
@@ -29,12 +33,13 @@ the pin. Do not float onto sibling `main`.
   `Button::OnMouseUp` clears `_pressed` before invoking the click, so sync the latch from `DebugIsPressed()` once the
   pointer is up (`ChromeHost::SyncToolVisuals` defers while `_pointerPressed`), never on every `Prepare` and never
   during a press.
-- Icon-only buttons draw `_text` with `FontRole::Icon` (Segoe Fluent Icons). Pass a code point that exists;
-  `HostTests` checks the rail glyphs against the installed font.
 - `Panel` paints no background; the embedded surface is cleared transparent and composited with premultiplied
   alpha. Composite chrome after the canvas blit so tooltips and popups over the hole stay visible.
 - `Tree` expects a borrowed `IDxTreeModel` (`GetVisibleItem` fills `TreeItemData` with `id`, `text`, `depth`,
-  `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`. No drag API.
+  `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`.
+  `SetReorderEnabled` lets a row drag call `OnTreeReorder` once; the library does not move the model.
+- Icon-only buttons draw `_text` with `FontRole::Icon` when Segoe Fluent Icons is installed, and with `FontRole::Body`
+  otherwise so a Unicode stand-in does not become a missing-glyph box.
 - Native flyouts go through `DxUi::ShowNativeHMenuContextMenu(owner, screen, HMENU, palette)`; an empty `HMENU`
   must not be shown.
 - An embedded view owns no window, so a DxUi "screen" point (menu items, context menus) is relative to the origin
@@ -58,7 +63,8 @@ the pin. Do not float onto sibling `main`.
 - Product theme adapters stay in RedPrism (`ThemePalette.h`). Splitter, ColorPicker, and NumericStepper ship in the
   pinned library (DxUi `Specs/Plans/Done/EditorConsumerControls_2026-09-20.md`); consume them through `ChromeHost`
   (splitter owns the layers clamp, picker on a CardPanel over the hole, stepper for layer opacity), never clone them.
-- Never call `SetBounds` (or change the tree, visibility or enabled state) from inside a captured DxUi drag callback
-  such as `Splitter` Preview: the EmbeddedHost interaction revision changes and the next pointer event cancels the
-  drag. Record the new width and arrange on the next `Prepare`; sync the viewport through the layout handler.
+- Never call `SetBounds` from inside a captured DxUi drag callback such as `Splitter` Preview. Record the new
+  width and arrange on the next `Prepare`. A bounds revision keeps the drag while the splitter stays in the tree,
+  enabled and visible. Hiding, disabling, removing it, or resizing the view still cancels. Sync the viewport
+  through the layout handler, not from inside the callback.
 - Library `test.ps1` does not replace RedPrism product tests.

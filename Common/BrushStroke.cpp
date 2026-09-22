@@ -2663,33 +2663,35 @@ void DocumentSession::FillSelection(FillSource source)
     CommitStroke(edit);
 }
 
-void DocumentSession::ClearSelectedPixels()
+bool DocumentSession::ClearSelectedPixels()
 {
     if (!_document.has_value() || !_document->selection.has_value() || !CanPaint())
     {
-        return;
+        return false;
     }
     if (_maskSelected)
     {
+        const int before = history.UndoCount();
         FillSelection(FillSource::Background);
-        return;
+        return history.UndoCount() == before + 1;
     }
     const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr || !layer->asset.has_value())
     {
-        return;
+        return false;
     }
     const std::shared_ptr<BrushStroke> edit = MakeRasterEdit(*layer, false);
     if (!edit)
     {
-        return;
+        return false;
     }
     edit->SetEditName(L"Clear");
     if (!edit->ClearPixels() || !edit->HasPaint())
     {
-        return;
+        return false;
     }
     CommitStroke(edit);
+    return true;
 }
 
 void DocumentSession::DeleteLayerMask()
@@ -3008,7 +3010,13 @@ void DocumentSession::BeginSelectionTransform()
     const std::optional<Guid> beforeActive = _activeLayerID;
     // Outer entry: closed by CommitTransform (merge) or CancelTransform (restore).
     BeginEdit(L"Transform Selection");
-    ClearSelectedPixels();
+    if (!ClearSelectedPixels())
+    {
+        _document = *before;
+        _activeLayerID = beforeActive;
+        EndEdit();
+        return;
+    }
     const std::optional<std::size_t> index = LayerIndex(_document->layers, source.id);
     if (!index.has_value())
     {
@@ -3418,13 +3426,18 @@ bool DocumentSession::CopyMergedSelection(const Raster& composite)
 
 void DocumentSession::CutSelection()
 {
-    if (!_document.has_value() || !_document->selection.has_value() || !CanCopyPixels())
+    if (!_document.has_value() || !_document->selection.has_value() || !CanCopyPixels() || !CanPaint())
     {
         return;
     }
-    if (CopySelection())
+    const std::optional<PixelClipboard> previous = _clipboard;
+    if (!CopySelection())
     {
-        ClearSelectedPixels();
+        return;
+    }
+    if (!ClearSelectedPixels())
+    {
+        _clipboard = previous;
     }
 }
 

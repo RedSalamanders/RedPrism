@@ -385,6 +385,71 @@ void TestExplodedGolden()
            "v7.overwrite-drops-removed-assets");
 }
 
+void TestExplodedReparseAndHostileZip()
+{
+    const std::wstring root = L"C:\\proj";
+    const std::wstring file = root + L"\\images\\a.png";
+    const auto plain = [](const std::wstring&) -> std::uint32_t { return 0x20u; };
+    Expect(ExplodedMemberPathAllowed(root, file, plain), "path.plain-allowed");
+    const auto junction = [](const std::wstring& path) -> std::uint32_t
+    { return path.find(L".png") == std::wstring::npos ? 0x410u : 0x20u; };
+    Expect(!ExplodedMemberPathAllowed(root, file, junction), "path.intermediate-reparse");
+    Expect(!ExplodedMemberPathAllowed(root, root + L"\\images\\..\\secret.png", plain), "path.dotdot-component");
+
+    const std::wstring project = ScratchRoot() + L"\\junction-project";
+    const std::wstring outside = ScratchRoot() + L"\\junction-outside";
+    const std::wstring link = project + L"\\images";
+    std::error_code error;
+    RemoveDirectoryW(link.c_str());
+    std::filesystem::remove_all(project, error);
+    std::filesystem::remove_all(outside, error);
+    std::filesystem::create_directories(outside, error);
+    std::filesystem::create_directories(project, error);
+    WriteText(std::filesystem::path(project) / L"manifest.json",
+              MinimalManifest(7, "\"imageFile\": \"00000000-0000-4000-8000-000000000002.png\""));
+    const DWORD linkFlags = SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+    if (CreateSymbolicLinkW(link.c_str(), outside.c_str(), linkFlags))
+    {
+        Expect(LoadProject(project.c_str()).status == ProjectIoStatus::Invalid, "path.junction-load");
+        RemoveDirectoryW(link.c_str());
+    }
+    else
+    {
+        std::printf("SKIP path.junction-load (CreateSymbolicLinkW %lu)\n", GetLastError());
+    }
+
+    const std::wstring emptyPath = ScratchRoot() + L"\\empty.prism";
+    FILE* emptyFile = nullptr;
+    Expect(_wfopen_s(&emptyFile, emptyPath.c_str(), L"wb") == 0 && emptyFile != nullptr, "zip.empty-create");
+    if (emptyFile != nullptr)
+    {
+        (void)fclose(emptyFile);
+    }
+    const ProjectLoadResult empty = LoadProject(emptyPath.c_str());
+    Expect(empty.status == ProjectIoStatus::Invalid && empty.document.layers.empty(), "zip.empty");
+    WriteText(std::filesystem::path(ScratchRoot()) / L"garbage.prism", "not-a-zip");
+    Expect(LoadProject((ScratchRoot() + L"\\garbage.prism").c_str()).status == ProjectIoStatus::Invalid, "zip.garbage");
+
+    const ProjectLoadResult loaded = LoadProject(MaterializeV7Fixture().c_str());
+    const std::wstring zipPath = ScratchRoot() + L"\\truncated.prism";
+    Expect(loaded.status == ProjectIoStatus::Ok &&
+               SaveProject(zipPath.c_str(), loaded.document, loaded.activeLayerID, true) == ProjectIoStatus::Ok,
+           "zip.truncate-save");
+    std::ifstream input(zipPath, std::ios::binary);
+    std::vector<char> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    input.close();
+    if (bytes.size() > 64)
+    {
+        bytes.resize(bytes.size() - 64);
+        std::ofstream output(zipPath, std::ios::binary | std::ios::trunc);
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+    const ProjectLoadResult truncated = LoadProject(zipPath.c_str());
+    Expect((truncated.status == ProjectIoStatus::Invalid || truncated.status == ProjectIoStatus::MissingImage) &&
+               truncated.document.layers.empty(),
+           "zip.truncated");
+}
+
 void TestPathTraversal()
 {
     const std::string evil = MinimalManifest(7, "\"imageFile\": \"../secret.png\"");
@@ -680,6 +745,7 @@ int wmain()
     TestJpegExport();
     TestHeifMissing();
     TestExplodedGolden();
+    TestExplodedReparseAndHostileZip();
     TestPathTraversal();
     TestManifestTooLarge();
     TestVersionGatesAndRejects();

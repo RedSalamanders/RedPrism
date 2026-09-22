@@ -34,6 +34,17 @@ void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops)
     RequestInvalidate();
 }
 
+void CanvasOverlay::SetAntPhase(float phase) noexcept
+{
+    if (phase == _antPhase)
+    {
+        return;
+    }
+    _antPhase = phase;
+    _ants.reset();
+    RequestInvalidate();
+}
+
 void CanvasOverlay::SetDraft(std::optional<Draft> draft)
 {
     _draft = std::move(draft);
@@ -145,7 +156,7 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
     {
         const D2D1_STROKE_STYLE_PROPERTIES properties =
             D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT,
-                                        D2D1_LINE_JOIN_MITER, 10.0f, D2D1_DASH_STYLE_CUSTOM, 0.0f);
+                                        D2D1_LINE_JOIN_MITER, 10.0f, D2D1_DASH_STYLE_CUSTOM, _antPhase);
         // Dash lengths are multiples of the stroke width: four DIP on, four off.
         const float dashes[] = {kAntsDashDip, kAntsDashDip};
         if (FAILED(_factory->CreateStrokeStyle(properties, dashes, 2, _ants.put())))
@@ -192,7 +203,7 @@ void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& ho
     {
         return;
     }
-    // Marching ants: a white line under a black dash (static for now; the animation is a later phase).
+    // Marching ants: a white line under a black dash. The dash offset is the ant phase; geometry stays put.
     ID2D1SolidColorBrush* white = host.GetSolidBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f));
     ID2D1SolidColorBrush* black = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
     D2D1_MATRIX_3X2_F previous{};

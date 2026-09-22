@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -28,6 +29,7 @@
 #include "ThemePalette.h"
 
 class ChromeAccessibilitySite;
+class PaletteControl;
 #pragma warning(pop)
 
 using unique_hmenu = wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu>;
@@ -364,9 +366,9 @@ class ChromeHost final
     static constexpr float kLayersDefaultDip = 240.0f;
     static constexpr float kLayersTitleDip = 32.0f;
     static constexpr float kOpacityWidthDip = 96.0f;
-    static constexpr float kWellDip = 26.0f;
-    static constexpr float kWellOffsetDip = 14.0f;
     static constexpr float kWellBlockDip = 48.0f;
+    static constexpr float kSwatchDip = 22.0f;
+    static constexpr float kPaletteHotDip = 14.0f;
     static constexpr float kPickerMarginDip = 8.0f;
 
     static constexpr int kCommandNew = 100;
@@ -391,6 +393,8 @@ class ChromeHost final
     static constexpr int kCommandClearPixels = 209;
     static constexpr int kCommandInvert = 210;
     static constexpr int kCommandContentAwareFill = 211;
+    static constexpr int kCommandSwapPalette = 212;
+    static constexpr int kCommandResetPalette = 213;
     static constexpr int kCommandNewLayer = 300;
     static constexpr int kCommandNewFolder = 301;
     static constexpr int kCommandDeleteLayer = 302;
@@ -406,6 +410,7 @@ class ChromeHost final
     static constexpr int kCommandZoomIn = 402;
     static constexpr int kCommandZoomOut = 403;
     static constexpr int kCommandSampleRing = 404;
+    static constexpr int kCommandKeyboardShortcuts = 405;
     static constexpr int kCommandAbout = 500;
     static constexpr int kCommandFlipCanvasHorizontal = 600;
     static constexpr int kCommandFlipCanvasVertical = 601;
@@ -439,6 +444,44 @@ class ChromeHost final
     static constexpr int kCommandMotionBlur = 801;
     static constexpr int kCommandAddNoise = 802;
     static constexpr int kCommandLensCorrection = 803;
+    // One id per finished local action, so a settings override can name it. Tool order matches EditorTool.
+    static constexpr int kCommandSelectToolBase = 900;
+    static constexpr int kCommandNudgeSelectionLeft = 920;
+    static constexpr int kCommandNudgeSelectionRight = 921;
+    static constexpr int kCommandNudgeSelectionUp = 922;
+    static constexpr int kCommandNudgeSelectionDown = 923;
+    static constexpr int kCommandNudgeLayerLeft = 924;
+    static constexpr int kCommandNudgeLayerRight = 925;
+    static constexpr int kCommandNudgeLayerUp = 926;
+    static constexpr int kCommandNudgeLayerDown = 927;
+    static constexpr int kCommandNudgePixelsLeft = 928;
+    static constexpr int kCommandNudgePixelsRight = 929;
+    static constexpr int kCommandNudgePixelsUp = 930;
+    static constexpr int kCommandNudgePixelsDown = 931;
+    static constexpr int kCommandBrushSmaller = 940;
+    static constexpr int kCommandBrushLarger = 941;
+    static constexpr int kCommandBrushSofter = 942;
+    static constexpr int kCommandBrushHarder = 943;
+    static constexpr int kCommandBlendPrevious = 944;
+    static constexpr int kCommandBlendNext = 945;
+    static constexpr int kCommandDeleteKey = 946;
+    static constexpr int kCommandToggleMarqueeKind = 947;
+    static constexpr int kCommandToggleLassoKind = 948;
+    static constexpr int kCommandToggleShapeKind = 949;
+
+    [[nodiscard]] static constexpr int SelectToolCommand(EditorTool tool) noexcept
+    {
+        return kCommandSelectToolBase + static_cast<int>(tool);
+    }
+    [[nodiscard]] static constexpr EditorTool ToolForSelectCommand(int command) noexcept
+    {
+        const int index = command - kCommandSelectToolBase;
+        if (index < 0 || index >= static_cast<int>(kEditorToolCount))
+        {
+            return EditorTool::Count;
+        }
+        return static_cast<EditorTool>(index);
+    }
 
     enum class MenuIndex : std::size_t
     {
@@ -470,6 +513,10 @@ class ChromeHost final
     void SetLayerExpandHandler(std::function<void(Guid, bool)> handler);
     // A double-click on a layer row (C16): the host renames it.
     void SetLayerInvokeHandler(std::function<void(Guid)> handler);
+    // A row drag. `parent` is the target's parent for Before/After, and is ignored for Inside (the target is the
+    // folder). The document move is `PlaceLayer`.
+    void SetLayerReorderHandler(
+        std::function<void(Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place)> handler);
     // The Rename Layer card (C16): opened on a name; the handler gets the committed name, nullopt on cancel.
     void SetRenameHandler(std::function<void(std::optional<std::wstring>)> handler);
     void OpenRenameCard(const std::wstring& name) noexcept;
@@ -492,6 +539,8 @@ class ChromeHost final
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
     // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
+    void SetSelectionAntPhase(float phase) noexcept;
+    [[nodiscard]] float SelectionAntPhase() const noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
     // The Brush and Eraser header: mode, size, hardness, opacity, mask paint and the color swatch.
     void SetBrushHandler(std::function<void(BrushAction, double)> handler);
@@ -529,6 +578,11 @@ class ChromeHost final
     void SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept;
     void SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept;
     void SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept;
+    [[nodiscard]] std::optional<D2D1_POINT_2F> CloneSourceMarkDip() const noexcept;
+    [[nodiscard]] float LayoutDpi() const noexcept
+    {
+        return _dpi;
+    }
     // The eyedropper loads a sampled color into the open picker (its swatch previews it; OK commits it).
     void SetPickerColor(uint32_t argb) noexcept;
     [[nodiscard]] uint32_t PickerColor() const noexcept;
@@ -630,10 +684,41 @@ class ChromeHost final
     }
     // Rail button bounds in DIP (index order of EditorTool); tests and the harness use it to prove layout.
     [[nodiscard]] D2D1_RECT_F ToolButtonBoundsDip(EditorTool tool) const noexcept;
+    [[nodiscard]] int VisibleToolButtonCount() const noexcept;
+    [[nodiscard]] bool MoreToolsOpen() const noexcept;
+    void CloseMoreTools() noexcept;
+    [[nodiscard]] D2D1_RECT_F MoreToolsBoundsDip() const noexcept;
+    [[nodiscard]] D2D1_RECT_F OverflowToolBoundsDip(EditorTool tool) const noexcept;
     // Separator bar of the layers splitter, palette wells, and the picker card, in DIP, for the same purpose.
     [[nodiscard]] D2D1_RECT_F SplitterBoundsDip() const noexcept;
     [[nodiscard]] D2D1_RECT_F PaletteWellBoundsDip(bool background) const noexcept;
+    [[nodiscard]] D2D1_RECT_F PaletteHotBoundsDip(bool reset) const noexcept;
     [[nodiscard]] D2D1_RECT_F ColorPickerBoundsDip() const noexcept;
+    [[nodiscard]] D2D1_RECT_F LayerRowBoundsDip(std::size_t index) const noexcept;
+    // 0 none, 1 layers tree, 2 splitter, 3 shortcuts, 4 notice, 5 adjust, 6 picker, 7 overlay, 8 other.
+    [[nodiscard]] int HitKindForTest(float xPixels, float yPixels) noexcept;
+    // The open filter panel's option row (radius, curve, ramp, hint) is visible inside the card.
+    [[nodiscard]] bool FilterOptionsVisible() const noexcept;
+    void ShowNotice(std::wstring text) noexcept;
+    void CloseNotice() noexcept;
+    [[nodiscard]] bool NoticeOpen() const noexcept;
+    [[nodiscard]] D2D1_RECT_F NoticeBoundsDip() const noexcept;
+    void OpenShortcuts() noexcept;
+    void CloseShortcuts() noexcept;
+    [[nodiscard]] bool ShortcutsOpen() const noexcept;
+    // Retitle menu accelerators, and the open shortcuts card, from the active keyboard layout.
+    void RefreshDisplayedChords() noexcept;
+    [[nodiscard]] std::wstring ShortcutChordAt(std::size_t index) const;
+    [[nodiscard]] std::wstring MenuItemCaption(int command) const;
+
+    struct CommandShortcutDefault
+    {
+        int command = 0;
+        unsigned captionId = 0;
+        const wchar_t* chord = L"";
+    };
+    // Every menu command and the chord shown after its tab. The self-test checks the STRINGTABLE matches.
+    [[nodiscard]] static std::span<const CommandShortcutDefault> CommandShortcuts() noexcept;
 
   private:
     class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
@@ -645,17 +730,35 @@ class ChromeHost final
         std::function<void(Guid)>* onLayer = nullptr;
         std::function<void(Guid, bool)>* onExpand = nullptr;
         std::function<void(Guid)>* onInvoke = nullptr;
+        std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)>* onReorder = nullptr;
+        bool useFluentIcons = true;
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;
         void OnTreeToggleExpanded(uint64_t itemId, bool expanded) override;
         void OnTreeItemInvoked(uint64_t itemId) override;
+        void OnTreeReorder(const DxUi::TreeDrop& drop) override;
+    };
+
+    class ShortcutListModel final : public DxUi::IDxTreeModel
+    {
+      public:
+        struct Row
+        {
+            std::wstring name;
+            std::wstring chord;
+        };
+        std::vector<Row> rows;
+        [[nodiscard]] std::size_t GetVisibleItemCount() const noexcept override;
+        void GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
     };
 
     HRESULT BindDevice(ID3D11Device* device) noexcept;
     HRESULT Build() noexcept;
     void Arrange() noexcept;
     void ArrangePicker() noexcept;
+    void ArrangeNotice() noexcept;
+    void ArrangeShortcuts() noexcept;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
@@ -694,6 +797,10 @@ class ChromeHost final
     // frames.
     static void SetPressedVisualIfChanged(DxUi::Button* button, bool& current, bool pressed) noexcept;
     void ReleaseFocusForPress(const DxUi::PointerEvent& event) noexcept;
+    void ChooseTool(EditorTool tool) noexcept;
+    void OpenMoreTools() noexcept;
+    void ArrangeMoreTools() noexcept;
+    [[nodiscard]] int RailSlotsThatFit(float wellTop) const noexcept;
     [[nodiscard]] DxUi::EmbeddedAccessibilityPlacement AccessibilityPlacement() const noexcept;
     void FlushAccessibilityPlacement() noexcept;
     bool _accessibilityPlacementDirty = false;
@@ -703,16 +810,28 @@ class ChromeHost final
     DxUi::MenuBar* _menu = nullptr;
     DxUi::TabControl* _tabs = nullptr;
     DxUi::Toolbar* _rail = nullptr;
+    DxUi::Button* _moreTools = nullptr;
+    DxUi::CardPanel* _moreCard = nullptr;
+    std::array<DxUi::Button*, kEditorToolCount> _overflowButtons{};
+    int _moreToolStart = static_cast<int>(kEditorToolCount);
+    bool _moreToolsOpen = false;
     DxUi::Label* _header = nullptr;
     DxUi::Tree* _layers = nullptr;
     DxUi::StatusStrip* _status = nullptr;
     DxUi::Label* _layersTitle = nullptr;
     DxUi::Splitter* _splitter = nullptr;
-    DxUi::ColorSwatch* _foregroundWell = nullptr;
-    DxUi::ColorSwatch* _backgroundWell = nullptr;
+    PaletteControl* _railPalette = nullptr;
     DxUi::NumericStepper* _opacity = nullptr;
     DxUi::CardPanel* _pickerCard = nullptr;
     DxUi::ColorPicker* _picker = nullptr;
+    DxUi::CardPanel* _noticeCard = nullptr;
+    DxUi::Label* _noticeLabel = nullptr;
+    DxUi::Button* _noticeClose = nullptr;
+    DxUi::CardPanel* _shortcutsCard = nullptr;
+    DxUi::Label* _shortcutsTitle = nullptr;
+    DxUi::Tree* _shortcutsTree = nullptr;
+    DxUi::Button* _shortcutsClose = nullptr;
+    ShortcutListModel _shortcutModel;
     CanvasOverlay* _overlay = nullptr;
     DxUi::Panel* _transformHeader = nullptr;
     DxUi::Label* _transformTitle = nullptr;
@@ -809,6 +928,7 @@ class ChromeHost final
     std::function<void(Guid)> _onLayer;
     std::function<void(Guid, bool)> _onExpand;
     std::function<void(Guid)> _onLayerInvoke;
+    std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)> _onReorder;
     // ChromeHostRename.cpp: the Rename Layer card.
     void BuildRenameCard(DxUi::Panel& root);
     void ArrangeRenameCard(float right, float top) noexcept;

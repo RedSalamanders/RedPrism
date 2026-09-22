@@ -576,9 +576,47 @@ function Write-RedPrismBuildBanner {
     Write-Host ''
 }
 
+function Get-RedPrismDxUiUpdateNoticeForegroundColor {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string] $Notice
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Notice)) {
+        return $null
+    }
+
+    # The pinned DxUi helper owns the read-only update decision. This adapter owns only the color.
+    if ($Notice -like 'DxUi main * has no successful completed validation;*') {
+        return 'Red'
+    }
+    if ($Notice -like 'DxUi update available:*') {
+        return 'Yellow'
+    }
+
+    return 'DarkYellow'
+}
+
+function Format-RedPrismDxUiUpdateNotice {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string] $Notice
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Notice)) {
+        return $null
+    }
+
+    return $Notice
+}
+
 Export-ModuleMember -Function @(
     'Test-RedPrismInteractiveTerminal',
     'Test-RedPrismTrueColorHost',
     'Get-RedPrismBuildBannerModel',
-    'Write-RedPrismBuildBanner'
+    'Write-RedPrismBuildBanner',
+    'Get-RedPrismDxUiUpdateNoticeForegroundColor',
+    'Format-RedPrismDxUiUpdateNotice'
 )

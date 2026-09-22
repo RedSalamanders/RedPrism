@@ -14,13 +14,19 @@ Library behavior remains in DxUi's own contracts. Splitter, ColorPicker, and Num
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, commit
-`7e3be94c9e3caa46d2997d28ce2251fbb9556619`, API revision 2, and lock target `["DxUi"]`. That commit is the DxUi
-branch `codex/editor-consumer-controls` (one commit on top of `4099dde`), restored from the sibling checkout; it is
-not on the public `main` yet. When the branch merges, move the pin to the merge commit and requalify. `build.ps1` runs
+`c403052bad26c97ba23995e136672c32c85ccbfc`, API revision 2, and lock target `["DxUi"]`. That commit is the merge of
+[DxUi pull request 19](https://github.com/RedSalamanders/DxUi/pull/19) on `main` (tree row drag reports one drop; splitter
+drag survives sibling layout). `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
 sibling `Z:\src\DxUi` working tree. A mismatched or dirty pin fails restore.
+
+`build.ps1` passes `-CheckUpdates`. `Show-DxUiUpdateNotice` from the pinned `Tools/ConsumerUpdate.psm1` then compares
+the lock with DxUi `main`. The notice is build output only: yellow when a newer `main` commit has a successful
+completed `ci.yml` push run, red when that validation is missing, dark yellow when the pin is ahead of or diverged
+from `main` or the lookup cannot run. The same pin prints nothing. The check never edits the lock and never fails a
+valid restore.
 
 `RedPrism` imports `Build/RedPrism.DxUi.props` / `.targets`, which reference `src/DxUi.vcxproj` once. Project
 references keep Configuration/Platform; they do not enumerate library `.cpp` files. Debug and ASan Debug use `/MDd`,

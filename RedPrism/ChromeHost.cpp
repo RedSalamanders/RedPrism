@@ -1,4 +1,6 @@
 #include "ChromeHost.h"
+#include "LucideToolButton.h"
+#include "PaletteControl.h"
 
 #include "Resources.h"
 #include "ThemePalette.h"
@@ -7,13 +9,230 @@
 #include <cmath>
 #include <iterator>
 #include <new>
+#include <string_view>
 
 namespace
 {
+[[nodiscard]] std::wstring KeyNameFromScan(UINT scanCode, bool extended)
+{
+    const LPARAM param =
+        (static_cast<LPARAM>(scanCode & 0xFFu) << 16) | (extended ? (static_cast<LPARAM>(1) << 24) : 0);
+    wchar_t name[64]{};
+    const int length = GetKeyNameTextW(static_cast<LONG>(param), name, static_cast<int>(std::size(name)));
+    if (length <= 0)
+    {
+        return {};
+    }
+    return std::wstring(name, static_cast<std::size_t>(length));
+}
+
+[[nodiscard]] std::wstring KeyNameFromVirtualKey(UINT virtualKey)
+{
+    const bool extended = virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP ||
+                          virtualKey == VK_DOWN || virtualKey == VK_INSERT || virtualKey == VK_DELETE ||
+                          virtualKey == VK_HOME || virtualKey == VK_END || virtualKey == VK_PRIOR ||
+                          virtualKey == VK_NEXT;
+    const UINT scanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC);
+    if (scanCode == 0)
+    {
+        return {};
+    }
+    return KeyNameFromScan(scanCode, extended);
+}
+
+[[nodiscard]] std::wstring LayoutKeyToken(std::wstring_view token)
+{
+    const auto named = [](std::wstring resolved, std::wstring_view fallback)
+    { return resolved.empty() ? std::wstring{fallback} : resolved; };
+    if (token.size() == 1)
+    {
+        const wchar_t character = token[0];
+        // A letter or digit follows the key that produces that character. Its label is the character.
+        if ((character >= L'A' && character <= L'Z') || (character >= L'0' && character <= L'9'))
+        {
+            return std::wstring{token};
+        }
+        if (character == L'[')
+        {
+            return named(KeyNameFromScan(0x1A, false), token);
+        }
+        if (character == L']')
+        {
+            return named(KeyNameFromScan(0x1B, false), token);
+        }
+    }
+    if (token == L"Left")
+    {
+        return named(KeyNameFromVirtualKey(VK_LEFT), token);
+    }
+    if (token == L"Right")
+    {
+        return named(KeyNameFromVirtualKey(VK_RIGHT), token);
+    }
+    if (token == L"Up")
+    {
+        return named(KeyNameFromVirtualKey(VK_UP), token);
+    }
+    if (token == L"Down")
+    {
+        return named(KeyNameFromVirtualKey(VK_DOWN), token);
+    }
+    if (token == L"Delete")
+    {
+        return named(KeyNameFromVirtualKey(VK_DELETE), token);
+    }
+    if (token == L"Backspace")
+    {
+        return named(KeyNameFromVirtualKey(VK_BACK), token);
+    }
+    if (token == L"F2")
+    {
+        return named(KeyNameFromVirtualKey(VK_F2), token);
+    }
+    if (token == L"F4")
+    {
+        return named(KeyNameFromVirtualKey(VK_F4), token);
+    }
+    return std::wstring{token};
+}
+
+// The catalog chord is the canonical label. The badge and the menu column show the key the active layout
+// actually names. Position keys (number-row plus and minus, the bracket keys) use their scan code.
+[[nodiscard]] std::wstring LayoutChord(std::wstring_view chord)
+{
+    const auto named = [](std::wstring resolved, std::wstring_view fallback)
+    { return resolved.empty() ? std::wstring{fallback} : resolved; };
+    if (chord == L"Ctrl++" || chord == L"Shift+=")
+    {
+        const wchar_t* prefix = chord == L"Ctrl++" ? L"Ctrl+" : L"Shift+";
+        return std::wstring{prefix} + named(KeyNameFromScan(0x0D, false), chord == L"Ctrl++" ? L"+" : L"=");
+    }
+    if (chord == L"Ctrl+-" || chord == L"Shift+-")
+    {
+        const wchar_t* prefix = chord == L"Ctrl+-" ? L"Ctrl+" : L"Shift+";
+        return std::wstring{prefix} + named(KeyNameFromScan(0x0C, false), L"-");
+    }
+    std::wstring text;
+    std::size_t start = 0;
+    while (start <= chord.size())
+    {
+        const std::size_t plus = chord.find(L'+', start);
+        const std::wstring_view part =
+            chord.substr(start, plus == std::wstring_view::npos ? std::wstring_view::npos : plus - start);
+        if (!text.empty())
+        {
+            text.push_back(L'+');
+        }
+        if (part == L"Ctrl" || part == L"Shift" || part == L"Alt")
+        {
+            text.append(part);
+        }
+        else
+        {
+            text += LayoutKeyToken(part);
+        }
+        if (plus == std::wstring_view::npos)
+        {
+            break;
+        }
+        start = plus + 1;
+    }
+    return text;
+}
+
+[[nodiscard]] std::wstring CommandCaption(UINT stringId)
+{
+    std::wstring caption = LoadStringResource(nullptr, stringId);
+    const std::size_t tab = caption.find(L'\t');
+    if (tab != std::wstring::npos)
+    {
+        caption = caption.substr(0, tab + 1) + LayoutChord(std::wstring_view{caption}.substr(tab + 1));
+    }
+    return caption;
+}
+
 void AppendCommand(HMENU menu, int command, UINT stringId) noexcept
 {
-    const std::wstring caption = LoadStringResource(nullptr, stringId);
+    const std::wstring caption = CommandCaption(stringId);
     (void)AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(command), caption.c_str());
+}
+
+void RewriteMenuChords(HMENU menu)
+{
+    if (menu == nullptr)
+    {
+        return;
+    }
+    const int count = GetMenuItemCount(menu);
+    for (int index = 0; index < count; ++index)
+    {
+        if (HMENU child = GetSubMenu(menu, index))
+        {
+            RewriteMenuChords(child);
+        }
+        const UINT command = GetMenuItemID(menu, index);
+        if (command == static_cast<UINT>(-1))
+        {
+            continue;
+        }
+        const std::span<const ChromeHost::CommandShortcutDefault> rows = ChromeHost::CommandShortcuts();
+        const ChromeHost::CommandShortcutDefault* match = nullptr;
+        for (const ChromeHost::CommandShortcutDefault& row : rows)
+        {
+            if (row.command == static_cast<int>(command) && row.chord != nullptr && row.chord[0] != L'\0')
+            {
+                match = &row;
+                break;
+            }
+        }
+        if (match == nullptr)
+        {
+            continue;
+        }
+        const std::wstring caption = CommandCaption(match->captionId);
+        const UINT state = GetMenuState(menu, command, MF_BYCOMMAND);
+        UINT flags = MF_BYCOMMAND | MF_STRING;
+        if (state != static_cast<UINT>(-1))
+        {
+            if ((state & (MF_GRAYED | MF_DISABLED)) != 0)
+            {
+                flags |= MF_GRAYED;
+            }
+            if ((state & MF_CHECKED) != 0)
+            {
+                flags |= MF_CHECKED;
+            }
+        }
+        (void)ModifyMenuW(menu, command, flags, static_cast<UINT_PTR>(command), caption.c_str());
+    }
+}
+
+[[nodiscard]] std::wstring MenuCaptionFrom(HMENU menu, int command)
+{
+    if (menu == nullptr)
+    {
+        return {};
+    }
+    wchar_t text[512]{};
+    const int length =
+        GetMenuStringW(menu, static_cast<UINT>(command), text, static_cast<int>(std::size(text)), MF_BYCOMMAND);
+    if (length > 0)
+    {
+        return std::wstring(text, static_cast<std::size_t>(length));
+    }
+    const int count = GetMenuItemCount(menu);
+    for (int index = 0; index < count; ++index)
+    {
+        if (HMENU child = GetSubMenu(menu, index))
+        {
+            std::wstring nested = MenuCaptionFrom(child, command);
+            if (!nested.empty())
+            {
+                return nested;
+            }
+        }
+    }
+    return {};
 }
 
 void AppendSeparator(HMENU menu) noexcept
@@ -46,7 +265,52 @@ void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeI
     outItem.depth = static_cast<uint32_t>(row.depth);
     outItem.hasChildren = row.isGroup;
     outItem.expanded = row.isGroup && !row.collapsed;
-    outItem.iconText = row.isGroup ? std::wstring(1, L'\xE8B7') : std::wstring{};
+    outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
+}
+
+void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
+{
+    if (drop.sourceId == 0 || drop.targetId == 0 || drop.sourceId > rows.size() || drop.targetId > rows.size() ||
+        onReorder == nullptr || !(*onReorder))
+    {
+        return;
+    }
+    const Guid source = rows[drop.sourceId - 1].id;
+    const Guid target = rows[drop.targetId - 1].id;
+    std::optional<Guid> parent;
+    if (drop.place != DxUi::TreeDropPlace::Inside)
+    {
+        const int depth = rows[drop.targetId - 1].depth;
+        if (depth > 0)
+        {
+            for (std::size_t index = drop.targetId - 1; index > 0;)
+            {
+                --index;
+                if (rows[index].depth == depth - 1)
+                {
+                    parent = rows[index].id;
+                    break;
+                }
+            }
+        }
+    }
+    (*onReorder)(source, target, parent, drop.place);
+}
+
+std::size_t ChromeHost::ShortcutListModel::GetVisibleItemCount() const noexcept
+{
+    return rows.size();
+}
+
+void ChromeHost::ShortcutListModel::GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const
+{
+    if (visibleIndex >= rows.size())
+    {
+        return;
+    }
+    outItem.id = visibleIndex + 1;
+    outItem.text = rows[visibleIndex].name;
+    outItem.badgeText = rows[visibleIndex].chord;
 }
 
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
@@ -149,10 +413,19 @@ void ChromeHost::Detach() noexcept
     _status = nullptr;
     _layersTitle = nullptr;
     _splitter = nullptr;
-    _foregroundWell = nullptr;
-    _backgroundWell = nullptr;
+    _railPalette = nullptr;
+    _moreTools = nullptr;
+    _moreCard = nullptr;
+    _overflowButtons.fill(nullptr);
     _opacity = nullptr;
     _pickerCard = nullptr;
+    _noticeCard = nullptr;
+    _noticeLabel = nullptr;
+    _noticeClose = nullptr;
+    _shortcutsCard = nullptr;
+    _shortcutsTitle = nullptr;
+    _shortcutsTree = nullptr;
+    _shortcutsClose = nullptr;
     _adjustCard = nullptr;
     _sizeCard = nullptr;
     _renameCard = nullptr;
@@ -238,6 +511,12 @@ void ChromeHost::SetLayerHandler(std::function<void(Guid)> handler)
 void ChromeHost::SetLayerExpandHandler(std::function<void(Guid, bool)> handler)
 {
     _onExpand = std::move(handler);
+}
+
+void ChromeHost::SetLayerReorderHandler(
+    std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)> handler)
+{
+    _onReorder = std::move(handler);
 }
 
 void ChromeHost::SetPaletteHandler(std::function<void(uint32_t, uint32_t)> handler)
@@ -387,6 +666,7 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(view, kCommandZoomOut, IDS_CMD_ZOOM_OUT);
         AppendSeparator(view);
         AppendCommand(view, kCommandSampleRing, IDS_CMD_SAMPLE_RING);
+        AppendCommand(view, kCommandKeyboardShortcuts, IDS_CMD_KEYBOARD_SHORTCUTS);
         (void)CheckMenuItem(view, static_cast<UINT>(kCommandSampleRing), MF_BYCOMMAND | MF_CHECKED);
     }
     if (HMENU help = _menus[static_cast<std::size_t>(MenuIndex::Help)].get())
@@ -441,6 +721,8 @@ HRESULT ChromeHost::Build() noexcept
         _tabs->AddTab<DxUi::Panel>(LoadStringResource(nullptr, IDS_UNTITLED));
         _rail = root->AddChild<DxUi::Toolbar>();
         _rail->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_TOOLS));
+        const bool fluentIcons = _view.Controls().HasFluentIconFont();
+        _treeModel.useFluentIcons = fluentIcons;
         for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
             const EditorTool tool = EditorToolAt(index);
@@ -451,28 +733,64 @@ HRESULT ChromeHost::Build() noexcept
             // switch, glyph or not). The latch is written only between presses: SyncToolVisuals defers while a
             // press is in flight, because a pressed-look write reaching the tree cancels a press held across a
             // frame.
-            DxUi::Button* button = _rail->AddButton(tooltip, std::wstring(1, EditorToolGlyph(tool)));
+            DxUi::Button* button = _rail->AddChild<LucideToolButton>(tooltip, tool, fluentIcons);
             button->SetAccessibleName(name);
-            button->SetOnClick(
-                [this, tool]
-                {
-                    SetTool(tool);
-                    if (_onTool)
-                    {
-                        _onTool(tool);
-                    }
-                });
+            button->SetOnClick([this, tool] { ChooseTool(tool); });
             _toolButtons[index] = button;
         }
-        // Palette wells sit at the bottom of the rail: background behind, foreground in front (legacy layout).
-        _backgroundWell = _rail->AddChild<DxUi::ColorSwatch>(_backgroundArgb);
-        _backgroundWell->SetAccessibleName(LoadStringResource(nullptr, IDS_PALETTE_BACKGROUND));
-        _backgroundWell->SetTooltipText(LoadStringResource(nullptr, IDS_PALETTE_BACKGROUND));
-        _backgroundWell->SetOnClick([this] { OpenColorPicker(true); });
-        _foregroundWell = _rail->AddChild<DxUi::ColorSwatch>(_foregroundArgb);
-        _foregroundWell->SetAccessibleName(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
-        _foregroundWell->SetTooltipText(LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND));
-        _foregroundWell->SetOnClick([this] { OpenColorPicker(false); });
+        const std::wstring moreName = LoadStringResource(nullptr, IDS_MORE_TOOLS);
+        _moreTools = _rail->AddChild<LucideIconButton>(moreName, IDR_LUCIDE_ELLIPSIS_VERTICAL);
+        _moreTools->SetAccessibleName(moreName);
+        _moreTools->SetVisible(false);
+        _moreTools->SetOnClick(
+            [this]
+            {
+                if (_moreToolsOpen)
+                {
+                    CloseMoreTools();
+                }
+                else
+                {
+                    OpenMoreTools();
+                }
+            });
+        _moreCard = root->AddChild<DxUi::CardPanel>();
+        _moreCard->SetCornerRadius(8.0f);
+        _moreCard->SetVisible(false);
+        _moreCard->SetAccessibleName(moreName);
+        for (std::size_t index = 0; index < kEditorToolCount; ++index)
+        {
+            const EditorTool tool = EditorToolAt(index);
+            const std::wstring name = LoadStringResource(nullptr, EditorToolNameId(tool));
+            const std::wstring tooltip =
+                FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, name, std::wstring(1, EditorToolKey(tool)));
+            DxUi::Button* overflow = _moreCard->AddChild<LucideToolButton>(tooltip, tool, fluentIcons);
+            overflow->SetAccessibleName(name);
+            overflow->SetVisible(false);
+            overflow->SetOnClick([this, tool] { ChooseTool(tool); });
+            _overflowButtons[index] = overflow;
+        }
+        // One palette control: overlapping wells, a swap hot zone, and a black-and-white reset hot zone.
+        _railPalette = _rail->AddChild<PaletteControl>(
+            LoadStringResource(nullptr, IDS_PALETTE_FOREGROUND), LoadStringResource(nullptr, IDS_PALETTE_BACKGROUND),
+            LoadStringResource(nullptr, IDS_PALETTE_SWAP), LoadStringResource(nullptr, IDS_PALETTE_RESET));
+        _railPalette->SetHandlers([this] { OpenColorPicker(false); }, [this] { OpenColorPicker(true); },
+                                  [this]
+                                  {
+                                      if (_onCommand)
+                                      {
+                                          _onCommand(kCommandSwapPalette);
+                                      }
+                                  },
+                                  [this]
+                                  {
+                                      if (_onCommand)
+                                      {
+                                          _onCommand(kCommandResetPalette);
+                                      }
+                                  });
+        _railPalette->SetForeground(_foregroundArgb);
+        _railPalette->SetBackground(_backgroundArgb);
         _header = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, EditorToolNameId(_tool)));
         BuildTransformHeader(*root);
         BuildSelectionHeader(*root);
@@ -510,8 +828,10 @@ HRESULT ChromeHost::Build() noexcept
         _treeModel.onLayer = &_onLayer;
         _treeModel.onExpand = &_onExpand;
         _treeModel.onInvoke = &_onLayerInvoke;
+        _treeModel.onReorder = &_onReorder;
         _layers->SetModel(&_treeModel);
         _layers->SetDelegate(&_treeModel);
+        _layers->SetReorderEnabled(true);
         _status = root->AddChild<DxUi::StatusStrip>();
         _status->SetSections({DxUi::StatusStrip::Section{std::wstring{}, 80.0f},
                               DxUi::StatusStrip::Section{std::wstring{}, 140.0f},
@@ -548,6 +868,25 @@ HRESULT ChromeHost::Build() noexcept
         _picker->GreenField().SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_GREEN));
         _picker->BlueField().SetAccessibleName(LoadStringResource(nullptr, IDS_ADJUST_BLUE));
         _picker->SetOnChange([this](DxUi::ColorPickerChange change) { OnPickerChange(change); });
+        _noticeCard = root->AddChild<DxUi::CardPanel>();
+        _noticeCard->SetCornerRadius(8.0f);
+        _noticeCard->SetVisible(false);
+        _noticeLabel = _noticeCard->AddChild<DxUi::Label>(std::wstring{});
+        _noticeLabel->SetFontRole(DxUi::FontRole::Body);
+        _noticeClose = _noticeCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_PICKER_OK));
+        _noticeClose->SetPrimary(true);
+        _noticeClose->SetOnClick([this] { CloseNotice(); });
+        _shortcutsCard = root->AddChild<DxUi::CardPanel>();
+        _shortcutsCard->SetCornerRadius(8.0f);
+        _shortcutsCard->SetVisible(false);
+        _shortcutsTitle = _shortcutsCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE));
+        _shortcutsTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+        _shortcutsTree = _shortcutsCard->AddChild<DxUi::Tree>();
+        _shortcutsTree->SetAccessibleName(LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE));
+        _shortcutsTree->SetModel(&_shortcutModel);
+        _shortcutsClose = _shortcutsCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_PICKER_OK));
+        _shortcutsClose->SetPrimary(true);
+        _shortcutsClose->SetOnClick([this] { CloseShortcuts(); });
         _view.Controls().SetRoot(std::move(root));
         SyncToolVisuals();
         Arrange();
@@ -574,7 +913,165 @@ D2D1_RECT_F ChromeHost::ToolButtonBoundsDip(EditorTool tool) const noexcept
     const float inset = (kRailWidthDip - kToolButtonDip) / 2.0f;
     const float top = kMenuHeightDip + kTabHeightDip + inset +
                       static_cast<float>(EditorToolIndex(tool)) * (kToolButtonDip + kToolGapDip);
-    return D2D1::RectF(inset, top, inset + kToolButtonDip, top + kToolButtonDip);
+    // The glyph stays centered in the 48 DIP rail. The hit and hover fill that width, so the padding to the
+    // left of the icon is the same button.
+    return D2D1::RectF(0.0f, top, kRailWidthDip, top + kToolButtonDip);
+}
+
+int ChromeHost::VisibleToolButtonCount() const noexcept
+{
+    int count = 0;
+    for (DxUi::Button* button : _toolButtons)
+    {
+        if (button != nullptr && button->IsVisible())
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int ChromeHost::RailSlotsThatFit(float wellTop) const noexcept
+{
+    int fit = 0;
+    const float limit = wellTop - kToolGapDip;
+    for (std::size_t index = 0; index < kEditorToolCount; ++index)
+    {
+        if (ToolButtonBoundsDip(EditorToolAt(index)).bottom <= limit)
+        {
+            ++fit;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return fit;
+}
+
+bool ChromeHost::MoreToolsOpen() const noexcept
+{
+    return _moreToolsOpen && _moreCard != nullptr && _moreCard->IsVisible();
+}
+
+D2D1_RECT_F ChromeHost::MoreToolsBoundsDip() const noexcept
+{
+    return _moreTools != nullptr && _moreTools->IsVisible() ? _moreTools->GetBounds() : D2D1::RectF();
+}
+
+D2D1_RECT_F ChromeHost::OverflowToolBoundsDip(EditorTool tool) const noexcept
+{
+    const std::size_t index = EditorToolIndex(tool);
+    DxUi::Button* button = index < kEditorToolCount ? _overflowButtons[index] : nullptr;
+    if (button == nullptr || !MoreToolsOpen() || !button->IsVisible())
+    {
+        return D2D1::RectF();
+    }
+    return button->GetBounds();
+}
+
+void ChromeHost::ChooseTool(EditorTool tool) noexcept
+{
+    CloseMoreTools();
+    if (_onCommand)
+    {
+        _onCommand(SelectToolCommand(tool));
+    }
+}
+
+void ChromeHost::OpenMoreTools() noexcept
+{
+    if (_moreCard == nullptr || _moreToolStart >= static_cast<int>(kEditorToolCount))
+    {
+        return;
+    }
+    _moreToolsOpen = true;
+    ArrangeMoreTools();
+    _view.MarkDirty();
+    if (_requestFrame != nullptr)
+    {
+        _requestFrame(_requestContext);
+    }
+    if (_pointerPressed)
+    {
+        _toolVisualsDirty = true;
+    }
+    else
+    {
+        SyncToolVisuals();
+    }
+}
+
+void ChromeHost::CloseMoreTools() noexcept
+{
+    if (!_moreToolsOpen && (_moreCard == nullptr || !_moreCard->IsVisible()))
+    {
+        return;
+    }
+    _moreToolsOpen = false;
+    ArrangeMoreTools();
+    _view.MarkDirty();
+    if (_requestFrame != nullptr)
+    {
+        _requestFrame(_requestContext);
+    }
+    if (_pointerPressed)
+    {
+        _toolVisualsDirty = true;
+    }
+    else
+    {
+        SyncToolVisuals();
+    }
+}
+
+void ChromeHost::ArrangeMoreTools() noexcept
+{
+    if (_moreCard == nullptr)
+    {
+        return;
+    }
+    const bool show = _moreToolsOpen && _moreToolStart < static_cast<int>(kEditorToolCount);
+    if (!show)
+    {
+        ShowControl(_moreCard, false);
+        for (DxUi::Button* button : _overflowButtons)
+        {
+            ShowControl(button, false);
+        }
+        return;
+    }
+    const int count = static_cast<int>(kEditorToolCount) - _moreToolStart;
+    constexpr float pad = 4.0f;
+    const float width = kRailWidthDip + pad * 2.0f;
+    const float height = pad * 2.0f + static_cast<float>(count) * kToolButtonDip +
+                         static_cast<float>(std::max(0, count - 1)) * kToolGapDip;
+    const float minTop = kMenuHeightDip + kTabHeightDip + pad;
+    const float maxBottom = HeightDip() - kStatusHeightDip - pad;
+    float top = _moreTools != nullptr ? _moreTools->GetBounds().top : minTop;
+    if (top + height > maxBottom)
+    {
+        top = std::max(minTop, maxBottom - height);
+    }
+    if (top < minTop)
+    {
+        top = minTop;
+    }
+    const float left = kRailWidthDip + pad;
+    PlaceControl(_moreCard, D2D1::RectF(left, top, left + width, top + height));
+    ShowControl(_moreCard, true);
+    float y = top + pad;
+    for (std::size_t index = 0; index < kEditorToolCount; ++index)
+    {
+        DxUi::Button* button = _overflowButtons[index];
+        const bool listed = static_cast<int>(index) >= _moreToolStart;
+        if (listed && button != nullptr)
+        {
+            PlaceControl(button, D2D1::RectF(left + pad, y, left + pad + kRailWidthDip, y + kToolButtonDip));
+            y += kToolButtonDip + kToolGapDip;
+        }
+        ShowControl(button, listed);
+    }
 }
 
 void ChromeHost::PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds) noexcept
@@ -606,6 +1103,36 @@ void ChromeHost::ShowControl(DxUi::Control* control, bool visible) noexcept
     {
         control->SetVisible(visible);
     }
+}
+
+struct PaletteLayout
+{
+    D2D1_RECT_F block{};
+    D2D1_RECT_F foreground{};
+    D2D1_RECT_F background{};
+    D2D1_RECT_F swap{};
+    D2D1_RECT_F reset{};
+};
+
+[[nodiscard]] PaletteLayout PaletteLayoutAt(float blockTop) noexcept
+{
+    PaletteLayout layout;
+    layout.block = D2D1::RectF(0.0f, blockTop, ChromeHost::kRailWidthDip, blockTop + ChromeHost::kWellBlockDip);
+    // 20 DIP squares overlap by 6, so the foreground sits in front and most of the background still shows.
+    // The step leaves a 14 DIP dark notch at each corner. Swap fills the top-right notch. Reset fills the
+    // bottom-left one. Neither covers a swatch, so the light glyph stays visible.
+    constexpr float swatch = 20.0f;
+    constexpr float overlap = 6.0f;
+    constexpr float step = swatch - overlap;
+    const float left = 7.0f;
+    const float foregroundTop = blockTop + 7.0f;
+    layout.foreground = D2D1::RectF(left, foregroundTop, left + swatch, foregroundTop + swatch);
+    layout.background = D2D1::RectF(left + step, foregroundTop + step, left + step + swatch, foregroundTop + step + swatch);
+    layout.swap = D2D1::RectF(layout.foreground.right, layout.foreground.top, layout.background.right,
+                              layout.background.top);
+    layout.reset = D2D1::RectF(layout.foreground.left, layout.foreground.bottom, layout.background.left,
+                               layout.background.bottom);
+    return layout;
 }
 
 void ChromeHost::Arrange() noexcept
@@ -648,23 +1175,41 @@ void ChromeHost::Arrange() noexcept
     {
         PlaceControl(_rail, D2D1::RectF(0.0f, tabBottom, kRailWidthDip, statusTop));
         const float wellTop = std::max(tabBottom, statusTop - kWellBlockDip);
+        const PaletteLayout palette = PaletteLayoutAt(wellTop);
+        if (_railPalette)
+        {
+            PlaceControl(_railPalette, palette.block);
+            PlaceControl(_railPalette->BackgroundZone(), palette.background);
+            PlaceControl(_railPalette->ForegroundZone(), palette.foreground);
+            PlaceControl(_railPalette->ResetZone(), palette.reset);
+            PlaceControl(_railPalette->SwapZone(), palette.swap);
+        }
+        const int fit = RailSlotsThatFit(wellTop);
+        const bool overflow = fit < static_cast<int>(kEditorToolCount);
+        const int shown = overflow ? std::max(0, fit - 1) : static_cast<int>(kEditorToolCount);
+        _moreToolStart = shown;
         for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
             if (DxUi::Button* button = _toolButtons[index])
             {
-                const D2D1_RECT_F bounds = ToolButtonBoundsDip(EditorToolAt(index));
-                PlaceControl(button, bounds);
-                ShowControl(button, bounds.bottom <= wellTop - kToolGapDip);
+                PlaceControl(button, ToolButtonBoundsDip(EditorToolAt(index)));
+                ShowControl(button, static_cast<int>(index) < shown);
             }
         }
-        if (_backgroundWell)
+        if (_moreTools)
         {
-            PlaceControl(_backgroundWell, PaletteWellBoundsDip(true));
+            const bool showMore = shown < static_cast<int>(kEditorToolCount) && fit >= 1;
+            if (showMore)
+            {
+                PlaceControl(_moreTools, ToolButtonBoundsDip(EditorToolAt(static_cast<std::size_t>(shown))));
+            }
+            ShowControl(_moreTools, showMore);
+            if (!showMore && _moreToolsOpen)
+            {
+                CloseMoreTools();
+            }
         }
-        if (_foregroundWell)
-        {
-            PlaceControl(_foregroundWell, PaletteWellBoundsDip(false));
-        }
+        ArrangeMoreTools();
     }
     if (_header)
     {
@@ -703,6 +1248,8 @@ void ChromeHost::Arrange() noexcept
     ArrangeSizeCard(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangeRenameCard(layersLeft - kSplitterWidthDip, headerBottom);
     ArrangePicker();
+    ArrangeNotice();
+    ArrangeShortcuts();
 }
 
 void ChromeHost::ArrangePicker() noexcept
@@ -711,10 +1258,21 @@ void ChromeHost::ArrangePicker() noexcept
     {
         return;
     }
-    const float left = kRailWidthDip + kPickerMarginDip;
-    const float top = kMenuHeightDip + kTabHeightDip + kHeaderHeightDip + kPickerMarginDip;
     const float width = DxUi::ColorPicker::kDefaultWidthDip + 2.0f * kPickerMarginDip;
     const float height = DxUi::ColorPicker::kDefaultHeightDip + 2.0f * kPickerMarginDip;
+    const float left = kRailWidthDip + kPickerMarginDip;
+    const D2D1_RECT_F foreground = PaletteWellBoundsDip(false);
+    const float minTop = kMenuHeightDip + kTabHeightDip + kPickerMarginDip;
+    const float maxBottom = HeightDip() - kStatusHeightDip - kPickerMarginDip;
+    float top = foreground.top - kPickerMarginDip - height;
+    if (top < minTop)
+    {
+        top = minTop;
+    }
+    if (top + height > maxBottom)
+    {
+        top = std::max(minTop, maxBottom - height);
+    }
     PlaceControl(_pickerCard, D2D1::RectF(left, top, left + width, top + height));
     PlaceControl(_picker, D2D1::RectF(left + kPickerMarginDip, top + kPickerMarginDip,
                                       left + kPickerMarginDip + DxUi::ColorPicker::kDefaultWidthDip,
@@ -730,10 +1288,16 @@ D2D1_RECT_F ChromeHost::PaletteWellBoundsDip(bool background) const noexcept
 {
     const float statusTop = HeightDip() - kStatusHeightDip;
     const float wellTop = std::max(kMenuHeightDip + kTabHeightDip, statusTop - kWellBlockDip);
-    const float inset = (kRailWidthDip - kWellDip - kWellOffsetDip) / 2.0f;
-    const float left = inset + (background ? kWellOffsetDip : 0.0f);
-    const float top = wellTop + inset + (background ? kWellOffsetDip : 0.0f);
-    return D2D1::RectF(left, top, left + kWellDip, top + kWellDip);
+    const PaletteLayout layout = PaletteLayoutAt(wellTop);
+    return background ? layout.background : layout.foreground;
+}
+
+D2D1_RECT_F ChromeHost::PaletteHotBoundsDip(bool reset) const noexcept
+{
+    const float statusTop = HeightDip() - kStatusHeightDip;
+    const float wellTop = std::max(kMenuHeightDip + kTabHeightDip, statusTop - kWellBlockDip);
+    const PaletteLayout layout = PaletteLayoutAt(wellTop);
+    return reset ? layout.reset : layout.swap;
 }
 
 D2D1_RECT_F ChromeHost::ColorPickerBoundsDip() const noexcept
@@ -744,6 +1308,375 @@ D2D1_RECT_F ChromeHost::ColorPickerBoundsDip() const noexcept
 bool ChromeHost::ColorPickerOpen() const noexcept
 {
     return _pickerCard != nullptr && _picker != nullptr && _pickerCard->IsVisible();
+}
+
+D2D1_RECT_F ChromeHost::LayerRowBoundsDip(std::size_t index) const noexcept
+{
+    if (_layers == nullptr)
+    {
+        return D2D1::RectF();
+    }
+    const std::optional<D2D1_RECT_F> row = _layers->GetVisibleItemHitRect(index);
+    return row.value_or(D2D1::RectF());
+}
+
+int ChromeHost::HitKindForTest(float xPixels, float yPixels) noexcept
+{
+    if (!_attached)
+    {
+        return 0;
+    }
+    const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+    const DxUi::Control* hit = _view.Controls().DebugHitTestControl(D2D1::Point2F(xPixels / scale, yPixels / scale));
+    if (hit == nullptr)
+    {
+        return 0;
+    }
+    if (hit == _layers)
+    {
+        return 1;
+    }
+    if (hit == _splitter)
+    {
+        return 2;
+    }
+    if (hit == _shortcutsCard || hit == _shortcutsTree)
+    {
+        return 3;
+    }
+    if (hit == _noticeCard || hit == _noticeLabel || hit == _noticeClose)
+    {
+        return 4;
+    }
+    if (hit == _adjustCard)
+    {
+        return 5;
+    }
+    if (hit == _pickerCard || hit == _picker)
+    {
+        return 6;
+    }
+    if (hit == _overlay)
+    {
+        return 7;
+    }
+    return 8;
+}
+
+void ChromeHost::ArrangeNotice() noexcept
+{
+    if (_noticeCard == nullptr || !_noticeCard->IsVisible())
+    {
+        return;
+    }
+    const float width = std::min(420.0f, std::max(240.0f, WidthDip() - kRailWidthDip - 32.0f));
+    const float left = kRailWidthDip + 16.0f;
+    const float top = kMenuHeightDip + kTabHeightDip + kHeaderHeightDip + 16.0f;
+    const float labelBottom = top + 12.0f + 48.0f;
+    PlaceControl(_noticeCard, D2D1::RectF(left, top, left + width, labelBottom + 46.0f));
+    PlaceControl(_noticeLabel, D2D1::RectF(left + 12.0f, top + 12.0f, left + width - 12.0f, labelBottom));
+    PlaceControl(_noticeClose,
+                 D2D1::RectF(left + width - 102.0f, labelBottom + 4.0f, left + width - 12.0f, labelBottom + 34.0f));
+}
+
+void ChromeHost::ArrangeShortcuts() noexcept
+{
+    if (_shortcutsCard == nullptr || !_shortcutsCard->IsVisible())
+    {
+        return;
+    }
+    const float right = WidthDip() - LayersWidthDip() - kSplitterWidthDip;
+    const float bottom = HeightDip() - kStatusHeightDip - 8.0f;
+    const float left = kRailWidthDip + 12.0f;
+    const float top = kMenuHeightDip + kTabHeightDip + 8.0f;
+    const float width = std::min(440.0f, std::max(220.0f, right - left));
+    const float height = std::max(160.0f, bottom - top);
+    PlaceControl(_shortcutsCard, D2D1::RectF(left, top, left + width, top + height));
+    PlaceControl(_shortcutsTitle, D2D1::RectF(left + 12.0f, top + 10.0f, left + width - 12.0f, top + 34.0f));
+    PlaceControl(_shortcutsTree, D2D1::RectF(left + 8.0f, top + 40.0f, left + width - 8.0f, top + height - 46.0f));
+    PlaceControl(_shortcutsClose,
+                 D2D1::RectF(left + width - 102.0f, top + height - 40.0f, left + width - 12.0f, top + height - 10.0f));
+}
+
+void ChromeHost::ShowNotice(std::wstring text) noexcept
+{
+    if (_noticeCard == nullptr || _noticeLabel == nullptr)
+    {
+        return;
+    }
+    CloseShortcuts();
+    _noticeLabel->SetText(std::move(text));
+    _noticeCard->SetVisible(true);
+    _noticeLabel->SetVisible(true);
+    if (_noticeClose != nullptr)
+    {
+        _noticeClose->SetVisible(true);
+        _view.Controls().SetCancelButton(_noticeClose);
+        _view.Controls().SetDefaultButton(_noticeClose);
+        _view.Controls().SetFocusControl(_noticeClose);
+    }
+    ArrangeNotice();
+    _canvasFocused = false;
+    _view.MarkDirty();
+}
+
+void ChromeHost::CloseNotice() noexcept
+{
+    if (_noticeCard == nullptr || !_noticeCard->IsVisible())
+    {
+        return;
+    }
+    _noticeCard->SetVisible(false);
+    if (!AdjustPanelOpen() && !ShortcutsOpen())
+    {
+        _view.Controls().SetCancelButton(nullptr);
+        _view.Controls().SetDefaultButton(nullptr);
+    }
+    _view.MarkDirty();
+}
+
+bool ChromeHost::NoticeOpen() const noexcept
+{
+    return _noticeCard != nullptr && _noticeCard->IsVisible();
+}
+
+D2D1_RECT_F ChromeHost::NoticeBoundsDip() const noexcept
+{
+    return NoticeOpen() ? _noticeCard->GetBounds() : D2D1::RectF();
+}
+
+void ChromeHost::OpenShortcuts() noexcept
+{
+    if (_shortcutsCard == nullptr || _shortcutsTree == nullptr)
+    {
+        return;
+    }
+    CloseNotice();
+    _shortcutModel.rows.clear();
+    for (const CommandShortcutDefault& row : CommandShortcuts())
+    {
+        std::wstring name = LoadStringResource(nullptr, row.captionId);
+        const std::size_t tab = name.find(L'\t');
+        if (tab != std::wstring::npos)
+        {
+            name.resize(tab);
+        }
+        std::wstring clean;
+        clean.reserve(name.size());
+        for (std::size_t index = 0; index < name.size(); ++index)
+        {
+            const wchar_t ch = name[index];
+            if (ch == L'&')
+            {
+                if (index + 1 < name.size() && name[index + 1] == L'&')
+                {
+                    clean.push_back(L'&');
+                    ++index;
+                }
+                continue;
+            }
+            clean.push_back(ch);
+        }
+        while (!clean.empty() && (clean.back() == L'.' || clean.back() == L' '))
+        {
+            clean.pop_back();
+        }
+        _shortcutModel.rows.push_back(ShortcutListModel::Row{std::move(clean), LayoutChord(row.chord)});
+    }
+    _shortcutsTree->NotifyDataChanged();
+    _shortcutsCard->SetVisible(true);
+    if (_shortcutsTitle != nullptr)
+    {
+        _shortcutsTitle->SetVisible(true);
+    }
+    _shortcutsTree->SetVisible(true);
+    if (_shortcutsClose != nullptr)
+    {
+        _shortcutsClose->SetVisible(true);
+        _view.Controls().SetCancelButton(_shortcutsClose);
+        _view.Controls().SetDefaultButton(_shortcutsClose);
+    }
+    ArrangeShortcuts();
+    _canvasFocused = false;
+    _view.MarkDirty();
+}
+
+void ChromeHost::RefreshDisplayedChords() noexcept
+{
+    for (const unique_hmenu& menu : _menus)
+    {
+        if (menu)
+        {
+            RewriteMenuChords(menu.get());
+        }
+    }
+    if (ShortcutsOpen())
+    {
+        OpenShortcuts();
+    }
+}
+
+std::wstring ChromeHost::ShortcutChordAt(std::size_t index) const
+{
+    if (index >= _shortcutModel.rows.size())
+    {
+        return {};
+    }
+    return _shortcutModel.rows[index].chord;
+}
+
+std::wstring ChromeHost::MenuItemCaption(int command) const
+{
+    for (const unique_hmenu& menu : _menus)
+    {
+        if (!menu)
+        {
+            continue;
+        }
+        std::wstring caption = MenuCaptionFrom(menu.get(), command);
+        if (!caption.empty())
+        {
+            return caption;
+        }
+    }
+    return {};
+}
+
+void ChromeHost::CloseShortcuts() noexcept
+{
+    if (_shortcutsCard == nullptr || !_shortcutsCard->IsVisible())
+    {
+        return;
+    }
+    _shortcutsCard->SetVisible(false);
+    if (!AdjustPanelOpen() && !NoticeOpen())
+    {
+        _view.Controls().SetCancelButton(nullptr);
+        _view.Controls().SetDefaultButton(nullptr);
+    }
+    _view.MarkDirty();
+}
+
+bool ChromeHost::ShortcutsOpen() const noexcept
+{
+    return _shortcutsCard != nullptr && _shortcutsCard->IsVisible();
+}
+
+std::span<const ChromeHost::CommandShortcutDefault> ChromeHost::CommandShortcuts() noexcept
+{
+    static constexpr CommandShortcutDefault kDefaults[] = {
+        {kCommandNew, IDS_CMD_NEW, L"Ctrl+N"},
+        {kCommandNewCanvas, IDS_CMD_NEW_CANVAS, L""},
+        {kCommandOpen, IDS_CMD_OPEN, L"Ctrl+O"},
+        {kCommandImportImages, IDS_CMD_IMPORT_IMAGES, L""},
+        {kCommandSave, IDS_CMD_SAVE, L"Ctrl+S"},
+        {kCommandSaveAs, IDS_CMD_SAVE_AS, L"Ctrl+Shift+S"},
+        {kCommandExportPng, IDS_CMD_EXPORT_PNG, L""},
+        {kCommandExportJpeg, IDS_CMD_EXPORT_JPEG, L""},
+        {kCommandCloseProject, IDS_CMD_CLOSE_PROJECT, L"Ctrl+W"},
+        {kCommandExit, IDS_CMD_EXIT, L"Alt+F4"},
+        {kCommandUndo, IDS_CMD_UNDO, L"Ctrl+Z"},
+        {kCommandRedo, IDS_CMD_REDO, L"Ctrl+Shift+Z"},
+        {kCommandCut, IDS_CMD_CUT, L"Ctrl+X"},
+        {kCommandCopy, IDS_CMD_COPY, L"Ctrl+C"},
+        {kCommandCopyMerged, IDS_CMD_COPY_MERGED, L"Ctrl+Shift+C"},
+        {kCommandPaste, IDS_CMD_PASTE, L"Ctrl+V"},
+        {kCommandFillForeground, IDS_CMD_FILL_FOREGROUND, L"Alt+Backspace"},
+        {kCommandFillBackground, IDS_CMD_FILL_BACKGROUND, L"Ctrl+Backspace"},
+        {kCommandSwapPalette, IDS_CMD_SWAP_PALETTE, L"X"},
+        {kCommandResetPalette, IDS_CMD_RESET_PALETTE, L"D"},
+        {kCommandClearPixels, IDS_CMD_CLEAR_PIXELS, L""},
+        {kCommandContentAwareFill, IDS_CMD_CONTENT_AWARE_FILL, L"Shift+Delete"},
+        {kCommandInvert, IDS_CMD_INVERT, L"Ctrl+I"},
+        {kCommandFreeTransform, IDS_CMD_FREE_TRANSFORM, L"Ctrl+T"},
+        {kCommandCurves, IDS_CMD_CURVES, L"Ctrl+M"},
+        {kCommandLevels, IDS_CMD_LEVELS, L"Ctrl+L"},
+        {kCommandHueSaturation, IDS_CMD_HUE_SATURATION, L"Ctrl+U"},
+        {kCommandExposure, IDS_CMD_EXPOSURE, L""},
+        {kCommandGradientMap, IDS_CMD_GRADIENT_MAP, L""},
+        {kCommandGrain, IDS_CMD_GRAIN, L""},
+        {kCommandCanvasSize, IDS_CMD_CANVAS_SIZE, L""},
+        {kCommandImageSize, IDS_CMD_IMAGE_SIZE, L""},
+        {kCommandFlipCanvasHorizontal, IDS_CMD_FLIP_CANVAS_HORIZONTAL, L""},
+        {kCommandFlipCanvasVertical, IDS_CMD_FLIP_CANVAS_VERTICAL, L""},
+        {kCommandNewLayer, IDS_CMD_NEW_LAYER, L"Ctrl+Shift+N"},
+        {kCommandNewFolder, IDS_CMD_NEW_FOLDER, L"Ctrl+G"},
+        {kCommandLayerViaCopy, IDS_CMD_LAYER_VIA_COPY, L"Ctrl+J"},
+        {kCommandNewLevelsAdjustment, IDS_CMD_ADJUST_LEVELS, L""},
+        {kCommandNewCurvesAdjustment, IDS_CMD_ADJUST_CURVES, L""},
+        {kCommandNewHueSaturationAdjustment, IDS_CMD_ADJUST_HSV, L""},
+        {kCommandNewExposureAdjustment, IDS_CMD_ADJUST_EXPOSURE, L""},
+        {kCommandNewGradientMapAdjustment, IDS_CMD_ADJUST_GRADIENT_MAP, L""},
+        {kCommandNewGrainAdjustment, IDS_CMD_ADJUST_GRAIN, L""},
+        {kCommandEditAdjustment, IDS_CMD_EDIT_ADJUSTMENT, L""},
+        {kCommandGroupLayers, IDS_CMD_GROUP_LAYERS, L""},
+        {kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP, L"Ctrl+Shift+G"},
+        {kCommandRenameLayer, IDS_CMD_RENAME_LAYER, L"F2"},
+        {kCommandDeleteLayer, IDS_CMD_DELETE_LAYER, L"Delete"},
+        {kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY, L""},
+        {kCommandMoveLayerUp, IDS_CMD_MOVE_LAYER_UP, L"Ctrl+]"},
+        {kCommandMoveLayerDown, IDS_CMD_MOVE_LAYER_DOWN, L"Ctrl+["},
+        {kCommandClipToggle, IDS_CMD_CLIP_CREATE, L"Ctrl+Alt+G"},
+        {kCommandMergeDown, IDS_CMD_MERGE_DOWN, L"Ctrl+E"},
+        {kCommandAddMask, IDS_CMD_ADD_MASK, L""},
+        {kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK, L""},
+        {kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL, L""},
+        {kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL, L""},
+        {kCommandSelectAll, IDS_CMD_SELECT_ALL, L"Ctrl+A"},
+        {kCommandDeselect, IDS_CMD_DESELECT, L"Ctrl+D"},
+        {kCommandInverse, IDS_CMD_INVERSE, L"Ctrl+Shift+I"},
+        {kCommandLoadLayerSelection, IDS_CMD_LOAD_LAYER_SELECTION, L""},
+        {kCommandLoadMaskSelection, IDS_CMD_LOAD_MASK_SELECTION, L""},
+        {kCommandGaussianBlur, IDS_CMD_GAUSSIAN_BLUR, L""},
+        {kCommandMotionBlur, IDS_CMD_MOTION_BLUR, L""},
+        {kCommandAddNoise, IDS_CMD_ADD_NOISE, L""},
+        {kCommandLensCorrection, IDS_CMD_LENS_CORRECTION, L""},
+        {kCommandZoomFit, IDS_CMD_ZOOM_FIT, L"Ctrl+0"},
+        {kCommandZoomActual, IDS_CMD_ZOOM_ACTUAL, L"Ctrl+1"},
+        {kCommandZoomIn, IDS_CMD_ZOOM_IN, L"Ctrl++"},
+        {kCommandZoomOut, IDS_CMD_ZOOM_OUT, L"Ctrl+-"},
+        {kCommandSampleRing, IDS_CMD_SAMPLE_RING, L""},
+        {kCommandKeyboardShortcuts, IDS_CMD_KEYBOARD_SHORTCUTS, L""},
+        {kCommandAbout, IDS_CMD_ABOUT, L""},
+        {SelectToolCommand(EditorTool::Move), IDS_CMD_TOOL_MOVE, L"V"},
+        {SelectToolCommand(EditorTool::Marquee), IDS_CMD_TOOL_MARQUEE, L"M"},
+        {SelectToolCommand(EditorTool::Lasso), IDS_CMD_TOOL_LASSO, L"L"},
+        {SelectToolCommand(EditorTool::Wand), IDS_CMD_TOOL_WAND, L"W"},
+        {SelectToolCommand(EditorTool::Crop), IDS_CMD_TOOL_CROP, L"C"},
+        {SelectToolCommand(EditorTool::Brush), IDS_CMD_TOOL_BRUSH, L"B"},
+        {SelectToolCommand(EditorTool::Eraser), IDS_CMD_TOOL_ERASER, L"E"},
+        {SelectToolCommand(EditorTool::Heal), IDS_CMD_TOOL_HEAL, L"J"},
+        {SelectToolCommand(EditorTool::Clone), IDS_CMD_TOOL_CLONE, L"S"},
+        {SelectToolCommand(EditorTool::Smear), IDS_CMD_TOOL_SMEAR, L"R"},
+        {SelectToolCommand(EditorTool::Gradient), IDS_CMD_TOOL_GRADIENT, L"G"},
+        {SelectToolCommand(EditorTool::Shape), IDS_CMD_TOOL_SHAPE, L"U"},
+        {SelectToolCommand(EditorTool::Eyedropper), IDS_CMD_TOOL_EYEDROPPER, L"I"},
+        {SelectToolCommand(EditorTool::Hand), IDS_CMD_TOOL_HAND, L"H"},
+        {SelectToolCommand(EditorTool::Zoom), IDS_CMD_TOOL_ZOOM, L"Z"},
+        {kCommandNudgeSelectionLeft, IDS_CMD_NUDGE_SELECTION_LEFT, L"Left"},
+        {kCommandNudgeSelectionRight, IDS_CMD_NUDGE_SELECTION_RIGHT, L"Right"},
+        {kCommandNudgeSelectionUp, IDS_CMD_NUDGE_SELECTION_UP, L"Up"},
+        {kCommandNudgeSelectionDown, IDS_CMD_NUDGE_SELECTION_DOWN, L"Down"},
+        {kCommandNudgeLayerLeft, IDS_CMD_NUDGE_LAYER_LEFT, L"Left"},
+        {kCommandNudgeLayerRight, IDS_CMD_NUDGE_LAYER_RIGHT, L"Right"},
+        {kCommandNudgeLayerUp, IDS_CMD_NUDGE_LAYER_UP, L"Up"},
+        {kCommandNudgeLayerDown, IDS_CMD_NUDGE_LAYER_DOWN, L"Down"},
+        {kCommandNudgePixelsLeft, IDS_CMD_NUDGE_PIXELS_LEFT, L"Ctrl+Left"},
+        {kCommandNudgePixelsRight, IDS_CMD_NUDGE_PIXELS_RIGHT, L"Ctrl+Right"},
+        {kCommandNudgePixelsUp, IDS_CMD_NUDGE_PIXELS_UP, L"Ctrl+Up"},
+        {kCommandNudgePixelsDown, IDS_CMD_NUDGE_PIXELS_DOWN, L"Ctrl+Down"},
+        {kCommandBrushSmaller, IDS_CMD_BRUSH_SMALLER, L"["},
+        {kCommandBrushLarger, IDS_CMD_BRUSH_LARGER, L"]"},
+        {kCommandBrushSofter, IDS_CMD_BRUSH_SOFTER, L"Shift+["},
+        {kCommandBrushHarder, IDS_CMD_BRUSH_HARDER, L"Shift+]"},
+        {kCommandBlendPrevious, IDS_CMD_BLEND_PREVIOUS, L"Shift+-"},
+        {kCommandBlendNext, IDS_CMD_BLEND_NEXT, L"Shift+="},
+        {kCommandDeleteKey, IDS_CMD_DELETE_KEY, L"Delete"},
+        {kCommandToggleMarqueeKind, IDS_CMD_TOGGLE_MARQUEE, L"M"},
+        {kCommandToggleLassoKind, IDS_CMD_TOGGLE_LASSO, L"L"},
+        {kCommandToggleShapeKind, IDS_CMD_TOGGLE_SHAPE, L"Shift+U"},
+    };
+    return kDefaults;
 }
 
 void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
@@ -808,9 +1741,16 @@ void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
     switch (change.phase)
     {
     case DxUi::ColorPickerChangePhase::Preview:
-        if (DxUi::ColorSwatch* well = _pickerBackground ? _backgroundWell : _foregroundWell)
+        if (_railPalette != nullptr)
         {
-            well->SetSwatchValue(change.argb);
+            if (_pickerBackground)
+            {
+                _railPalette->SetBackground(change.argb);
+            }
+            else
+            {
+                _railPalette->SetForeground(change.argb);
+            }
         }
         _view.MarkDirty();
         break;
@@ -831,16 +1771,24 @@ void ChromeHost::FinishPicker(bool commit, uint32_t argb) noexcept
     {
         target = argb | 0xFF000000u;
     }
-    DxUi::ColorSwatch* well = _pickerBackground ? _backgroundWell : _foregroundWell;
-    if (well)
+    if (_railPalette != nullptr)
     {
-        well->SetSwatchValue(target);
+        if (_pickerBackground)
+        {
+            _railPalette->SetBackground(target);
+        }
+        else
+        {
+            _railPalette->SetForeground(target);
+        }
     }
     if (_pickerCard)
     {
         _pickerCard->SetVisible(false);
     }
-    _view.Controls().SetFocusControl(well);
+    _view.Controls().SetFocusControl(
+        _railPalette != nullptr ? (_pickerBackground ? _railPalette->BackgroundZone() : _railPalette->ForegroundZone())
+                                : nullptr);
     _view.MarkDirty();
     if (commit && _onPalette)
     {
@@ -897,13 +1845,16 @@ void ChromeHost::SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) no
     _foregroundArgb = foregroundArgb | 0xFF000000u;
     _backgroundArgb = backgroundArgb | 0xFF000000u;
     const bool open = ColorPickerOpen();
-    if (_foregroundWell && !(open && !_pickerBackground))
+    if (_railPalette != nullptr)
     {
-        _foregroundWell->SetSwatchValue(_foregroundArgb);
-    }
-    if (_backgroundWell && !(open && _pickerBackground))
-    {
-        _backgroundWell->SetSwatchValue(_backgroundArgb);
+        if (!(open && !_pickerBackground))
+        {
+            _railPalette->SetForeground(_foregroundArgb);
+        }
+        if (!(open && _pickerBackground))
+        {
+            _railPalette->SetBackground(_backgroundArgb);
+        }
     }
 }
 
@@ -988,6 +1939,18 @@ bool ChromeHost::IsCanvasPoint(float xPixels, float yPixels) const noexcept
         return false;
     }
     if (RenameCardOpen() && covers(_renameCard->GetBounds()))
+    {
+        return false;
+    }
+    if (NoticeOpen() && covers(_noticeCard->GetBounds()))
+    {
+        return false;
+    }
+    if (ShortcutsOpen() && covers(_shortcutsCard->GetBounds()))
+    {
+        return false;
+    }
+    if (MoreToolsOpen() && covers(_moreCard->GetBounds()))
     {
         return false;
     }
@@ -1126,6 +2089,20 @@ void ChromeHost::SyncToolVisuals() noexcept
         {
             button->SetPressedVisual(latched);
         }
+        if (DxUi::Button* overflow = _overflowButtons[index];
+            overflow != nullptr && overflow->DebugIsPressed() != latched)
+        {
+            overflow->SetPressedVisual(latched);
+        }
+    }
+    if (_moreTools != nullptr)
+    {
+        const bool latched = _moreToolsOpen || (_moreToolStart < static_cast<int>(kEditorToolCount) &&
+                                                EditorToolIndex(_tool) >= static_cast<std::size_t>(_moreToolStart));
+        if (_moreTools->DebugIsPressed() != latched)
+        {
+            _moreTools->SetPressedVisual(latched);
+        }
     }
 }
 
@@ -1226,6 +2203,21 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     if (!_attached)
     {
         return false;
+    }
+    if (event.action == DxUi::PointerAction::Down && MoreToolsOpen())
+    {
+        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+        const float x = event.xPixels / scale;
+        const float y = event.yPixels / scale;
+        const auto inside = [](const D2D1_RECT_F& bounds, float px, float py)
+        { return px >= bounds.left && px < bounds.right && py >= bounds.top && py < bounds.bottom; };
+        const bool inCard = _moreCard != nullptr && inside(_moreCard->GetBounds(), x, y);
+        const bool inButton = _moreTools != nullptr && inside(_moreTools->GetBounds(), x, y);
+        if (!inCard && !inButton)
+        {
+            CloseMoreTools();
+            return true;
+        }
     }
     const bool inHole = IsCanvasPoint(event.xPixels, event.yPixels);
     if (inHole && event.action == DxUi::PointerAction::Down)
@@ -1900,6 +2892,19 @@ void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loo
     _overlay->SetSelectionOutline(std::move(loops));
 }
 
+void ChromeHost::SetSelectionAntPhase(float phase) noexcept
+{
+    if (_overlay)
+    {
+        _overlay->SetAntPhase(phase);
+    }
+}
+
+float ChromeHost::SelectionAntPhase() const noexcept
+{
+    return _overlay != nullptr ? _overlay->AntPhase() : 0.0f;
+}
+
 void ChromeHost::SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept
 {
     if (!_overlay)
@@ -2551,6 +3556,11 @@ void ChromeHost::SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept
     _overlay->SetCloneSource(point);
 }
 
+std::optional<D2D1_POINT_2F> ChromeHost::CloneSourceMarkDip() const noexcept
+{
+    return _overlay != nullptr ? _overlay->CloneSource() : std::nullopt;
+}
+
 void ChromeHost::SetPickerColor(uint32_t argb) noexcept
 {
     if (!_picker || !_pickerCard || !_pickerCard->IsVisible())
@@ -2558,9 +3568,16 @@ void ChromeHost::SetPickerColor(uint32_t argb) noexcept
         return;
     }
     _picker->SetCurrentColor(argb | 0xFF000000u);
-    if (DxUi::ColorSwatch* well = _pickerBackground ? _backgroundWell : _foregroundWell)
+    if (_railPalette != nullptr)
     {
-        well->SetSwatchValue(argb | 0xFF000000u);
+        if (_pickerBackground)
+        {
+            _railPalette->SetBackground(argb | 0xFF000000u);
+        }
+        else
+        {
+            _railPalette->SetForeground(argb | 0xFF000000u);
+        }
     }
     _view.MarkDirty();
 }

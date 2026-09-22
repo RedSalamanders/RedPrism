@@ -6,7 +6,9 @@ Restore the exact DxUi source pin and isolated build dependencies without modify
 param(
     [ValidateSet('x64', 'ARM64')]
     [string] $Platform = 'x64',
-    [string] $MSBuildPath = ''
+    [string] $MSBuildPath = '',
+
+    [switch] $CheckUpdates
 )
 
 Set-StrictMode -Version Latest
@@ -80,6 +82,24 @@ $identityPath = Join-Path $dependencyRoot "DxUi.identity.$Platform.json"
 $identityJson = $buildIdentity | ConvertTo-Json -Depth 5
 if (-not (Test-Path -LiteralPath $identityPath) -or [IO.File]::ReadAllText($identityPath) -ne $identityJson) {
     [IO.File]::WriteAllText($identityPath, $identityJson, [Text.UTF8Encoding]::new($false))
+}
+
+if ($CheckUpdates) {
+    Import-Module (Join-Path $source 'Tools/ConsumerUpdate.psm1') -Force
+    Import-Module (Join-Path $PSScriptRoot 'Build/BuildPresentation.psm1') -Force
+    # The pinned helper decides the notice. A lookup failure stays an advisory and does not fail restore.
+    foreach ($record in @(Show-DxUiUpdateNotice -LockFile $pinPath 6>&1)) {
+        $notice = if ($record -is [System.Management.Automation.InformationRecord]) {
+            [string] $record.MessageData
+        }
+        else {
+            [string] $record
+        }
+        $foregroundColor = Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $notice
+        if ($foregroundColor) {
+            Write-Host (Format-RedPrismDxUiUpdateNotice -Notice $notice) -ForegroundColor $foregroundColor
+        }
+    }
 }
 
 Write-Host "DxUi restored at exact pin $($pin.commit); sibling checkout unchanged."

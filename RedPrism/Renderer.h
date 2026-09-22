@@ -71,6 +71,8 @@ class Renderer final
     [[nodiscard]] bool IsSuspended() const noexcept;
     [[nodiscard]] bool IsOccluded() const noexcept;
     [[nodiscard]] bool IsWarp() const noexcept;
+    // Self-test seam: the same rebuild Present runs after a device-removed result.
+    HRESULT RecoverDeviceForTest() noexcept;
 
   private:
     static constexpr DXGI_FORMAT kTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;

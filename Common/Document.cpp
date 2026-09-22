@@ -1138,23 +1138,57 @@ void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
     _displayCopy.reset();
 }
 
-void DocumentSession::Undo()
+bool DocumentSession::CancelPendingEdit()
 {
     _lassoDraft.reset();
+    // The open panel owns the document until OK or Cancel. The key must not restore history under it.
     if (HasColorEdit())
     {
-        return; // The open panel owns the document until OK or Cancel.
+        return true;
     }
-    // A pending gradient is not in history yet: the first Undo discards it, as Escape would.
+    // Pending edits are not history entries yet. The first Undo or Redo drops them, as Escape would.
     if (_gradient)
     {
         CancelGradient();
-        return;
+        return true;
     }
-    // A pending transform is not in history yet: the first Undo discards it, as Escape would.
     if (_transformEdit.has_value())
     {
         CancelTransform();
+        return true;
+    }
+    if (_brush)
+    {
+        CancelBrush();
+        return true;
+    }
+    if (_warp)
+    {
+        CancelWarp();
+        return true;
+    }
+    if (_pixelMove)
+    {
+        CancelPixelMove();
+        return true;
+    }
+    if (_shapeDraft.has_value())
+    {
+        CancelShape();
+        return true;
+    }
+    if (_cropRect.has_value())
+    {
+        CancelCrop();
+        return true;
+    }
+    return false;
+}
+
+void DocumentSession::Undo()
+{
+    if (CancelPendingEdit())
+    {
         return;
     }
     const std::optional<DocumentHistory::Snapshot> snapshot = history.Undo();
@@ -1166,14 +1200,8 @@ void DocumentSession::Undo()
 
 void DocumentSession::Redo()
 {
-    _lassoDraft.reset();
-    if (HasColorEdit())
+    if (CancelPendingEdit())
     {
-        return;
-    }
-    if (_transformEdit.has_value())
-    {
-        CancelTransform();
         return;
     }
     const std::optional<DocumentHistory::Snapshot> snapshot = history.Redo();
@@ -1409,7 +1437,7 @@ bool DocumentSession::CanPlaceLayer(const Guid& id, const std::optional<Guid>& p
 }
 
 bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& parent, const std::optional<Guid>& above,
-                                 bool atBottom)
+                                 bool atBottom, bool before)
 {
     const std::optional<Guid> destination = parent;
     const std::optional<Guid> aboveId = above;
@@ -1434,7 +1462,7 @@ bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& pare
         {
             return false;
         }
-        insertion = target.value() + 1;
+        insertion = target.value() + (before ? 0 : 1);
     }
     layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(layer));
     AdoptClipping(id, layers);

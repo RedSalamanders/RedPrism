@@ -83,6 +83,12 @@ maximized), the layers panel width and the sample ring; `jpegQuality` and `theme
 takes a saved placement that still meets a monitor (`MonitorFromRect`) and opens maximized when it was; the chrome
 palette, the sample ring and the layers width apply once the chrome exists.
 
+## Command chords
+
+A finished command's default chord is not a settings field. It lives on the command id in
+[`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). A later override will name that same id. The settings
+document does not store a replacement chord today, and a key or control still runs the command through that id.
+
 ## Validation
 
 `IoTests` `settings.*`: the file names and default paths; parsing (a minimal document is the defaults, every field

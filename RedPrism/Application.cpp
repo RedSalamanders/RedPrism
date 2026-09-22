@@ -7,6 +7,7 @@
 #include "FileDialogs.h"
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
+#include "LucideToolButton.h"
 #include "ProjectStore.h"
 #include "Resources.h"
 #include "Selection.h"
@@ -30,6 +31,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/com.h>
+#include <wil/resource.h>
 #pragma warning(pop)
 
 namespace
@@ -249,7 +251,16 @@ int Application::Run(int showCommand) noexcept
             _occlusionStatusChanged = false;
         }
 
-        const bool chromeAnimating = _chrome && _chrome->NeedsAnimation();
+        const std::optional<DocumentSelection> marchingSelection = _session.DisplayedSelection();
+        const bool marchingAnts = marchingSelection.has_value() && !marchingSelection->IsEmpty();
+        if (marchingAnts && _chrome)
+        {
+            // One dash cycle (8 DIP) every 400 ms. Hidden and occluded frames never reach this render.
+            const float phase = static_cast<float>(static_cast<double>(GetTickCount64() % 400ull) / 400.0) * 8.0f;
+            _chrome->SetSelectionAntPhase(phase);
+            _frameInvalidated = true;
+        }
+        const bool chromeAnimating = (_chrome && _chrome->NeedsAnimation()) || marchingAnts;
         if (_chrome && _chrome->NeedsPreparation())
         {
             _frameInvalidated = true;
@@ -287,7 +298,7 @@ int Application::Run(int showCommand) noexcept
                 _renderer.IsOccluded() && !forceCaptureFrame,
                 false,
                 _frameInvalidated,
-                _chrome && _chrome->NeedsAnimation(),
+                (_chrome && _chrome->NeedsAnimation()) || marchingAnts,
             });
         }
 
@@ -441,6 +452,71 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"Visible DxUi chrome did not allocate a surface or composite.\n");
         return 5;
     }
+    const int visibleTools = _chrome->VisibleToolButtonCount();
+    if (LucideIconsPrepared() < static_cast<int>(kEditorToolCount) || LucideIconsDrawn() < visibleTools ||
+        visibleTools < 1)
+    {
+        const std::wstring missed =
+            std::format(L"The tool rail prepared {} Lucide icons and drew {} of {} visible tools.\n",
+                        LucideIconsPrepared(), LucideIconsDrawn(), visibleTools);
+        SelfTestFailure(missed.c_str());
+        return 5;
+    }
+    if (visibleTools < static_cast<int>(kEditorToolCount))
+    {
+        const float scale = static_cast<float>(windowDpi) / 96.0f;
+        const D2D1_RECT_F more = _chrome->MoreToolsBoundsDip();
+        if (more.bottom <= more.top)
+        {
+            SelfTestFailure(L"The rail overflowed without a More button.\n");
+            return 5;
+        }
+        DxUi::PointerEvent pointer{};
+        const auto click = [&](const D2D1_RECT_F& rect)
+        {
+            pointer.action = DxUi::PointerAction::Down;
+            pointer.xPixels = (rect.left + rect.right) * 0.5f * scale;
+            pointer.yPixels = (rect.top + rect.bottom) * 0.5f * scale;
+            const bool pressed = _chrome->DispatchPointer(pointer);
+            pointer.action = DxUi::PointerAction::Up;
+            return _chrome->DispatchPointer(pointer) && pressed;
+        };
+        if (!click(more) || !_chrome->MoreToolsOpen())
+        {
+            SelfTestFailure(L"More did not open the hidden tools.\n");
+            return 5;
+        }
+        (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
+        EditorTool hidden = EditorTool::Count;
+        D2D1_RECT_F hiddenBounds{};
+        for (std::size_t index = 0; index < kEditorToolCount; ++index)
+        {
+            const D2D1_RECT_F bounds = _chrome->OverflowToolBoundsDip(EditorToolAt(index));
+            if (bounds.bottom > bounds.top)
+            {
+                hidden = EditorToolAt(index);
+                hiddenBounds = bounds;
+                break;
+            }
+        }
+        if (hidden == EditorTool::Count || !click(hiddenBounds) || _tool != hidden || _chrome->MoreToolsOpen())
+        {
+            SelfTestFailure(L"A hidden tool in the More card did not become the current tool.\n");
+            return 5;
+        }
+        (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
+        const D2D1_RECT_F move = _chrome->ToolButtonBoundsDip(EditorTool::Move);
+        if (!click(move) || _tool != EditorTool::Move)
+        {
+            SelfTestFailure(L"The rail did not return to the Move tool after More.\n");
+            return 5;
+        }
+    }
+    else if (_chrome->MoreToolsBoundsDip().bottom > _chrome->MoreToolsBoundsDip().top)
+    {
+        SelfTestFailure(L"More was shown when every tool fit on the rail.\n");
+        return 5;
+    }
     if (visible.surfaceBytes > (64ull * 1024ull * 1024ull))
     {
         SelfTestFailure(L"Visible DxUi chrome exceeded the 64 MiB surface cap.\n");
@@ -458,6 +534,47 @@ int Application::RunSelfTest() noexcept
     {
         SelfTestFailure(L"A settled document was re-composited.\n");
         return 5;
+    }
+    // Marching ants change the dash, not the document composite.
+    _session.ApplySelection(SelectionGeometry::Rect(10, 10, 80, 40), SelectionMode::New, L"Select");
+    SyncChrome();
+    {
+        const std::uint64_t antComposites = _composition.CompositeCount();
+        _chrome->SetSelectionAntPhase(3.0f);
+        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        if (FAILED(result) || _composition.CompositeCount() != antComposites ||
+            std::fabs(_chrome->SelectionAntPhase() - 3.0f) > 0.01f)
+        {
+            SelfTestFailure(L"Marching ants recomposited the document or did not keep the dash phase.\n");
+            return 5;
+        }
+    }
+    _session.Deselect();
+    SyncChrome();
+    // Device loss rebuilds the device, then the composition and the brush engine bind to the new one.
+    {
+        ID3D11Device* previous = _renderer.Device();
+        const HRESULT recovered = _renderer.RecoverDeviceForTest();
+        if (FAILED(recovered))
+        {
+            const std::wstring message =
+                std::format(L"RecoverDevice failed {:#010X}.\n", static_cast<std::uint32_t>(recovered));
+            SelfTestFailure(message.c_str());
+            return 5;
+        }
+        BindCompositionDevice();
+        if (_renderer.Device() == nullptr || _renderer.Device() == previous || !_brushEngine.Ready() ||
+            _composition.Device() != _renderer.Device())
+        {
+            SelfTestFailure(L"Device recovery did not rebind the composition and the brush engine.\n");
+            return 5;
+        }
+        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        if (FAILED(result) || _composition.CanvasSurfaceBytes() == 0)
+        {
+            SelfTestFailure(L"The frame after device recovery did not present.\n");
+            return 5;
+        }
     }
 
     // The DxUi splitter, palette wells with the color picker, and the opacity stepper are wired to the session.
@@ -484,6 +601,20 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The layers splitter did not take the pointer move.\n");
             return 5;
         }
+        // The frame between moves lays the panes out. That bounds change must not snap the drag back.
+        (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
+        if (std::fabs(_chrome->LayersWidthDip() - (beforeWidth + 40.0f)) > 0.5f)
+        {
+            SelfTestFailure(L"A frame during the drag snapped the splitter back.\n");
+            return 5;
+        }
+        pointer.action = DxUi::PointerAction::Move;
+        pointer.xPixels = (centerX - 80.0f) * scale;
+        if (!_chrome->DispatchPointer(pointer))
+        {
+            SelfTestFailure(L"A frame during the drag cancelled the splitter.\n");
+            return 5;
+        }
         pointer.action = DxUi::PointerAction::Up;
         if (!_chrome->DispatchPointer(pointer))
         {
@@ -495,11 +626,11 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The layers splitter did not report a layout change.\n");
             return 5;
         }
-        if (std::fabs(_chrome->LayersWidthDip() - (beforeWidth + 40.0f)) > 0.5f)
+        if (std::fabs(_chrome->LayersWidthDip() - (beforeWidth + 80.0f)) > 0.5f)
         {
             const std::wstring text =
                 std::format(L"The layers splitter did not resize the panel: {} DIP, expected {} DIP.\n",
-                            _chrome->LayersWidthDip(), beforeWidth + 40.0f);
+                            _chrome->LayersWidthDip(), beforeWidth + 80.0f);
             SelfTestFailure(text.c_str());
             return 5;
         }
@@ -521,6 +652,12 @@ int Application::RunSelfTest() noexcept
         if (!handled || !_chrome->ColorPickerOpen())
         {
             SelfTestFailure(L"The foreground well did not open the color picker.\n");
+            return 5;
+        }
+        const D2D1_RECT_F picker = _chrome->ColorPickerBoundsDip();
+        if (picker.bottom > well.top + 1.0f || picker.left < well.right)
+        {
+            SelfTestFailure(L"The color picker opened at the top of the canvas instead of beside the wells.\n");
             return 5;
         }
         _chrome->SampleColor(0xFF336699u);
@@ -552,6 +689,175 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"D did not reset the palette into the wells.\n");
             return 5;
         }
+        const auto clickPalette = [&](const D2D1_RECT_F& rect)
+        {
+            pointer.action = DxUi::PointerAction::Down;
+            pointer.xPixels = (rect.left + rect.right) * 0.5f * scale;
+            pointer.yPixels = (rect.top + rect.bottom) * 0.5f * scale;
+            const bool pressed = _chrome->DispatchPointer(pointer);
+            pointer.action = DxUi::PointerAction::Up;
+            return _chrome->DispatchPointer(pointer) && pressed;
+        };
+        if (!clickPalette(_chrome->PaletteHotBoundsDip(false)) ||
+            _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
+            _session.BackgroundColor() != DocumentSession::kDefaultForegroundArgb)
+        {
+            SelfTestFailure(L"The palette swap hot zone did not invert foreground and background.\n");
+            return 5;
+        }
+        if (!clickPalette(_chrome->PaletteHotBoundsDip(true)) ||
+            _session.ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
+            _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"The palette reset hot zone did not restore black and white.\n");
+            return 5;
+        }
+
+        for (const ChromeHost::CommandShortcutDefault& row : ChromeHost::CommandShortcuts())
+        {
+            const std::wstring text = LoadStringResource(nullptr, row.captionId);
+            const std::size_t tab = text.find(L'\t');
+            const std::wstring chord = tab == std::wstring::npos ? std::wstring{} : text.substr(tab + 1);
+            if (chord != row.chord)
+            {
+                const std::wstring mismatch = std::format(
+                    L"Command {} shortcut is \"{}\", catalog default is \"{}\".\n", row.command, chord, row.chord);
+                SelfTestFailure(mismatch.c_str());
+                return 5;
+            }
+        }
+        _chrome->ShowNotice(L"Merge Down is not implemented yet.");
+        const D2D1_RECT_F notice = _chrome->NoticeBoundsDip();
+        if (!_chrome->NoticeOpen() || notice.bottom <= notice.top ||
+            _chrome->IsCanvasPoint((notice.left + notice.right) * 0.5f * scale,
+                                   (notice.top + notice.bottom) * 0.5f * scale))
+        {
+            SelfTestFailure(L"The unimplemented-function notice did not open as an overlay.\n");
+            return 5;
+        }
+        _chrome->CloseNotice();
+        if (_chrome->NoticeOpen())
+        {
+            SelfTestFailure(L"The unimplemented-function notice stayed open.\n");
+            return 5;
+        }
+        _chrome->OpenShortcuts();
+        if (!_chrome->ShortcutsOpen())
+        {
+            SelfTestFailure(L"Keyboard Shortcuts did not open.\n");
+            return 5;
+        }
+        const auto shortcutIndex = [](int command) -> std::size_t
+        {
+            const std::span<const ChromeHost::CommandShortcutDefault> rows = ChromeHost::CommandShortcuts();
+            for (std::size_t index = 0; index < rows.size(); ++index)
+            {
+                if (rows[index].command == command)
+                {
+                    return index;
+                }
+            }
+            return static_cast<std::size_t>(-1);
+        };
+        const auto layoutKeyName = [](UINT scanCode) -> std::wstring
+        {
+            wchar_t name[64]{};
+            const int length = GetKeyNameTextW(static_cast<LONG>(static_cast<LPARAM>(scanCode) << 16), name,
+                                               static_cast<int>(std::size(name)));
+            return length > 0 ? std::wstring(name, static_cast<std::size_t>(length)) : std::wstring{};
+        };
+        const std::wstring plusName = layoutKeyName(0x0D);
+        const std::wstring bracketName = layoutKeyName(0x1A);
+        const std::wstring zoomExpected = plusName.empty() ? std::wstring{L"Ctrl++"} : L"Ctrl+" + plusName;
+        const std::wstring smallerExpected = bracketName.empty() ? std::wstring{L"["} : bracketName;
+        const std::wstring layerExpected = bracketName.empty() ? std::wstring{L"Ctrl+["} : L"Ctrl+" + bracketName;
+        const std::wstring zoomShown = _chrome->ShortcutChordAt(shortcutIndex(ChromeHost::kCommandZoomIn));
+        const std::wstring smallerShown = _chrome->ShortcutChordAt(shortcutIndex(ChromeHost::kCommandBrushSmaller));
+        const std::wstring zoomMenu = _chrome->MenuItemCaption(ChromeHost::kCommandZoomIn);
+        const std::wstring layerMenu = _chrome->MenuItemCaption(ChromeHost::kCommandMoveLayerDown);
+        if (zoomShown != zoomExpected || smallerShown != smallerExpected ||
+            zoomMenu.find(zoomExpected) == std::wstring::npos || layerMenu.find(layerExpected) == std::wstring::npos)
+        {
+            const std::wstring mismatch =
+                std::format(L"Keyboard shortcut display did not follow the layout. Zoom badge \"{}\" expected \"{}\", "
+                            L"brush \"{}\" expected \"{}\", "
+                            L"zoom menu \"{}\", layer menu \"{}\".\n",
+                            zoomShown, zoomExpected, smallerShown, smallerExpected, zoomMenu, layerMenu);
+            SelfTestFailure(mismatch.c_str());
+            return 5;
+        }
+        _chrome->CloseShortcuts();
+
+        const int editsBeforeFilter = _session.history.UndoCount();
+        const Guid painted = InsertPaintedLayer(_session, L"Filter", 16, 16, Vec2{}, 0.0, 0xFFFF0000u);
+        if (painted != Guid{} && !BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+        {
+            SelfTestFailure(L"Gaussian Blur did not open on a painted layer.\n");
+            return 5;
+        }
+        SyncChrome();
+        if (painted != Guid{} && !_chrome->FilterOptionsVisible())
+        {
+            SelfTestFailure(L"The Gaussian Blur panel did not show its Radius option.\n");
+            return 5;
+        }
+        CancelColorEdit();
+        while (_session.history.CanUndo() && _session.history.UndoCount() > editsBeforeFilter)
+        {
+            _session.Undo();
+        }
+
+        const int editsBeforeDrag = _session.history.UndoCount();
+        _session.AddBlankLayer();
+        SyncChrome();
+        const std::vector<HierarchyEntry> beforeRows = _session.LayerRows();
+        const D2D1_RECT_F topRow = _chrome->LayerRowBoundsDip(0);
+        const D2D1_RECT_F lowerRow = _chrome->LayerRowBoundsDip(1);
+        if (beforeRows.size() < 2 || topRow.bottom <= topRow.top || lowerRow.bottom <= lowerRow.top)
+        {
+            SelfTestFailure(L"The layers tree did not lay out two rows to drag.\n");
+            return 5;
+        }
+        const Guid dragged = beforeRows[0].id;
+        (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), static_cast<float>(windowDpi));
+        DxUi::PointerEvent drag{};
+        drag.action = DxUi::PointerAction::Down;
+        drag.xPixels = (topRow.left + topRow.right) * 0.5f * scale;
+        drag.yPixels = (topRow.top + topRow.bottom) * 0.5f * scale;
+        if (!_chrome->DispatchPointer(drag))
+        {
+            const std::wstring missed = std::format(L"The layers tree did not take the drag press at {:.1f},{:.1f} "
+                                                    L"(row {:.1f},{:.1f}-{:.1f},{:.1f}, hit {}).\n",
+                                                    drag.xPixels, drag.yPixels, topRow.left, topRow.top, topRow.right,
+                                                    topRow.bottom, _chrome->HitKindForTest(drag.xPixels, drag.yPixels));
+            SelfTestFailure(missed.c_str());
+            return 5;
+        }
+        drag.action = DxUi::PointerAction::Move;
+        drag.xPixels = (lowerRow.left + lowerRow.right) * 0.5f * scale;
+        drag.yPixels = (lowerRow.bottom - 3.0f) * scale;
+        if (!_chrome->DispatchPointer(drag))
+        {
+            SelfTestFailure(L"The layers tree did not take the drag move.\n");
+            return 5;
+        }
+        drag.action = DxUi::PointerAction::Up;
+        if (!_chrome->DispatchPointer(drag))
+        {
+            SelfTestFailure(L"The layers tree did not take the drag release.\n");
+            return 5;
+        }
+        const std::vector<HierarchyEntry> afterRows = _session.LayerRows();
+        if (afterRows.empty() || afterRows[0].id == dragged)
+        {
+            SelfTestFailure(L"Dragging a layer did not reorder it.\n");
+            return 5;
+        }
+        while (_session.history.CanUndo() && _session.history.UndoCount() > editsBeforeDrag)
+        {
+            _session.Undo();
+        }
+        SyncChrome();
 
         if (!_chrome->RequestLayerOpacity(50.0))
         {
@@ -859,6 +1165,36 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Escape did not drop the stroke in progress.\n");
             return 5;
         }
+        pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
+        if (_session.PendingBrush() == nullptr || _composition.HasStroke() == false)
+        {
+            SelfTestFailure(L"The stroke for Undo was not live.\n");
+            return 5;
+        }
+        const int undoBeforeStroke = _session.history.UndoCount();
+        if (!HandleAccelerator('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
+            _brushDragging || _session.history.UndoCount() != undoBeforeStroke)
+        {
+            SelfTestFailure(L"Ctrl+Z did not drop the stroke without moving history.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 500.0, 500.0);
+        if (_session.history.UndoCount() != undoBeforeStroke || _session.PendingBrush() != nullptr)
+        {
+            SelfTestFailure(L"Mouse-up after Undo painted the cancelled stroke.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONDOWN, 0, 520.0, 500.0);
+        _forcedDiscard = false;
+        const int beforePrompt = _session.history.UndoCount();
+        const bool stayed = !ConfirmDiscardChanges();
+        _forcedDiscard.reset();
+        if (!stayed || _session.PendingBrush() != nullptr || _session.history.UndoCount() != beforePrompt + 1 ||
+            _session.history.UndoName() != L"Brush Stroke")
+        {
+            SelfTestFailure(L"The save prompt did not commit the live stroke before asking.\n");
+            return 5;
+        }
         OnTool(EditorTool::Move);
     }
 
@@ -922,7 +1258,17 @@ int Application::RunSelfTest() noexcept
         }
         _session.SetCloneSource(Vec2{100, 100});
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
-        pointer(WM_LBUTTONUP, 0, 200.0, 200.0);
+        pointer(WM_MOUSEMOVE, MK_LBUTTON, 260.0, 200.0);
+        const std::optional<D2D1_POINT_2F> sourceMark = _chrome->CloneSourceMarkDip();
+        const Vec2 sourceView = _viewport.ViewFromDocument(Vec2{160, 100}, DocumentSize());
+        const float sourceDip = _chrome->LayoutDpi() > 0.0f ? 96.0f / _chrome->LayoutDpi() : 1.0f;
+        if (!sourceMark.has_value() || std::fabs(sourceMark->x - sourceView.x * sourceDip) > 1.5 ||
+            std::fabs(sourceMark->y - sourceView.y * sourceDip) > 1.5)
+        {
+            SelfTestFailure(L"Clone Stamp's source crosshair did not follow the stroke.\n");
+            return 5;
+        }
+        pointer(WM_LBUTTONUP, 0, 260.0, 200.0);
         std::array<int, 4> stamped{};
         if (_session.history.UndoName() != L"Clone Stamp" || !pixelAt(200, 200, stamped) || stamped[2] < 250 ||
             stamped[1] > 5)
@@ -1614,6 +1960,27 @@ HRESULT Application::InitializeChrome() noexcept
             }
             SyncChrome();
             _frameInvalidated = true;
+        });
+    chrome->SetLayerReorderHandler(
+        [this](Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place)
+        {
+            bool moved = false;
+            if (place == DxUi::TreeDropPlace::Inside)
+            {
+                moved = _session.PlaceLayer(source, target);
+            }
+            else if (place == DxUi::TreeDropPlace::Before)
+            {
+                moved = _session.PlaceLayer(source, parent, target);
+            }
+            else
+            {
+                moved = _session.PlaceLayer(source, parent, target, false, true);
+            }
+            if (moved)
+            {
+                DocumentChanged();
+            }
         });
     chrome->SetPaletteHandler(
         [this](uint32_t foreground, uint32_t background)
@@ -2462,9 +2829,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
 }
 
-void Application::OnCommand(int command) noexcept
+[[nodiscard]] bool SkipsTransformSettle(int command) noexcept
 {
-    // Commands that change layers or files settle a pending transform first; view, history and About do not.
     switch (command)
     {
     case ChromeHost::kCommandUndo:
@@ -2474,14 +2840,51 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandZoomIn:
     case ChromeHost::kCommandZoomOut:
     case ChromeHost::kCommandSampleRing:
+    case ChromeHost::kCommandKeyboardShortcuts:
     case ChromeHost::kCommandAbout:
     case ChromeHost::kCommandFreeTransform:
     case ChromeHost::kCommandRenameLayer:
-        break;
+    case ChromeHost::kCommandSwapPalette:
+    case ChromeHost::kCommandResetPalette:
+    case ChromeHost::kCommandNudgeSelectionLeft:
+    case ChromeHost::kCommandNudgeSelectionRight:
+    case ChromeHost::kCommandNudgeSelectionUp:
+    case ChromeHost::kCommandNudgeSelectionDown:
+    case ChromeHost::kCommandNudgeLayerLeft:
+    case ChromeHost::kCommandNudgeLayerRight:
+    case ChromeHost::kCommandNudgeLayerUp:
+    case ChromeHost::kCommandNudgeLayerDown:
+    case ChromeHost::kCommandNudgePixelsLeft:
+    case ChromeHost::kCommandNudgePixelsRight:
+    case ChromeHost::kCommandNudgePixelsUp:
+    case ChromeHost::kCommandNudgePixelsDown:
+    case ChromeHost::kCommandBrushSmaller:
+    case ChromeHost::kCommandBrushLarger:
+    case ChromeHost::kCommandBrushSofter:
+    case ChromeHost::kCommandBrushHarder:
+    case ChromeHost::kCommandBlendPrevious:
+    case ChromeHost::kCommandBlendNext:
+    case ChromeHost::kCommandToggleMarqueeKind:
+    case ChromeHost::kCommandToggleLassoKind:
+    case ChromeHost::kCommandToggleShapeKind:
+        return true;
     default:
+        return ChromeHost::ToolForSelectCommand(command) != EditorTool::Count;
+    }
+}
+
+void Application::OnCommand(int command) noexcept
+{
+    // Commands that change layers or files settle a pending transform first; view, history and About do not.
+    if (!SkipsTransformSettle(command))
+    {
         _transformDrag.reset();
         _session.CommitTransform();
-        break;
+    }
+    if (const EditorTool selected = ChromeHost::ToolForSelectCommand(command); selected != EditorTool::Count)
+    {
+        OnTool(selected);
+        return;
     }
     switch (command)
     {
@@ -2550,11 +2953,26 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandUndo:
-        _session.Undo();
-        DocumentChanged();
-        break;
     case ChromeHost::kCommandRedo:
-        _session.Redo();
+        // The session drops the pending edit. The composition stroke has to go with it, or the preview stays up.
+        _brushDragging = false;
+        _warpDragging = false;
+        _shapeDragging = false;
+        _gradientHandle.reset();
+        _pixelDragStart.reset();
+        _cropDrag.reset();
+        if (_composition.HasStroke())
+        {
+            _composition.EndStroke(nullptr, 0, 0);
+        }
+        if (command == ChromeHost::kCommandUndo)
+        {
+            _session.Undo();
+        }
+        else
+        {
+            _session.Redo();
+        }
         DocumentChanged();
         break;
     case ChromeHost::kCommandNewLayer:
@@ -2604,6 +3022,19 @@ void Application::OnCommand(int command) noexcept
             _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _session.showsSampleRing);
         }
         break;
+    case ChromeHost::kCommandKeyboardShortcuts:
+        if (_chrome)
+        {
+            if (_chrome->ShortcutsOpen())
+            {
+                _chrome->CloseShortcuts();
+            }
+            else
+            {
+                _chrome->OpenShortcuts();
+            }
+        }
+        break;
     case ChromeHost::kCommandAbout:
         if (!_quietUi && _window)
         {
@@ -2612,6 +3043,105 @@ void Application::OnCommand(int command) noexcept
             const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
             MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
         }
+        break;
+    case ChromeHost::kCommandSwapPalette:
+        if (_chrome != nullptr && _chrome->ColorPickerOpen())
+        {
+            _chrome->CloseColorPicker(false);
+        }
+        _session.SwapPaletteColors();
+        SyncChrome();
+        _frameInvalidated = true;
+        break;
+    case ChromeHost::kCommandResetPalette:
+        if (_chrome != nullptr && _chrome->ColorPickerOpen())
+        {
+            _chrome->CloseColorPicker(false);
+        }
+        _session.ResetPaletteColors();
+        SyncChrome();
+        _frameInvalidated = true;
+        break;
+    case ChromeHost::kCommandNudgeSelectionLeft:
+    case ChromeHost::kCommandNudgeSelectionRight:
+    case ChromeHost::kCommandNudgeSelectionUp:
+    case ChromeHost::kCommandNudgeSelectionDown:
+    case ChromeHost::kCommandNudgeLayerLeft:
+    case ChromeHost::kCommandNudgeLayerRight:
+    case ChromeHost::kCommandNudgeLayerUp:
+    case ChromeHost::kCommandNudgeLayerDown:
+    case ChromeHost::kCommandNudgePixelsLeft:
+    case ChromeHost::kCommandNudgePixelsRight:
+    case ChromeHost::kCommandNudgePixelsUp:
+    case ChromeHost::kCommandNudgePixelsDown:
+    {
+        const double step = _acceleratorShift ? 10.0 : 1.0;
+        const double x =
+            (command == ChromeHost::kCommandNudgeSelectionLeft || command == ChromeHost::kCommandNudgeLayerLeft ||
+             command == ChromeHost::kCommandNudgePixelsLeft)
+                ? -step
+            : (command == ChromeHost::kCommandNudgeSelectionRight || command == ChromeHost::kCommandNudgeLayerRight ||
+               command == ChromeHost::kCommandNudgePixelsRight)
+                ? step
+                : 0.0;
+        const double y =
+            (command == ChromeHost::kCommandNudgeSelectionUp || command == ChromeHost::kCommandNudgeLayerUp ||
+             command == ChromeHost::kCommandNudgePixelsUp)
+                ? -step
+            : (command == ChromeHost::kCommandNudgeSelectionDown || command == ChromeHost::kCommandNudgeLayerDown ||
+               command == ChromeHost::kCommandNudgePixelsDown)
+                ? step
+                : 0.0;
+        if (command >= ChromeHost::kCommandNudgePixelsLeft)
+        {
+            _session.NudgePixels(x, y);
+            static_cast<void>(_session.TakeLastBrushCommit());
+            DocumentChanged();
+        }
+        else if (command >= ChromeHost::kCommandNudgeLayerLeft)
+        {
+            _session.NudgeLayer(x, y);
+            DocumentChanged();
+        }
+        else
+        {
+            _session.NudgeSelection(x, y);
+            SelectionChanged();
+        }
+        break;
+    }
+    case ChromeHost::kCommandBrushSmaller:
+    case ChromeHost::kCommandBrushLarger:
+        _session.ChangeBrushSize(command == ChromeHost::kCommandBrushLarger);
+        SyncChrome();
+        break;
+    case ChromeHost::kCommandBrushSofter:
+    case ChromeHost::kCommandBrushHarder:
+        _session.ChangeBrushHardness(command == ChromeHost::kCommandBrushHarder);
+        SyncChrome();
+        break;
+    case ChromeHost::kCommandBlendPrevious:
+    case ChromeHost::kCommandBlendNext:
+        _session.StepBlendMode(command == ChromeHost::kCommandBlendNext);
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandDeleteKey:
+        _session.DeleteKeyPressed();
+        static_cast<void>(_session.TakeLastBrushCommit());
+        DocumentChanged();
+        break;
+    case ChromeHost::kCommandToggleMarqueeKind:
+        _session.ToggleMarqueeKind();
+        SyncChrome();
+        break;
+    case ChromeHost::kCommandToggleLassoKind:
+        _session.ToggleLassoKind();
+        SyncChrome();
+        break;
+    case ChromeHost::kCommandToggleShapeKind:
+        _shapeDragging = false;
+        _session.ToggleShapeKind();
+        SyncChrome();
         break;
     case ChromeHost::kCommandFreeTransform:
         if (_tool != EditorTool::Move)
@@ -2824,8 +3354,82 @@ void Application::OnTool(EditorTool tool) noexcept
     _frameInvalidated = true;
 }
 
-bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat) noexcept
+namespace
 {
+// Set-1 scan codes. These stay on the same physical key when the layout changes. VK_OEM_* does not.
+enum class KeyPosition : std::uint8_t
+{
+    None,
+    NumberRowMinus, // 0x0C, the key immediately right of 0
+    NumberRowPlus,  // 0x0D, the key immediately left of Backspace
+    BracketLeft,    // 0x1A, US [
+    BracketRight    // 0x1B, US ]
+};
+
+constexpr UINT kScanNumberRowMinus = 0x0C;
+constexpr UINT kScanNumberRowPlus = 0x0D;
+constexpr UINT kScanBracketLeft = 0x1A;
+constexpr UINT kScanBracketRight = 0x1B;
+
+[[nodiscard]] KeyPosition KeyPositionForAccelerator(UINT virtualKey, UINT scanCode) noexcept
+{
+    switch (scanCode & 0xFFu)
+    {
+    case kScanNumberRowMinus:
+        return KeyPosition::NumberRowMinus;
+    case kScanNumberRowPlus:
+        return KeyPosition::NumberRowPlus;
+    case kScanBracketLeft:
+        return KeyPosition::BracketLeft;
+    case kScanBracketRight:
+        return KeyPosition::BracketRight;
+    default:
+        break;
+    }
+    // A synthetic call (self-test) has no scan code. The US virtual key then names that position.
+    if (scanCode != 0)
+    {
+        return KeyPosition::None;
+    }
+    switch (virtualKey)
+    {
+    case VK_OEM_MINUS:
+        return KeyPosition::NumberRowMinus;
+    case VK_OEM_PLUS:
+        return KeyPosition::NumberRowPlus;
+    case VK_OEM_4:
+        return KeyPosition::BracketLeft;
+    case VK_OEM_6:
+        return KeyPosition::BracketRight;
+    default:
+        return KeyPosition::None;
+    }
+}
+} // namespace
+
+bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat, UINT scanCode) noexcept
+{
+    _acceleratorShift = (modifiers & MK_SHIFT) != 0;
+    const auto clearAcceleratorShift = wil::scope_exit([this]() noexcept { _acceleratorShift = false; });
+    const KeyPosition keyPosition = KeyPositionForAccelerator(virtualKey, scanCode);
+    if (virtualKey == VK_ESCAPE && _chrome != nullptr && (modifiers & MK_CONTROL) == 0)
+    {
+        if (_chrome->MoreToolsOpen())
+        {
+            _chrome->CloseMoreTools();
+            return true;
+        }
+        if (_chrome->NoticeOpen())
+        {
+            _chrome->CloseNotice();
+            return true;
+        }
+        if (_chrome->ShortcutsOpen())
+        {
+            _chrome->CloseShortcuts();
+            return true;
+        }
+    }
     const bool control = (modifiers & MK_CONTROL) != 0;
     const bool shift = (modifiers & MK_SHIFT) != 0;
     if (control)
@@ -2882,11 +3486,11 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
                 !_session.PendingLasso().has_value() && GetKeyState(VK_MENU) >= 0)
             {
                 // Ctrl-arrow moves the selected pixels in any tool, one pixel or ten with Shift, one entry each.
-                const double step = shift ? 10.0 : 1.0;
-                _session.NudgePixels(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
-                                     virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
-                static_cast<void>(_session.TakeLastBrushCommit());
-                DocumentChanged();
+                const int command = virtualKey == VK_LEFT    ? ChromeHost::kCommandNudgePixelsLeft
+                                    : virtualKey == VK_RIGHT ? ChromeHost::kCommandNudgePixelsRight
+                                    : virtualKey == VK_UP    ? ChromeHost::kCommandNudgePixelsUp
+                                                             : ChromeHost::kCommandNudgePixelsDown;
+                OnCommand(command);
                 return true;
             }
             break;
@@ -2904,12 +3508,6 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         case 'E':
             OnCommand(ChromeHost::kCommandMergeDown);
             return true;
-        case VK_OEM_6: // ]
-            OnCommand(ChromeHost::kCommandMoveLayerUp);
-            return true;
-        case VK_OEM_4: // [
-            OnCommand(ChromeHost::kCommandMoveLayerDown);
-            return true;
         case 'M':
             OnCommand(ChromeHost::kCommandCurves);
             return true;
@@ -2925,16 +3523,28 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         case '1':
             OnCommand(ChromeHost::kCommandZoomActual);
             return true;
-        case VK_OEM_PLUS:
-        case VK_ADD:
-            OnCommand(ChromeHost::kCommandZoomIn);
-            return true;
-        case VK_OEM_MINUS:
-        case VK_SUBTRACT:
-            OnCommand(ChromeHost::kCommandZoomOut);
-            return true;
         default:
             break;
+        }
+        if (keyPosition == KeyPosition::BracketRight)
+        {
+            OnCommand(ChromeHost::kCommandMoveLayerUp);
+            return true;
+        }
+        if (keyPosition == KeyPosition::BracketLeft)
+        {
+            OnCommand(ChromeHost::kCommandMoveLayerDown);
+            return true;
+        }
+        if (keyPosition == KeyPosition::NumberRowPlus || virtualKey == VK_ADD)
+        {
+            OnCommand(ChromeHost::kCommandZoomIn);
+            return true;
+        }
+        if (keyPosition == KeyPosition::NumberRowMinus || virtualKey == VK_SUBTRACT)
+        {
+            OnCommand(ChromeHost::kCommandZoomOut);
+            return true;
         }
         return false;
     }
@@ -2976,11 +3586,14 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             }
             return true;
         }
-        if (shift && (virtualKey == VK_OEM_PLUS || virtualKey == VK_OEM_MINUS))
+        if (shift && keyPosition == KeyPosition::NumberRowPlus)
         {
-            // Shift+= and Shift+- step the active layer's blend mode, wrapping.
-            _session.StepBlendMode(virtualKey == VK_OEM_PLUS);
-            DocumentChanged();
+            OnCommand(ChromeHost::kCommandBlendNext);
+            return true;
+        }
+        if (shift && keyPosition == KeyPosition::NumberRowMinus)
+        {
+            OnCommand(ChromeHost::kCommandBlendPrevious);
             return true;
         }
         if (virtualKey == VK_ESCAPE && _pixelDragStart.has_value())
@@ -3038,18 +3651,20 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             CancelBrushStroke();
             return true;
         }
-        if (EditorToolIsBrush(_tool) && (virtualKey == VK_OEM_4 || virtualKey == VK_OEM_6))
+        if (EditorToolIsBrush(_tool) &&
+            (keyPosition == KeyPosition::BracketLeft || keyPosition == KeyPosition::BracketRight))
         {
-            // [ and ] step the size; with Shift the hardness, in quarters.
+            // The US [ ] keys step the size; with Shift, the hardness, in quarters.
             if (shift)
             {
-                _session.ChangeBrushHardness(virtualKey == VK_OEM_6);
+                OnCommand(keyPosition == KeyPosition::BracketRight ? ChromeHost::kCommandBrushHarder
+                                                                   : ChromeHost::kCommandBrushSofter);
             }
             else
             {
-                _session.ChangeBrushSize(virtualKey == VK_OEM_6);
+                OnCommand(keyPosition == KeyPosition::BracketRight ? ChromeHost::kCommandBrushLarger
+                                                                   : ChromeHost::kCommandBrushSmaller);
             }
-            SyncChrome();
             return true;
         }
         if ((EditorToolIsBrush(_tool) || _tool == EditorTool::Move || _tool == EditorTool::Gradient) &&
@@ -3103,10 +3718,11 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP || virtualKey == VK_DOWN))
         {
             // Arrow keys move the outline by a pixel, ten with Shift; each press is one entry.
-            const double step = shift ? 10.0 : 1.0;
-            _session.NudgeSelection(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
-                                    virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
-            SelectionChanged();
+            const int command = virtualKey == VK_LEFT    ? ChromeHost::kCommandNudgeSelectionLeft
+                                : virtualKey == VK_RIGHT ? ChromeHost::kCommandNudgeSelectionRight
+                                : virtualKey == VK_UP    ? ChromeHost::kCommandNudgeSelectionUp
+                                                         : ChromeHost::kCommandNudgeSelectionDown;
+            OnCommand(command);
             return true;
         }
         if (virtualKey == VK_ESCAPE && (_transformDrag.has_value() || _session.PendingTransformEdit().has_value()))
@@ -3128,42 +3744,27 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             (virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP || virtualKey == VK_DOWN))
         {
             // Arrow keys nudge by a pixel, ten with Shift; a pending edit moves its draft, otherwise the move commits.
-            const double step = shift ? 10.0 : 1.0;
-            _session.NudgeLayer(virtualKey == VK_LEFT ? -step : (virtualKey == VK_RIGHT ? step : 0.0),
-                                virtualKey == VK_UP ? -step : (virtualKey == VK_DOWN ? step : 0.0));
-            DocumentChanged();
+            const int command = virtualKey == VK_LEFT    ? ChromeHost::kCommandNudgeLayerLeft
+                                : virtualKey == VK_RIGHT ? ChromeHost::kCommandNudgeLayerRight
+                                : virtualKey == VK_UP    ? ChromeHost::kCommandNudgeLayerUp
+                                                         : ChromeHost::kCommandNudgeLayerDown;
+            OnCommand(command);
             return true;
         }
         if (virtualKey == VK_DELETE && shift)
         {
-            // Shift+Delete fills the selection from its surroundings (Edit > Content-Aware Fill).
-            EndSelectionInteraction(false);
-            static_cast<void>(BeginColorEdit(ChromeHost::kCommandContentAwareFill));
+            OnCommand(ChromeHost::kCommandContentAwareFill);
             return true;
         }
         if (virtualKey == VK_DELETE)
         {
-            // Delete clears the selected pixels; without a selection it deletes the targeted mask, or the layer.
-            _transformDrag.reset();
-            _session.CommitTransform();
-            _session.DeleteKeyPressed();
-            static_cast<void>(_session.TakeLastBrushCommit());
-            DocumentChanged();
+            OnCommand(ChromeHost::kCommandDeleteKey);
             return true;
         }
         if (virtualKey == 'X' || virtualKey == 'D')
         {
-            // Legacy palette keys: X swaps foreground and background, D restores black over white.
-            if (virtualKey == 'X')
-            {
-                _session.SwapPaletteColors();
-            }
-            else
-            {
-                _session.ResetPaletteColors();
-            }
-            SyncChrome();
-            _frameInvalidated = true;
+            // Palette commands. The keys are the default chords; both the keys and the rail hot zones call OnCommand.
+            OnCommand(virtualKey == 'X' ? ChromeHost::kCommandSwapPalette : ChromeHost::kCommandResetPalette);
             return true;
         }
         const EditorTool tool = EditorToolFromKey(static_cast<wchar_t>(virtualKey));
@@ -3173,19 +3774,17 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             // switching, and the choice stays as last set while the project is open.
             if (tool == _tool && !repeat && tool == EditorTool::Marquee)
             {
-                _session.ToggleMarqueeKind();
+                OnCommand(ChromeHost::kCommandToggleMarqueeKind);
             }
             else if (tool == _tool && !repeat && tool == EditorTool::Lasso)
             {
-                _session.ToggleLassoKind();
+                OnCommand(ChromeHost::kCommandToggleLassoKind);
             }
             else if (tool == _tool && !repeat && shift && tool == EditorTool::Shape)
             {
-                // Shift-U: the Shape tool switches between Rectangle and Ellipse.
-                _shapeDragging = false;
-                _session.ToggleShapeKind();
+                OnCommand(ChromeHost::kCommandToggleShapeKind);
             }
-            OnTool(tool);
+            OnCommand(ChromeHost::SelectToolCommand(tool));
             return true;
         }
     }
@@ -3428,10 +4027,23 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_MOUSELEAVE:
         OnPointer(message, wParam, lParam);
         return 0;
+    case WM_INPUTLANGCHANGE:
+        if (_chrome)
+        {
+            _chrome->RefreshDisplayedChords();
+            _frameInvalidated = true;
+        }
+        break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
         UpdateSelectionModifiers();
-        if (HandleAccelerator(static_cast<UINT>(wParam), KeyModifiers(), (lParam & 0x40000000) != 0))
+        if (static_cast<UINT>(wParam) == VK_MENU)
+        {
+            (void)ApplyCanvasCursor();
+            SyncBrushCursor();
+        }
+        if (HandleAccelerator(static_cast<UINT>(wParam), KeyModifiers(), (lParam & 0x40000000) != 0,
+                              (static_cast<UINT>(lParam) >> 16) & 0xFFu))
         {
             return 0;
         }
@@ -3443,6 +4055,11 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_KEYUP:
     case WM_SYSKEYUP:
         UpdateSelectionModifiers();
+        if (static_cast<UINT>(wParam) == VK_MENU)
+        {
+            (void)ApplyCanvasCursor();
+            SyncBrushCursor();
+        }
         if (static_cast<UINT>(wParam) == VK_SPACE)
         {
             _spacePan = false;
@@ -4052,6 +4669,12 @@ bool Application::ApplyCanvasCursor() noexcept
     }
     else if (EditorToolIsBrush(_tool))
     {
+        // Alt with Clone Stamp is waiting for the click that sets the source: a crosshair, not the tip ring.
+        if (_tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0)
+        {
+            SetCursor(LoadCursorW(nullptr, IDC_CROSS));
+            return true;
+        }
         // The tip circle in the overlay is the cursor; the arrow would only hide the pixels under it.
         SetCursor(_session.Document().has_value() ? nullptr : LoadCursorW(nullptr, IDC_CROSS));
         return true;
@@ -4600,6 +5223,11 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     _brushHover = pixel;
     PushStrokeTiles();
     SyncBrushCursor();
+    if (kind == BrushKind::Clone)
+    {
+        // The source crosshair moves with this stroke. Hover updates do not run while the button is down.
+        SyncToolOverlays();
+    }
 }
 
 void Application::PushStrokeTiles() noexcept
@@ -4652,6 +5280,10 @@ void Application::ContinueBrushStroke(Vec2 view) noexcept
     }
     PushStrokeTiles();
     SyncBrushCursor();
+    if (_tool == EditorTool::Clone)
+    {
+        SyncToolOverlays();
+    }
 }
 
 void Application::FinishBrushStroke() noexcept
@@ -4697,7 +5329,8 @@ void Application::SyncBrushCursor() noexcept
         return;
     }
     std::optional<CanvasOverlay::BrushCursor> cursor;
-    if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value())
+    const bool pickingCloneSource = _tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0;
+    if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value() && !pickingCloneSource)
     {
         const Vec2 view = _viewport.ViewFromDocument(_brushHover.value(), DocumentSize());
         CanvasOverlay::BrushCursor circle;

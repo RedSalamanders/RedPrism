@@ -16,8 +16,9 @@ Windows-native raster composition (Direct3D 11 + DxUi). This guide is not a beha
 ## Install
 
 Releases are portable ZIPs from `.\package.ps1` (`RedPrism-<version>-<x64|ARM64>.zip` with a `.sha256` beside it):
-extract the folder anywhere and run `RedPrism.exe`. The Visual C++ runtime is inside; Windows 10 or later supplies
-the rest. Nothing is installed or registered; settings and crash reports live under `%LocalAppData%\RedPrism`. The
+extract the folder anywhere and run `RedPrism.exe`. The Visual C++ runtime is inside the ZIP. The application
+requires Windows 11 build 22000.2600 or later. Nothing is installed or registered; settings and crash reports
+live under `%LocalAppData%\RedPrism`. The
 executable is unsigned in this version, so SmartScreen may ask once.
 
 ## Shell
@@ -29,8 +30,8 @@ a layer of the current project or a new project of its own size; a modified proj
 replaced or closed. The menus list every function of the Mac app; one that is not implemented yet says so when
 invoked instead of doing nothing.
 
-- **Tool rail**: sixteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
-  E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom, A no tool). Keys apply
+- **Tool rail**: fifteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
+  E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom). Keys apply
   when the canvas has focus; Escape returns focus to chrome. Hover a button for its name and key.
 - **Palette**: the two wells at the bottom of the rail are the foreground (front) and background (behind) colors.
   Click one to open the color picker (saturation/value field, hue strip, R/G/B, hex); OK or Enter commits, Cancel or
@@ -104,5 +105,4 @@ Empty-document harness captures:
 - [Canvas Size card](screenshots/canvassize-96.png) (`--demo canvassize`)
 - [Crop tool](screenshots/crop-96.png) (`--demo crop`)
 
-Filters are later phases (indexed plans under `Specs/Plans/WIP/`). See
-[usage.md](usage.md) for the command line and file formats.
+See [usage.md](usage.md) for the command line and file formats.

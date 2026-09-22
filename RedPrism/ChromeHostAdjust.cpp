@@ -72,6 +72,53 @@ D2D1_RECT_F ChromeHost::AdjustPanelBoundsDip() const noexcept
     return AdjustPanelOpen() ? _adjustCard->GetBounds() : D2D1::RectF();
 }
 
+bool ChromeHost::FilterOptionsVisible() const noexcept
+{
+    if (!AdjustPanelOpen() || _adjustInspector.panel != AdjustPanelKind::Filter || _adjustCard == nullptr)
+    {
+        return false;
+    }
+    DxUi::Control* option = nullptr;
+    switch (_adjustInspector.filter)
+    {
+    case FilterKind::GaussianBlur:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].slider;
+        break;
+    case FilterKind::MotionBlur:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Angle)].slider;
+        break;
+    case FilterKind::AddNoise:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Amount)].slider;
+        break;
+    case FilterKind::LensCorrection:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Distortion)].slider;
+        break;
+    case FilterKind::Exposure:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Exposure)].slider;
+        break;
+    case FilterKind::Grain:
+        option = _adjustRows[static_cast<std::size_t>(AdjustRowId::GrainAmount)].slider;
+        break;
+    case FilterKind::Curves:
+        option = _curveEditor;
+        break;
+    case FilterKind::GradientMap:
+        option = _gradientRamp;
+        break;
+    case FilterKind::ContentAwareFill:
+        option = _fillHint;
+        break;
+    }
+    if (option == nullptr || !option->IsVisible())
+    {
+        return false;
+    }
+    const D2D1_RECT_F bounds = option->GetBounds();
+    const D2D1_RECT_F card = _adjustCard->GetBounds();
+    return bounds.bottom > bounds.top + 1.0f && bounds.right > bounds.left + 1.0f && bounds.top >= card.top - 0.5f &&
+           bounds.bottom <= card.bottom + 0.5f;
+}
+
 void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
 {
     _adjustCard = root.AddChild<DxUi::CardPanel>();

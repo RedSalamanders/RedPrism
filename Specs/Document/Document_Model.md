@@ -97,7 +97,9 @@ bottom-to-top order.
 - New canvas (rejects invalid sizes without touching the document), blank layer, folder: names are the lowest
   unused `Layer N` / `Folder N`; a new layer goes directly above the active layer, or on top of the active folder's
   contents, and inherits the active layer's parent.
-- Rename (trimmed, blank ignored), visibility, place/move (`CanPlaceLayer` refuses self and descendants), move out of
+- Rename (trimmed, blank ignored), visibility, place/move (`CanPlaceLayer` refuses self and descendants; `before`
+  inserts in front of the named sibling, which is visually below it in the top-first list — the layers drag uses
+  this), move out of
   group, delete (a folder deletes its descendants; clips onto deleted sources are released; the next neighbor
   becomes active, or nothing when the document empties; the canvas size is kept).
 - Opacity/blend (groups skipped), clipping link (`CanLinkMask` runs the graph validation on a copy).

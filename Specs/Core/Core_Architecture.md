@@ -70,7 +70,9 @@ search. If no matching output exists, creation MAY use `D3D_DRIVER_TYPE_HARDWARE
 to WARP unless `--warp` was already requested and failed.
 
 When the window moves to a monitor scanned out by another adapter, `Renderer::EnsureDeviceForWindowMonitor` rebuilds
-device resources. WARP devices do not follow monitors.
+device resources. WARP devices do not follow monitors. Device loss (`RecoverDevice`) waits out an outstanding
+Present, gives chrome the new device before creating the replacement swap chain, and still presents if occlusion
+registration is refused. The WARP self-test calls `RecoverDeviceForTest` and requires a later frame to present.
 
 ## Command catalog
 

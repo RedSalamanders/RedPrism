@@ -27,6 +27,12 @@ entry, and clears redo, then trims.
 Undo/redo are ignored while `depth != 0`. Undo restores the entry’s before snapshot (document + active layer
 id + revision). Redo restores after.
 
+A pending edit that is not a history entry yet (gradient, transform, brush, warp, pixel move, shape draft, crop
+frame) is dropped by the first Undo and by the first Redo, and history does not move on that call. An open color
+panel also consumes the key: history stays put until OK or Cancel. The host drops any composition stroke in the
+same command. `ConfirmDiscardChanges` settles a live stroke before it reads `IsModified`, so Save writes that
+stroke and a clean document plus a stroke still asks.
+
 `MarkSaved` stores the current revision. `IsModified` is revision ≠ saved revision. `Reset` clears stacks and
 starts a new saved revision.
 
@@ -38,5 +44,8 @@ entry, else the oldest future entry. A 256 MiB trim test MUST exist (`history.
 ## Validation
 
 `Tests/DocumentTests` covers nested transactions, no-op rename/empty name preserving redo, entry-limit trim,
-shared live rasters reporting 0 retained bytes, and the 256 MiB unique-pixel trim. Debug and ASan Debug
-`test.ps1` MUST run `DocumentTests.exe`.
+shared live rasters reporting 0 retained bytes, the 256 MiB unique-pixel trim, and `pending.*` (Undo/Redo drop a
+live brush, gradient, warp, pixel move and crop frame without moving history; Cut on a hidden layer or under an
+open Levels panel leaves the clipboard and the pixels; a paintable Cut clears; a float aborts when the clear
+paints nothing). The WARP self-test covers Ctrl+Z during a stroke and the save prompt committing that stroke.
+Debug and ASan Debug `test.ps1` MUST run `DocumentTests.exe`.

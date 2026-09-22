@@ -6,8 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 
-// The tool rail, top to bottom, in legacy order (ContentView tool rail plus Eraser as its own button and
-// Idle last). Names live in the STRINGTABLE (EditorToolNameId); keys are the Photoshop-style shortcuts.
+// The tool rail, top to bottom, in legacy order (ContentView tool rail plus Eraser as its own button).
+// Names live in the STRINGTABLE (EditorToolNameId); keys are the Photoshop-style shortcuts.
 enum class EditorTool : std::uint8_t
 {
     Move = 0,
@@ -25,7 +25,6 @@ enum class EditorTool : std::uint8_t
     Eyedropper,
     Hand,
     Zoom,
-    Idle,
     Count,
 };
 
@@ -75,9 +74,8 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
         return IDS_TOOL_HAND;
     case EditorTool::Zoom:
         return IDS_TOOL_ZOOM;
-    case EditorTool::Idle:
     case EditorTool::Count:
-        return IDS_TOOL_IDLE;
+        return IDS_TOOL_MOVE;
     }
     return IDS_TOOL_MOVE;
 }
@@ -102,44 +100,89 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
     return tool == EditorTool::Clone ? 1 : tool == EditorTool::Smear ? 2 : 0;
 }
 
-// Segoe Fluent Icons code points. HostTests proves every glyph exists in the installed icon font.
-[[nodiscard]] constexpr wchar_t EditorToolGlyph(EditorTool tool) noexcept
+// Unicode stand-ins when Segoe Fluent Icons is not installed. The rail draws these in the UI font.
+[[nodiscard]] constexpr wchar_t EditorToolFallbackGlyph(EditorTool tool) noexcept
 {
     switch (tool)
     {
     case EditorTool::Move:
-        return L'\xE7C2'; // Move
+        return L'\u2194';
     case EditorTool::Marquee:
-        return L'\xEF20'; // Dashed selection rectangle
+        return L'\u25A2';
     case EditorTool::Lasso:
-        return L'\xEC87'; // Pen: freehand outline
+        return L'\u270E';
     case EditorTool::Wand:
-        return L'\xF4A5'; // Sparkles
+        return L'\u2726';
+    case EditorTool::Crop:
+        return L'\u2702';
+    case EditorTool::Brush:
+        return L'\u270E';
+    case EditorTool::Eraser:
+        return L'\u232B';
+    case EditorTool::Heal:
+        return L'\u2695';
+    case EditorTool::Clone:
+        return L'\u2398';
+    case EditorTool::Smear:
+        return L'\u261D';
+    case EditorTool::Gradient:
+        return L'\u25D0';
+    case EditorTool::Shape:
+        return L'\u25A1';
+    case EditorTool::Eyedropper:
+        return L'\u2317';
+    case EditorTool::Hand:
+        return L'\u270B';
+    case EditorTool::Zoom:
+        return L'\u2315';
+    case EditorTool::Count:
+        return L'\u2315';
+    }
+    return L'\u2194';
+}
+
+// Segoe Fluent Icons code points, the same family RedSalamander uses for chrome glyphs. `fluent` false selects
+// the Unicode stand-in. HostTests proves every Fluent glyph exists in the installed icon font.
+[[nodiscard]] constexpr wchar_t EditorToolGlyph(EditorTool tool, bool fluent = true) noexcept
+{
+    if (!fluent)
+    {
+        return EditorToolFallbackGlyph(tool);
+    }
+    switch (tool)
+    {
+    case EditorTool::Move:
+        return L'\xE759'; // SIPMove: the four-way move arrow
+    case EditorTool::Marquee:
+        return L'\xEF20'; // Marquee: dashed selection rectangle
+    case EditorTool::Lasso:
+        return L'\xF1BE'; // Lasso
+    case EditorTool::Wand:
+        return L'\xF4A5'; // SpecialEffectSize: sparkles, the wand
     case EditorTool::Crop:
         return L'\xE7A8'; // Crop
     case EditorTool::Brush:
-        return L'\xE70F'; // Edit (pencil)
+        return L'\xE76D'; // InkingTool: the drawing pen
     case EditorTool::Eraser:
         return L'\xE75C'; // EraseTool
     case EditorTool::Heal:
-        return L'\xE90F'; // Repair
+        return L'\xE95E'; // Health: the bandage stand-in
     case EditorTool::Clone:
-        return L'\xE8C8'; // Copy
+        return L'\xE8C8'; // Copy: no stamp glyph in the icon font
     case EditorTool::Smear:
-        return L'\xEA99'; // Broom
+        return L'\xF271'; // PointerHand: the smudge finger
     case EditorTool::Gradient:
-        return L'\xEB42'; // Paint drop (fill)
+        return L'\xEF90'; // Flow: a blend, not a paint drop
     case EditorTool::Shape:
-        return L'\xE7FB'; // Rounded rectangle
+        return L'\xE739'; // Checkbox: a square
     case EditorTool::Eyedropper:
         return L'\xEF3C'; // Eyedropper
     case EditorTool::Hand:
-        return L'\xE7C9'; // TouchPointer
+        return L'\xEB8A'; // NUIFPPressHand: an open hand
     case EditorTool::Zoom:
-        return L'\xE71E'; // Zoom
-    case EditorTool::Idle:
+        return L'\xE8A3'; // ZoomIn: magnifier
     case EditorTool::Count:
-        return L'\xE711'; // Cancel
+        return L'\xE8A3';
     }
     return L'\xE7C2';
 }
@@ -178,9 +221,8 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
         return L'H';
     case EditorTool::Zoom:
         return L'Z';
-    case EditorTool::Idle:
     case EditorTool::Count:
-        return L'A';
+        return L'Z';
     }
     return L'V';
 }

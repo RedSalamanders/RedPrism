@@ -41,6 +41,12 @@ class CanvasOverlay final : public DxUi::Control
     void SetGeometry(std::optional<Geometry> geometry) noexcept;
     void SetGuides(std::vector<float> xs, std::vector<float> ys);
     void SetSelectionOutline(std::vector<OutlineLoop> loops);
+    // Dash offset in DIP. Rebuilds the stroke style only; the outline geometry stays.
+    void SetAntPhase(float phase) noexcept;
+    [[nodiscard]] float AntPhase() const noexcept
+    {
+        return _antPhase;
+    }
     void SetDraft(std::optional<Draft> draft);
     // The brush tip over the canvas: a circle of the tip's diameter at the pointer (DIP relative to the overlay).
     struct BrushCursor
@@ -73,6 +79,10 @@ class CanvasOverlay final : public DxUi::Control
     void SetSampleRing(std::optional<SampleRing> ring) noexcept;
     // Clone Stamp's source crosshair.
     void SetCloneSource(std::optional<D2D1_POINT_2F> point) noexcept;
+    [[nodiscard]] std::optional<D2D1_POINT_2F> CloneSource() const noexcept
+    {
+        return _cloneSource;
+    }
     [[nodiscard]] bool HasGeometry() const noexcept
     {
         return _geometry.has_value();
@@ -113,4 +123,5 @@ class CanvasOverlay final : public DxUi::Control
     mutable wil::com_ptr_nothrow<ID2D1PathGeometry> _outlineGeometry;
     mutable wil::com_ptr_nothrow<ID2D1StrokeStyle> _ants;
     mutable bool _outlineDirty = false;
+    float _antPhase = 0.0f;
 };

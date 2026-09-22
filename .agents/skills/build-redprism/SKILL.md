@@ -43,4 +43,5 @@ When diagnosing a failure:
 5. Build Debug, Release, and ASan Debug when changing project properties. ASan Debug tests must produce a real
    AddressSanitizer diagnostic from the isolated probe.
 
-DxUi restore is C2 work. Do not add an unpinned sibling checkout to the build.
+DxUi restore is C2 work. Do not add an unpinned sibling checkout to the build. A normal build asks DxUi whether
+`main` is newer than the lock and prints that advisory without changing the pin.

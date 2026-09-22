@@ -63,6 +63,17 @@ HRESULT Renderer::CreateDeviceResources() noexcept
         return result;
     }
 
+    // Chrome still holds the previous device. Hand it the new one before the HWND takes a swap chain, or the
+    // old factory keeps the window and CreateSwapChainForHwnd returns E_ACCESSDENIED.
+    if (_chrome != nullptr && _device)
+    {
+        result = _chrome->ReplaceDevice(_device.get());
+        if (FAILED(result))
+        {
+            return result;
+        }
+    }
+
     result = CreateSwapChain();
     if (FAILED(result))
     {
@@ -266,20 +277,7 @@ HRESULT Renderer::EnsureDeviceForWindowMonitor() noexcept
         _deviceMonitor = monitor;
         return S_FALSE;
     }
-    const HRESULT result = CreateDeviceResources();
-    if (FAILED(result))
-    {
-        return result;
-    }
-    if (_chrome && _device)
-    {
-        const HRESULT chromeResult = _chrome->ReplaceDevice(_device.get());
-        if (FAILED(chromeResult))
-        {
-            return chromeResult;
-        }
-    }
-    return S_OK;
+    return CreateDeviceResources();
 }
 
 Renderer::DeviceIdentity Renderer::DeviceInfo() const noexcept
@@ -326,6 +324,13 @@ HRESULT Renderer::CreateSwapChain() noexcept
     description.Flags = kSwapChainFlags;
 
     result = factory->CreateSwapChainForHwnd(_device.get(), _window, &description, nullptr, nullptr, _swapChain.put());
+    if (result == E_ACCESSDENIED)
+    {
+        // The previous flip-model chain can stay bound to the HWND until the window processes a message.
+        SendMessageW(_window, WM_NULL, 0, 0);
+        result =
+            factory->CreateSwapChainForHwnd(_device.get(), _window, &description, nullptr, nullptr, _swapChain.put());
+    }
     if (FAILED(result))
     {
         return result;
@@ -358,7 +363,13 @@ HRESULT Renderer::CreateSwapChain() noexcept
     result = factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
     if (FAILED(result))
     {
-        return result;
+        // A second registration on the same HWND (device recovery) can return E_ACCESSDENIED while the swap
+        // chain is already usable. Occlusion messages are optional; Present still runs.
+        OutputDebugStringW(L"Occlusion status was not registered; presentation continues without it.\n");
+        _factory = std::move(factory);
+        _occlusionStatusCookie = 0;
+        _occlusionStatusRegistered = false;
+        return S_OK;
     }
 
     _factory = std::move(factory);
@@ -519,6 +530,11 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     return S_OK;
 }
 
+HRESULT Renderer::RecoverDeviceForTest() noexcept
+{
+    return RecoverDevice();
+}
+
 HRESULT Renderer::ProbeOcclusion() noexcept
 {
     if (!_swapChain || !_occluded)
@@ -563,17 +579,16 @@ bool Renderer::IsWarp() const noexcept
 HRESULT Renderer::RecoverDevice() noexcept
 {
     OutputDebugStringW(L"Direct3D device was lost; rebuilding graphics resources.\n");
-    const HRESULT result = CreateDeviceResources();
-    if (SUCCEEDED(result) && _chrome && _device)
-    {
-        const HRESULT chromeResult = _chrome->ReplaceDevice(_device.get());
-        return FAILED(chromeResult) ? chromeResult : result;
-    }
-    return result;
+    return CreateDeviceResources();
 }
 
 void Renderer::ReleaseDeviceResources() noexcept
 {
+    // An outstanding Present keeps the HWND bound to the swap chain. Wait it out before the handles go.
+    if (_frameLatencyWaitable)
+    {
+        (void)WaitForSingleObject(_frameLatencyWaitable.get(), 1000);
+    }
     if (_factory && _occlusionStatusRegistered)
     {
         _factory->UnregisterOcclusionStatus(_occlusionStatusCookie);

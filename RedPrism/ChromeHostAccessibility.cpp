@@ -2,6 +2,7 @@
 
 #include "AccessibilityRoot.h"
 #include "AdjustControls.h"
+#include "PaletteControl.h"
 
 #include <memory>
 #include <new>
@@ -105,7 +106,7 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
     {
         return L"Slider";
     }
-    if (dynamic_cast<const DxUi::ColorSwatch*>(&control))
+    if (dynamic_cast<const DxUi::ColorSwatch*>(&control) || dynamic_cast<const PaletteZone*>(&control))
     {
         return L"ColorSwatch";
     }
