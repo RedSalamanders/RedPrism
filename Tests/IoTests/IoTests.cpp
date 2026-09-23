@@ -1381,47 +1381,67 @@ void TestSettingsStore()
     const std::filesystem::path root =
         std::filesystem::path(ScratchRoot()) / (L"settings-" + std::to_wstring(GetCurrentProcessId()));
     std::filesystem::remove_all(root, error);
-    const std::wstring path = (root / L"settings.json").wstring();
-    const SettingsLoadResult missing = SettingsStore::LoadCold(path);
+    // Each check below gets its own subdirectory instead of sharing one `path` through the whole sequence (RF-1116:
+    // on another branch, IoTests failed four settings.* checks together, once, then passed on a rerun; sharing one
+    // path meant a single transient file-system hiccup, such as a real-time scanner briefly holding a just-written
+    // file on a machine building several worktrees at once, left the wrong starting state for every later check in
+    // the chain instead of failing just the one check it hit).
+    const auto scratchPath = [&root](const wchar_t* name) { return (root / name / L"settings.json").wstring(); };
+
+    const std::wstring missingPath = scratchPath(L"cold-missing");
+    const SettingsLoadResult missing = SettingsStore::LoadCold(missingPath);
     Expect(missing.status == SettingsLoadStatus::Missing && missing.templateWritten &&
-               missing.settings == AppSettings{} && SettingsStore::Parse(FileText(path)) == AppSettings{},
+               missing.settings == AppSettings{} && SettingsStore::Parse(FileText(missingPath)) == AppSettings{},
            "settings.cold-missing-writes-template");
-    const bool bomWritten = SettingsStore::WriteFileAtomic(path, bom);
-    const SettingsLoadResult bomCold = SettingsStore::LoadCold(path);
+    const std::wstring bomPath = scratchPath(L"cold-bom");
+    const bool bomWritten = SettingsStore::WriteFileAtomic(bomPath, bom);
+    const SettingsLoadResult bomCold = SettingsStore::LoadCold(bomPath);
     Expect(bomWritten && bomCold.status == SettingsLoadStatus::Loaded && bomCold.backupPath.empty() &&
-               bomCold.settings.theme == ThemePreference::Light && FileText(path) == bom,
+               bomCold.settings.theme == ThemePreference::Light && FileText(bomPath) == bom,
            "settings.cold-byte-order-mark-is-loaded");
-    const bool brokenWritten = SettingsStore::WriteFileAtomic(path, "{ nope");
-    const SettingsLoadResult invalid = SettingsStore::LoadCold(path);
+    const std::wstring invalidPath = scratchPath(L"cold-invalid");
+    const bool brokenWritten = SettingsStore::WriteFileAtomic(invalidPath, "{ nope");
+    const SettingsLoadResult invalid = SettingsStore::LoadCold(invalidPath);
     Expect(brokenWritten && invalid.status == SettingsLoadStatus::Invalid && !invalid.backupPath.empty() &&
                FileText(invalid.backupPath) == "{ nope" && invalid.templateWritten &&
-               invalid.settings == AppSettings{} && SettingsStore::Parse(FileText(path)) == AppSettings{},
+               invalid.settings == AppSettings{} && SettingsStore::Parse(FileText(invalidPath)) == AppSettings{},
            "settings.cold-invalid-backs-up-and-resets");
-    const bool brokenAgain = SettingsStore::WriteFileAtomic(path, "{ nope again");
-    Expect(brokenAgain && !SettingsStore::LoadLive(path).has_value() && FileText(path) == "{ nope again",
+    const std::wstring liveInvalidPath = scratchPath(L"live-invalid");
+    const bool brokenAgain = SettingsStore::WriteFileAtomic(liveInvalidPath, "{ nope again");
+    Expect(brokenAgain && !SettingsStore::LoadLive(liveInvalidPath).has_value() &&
+               FileText(liveInvalidPath) == "{ nope again",
            "settings.live-invalid-keeps-the-file");
-    Expect(SettingsStore::WriteFileAtomic(path, SettingsStore::Serialize(changed)) &&
-               SettingsStore::LoadLive(path) == changed &&
-               !SettingsStore::LoadLive((root / L"none.json").wstring()).has_value(),
+    const std::wstring liveValidPath = scratchPath(L"live-valid");
+    Expect(SettingsStore::WriteFileAtomic(liveValidPath, SettingsStore::Serialize(changed)) &&
+               SettingsStore::LoadLive(liveValidPath) == changed &&
+               !SettingsStore::LoadLive((root / L"live-valid" / L"none.json").wstring()).has_value(),
            "settings.live-valid-and-missing");
     std::wstring backup;
-    Expect(SettingsStore::WriteFileAtomic(path, "broken") && SettingsStore::Save(path, changed, &backup) &&
-               !backup.empty() && FileText(backup) == "broken" && SettingsStore::LoadLive(path) == changed,
+    const std::wstring saveBackupPath = scratchPath(L"save-backup");
+    Expect(SettingsStore::WriteFileAtomic(saveBackupPath, "broken") &&
+               SettingsStore::Save(saveBackupPath, changed, &backup) && !backup.empty() &&
+               FileText(backup) == "broken" && SettingsStore::LoadLive(saveBackupPath) == changed,
            "settings.save-over-invalid-backs-up");
-    Expect(SettingsStore::WriteFileAtomic(path, R"({"schema":1,"custom":true})") &&
-               SettingsStore::Save(path, changed) && FileText(path).find("\"custom\": true") != std::string::npos &&
-               SettingsStore::LoadLive(path) == changed,
+    const std::wstring saveUnknownPath = scratchPath(L"save-unknown");
+    Expect(SettingsStore::WriteFileAtomic(saveUnknownPath, R"({"schema":1,"custom":true})") &&
+               SettingsStore::Save(saveUnknownPath, changed) &&
+               FileText(saveUnknownPath).find("\"custom\": true") != std::string::npos &&
+               SettingsStore::LoadLive(saveUnknownPath) == changed,
            "settings.save-keeps-unknown-fields");
     bool temporaryLeft = false;
-    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(root, error))
+    for (const std::filesystem::directory_entry& entry : std::filesystem::recursive_directory_iterator(root, error))
     {
         temporaryLeft = temporaryLeft || entry.path().wstring().find(L".tmp-") != std::wstring::npos;
     }
     Expect(!temporaryLeft, "settings.save-leaves-no-temporary");
-    const std::wstring nested = (root / L"deeper" / L"dir" / L"settings.json").wstring();
+    const std::wstring nested = (root / L"nested" / L"deeper" / L"dir" / L"settings.json").wstring();
     Expect(SettingsStore::Save(nested, changed) && SettingsStore::LoadLive(nested) == changed,
            "settings.save-creates-the-directory");
-    const SettingsLoadResult unreadable = SettingsStore::LoadCold((root / L"deeper").wstring());
+    // A directory where LoadCold expects a file, made explicitly rather than reused from the previous check's
+    // `deeper`, so this check no longer depends on that one having run first.
+    const std::filesystem::path unreadablePath = root / L"unreadable" / L"settings.json";
+    std::filesystem::create_directories(unreadablePath, error);
+    const SettingsLoadResult unreadable = SettingsStore::LoadCold(unreadablePath.wstring());
     Expect(unreadable.status == SettingsLoadStatus::Unreadable && unreadable.settings == AppSettings{},
            "settings.cold-unreadable-keeps-defaults");
     std::filesystem::remove_all(root, error);

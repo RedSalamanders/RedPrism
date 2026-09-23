@@ -862,11 +862,11 @@ struct BrushSettings
     double blue = 0;
     // Caps the whole stroke, as in Photoshop: overlapping dabs never exceed it (0.01–1).
     double opacity = 1;
-    // Erase: the stroke clears the layer's pixels instead of painting color on them.
+    // Unread: BrushStroke derives whether it erases or heals from the BrushKind passed to its constructor instead
+    // (BrushStroke::Erasing() / Healing()), never from here. Kept at this position, always false, only so the
+    // BrushSettings{...} aggregate initializers across the codebase (self-test and demo brush setup; none set a
+    // field past this one) keep compiling.
     bool erasing = false;
-    // Spot Healing uses nearby source pixels instead of the foreground color, once the stroke ends.
-    bool healing = false;
-    SpotHealingMode healingMode = SpotHealingMode::ContentAware;
     [[nodiscard]] bool operator==(const BrushSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept;
     // Soft-tip deposition rate shared by the continuous integral and the dab fallback.
@@ -1866,9 +1866,11 @@ class DocumentSession
     // A brush stroke, gradient or Invert/pixel-move edit on `layer` (or its mask): built, validated, pixel-budget
     // limited and clipped to the selection, or null when construction fails, the raster is invalid, or there is no
     // document. `settings` is the brush the caller paints with; edits that only need a raster to write into (a
-    // gradient, Invert, a pixel move) leave it default.
+    // gradient, Invert, a pixel move) leave it default. `kind` becomes the stroke's own BrushKind (Erasing() /
+    // Healing()); the current spotHealingMode always travels with it.
     [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask,
-                                                              const BrushSettings& settings = {}) const;
+                                                              const BrushSettings& settings = {},
+                                                              BrushKind kind = BrushKind::Paint) const;
     // What Clone Stamp and the Wand each read at document size: `allLayers` reads `composite` (null or wrongly
     // sized reads nothing), else the active layer's own pixels at its displayed transform; a folder or blank layer
     // reads as transparent.

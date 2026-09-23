@@ -5681,7 +5681,7 @@ void Application::FinishBrushStroke() noexcept
     }
     // Spot Healing rewrites the tiles after the last preview update, so its result uploads on its own instead of
     // adopting the working texture, which still shows the wash.
-    const bool healing = pending->Settings().healing;
+    const bool healing = pending->Healing();
     if (!healing)
     {
         // Mouse-up settles the provisional tail into the final curve segment: those tiles reach the working texture

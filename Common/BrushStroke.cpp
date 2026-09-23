@@ -352,9 +352,10 @@ LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int heig
 // ── BrushStroke ──────────────────────────────────────────────────────────
 
 BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth,
-                         int canvasHeight, BrushCoverageEngine* engine)
+                         int canvasHeight, BrushCoverageEngine* engine, BrushKind kind, SpotHealingMode healingMode)
     : _layerID(layer.id), _mask(mask), _settings(settings), _canvasWidth(std::max(1, canvasWidth)),
-      _canvasHeight(std::max(1, canvasHeight)), _engine(engine != nullptr ? engine : &CpuBrushCoverage::Shared())
+      _canvasHeight(std::max(1, canvasHeight)), _engine(engine != nullptr ? engine : &CpuBrushCoverage::Shared()),
+      _kind(kind), _healingMode(healingMode)
 {
     // A mask on its own placement is painted in its own pixel grid; otherwise the grid is the layer's.
     const bool placedMask = mask && layer.mask.has_value() && layer.mask->placement.has_value();
@@ -679,7 +680,7 @@ bool BrushStroke::ComposeTile(Tile& tile)
     const double paintR = _settings.red * 255.0;
     const bool sampling = _sample.has_value() && _sample->HasStorage() &&
                           _sample->Format() == (_mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888);
-    const bool washing = !sampling && _settings.healing && !_mask;
+    const bool washing = !sampling && Healing() && !_mask;
     const auto round8 = [](double value)
     { return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0))); };
     for (std::size_t index = 0; index < count; ++index)
@@ -747,7 +748,7 @@ bool BrushStroke::ComposeTile(Tile& tile)
         {
             out[0] = round8(gray * c + under[0] * keep);
         }
-        else if (_settings.erasing)
+        else if (Erasing())
         {
             // Erasing takes the coverage out of the layer's alpha, leaving the pixels under it transparent.
             for (int channel = 0; channel < 4; ++channel)
@@ -985,9 +986,6 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
         return false;
     }
     BrushSettings settings = brushSettings;
-    settings.erasing = kind == BrushKind::Erase && !mask;
-    settings.healing = kind == BrushKind::Heal;
-    settings.healingMode = spotHealingMode;
     if (mask)
     {
         settings.red = maskPaintWhite ? 1.0 : 0.0;
@@ -1028,7 +1026,7 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         editName = L"Spot Healing";
     }
-    std::shared_ptr<BrushStroke> stroke = MakeRasterEdit(*layer, mask, settings);
+    std::shared_ptr<BrushStroke> stroke = MakeRasterEdit(*layer, mask, settings, kind);
     if (!stroke)
     {
         return false;
@@ -1081,7 +1079,7 @@ void DocumentSession::FinishBrush()
     {
         return;
     }
-    if (stroke->Settings().healing && !stroke->Heal(NextHealSeed()))
+    if (stroke->Healing() && !stroke->Heal(NextHealSeed()))
     {
         return;
     }
@@ -1125,10 +1123,10 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
             return false;
         }
     }
-    const std::wstring name = !stroke->EditName().empty()  ? stroke->EditName()
-                              : stroke->IsMask()           ? L"Paint Mask"
-                              : stroke->Settings().erasing ? L"Erase"
-                                                           : L"Brush Stroke";
+    const std::wstring name = !stroke->EditName().empty() ? stroke->EditName()
+                              : stroke->IsMask()          ? L"Paint Mask"
+                              : stroke->Erasing()         ? L"Erase"
+                                                          : L"Brush Stroke";
     BeginEdit(name);
     if (stroke->IsMask())
     {
@@ -1324,7 +1322,7 @@ void BrushStroke::SetSample(Raster sample, int offsetX, int offsetY, bool replac
 
 bool BrushStroke::Heal(std::uint32_t seed)
 {
-    if (!_valid || _failed || !_settings.healing || _mask)
+    if (!_valid || _failed || !Healing() || _mask)
     {
         return false;
     }
@@ -1396,7 +1394,7 @@ bool BrushStroke::Heal(std::uint32_t seed)
         }
     }
     if (!SpotHealing::Heal(pixels.data(), gray.data(), w, h, w * 4u, static_cast<float>(_settings.opacity),
-                           _settings.healingMode, seed))
+                           _healingMode, seed))
     {
         return false;
     }
@@ -1803,8 +1801,7 @@ void DocumentSession::FinishWarp()
     settings.diameter = std::min(2000.0, warp->Diameter() + 4.0);
     settings.hardness = 1.0;
     settings.opacity = 1.0;
-    settings.erasing = false;
-    settings.healing = false;
+    // Neither erase nor heal: MakeRasterEdit's default BrushKind::Paint applies.
     const std::shared_ptr<BrushStroke> stroke = MakeRasterEdit(*current, false, settings);
     if (!stroke)
     {
@@ -2534,7 +2531,7 @@ std::wstring DocumentSession::NextLayerName() const
 }
 
 std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& layer, bool mask,
-                                                             const BrushSettings& settings) const
+                                                             const BrushSettings& settings, BrushKind kind) const
 {
     if (!_document.has_value())
     {
@@ -2543,7 +2540,8 @@ std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& l
     std::shared_ptr<BrushStroke> edit;
     try
     {
-        edit = std::make_shared<BrushStroke>(layer, mask, settings, _document->width, _document->height, _brushEngine);
+        edit = std::make_shared<BrushStroke>(layer, mask, settings, _document->width, _document->height, _brushEngine,
+                                             kind, spotHealingMode);
     }
     catch (const std::bad_alloc&)
     {

@@ -155,8 +155,11 @@ class BrushStroke
 
     // A stroke on `layer`'s pixels, or with `mask` on its mask (in the mask's own grid when it has a placement).
     // The grid is the layer's pixel grid grown to cover the canvas, so paint beyond the layer's pixels extends it.
+    // `kind` and `healingMode` are the stroke's own kind and (for Heal) its algorithm; Erasing() and Healing() are
+    // derived from them, never stored redundantly.
     BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth, int canvasHeight,
-                BrushCoverageEngine* engine);
+                BrushCoverageEngine* engine, BrushKind kind = BrushKind::Paint,
+                SpotHealingMode healingMode = SpotHealingMode::ContentAware);
     ~BrushStroke();
     BrushStroke(const BrushStroke&) = delete;
     BrushStroke& operator=(const BrushStroke&) = delete;
@@ -236,9 +239,16 @@ class BrushStroke
     {
         return _mask;
     }
-    [[nodiscard]] const BrushSettings& Settings() const noexcept
+    // Erase: the stroke clears the layer's pixels instead of painting color on them; never true on a mask (an
+    // erase brush there paints black or white like Paint, per the mask palette).
+    [[nodiscard]] bool Erasing() const noexcept
     {
-        return _settings;
+        return _kind == BrushKind::Erase && !_mask;
+    }
+    // Spot Healing: the stroke uses nearby source pixels instead of the foreground color once it ends (Heal()).
+    [[nodiscard]] bool Healing() const noexcept
+    {
+        return _kind == BrushKind::Heal;
     }
     [[nodiscard]] int Width() const noexcept
     {
@@ -308,6 +318,8 @@ class BrushStroke
     LayerTransform _sourceTransform;
     Raster _source;
     BrushCoverageEngine* _engine = nullptr;
+    BrushKind _kind = BrushKind::Paint;
+    SpotHealingMode _healingMode = SpotHealingMode::ContentAware;
     bool _valid = false;
     bool _failed = false;
     std::int64_t _pixelLimit = 100'000'000;
