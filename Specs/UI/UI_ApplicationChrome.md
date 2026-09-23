@@ -198,13 +198,17 @@ Keys with the canvas focused: M chooses the Marquee and, pressed again, switches
 the Lasso and, pressed again, switches Freehand and Polygonal (holding the key does not keep switching; the choice
 stays while the project is open). Arrows nudge a non-empty selection by one pixel (Shift ten) with a selection tool.
 Ctrl+A selects all, Ctrl+D deselects, Ctrl+Shift+I inverts. The Select menu adds Load Layer Selection and Load Mask
-Selection for the active layer. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
+Selection for the active layer; an outline the tracer refuses says why, as the wand's refusals do
+(`IDS_ERROR_SELECTION_DETAILED` past 8 000 000 pixel edges, `IDS_ERROR_WAND_MEMORY` when it cannot be allocated),
+while a layer or mask with nothing to trace loads nothing without a word. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
 Delete clears them, and without a selection deletes the targeted mask, or the layer; Shift+Delete opens
 Content-Aware Fill on them ([`Document_Tools.md`](../Document/Document_Tools.md)); Ctrl+X, Ctrl+C, Ctrl+Shift+C
 and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
 PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
 system clipboard changed since that copy; a copy that could not reach the system clipboard, because another app held
-it open, is still the newest, so Paste keeps taking it until the system clipboard changes again); Alt+Backspace and
+it open, is still the newest, so Paste keeps taking it until the system clipboard changes again; Copy and Copy
+Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends
+with it); Alt+Backspace and
 Ctrl+Backspace fill with the foreground and background
 colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
@@ -284,8 +288,11 @@ Transparent), Reverse, Opacity (1–100 %), a `Mask` note, and Cancel / Apply pi
 Pointer rules: a press starts a line and drags its end; a press within 10 DIP of a pending line's end drags that end
 (Shift snaps the line to 45°); a click without a line pends nothing. The pending gradient shows through the
 composition's stroke preview and the overlay draws the line with a handle at each end. Enter or Apply commits, Escape
-or Cancel drops, Undo drops, and switching tools, layers or targets applies it. Digits set the gradient's opacity.
-Palette changes re-render the pending line.
+or Cancel drops, Undo drops, and switching tools, layers or targets applies it: its preview ends by adopting its
+working texture for that layer and target only, and a line then started on another layer previews on a texture of
+its own (the self-test commits a line on one layer, chooses another, commits a line there with Enter and finds each
+layer drawn exactly as its raster). Digits set the gradient's opacity. Palette changes re-render the pending line,
+and so does the brush header's Paint choice for a line on a mask.
 
 The Shape header (`BuildShapeHeader`, `ShapeInspectorState`): Rectangle / Ellipse, Radius (px, rectangles only) and
 Fill (the foreground swatch). A drag draws the shape as a draft on the overlay, filled with the foreground color and
@@ -357,7 +364,7 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
-| Help | Command List, About RedPrism (version from `Common/Version.h`). Help is the right-justified item on the menu bar |
+| Help | Command List, About RedPrism (the running module's file version from its own `VS_VERSIONINFO`, which carries the stamped build number, through `RedPrism/VersionInfo.h`; the compile-time `Common/Version.h` string only when that cannot be read). Help is the right-justified item on the menu bar |
 
 Every finished user action is a command, with no exception for an action whose only control is local. A canvas key,
 a menu item, and a rail hot zone are the same kind of action. Each one MUST have one stable integer id in the
@@ -482,8 +489,14 @@ notice is a card over the canvas (`ChromeHost::ShowNotice`), not a message box, 
 the command or click that raised it returns (never from inside a DxUi dispatch). OK or Escape dismisses it. Quiet
 runs (`--self-test`, `--screenshot`, `--bench`) count it instead of showing it. A color or filter command that
 cannot run on the active layer shows the same card with `IDS_CMD_UNAVAILABLE` ("{0} cannot be used on this layer.")
-and does not open an empty panel. A stub leaves with its implementation, and the not-implemented notice never
-appears for an implemented function. No exposed function awaits an implementation since C16 closed
+and does not open an empty panel. An edit the document's 100 M pixel budget refuses (Decision D7 of the 2026-09-23
+review, [`Document_Model.md`](../Document/Document_Model.md): a paste, Layer via Copy, a duplicate, a mask, the
+floating selection's merge, a filter whose grid grows, a merge, a distortion, a shape) shows the card with
+`IDS_ERROR_TOO_LARGE` once, from the message loop as the not-implemented notice is: `SyncChrome`, which every
+document change runs, reads `DocumentSession::TakeBudgetRefusal`, so whichever path ran the edit reports it, and
+quiet runs count it; a refused filter or merge names the budget instead of `IDS_CMD_UNAVAILABLE` or
+`IDS_ERROR_FLATTEN`. A stub leaves with its implementation, and the not-implemented notice never appears for an
+implemented function. No exposed function awaits an implementation since C16 closed
 ([`Completeness_2026-09-21.md`](../Plans/Done/Completeness_2026-09-21.md)); a function surfaced ahead of its
 implementation joins a table here until it lands. The self-test raises the notice under quiet UI and checks that
 the count rises by one while the document and the history stay as they were.
@@ -507,12 +520,15 @@ commits; it closes without renaming when that layer goes away (Undo, a delete, a
 replaced, and when an interaction settles (a tool switch). Merge (C16, legacy `LayerMerge.swift`): Ctrl+E follows
 `DocumentSession::PlanMerge` — the active layer merges with the layer beneath it in its folder (`Merge Down`), a
 folder merges its contents and goes (`Merge Group`), several selected layers merge together (`Merge Layers`); the
-Layer menu's caption names the plan. The host composites the planned layers alone — cut loose from any parent or
-clipping source outside the plan — through the canvas composition (`Compose` on that subset, `Readback`, the
-document invalidated before and after) and `DocumentSession::MergeLayers` installs the result trimmed to its
-pixels in the anchor's place, named after the plan, with layers clipped to any merged layer clipping to it, as one
-entry; a failed composite reports `IDS_ERROR_FLATTEN`. The self-test renames through typed characters and Enter,
-leaves a name alone on Escape, and merges a blue layer down onto a red one into one 14 × 14 layer.
+Layer menu's caption names the plan. A pending transform applies and a pending gradient commits first, each as its
+own entry, so the merge holds what the canvas showed. The host composites the planned layers alone — cut loose from
+any parent or clipping source outside the plan — through the canvas composition (`Compose` on that subset,
+`Readback`, the document invalidated before and after) and `DocumentSession::MergeLayers` installs the result
+trimmed to its pixels in the anchor's place, named after the plan, with layers clipped to any merged layer clipping
+to it, as one entry; a failed composite reports `IDS_ERROR_FLATTEN`, a result past the document's pixel budget
+`IDS_ERROR_TOO_LARGE`. The self-test renames through typed characters and Enter, leaves a name alone on Escape,
+merges a blue layer down onto a red one into one 14 × 14 layer, and merges a layer under a pending gradient into
+one that holds the gradient.
 
 The 32 DIP title row holds the `Layers` label and a `DxUi::NumericStepper` (0–100 %, step 1, Shift 10, unit `%`,
 accessible name `Layer opacity`) bound to the active raster layer's opacity. Typing previews live on the layer the
@@ -541,7 +557,9 @@ Gradient Map end, the Canvas Size custom color); Cancel, Escape (also when a pic
 restore the well.
 Pointer input inside the card belongs to chrome even though it lies in the hole; a canvas click outside it focuses
 the canvas and leaves the picker open. Captions come from the STRINGTABLE (`IDS_PICKER_*`, `IDS_PALETTE_*`).
-Mask-selected black/white policy arrives with mask painting.
+With a layer's mask targeted, the swap and reset (the keys and the rail's hot zones alike) act on the mask palette
+instead (legacy `ColorPalette.swift`): swap flips the brush header's Paint between Black - Hide and White -
+Reveal, reset returns it to Black, and the RGB colors stay; a pending mask gradient re-renders with it.
 
 The C3 fallback (app-owned split rectangles, a ColorSwatch-launched dialog from existing controls, TextField
 numeric nudge) is retired: RedPrism consumes the library controls and does not implement a second toolkit.
@@ -563,12 +581,17 @@ UIA provider (`UiaHostProviderFromHwnd`) whose one child is the DxUi chrome's fr
 a device swap; the next `Prepare` re-arms it) with a `ChromeAccessibilitySite` (the window root as parent and fragment root,
 focus requests to the HWND, a frame after a UIA action). The placement (client rectangle in screen pixels, whether
 the chrome rather than the canvas holds the keyboard focus) follows `WM_SIZE`, `WM_MOVE`, focus changes and the
-canvas-focus toggle. Every interactive control carries an accessible name: buttons and checkboxes from their
-captions, steppers and sliders from their labels, combo boxes from their tooltips, the wells, swatches, tree,
-tabs, rail, splitter, picker and the drawn adjustment controls from `IDS_A11Y_*` strings.
+canvas-focus toggle. DxUi republishes its tree only when told after a preparation
+(`EmbeddedHost::UpdateAccessibility`), so `ChromeHost::Prepare` tells it after every preparation that changed the
+chrome, not only when the placement moved: a panel, a card or a header joins the tree with the frame that lays it
+out, and a frame that prepared nothing publishes nothing. Every interactive control carries an accessible name:
+buttons and checkboxes from their captions, steppers and sliders from their labels, combo boxes from their tooltips,
+the wells, swatches, tree, tabs, rail, splitter, picker and the drawn adjustment controls from `IDS_A11Y_*` strings.
 `ChromeHost::UnnamedInteractiveControls` walks the tree and the WARP self-test requires it empty, walks the UIA
-tree from the window root (at least eight named elements) and resolves a point under the menu bar. Detaching the
-chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`, `UiaDisconnectProvider`).
+tree from the window root (at least eight named elements), resolves a point under the menu bar, and finds the
+palette's four zones and, with their panels open, the curve editor, both levels bars and the hue spectrum as named
+Buttons in that tree. Detaching the chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`,
+`UiaDisconnectProvider`).
 
 ## Size cards
 
@@ -620,7 +643,11 @@ settle only once Save or Don't Save lets it go. A pending edit that Save would r
 pending gradient, a changed transform, a typed opacity — counts as a change, so a clean document with one still
 asks. Quiet runs never ask (they proceed, or take the self-test's forced answer). Close Project (Ctrl+W) leaves the
 shell without a document: the status strip shows `—`, the layers panel is empty, the canvas hole shows the clear
-color and the document commands do nothing; New, Open, Import Images… and a drop start the next document.
+color and the document commands do nothing; New, Open, Import Images… and a drop start the next document. A document
+that replaces another (a project opened, a new project from images) takes the session over through
+`DocumentSession::ReplaceDocument` ([`Document_Model.md`](../Document/Document_Model.md)): its active layer's image is
+the target, never a mask targeted in the document it replaced (not even when the reopened active layer is that same
+layer with a mask of its own), and no selected set, draft or history carries over.
 
 Save, Save As and Export write what the canvas shows (review-fix Decision D2): before writing they settle the
 document as Enter would — a typed opacity records its entry, a live stroke or warp and a pending gradient commit, a
@@ -639,7 +666,10 @@ the window without asking again and Windows goes on, Cancel keeps it and the use
 critical end is never refused. The settings are saved when the session ends, as a close saves them; the message
 handling lives in [`UI_Windowing.md`](UI_Windowing.md).
 
-Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Load failures
+Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Images added as
+layers center on the drop point (`DragQueryPoint` mapped through the viewport) when the drop lands on the canvas —
+the hole, not a floating card — and on the canvas's middle otherwise (legacy `ContentView.onDrop`); a drop that also
+holds a project, or opens a new project, centers them, as the point belongs to the document it landed on. Load failures
 report the `ProjectIoStatus` through a localized message (unsupported version names the version); `--screenshot`
 runs suppress dialogs.
 
@@ -674,7 +704,11 @@ project saved in place, an image batch whose first file fails, Canvas Size over 
 clipboard refused (the user's clipboard is set aside, cleared and restored around every clipboard step, and each
 mirror is read back), capture loss mid-stroke and mid-drag, a splitter drag cancelled, a leave without a capture,
 Space panning across a focus loss, Alt-press then Undo then a drag, a close inside a chrome callback and the session
-end.
+end. The review's integration checks add a reopened project that keeps no mask target, a drop centered on its
+point, Load Selection and budget refusals that say why, Copy, Copy Merged and Merge applying a pending gradient, a
+gradient pending on another layer, the mask palette's Paint, X and D, and the adjustment panel's live controls (a
+typed decimal, the Gradient Map picker's lifetime, the spectrum's handle strip, the drawn editors in the UI
+Automation tree); [`Testing_Validation.md`](../Testing/Testing_Validation.md) lists them.
 The self-test's keys all go through the window procedure (`Application::HandleAccelerator` sends the key down —
 a system key with Alt —, the character `TranslateMessage` would post and the key up, with a real scan code and the
 modifiers in the thread's key state, after a frame). Its keyboard steps (`RunKeyboardSelfTest`) replace X with Q

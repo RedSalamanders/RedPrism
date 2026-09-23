@@ -213,9 +213,12 @@ green and blue channels are the foreground color: `SetForegroundColor`, `SwapPal
 write them,
 and a stroke copies them when it begins (a mask still paints black or white). `brushMode`
 (Paint default, Erase: the Brush tool's own erase mode) and `maskPaintWhite` (default false: a mask is painted
-black, hiding). `CanPaint` needs a document, no pending transform, no stroke in progress, an active layer that is
-visible with its ancestors and is not an adjustment layer (a folder only through its mask), an enabled mask when the
-mask is selected, and no explicitly empty selection.
+black, hiding). A targeted mask has its own palette (legacy `ColorPalette.swift`): with the mask selected,
+`SwapPaletteColors` flips `maskPaintWhite` and `ResetPaletteColors` sets it false, the RGB colors untouched; either
+re-renders a pending mask gradient, as the host does when the brush header's Paint choice changes. `CanPaint` needs
+a document, no pending transform, no stroke in progress, an active layer that is visible with its ancestors and is
+not an adjustment layer (a folder only through its mask), an enabled mask when the mask is selected, and no
+explicitly empty selection.
 
 - `SetBrushEngine(engine)` chooses the coverage engine for later strokes (nullptr: the CPU kernel); the host binds
   its compute engine with the device and drops it with the device.
@@ -551,7 +554,8 @@ The WARP self-test paints, erases, keys and cancels a stroke through `Applicatio
 Retouch: `DocumentTests` `heal.*` (the legacy `SpotHealingTests` blemish for every mode), `clone.*` and `tips.*`
 (`CloneStampTests`), `blur.*`, `smudge.*`, `liquify.*` and `warp.*` (own goldens: a softened edge, carried color, a
 pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`; the mask row also with a colored palette and with
-`maskPaintWhite`), `gradientfirst.*` (a fill, both flips, Cut, a
+`maskPaintWhite`), `palette.mask-*` (X and D on a targeted mask flip and reset `maskPaintWhite` and a pending mask
+gradient follows; off the mask they change the colors), `gradientfirst.*` (a fill, both flips, Cut, a
 pixel nudge, a brush stroke, a layer deletion and a mask switch under a pending gradient record the gradient first;
 Flip Canvas drops the crop frame), `shape.*` (`ShapeToolTests` plus the redraw on
 scaling) and `eyedropper.*`. The WARP self-test drives each tool through `Application`.

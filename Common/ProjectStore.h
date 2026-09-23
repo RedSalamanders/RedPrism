@@ -106,8 +106,11 @@ template <typename AttributeFn>
 [[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path);
 [[nodiscard]] ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID, bool zipArchive);
+// The image becomes a layer above the active one (legacy EditorSession.insert), centered on `center` (a drop point,
+// in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
-                                              std::optional<Guid>& activeLayerID) noexcept;
+                                              std::optional<Guid>& activeLayerID,
+                                              std::optional<Vec2> center = std::nullopt) noexcept;
 [[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution,
                                                 const wchar_t* path) noexcept;
 [[nodiscard]] ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options,

@@ -1743,7 +1743,8 @@ class DocumentSession
     bool showsSampleRing = true;
 
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
-    // EditorSession brush settings: X swaps, D resets. Mask-selected black/white policy arrives with mask painting.
+    // EditorSession brush settings: X swaps, D resets. A targeted mask has its own black/white palette (legacy
+    // ColorPalette.swift): there X flips `maskPaintWhite` and D resets it to black, leaving the colors alone.
     static constexpr uint32_t kDefaultForegroundArgb = 0xFF000000u;
     static constexpr uint32_t kDefaultBackgroundArgb = 0xFFFFFFFFu;
     [[nodiscard]] uint32_t ForegroundColor() const noexcept
@@ -1767,15 +1768,29 @@ class DocumentSession
     }
     void SwapPaletteColors() noexcept
     {
-        std::swap(_foregroundArgb, _backgroundArgb);
-        ApplyForegroundToBrush();
+        if (_maskSelected)
+        {
+            maskPaintWhite = !maskPaintWhite;
+        }
+        else
+        {
+            std::swap(_foregroundArgb, _backgroundArgb);
+            ApplyForegroundToBrush();
+        }
         RefreshGradient();
     }
     void ResetPaletteColors() noexcept
     {
-        _foregroundArgb = kDefaultForegroundArgb;
-        _backgroundArgb = kDefaultBackgroundArgb;
-        ApplyForegroundToBrush();
+        if (_maskSelected)
+        {
+            maskPaintWhite = false;
+        }
+        else
+        {
+            _foregroundArgb = kDefaultForegroundArgb;
+            _backgroundArgb = kDefaultBackgroundArgb;
+            ApplyForegroundToBrush();
+        }
         RefreshGradient();
     }
 

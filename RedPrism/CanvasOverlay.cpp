@@ -111,10 +111,6 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     {
         return;
     }
-    if (_drawnContext.get() != dc)
-    {
-        _drawnContext = dc;
-    }
     const D2D1_RECT_F bounds = GetBounds();
     if (!(bounds.right > bounds.left) || !(bounds.bottom > bounds.top))
     {

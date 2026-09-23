@@ -150,6 +150,9 @@ class Application final : public ChromeEvents
     void OnBandChanged(int index, double degrees) noexcept override;
     void OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept;
     void SyncAdjustPanel() noexcept;
+    // The panel's live DxUi controls (review fixes wave 1b, RF-1107): typed decimals, the Gradient Map picker's
+    // lifetime, the spectrum's handle strip and the drawn editors in the UI Automation tree.
+    int RunAdjustSelfTest() noexcept;
     // ApplicationSize.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): the New Canvas, Canvas Size and
     // Image Size cards edit a draft the Application owns; Apply resizes as one entry.
     [[nodiscard]] bool SizeCardOpen() const noexcept;
@@ -257,6 +260,7 @@ class Application final : public ChromeEvents
     };
     static constexpr UINT kNotImplementedMessage = WM_APP + 7; // Renderer owns WM_APP + 1
     static constexpr UINT kEndSessionMessage = WM_APP + 8;     // the save prompt a refused session end posts
+    static constexpr UINT kNoticeMessage = WM_APP + 9;         // a notice card to show (wParam: its string id)
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
     [[nodiscard]] bool ConfirmDiscardChanges() noexcept;
     // Modified history, or a pending edit that Save would record (a live stroke or warp, a pending gradient, a
@@ -279,10 +283,12 @@ class Application final : public ChromeEvents
     // Quiet runs drive the pointer synthetically from a hidden window: they honor only the losses their own thread
     // causes, never a capture or focus change another thread or process sends.
     [[nodiscard]] bool HonorsPointerLoss() const noexcept;
-    void OpenPaths(const std::vector<std::wstring>& paths) noexcept;
+    // `dropPoint`: where a drop landed on the canvas, in document pixels; images added as layers center on it.
+    void OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint = std::nullopt) noexcept;
     [[nodiscard]] bool OpenProjectPath(const wchar_t* path) noexcept;
     void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
-    [[nodiscard]] bool ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject) noexcept;
+    [[nodiscard]] bool ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject,
+                                        std::optional<Vec2> center = std::nullopt) noexcept;
     void ImportImages() noexcept;
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
@@ -293,8 +299,15 @@ class Application final : public ChromeEvents
     int RunFilesSelfTest() noexcept;
     int RunSessionSelfTest() noexcept;
     int RunClipboardSelfTest() noexcept;
+    // Refusals the host reports (review fixes wave 1b): Load Mask / Layer Selection past the outline limit, and edits
+    // the document's pixel budget refused (Decision D7).
+    int RunRefusalSelfTest() noexcept;
     void ZoomBy(double factor) noexcept;
     void ShowError(UINT stringId) noexcept;
+    // An edit the document's 100 M pixel budget refused (Decision D7, `DocumentSession::TakeBudgetRefusal`) shows
+    // IDS_ERROR_TOO_LARGE in the notice card, from the message loop; SyncChrome reports it once, whichever path ran
+    // the edit.
+    void ReportBudgetRefusal() noexcept;
     [[nodiscard]] Vec2 DocumentSize() const noexcept;
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnSize(UINT width, UINT height) noexcept;
@@ -386,6 +399,9 @@ class Application final : public ChromeEvents
     std::wstring _demo;
     bool _quietUi = false;
     int _notImplementedCount = 0;                    // notices raised; quiet runs count instead of showing them
+    int _errorsShown = 0;                            // ShowError calls; quiet runs count instead of showing them
+    UINT _lastErrorId = 0;                           // the string the last ShowError named
+    int _budgetNotices = 0;                          // budget refusals reported (ReportBudgetRefusal)
     std::optional<ImageOpenChoice> _forcedImageOpen; // the self-test's answer to the image-open prompt
     std::optional<bool> _forcedDiscard;              // the self-test's answer to the save prompt (true: Don't Save)
     struct SizeDialog

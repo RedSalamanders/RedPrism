@@ -52,6 +52,32 @@ D2D1_RECT_F ChromeHost::AdjustPanelBoundsDip() const noexcept
     return AdjustPanelOpen() ? _adjustCard->GetBounds() : D2D1::RectF();
 }
 
+bool ChromeHost::FocusAdjustRadiusForTest() noexcept
+{
+    DxUi::NumericStepper* stepper = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].stepper;
+    if (!_attached || !AdjustPanelOpen() || stepper == nullptr || !stepper->IsVisible())
+    {
+        return false;
+    }
+    DxUi::TextField& field = stepper->Field();
+    _canvasFocused = false;
+    _accessibilityPlacementDirty = true;
+    _view.Controls().SetFocusControl(&field);
+    field.SetSelectionRange(0, field.GetText().size());
+    return true;
+}
+
+std::wstring ChromeHost::AdjustRadiusTextForTest() const
+{
+    const DxUi::NumericStepper* stepper = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].stepper;
+    return stepper != nullptr ? std::wstring(stepper->Field().GetText()) : std::wstring{};
+}
+
+D2D1_RECT_F ChromeHost::SpectrumBoundsDipForTest() const noexcept
+{
+    return AdjustPanelOpen() && _spectrum != nullptr && _spectrum->IsVisible() ? _spectrum->GetBounds() : D2D1::RectF();
+}
+
 bool ChromeHost::FilterOptionsVisible() const noexcept
 {
     if (!AdjustPanelOpen() || _adjustInspector.panel != AdjustPanelKind::Filter || _adjustCard == nullptr)

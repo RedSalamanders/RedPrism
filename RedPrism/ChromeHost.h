@@ -482,6 +482,13 @@ class ChromeHost final : public CommandIds
     void FocusLayerOpacityForTest() noexcept;
     // Self-test hook: the keyboard on the layers panel's list, as a click on a row would leave it.
     void FocusLayersForTest() noexcept;
+    // Self-test hooks for the live controls (review fixes wave 1b, RF-1107): the Gaussian Blur radius field focused
+    // with its text selected, as a click and Ctrl+A leave it, and the text it shows; the Image Size unit combo
+    // focused, as a click on it leaves it; the Hue/Saturation spectrum's bounds.
+    [[nodiscard]] bool FocusAdjustRadiusForTest() noexcept;
+    [[nodiscard]] std::wstring AdjustRadiusTextForTest() const;
+    [[nodiscard]] bool FocusSizeUnitForTest() noexcept;
+    [[nodiscard]] D2D1_RECT_F SpectrumBoundsDipForTest() const noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -856,6 +863,9 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] DxUi::EmbeddedAccessibilityPlacement AccessibilityPlacement() const noexcept;
     void FlushAccessibilityPlacement() noexcept;
     bool _accessibilityPlacementDirty = false;
+    // DxUi's preparation count when the UI Automation snapshot was last published: a preparation since then changed
+    // the controls, and the next Prepare republishes them (EmbeddedHost::UpdateAccessibility).
+    std::uint64_t _accessibilityPreparations = 0;
     bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
     bool _syncing = false;        // a header or card sync is writing its controls (HoldReports)

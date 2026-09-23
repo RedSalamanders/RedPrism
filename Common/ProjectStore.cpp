@@ -1615,8 +1615,8 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
     return zipArchive ? SaveZip(path, json, files) : SaveExploded(path, json, files);
 }
 
-ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
-                                std::optional<Guid>& activeLayerID) noexcept
+ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, std::optional<Guid>& activeLayerID,
+                                std::optional<Vec2> center) noexcept
 {
     DecodedImage decoded{};
     const ImageCodecStatus status = ImportImageFile(path, kMaxLayerPixels, decoded);
@@ -1647,9 +1647,9 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
     }
     else
     {
-        // legacy EditorSession.insert (no drop point supplied here: the host wires that separately): centered on
-        // the canvas, above the active layer inside its folder (`document.layers.append` puts it topmost of
-        // whichever layers share its parentID; parentID is the active layer's group, or the group it is inside).
+        // legacy EditorSession.insert: centered on the drop point, else on the canvas, above the active layer inside
+        // its folder (`document.layers.append` puts it topmost of whichever layers share its parentID; parentID is
+        // the active layer's group, or the group it is inside).
         const ImageLayer* active = nullptr;
         if (activeLayerID.has_value())
         {
@@ -1662,9 +1662,12 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
                 }
             }
         }
-        const Vec2 center{static_cast<double>(document.width) / 2.0, static_cast<double>(document.height) / 2.0};
-        layer.transform.origin = Vec2{std::floor(center.x - layer.transform.size.x / 2.0),
-                                      std::floor(center.y - layer.transform.size.y / 2.0)};
+        const Vec2 middle =
+            center.has_value() && std::isfinite(center->x) && std::isfinite(center->y)
+                ? center.value()
+                : Vec2{static_cast<double>(document.width) / 2.0, static_cast<double>(document.height) / 2.0};
+        layer.transform.origin = Vec2{std::floor(middle.x - layer.transform.size.x / 2.0),
+                                      std::floor(middle.y - layer.transform.size.y / 2.0)};
         if (active != nullptr)
         {
             layer.parentID = active->isGroup ? std::optional<Guid>(active->id) : active->parentID;

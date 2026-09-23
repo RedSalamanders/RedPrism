@@ -2579,8 +2579,12 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
     {
         AttachAccessibility();
     }
-    else if (SUCCEEDED(prepared) && _accessibilityPlacementDirty && !_inDispatch && !_pointerPressed)
+    else if (SUCCEEDED(prepared) && !_inDispatch && !_pointerPressed &&
+             (_accessibilityPlacementDirty || _view.GetStatistics().preparations != _accessibilityPreparations))
     {
+        // DxUi republishes its UI Automation snapshot only when told after a preparation: the controls a panel, a
+        // card or a header shows join the tree with the frame that lays them out, and a frame that prepared
+        // nothing publishes nothing.
         FlushAccessibilityPlacement();
     }
     return prepared;

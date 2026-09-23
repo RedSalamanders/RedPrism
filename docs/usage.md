@@ -26,8 +26,9 @@ version 7. A project the app cannot open (unsupported version, damaged metadata,
 
 PNG, JPEG, TIFF, and HEIC (when Windows provides the HEIF codec) open through File › Open, File › Import Images…
 (several at once) or a drop on the window. Open and a drop ask whether the image is added as a layer named after
-the file above the active layer, or opened as a new project of the image's size (the current project is replaced
-after the save prompt); Import Images… always adds layers. A drop of several images asks once. Close Project
+the file above the active layer (centered where it was dropped when the drop lands on the canvas, else on the
+canvas), or opened as a new project of the image's size (the current project is replaced after the save prompt);
+Import Images… always adds layers. A drop of several images asks once. Close Project
 (Ctrl+W) leaves the window empty until the next New, Open, import or drop. Export PNG (with transparency) or JPEG
 (opaque, quality 0.8) from the File menu.
 
@@ -45,7 +46,7 @@ after the save prompt); Import Images… always adds layers. A drop of several i
 | Shift+Delete | Content-Aware Fill: synthesize the selected pixels from the surrounding image of the layer (also on the Edit menu; OK applies one undo step) |
 | Ctrl+X / Ctrl+C / Ctrl+Shift+C / Ctrl+V | Cut, copy, copy merged, paste in place as a new layer (another app's image pastes centered) |
 | Alt+Backspace / Ctrl+Backspace / Ctrl+I | Fill the selection (or the whole layer) with the foreground / background color; invert the layer or its mask |
-| X / D | Swap the foreground and background colors / reset them to black over white (canvas focused) |
+| X / D | Swap the foreground and background colors / reset them to black over white; with a mask targeted, switch its Paint between black and white / reset it to black (canvas focused) |
 | Ctrl+T / Enter / Escape | Free Transform, or Transform Selection with a selection (the selected pixels float and merge back); apply / cancel a pending transform (canvas focused) |
 | Ctrl-drag / Ctrl+Alt-drag / Ctrl+Arrows | Move / duplicate the selected pixels with a selection tool; nudge them by 1 (Shift 10) in any tool |
 | Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool; nudge the selection outline with a selection tool |

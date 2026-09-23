@@ -11,6 +11,8 @@
 #include "Resources.h"
 #include "SettingsStore.h"
 #include "TransformOverlay.h"
+#include "Version.h"
+#include "VersionInfo.h"
 
 #include <array>
 #include <cmath>
@@ -331,7 +333,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 463> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 464> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -805,7 +807,8 @@ void TestStringTable() noexcept
                                          IDS_KEY_JOIN,
                                          IDS_KEY_LIST,
                                          IDS_SHUTDOWN_UNSAVED,
-                                         IDS_ERROR_CANVAS_DRAW};
+                                         IDS_ERROR_CANVAS_DRAW,
+                                         IDS_ERROR_SELECTION_DETAILED};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -1300,6 +1303,42 @@ void TestLocalization()
            "locale.satellite-override");
 }
 
+// Help › About reads the running module's own VS_VERSIONINFO (RF-704): the stamped build number, not the
+// compile-time "0.1.0.0". RedPrism.exe carries the resource; HostTests.exe does not, so About's fallback shows.
+void TestVersionInfo()
+{
+    Expect(RedPrism::FormatFileVersion(0, 1, 42, 0) == L"0.1.42.0" &&
+               RedPrism::FormatFileVersion(65535, 0, 7, 3) == L"65535.0.7.3",
+           "version.format");
+    std::wstring formatted = L"untouched";
+    Expect(!RedPrism::TryReadModuleFileVersion(nullptr, formatted) && formatted == L"untouched", "version.null-path");
+    wchar_t module[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, module, MAX_PATH);
+    Expect(length > 0 && length < MAX_PATH && !RedPrism::TryReadModuleFileVersion(module, formatted) &&
+               formatted == L"untouched" && RedPrism::FormatRunningModuleVersion(L"9.8.7.6") == L"9.8.7.6",
+           "version.no-resource-falls-back");
+    std::wstring exe(module, length);
+    const std::size_t slash = exe.find_last_of(L"\\/");
+    exe = (slash == std::wstring::npos ? std::wstring{} : exe.substr(0, slash + 1)) + L"RedPrism.exe";
+    const bool read = RedPrism::TryReadModuleFileVersion(exe.c_str(), formatted);
+    // Major and minor come from Common/Version.h; the build field is whatever ResourceCompile stamped; revision 0.
+    const std::wstring prefix =
+        std::to_wstring(REDPRISM_VERSION_MAJOR) + L"." + std::to_wstring(REDPRISM_VERSION_MINOR) + L".";
+    std::size_t fields = 0;
+    bool digits = !formatted.empty();
+    for (const wchar_t character : formatted)
+    {
+        fields += character == L'.' ? 1u : 0u;
+        digits = digits && (character == L'.' || (character >= L'0' && character <= L'9'));
+    }
+    if (!read || !formatted.starts_with(prefix) || !formatted.ends_with(L".0") || fields != 3 || !digits)
+    {
+        std::printf("     RedPrism.exe version '%ls' (read %d)\n", formatted.c_str(), read ? 1 : 0);
+    }
+    Expect(read && formatted.starts_with(prefix) && formatted.ends_with(L".0") && fields == 3 && digits,
+           "version.redprism-exe");
+}
+
 int gCrtReportFailures = 0; // incremented only in Debug / ASan Debug; see CountCrtReportFailures below.
 
 #if defined(_DEBUG)
@@ -1355,6 +1394,7 @@ int wmain(int argc, wchar_t** argv)
     TestStringTable();
     TestCrashDumps();
     TestLocalization();
+    TestVersionInfo();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {
         std::printf("%d test(s) failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);

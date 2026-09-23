@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -22,6 +23,7 @@
 #include <vector>
 
 #include <commctrl.h>
+#include <shlobj.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -296,10 +298,11 @@ void Application::OpenPath(const wchar_t* path) noexcept
     OpenPaths(std::vector<std::wstring>{std::wstring(path)});
 }
 
-void Application::OpenPaths(const std::vector<std::wstring>& paths) noexcept
+void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint) noexcept
 {
     // Projects first, each one replacing the document; then one question for every image in the batch.
     std::vector<std::wstring> images;
+    bool projects = false;
     for (const std::wstring& path : paths)
     {
         if (path.empty())
@@ -308,6 +311,7 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths) noexcept
         }
         if (LooksLikeProjectPath(path.c_str()))
         {
+            projects = true;
             (void)OpenProjectPath(path.c_str());
         }
         else
@@ -324,7 +328,9 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths) noexcept
     {
         return;
     }
-    (void)ImportImagePaths(images, choice == ImageOpenChoice::NewProject);
+    // A drop point belongs to the document it landed on: images dropped with a project center on the canvas
+    // (legacy ProjectController.receive), and so does a new project.
+    (void)ImportImagePaths(images, choice == ImageOpenChoice::NewProject, projects ? std::nullopt : dropPoint);
 }
 
 bool Application::OpenProjectPath(const wchar_t* path) noexcept
@@ -354,24 +360,25 @@ bool Application::OpenProjectPath(const wchar_t* path) noexcept
 }
 
 // A loaded or newly made document takes the session over: no outline in progress, pending edit or stroke carries
-// over, the history starts afresh with the document marked saved, and the viewport fits it.
+// over, the history starts afresh with the document marked saved, and the viewport fits it. The session replaces its
+// whole state (DocumentSession::ReplaceDocument), so a mask target or a selection of layers never survives into the
+// new document, not even when the reopened active layer has the same id and a mask of its own.
 void Application::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active,
                                   std::wstring path) noexcept
 {
     SettleInteractions(false);
-    _session.history.Reset();
-    _session.Document() = std::move(document);
-    _session.SelectLayer(active);
-    _session.CollapsedGroupIDs().clear();
-    _session.history.MarkSaved();
+    _session.ReplaceDocument(std::move(document), active);
     _documentPath = std::move(path);
     _viewport.followsFit = true;
     DocumentChanged();
 }
 
 // `newProject` (or no document): the first image becomes a document of its own size; every other image becomes a
-// layer above the active one, all in one `Import Images` entry (`Import Image` for a single file).
-bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject) noexcept
+// layer above the active one, all in one `Import Images` entry (`Import Image` for a single file), centered on
+// `center` when the images join the document it was taken on (legacy drainImports: the images of a batch that
+// starts the document center on its canvas, whatever the drop point).
+bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject,
+                                   std::optional<Vec2> center) noexcept
 {
     if (paths.empty())
     {
@@ -415,6 +422,7 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
             return false;
         }
         ReplaceDocument(std::move(created.value()), active, std::wstring{});
+        center.reset();
     }
     else
     {
@@ -428,7 +436,8 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
         _session.BeginEdit(paths.size() - next > 1 ? L"Import Images" : L"Import Image");
         for (; next < paths.size(); ++next)
         {
-            const ProjectIoStatus status = ImportImageOnto(_session.Document().value(), paths[next].c_str(), active);
+            const ProjectIoStatus status =
+                ImportImageOnto(_session.Document().value(), paths[next].c_str(), active, center);
             if (status != ProjectIoStatus::Ok)
             {
                 noteFailure(status);
@@ -993,6 +1002,102 @@ int Application::RunFilesSelfTest() noexcept
             return 5;
         }
     }
+    // A reopened project starts on its active layer's image (RF-1101): a mask targeted in the document it replaces
+    // never carries over, not even when the reopened active layer is that same layer with a mask of its own.
+    {
+        const std::wstring reopened = scratch + L"reopen.prism";
+        (void)DeleteFileW(reopened.c_str());
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+        const Guid masked = insertRed(60, 40);
+        OnCommand(ChromeHost::kCommandAddMask);
+        const bool targeted = _session.IsMaskSelected() && _session.ActiveLayerID() == masked;
+        const bool written = targeted && SaveProject(reopened.c_str(), _session.Document().value(),
+                                                     _session.ActiveLayerID(), true) == ProjectIoStatus::Ok;
+        _forcedDiscard = true;
+        const bool opened = written && OpenProjectPath(reopened.c_str());
+        _forcedDiscard.reset();
+        (void)DeleteFileW(reopened.c_str());
+        _documentPath.clear();
+        const bool imageTargeted = opened && _session.ActiveLayerID() == masked && _session.ActiveLayer() != nullptr &&
+                                   _session.ActiveLayer()->mask.has_value() && !_session.IsMaskSelected();
+        OnTool(EditorTool::Brush);
+        _session.brushSettings = BrushSettings{8, 1, 1, 0, 0, 1, false};
+        BeginBrushStroke(_viewport.ViewFromDocument(Vec2{30, 20}, DocumentSize()), 0);
+        FinishBrushStroke();
+        const std::wstring painted = _session.history.UndoName();
+        OnTool(EditorTool::Move);
+        if (!targeted || !written || !opened || !imageTargeted || painted != L"Brush Stroke")
+        {
+            ReportFilesSelfTestFailure(std::format(L"Reopening a project kept the mask target of the document it "
+                                                   L"replaced (targeted {}, written {}, opened {}, image targeted {}, "
+                                                   L"stroke '{}').\n",
+                                                   targeted, written, opened, imageTargeted, painted));
+            return 5;
+        }
+    }
+    // A file dropped on the canvas joins as a layer centered on the drop point (RF-1106, legacy ContentView.onDrop);
+    // dropped on the chrome it centers on the canvas. The drop goes through the window procedure with a real HDROP.
+    {
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+        const auto dropAt = [&](POINT client) -> std::optional<Vec2>
+        {
+            const std::size_t bytes = sizeof(DROPFILES) + (fixture.size() + 2) * sizeof(wchar_t);
+            wil::unique_hglobal memory(GlobalAlloc(GHND, bytes)); // zero-filled: the list ends with two nulls
+            auto* files = memory ? static_cast<DROPFILES*>(GlobalLock(memory.get())) : nullptr;
+            if (files == nullptr)
+            {
+                return std::nullopt;
+            }
+            files->pFiles = sizeof(DROPFILES);
+            files->pt = client;
+            files->fNC = FALSE;
+            files->fWide = TRUE;
+            std::copy(fixture.begin(), fixture.end(),
+                      reinterpret_cast<wchar_t*>(reinterpret_cast<std::uint8_t*>(files) + sizeof(DROPFILES)));
+            (void)GlobalUnlock(memory.get());
+            const std::size_t before = layerCount();
+            _forcedImageOpen = ImageOpenChoice::AddLayer;
+            // The window procedure's DragFinish frees the handle.
+            (void)SendMessageW(_window.get(), WM_DROPFILES, reinterpret_cast<WPARAM>(memory.release()), 0);
+            _forcedImageOpen.reset();
+            const ImageLayer* layer = _session.ActiveLayer();
+            if (layerCount() != before + 1 || layer == nullptr || _session.history.UndoName() != L"Import Image")
+            {
+                return std::nullopt;
+            }
+            return layer->transform.origin;
+        };
+        const CanvasHole hole = _chrome->HolePixels();
+        const Vec2 view = _viewport.ViewFromDocument(Vec2{200.0, 150.0}, DocumentSize());
+        const POINT onCanvas{static_cast<LONG>(std::lround(hole.left + view.x)),
+                             static_cast<LONG>(std::lround(hole.top + view.y))};
+        const Vec2 landed = _viewport.DocumentFromView(
+            Vec2{static_cast<double>(onCanvas.x) - hole.left, static_cast<double>(onCanvas.y) - hole.top},
+            DocumentSize());
+        const std::optional<Vec2> atPoint = dropAt(onCanvas);
+        const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+        const D2D1_RECT_F rail = _chrome->ToolButtonBoundsDip(EditorTool::Move);
+        const POINT onRail{static_cast<LONG>(std::lround((rail.left + rail.right) / 2.0f * scale)),
+                           static_cast<LONG>(std::lround((rail.top + rail.bottom) / 2.0f * scale))};
+        const std::optional<Vec2> atMiddle = dropAt(onRail);
+        const Vec2 expectedPoint{std::floor(landed.x - 3.0), std::floor(landed.y - 1.5)};
+        const Vec2 expectedMiddle{std::floor(documentWidth() / 2.0 - 3.0),
+                                  std::floor(_session.Document().value().height / 2.0 - 1.5)};
+        if (atPoint != expectedPoint || atMiddle != expectedMiddle)
+        {
+            ReportFilesSelfTestFailure(std::format(
+                L"A dropped image did not center on the drop point, or on the canvas off it (at the point {},{} for "
+                L"{},{}; off the canvas {},{} for {},{}).\n",
+                atPoint.has_value() ? atPoint->x : -1.0, atPoint.has_value() ? atPoint->y : -1.0, expectedPoint.x,
+                expectedPoint.y, atMiddle.has_value() ? atMiddle->x : -1.0, atMiddle.has_value() ? atMiddle->y : -1.0,
+                expectedMiddle.x, expectedMiddle.y));
+            return 5;
+        }
+    }
     OnTool(EditorTool::Move);
     return 0;
 }
@@ -1073,6 +1178,50 @@ int Application::RunClipboardSelfTest() noexcept
                         writeFailed, pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
                         pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
         return 5;
+    }
+    // Copy and Copy Merged take the pixels the canvas shows (RF-1104, Decision D3): a pending gradient commits first
+    // as its own entry and its preview ends with it; the merged copy holds the gradient, not the layers beneath it.
+    {
+        OnCommand(ChromeHost::kCommandDeselect);
+        OnCommand(ChromeHost::kCommandNewLayer);
+        OnTool(EditorTool::Gradient);
+        _session.SetForegroundColor(0xFF000000u);
+        _session.SetBackgroundColor(0xFFFFFFFFu);
+        _session.gradientSettings = GradientSettings{};
+        const auto dragLine = [&]()
+        {
+            BeginGradientDrag(_viewport.ViewFromDocument(Vec2{0, 50}, DocumentSize()));
+            DragGradient(_viewport.ViewFromDocument(Vec2{100, 50}, DocumentSize()), 0);
+            EndGradientDrag();
+            return _session.PendingGradient() != nullptr && _composition.HasStroke();
+        };
+        const int before = _session.history.UndoCount();
+        const bool copyPending = dragLine();
+        OnCommand(ChromeHost::kCommandCopy);
+        const bool copyApplied = _session.PendingGradient() == nullptr && !_composition.HasStroke() &&
+                                 _session.history.UndoCount() == before + 1 &&
+                                 _session.history.UndoName() == L"Gradient";
+        // A white start this time: the merged copy shows it only when the pending line was applied first.
+        _session.SetForegroundColor(0xFFFFFFFFu);
+        const bool mergedPending = dragLine();
+        OnCommand(ChromeHost::kCommandCopyMerged);
+        std::array<std::uint8_t, 4> start{};
+        if (_session.Clipboard().has_value())
+        {
+            _session.Clipboard()->image.ReadRegion(2, 50, 1, 1, start.data(), 4, 0);
+        }
+        const bool mergedApplied = _session.PendingGradient() == nullptr && !_composition.HasStroke() &&
+                                   _session.history.UndoCount() == before + 2 && start[0] > 200 && start[1] > 200 &&
+                                   start[2] > 200 && start[3] == 255;
+        OnTool(EditorTool::Move);
+        if (!copyPending || !copyApplied || !mergedPending || !mergedApplied)
+        {
+            ReportFilesSelfTestFailure(std::format(L"Copy or Copy Merged under a pending gradient did not apply it "
+                                                   L"first (copy {} {}, merged {} {}, merged start {} {} {} {}).\n",
+                                                   copyPending, copyApplied, mergedPending, mergedApplied, start[0],
+                                                   start[1], start[2], start[3]));
+            return 5;
+        }
     }
     OnCommand(ChromeHost::kCommandDeselect);
     return 0;

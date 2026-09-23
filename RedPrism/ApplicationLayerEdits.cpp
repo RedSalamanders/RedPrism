@@ -2,9 +2,11 @@
 
 #include "ChromeHost.h"
 #include "Resources.h"
+#include "Selection.h"
 #include "resource.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -214,6 +216,16 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
 
 void Application::MergeLayersCommand() noexcept
 {
+    // The merge composes what the canvas shows: a pending transform applies and a pending gradient commits first,
+    // each as its own entry (Decision D3), before the plan is made and its layers composed. The session would commit
+    // the gradient only inside MergeLayers, after the composite was read without it.
+    if (_session.PendingTransformEdit().has_value())
+    {
+        _transformDrag.reset();
+        _session.CommitTransform();
+        DocumentChanged();
+    }
+    CommitGradient();
     const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
     if (!plan.has_value() || !_session.Document().has_value())
     {
@@ -258,7 +270,15 @@ void Application::MergeLayersCommand() noexcept
                                           bgra.data(), bgra.size());
     if (!composite.HasStorage() || !_session.MergeLayers(plan.value(), composite))
     {
-        ShowError(IDS_ERROR_FLATTEN);
+        // A merge whose pixels would not fit the document's budget (Decision D7) says that, not that it failed.
+        if (_session.TakeBudgetRefusal())
+        {
+            ReportBudgetRefusal();
+        }
+        else
+        {
+            ShowError(IDS_ERROR_FLATTEN);
+        }
         return;
     }
     DocumentChanged();
@@ -531,6 +551,50 @@ int Application::RunLayerEditsSelfTest() noexcept
                                                     L"entry (cancelled {}, committed {}, opacity {}).\n",
                                                     cancelled, committed, opacityOf(freshId)));
         return 5;
+    }
+    // Merge composes what the canvas shows (RF-1104): a gradient pending on the upper layer commits first as its own
+    // entry, and the merged layer holds it instead of the blue it covered.
+    {
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+        insert(L"Base", 40, 20, Vec2{0, 0}, 0xFFFF0000u);
+        insert(L"Top", 40, 20, Vec2{0, 0}, 0xFF0000FFu);
+        DocumentChanged();
+        OnTool(EditorTool::Gradient);
+        _session.SetForegroundColor(0xFF000000u);
+        _session.SetBackgroundColor(0xFFFFFFFFu);
+        _session.gradientSettings = GradientSettings{};
+        BeginGradientDrag(_viewport.ViewFromDocument(Vec2{0, 10}, DocumentSize()));
+        DragGradient(_viewport.ViewFromDocument(Vec2{40, 10}, DocumentSize()), 0);
+        EndGradientDrag();
+        const bool pending = _session.PendingGradient() != nullptr;
+        OnCommand(ChromeHost::kCommandMergeDown);
+        const ImageLayer* result = _session.ActiveLayer();
+        std::array<std::uint8_t, 4> start{};
+        if (result != nullptr && result->asset.has_value())
+        {
+            const Vec2 pixel =
+                PixelToDocument(result->transform, result->asset->image.Width(), result->asset->image.Height())
+                    .Inverted()
+                    .Apply(Vec2{1.5, 10.5});
+            result->asset->image.ReadRegion(static_cast<int>(std::floor(pixel.x)),
+                                            static_cast<int>(std::floor(pixel.y)), 1, 1, start.data(), 4, 0);
+        }
+        const std::wstring mergeEntry = _session.history.UndoName();
+        _session.Undo();
+        const std::wstring gradientEntry = _session.history.UndoName();
+        DocumentChanged();
+        OnTool(EditorTool::Move);
+        if (!pending || mergeEntry != L"Merge Down" || gradientEntry != L"Gradient" || start[0] > 40 || start[2] > 40 ||
+            start[3] != 255)
+        {
+            ReportLayerEditsSelfTestFailure(
+                std::format(L"Merge Down under a pending gradient did not merge it (pending "
+                            L"{}, entries '{}' over '{}', merged start {} {} {} {}).\n",
+                            pending, mergeEntry, gradientEntry, start[0], start[1], start[2], start[3]));
+            return 5;
+        }
     }
     return 0;
 }

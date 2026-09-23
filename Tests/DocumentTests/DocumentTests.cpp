@@ -3378,6 +3378,33 @@ void TestGradientTool()
                    (paintWhite ? std::array<double, 4>{0, 0, 1, 1} : std::array<double, 4>{1, 0, 0, 1}),
                paintWhite ? "gradient.layer-palette-colors-after-white" : "gradient.layer-palette-colors");
     }
+    // X and D on a targeted mask (legacy ColorPalette.swift swapPaletteColors / resetPaletteColors) flip and reset
+    // the mask palette, not the RGB colors, and a pending mask gradient follows; off the mask they change the colors.
+    {
+        DocumentSession session = GradientSession();
+        DragGradient(session, Vec2{0, 2}, Vec2{0.6, 2});
+        session.CommitGradient();
+        session.AddLayerMask(true);
+        session.SetForegroundColor(0xFFFF0000u);
+        session.SetBackgroundColor(0xFF0000FFu);
+        session.maskPaintWhite = false;
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        session.SwapPaletteColors();
+        const bool flipped = session.IsMaskSelected() && session.maskPaintWhite &&
+                             session.ForegroundColor() == 0xFFFF0000u && session.BackgroundColor() == 0xFF0000FFu;
+        session.CommitGradient();
+        Expect(flipped && Near(ActiveMaskValue(session, 0, 2), 255) && Near(ActiveMaskValue(session, 100, 2), 0),
+               "palette.mask-swap-flips-mask-paint");
+        session.ResetPaletteColors();
+        Expect(!session.maskPaintWhite && session.ForegroundColor() == 0xFFFF0000u &&
+                   session.BackgroundColor() == 0xFF0000FFu,
+               "palette.mask-reset-paints-black");
+        session.SelectLayerTarget(session.ActiveLayerID().value(), false);
+        session.SwapPaletteColors();
+        Expect(!session.maskPaintWhite && session.ForegroundColor() == 0xFF0000FFu &&
+                   session.BackgroundColor() == 0xFFFF0000u,
+               "palette.image-swap-leaves-mask-paint");
+    }
     // Legacy paletteChangesUpdatePendingPreview, and the pending tiles feed the preview.
     {
         DocumentSession session = GradientSession();

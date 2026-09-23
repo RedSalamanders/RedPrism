@@ -69,9 +69,14 @@ Mouse-up (`DocumentSession::FinishBrush`) settles the tail, then installs one ra
 `PaintSnapshot` finds the painted bounds (the alpha bounds of the touched tiles plus the original pixels; a mask
 keeps its whole grid) and builds `Raster::Replacing(source, tiles, bounds)`, a sparse raster that shares the
 layer's previous storage and every untouched tile. The layer's transform becomes `TransformFor(bounds)` (the same
-placement, resized to the crop); the thumbnail is sampled through `ReadRegion`, never through `Data()`. A mask on
-the layer's grid grows with the layer, revealing (255) the new area; a uniform mask stays uniform. The commit is
-refused, and nothing recorded, when the layer's pixels or transform changed under the stroke. History names:
+placement, resized to the crop); the thumbnail is sampled through `ReadRegion`, never through `Data()`. A painted
+sparse mask keeps its own fill over its own extent (`Replacing` pads only the area the crop adds), so a hide-all
+mask painted any number of times still hides everything no stroke touched; a mask whose pixel size differs from its
+layer's (stretched over it) is resampled onto the layer's grid by the nearest pixel (`Raster::Stretched`), as its
+tiles were read, the first time a stroke commits on it, while a uniform 1 × 1 mask stays one value. A mask on the
+layer's grid grows with the layer (`CarriedMask`): its old area keeps its pixels and fill and only the new area
+reveals (255). The commit is refused, and nothing recorded, when the layer's pixels or transform changed under the
+stroke. History names:
 `Brush Stroke`, `Erase`, `Paint Mask`. Undo, Redo and the next stroke read the tiles directly; the first
 `Data()` call (export, a filter) assembles a contiguous copy once and keeps it.
 
@@ -149,11 +154,13 @@ the coverage) and `Invert` (premultiplied: each color becomes alpha − color, a
 it covers every pixel the layer has, on or off the canvas). `Fill`, `ClearPixels` and `Invert` wrap them.
 
 `LiftSelection` copies the layer's pixels under the selection out of the original, faded by the coverage;
-`MoveLifted(offset, duplicate)` rebuilds every tile the pixels leave or land on (and any tile an earlier preview
-changed) from the original: the selection becomes a hole (the pixels times one minus the coverage, unless
-duplicating) and the lifted pixels land `offset` document pixels away, source-over (exact for whole pixels on an
-unscaled layer, bilinear otherwise), so a preview never accumulates and the pixels along a soft edge add back to the
-original. The session's `PixelMove` keeps the raster; the host shows it through the stroke preview like a gradient
+`MoveLifted(offset, duplicate)` renders the move from the original: the selection becomes a hole (the pixels times
+one minus the coverage, unless duplicating) and the lifted pixels land `offset` document pixels away, source-over
+(exact for whole pixels on an unscaled layer, bilinear otherwise), so a preview never accumulates and the pixels
+along a soft edge add back to the original. It rebuilds only what changed: an offset that rounds to the one already
+shown rebuilds nothing, and a new offset rebuilds the tiles the pixels landed on last time and land on now (the
+hole's tiles on the first update, or when duplicating switches), each from its original content (review fix
+RF-216). The session's `PixelMove` keeps the raster; the host shows it through the stroke preview like a gradient
 (`BeginStroke` from `PreviewFor`, the changed tiles per pointer update) and the commit adopts the working texture,
 so a move never re-uploads the layer per pointer update. The session's other edits (fills, Clear, Invert, nudges)
 commit at once and upload through the sparse path.
@@ -186,8 +193,10 @@ pixels, hard edges, soft falloff, cancel), `mask.*` brush cases (paint white/bla
 source-over coverage, repeated flushes), `snapshot.*` / `ridges.*` (a 2000² document with a 400 px tip: mouse-up and
 the next stroke never materialize, history retains only replaced tiles), `bounds.*` / `budget.*` (alpha bounds,
 transform after growth, the pixel limit), `reject.*` / `line.*` / `keys.*` (invalid settings and points, Shift lines,
-size / hardness / opacity keys), `expand.*` (paint beyond the layer grows it) and `clip.*` (selection-clipped paint);
-the pixel edit cases (`edit.*`, `pixelmove.*`, `clipboard.*`, `floating.*`) are listed in
+size / hardness / opacity keys), `expand.*` (paint beyond the layer grows it), `clip.*` (selection-clipped paint),
+`maskfill.*` (a hide-all mask painted on two tiles keeps hiding the rest, also once the layer grows) and
+`stretchmask.*` (a mask stretched over a layer of another pixel size keeps its place when painted and when the layer
+grows); the pixel edit cases (`edit.*`, `pixelmove.*`, `movetiles.*`, `clipboard.*`, `floating.*`) are listed in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 `CompositionTests` (WARP): `sparse.*` (a sparse raster uploads through the GPU assembly path and matches the

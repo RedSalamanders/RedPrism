@@ -1,13 +1,25 @@
 #include "Application.h"
 
 #include "Adjust.h"
+#include "AdjustControls.h"
 #include "ChromeHost.h"
 #include "Resources.h"
 #include "resource.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <format>
+#include <string>
 #include <unordered_set>
+#include <vector>
+
+#include <UIAutomation.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/com.h>
+#pragma warning(pop)
 
 // Color adjustments and filters on the host (C12, Specs/UI/UI_ApplicationChrome.md): the Image and Filter menus
 // open a session edit, the adjustment panel's actions change its settings, previews reach the canvas through the
@@ -26,6 +38,53 @@ namespace
     const auto byte = [](double value)
     { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0, 1.0) * 255)); };
     return 0xFF000000u | (byte(color.red) << 16) | (byte(color.green) << 8) | byte(color.blue);
+}
+
+// Whether the UI Automation subtree under `fragment` holds a Button named `name` (the drawn controls are Buttons for
+// UI Automation, AdjustControls.h), walked as a client would, through Navigate.
+[[nodiscard]] bool HasNamedButton(IRawElementProviderFragment* fragment, const std::wstring& name, int& budget) noexcept
+{
+    if (fragment == nullptr || budget <= 0)
+    {
+        return false;
+    }
+    --budget;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> simple;
+    if (SUCCEEDED(fragment->QueryInterface(IID_PPV_ARGS(simple.put()))) && simple)
+    {
+        VARIANT value;
+        VariantInit(&value);
+        const bool named = SUCCEEDED(simple->GetPropertyValue(UIA_NamePropertyId, &value)) && value.vt == VT_BSTR &&
+                           value.bstrVal != nullptr && name == value.bstrVal;
+        (void)VariantClear(&value);
+        VariantInit(&value);
+        const bool button = SUCCEEDED(simple->GetPropertyValue(UIA_ControlTypePropertyId, &value)) &&
+                            value.vt == VT_I4 && value.lVal == UIA_ButtonControlTypeId;
+        (void)VariantClear(&value);
+        if (named && button)
+        {
+            return true;
+        }
+    }
+    wil::com_ptr_nothrow<IRawElementProviderFragment> child;
+    if (FAILED(fragment->Navigate(NavigateDirection_FirstChild, child.put())))
+    {
+        return false;
+    }
+    while (child && budget > 0)
+    {
+        if (HasNamedButton(child.get(), name, budget))
+        {
+            return true;
+        }
+        wil::com_ptr_nothrow<IRawElementProviderFragment> next;
+        if (FAILED(child->Navigate(NavigateDirection_NextSibling, next.put())))
+        {
+            break;
+        }
+        child = std::move(next);
+    }
+    return false;
 }
 
 [[nodiscard]] std::optional<AdjustmentKind> AdjustmentKindForCommand(int command) noexcept
@@ -92,6 +151,13 @@ bool Application::BeginColorEdit(int command) noexcept
     _session.BeginColorEdit(kind.value());
     if (!_session.HasColorEdit())
     {
+        if (_session.TakeBudgetRefusal())
+        {
+            // The filter's grown grid would not fit the document's pixel budget (Decision D7): that is the reason,
+            // not the layer.
+            ReportBudgetRefusal();
+            return false;
+        }
         UINT captionId = 0;
         for (const ChromeHost::CommandShortcutDefault& row : ChromeHost::CommandShortcuts())
         {
@@ -552,4 +618,217 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
         }
     }
     return false;
+}
+
+void SelfTestFailure(const wchar_t* message) noexcept; // Application.cpp
+
+int Application::RunAdjustSelfTest() noexcept
+{
+    if (!_chrome || !_window)
+    {
+        SelfTestFailure(L"The adjust self-test needs the chrome and the window.\n");
+        return 5;
+    }
+    const auto fail = [](const std::wstring& message) noexcept
+    {
+        SelfTestFailure(message.c_str());
+        return 5;
+    };
+    // A user sees frames between inputs: the chrome lays out and renders, and DxUi takes keys only after that.
+    const auto settle = [this]() noexcept
+    {
+        (void)_chrome->AdvanceAnimation(GetTickCount64());
+        SyncChrome();
+        (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    };
+    const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+    const auto press = [&](float xDip, float yDip) noexcept
+    {
+        DxUi::PointerEvent pointer{};
+        pointer.action = DxUi::PointerAction::Down;
+        pointer.xPixels = xDip * scale;
+        pointer.yPixels = yDip * scale;
+        (void)_chrome->DispatchPointer(pointer);
+        pointer.action = DxUi::PointerAction::Up;
+        (void)_chrome->DispatchPointer(pointer);
+    };
+    // Whether the window's UI Automation root reaches a Button of that name through the chrome's tree.
+    const auto reachable = [&](UINT nameId) noexcept
+    {
+        settle();
+        IRawElementProviderFragmentRoot* root = _chrome->AccessibilityRoot();
+        wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
+        int budget = 4000;
+        return root != nullptr && SUCCEEDED(root->QueryInterface(IID_PPV_ARGS(fragment.put()))) && fragment &&
+               HasNamedButton(fragment.get(), LoadStringResource(nullptr, nameId), budget);
+    };
+
+    // A fresh document with one painted layer for the panels.
+    _forcedDiscard = true;
+    OnCommand(ChromeHost::kCommandNew);
+    _forcedDiscard.reset();
+    {
+        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(64 * 64 * 4), 0);
+        for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
+        {
+            bytes[index] = 0x2E;
+            bytes[index + 1] = 0x8A;
+            bytes[index + 2] = 0xE5;
+            bytes[index + 3] = 0xFF;
+        }
+        const Raster raster = Raster::Make(64, 64, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        ImageLayer layer = ImageLayer::Blank(L"Swatch", Vec2{64, 64});
+        layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
+        layer.transform.origin = Vec2{20, 20};
+        _session.BeginEdit(L"Import Image");
+        _session.Document().value().layers.push_back(layer);
+        _session.EndEdit();
+        _session.SelectLayer(layer.id);
+        DocumentChanged();
+    }
+    OnTool(EditorTool::Move);
+
+    // A typed decimal stays as typed while it previews (RF-501): "2.5" into Gaussian Blur's radius shows "2", "2."
+    // and "2.5", never a reformatted "2.0", and the preview follows it.
+    {
+        _session.filterSettings.radius = 1.0;
+        if (!BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+        {
+            return fail(L"Gaussian Blur did not open for the typed-decimal check.\n");
+        }
+        settle();
+        if (!_chrome->FocusAdjustRadiusForTest())
+        {
+            CancelColorEdit();
+            return fail(L"The Gaussian Blur radius field could not take the focus.\n");
+        }
+        // Each key is followed by the frame its preview asks for, which syncs the panel from the session.
+        std::array<std::wstring, 3> shown;
+        const std::array<wchar_t, 3> typed{L'2', L'.', L'5'};
+        for (std::size_t index = 0; index < typed.size(); ++index)
+        {
+            (void)_chrome->DispatchCharacter(typed[index], 0);
+            settle();
+            shown[index] = _chrome->AdjustRadiusTextForTest();
+        }
+        const bool previewed = _session.PendingColorEdit().has_value() &&
+                               std::fabs(_session.PendingColorEdit()->settings.radius - 2.5) < 1e-9;
+        CancelColorEdit();
+        _chrome->SetCanvasFocused(true);
+        if (shown[0] != L"2" || shown[1] != L"2." || shown[2] != L"2.5" || !previewed)
+        {
+            return fail(std::format(L"Typing 2.5 into the Gaussian Blur radius was reformatted ('{}', '{}', '{}', "
+                                    L"previewed {}).\n",
+                                    shown[0], shown[1], shown[2], previewed));
+        }
+    }
+
+    // The Gradient Map's color picker closes with its panel, and the next pick from a palette well reaches the
+    // palette (RF-503).
+    {
+        if (!BeginColorEdit(ChromeHost::kCommandGradientMap))
+        {
+            return fail(L"Gradient Map did not open for the picker check.\n");
+        }
+        settle();
+        OnAdjustAction(AdjustAction::OpenShadows, 0.0);
+        const bool pickerOpen = _chrome->ColorPickerOpen();
+        CancelColorEdit();
+        settle();
+        const bool closedWithPanel = !_chrome->ColorPickerOpen() && !_chrome->AdjustPanelOpen();
+        const std::uint32_t foreground = _session.ForegroundColor();
+        const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(false);
+        press((well.left + well.right) * 0.5f, (well.top + well.bottom) * 0.5f);
+        const bool wellOpened = _chrome->ColorPickerOpen();
+        _chrome->SampleColor(0xFF123456u);
+        _chrome->CloseColorPicker(true);
+        settle();
+        const bool reached = _session.ForegroundColor() == 0xFF123456u;
+        _session.SetForegroundColor(foreground);
+        _chrome->SetCanvasFocused(true);
+        settle();
+        if (!pickerOpen || !closedWithPanel || !wellOpened || !reached)
+        {
+            return fail(std::format(L"The Gradient Map picker outlived its panel or took the next palette pick (open "
+                                    L"{}, closed with the panel {}, well opened {}, palette reached {}).\n",
+                                    pickerOpen, closedWithPanel, wellOpened, reached));
+        }
+    }
+
+    // The drawn controls are elements of the window's UI Automation tree (RF-507): the palette's zones always, the
+    // curve editor, the levels bars and the hue spectrum while their panel shows them.
+    {
+        const bool palette = reachable(IDS_PALETTE_FOREGROUND) && reachable(IDS_PALETTE_BACKGROUND) &&
+                             reachable(IDS_PALETTE_SWAP) && reachable(IDS_PALETTE_RESET);
+        const bool curves = BeginColorEdit(ChromeHost::kCommandCurves) && reachable(IDS_A11Y_CURVE_EDITOR);
+        CancelColorEdit();
+        const bool levels = BeginColorEdit(ChromeHost::kCommandLevels) && reachable(IDS_A11Y_LEVELS_INPUT) &&
+                            reachable(IDS_A11Y_LEVELS_OUTPUT);
+        CancelColorEdit();
+        const bool opened = BeginColorEdit(ChromeHost::kCommandHueSaturation);
+        OnAdjustAction(AdjustAction::SetRange, 1.0);
+        const bool spectrum = opened && reachable(IDS_A11Y_HUE_SPECTRUM);
+        CancelColorEdit();
+        settle();
+        if (!palette || !curves || !levels || !spectrum)
+        {
+            return fail(std::format(L"A drawn control was not in the UI Automation tree (palette zones {}, curve "
+                                    L"editor {}, levels bars {}, hue spectrum {}).\n",
+                                    palette, curves, levels, spectrum));
+        }
+    }
+
+    // A press on the spectrum's hue bars moves no handle; a press in the handle strip between them drags the nearest
+    // handle (RF-511, legacy HueSaturationSheet).
+    {
+        if (!BeginColorEdit(ChromeHost::kCommandHueSaturation))
+        {
+            return fail(L"Hue/Saturation did not open for the spectrum check.\n");
+        }
+        OnAdjustAction(AdjustAction::SetRange, 1.0);
+        settle();
+        const D2D1_RECT_F bounds = _chrome->SpectrumBoundsDipForTest();
+        std::optional<float> stripTop;
+        std::optional<float> stripBottom;
+        for (float y = bounds.top; y < bounds.bottom; y += 0.25f)
+        {
+            if (SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(bounds.left + 1.0f, y)))
+            {
+                stripTop = stripTop.value_or(y);
+                stripBottom = y;
+            }
+        }
+        const auto hueSettings = [this]() -> std::optional<HueSaturationSettings>
+        {
+            const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+            return edit.has_value() && edit->kind == FilterKind::HueSaturation
+                       ? std::optional<HueSaturationSettings>(edit->settings.hsv)
+                       : std::nullopt;
+        };
+        const HueSaturationSettings before = hueSettings().value_or(HueSaturationSettings{});
+        // Just right of the band's range start: that handle is the nearest, and the place is a valid one for it.
+        const double degrees = Adjust::BandOf(before).Handles()[1] + 3.0;
+        const float x = bounds.left + (bounds.right - bounds.left) * static_cast<float>(degrees / 360.0);
+        const float barY = bounds.top + 1.0f;
+        const bool onBar = !SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(x, barY));
+        press(x, barY);
+        const bool barIgnored = hueSettings() == std::optional<HueSaturationSettings>(before);
+        bool stripMoved = false;
+        if (stripTop.has_value() && stripBottom.has_value())
+        {
+            press(x, (stripTop.value() + stripBottom.value()) * 0.5f);
+            stripMoved = hueSettings().has_value() && !(hueSettings().value() == before);
+        }
+        CancelColorEdit();
+        _chrome->SetCanvasFocused(true);
+        settle();
+        if (bounds.right <= bounds.left || !stripTop.has_value() || !onBar || !barIgnored || !stripMoved)
+        {
+            return fail(std::format(L"The spectrum's press rules broke (bounds {:.1f}-{:.1f}, strip {}, a bar press "
+                                    L"ignored {}, a strip press moved a handle {}).\n",
+                                    bounds.left, bounds.right, stripTop.has_value(), barIgnored, stripMoved));
+        }
+    }
+    OnTool(EditorTool::Move);
+    return 0;
 }

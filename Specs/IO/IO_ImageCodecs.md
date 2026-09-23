@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-23
 Owner: `Common/ImageCodecs.*`
 
 ## Scope
@@ -33,9 +33,11 @@ an uncaught HRESULT or a crash. TIFF uses the first frame.
 Import (never RedPrism's own project assets, which are always straight-sRGB and untagged) applies the source's EXIF
 orientation tag (274, read from `/app1/ifd/{ushort=274}`, `/ifd/{ushort=274}`, or `System.Photo.Orientation`) with
 `IWICBitmapFlipRotator`, and color-manages a non-sRGB embedded profile to sRGB with `IWICColorTransform` before the
-premultiplied-BGRA conversion. `ImportImageOnto` places the new layer centered on the canvas and above the active
-layer inside its folder (`Document/Document_Model.md`'s session-edit insertion rule); a budget failure restores the
-previous active layer and reports `TooLarge`, not `Invalid`.
+premultiplied-BGRA conversion. `ImportImageOnto` places the new layer centered on its `center` argument (a drop point
+in document pixels, legacy `insert(_:centeredAt:)`) or else on the canvas, and above the active layer inside its
+folder (`Document/Document_Model.md`'s session-edit insertion rule); into an empty document the image becomes the
+canvas and the point does not apply. A budget failure restores the previous active layer and reports `TooLarge`,
+not `Invalid`.
 
 ## Export
 

@@ -32,8 +32,11 @@ dropped by the first Undo and by the first Redo, and history does not move on th
 edit in progress (the Crop tool always shows one, the whole canvas by default): Undo and Redo drop it and still move
 history, as legacy `restore()` cancels the crop; with nothing to undo the frame stays. An open color panel also
 consumes the key: history stays put until OK or Cancel. The host drops any composition stroke in the
-same command. `ConfirmDiscardChanges` settles a live stroke before it reads `IsModified`, so Save writes that
-stroke and a clean document plus a stroke still asks.
+same command. The save prompt (`ConfirmDiscardChanges`) settles nothing before it asks: a pending edit that Save
+would record (a live stroke or warp, a pending gradient, a changed transform, a typed opacity) counts as unsaved
+work beside `IsModified`, so a clean document with one still asks; Cancel leaves it pending, Save settles and
+writes it, and Don't Save settles it as the document goes ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md)
+› Files).
 
 `MarkSaved` stores the current revision. `IsModified` is revision ≠ saved revision. `Reset` clears stacks and
 starts a new saved revision.
@@ -51,5 +54,6 @@ live brush, gradient, warp and pixel move without moving history; with a crop fr
 history, and keep it when there is nothing to undo; Cut on a hidden layer or under an
 open Levels panel leaves the clipboard and the pixels; a paintable Cut clears; a float aborts when the clear
 paints nothing) and `cutfull.*` (Cut on a mask and Clear with a full 100-entry history keep the copy and report
-the clear). The WARP self-test covers Ctrl+Z during a stroke and the save prompt committing that stroke.
+the clear). The WARP self-test covers Ctrl+Z during a stroke, and the save prompt asking for a live stroke on a
+clean document whose Cancel leaves the stroke live for its release to record.
 Debug and ASan Debug `test.ps1` MUST run `DocumentTests.exe`.

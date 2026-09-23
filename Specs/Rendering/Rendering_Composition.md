@@ -247,7 +247,10 @@ canvas that fails without device loss leaves the chrome presenting and notices o
 through its proxy and the wand's composite reads it back at full resolution, a 17 000 pixel layer included; the
 wand's composite reads the document under a live stroke preview; a curved three-sample stroke's adopted texture
 equals its committed raster within 2/255 (RF-405); a gradient started on another layer while a stale preview remains
-previews on that layer; the ants follow the outline; minimizing and occlusion drop the surfaces and the next frame
+previews on that layer; a gradient left pending on one layer when another layer is chosen commits, its preview ends
+by adopting its texture for that layer, the next layer's line previews on a texture of its own and Enter adopts that
+one, and each layer then draws exactly as its committed raster (within 2/255, the other layer hidden; RF-1105); the
+ants follow the outline; minimizing and occlusion drop the surfaces and the next frame
 restores them; the window cannot shrink below the chrome around a minimum canvas and the crop shade of inverted
 bounds draws nothing; the screenshot exit codes tell 8 (unsupported) from 9 (failed or never captured); three failed
 frames stop drawing and post one `WM_CLOSE` that prompts, the window still open.

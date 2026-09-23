@@ -530,6 +530,29 @@ int Application::RunSizeSelfTest() noexcept
         ReportSizeSelfTestFailure(L"Undo did not restore the document through the three size entries.\n");
         return 5;
     }
+    // Without resampling Image Size lists Inches and Centimeters only, and a pick reports the unit, not its place in
+    // the list (RF-502): Down on the focused combo picks Centimeters and the draft stores Centimeters.
+    {
+        OnCommand(ChromeHost::kCommandImageSize);
+        OnSizeAction(SizeAction::SetResample, 0.0);
+        const bool inches = _sizeDialog.image.unit == CanvasUnit::Inches;
+        (void)_chrome->AdvanceAnimation(GetTickCount64());
+        SyncChrome();
+        (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        const bool focused = _chrome->FocusSizeUnitForTest();
+        const bool picked = _chrome->DispatchKey(VK_DOWN, true, 0);
+        (void)_chrome->DispatchKey(VK_DOWN, false, 0);
+        const CanvasUnit unit = _sizeDialog.image.unit;
+        CancelSizeCard();
+        _chrome->SetCanvasFocused(true);
+        if (!inches || !focused || !picked || unit != CanvasUnit::Centimeters)
+        {
+            ReportSizeSelfTestFailure(std::format(L"Image Size's unit pick without resampling did not store the unit "
+                                                  L"picked (inches first {}, focused {}, picked {}, unit {}).\n",
+                                                  inches, focused, picked, static_cast<int>(unit)));
+            return 5;
+        }
+    }
     // New Canvas: a fresh unmodified document of the typed size.
     OnCommand(ChromeHost::kCommandNewCanvas);
     OnSizeAction(SizeAction::SetWidth, 300.0);

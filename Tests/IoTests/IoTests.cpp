@@ -1191,6 +1191,19 @@ void TestImportOntoDocument()
            "import.centered-on-canvas");
     Expect(nestedActive.has_value() && nestedActive.value() == nested.layers.back().id, "import.nested-active-layer");
 
+    // RF-1106: a drop point (document pixels) centers the import there instead (legacy insert(_:centeredAt:)); into
+    // an empty document the image is the canvas and the point does not apply.
+    Expect(ImportImageOnto(nested, path.c_str(), nestedActive, Vec2{30.5, 70.0}) == ProjectIoStatus::Ok &&
+               Near(nested.layers.back().transform.origin.x, std::floor(30.5 - 6.0 / 2.0)) &&
+               Near(nested.layers.back().transform.origin.y, std::floor(70.0 - 3.0 / 2.0)),
+           "import.centered-on-drop-point");
+    CanvasDocument dropped;
+    std::optional<Guid> droppedActive;
+    Expect(ImportImageOnto(dropped, path.c_str(), droppedActive, Vec2{500.0, 500.0}) == ProjectIoStatus::Ok &&
+               dropped.width == 6 && dropped.height == 3 && Near(dropped.layers.back().transform.origin.x, 0.0) &&
+               Near(dropped.layers.back().transform.origin.y, 0.0),
+           "import.drop-point-ignored-for-a-new-canvas");
+
     // RF-105: a budget failure pops the layer, restores the previous active layer, and reports TooLarge (not
     // Invalid). `Raster::MakeSparse` with an empty base and no tiles reports 100,000,000 pixels for the budget
     // check without allocating a 400 MB buffer.

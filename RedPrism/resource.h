@@ -478,6 +478,8 @@
 #define IDS_UNIT_CENTIMETERS 649
 #define IDS_A11Y_PALETTE_NAME 650
 #define IDS_SHUTDOWN_UNSAVED 664
+// Integration hand-offs (review fixes wave 1b, ids 666-679 of WP6's range).
+#define IDS_ERROR_SELECTION_DETAILED 666
 // Rendering, viewport and frame loop (review fixes WP4, ids 680-687).
 #define IDS_ERROR_CANVAS_DRAW 680
 #define IDR_LUCIDE_MOVE 700

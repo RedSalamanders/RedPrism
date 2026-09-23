@@ -237,6 +237,7 @@ void ChromeHost::AttachAccessibility() noexcept
     _accessibilityRoot = std::move(root);
     _accessibilitySite = std::move(site);
     _accessibilityPlacementDirty = false;
+    _accessibilityPreparations = _view.GetStatistics().preparations;
 }
 
 void ChromeHost::DetachAccessibility() noexcept
@@ -306,6 +307,7 @@ void ChromeHost::FlushAccessibilityPlacement() noexcept
     {
         return;
     }
+    _accessibilityPreparations = _view.GetStatistics().preparations;
     const DxUi::EmbeddedAccessibilityPlacement placement = AccessibilityPlacement();
     (void)_view.UpdateAccessibility(placement);
     if (_accessibilityRoot)

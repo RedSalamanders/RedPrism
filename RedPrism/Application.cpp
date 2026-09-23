@@ -606,6 +606,42 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"More was shown when every tool fit on the rail.\n");
         return 5;
     }
+    // A settled rail parses no SVG documents (RF-505): frames that repaint it under a moving pointer add none, and a
+    // tool switch adds at most the two icons whose latch changed.
+    {
+        const float scale = static_cast<float>(windowDpi) / 96.0f;
+        const auto hoverFrame = [&](EditorTool tool)
+        {
+            const D2D1_RECT_F button = _chrome->ToolButtonBoundsDip(tool);
+            OnPointer(WM_MOUSEMOVE, 0,
+                      MAKELPARAM(static_cast<int>(std::lround((button.left + button.right) / 2.0f * scale)),
+                                 static_cast<int>(std::lround((button.top + button.bottom) / 2.0f * scale))));
+            (void)_chrome->AdvanceAnimation(GetTickCount64());
+            (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+        };
+        hoverFrame(EditorTool::Move);
+        const int settled = LucideSvgCreateCount();
+        for (const EditorTool tool : {EditorTool::Marquee, EditorTool::Lasso, EditorTool::Brush, EditorTool::Move})
+        {
+            hoverFrame(tool);
+        }
+        const int hovered = LucideSvgCreateCount();
+        OnTool(EditorTool::Brush);
+        hoverFrame(EditorTool::Marquee);
+        hoverFrame(EditorTool::Lasso);
+        const int switched = LucideSvgCreateCount();
+        OnTool(EditorTool::Move);
+        hoverFrame(EditorTool::Marquee);
+        const int returned = LucideSvgCreateCount();
+        if (hovered != settled || switched - hovered > 2 || returned - switched > 2)
+        {
+            SelfTestFailure(std::format(L"The rail parsed SVG documents while settled or beyond the two latched icons "
+                                        L"of a tool switch (repaints {}, switch {}, back {}).\n",
+                                        hovered - settled, switched - hovered, returned - switched)
+                                .c_str());
+            return 5;
+        }
+    }
     if (visible.surfaceBytes > (64ull * 1024ull * 1024ull))
     {
         SelfTestFailure(L"Visible DxUi chrome exceeded the 64 MiB surface cap.\n");
@@ -1391,6 +1427,44 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The committed gradient did not darken its start more than its end.\n");
             return 5;
         }
+        // A targeted mask has its own black/white palette (RF-1105): a pending mask gradient follows the brush
+        // header's Paint choice (maskPaintWhite), and X flips and D resets that choice, leaving the colors alone.
+        {
+            OnCommand(ChromeHost::kCommandAddMask);
+            _session.maskPaintWhite = false;
+            const std::uint32_t foreground = _session.ForegroundColor();
+            const std::uint32_t background = _session.BackgroundColor();
+            pointer(WM_LBUTTONDOWN, 0, 10.0, 250.0);
+            pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
+            pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
+            const bool maskLine = _session.IsMaskSelected() && _session.PendingGradient() != nullptr &&
+                                  _session.PendingGradient()->raster->IsMask();
+            OnBrushAction(BrushAction::SetMaskPaint, 1.0);
+            const bool applied = HandleAccelerator(VK_RETURN, 0) && _session.history.UndoName() == L"Gradient Mask";
+            std::uint8_t start = 0;
+            if (const ImageLayer* masked = _session.ActiveLayer(); masked != nullptr && masked->mask.has_value())
+            {
+                const Raster& mask = masked->mask->asset.image;
+                const Vec2 cell =
+                    PixelToDocument(masked->transform, mask.Width(), mask.Height()).Inverted().Apply(Vec2{12.5, 250.5});
+                mask.ReadRegion(static_cast<int>(std::floor(cell.x)), static_cast<int>(std::floor(cell.y)), 1, 1,
+                                &start, 1, 0);
+            }
+            const bool swapped = HandleAccelerator('X', 0) && !_session.maskPaintWhite;
+            const bool swappedBack = HandleAccelerator('X', 0) && _session.maskPaintWhite;
+            const bool reset = HandleAccelerator('D', 0) && !_session.maskPaintWhite;
+            if (!maskLine || !applied || start < 240 || !swapped || !swappedBack || !reset ||
+                _session.ForegroundColor() != foreground || _session.BackgroundColor() != background)
+            {
+                SelfTestFailure(
+                    std::format(L"The mask palette did not follow Paint, X and D (line {}, applied {}, "
+                                L"start {}, X {} {}, D {}, colors kept {}).\n",
+                                maskLine, applied, start, swapped, swappedBack, reset,
+                                _session.ForegroundColor() == foreground && _session.BackgroundColor() == background)
+                        .c_str());
+                return 5;
+            }
+        }
         // Shape: a drag adds a filled layer, Shift-U switches the kind, Escape drops a draft.
         OnTool(EditorTool::Shape);
         _session.SetForegroundColor(0xFF3366CCu);
@@ -1867,6 +1941,11 @@ int Application::RunSelfTest() noexcept
     {
         return edits;
     }
+    // The adjustment panel's live controls (review fixes wave 1b: RF-1107).
+    if (const int adjust = RunAdjustSelfTest(); adjust != 0)
+    {
+        return adjust;
+    }
     // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
     // loss, a close inside a chrome dispatch and the session end.
     if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
@@ -1876,6 +1955,11 @@ int Application::RunSelfTest() noexcept
     if (const int session = RunSessionSelfTest(); session != 0)
     {
         return session;
+    }
+    // Refusals the host reports (review fixes wave 1b: RF-1102, RF-1103).
+    if (const int refusals = RunRefusalSelfTest(); refusals != 0)
+    {
+        return refusals;
     }
     // Rendering, viewport and frame loop (review fixes WP4).
     if (const int rendering = RunRenderingSelfTest(); rendering != 0)
@@ -2163,6 +2247,13 @@ void Application::SyncChrome() noexcept
     if (!_chrome)
     {
         return;
+    }
+    // Every document change ends here: an edit the document's pixel budget refused (a paste, Layer via Copy, a
+    // duplicate, a mask, the floating selection's merge, a filter's grown grid, a distortion, a shape) says so once,
+    // whichever path ran it (Decision D7).
+    if (_session.TakeBudgetRefusal())
+    {
+        ReportBudgetRefusal();
     }
     if (_renameLayer.has_value())
     {
@@ -3329,12 +3420,17 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandCopy:
+        // The copy takes the pixels the canvas shows: a pending gradient applies first as its own entry (Decision D3,
+        // as CopySelection would), and its preview ends with it.
+        CommitGradient();
         if (_session.CopySelection())
         {
             MirrorClipboard();
         }
         break;
     case ChromeHost::kCommandCopyMerged:
+        // The same for the composite, which reads the committed document.
+        CommitGradient();
         if (_session.CanCopyMerged())
         {
             const std::optional<Raster> composite = WandComposite();
@@ -3424,18 +3520,20 @@ void Application::OnCommand(int command) noexcept
         SelectionChanged();
         break;
     case ChromeHost::kCommandLoadLayerSelection:
-        EndSelectionInteraction(false);
-        if (_session.ActiveLayerID().has_value())
-        {
-            static_cast<void>(_session.LoadLayerSelection(_session.ActiveLayerID().value()));
-        }
-        SelectionChanged();
-        break;
     case ChromeHost::kCommandLoadMaskSelection:
         EndSelectionInteraction(false);
         if (_session.ActiveLayerID().has_value())
         {
-            static_cast<void>(_session.LoadMaskSelection(_session.ActiveLayerID().value()));
+            // An outline the tracer refuses says why, as the wand does (RF-217); nothing to trace stays silent.
+            WandFailure failure = WandFailure::None;
+            const Guid layer = _session.ActiveLayerID().value();
+            static_cast<void>(command == ChromeHost::kCommandLoadMaskSelection
+                                  ? _session.LoadMaskSelection(layer, SelectionMode::New, &failure)
+                                  : _session.LoadLayerSelection(layer, SelectionMode::New, &failure));
+            if (failure != WandFailure::None)
+            {
+                ShowError(failure == WandFailure::TooDetailed ? IDS_ERROR_SELECTION_DETAILED : IDS_ERROR_WAND_MEMORY);
+            }
         }
         SelectionChanged();
         break;
@@ -3536,6 +3634,8 @@ void Application::OpenDocument() noexcept
 
 void Application::ShowError(UINT stringId) noexcept
 {
+    ++_errorsShown;
+    _lastErrorId = stringId;
     if (_quietUi || !_window)
     {
         return;
@@ -3543,6 +3643,19 @@ void Application::ShowError(UINT stringId) noexcept
     const std::wstring text = LoadStringResource(nullptr, stringId);
     const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
     MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
+}
+
+void Application::ReportBudgetRefusal() noexcept
+{
+    // The notice card, not a message box, shown from the message loop as the not-implemented notice is: the refused
+    // edit may have run inside a DxUi dispatch (a header's Apply, a menu command, a layer row), where neither a
+    // modal loop nor the card's focus change may land. Quiet runs count it instead.
+    ++_budgetNotices;
+    if (_quietUi || !_window)
+    {
+        return;
+    }
+    (void)PostMessageW(_window.get(), kNoticeMessage, static_cast<WPARAM>(IDS_ERROR_TOO_LARGE), 0);
 }
 
 bool Application::SaveDocument(bool saveAs) noexcept
@@ -3784,8 +3897,20 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 paths.push_back(std::move(path));
             }
         }
+        // Images added as layers center on the drop point when it lands on the canvas (legacy ContentView.onDrop),
+        // anywhere else on the canvas's middle.
+        std::optional<Vec2> dropPoint;
+        POINT client{};
+        if (DragQueryPoint(drop, &client) != FALSE && _chrome && _session.Document().has_value() &&
+            _chrome->IsCanvasPoint(static_cast<float>(client.x), static_cast<float>(client.y)))
+        {
+            const CanvasHole hole = _chrome->HolePixels();
+            dropPoint = _viewport.DocumentFromView(
+                Vec2{static_cast<double>(client.x) - hole.left, static_cast<double>(client.y) - hole.top},
+                DocumentSize());
+        }
         DragFinish(drop);
-        OpenPaths(paths);
+        OpenPaths(paths, dropPoint);
         return 0;
     }
     case WM_MOUSEMOVE:
@@ -3900,6 +4025,13 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         return 0;
     case kNotImplementedMessage:
         ShowNotImplementedNotice(static_cast<UINT>(wParam));
+        return 0;
+    case kNoticeMessage:
+        if (!_quietUi && _chrome)
+        {
+            _chrome->ShowNotice(LoadStringResource(nullptr, static_cast<UINT>(wParam)));
+            _frameInvalidated = true;
+        }
         return 0;
     case WM_DESTROY:
         _displayPowerNotification.reset();
@@ -4901,7 +5033,9 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
         }
         break;
     case BrushAction::SetMaskPaint:
+        // A pending mask gradient takes its ends from the mask palette (legacy maskPaintWhite didSet, RF-205).
         _session.maskPaintWhite = value >= 0.5;
+        _session.RefreshGradient();
         break;
     case BrushAction::OpenColor:
         if (_chrome)
@@ -5970,6 +6104,112 @@ int Application::RunRenderingSelfTest() noexcept
     EndGradientDrag();
     OnTool(EditorTool::Move);
 
+    // A gradient pending on one layer when another is chosen (RF-1105, WP2's commit and WP4's restart together): the
+    // session commits it, its preview ends by adopting its texture for that layer only, the next layer's line
+    // previews on its own texture, Enter commits it the same way, and the canvas then equals both committed rasters.
+    {
+        fresh(300, 200);
+        const Guid left = InsertPaintedLayer(_session, L"Left", 150, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
+        const Guid right = InsertPaintedLayer(_session, L"Right", 150, 200, Vec2{150, 0}, 0.0, 0xFF808080u);
+        OnTool(EditorTool::Gradient);
+        _session.SetForegroundColor(0xFF000000u);
+        _session.SetBackgroundColor(0xFFFFFFFFu);
+        _session.gradientSettings = GradientSettings{};
+        _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+        // What a click on the layer's row does (ChromeEvents::OnLayerSelected).
+        const auto chooseLayer = [&](const Guid& id) { OnLayerSelected(id); };
+        const auto line = [&](double fromX, double toX)
+        {
+            BeginGradientDrag(_viewport.ViewFromDocument(Vec2{fromX, 100}, DocumentSize()));
+            DragGradient(_viewport.ViewFromDocument(Vec2{toX, 100}, DocumentSize()), 0);
+            EndGradientDrag();
+        };
+        chooseLayer(left);
+        const int entries = _session.history.UndoCount();
+        const std::uint64_t adoptions = _composition.AdoptionCount();
+        line(10.0, 140.0);
+        const bool leftPreview = _composition.StrokeLayerID() == std::optional<Guid>(left);
+        chooseLayer(right);
+        const bool leftCommitted = _session.PendingGradient() == nullptr &&
+                                   _session.history.UndoCount() == entries + 1 && !_composition.HasStroke() &&
+                                   _composition.AdoptionCount() == adoptions + 1;
+        line(160.0, 290.0);
+        const bool rightPreview =
+            _composition.StrokeLayerID() == std::optional<Guid>(right) && !_composition.StrokeTextureMissing();
+        _chrome->SetCanvasFocused(true);
+        const bool entered = HandleAccelerator(VK_RETURN, 0);
+        const bool rightCommitted = _session.PendingGradient() == nullptr &&
+                                    _session.history.UndoCount() == entries + 2 &&
+                                    _session.history.UndoName() == L"Gradient" && !_composition.HasStroke() &&
+                                    _composition.AdoptionCount() == adoptions + 2;
+        // Each layer alone on the canvas (a gradient grows its layer over the canvas, so the upper one covers the
+        // lower one): what the adopted texture draws equals the committed raster.
+        const auto offBy = [&](const Guid& shown) -> int
+        {
+            for (ImageLayer& layer : _session.Document().value().layers)
+            {
+                layer.visible = layer.id == shown;
+            }
+            DocumentChanged();
+            frame();
+            std::vector<std::uint8_t> bgra;
+            UINT width = 0;
+            UINT height = 0;
+            const ImageLayer* layer = nullptr;
+            for (const ImageLayer& candidate : _session.Document().value().layers)
+            {
+                if (candidate.id == shown)
+                {
+                    layer = &candidate;
+                }
+            }
+            if (layer == nullptr || !layer->asset.has_value() || FAILED(_composition.Readback(bgra, width, height)) ||
+                width != 300 || height != 200)
+            {
+                return 255;
+            }
+            const Raster& image = layer->asset->image;
+            const int originX = static_cast<int>(std::lround(layer->transform.origin.x));
+            const int originY = static_cast<int>(std::lround(layer->transform.origin.y));
+            std::vector<std::uint8_t> row(static_cast<std::size_t>(image.Width()) * 4u);
+            int worst = 0;
+            for (int y = 0; y < image.Height(); ++y)
+            {
+                image.ReadRegion(0, y, image.Width(), 1, row.data(), image.Width() * 4, 0);
+                for (int x = 0; x < image.Width(); ++x)
+                {
+                    const int dx = originX + x;
+                    const int dy = originY + y;
+                    if (dx < 0 || dy < 0 || dx >= 300 || dy >= 200)
+                    {
+                        continue;
+                    }
+                    for (std::size_t c = 0; c < 4; ++c)
+                    {
+                        const int canvas =
+                            bgra[(static_cast<std::size_t>(dy) * 300u + static_cast<std::size_t>(dx)) * 4u + c];
+                        worst = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
+                    }
+                }
+            }
+            return worst;
+        };
+        const int leftOff = offBy(left);
+        const int rightOff = offBy(right);
+        OnTool(EditorTool::Move);
+        if (!leftPreview || !leftCommitted || !rightPreview || !entered || !rightCommitted || leftOff > 2 ||
+            rightOff > 2)
+        {
+            SelfTestFailure(std::format(L"A gradient left pending on another layer did not end its preview with its "
+                                        L"own commit (left preview {}, committed {}, right preview {}, Enter {}, "
+                                        L"committed {}, adoptions {}, canvas off the rasters by {} and {}).\n",
+                                        leftPreview, leftCommitted, rightPreview, entered, rightCommitted,
+                                        _composition.AdoptionCount() - adoptions, leftOff, rightOff)
+                                .c_str());
+            return 5;
+        }
+    }
+
     // Marching ants follow the outline the overlay shows (RF-408).
     _session.ApplySelection(SelectionGeometry::Rect(10, 10, 80, 40), SelectionMode::New, L"Select");
     SyncChrome();
@@ -6078,6 +6318,128 @@ int Application::RunRenderingSelfTest() noexcept
         return 5;
     }
     frame();
+    return 0;
+}
+
+// ── Refusals the host reports (review fixes wave 1b) ─────────────────────────
+
+int Application::RunRefusalSelfTest() noexcept
+{
+    if (!_chrome || !_window)
+    {
+        SelfTestFailure(L"The refusal self-test needs the chrome and the window.\n");
+        return 5;
+    }
+    const auto fresh = [&]()
+    {
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+    };
+    const auto layerCount = [&]()
+    { return _session.Document().has_value() ? _session.Document()->layers.size() : std::size_t{0}; };
+    const auto addLayer = [&](ImageLayer layer, bool bottom)
+    {
+        std::vector<ImageLayer>& layers = _session.Document().value().layers;
+        _session.BeginEdit(L"Import Image");
+        layers.insert(bottom ? layers.begin() : layers.end(), layer);
+        _session.EndEdit();
+        _session.SelectLayer(layer.id);
+        DocumentChanged();
+        return layer.id;
+    };
+
+    // Load Mask / Layer Selection say why they loaded nothing (RF-1102, RF-217): a 2100 × 2100 checkerboard mask and
+    // layer (8.8 M pixel edges, past the tracer's 8 000 000) raise IDS_ERROR_SELECTION_DETAILED; nothing to trace
+    // stays silent.
+    {
+        fresh();
+        constexpr int kSide = 2100;
+        std::vector<std::uint8_t> checker(static_cast<std::size_t>(kSide) * static_cast<std::size_t>(kSide));
+        std::vector<std::uint8_t> dots(checker.size() * 4u, 0);
+        for (int y = 0; y < kSide; ++y)
+        {
+            for (int x = 0; x < kSide; ++x)
+            {
+                const std::size_t index =
+                    static_cast<std::size_t>(y) * static_cast<std::size_t>(kSide) + static_cast<std::size_t>(x);
+                const bool dark = (x + y) % 2 == 0;
+                checker[index] = dark ? 0 : 255;
+                dots[index * 4u + 3u] = dark ? 255 : 0;
+            }
+        }
+        const Raster mask = Raster::Make(kSide, kSide, RasterFormat::Gray8, checker.data(), checker.size());
+        const Raster pixels = Raster::Make(kSide, kSide, RasterFormat::Bgra8888, dots.data(), dots.size());
+        ImageLayer layer = ImageLayer::Blank(L"Dots", Vec2{static_cast<double>(kSide), static_cast<double>(kSide)});
+        layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+        layer.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer.name}, true, std::nullopt, true};
+        (void)addLayer(std::move(layer), false);
+        const int errors = _errorsShown;
+        OnCommand(ChromeHost::kCommandLoadMaskSelection);
+        const bool maskRefused = _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
+                                 !_session.Selection().has_value();
+        OnCommand(ChromeHost::kCommandLoadLayerSelection);
+        const bool layerRefused = _errorsShown == errors + 2 && _lastErrorId == IDS_ERROR_SELECTION_DETAILED &&
+                                  !_session.Selection().has_value();
+        OnCommand(ChromeHost::kCommandNewLayer);
+        OnCommand(ChromeHost::kCommandLoadLayerSelection);
+        const bool emptySilent = _errorsShown == errors + 2 && !_session.Selection().has_value();
+        if (!maskRefused || !layerRefused || !emptySilent)
+        {
+            SelfTestFailure(std::format(L"Load Mask / Layer Selection did not say why it loaded nothing (mask {}, "
+                                        L"layer {}, blank layer silent {}, errors {}).\n",
+                                        maskRefused, layerRefused, emptySilent, _errorsShown - errors)
+                                .c_str());
+            return 5;
+        }
+    }
+
+    // Edits the document's pixel budget refuses say so once, whichever path ran them (RF-1103, Decision D7). A hidden
+    // 10 000 × 9 998 placeholder holds all but 9 200 of the 100 M image pixels without allocating them.
+    {
+        fresh();
+        ImageLayer budget = ImageLayer::Blank(L"Budget", Vec2{100, 100});
+        budget.asset = RasterAsset{Raster::MakeSparse(10000, 9998, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0),
+                                   Raster::Make(1, 1, RasterFormat::Bgra8888), L"Budget"};
+        budget.visible = false;
+        (void)addLayer(std::move(budget), true);
+        (void)InsertPaintedLayer(_session, L"A", 20, 20, Vec2{0, 0}, 0.0, 0xFFFF0000u);
+        const Guid b = InsertPaintedLayer(_session, L"B", 20, 20, Vec2{180, 180}, 0.0, 0xFF0000FFu);
+        (void)InsertPaintedLayer(_session, L"R", 100, 100, Vec2{300, 300}, 0.0, 0xFF00FF00u);
+        DocumentChanged();
+        const std::size_t layers = layerCount();
+        const int notices = _budgetNotices;
+        const int errors = _errorsShown;
+        // Layer via Copy duplicates the 10 000-pixel layer without a selection, and copies it with one.
+        OnCommand(ChromeHost::kCommandLayerViaCopy);
+        const bool duplicateRefused = layerCount() == layers && _budgetNotices == notices + 1;
+        DocumentChanged();
+        const bool once = _budgetNotices == notices + 1;
+        OnCommand(ChromeHost::kCommandSelectAll);
+        OnCommand(ChromeHost::kCommandLayerViaCopy);
+        const bool copyRefused = layerCount() == layers && _budgetNotices == notices + 2;
+        OnCommand(ChromeHost::kCommandDeselect);
+        // A Gaussian Blur whose grown grid would not fit names the budget, not the layer.
+        _session.filterSettings.radius = 10;
+        OnCommand(ChromeHost::kCommandGaussianBlur);
+        const bool blurRefused = !_session.HasColorEdit() && _budgetNotices == notices + 3;
+        // Merge Down of B onto A spans 200 × 200: the budget refuses it, and IDS_ERROR_FLATTEN is not raised.
+        _session.SelectLayer(b);
+        SyncChrome();
+        OnCommand(ChromeHost::kCommandMergeDown);
+        const bool mergeRefused = layerCount() == layers && _budgetNotices == notices + 4 && _errorsShown == errors;
+        fresh();
+        if (!duplicateRefused || !once || !copyRefused || !blurRefused || !mergeRefused)
+        {
+            SelfTestFailure(std::format(L"An edit the pixel budget refused did not raise its notice once (duplicate "
+                                        L"{}, once {}, copy {}, blur {}, merge {}, notices {}, errors {}).\n",
+                                        duplicateRefused, once, copyRefused, blurRefused, mergeRefused,
+                                        _budgetNotices - notices, _errorsShown - errors)
+                                .c_str());
+            return 5;
+        }
+    }
+    OnTool(EditorTool::Move);
     return 0;
 }
 

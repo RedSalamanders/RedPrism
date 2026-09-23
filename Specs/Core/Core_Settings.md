@@ -82,8 +82,10 @@ version cannot read and the unknown fields inside the entries it keeps (when the
 bindings the array is left exactly as the file has it; otherwise the unread entries stay first, then one entry per
 binding, reusing an existing entry that reads the same). An invalid existing document is backed up to
 `<path>.invalid-…` first. The application saves
-when the main window closes: the window placement (`GetWindowPlacement`'s normal rectangle and whether it was
-maximized), the layers panel width and the sample ring; `jpegQuality` and `theme` are what the file said.
+when the main window closes, and when Windows ends the session (`WM_ENDSESSION` with the end confirmed: the process
+may be ended as soon as that message returns, so no close follows; [`UI_Windowing.md`](../UI/UI_Windowing.md)): the
+window placement (`GetWindowPlacement`'s normal rectangle and whether it was maximized), the layers panel width and
+the sample ring; `jpegQuality` and `theme` are what the file said.
 
 ## Startup application
 
@@ -134,5 +136,6 @@ removing every default, the later entry winning, shadowing, the shared label, ig
 AltGr, the Shift and repeat rules, the scopes and conditions). The WARP self-test edits its own settings file and
 proves the reload applies the theme, the sample ring and the layers width live, that a broken file changes nothing
 and is not rewritten, that restoring it applies again, that a save records the window placement and that deleting
-the watched directory leaves no watch armed; it applies replacement chords and drives them through the window
-procedure (UI_ApplicationChrome.md "Validation").
+the watched directory leaves no watch armed; its session checks prove a confirmed `WM_ENDSESSION` writes the
+settings file; it applies replacement chords and drives them through the window procedure (UI_ApplicationChrome.md
+"Validation").

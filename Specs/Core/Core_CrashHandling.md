@@ -1,7 +1,7 @@
 # RedPrism crash handling
 
 Status: current normative repository contract
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-23
 Owner: `Common/CrashDumps.*`, `RedPrism/Main.cpp`
 
 ## Scope
@@ -14,6 +14,13 @@ Nothing is uploaded, ever. The gates live in [`Testing_Validation.md`](../Testin
 `%LocalAppData%\RedPrism\Crashes\RedPrism-<yyyyMMdd-HHmmss>-<pid>.dmp`, next to `pending.txt` (the marker) and
 the settings file's folder ([`Core_Settings.md`](Core_Settings.md)). The newest ten dumps are kept; an ordinary
 start prunes the rest (`CrashDumps::PruneDumps`, name order is age order).
+
+A harness run (`--self-test`, `--screenshot`, `--demo`, `--bench`) never writes into the user's folder: its dumps
+and marker go to `%TEMP%\RedPrism.Harness\<pid>\` (`Main.cpp` `HarnessCrashDirectory`; the ordinary folder only
+when the temp path is unavailable), one folder per process, so concurrent runs never share one (review fix RF-708).
+Nothing reads, prompts for or prunes that folder; a crashed harness run's dump stays there for its log to name.
+A Debug harness run also ends with exit code 3 at the first CRT assertion or error report, which
+`HarnessCrtReportHook` writes to stderr, since no one is there to answer its dialog (RF-702).
 
 ## Handlers
 

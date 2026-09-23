@@ -137,11 +137,6 @@ class CanvasOverlay final : public DxUi::Control
     mutable wil::com_ptr_nothrow<ID2D1PathGeometry> _outlineGeometry;
     // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
     mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle>, 8> _antStyles;
-    // The device context this overlay last drew with. Holding it through a device rebuild keeps the next device's
-    // context from taking its address while chrome caches still compare raw context pointers (the rail's SVG
-    // documents, RF-505); otherwise the first frame on the new device fails with D2DERR_WRONG_FACTORY and device
-    // recovery (RF-401) cannot draw. Released for the new context at the first paint after the rebuild.
-    mutable wil::com_ptr_nothrow<ID2D1DeviceContext> _drawnContext;
     mutable bool _outlineDirty = false;
     float _antPhase = 0.0f;
 };

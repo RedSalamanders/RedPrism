@@ -55,6 +55,10 @@ the pin. Do not float onto sibling `main`.
   this true.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
+- The embedded UI Automation tree is a snapshot that DxUi republishes only when `EmbeddedHost::UpdateAccessibility`
+  is called after a preparation (with nothing prepared since and the same placement it returns `S_FALSE` at once):
+  call it after every `Prepare` that prepared, not only when the placement moves, or a panel or card shown later
+  never reaches UI Automation (`ChromeHost::Prepare`).
 
 ## Host boundary
 

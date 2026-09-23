@@ -68,6 +68,18 @@ bool ChromeHost::SizeCardOpen() const noexcept
     return _sizeCard != nullptr && _sizeCard->IsVisible();
 }
 
+bool ChromeHost::FocusSizeUnitForTest() noexcept
+{
+    if (!_attached || !SizeCardOpen() || _sizeUnit == nullptr || !_sizeUnit->IsVisible())
+    {
+        return false;
+    }
+    _canvasFocused = false;
+    _accessibilityPlacementDirty = true;
+    _view.Controls().SetFocusControl(_sizeUnit);
+    return true;
+}
+
 void ChromeHost::BuildSizeCard(DxUi::Panel& root)
 {
     _sizeCard = root.AddChild<DxUi::CardPanel>();
