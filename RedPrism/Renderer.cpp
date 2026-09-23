@@ -79,6 +79,8 @@ HRESULT Renderer::CreateDeviceResources() noexcept
     {
         return result;
     }
+    // Borrowers (the composition, the brush engine) rebind when this changes, even at a reused address.
+    ++_deviceGeneration;
 
     RECT client{};
     if (!GetClientRect(_window, &client))
@@ -359,23 +361,32 @@ HRESULT Renderer::CreateSwapChain() noexcept
         return result;
     }
 
+    _factory = std::move(factory);
+    _occlusionStatusCookie = 0;
+    _occlusionStatusRegistered = false;
+    RegisterOcclusionStatus();
+    return S_OK;
+}
+
+void Renderer::RegisterOcclusionStatus() noexcept
+{
+    if (!_factory || !_window || _occlusionStatusRegistered)
+    {
+        return;
+    }
     DWORD occlusionStatusCookie = 0;
-    result = factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
+    const HRESULT result =
+        _factory->RegisterOcclusionStatusWindow(_window, kOcclusionStatusMessage, &occlusionStatusCookie);
     if (FAILED(result))
     {
-        // A second registration on the same HWND (device recovery) can return E_ACCESSDENIED while the swap
-        // chain is already usable. Occlusion messages are optional; Present still runs.
-        OutputDebugStringW(L"Occlusion status was not registered; presentation continues without it.\n");
-        _factory = std::move(factory);
-        _occlusionStatusCookie = 0;
-        _occlusionStatusRegistered = false;
-        return S_OK;
+        // A second registration on the same HWND (device recovery) can return E_ACCESSDENIED while the swap chain
+        // is already usable. Present still runs; an occluded window then probes on each wake (OcclusionMessages)
+        // and tries registering again, instead of waiting for a message that never comes (RF-410).
+        OutputDebugStringW(L"Occlusion status was not registered; an occluded window probes on each wake.\n");
+        return;
     }
-
-    _factory = std::move(factory);
     _occlusionStatusCookie = occlusionStatusCookie;
     _occlusionStatusRegistered = true;
-    return S_OK;
 }
 
 HRESULT Renderer::CreateRenderTarget(UINT width, UINT height) noexcept
@@ -425,17 +436,16 @@ HRESULT Renderer::Resize(UINT width, UINT height) noexcept
 
     _context->OMSetRenderTargets(0, nullptr, nullptr);
     _renderTarget.reset();
-    const HRESULT result = _swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, kSwapChainFlags);
-    if (IsDeviceLost(result))
+    HRESULT result = _swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, kSwapChainFlags);
+    if (SUCCEEDED(result))
+    {
+        result = CreateRenderTarget(width, height);
+    }
+    if (FAILED(result) && DeviceLostAfter(result))
     {
         return RecoverDevice();
     }
-    if (FAILED(result))
-    {
-        return result;
-    }
-
-    return CreateRenderTarget(width, height);
+    return result;
 }
 
 ID3D11Device* Renderer::Device() const noexcept
@@ -458,9 +468,33 @@ ID3D11DeviceContext* Renderer::Context() const noexcept
     return _context.get();
 }
 
+HRESULT Renderer::StageResult(Stage stage, HRESULT result) noexcept
+{
+    if (_injecting && _injectedStage == stage)
+    {
+        _injecting = false;
+        return _injectedResult;
+    }
+    return result;
+}
+
+bool Renderer::DeviceLostAfter(HRESULT result) const noexcept
+{
+    // A removed device surfaces from whichever call touched it first: chrome Prepare, a composition pass, the blit,
+    // the chrome composite or Present. The device itself says so whatever the stage returned (RF-401).
+    return IsDeviceLost(result) || (_device && FAILED(_device->GetDeviceRemovedReason()));
+}
+
+HRESULT Renderer::RecoverFromStage() noexcept
+{
+    const HRESULT recoveryResult = RecoverDevice();
+    return SUCCEEDED(recoveryResult) ? S_FALSE : recoveryResult;
+}
+
 HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
                          const CanvasDocument* document) noexcept
 {
+    _canvasFailure = S_OK;
     if (_suspended)
     {
         return S_OK;
@@ -482,51 +516,65 @@ HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const 
     viewportDx.MaxDepth = 1.0f;
     if (chrome)
     {
-        const HRESULT chromeResult = chrome->Prepare(
-            _width, _height, _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window)));
+        const HRESULT chromeResult =
+            StageResult(Stage::ChromePrepare,
+                        chrome->Prepare(_width, _height,
+                                        _layoutDpi > 0.0f ? _layoutDpi : static_cast<float>(GetDpiForWindow(_window))));
         if (FAILED(chromeResult))
         {
-            return chromeResult;
+            _failedStage = Stage::ChromePrepare;
+            return DeviceLostAfter(chromeResult) ? RecoverFromStage() : chromeResult;
         }
     }
 
     if (composition && composition->HasDevice() && document && viewport && chrome)
     {
-        HRESULT composeResult = composition->Compose(*document);
-        if (FAILED(composeResult))
+        HRESULT canvasResult = StageResult(Stage::Compose, composition->Compose(*document));
+        if (SUCCEEDED(canvasResult))
         {
-            return composeResult;
+            const CanvasHole hole = chrome->HolePixels();
+            canvasResult =
+                StageResult(Stage::Blit, composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport,
+                                                                  hole.left, hole.top, hole.width, hole.height));
         }
-        const CanvasHole hole = chrome->HolePixels();
-        composeResult = composition->BlitToTarget(_renderTarget.get(), _width, _height, *viewport, hole.left, hole.top,
-                                                 hole.width, hole.height);
-        if (FAILED(composeResult))
+        if (FAILED(canvasResult))
         {
-            return composeResult;
+            if (DeviceLostAfter(canvasResult))
+            {
+                return RecoverFromStage();
+            }
+            // The hole stays empty this frame; the chrome still presents, so the window keeps working and the
+            // document can be saved (Decision D1). The host reports it.
+            _canvasFailure = canvasResult;
         }
         _context->OMSetRenderTargets(1, renderTargets, nullptr);
     }
 
     if (chrome)
     {
-        const HRESULT chromeResult = chrome->Composite(_context.get(), viewportDx);
+        const HRESULT chromeResult = StageResult(Stage::ChromeComposite, chrome->Composite(_context.get(), viewportDx));
         if (FAILED(chromeResult))
         {
-            return chromeResult;
+            _failedStage = Stage::ChromeComposite;
+            return DeviceLostAfter(chromeResult) ? RecoverFromStage() : chromeResult;
         }
     }
 
-    const HRESULT presentResult = _swapChain->Present(1, 0);
-    if (IsDeviceLost(presentResult))
+    const HRESULT presentResult = StageResult(Stage::Present, _swapChain->Present(1, 0));
+    if (FAILED(presentResult) && DeviceLostAfter(presentResult))
     {
-        const HRESULT recoveryResult = RecoverDevice();
-        return SUCCEEDED(recoveryResult) ? S_FALSE : recoveryResult;
+        return RecoverFromStage();
     }
-    if (FAILED(presentResult) && presentResult != DXGI_STATUS_OCCLUDED)
+    if (FAILED(presentResult))
     {
+        _failedStage = Stage::Present;
         return presentResult;
     }
     _occluded = presentResult == DXGI_STATUS_OCCLUDED;
+    if (!_occluded)
+    {
+        ++_presentCount;
+    }
     return S_OK;
 }
 
@@ -541,12 +589,14 @@ HRESULT Renderer::ProbeOcclusion() noexcept
     {
         return E_UNEXPECTED;
     }
+    // A registration that failed is retried here, so the next occlusion can wait for its message again.
+    RegisterOcclusionStatus();
 
     const HRESULT result = _swapChain->Present(0, DXGI_PRESENT_TEST);
-    if (IsDeviceLost(result))
+    if (FAILED(result) && DeviceLostAfter(result))
     {
-        const HRESULT recoveryResult = RecoverDevice();
-        return SUCCEEDED(recoveryResult) ? S_FALSE : recoveryResult;
+        // The rebuilt swap chain is not occluded: the next frame draws.
+        return RecoverDevice();
     }
     if (result == DXGI_STATUS_OCCLUDED)
     {

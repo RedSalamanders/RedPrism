@@ -24,6 +24,16 @@ class Renderer final
   public:
     static constexpr UINT kOcclusionStatusMessage = WM_APP + 1;
 
+    // The stages of a frame, in order (Rendering_Composition.md "Present order").
+    enum class Stage : std::uint8_t
+    {
+        ChromePrepare,
+        Compose,
+        Blit,
+        ChromeComposite,
+        Present,
+    };
+
     struct DeviceIdentity final
     {
         LUID adapterLuid{};
@@ -44,8 +54,37 @@ class Renderer final
     void Shutdown() noexcept;
     void SetChrome(ChromeHost* chrome) noexcept;
     HRESULT Resize(UINT width, UINT height) noexcept;
+    // One frame. S_OK when it was drawn (presented, or occluded); S_FALSE when a stage found the device removed and
+    // the device, swap chain and target were rebuilt (the host rebinds and draws again); a failure otherwise. A
+    // canvas stage that fails without device loss leaves the hole empty and still presents the chrome
+    // (CanvasFailure reports it), so the window keeps working (Decision D1).
     HRESULT Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
                    const CanvasDocument* document) noexcept;
+    // The canvas stage's failure in the last Render, S_OK when the canvas drew.
+    [[nodiscard]] HRESULT CanvasFailure() const noexcept
+    {
+        return _canvasFailure;
+    }
+    // The stage and result of the last Render that failed (diagnostics).
+    [[nodiscard]] Stage FailedStage() const noexcept
+    {
+        return _failedStage;
+    }
+    // Frames that reached the display (Present neither failed nor reported occlusion).
+    [[nodiscard]] std::uint64_t PresentCount() const noexcept
+    {
+        return _presentCount;
+    }
+    // Bumped by every device rebuild, so a borrower can tell a new device from an old one at the same address.
+    [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept
+    {
+        return _deviceGeneration;
+    }
+    // Whether DXGI's occlusion-status message is registered; without it an occluded window probes on each wake.
+    [[nodiscard]] bool OcclusionMessages() const noexcept
+    {
+        return _occlusionStatusRegistered;
+    }
     // The color behind the canvas (Specs/UI/UI_ApplicationChrome.md, Theme): dark, light or the system window
     // color under high contrast.
     void SetClearColor(const std::array<float, 4>& color) noexcept
@@ -73,6 +112,19 @@ class Renderer final
     [[nodiscard]] bool IsWarp() const noexcept;
     // Self-test seam: the same rebuild Present runs after a device-removed result.
     HRESULT RecoverDeviceForTest() noexcept;
+    // Self-test seam: the next time `stage` runs it reports `result` instead of its own (a device-lost code makes
+    // the stage look like a removed device).
+    void FailNextStageForTest(Stage stage, HRESULT result) noexcept
+    {
+        _injectedStage = stage;
+        _injectedResult = result;
+        _injecting = true;
+    }
+    // Self-test seam: the state a Present that reported DXGI_STATUS_OCCLUDED leaves.
+    void SetOccludedForTest(bool occluded) noexcept
+    {
+        _occluded = occluded;
+    }
 
   private:
     static constexpr DXGI_FORMAT kTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -87,6 +139,12 @@ class Renderer final
     HRESULT RecoverDevice() noexcept;
     void ReleaseDeviceResources() noexcept;
     static bool IsDeviceLost(HRESULT result) noexcept;
+    // A failed stage whose result, or the device itself (GetDeviceRemovedReason), says the device is gone.
+    [[nodiscard]] bool DeviceLostAfter(HRESULT result) const noexcept;
+    // Rebuilds after a stage found the device gone: S_FALSE when rebuilt, the rebuild's failure otherwise.
+    HRESULT RecoverFromStage() noexcept;
+    [[nodiscard]] HRESULT StageResult(Stage stage, HRESULT result) noexcept;
+    void RegisterOcclusionStatus() noexcept;
 
     HWND _window = nullptr;
     ChromeHost* _chrome = nullptr;
@@ -108,6 +166,13 @@ class Renderer final
     HMONITOR _deviceMonitor = nullptr;
     DWORD _occlusionStatusCookie = 0;
     bool _occlusionStatusRegistered = false;
+    HRESULT _canvasFailure = S_OK;
+    std::uint64_t _presentCount = 0;
+    std::uint64_t _deviceGeneration = 0;
+    Stage _injectedStage = Stage::Present;
+    HRESULT _injectedResult = S_OK;
+    bool _injecting = false;
+    Stage _failedStage = Stage::Present;
     float _layoutDpi = 0;
     std::array<float, 4> _clearColor{0.118f, 0.118f, 0.133f, 1.0f};
 };

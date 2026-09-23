@@ -8,9 +8,11 @@
 #include <cmath>
 #include <optional>
 
-// The Move tool's box, handles and rotation knob in view coordinates (canvas-hole pixels), built from a document
-// transform or a distortion's corners through the viewport. Hit-testing mirrors the legacy TransformOverlayGeometry:
-// the rotation knob first, then the eight handles, then the four edges, all within kHitRadius.
+// The Move tool's box, handles and rotation knob in view coordinates (canvas-hole device pixels), built from a
+// document transform or a distortion's corners through the viewport. Hit-testing mirrors the legacy
+// TransformOverlayGeometry: the rotation knob first, then the eight handles, then the four edges, all within the hit
+// radius. The radius and the knob's offset are DIPs (the overlay draws in DIPs), scaled to device pixels by the
+// viewport's backing scale so a handle hits where it is drawn on any display.
 struct TransformHit
 {
     TransformDrag::Mode mode = TransformDrag::Mode::Move;
@@ -19,11 +21,12 @@ struct TransformHit
 
 struct TransformOverlayGeometry
 {
-    static constexpr double kHitRadius = 10.0;
-    static constexpr double kRotationOffset = 28.0;
+    static constexpr double kHitRadiusDip = 10.0;
+    static constexpr double kRotationOffsetDip = 28.0;
 
     std::array<Vec2, 8> handles{};
     Vec2 rotationHandle{};
+    double hitRadius = kHitRadiusDip; // device pixels
     // A distortion has no single rotation, so its rotation knob is hidden.
     bool showsRotation = true;
 
@@ -38,8 +41,10 @@ struct TransformOverlayGeometry
                 viewport.ViewFromDocument(transform.Point(LayerTransform::kHandles[index]), documentSize);
         }
         const double radians = transform.Radians();
-        geometry.rotationHandle = Vec2{geometry.handles[1].x + std::sin(radians) * kRotationOffset,
-                                       geometry.handles[1].y - std::cos(radians) * kRotationOffset};
+        const double offset = viewport.DipToView(kRotationOffsetDip);
+        geometry.rotationHandle = Vec2{geometry.handles[1].x + std::sin(radians) * offset,
+                                       geometry.handles[1].y - std::cos(radians) * offset};
+        geometry.hitRadius = viewport.DipToView(kHitRadiusDip);
         geometry.showsRotation = true;
         return geometry;
     }
@@ -58,6 +63,7 @@ struct TransformOverlayGeometry
         geometry.handles = {view[0], middle(view[0], view[1]), view[1], middle(view[1], view[2]),
                             view[2], middle(view[2], view[3]), view[3], middle(view[3], view[0])};
         geometry.rotationHandle = geometry.handles[1];
+        geometry.hitRadius = viewport.DipToView(kHitRadiusDip);
         geometry.showsRotation = false;
         return geometry;
     }
@@ -65,7 +71,7 @@ struct TransformOverlayGeometry
     [[nodiscard]] std::optional<TransformHit> Hit(Vec2 point) const noexcept
     {
         const auto nearHandle = [&](Vec2 other)
-        { return std::hypot(point.x - other.x, point.y - other.y) <= kHitRadius; };
+        { return std::hypot(point.x - other.x, point.y - other.y) <= hitRadius; };
         if (showsRotation && nearHandle(rotationHandle))
         {
             return TransformHit{TransformDrag::Mode::Rotate, -1};
@@ -90,7 +96,7 @@ struct TransformOverlayGeometry
                 continue;
             }
             const double t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared;
-            if (t >= 0.0 && t <= 1.0 && std::hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <= kHitRadius)
+            if (t >= 0.0 && t <= 1.0 && std::hypot(point.x - a.x - t * dx, point.y - a.y - t * dy) <= hitRadius)
             {
                 return TransformHit{TransformDrag::Mode::Resize, edge[2]};
             }

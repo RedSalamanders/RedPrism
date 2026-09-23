@@ -1,17 +1,26 @@
-// Document-space layer pass. One fullscreen triangle per pass; the pass mode selects what the pixel writes.
+// Document-space layer pass. One fullscreen triangle per pass; the pass mode (CompositionShared.h) selects what the
+// pixel writes:
 //
-//   0  Layer onto the canvas: premultiplied source over the destination with the layer blend mode.
-//   1  Stack begin: the clipping base written as straight color plus its alpha into an empty stack surface.
-//   2  Stack child: a clipped layer blended over the stack's straight color; the stack alpha (base alpha) is kept.
-//   3  Stack resolve: the stack surface premultiplied and composited onto the canvas with the base blend mode.
-//   4  Layer coverage: the layer's alpha after transform, opacity, raster mask and upstream live coverage (R8).
-//   5  Mask coverage: a Gray8 mask placed by the mask transform, times the parent coverage (R8); 0 outside.
-//   6  Adjust: the composite beneath an adjustment layer reworked through its tables (C12), blended back with the
-//      layer blend mode at its opacity, mask and folder coverage; alpha is kept and transparent pixels left alone.
-//   7  Stack adjust: a clipped adjustment reworks the stack's straight base color, keeping the stack alpha.
+//   Layer          the layer onto the canvas: premultiplied source over the destination with its blend mode.
+//   StackBegin     the clipping base written as straight color plus its alpha into an empty stack surface.
+//   StackChild     a clipped layer blended over the stack's straight color; the stack alpha (base alpha) is kept.
+//   StackResolve   the stack surface premultiplied and composited onto the canvas with the base blend mode.
+//   LayerCoverage  the layer's alpha after transform, opacity, raster mask and upstream live coverage (R8).
+//   MaskCoverage   a Gray8 mask placed by the mask transform, times the parent coverage (R8); 0 outside.
+//   Adjust         the composite beneath an adjustment layer reworked through its tables (C12), blended back with
+//                  the layer blend mode at its opacity, mask and folder coverage; alpha is kept and transparent
+//                  pixels left alone.
+//   StackAdjust    a clipped adjustment reworks the stack's straight base color, keeping the stack alpha.
 //
-// Coordinates: SV_POSITION.xy is the document pixel center (top-left origin, +Y down). A transform maps document
-// pixels to the unit square of the layer or mask raster: rotation is clockwise, flips mirror the unit square.
+// Coordinates: the canvas is a window of the document. Canvas pixel (i, j) covers the document square of side
+// `viewScale` at `viewOrigin + (i, j) * viewScale`, so SV_POSITION.xy is the document point
+// `viewOrigin + SV_POSITION.xy * viewScale` (top-left origin, +Y down). The window is the whole document at scale 1
+// unless the document is larger than the device's textures: the display then draws a reduced proxy (scale 2, 4, ...)
+// and a full-resolution readback composes it in tiles (origin = the tile). A transform maps document pixels to the
+// unit square of the layer or mask raster: rotation is clockwise, flips mirror the unit square. A texture may hold
+// only part of its raster, reduced: `sourceRect` and `maskRect` map the raster's unit square onto the texels.
+
+#include "CompositionShared.h"
 
 cbuffer LayerConstants : register(b0)
 {
@@ -35,13 +44,11 @@ cbuffer LayerConstants : register(b0)
     float grainSize;
     float grainRoughness;
     uint grainSeed;
-    float3 adjustPad;
+    float2 viewOrigin;
+    float viewScale;
+    float4 sourceRect; // the raster's unit square onto the texels: (uv - xy) * zw
+    float4 maskRect;
 };
-
-static const uint kFlagHasMask = 1u;
-static const uint kFlagHasLive = 2u;
-static const uint kFlagHasFolder = 4u;
-static const uint kFlagMaskPlaced = 8u;
 
 Texture2D<float4> g_source : register(t0);
 Texture2D<float4> g_dest : register(t1);
@@ -221,24 +228,65 @@ float4 PremulOver(float4 src, float4 dst, uint mode)
     return float4(outRgb, outA);
 }
 
-float4 SampleSource(float2 uv)
+// A texture coordinate with its screen derivatives. Coordinates are taken before any branch on the unit square, so
+// every pixel of a 2 x 2 quad supplies them and the mip level stays defined at a layer's or a mask's edge (implicit
+// derivatives inside such a branch are undefined).
+struct TexelCoordinate
 {
-    float4 color = g_source.Sample(g_linear, uv);
+    float2 texel;
+    float2 dx;
+    float2 dy;
+};
+
+TexelCoordinate Coordinate(float2 texel)
+{
+    TexelCoordinate coordinate;
+    coordinate.texel = texel;
+    coordinate.dx = ddx(texel);
+    coordinate.dy = ddy(texel);
+    return coordinate;
+}
+
+// The raster's unit square onto the texels the texture holds (the whole raster, or a part of it, reduced).
+TexelCoordinate SourceCoordinate(float2 uv)
+{
+    return Coordinate((uv - sourceRect.xy) * sourceRect.zw);
+}
+
+TexelCoordinate MaskCoordinate(float2 uv)
+{
+    return Coordinate((uv - maskRect.xy) * maskRect.zw);
+}
+
+float4 SampleSource(TexelCoordinate coordinate)
+{
+    float4 color = g_source.SampleGrad(g_linear, coordinate.texel, coordinate.dx, coordinate.dy);
     if (filterMode == 0)
     {
-        color = g_source.Sample(g_point, uv);
+        color = g_source.SampleGrad(g_point, coordinate.texel, coordinate.dx, coordinate.dy);
     }
     return color;
 }
 
-float SampleMask(float2 uv)
+float SampleMask(TexelCoordinate coordinate)
 {
-    float value = g_mask.Sample(g_linear, uv);
+    float value = g_mask.SampleGrad(g_linear, coordinate.texel, coordinate.dx, coordinate.dy);
     if (filterMode == 0)
     {
-        value = g_mask.Sample(g_point, uv);
+        value = g_mask.SampleGrad(g_point, coordinate.texel, coordinate.dx, coordinate.dy);
     }
     return value;
+}
+
+// Where a layer's mask is read: through its placement when it sits apart from the layer, else the layer's own uv.
+float2 MaskUnit(float2 document, float2 layerUv)
+{
+    float2 maskUv = layerUv;
+    if ((flags & kCompositionFlagMaskPlaced) != 0)
+    {
+        maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
+    }
+    return maskUv;
 }
 
 // The premultiplied layer color at one document pixel: image through its transform, times opacity, raster mask
@@ -247,28 +295,26 @@ float4 LayerColor(float2 document, int2 destPixel, bool useFolder)
 {
     float4 src = float4(0, 0, 0, 0);
     float2 uv = DocumentToUnit(document, layerCenter, layerSize, layerSinCos, layerFlip);
+    float2 maskUv = MaskUnit(document, uv);
+    TexelCoordinate source = SourceCoordinate(uv);
+    TexelCoordinate mask = MaskCoordinate(maskUv);
     if (!OutsideUnit(uv))
     {
-        src = SampleSource(uv) * opacity;
-        if ((flags & kFlagHasMask) != 0)
+        src = SampleSource(source) * opacity;
+        if ((flags & kCompositionFlagHasMask) != 0)
         {
             float coverage = maskBackground;
-            float2 maskUv = uv;
-            if ((flags & kFlagMaskPlaced) != 0)
-            {
-                maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
-            }
             if (!OutsideUnit(maskUv))
             {
-                coverage = SampleMask(maskUv);
+                coverage = SampleMask(mask);
             }
             src *= coverage;
         }
-        if ((flags & kFlagHasLive) != 0)
+        if ((flags & kCompositionFlagHasLive) != 0)
         {
             src *= saturate(g_live.Load(int3(destPixel, 0)));
         }
-        if (useFolder && (flags & kFlagHasFolder) != 0)
+        if (useFolder && (flags & kCompositionFlagHasFolder) != 0)
         {
             src *= saturate(g_folder.Load(int3(destPixel, 0)));
         }
@@ -333,17 +379,17 @@ float3 GrainStraight(float3 c, float2 document)
 float3 AdjustStraight(float3 c, float2 document)
 {
     float3 result = c;
-    if (adjustKind == 0)
+    if (adjustKind == kCompositionAdjustCube)
     {
         float3 coordinate = c * (32.0 / 33.0) + 0.5 / 33.0;
         result = g_cube.SampleLevel(g_linear, coordinate, 0).rgb;
     }
-    else if (adjustKind == 4)
+    else if (adjustKind == kCompositionAdjustGradientMap)
     {
         float level = round(dot(c * 255.0, float3(0.2126, 0.7152, 0.0722)));
         result = g_lut.Load(int3((int)min(level, 255.0), 0, 0)).rgb;
     }
-    else if (adjustKind == 5)
+    else if (adjustKind == kCompositionAdjustGrain)
     {
         result = GrainStraight(c, document);
     }
@@ -357,20 +403,21 @@ float3 AdjustStraight(float3 c, float2 document)
     return saturate(result);
 }
 
-// Where the adjustment applies: its opacity, its own raster mask (through its placement) and its folders.
-float AdjustCoverage(float2 document, int2 destPixel, bool useFolder)
+// Where the adjustment applies: its opacity, its own raster mask (through its placement, `maskUv`, sampled at `mask`)
+// and its folders.
+float AdjustCoverage(float2 maskUv, TexelCoordinate mask, int2 destPixel, bool useFolder)
 {
     float coverage = opacity;
-    if ((flags & kFlagHasMask) != 0)
+    if ((flags & kCompositionFlagHasMask) != 0)
     {
-        float2 maskUv = DocumentToUnit(document, layerCenter, layerSize, layerSinCos, layerFlip);
-        if ((flags & kFlagMaskPlaced) != 0)
+        float maskValue = maskBackground;
+        if (!OutsideUnit(maskUv))
         {
-            maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
+            maskValue = SampleMask(mask);
         }
-        coverage *= OutsideUnit(maskUv) ? maskBackground : SampleMask(maskUv);
+        coverage *= maskValue;
     }
-    if (useFolder && (flags & kFlagHasFolder) != 0)
+    if (useFolder && (flags & kCompositionFlagHasFolder) != 0)
     {
         coverage *= saturate(g_folder.Load(int3(destPixel, 0)));
     }
@@ -379,6 +426,9 @@ float AdjustCoverage(float2 document, int2 destPixel, bool useFolder)
 
 float4 AdjustPass(float2 document, int2 destPixel, bool inStack)
 {
+    // The mask's coordinate before the branch on the destination's alpha (see TexelCoordinate).
+    float2 maskUv = MaskUnit(document, DocumentToUnit(document, layerCenter, layerSize, layerSinCos, layerFlip));
+    TexelCoordinate mask = MaskCoordinate(maskUv);
     float4 dest = g_dest.Load(int3(destPixel, 0));
     float4 result = dest;
     // The stack holds straight color at the base alpha; the canvas holds premultiplied color.
@@ -391,7 +441,7 @@ float4 AdjustPass(float2 document, int2 destPixel, bool inStack)
         {
             adjusted = BlendStraight(d, adjusted, blendMode);
         }
-        float coverage = AdjustCoverage(document, destPixel, !inStack);
+        float coverage = AdjustCoverage(maskUv, mask, destPixel, !inStack);
         result = float4(lerp(dest.rgb, adjusted * da, coverage), dest.a);
     }
     return result;
@@ -400,48 +450,53 @@ float4 AdjustPass(float2 document, int2 destPixel, bool inStack)
 float4 PixelMain(PixelInput input) : SV_TARGET
 {
     int2 destPixel = int2(input.position.xy);
-    float2 document = input.position.xy;
+    float2 document = viewOrigin + input.position.xy * viewScale;
 
-    if (passMode == 6 || passMode == 7)
+    if (passMode == kCompositionPassAdjust || passMode == kCompositionPassStackAdjust)
     {
-        return AdjustPass(document, destPixel, passMode == 7);
+        return AdjustPass(document, destPixel, passMode == kCompositionPassStackAdjust);
     }
-    if (passMode == 3)
+    if (passMode == kCompositionPassStackResolve)
     {
         float4 stack = g_source.Load(int3(destPixel, 0));
         float4 premultiplied = float4(stack.rgb * stack.a, stack.a);
-        if ((flags & kFlagHasFolder) != 0)
+        if ((flags & kCompositionFlagHasFolder) != 0)
         {
             premultiplied *= saturate(g_folder.Load(int3(destPixel, 0)));
         }
         float4 dest = g_dest.Load(int3(destPixel, 0));
         return PremulOver(premultiplied, dest, blendMode);
     }
-    if (passMode == 5)
+    if (passMode == kCompositionPassMaskCoverage)
     {
         float2 maskUv = DocumentToUnit(document, maskCenter, maskSize, maskSinCos, maskFlip);
-        float coverage = OutsideUnit(maskUv) ? 0.0 : SampleMask(maskUv);
-        if ((flags & kFlagHasFolder) != 0)
+        TexelCoordinate mask = MaskCoordinate(maskUv);
+        float coverage = 0.0;
+        if (!OutsideUnit(maskUv))
+        {
+            coverage = SampleMask(mask);
+        }
+        if ((flags & kCompositionFlagHasFolder) != 0)
         {
             coverage *= saturate(g_folder.Load(int3(destPixel, 0)));
         }
         return float4(coverage, coverage, coverage, coverage);
     }
 
-    float4 src = LayerColor(document, destPixel, passMode == 0);
-    if (passMode == 4)
+    float4 src = LayerColor(document, destPixel, passMode == kCompositionPassLayer);
+    if (passMode == kCompositionPassLayerCoverage)
     {
         float coverage = saturate(src.a);
         return float4(coverage, coverage, coverage, coverage);
     }
-    if (passMode == 1)
+    if (passMode == kCompositionPassStackBegin)
     {
         float sa = saturate(src.a);
         float3 straight = (sa > 1e-5) ? src.rgb / sa : 0.0;
         return float4(straight, sa);
     }
     float4 dest = g_dest.Load(int3(destPixel, 0));
-    if (passMode == 2)
+    if (passMode == kCompositionPassStackChild)
     {
         float sa = saturate(src.a);
         float3 s = (sa > 1e-5) ? src.rgb / sa : 0.0;

@@ -180,13 +180,12 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
         }
     }
     BindCompositionDevice();
-    _composition.InvalidateDocument();
+    // A full-resolution readback of `copy` (tiled past the texture limit, never the display proxy or a preview).
     std::optional<Raster> result;
     std::vector<std::uint8_t> bgra;
     UINT width = 0;
     UINT height = 0;
-    if (SUCCEEDED(_composition.Compose(copy)) && SUCCEEDED(_composition.Readback(bgra, width, height)) && width > 0 &&
-        height > 0)
+    if (SUCCEEDED(_composition.ComposeReadback(copy, bgra, width, height)) && width > 0 && height > 0)
     {
         const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
                                            bgra.data(), bgra.size());
@@ -195,8 +194,6 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
             result = raster;
         }
     }
-    // The next frame composes the real document again.
-    _composition.InvalidateDocument();
     return result;
 }
 

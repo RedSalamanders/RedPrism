@@ -1,7 +1,7 @@
 # Brush rendering
 
 Status: current normative contract (created with C10)
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-23
 Owner: `Common/BrushStroke.*` (stroke model, CPU kernel, session brush API), `RedPrism/BrushCompute.*` and
 `RedPrism/Shaders/BrushCoverage.hlsl` (compute engine), the sparse-raster and stroke-preview code in
 `RedPrism/CanvasRenderer.*`, the brush code in `RedPrism/Application.cpp`
@@ -91,11 +91,29 @@ While a stroke is drawn the composition shows it without a document edit:
   `StrokeTextureMissing()` the host sends every touched tile, afterwards only `TakeChanged`.
 - `Compose` draws the working texture in place of the layer's image (or as its mask) with the preview's transform,
   including for a layer that has no pixels yet; a tile update marks the document dirty, so the frame composites
-  once per pointer update and never per frame otherwise.
-- `EndStroke(committed, cropX, cropY)` adopts the working texture: the committed raster's crop is copied on the GPU
-  (`CopySubresourceRegion`) into a raster-cache entry keyed by that raster's identity, so the first composition
-  after mouse-up finds its texture and the committed raster is never materialized for upload. `EndStroke(nullptr)`
-  drops the preview. `CanvasSurfaceBytes` counts the working texture; `ReleaseDocumentSurfaces` drops it.
+  once per pointer update and never per frame otherwise. When the preview's grid grew past the layer (the grid
+  covers the canvas, a warp covers the document), an unplaced mask of more than one pixel stays on the layer's own
+  pixels (placed at the layer's transform) and paint beyond them is revealed, exactly as the commit grows the mask
+  with 255; a uniform 1 × 1 mask stays uniform (legacy `TiledLayerRenderer.drawStroke`: "paint beyond the layer's
+  old bounds is revealed, not masked").
+- Mouse-up first settles the provisional tail (`BrushStroke::Flush`, the final Catmull-Rom segment) and sends the
+  tiles it changed to the working texture, then commits: the adopted texture holds the curve the raster holds, never
+  the chord the tail drew, so the canvas, a PNG export and the next stroke's base agree with the saved pixels.
+- `EndStroke(committed, cropX, cropY, committedLayerID)` adopts the working texture: the committed raster's crop is
+  copied on the GPU (`CopySubresourceRegion`) into a raster-cache entry keyed by that raster's identity, so the first
+  composition after mouse-up finds its texture and the committed raster is never materialized for upload. The host
+  names the layer the committed raster was installed on (`Application::EndStrokePreview` finds it by identity), and
+  the adoption happens only when that is the preview's layer, the raster's format is the target's (Gray8 for a
+  mask), the crop lies in the working texture and nothing was reduced; otherwise the committed raster uploads on its
+  own. `EndStroke()` drops the preview. `CanvasSurfaceBytes` counts the working texture; `ReleaseDocumentSurfaces`
+  drops it.
+- A gradient or pixel move shows through one preview per raster: when the pending raster changes (another layer, the
+  mask instead of the image, or a new line after the old one went) the host ends the old preview, adopting its
+  texture only for its own commit, and begins a new one, so a new gradient never writes into another layer's
+  texture.
+- A grid larger than the device's textures previews through a reduced working texture of the part the display
+  shows (Rendering_Composition.md "Documents larger than the device"); its tiles are reduced on the CPU and it is
+  never adopted.
 
 Sparse rasters that reach `TextureFor` without an adopted texture (Undo, Redo, a reopened stroke) are assembled on
 the GPU the same way (`CreateSparseTexture`: clear to the fill, copy the base's texture, upload the tiles), which
@@ -174,8 +192,11 @@ the pixel edit cases (`edit.*`, `pixelmove.*`, `clipboard.*`, `floating.*`) are 
 
 `CompositionTests` (WARP): `sparse.*` (a sparse raster uploads through the GPU assembly path and matches the
 assembled bytes), `stroke.*` (preview texture creation from source and fill, tile updates, mask previews, adoption
-on commit, rebuild after a device reset) and `gpubrush.*` (the compute kernel against the CPU kernel within 2/255
-per pixel, a session stroke through the GPU engine matching the CPU engine, buffers released after `EndStroke`).
+on commit, rebuild after a device reset), `strokemask.*` (an unplaced mask in a grown preview), `adopt.*` (adoption
+only for the preview's own layer and target), `oversize.stroke-*` (a reduced working texture) and `gpubrush.*` (the
+compute kernel against the CPU kernel within 2/255 per pixel, a session stroke through the GPU engine matching the
+CPU engine, buffers released after `EndStroke`). The self-test proves the mouse-up upload: a curved three-sample
+stroke's adopted texture equals its committed raster within 2/255.
 
 `RedPrism.exe --self-test --warp` paints a stroke through the pointer path with the compute engine, proves the live
 preview shows the paint, that mouse-up commits one sparse `Brush Stroke` entry that never materializes and draws

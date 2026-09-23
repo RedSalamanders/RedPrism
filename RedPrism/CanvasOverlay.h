@@ -5,6 +5,8 @@
 #include <DxUi/DxUi.h>
 
 #include <array>
+#include <cmath>
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -41,7 +43,8 @@ class CanvasOverlay final : public DxUi::Control
     void SetGeometry(std::optional<Geometry> geometry) noexcept;
     void SetGuides(std::vector<float> xs, std::vector<float> ys);
     void SetSelectionOutline(std::vector<OutlineLoop> loops);
-    // Dash offset in DIP. Rebuilds the stroke style only; the outline geometry stays.
+    // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
+    // is made once and kept.
     void SetAntPhase(float phase) noexcept;
     [[nodiscard]] float AntPhase() const noexcept
     {
@@ -98,6 +101,10 @@ class CanvasOverlay final : public DxUi::Control
 
     void Paint(DxUi::ControlHost& host) const override;
     [[nodiscard]] D2D1_RECT_F GetHitBounds() const noexcept override;
+    // The crop frame clipped to the overlay's bounds, or nothing when the bounds are empty or inverted (a window
+    // shorter than the chrome around the hole) or the frame misses them (RF-413).
+    [[nodiscard]] static std::optional<D2D1_RECT_F> ShadeFrame(const D2D1_RECT_F& bounds,
+                                                               const D2D1_RECT_F& frame) noexcept;
 
   private:
     void PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
@@ -106,6 +113,13 @@ class CanvasOverlay final : public DxUi::Control
     void PaintTools(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
     void PaintTransform(ID2D1DeviceContext* dc, DxUi::ControlHost& host, const D2D1_RECT_F& bounds) const;
     [[nodiscard]] bool EnsureSelectionResources(ID2D1DeviceContext* dc) const noexcept;
+    // The whole dash step (0-7) of the phase.
+    [[nodiscard]] std::size_t AntStep() const noexcept
+    {
+        const double step = std::isfinite(_antPhase) ? std::floor(static_cast<double>(_antPhase)) : 0.0;
+        const long long whole = static_cast<long long>(std::fmod(step, 8.0));
+        return static_cast<std::size_t>((whole + 8) % 8);
+    }
 
     std::optional<Geometry> _geometry;
     std::vector<float> _guideXs;
@@ -121,7 +135,13 @@ class CanvasOverlay final : public DxUi::Control
     // Device-independent Direct2D resources, rebuilt when the outline or the factory changes.
     mutable wil::com_ptr_nothrow<ID2D1Factory> _factory;
     mutable wil::com_ptr_nothrow<ID2D1PathGeometry> _outlineGeometry;
-    mutable wil::com_ptr_nothrow<ID2D1StrokeStyle> _ants;
+    // One dash style per step of the 8 DIP cycle, made on first use (RF-408).
+    mutable std::array<wil::com_ptr_nothrow<ID2D1StrokeStyle>, 8> _antStyles;
+    // The device context this overlay last drew with. Holding it through a device rebuild keeps the next device's
+    // context from taking its address while chrome caches still compare raw context pointers (the rail's SVG
+    // documents, RF-505); otherwise the first frame on the new device fails with D2DERR_WRONG_FACTORY and device
+    // recovery (RF-401) cannot draw. Released for the new context at the first paint after the rebuild.
+    mutable wil::com_ptr_nothrow<ID2D1DeviceContext> _drawnContext;
     mutable bool _outlineDirty = false;
     float _antPhase = 0.0f;
 };

@@ -171,9 +171,11 @@ and, pinned right, Deselect when a selection exists and `Empty selection` when i
 a STRINGTABLE entry (`IDS_SELECTION_*`, `IDS_WAND_*`).
 
 `CanvasOverlay` draws the selection outline in every tool as marching ants (a white line under a black 4/4 dash).
-The dash offset advances one cycle every 400 ms while a non-empty outline is showing and the window is visible,
-powered, and not occluded; the path geometry is rebuilt only when the selection or the view mapping changes. A
-settled document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
+The dash offset steps one DIP every 120 ms through its 8 DIP cycle (legacy `EditorCanvas` ants timer) while a
+non-empty outline is showing and the window is visible, powered, and not occluded: the frame loop waits for the
+next step with a timed message wait and presents one frame per step, never a frame per vsync; each step's dash style
+is made once and kept. The path geometry is rebuilt only when the selection or the view mapping changes. A settled
+document with no selection does not stay awake for the dash. The draft being drawn (freehand and polygonal
 polylines, the polygonal rubber band to the cursor and an 8 DIP handle on the first corner, the Marquee's rectangle
 or ellipse) is a white line over a dark one. Outline and draft changes re-composite chrome only, never the document.
 

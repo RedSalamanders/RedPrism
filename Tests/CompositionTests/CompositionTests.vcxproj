@@ -110,6 +110,7 @@
       <HeaderFileOutput>$(IntDir)CompositionVertexShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)CompositionVertexShader.cso</ObjectFileOutput>
       <VariableName>g_CompositionVertexShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <FxCompile Include="..\..\RedPrism\Shaders\CompositionPixel.hlsl">
       <ShaderType>Pixel</ShaderType>
@@ -119,6 +120,7 @@
       <HeaderFileOutput>$(IntDir)CompositionPixelShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)CompositionPixelShader.cso</ObjectFileOutput>
       <VariableName>g_CompositionPixelShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <FxCompile Include="..\..\RedPrism\Shaders\BrushCoverage.hlsl">
       <ShaderType>Compute</ShaderType>
@@ -128,6 +130,7 @@
       <HeaderFileOutput>$(IntDir)BrushCoverageShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)BrushCoverageShader.cso</ObjectFileOutput>
       <VariableName>g_BrushCoverageShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <FxCompile Include="..\..\RedPrism\Shaders\CompositionBlit.hlsl">
       <ShaderType>Pixel</ShaderType>
@@ -137,6 +140,7 @@
       <HeaderFileOutput>$(IntDir)CompositionBlitPixelShader.h</HeaderFileOutput>
       <ObjectFileOutput>$(IntDir)CompositionBlitPixelShader.cso</ObjectFileOutput>
       <VariableName>g_CompositionBlitPixelShader</VariableName>
+      <AdditionalOptions>/Ges /O3 /Qstrip_debug /Qstrip_reflect /Qstrip_priv %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
   </ItemGroup>
 

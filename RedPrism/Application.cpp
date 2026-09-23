@@ -40,8 +40,9 @@ namespace
 constexpr int kDefaultClientWidth = 1280;
 constexpr int kDefaultClientHeight = 800;
 constexpr UINT kScreenshotDelayMilliseconds = 800;
-constexpr double kWheelZoomStep = 1.1;
 constexpr double kCommandZoomStep = 1.25;
+// Frames in a row that may fail before drawing stops and the window asks to close (RF-401).
+constexpr int kFailedFramesBeforeClose = 3;
 
 [[nodiscard]] SIZE ScaleDefaultClientSize(UINT dpi) noexcept
 {
@@ -139,6 +140,8 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
     {
         _screenshotPath = screenshotPath;
         _quietUi = true;
+        // A run that closes before its capture has failed it (exit 9), whatever else happened.
+        _screenshotResult = E_PENDING;
     }
     if (screenshotDpi == 96 || screenshotDpi == 144)
     {
@@ -206,17 +209,13 @@ int Application::Run(int showCommand) noexcept
 
     if (!_screenshotPath.empty())
     {
+        // The capture timer starts after the first frame that reached the display (RenderFrame, RF-409).
         ShowWindow(_window.get(), SW_SHOWNOACTIVATE);
         _windowVisible = true;
         _frameInvalidated = true;
         if (_chrome)
         {
             _chrome->SetVisible(true);
-        }
-        if (!_screenshotArmed)
-        {
-            _screenshotArmed = true;
-            (void)SetTimer(_window.get(), kScreenshotTimerId, kScreenshotDelayMilliseconds, nullptr);
         }
     }
     else
@@ -232,11 +231,7 @@ int Application::Run(int showCommand) noexcept
         {
             if (message.message == WM_QUIT)
             {
-                if (!_screenshotPath.empty())
-                {
-                    return FAILED(_screenshotResult) ? 8 : 0;
-                }
-                return FAILED(_runtimeFailure) ? 5 : static_cast<int>(message.wParam);
+                return ExitCode(static_cast<int>(message.wParam));
             }
             TranslateMessage(&message);
             DispatchMessageW(&message);
@@ -246,66 +241,79 @@ int Application::Run(int showCommand) noexcept
         {
             break;
         }
+        if (FAILED(_frameLoopFailure))
+        {
+            // Drawing stopped after a failure it could not get past; the close it asked for prompts to save
+            // (RF-401). Until then the window only answers messages.
+            if (!WaitMessage())
+            {
+                break;
+            }
+            continue;
+        }
 
-        if (!_renderer.IsOccluded() || !_screenshotPath.empty())
+        const bool capturing = !_screenshotPath.empty();
+        if (!_renderer.IsOccluded() || capturing)
         {
             _occlusionStatusChanged = false;
         }
+        ReleaseSurfacesWhileUnseen();
 
-        const std::optional<DocumentSelection> marchingSelection = _session.DisplayedSelection();
-        const bool marchingAnts = marchingSelection.has_value() && !marchingSelection->IsEmpty();
-        if (marchingAnts && _chrome)
+        // Marching ants: the dash steps one DIP every 120 ms while a non-empty outline shows and a frame can reach
+        // the display; the wait below wakes for the next step, nothing else (RF-408).
+        DWORD waitTimeout = INFINITE;
+        const bool drawable =
+            capturing || (_windowVisible && _displayPoweredOn && !_renderer.IsSuspended() && !_renderer.IsOccluded());
+        if (_marchingAnts && _chrome && drawable)
         {
-            // One dash cycle (8 DIP) every 400 ms. Hidden and occluded frames never reach this render.
-            const float phase = static_cast<float>(static_cast<double>(GetTickCount64() % 400ull) / 400.0) * 8.0f;
-            _chrome->SetSelectionAntPhase(phase);
-            _frameInvalidated = true;
+            const std::uint64_t now = GetTickCount64();
+            const float phase = MarchingAntsPhase(now);
+            if (phase != _chrome->SelectionAntPhase())
+            {
+                _chrome->SetSelectionAntPhase(phase);
+                _frameInvalidated = true;
+            }
+            waitTimeout = MillisecondsToNextAntStep(now);
         }
-        const bool chromeAnimating = (_chrome && _chrome->NeedsAnimation()) || marchingAnts;
         if (_chrome && _chrome->NeedsPreparation())
         {
             _frameInvalidated = true;
         }
 
-        const bool forceCaptureFrame = !_screenshotPath.empty();
-        HostFrameAction frameAction = SelectHostFrameAction(HostFrameState{
-            _windowVisible || forceCaptureFrame,
-            _displayPoweredOn,
-            _renderer.IsSuspended() && !forceCaptureFrame,
-            _renderer.IsOccluded() && !forceCaptureFrame,
-            _occlusionStatusChanged,
-            _frameInvalidated,
-            chromeAnimating,
-        });
+        HostFrameState state;
+        state.windowVisible = _windowVisible;
+        state.displayPoweredOn = _displayPoweredOn;
+        state.rendererSuspended = _renderer.IsSuspended();
+        state.rendererOccluded = _renderer.IsOccluded();
+        state.occlusionStatusChanged = _occlusionStatusChanged;
+        state.frameInvalidated = _frameInvalidated;
+        state.chromeAnimating = _chrome && _chrome->NeedsAnimation();
+        state.occlusionMessages = _renderer.OcclusionMessages();
+        state.capturing = capturing;
+        HostFrameAction frameAction = SelectHostFrameAction(state);
         if (frameAction == HostFrameAction::ProbeOcclusion)
         {
             _occlusionStatusChanged = false;
             result = _renderer.ProbeOcclusion();
             if (FAILED(result))
             {
-                _runtimeFailure = result;
                 OutputDebugStringW(L"Swap-chain occlusion probe failed.\n");
-                CloseMainWindow();
+                OnFrameLoopFailure(result);
                 continue;
             }
-            if (!_renderer.IsOccluded())
+            if (_renderer.IsOccluded())
             {
-                _frameInvalidated = true;
+                // Still hidden: wait for the next message (the occlusion status, or any other without it).
+                (void)WaitUntilMessage();
+                continue;
             }
-            frameAction = SelectHostFrameAction(HostFrameState{
-                _windowVisible || forceCaptureFrame,
-                _displayPoweredOn,
-                _renderer.IsSuspended() && !forceCaptureFrame,
-                _renderer.IsOccluded() && !forceCaptureFrame,
-                false,
-                _frameInvalidated,
-                (_chrome && _chrome->NeedsAnimation()) || marchingAnts,
-            });
+            _frameInvalidated = true;
+            frameAction = HostFrameAction::Render;
         }
 
         if (frameAction == HostFrameAction::WaitForMessage)
         {
-            (void)WaitUntilMessage();
+            (void)WaitUntilMessage(waitTimeout);
             continue;
         }
 
@@ -324,34 +332,114 @@ int Application::Run(int showCommand) noexcept
             _layoutDirty = false;
             SyncChrome();
         }
-        BindCompositionDevice();
-        const CanvasDocument* document = _session.DisplayDocument();
-        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
-        if (FAILED(result))
-        {
-            BindCompositionDevice();
-            result = _renderer.Render(_chrome.get(), &_composition, &_viewport, document);
-        }
-        if (FAILED(result))
-        {
-            _runtimeFailure = result;
-            OutputDebugStringW(L"Frame rendering failed.\n");
-            CloseMainWindow();
-            continue;
-        }
-        _frameInvalidated = false;
-        if (!_screenshotPath.empty() && !_screenshotArmed && _window)
-        {
-            _screenshotArmed = true;
-            (void)SetTimer(_window.get(), kScreenshotTimerId, kScreenshotDelayMilliseconds, nullptr);
-        }
+        RenderFrame();
     }
 
+    return ExitCode(0);
+}
+
+int Application::ExitCode(int quitCode) const noexcept
+{
+    if (FAILED(_frameLoopFailure) || FAILED(_runtimeFailure))
+    {
+        return 5;
+    }
     if (!_screenshotPath.empty())
     {
-        return FAILED(_screenshotResult) ? 8 : 0;
+        // 8: this system cannot capture a window at all; 9: the capture was possible and failed, or never happened
+        // (RF-409, Testing_Validation.md "Harness screenshot").
+        if (SUCCEEDED(_screenshotResult))
+        {
+            return 0;
+        }
+        return _screenshotResult == E_NOTIMPL || _screenshotResult == REGDB_E_CLASSNOTREG ? 8 : 9;
     }
-    return FAILED(_runtimeFailure) ? 5 : 0;
+    return quitCode;
+}
+
+void Application::RenderFrame() noexcept
+{
+    BindCompositionDevice();
+    HRESULT result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    if (result == S_FALSE)
+    {
+        // A stage found the device removed and the renderer rebuilt it: rebind and draw on the new device.
+        BindCompositionDevice();
+        result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    }
+    if (FAILED(result))
+    {
+        // A failed frame never closes the window on its own (RF-401): it is tried again on the next change, and
+        // only a failure that keeps repeating stops drawing and asks to close, through the save prompt.
+        ++_failedFrames;
+        _lastFrameFailure = result;
+        _frameInvalidated = false;
+        OutputDebugStringW(L"Frame rendering failed.\n");
+        if (_failedFrames >= kFailedFramesBeforeClose)
+        {
+            OnFrameLoopFailure(result);
+        }
+        return;
+    }
+    _failedFrames = 0;
+    if (result == S_FALSE)
+    {
+        // Rebuilt twice in a row: draw again on the next pass.
+        return;
+    }
+    _frameInvalidated = false;
+    ReportCanvasFailure(_renderer.CanvasFailure());
+    // The screenshot capture waits for a frame that reached the display (RF-409).
+    if (!_screenshotPath.empty() && !_screenshotArmed && _window && _renderer.PresentCount() > 0)
+    {
+        _screenshotArmed = true;
+        (void)SetTimer(_window.get(), kScreenshotTimerId, kScreenshotDelayMilliseconds, nullptr);
+    }
+}
+
+void Application::ReportCanvasFailure(HRESULT failure) noexcept
+{
+    if (SUCCEEDED(failure))
+    {
+        _canvasFailureShown = false;
+        return;
+    }
+    if (_canvasFailureShown)
+    {
+        return;
+    }
+    // Once per failure: the canvas is empty but the document is intact and the chrome works, so it can be saved.
+    _canvasFailureShown = true;
+    ++_canvasFailureNotices;
+    OutputDebugStringW(L"The canvas could not be drawn; the chrome still presents.\n");
+    if (!_quietUi && _chrome)
+    {
+        _chrome->ShowNotice(FormatStringResource(nullptr, IDS_ERROR_CANVAS_DRAW, static_cast<std::uint32_t>(failure)));
+    }
+}
+
+void Application::OnFrameLoopFailure(HRESULT failure) noexcept
+{
+    if (FAILED(_frameLoopFailure) || !_window)
+    {
+        return;
+    }
+    _frameLoopFailure = failure;
+    OutputDebugStringW(L"Frame rendering stopped; the window asks to close through the save prompt.\n");
+    // The normal close: a modified document asks to be saved first (RF-401).
+    PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+}
+
+void Application::ReleaseSurfacesWhileUnseen() noexcept
+{
+    // Hidden, minimized, occluded or display-off windows keep no document surfaces (Rendering_Composition.md,
+    // RF-411); the next frame that can reach the display composes them again.
+    const bool unseen = _screenshotPath.empty() &&
+                        (!_windowVisible || !_displayPoweredOn || _renderer.IsSuspended() || _renderer.IsOccluded());
+    if (unseen && _composition.CanvasSurfaceBytes() != 0)
+    {
+        _composition.ReleaseDocumentSurfaces();
+    }
 }
 
 // Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr so test logs name the check.
@@ -1777,6 +1865,11 @@ int Application::RunSelfTest() noexcept
     {
         return session;
     }
+    // Rendering, viewport and frame loop (review fixes WP4).
+    if (const int rendering = RunRenderingSelfTest(); rendering != 0)
+    {
+        return rendering;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -2223,8 +2316,11 @@ void Application::SyncChrome() noexcept
     _chrome->SetSelectionInspector(selection);
     const Vec2 documentSize = DocumentSize();
     const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
-    const double scale = _viewport.PointsPerPixel();
-    // The outline geometry is rebuilt only when the selection or the view mapping changes.
+    const double scale = _viewport.ViewScale();
+    // The frame loop steps the ants only while a non-empty outline shows (RF-408): read here, never per loop pass.
+    _marchingAnts = document != nullptr && current.has_value() && !current->IsEmpty();
+    // The outline geometry is rebuilt only when the selection or the view mapping changes (the chrome converts the
+    // device pixels to DIPs, so a new display scale rebuilds it too).
     if (document == nullptr)
     {
         if (_overlaySelection.has_value())
@@ -2233,7 +2329,8 @@ void Application::SyncChrome() noexcept
             _chrome->SetSelectionOutline({});
         }
     }
-    else if (current != _overlaySelection || origin != _overlayOrigin || scale != _overlayScale)
+    else if (current != _overlaySelection || origin != _overlayOrigin || scale != _overlayScale ||
+             _viewport.backingScale != _overlayBacking)
     {
         std::vector<std::vector<D2D1_POINT_2F>> loops;
         if (current.has_value())
@@ -2254,6 +2351,7 @@ void Application::SyncChrome() noexcept
         _overlaySelection = current;
         _overlayOrigin = origin;
         _overlayScale = scale;
+        _overlayBacking = _viewport.backingScale;
         _chrome->SetSelectionOutline(std::move(loops));
     }
     std::optional<CanvasOverlay::Draft> draft;
@@ -2335,10 +2433,13 @@ void Application::BindCompositionDevice() noexcept
     {
         _composition.ReleaseDeviceResources();
         DropBrushEngine();
+        _boundDeviceGeneration = 0;
         return;
     }
-    if (_composition.Device() != device)
+    // A rebuilt device can come back at the old one's address: the generation tells them apart.
+    if (_composition.Device() != device || _boundDeviceGeneration != _renderer.DeviceGeneration())
     {
+        _boundDeviceGeneration = _renderer.DeviceGeneration();
         (void)_composition.CreateDeviceResources(device, context);
         // The brush computes coverage on the same device; without it the CPU kernel paints. A stroke in
         // flight on the old device is dropped with it.
@@ -2384,9 +2485,10 @@ void Application::CloseMainWindow() noexcept
     _window.reset();
 }
 
-bool Application::WaitUntilMessage() noexcept
+bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
-    // The settings directory watch waits beside the queue: a change reloads on this thread, never a poll.
+    // The settings directory watch waits beside the queue: a change reloads on this thread, never a poll. A timeout
+    // is the next marching-ants step (RF-408); without an outline the wait is unbounded.
     HANDLE handles[1]{};
     DWORD count = 0;
     if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
@@ -2394,8 +2496,8 @@ bool Application::WaitUntilMessage() noexcept
         handles[count++] = watch;
     }
     const DWORD waitResult =
-        MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-    if (waitResult == WAIT_OBJECT_0 + count)
+        MsgWaitForMultipleObjectsEx(count, count ? handles : nullptr, timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    if (waitResult == WAIT_OBJECT_0 + count || waitResult == WAIT_TIMEOUT)
     {
         return true;
     }
@@ -2405,8 +2507,7 @@ bool Application::WaitUntilMessage() noexcept
         return true;
     }
     const DWORD error = waitResult == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA;
-    _runtimeFailure = error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL;
-    CloseMainWindow();
+    OnFrameLoopFailure(error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL);
     return false;
 }
 
@@ -2438,8 +2539,7 @@ bool Application::WaitForFrameLatency() noexcept
         return false;
     }
     const DWORD error = waitResult == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA;
-    _runtimeFailure = error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL;
-    CloseMainWindow();
+    OnFrameLoopFailure(error != ERROR_SUCCESS ? HRESULT_FROM_WIN32(error) : E_FAIL);
     return false;
 }
 
@@ -2458,9 +2558,9 @@ void Application::CheckDeviceAdapter() noexcept
     }
     if (FAILED(result))
     {
-        _runtimeFailure = result;
+        // Never a close without the save prompt (RF-401).
         OutputDebugStringW(L"Direct3D device could not follow the window to its new adapter.\n");
-        PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+        OnFrameLoopFailure(result);
     }
 }
 
@@ -2562,10 +2662,15 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     const bool panMode = _spacePan || _tool == EditorTool::Hand;
     if (event.action == DxUi::PointerAction::Wheel && inHole)
     {
-        const double factor = event.wheelDelta > 0 ? kWheelZoomStep : (1.0 / kWheelZoomStep);
-        _viewport.SetZoom(_viewport.zoom * factor, view, documentSize);
-        SyncChrome();
-        _frameInvalidated = true;
+        // 1.1 per notch, a fraction of it per partial delta: a precision touchpad's many small deltas (or a pinch)
+        // zoom as far as the notches they add up to, and a zero delta does nothing (RF-404).
+        const double factor = CanvasViewport::WheelZoomFactor(static_cast<double>(event.wheelDelta));
+        if (factor != 1.0)
+        {
+            _viewport.SetZoom(_viewport.zoom * factor, view, documentSize);
+            SyncChrome();
+            _frameInvalidated = true;
+        }
         return;
     }
     if (!panMode && AdjustPointer(event, view, inHole))
@@ -2785,6 +2890,11 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         _canvasDrag = true;
         _lastPointer = point;
+        _zoomDrag.reset();
+        if (_tool == EditorTool::Zoom && !panMode)
+        {
+            _zoomDrag = ZoomDrag{point, _viewport.zoom, false};
+        }
         _frameInvalidated = true;
         return;
     }
@@ -2797,12 +2907,20 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             SyncChrome();
             _frameInvalidated = true;
         }
-        else if (_tool == EditorTool::Zoom)
+        else if (_tool == EditorTool::Zoom && _zoomDrag.has_value())
         {
-            const double factor = delta.y < 0 ? 1.02 : (delta.y > 0 ? (1.0 / 1.02) : 1.0);
-            if (factor != 1.0)
+            // Right zooms in, left out: doubling for every 100 DIPs from the press, around the press (legacy
+            // EditorCanvas), however many moves the pointer reports on the way (RF-404).
+            const double dragDip = static_cast<double>(point.x - _zoomDrag->start.x) / _viewport.DipToView(1.0);
+            if (std::fabs(dragDip) >= 3.0)
             {
-                _viewport.SetZoom(_viewport.zoom * factor, view, documentSize);
+                _zoomDrag->moved = true;
+            }
+            if (_zoomDrag->moved)
+            {
+                const Vec2 anchor{static_cast<double>(_zoomDrag->start.x) - hole.left,
+                                  static_cast<double>(_zoomDrag->start.y) - hole.top};
+                _viewport.SetZoom(_zoomDrag->zoom * CanvasViewport::DragZoomFactor(dragDip), anchor, documentSize);
                 SyncChrome();
                 _frameInvalidated = true;
             }
@@ -2812,6 +2930,16 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     if (event.action == DxUi::PointerAction::Up)
     {
+        if (_zoomDrag.has_value() && !_zoomDrag->moved && _tool == EditorTool::Zoom && !panMode)
+        {
+            // A click zooms in twice around the press; with Alt it zooms out (legacy).
+            const Vec2 anchor{static_cast<double>(_zoomDrag->start.x) - hole.left,
+                              static_cast<double>(_zoomDrag->start.y) - hole.top};
+            _viewport.SetZoom(_viewport.zoom * (GetKeyState(VK_MENU) < 0 ? 0.5 : 2.0), anchor, documentSize);
+            SyncChrome();
+            _frameInvalidated = true;
+        }
+        _zoomDrag.reset();
         _canvasDrag = false;
     }
 }
@@ -3453,18 +3581,15 @@ void Application::ExportFlattened(bool jpeg) noexcept
     {
         return;
     }
+    // The committed document at full resolution, never the canvas's preview composite (RF-402).
     BindCompositionDevice();
-    if (FAILED(_composition.Compose(_session.Document().value())))
-    {
-        ShowError(IDS_ERROR_FLATTEN);
-        return;
-    }
     std::vector<std::uint8_t> bgra;
     UINT width = 0;
     UINT height = 0;
-    if (FAILED(_composition.Readback(bgra, width, height)) || width == 0 || height == 0)
+    if (FAILED(_composition.ComposeReadback(_session.Document().value(), bgra, width, height)) || width == 0 ||
+        height == 0)
     {
-        ShowError(IDS_ERROR_READBACK);
+        ShowError(IDS_ERROR_FLATTEN);
         return;
     }
     const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
@@ -3529,7 +3654,10 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     switch (message)
     {
     case WM_SIZE:
-        return OnSize(window, LOWORD(lParam), HIWORD(lParam));
+        return OnSize(LOWORD(lParam), HIWORD(lParam));
+    case WM_GETMINMAXINFO:
+        OnGetMinMaxInfo(window, reinterpret_cast<MINMAXINFO*>(lParam));
+        return 0;
     case WM_DPICHANGED:
     {
         const LRESULT dpiResult = OnDpiChanged(window, reinterpret_cast<const RECT*>(lParam));
@@ -3772,7 +3900,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     return DefWindowProcW(window, message, wParam, lParam);
 }
 
-LRESULT Application::OnSize(HWND window, UINT width, UINT height) noexcept
+LRESULT Application::OnSize(UINT width, UINT height) noexcept
 {
     if (_chrome)
     {
@@ -3784,6 +3912,11 @@ LRESULT Application::OnSize(HWND window, UINT width, UINT height) noexcept
     }
 
     const HRESULT result = _renderer.Resize(width, height);
+    if (width == 0 || height == 0)
+    {
+        // Minimized: nothing presents, and no document surfaces wait for a frame that cannot show (RF-411).
+        _composition.ReleaseDocumentSurfaces();
+    }
     if (SUCCEEDED(result) && width != 0 && height != 0)
     {
         SyncChrome();
@@ -3791,10 +3924,39 @@ LRESULT Application::OnSize(HWND window, UINT width, UINT height) noexcept
     }
     if (FAILED(result))
     {
-        _runtimeFailure = result;
-        PostMessageW(window, WM_CLOSE, 0, 0);
+        // Never a close without the save prompt (RF-401).
+        OnFrameLoopFailure(result);
     }
     return 0;
+}
+
+void Application::OnGetMinMaxInfo(HWND window, MINMAXINFO* info) const noexcept
+{
+    // The smallest window the chrome lays out in (RF-413): the rail, a minimum canvas, the splitter and the layers
+    // panel across; the menu, tabs, tool header, a minimum canvas and the status strip down.
+    if (info == nullptr)
+    {
+        return;
+    }
+    const UINT dpi = _screenshotDpi != 0 ? _screenshotDpi : GetDpiForWindow(window);
+    if (dpi == 0)
+    {
+        return;
+    }
+    const float widthDip = ChromeHost::kRailWidthDip + ChromeHost::kCanvasMinDip + ChromeHost::kSplitterWidthDip +
+                           ChromeHost::kLayersMinDip;
+    const float heightDip = ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip +
+                            ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip;
+    RECT bounds{0, 0, MulDiv(static_cast<int>(std::ceil(widthDip)), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
+                MulDiv(static_cast<int>(std::ceil(heightDip)), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
+    const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_STYLE));
+    const DWORD extendedStyle = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE));
+    if (!AdjustWindowRectExForDpi(&bounds, style, FALSE, extendedStyle, dpi))
+    {
+        return;
+    }
+    info->ptMinTrackSize.x = std::max(info->ptMinTrackSize.x, bounds.right - bounds.left);
+    info->ptMinTrackSize.y = std::max(info->ptMinTrackSize.y, bounds.bottom - bounds.top);
 }
 
 LRESULT Application::OnDpiChanged(HWND window, const RECT* suggestedBounds) noexcept
@@ -4223,8 +4385,7 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
                     moving.insert(edit->layerID);
                 }
             }
-            draft = _session.SnappedMove(draft, moving,
-                                         TransformSnap::kDistanceDip / std::max(_viewport.PointsPerPixel(), 0.0001));
+            draft = _session.SnappedMove(draft, moving, _viewport.DipToDocument(TransformSnap::kDistanceDip));
         }
         _session.PreviewTransform(draft);
     }
@@ -4429,7 +4590,7 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     {
         // Polygonal adds a corner per click and closes on a click near the first corner or a double-click.
         const Vec2 first = _viewport.ViewFromDocument(draft->points.front(), documentSize);
-        const double closeDistance = 8.0 * std::max(1.0, _viewport.backingScale);
+        const double closeDistance = _viewport.DipToView(8.0);
         if (doubleClick ||
             (draft->points.size() >= 3 && std::hypot(view.x - first.x, view.y - first.y) <= closeDistance))
         {
@@ -4664,20 +4825,18 @@ void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 
 std::optional<Raster> Application::WandComposite() noexcept
 {
-    // Every visible layer as shown on the canvas: the composition's flattened readback at document size.
+    // Every visible layer of the committed document flattened at document size: never a panel's preview or a
+    // pending stroke on the canvas (RF-402), as the legacy sampleCompositeColor draws the document itself.
     if (!_session.Document().has_value())
     {
         return std::nullopt;
     }
     BindCompositionDevice();
-    if (FAILED(_composition.Compose(_session.Document().value())))
-    {
-        return std::nullopt;
-    }
     std::vector<std::uint8_t> bgra;
     UINT width = 0;
     UINT height = 0;
-    if (FAILED(_composition.Readback(bgra, width, height)) || width == 0 || height == 0)
+    if (FAILED(_composition.ComposeReadback(_session.Document().value(), bgra, width, height)) || width == 0 ||
+        height == 0)
     {
         return std::nullopt;
     }
@@ -4827,6 +4986,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         preview.fill = uniform;
     }
     (void)_composition.BeginStroke(preview);
+    _previewSource.reset();
     _brushDragging = true;
     _brushHover = pixel;
     PushStrokeTiles();
@@ -4903,19 +5063,56 @@ void Application::FinishBrushStroke() noexcept
     _brushDragging = false;
     // Spot Healing rewrites the tiles after the last preview update, so its result uploads on its own instead of
     // adopting the working texture, which still shows the wash.
-    const BrushStroke* pending = _session.PendingBrush();
+    BrushStroke* pending = _session.MutableBrush();
     const bool healing = pending != nullptr && pending->Settings().healing;
+    if (pending != nullptr && !healing)
+    {
+        // Mouse-up settles the provisional tail into the final curve segment: those tiles reach the working texture
+        // before it is adopted, so the canvas and an export show the curve the raster holds (RF-405). The session's
+        // own flush then finds nothing left to settle.
+        (void)pending->Flush();
+        PushStrokeTiles();
+    }
     _session.FinishBrush();
     const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
-    if (commit.has_value() && !healing)
+    if (healing)
     {
-        _composition.EndStroke(&commit->image, commit->x, commit->y);
+        _composition.EndStroke();
     }
     else
     {
-        _composition.EndStroke(nullptr, 0, 0);
+        EndStrokePreview(commit);
     }
     DocumentChanged();
+}
+
+void Application::EndStrokePreview(const std::optional<BrushCommitInfo>& commit) noexcept
+{
+    // The working texture becomes the committed raster's texture only for the layer that raster was installed on
+    // (RF-407); the composition also checks the target and the crop. Anything else uploads on its own.
+    const Guid* owner = nullptr;
+    if (commit.has_value() && _session.Document().has_value())
+    {
+        for (const ImageLayer& layer : _session.Document().value().layers)
+        {
+            const Raster* installed = commit->mask ? (layer.mask.has_value() ? &layer.mask->asset.image : nullptr)
+                                                   : (layer.asset.has_value() ? &layer.asset->image : nullptr);
+            if (installed != nullptr && installed->Identity() == commit->image.Identity())
+            {
+                owner = &layer.id;
+                break;
+            }
+        }
+    }
+    if (owner != nullptr)
+    {
+        _composition.EndStroke(&commit->image, commit->x, commit->y, owner);
+    }
+    else
+    {
+        _composition.EndStroke();
+    }
+    _previewSource.reset();
 }
 
 void Application::CancelBrushStroke() noexcept
@@ -4943,7 +5140,7 @@ void Application::SyncBrushCursor() noexcept
         const Vec2 view = _viewport.ViewFromDocument(_brushHover.value(), DocumentSize());
         CanvasOverlay::BrushCursor circle;
         circle.center = D2D1::Point2F(static_cast<float>(view.x), static_cast<float>(view.y));
-        circle.radius = static_cast<float>(_session.brushSettings.diameter * _viewport.PointsPerPixel() / 2.0);
+        circle.radius = static_cast<float>(_session.brushSettings.diameter * _viewport.ViewScale() / 2.0);
         circle.hardness = static_cast<float>(_session.brushSettings.hardness);
         cursor = circle;
     }
@@ -5186,6 +5383,7 @@ void Application::BeginWarpStroke(Vec2 view) noexcept
     preview.sourceY = 0;
     preview.fill = 0;
     (void)_composition.BeginStroke(preview);
+    _previewSource.reset();
     _warpDragging = true;
     _brushHover = pixel;
     PushWarpTiles();
@@ -5296,7 +5494,7 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
     if (pending != nullptr && pending->HasLine())
     {
         // A press near an end of the pending line drags that end.
-        const double reach = 10.0 * (_window ? GetDpiForWindow(_window.get()) : 96u) / 96.0;
+        const double reach = _viewport.DipToView(10.0);
         const Vec2 start = _viewport.ViewFromDocument(pending->start, DocumentSize());
         const Vec2 end = _viewport.ViewFromDocument(pending->end, DocumentSize());
         if (std::hypot(view.x - end.x, view.y - end.y) <= reach)
@@ -5380,10 +5578,17 @@ void Application::SyncGradientPreview() noexcept
     GradientEdit* pending = _session.MutableGradient();
     if (pending != nullptr && pending->raster)
     {
+        // The preview shows one raster: a new gradient (on another layer, on the mask instead of the image, or a new
+        // line) ends the previous preview, adopting its texture only for its own commit, and begins afresh (RF-407).
+        if (_composition.HasStroke() && _previewSource.lock() != pending->raster)
+        {
+            EndStrokePreview(_session.TakeLastBrushCommit());
+        }
         if (!_composition.HasStroke())
         {
             BindCompositionDevice();
             (void)_composition.BeginStroke(PreviewFor(*pending->raster));
+            _previewSource = pending->raster;
         }
         PushGradientTiles();
         return;
@@ -5391,15 +5596,7 @@ void Application::SyncGradientPreview() noexcept
     if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
         _session.PendingWarp() == nullptr && _session.PendingPixelMove() == nullptr)
     {
-        const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
-        if (commit.has_value())
-        {
-            _composition.EndStroke(&commit->image, commit->x, commit->y);
-        }
-        else
-        {
-            _composition.EndStroke(nullptr, 0, 0);
-        }
+        EndStrokePreview(_session.TakeLastBrushCommit());
         _frameInvalidated = true;
     }
 }
@@ -5431,6 +5628,439 @@ void Application::PushGradientTiles() noexcept
         (void)_composition.UpdateStrokeTiles(tiles);
         _frameInvalidated = true;
     }
+}
+
+// ── Rendering, viewport and frame loop self-test (review fixes WP4) ──────────
+
+int Application::RunRenderingSelfTest() noexcept
+{
+    if (!_chrome || !_window)
+    {
+        SelfTestFailure(L"The rendering self-test needs the chrome and the window.\n");
+        return 5;
+    }
+    const auto fresh = [&](int width, int height)
+    {
+        SettleInteractions(false);
+        _session.CreateDocument(width, height, false);
+        _session.history.MarkSaved();
+        _viewport.followsFit = true;
+        DocumentChanged();
+    };
+    const auto readCanvas = [&](int x, int y, std::array<int, 4>& out) -> bool
+    {
+        std::vector<std::uint8_t> bgra;
+        UINT width = 0;
+        UINT height = 0;
+        if (FAILED(_composition.Readback(bgra, width, height)) || x < 0 || y < 0 || static_cast<UINT>(x) >= width ||
+            static_cast<UINT>(y) >= height)
+        {
+            return false;
+        }
+        const std::size_t index = (static_cast<std::size_t>(y) * width + static_cast<std::size_t>(x)) * 4u;
+        out = {bgra[index], bgra[index + 1], bgra[index + 2], bgra[index + 3]};
+        return true;
+    };
+    const auto rasterPixel = [](const Raster& raster, int x, int y) -> std::array<int, 4>
+    {
+        std::array<std::uint8_t, 4> pixel{};
+        raster.ReadRegion(x, y, 1, 1, pixel.data(), 4, 0);
+        return {pixel[0], pixel[1], pixel[2], pixel[3]};
+    };
+    const auto frame = [&]()
+    {
+        _frameInvalidated = true;
+        RenderFrame();
+    };
+
+    // Zoom is device pixels per document pixel (RF-403): Actual Pixels draws the document 1:1 on this display.
+    fresh(400, 300);
+    OnTool(EditorTool::Move);
+    const CanvasHole hole = _chrome->HolePixels();
+    OnCommand(ChromeHost::kCommandZoomActual);
+    const Vec2 size = DocumentSize();
+    const double drawn =
+        _viewport.ViewFromDocument(Vec2{400, 0}, size).x - _viewport.ViewFromDocument(Vec2{0, 0}, size).x;
+    const Vec2 origin = _viewport.DocumentRectOrigin(size);
+    if (_viewport.zoom != 1.0 || std::fabs(drawn - 400.0) > 1e-6 || origin.x != std::round(origin.x) ||
+        origin.y != std::round(origin.y))
+    {
+        SelfTestFailure(L"Actual Pixels did not draw one device pixel per document pixel on whole pixels.\n");
+        return 5;
+    }
+    // Wheel zoom follows the delta (RF-404): ten 12-unit deltas of a precision touchpad zoom as far as one notch,
+    // and a zero delta does nothing.
+    const auto wheel = [&](int delta)
+    {
+        POINT screen{static_cast<LONG>(hole.left + hole.width / 2.0f),
+                     static_cast<LONG>(hole.top + hole.height / 2.0f)};
+        (void)ClientToScreen(_window.get(), &screen);
+        OnPointer(WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(delta))),
+                  MAKELPARAM(screen.x, screen.y));
+    };
+    const double beforeWheel = _viewport.zoom;
+    for (int step = 0; step < 10; ++step)
+    {
+        wheel(12);
+    }
+    const double afterPartials = _viewport.zoom;
+    wheel(0);
+    if (std::fabs(afterPartials - beforeWheel * 1.1) > 1e-9 || _viewport.zoom != afterPartials)
+    {
+        SelfTestFailure(L"Wheel zoom did not follow the wheel delta.\n");
+        return 5;
+    }
+    // The Zoom tool zooms by the drag's distance (doubling per 100 DIP right), however many moves report it, and a
+    // click zooms in twice (RF-404).
+    OnTool(EditorTool::Zoom);
+    const int pressX = static_cast<int>(hole.left + hole.width / 2.0f);
+    const int pressY = static_cast<int>(hole.top + hole.height / 2.0f);
+    const int dragPixels = static_cast<int>(std::lround(_viewport.DipToView(100.0)));
+    const double beforeDrag = _viewport.zoom;
+    OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(pressX, pressY));
+    for (int step = 1; step <= 8; ++step)
+    {
+        OnPointer(WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(pressX + dragPixels * step / 8, pressY));
+    }
+    OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(pressX + dragPixels, pressY));
+    const double expectedDrag =
+        beforeDrag * CanvasViewport::DragZoomFactor(static_cast<double>(dragPixels) / _viewport.DipToView(1.0));
+    if (std::fabs(_viewport.zoom - expectedDrag) > 1e-9 || _viewport.zoom < beforeDrag * 1.9)
+    {
+        SelfTestFailure(L"The Zoom tool's drag did not zoom by its distance.\n");
+        return 5;
+    }
+    const double beforeClick = _viewport.zoom;
+    OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(pressX, pressY));
+    OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(pressX, pressY));
+    if (std::fabs(_viewport.zoom - _viewport.ClampZoom(beforeClick * 2.0)) > 1e-9)
+    {
+        SelfTestFailure(L"A Zoom tool click did not zoom in twice.\n");
+        return 5;
+    }
+    OnTool(EditorTool::Move);
+    _viewport.followsFit = true;
+    SyncChrome();
+
+    // A device removed at any stage of a frame is rebuilt and drawn on; the window stays (RF-401).
+    const std::array<std::pair<Renderer::Stage, const wchar_t*>, 5> stages{{
+        {Renderer::Stage::ChromePrepare, L"chrome Prepare"},
+        {Renderer::Stage::Compose, L"the composition"},
+        {Renderer::Stage::Blit, L"the blit"},
+        {Renderer::Stage::ChromeComposite, L"chrome Composite"},
+        {Renderer::Stage::Present, L"Present"},
+    }};
+    for (const auto& [stage, name] : stages)
+    {
+        const std::uint64_t generation = _renderer.DeviceGeneration();
+        _renderer.FailNextStageForTest(stage, DXGI_ERROR_DEVICE_REMOVED);
+        frame();
+        if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _frameInvalidated ||
+            _renderer.DeviceGeneration() != generation + 1 || _composition.Device() != _renderer.Device() ||
+            _boundDeviceGeneration != _renderer.DeviceGeneration() || !_brushEngine.Ready() ||
+            _composition.CanvasSurfaceBytes() == 0)
+        {
+            const std::wstring message = std::format(
+                L"A device removed during {} was not rebuilt and drawn on (failed frames {}, last failure {:#010x} "
+                L"at stage {}, generation {} -> {}, bound {}, brush {}, surfaces {}).\n",
+                name, _failedFrames, static_cast<std::uint32_t>(_lastFrameFailure),
+                static_cast<int>(_renderer.FailedStage()), generation, _renderer.DeviceGeneration(),
+                _composition.Device() == _renderer.Device(), _brushEngine.Ready(), _composition.CanvasSurfaceBytes());
+            SelfTestFailure(message.c_str());
+            return 5;
+        }
+    }
+    // A canvas that cannot be drawn leaves the chrome working and says so once; the next frame draws it again.
+    const int noticesBefore = _canvasFailureNotices;
+    _renderer.FailNextStageForTest(Renderer::Stage::Compose, E_OUTOFMEMORY);
+    frame();
+    if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || _renderer.CanvasFailure() != E_OUTOFMEMORY ||
+        _canvasFailureNotices != noticesBefore + 1)
+    {
+        SelfTestFailure(L"A canvas that could not be drawn stopped the frame or closed the window.\n");
+        return 5;
+    }
+    frame();
+    if (FAILED(_renderer.CanvasFailure()) || _canvasFailureShown || _composition.CanvasSurfaceBytes() == 0)
+    {
+        SelfTestFailure(L"The canvas did not draw again after a failed frame.\n");
+        return 5;
+    }
+
+    // Documents and layers larger than the device's textures draw through a proxy, and read back at full
+    // resolution (Decision D1).
+    fresh(17000, 300);
+    InsertPaintedLayer(_session, L"Left", 8500, 300, Vec2{0, 0}, 0.0, 0xFFFF0000u);
+    InsertPaintedLayer(_session, L"Right", 8500, 300, Vec2{8500, 0}, 0.0, 0xFF0000FFu);
+    DocumentChanged();
+    frame();
+    if (!_window || FAILED(_frameLoopFailure) || _failedFrames != 0 || FAILED(_renderer.CanvasFailure()) ||
+        _composition.CanvasScale() != 2 || _composition.CanvasSurfaceBytes() == 0)
+    {
+        SelfTestFailure(L"A document wider than the device's textures did not draw through its proxy.\n");
+        return 5;
+    }
+    {
+        const std::optional<Raster> flat = WandComposite();
+        if (!flat.has_value() || flat->Width() != 17000 || flat->Height() != 300 ||
+            rasterPixel(flat.value(), 8499, 150) != std::array<int, 4>{0, 0, 255, 255} ||
+            rasterPixel(flat.value(), 8500, 150) != std::array<int, 4>{255, 0, 0, 255})
+        {
+            SelfTestFailure(L"A document wider than the device's textures did not read back at full resolution.\n");
+            return 5;
+        }
+    }
+    InsertPaintedLayer(_session, L"Panorama", 17000, 300, Vec2{0, 0}, 0.0, 0xFF00FF00u);
+    DocumentChanged();
+    frame();
+    {
+        const std::optional<Raster> flat = WandComposite();
+        if (_failedFrames != 0 || FAILED(_renderer.CanvasFailure()) || !flat.has_value() ||
+            rasterPixel(flat.value(), 16999, 299) != std::array<int, 4>{0, 255, 0, 255})
+        {
+            SelfTestFailure(L"A layer wider than the device's textures did not draw or read back.\n");
+            return 5;
+        }
+    }
+
+    // A readback composes the document itself, never the stroke preview on the canvas (RF-402).
+    fresh(200, 150);
+    InsertPaintedLayer(_session, L"White", 200, 150, Vec2{0, 0}, 0.0, 0xFFFFFFFFu);
+    DocumentChanged();
+    OnTool(EditorTool::Brush);
+    _session.brushMode = BrushToolMode::Paint;
+    _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+    SyncChrome();
+    BeginBrushStroke(_viewport.ViewFromDocument(Vec2{40, 75}, DocumentSize()), 0);
+    ContinueBrushStroke(_viewport.ViewFromDocument(Vec2{160, 75}, DocumentSize()));
+    frame();
+    {
+        std::array<int, 4> shown{};
+        const bool read = readCanvas(100, 75, shown);
+        const std::optional<Raster> composite = WandComposite();
+        const std::array<int, 4> flat =
+            composite.has_value() ? rasterPixel(composite.value(), 100, 75) : std::array<int, 4>{-1, -1, -1, -1};
+        if (!read || shown[2] < 250 || shown[1] > 5 || flat != std::array<int, 4>{255, 255, 255, 255})
+        {
+            const std::wstring message = std::format(
+                L"The flattened composite read the stroke preview instead of the document (shown {} {} {} {}, "
+                L"flattened {} {} {} {}).\n",
+                shown[0], shown[1], shown[2], shown[3], flat[0], flat[1], flat[2], flat[3]);
+            SelfTestFailure(message.c_str());
+            return 5;
+        }
+        frame();
+        if (!readCanvas(100, 75, shown) || shown[2] < 250 || shown[1] > 5)
+        {
+            SelfTestFailure(L"The canvas did not show the stroke preview again after a readback.\n");
+            return 5;
+        }
+    }
+    CancelBrushStroke();
+
+    // Mouse-up uploads the final curve segment before the working texture is adopted (RF-405): the canvas drawn from
+    // the adopted texture equals the committed raster.
+    fresh(400, 300);
+    _session.AddBlankLayer();
+    DocumentChanged();
+    OnTool(EditorTool::Brush);
+    _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1, false};
+    _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
+    SyncChrome();
+    const std::uint64_t adoptionsBefore = _composition.AdoptionCount();
+    BeginBrushStroke(_viewport.ViewFromDocument(Vec2{60, 200}, DocumentSize()), 0);
+    ContinueBrushStroke(_viewport.ViewFromDocument(Vec2{200, 60}, DocumentSize()));
+    ContinueBrushStroke(_viewport.ViewFromDocument(Vec2{340, 200}, DocumentSize()));
+    FinishBrushStroke();
+    frame();
+    if (_composition.AdoptionCount() != adoptionsBefore + 1)
+    {
+        SelfTestFailure(L"The curved stroke's commit did not adopt its working texture.\n");
+        return 5;
+    }
+    {
+        const ImageLayer* painted = _session.ActiveLayer();
+        std::vector<std::uint8_t> bgra;
+        UINT width = 0;
+        UINT height = 0;
+        int worst = 255;
+        if (painted != nullptr && painted->asset.has_value() && !painted->asset->image.IsMaterialized() &&
+            SUCCEEDED(_composition.Readback(bgra, width, height)) && width == 400 && height == 300)
+        {
+            const Raster& image = painted->asset->image;
+            const int left = static_cast<int>(std::lround(painted->transform.origin.x));
+            const int top = static_cast<int>(std::lround(painted->transform.origin.y));
+            std::vector<std::uint8_t> row(static_cast<std::size_t>(image.Width()) * 4u);
+            worst = 0;
+            for (int y = 0; y < image.Height(); ++y)
+            {
+                image.ReadRegion(0, y, image.Width(), 1, row.data(), image.Width() * 4, 0);
+                for (int x = 0; x < image.Width(); ++x)
+                {
+                    const int dx = left + x;
+                    const int dy = top + y;
+                    if (dx < 0 || dy < 0 || dx >= 400 || dy >= 300)
+                    {
+                        continue;
+                    }
+                    for (std::size_t c = 0; c < 4; ++c)
+                    {
+                        const int canvas =
+                            bgra[(static_cast<std::size_t>(dy) * 400u + static_cast<std::size_t>(dx)) * 4u + c];
+                        worst = std::max(worst, std::abs(canvas - row[static_cast<std::size_t>(x) * 4u + c]));
+                    }
+                }
+            }
+        }
+        if (worst > 2)
+        {
+            const std::wstring message = std::format(
+                L"The canvas drawn from the adopted stroke differs from the committed raster by {}.\n", worst);
+            SelfTestFailure(message.c_str());
+            return 5;
+        }
+    }
+
+    // A new gradient never draws into another layer's preview texture (RF-407).
+    fresh(300, 200);
+    const Guid first = InsertPaintedLayer(_session, L"First", 300, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
+    const Guid second = InsertPaintedLayer(_session, L"Second", 300, 200, Vec2{0, 0}, 0.0, 0xFF808080u);
+    DocumentChanged();
+    OnTool(EditorTool::Gradient);
+    _session.SelectLayer(first);
+    SyncChrome();
+    BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
+    DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
+    if (_composition.StrokeLayerID() != std::optional<Guid>(first))
+    {
+        SelfTestFailure(L"The gradient on the first layer did not preview on it.\n");
+        return 5;
+    }
+    // The first gradient goes without the host hearing of it: its preview is stale when the next one starts.
+    _gradientHandle.reset();
+    _session.CancelGradient();
+    _session.SelectLayer(second);
+    BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
+    DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
+    if (_composition.StrokeLayerID() != std::optional<Guid>(second) || _composition.StrokeTextureMissing())
+    {
+        SelfTestFailure(L"A gradient on another layer drew into the previous layer's preview texture.\n");
+        return 5;
+    }
+    CancelGradient();
+    EndGradientDrag();
+    OnTool(EditorTool::Move);
+
+    // Marching ants follow the outline the overlay shows (RF-408).
+    _session.ApplySelection(SelectionGeometry::Rect(10, 10, 80, 40), SelectionMode::New, L"Select");
+    SyncChrome();
+    const bool antsWithSelection = _marchingAnts;
+    _session.Deselect();
+    SyncChrome();
+    if (!antsWithSelection || _marchingAnts)
+    {
+        SelfTestFailure(L"The marching ants did not follow the selection outline.\n");
+        return 5;
+    }
+
+    // Minimized or occluded, the document keeps no surfaces; the next frame composes them again (RF-411).
+    frame();
+    RECT client{};
+    (void)GetClientRect(_window.get(), &client);
+    const UINT clientWidth = static_cast<UINT>(client.right - client.left);
+    const UINT clientHeight = static_cast<UINT>(client.bottom - client.top);
+    (void)HandleMessage(_window.get(), WM_SIZE, SIZE_MINIMIZED, 0);
+    const bool minimizedReleased = _composition.CanvasSurfaceBytes() == 0 && _renderer.IsSuspended();
+    (void)HandleMessage(_window.get(), WM_SIZE, SIZE_RESTORED, MAKELPARAM(clientWidth, clientHeight));
+    frame();
+    const bool restoredDrawn = _composition.CanvasSurfaceBytes() != 0;
+    _windowVisible = true;
+    _renderer.SetOccludedForTest(true);
+    ReleaseSurfacesWhileUnseen();
+    const bool occludedReleased = _composition.CanvasSurfaceBytes() == 0;
+    _renderer.SetOccludedForTest(false);
+    frame();
+    ReleaseSurfacesWhileUnseen();
+    const bool visibleKept = _composition.CanvasSurfaceBytes() != 0;
+    _windowVisible = false;
+    if (!minimizedReleased || !restoredDrawn || !occludedReleased || !visibleKept)
+    {
+        SelfTestFailure(L"A minimized or occluded window kept its document surfaces.\n");
+        return 5;
+    }
+
+    // The window never gets smaller than the chrome around a minimum canvas, and the crop shade of a window shorter
+    // than the chrome draws nothing instead of clamping with inverted bounds (RF-413).
+    {
+        RECT frameBounds{};
+        (void)GetWindowRect(_window.get(), &frameBounds);
+        (void)SetWindowPos(_window.get(), nullptr, 0, 0, 120, 90, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        RECT shrunk{};
+        (void)GetClientRect(_window.get(), &shrunk);
+        const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+        const float minimumHeight =
+            (ChromeHost::kMenuHeightDip + ChromeHost::kTabHeightDip + ChromeHost::kHeaderHeightDip +
+             ChromeHost::kCanvasMinDip + ChromeHost::kStatusHeightDip) *
+            scale;
+        const bool clamped = static_cast<float>(shrunk.bottom - shrunk.top) >= minimumHeight - 1.0f;
+        (void)SetWindowPos(_window.get(), nullptr, 0, 0, frameBounds.right - frameBounds.left,
+                           frameBounds.bottom - frameBounds.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        const std::optional<D2D1_RECT_F> inverted =
+            CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 90.0f), D2D1::RectF(10.0f, 10.0f, 50.0f, 50.0f));
+        const std::optional<D2D1_RECT_F> inside = CanvasOverlay::ShadeFrame(D2D1::RectF(0.0f, 98.0f, 400.0f, 300.0f),
+                                                                            D2D1::RectF(-10.0f, 10.0f, 50.0f, 500.0f));
+        if (!clamped || inverted.has_value() || !inside.has_value() || inside->left != 0.0f || inside->top != 108.0f ||
+            inside->bottom != 300.0f)
+        {
+            SelfTestFailure(L"The window shrank below the chrome, or the crop shade clamped with inverted bounds.\n");
+            return 5;
+        }
+        frame();
+    }
+
+    // Screenshot exit codes (RF-409): 8 only when this system cannot capture a window, 9 for a capture that failed
+    // or never happened.
+    {
+        const std::wstring savedPath = _screenshotPath;
+        const HRESULT savedResult = _screenshotResult;
+        _screenshotPath = L"capture.png";
+        _screenshotResult = E_NOTIMPL;
+        const int unsupported = ExitCode(0);
+        _screenshotResult = E_ACCESSDENIED;
+        const int failed = ExitCode(0);
+        _screenshotResult = E_PENDING;
+        const int missed = ExitCode(0);
+        _screenshotResult = S_OK;
+        const int captured = ExitCode(0);
+        _screenshotPath = savedPath;
+        _screenshotResult = savedResult;
+        if (unsupported != 8 || failed != 9 || missed != 9 || captured != 0)
+        {
+            SelfTestFailure(L"The screenshot exit codes do not tell an unsupported capture from a failed one.\n");
+            return 5;
+        }
+    }
+
+    // Frames that keep failing stop drawing and ask to close through the save prompt, never closing on their own
+    // (RF-401). The close request is taken back so the self-test can finish.
+    for (int attempt = 0; attempt < kFailedFramesBeforeClose; ++attempt)
+    {
+        _renderer.FailNextStageForTest(Renderer::Stage::ChromeComposite, E_FAIL);
+        frame();
+    }
+    MSG close{};
+    const bool asked = PeekMessageW(&close, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE) != FALSE;
+    const bool stopped = FAILED(_frameLoopFailure) && _runtimeFailure == S_OK && _window;
+    _frameLoopFailure = S_OK;
+    _failedFrames = 0;
+    if (!asked || !stopped)
+    {
+        SelfTestFailure(L"Failing frames closed the window without the save prompt or kept drawing.\n");
+        return 5;
+    }
+    frame();
+    return 0;
 }
 
 void Application::OnShapeAction(ShapeAction action, double value) noexcept
@@ -5540,7 +6170,7 @@ void Application::SyncToolOverlays() noexcept
         CanvasOverlay::ShapeDraftOverlay overlay;
         overlay.ellipse = shape->kind == ShapeKind::Ellipse;
         overlay.rect = D2D1::RectF(a.x, a.y, b.x, b.y);
-        overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.PointsPerPixel());
+        overlay.cornerRadius = static_cast<float>(shape->cornerRadius * _viewport.ViewScale());
         overlay.argb = _session.ForegroundColor();
         draft = overlay;
     }
@@ -5635,10 +6265,15 @@ void Application::SyncPixelMovePreview() noexcept
     PixelMove* pending = _session.MutablePixelMove();
     if (pending != nullptr && pending->raster)
     {
+        if (_composition.HasStroke() && _previewSource.lock() != pending->raster)
+        {
+            EndStrokePreview(_session.TakeLastBrushCommit());
+        }
         if (!_composition.HasStroke())
         {
             BindCompositionDevice();
             (void)_composition.BeginStroke(PreviewFor(*pending->raster));
+            _previewSource = pending->raster;
         }
         PushPixelMoveTiles();
         return;
@@ -5646,15 +6281,7 @@ void Application::SyncPixelMovePreview() noexcept
     if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
         _session.PendingWarp() == nullptr && _session.PendingGradient() == nullptr)
     {
-        const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
-        if (commit.has_value())
-        {
-            _composition.EndStroke(&commit->image, commit->x, commit->y);
-        }
-        else
-        {
-            _composition.EndStroke(nullptr, 0, 0);
-        }
+        EndStrokePreview(_session.TakeLastBrushCommit());
         _frameInvalidated = true;
     }
 }

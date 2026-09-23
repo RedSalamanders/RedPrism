@@ -73,7 +73,8 @@ wells with the color picker, and the opacity stepper. Do not implement those thr
 
 `--screenshot <png>` shows the titled window with `SW_SHOWNOACTIVATE`, presents chrome and the canvas, waits 800 ms
 on a one-shot timer so DxUi animations settle, captures the owned window through `Common/WindowCapture.cpp`
-(Windows.Graphics.Capture, no cursor, no activation), and exits 0 when the PNG is written or 8 on capture failure.
+(Windows.Graphics.Capture, no cursor, no activation), and exits 0 when the PNG is written, 8 when this system cannot
+capture a window, or 9 when the capture failed or never happened ([`UI_Windowing.md`](../UI/UI_Windowing.md)).
 Computer Use and desktop screenshot tools are not evidence.
 
 ## Validation

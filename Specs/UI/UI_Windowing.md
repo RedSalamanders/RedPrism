@@ -40,6 +40,7 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 | Close | `WM_CLOSE` asks for a document with unsaved work ([`UI_ApplicationChrome.md`](UI_ApplicationChrome.md) Files), then shuts the renderer down and resets the HWND. A close that arrives while another window-procedure call is on the stack (a modal loop: a dialog, a message box, a menu, a caption drag) or inside a chrome dispatch MUST wait: it is posted again once the outermost call returns, so the chrome is never destroyed under its own stack and one prompt never opens over another |
 | Session end | See below |
 | Pointer loss | See below |
+| Minimum size | `WM_GETMINMAXINFO` keeps the client at least the rail, a 200 DIP canvas, the splitter and the minimum layers panel wide, and the menu, tabs, tool header, a 200 DIP canvas and the status strip tall, at the window's DPI (or the `--dpi` layout DPI) |
 | Power | `RegisterPowerSettingNotification` for `GUID_SESSION_DISPLAY_STATUS`; display-off blocks Present |
 | Adapter follow | `WM_EXITSIZEMOVE`, `WM_DISPLAYCHANGE`, and `WM_DPICHANGED` call `EnsureDeviceForWindowMonitor` |
 
@@ -93,13 +94,15 @@ command line.`) shown the same way.
 | *(none)* | Create the titled Direct3D 11 window and run the idle message loop |
 | `--warp` | Force WARP (Microsoft Basic Render Driver) |
 | `--self-test` | Create the titled window **hidden**, force WARP, assert the DPI-adjusted 1280×800 logical client, composite DxUi chrome, prove visible surface then 0 when hidden, exit 0 |
-| `--screenshot <png>` | Show the titled window without activating it, present chrome and the canvas, capture through Windows.Graphics.Capture, exit 0 or 8 |
+| `--screenshot <png>` | Show the titled window without activating it, present chrome and the canvas (whatever the display's power, the window's visibility or occlusion), start the capture delay after the first frame that reached the display, capture through Windows.Graphics.Capture, exit 0, 8 when this system cannot capture a window (`E_NOTIMPL`, the capture API absent) or 9 when the capture failed or never happened |
 | `--dpi 96\|144` | Override layout DPI and the 1280×800 logical client scale for `--screenshot` |
 | `--help` | Print the catalog and exit 0 |
 
 `--self-test` without `--warp` still uses WARP. Self-test MUST refuse a non-WARP device (exit 5).
 
-Exit codes: 0 ok, 1 allocation, 2 command line or window, 5 graphics, 8 screenshot.
+Exit codes: 0 ok, 1 allocation, 2 command line or window, 5 graphics (including a frame loop that stopped drawing
+after repeated failures; the window closed through the save prompt), 8 screenshot capture unsupported, 9 screenshot
+capture failed.
 
 ## Self-test window checks
 

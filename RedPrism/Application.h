@@ -90,9 +90,17 @@ class Application final
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
     void CloseMainWindow() noexcept;
-    bool WaitUntilMessage() noexcept;
+    bool WaitUntilMessage(DWORD timeout = INFINITE) noexcept;
     bool WaitForFrameLatency() noexcept;
     void CheckDeviceAdapter() noexcept;
+    // The frame loop (Rendering_Composition.md "Failures"): one frame with device-loss recovery, the canvas failure
+    // notice, the stop that asks to close through the save prompt, surfaces dropped while unseen, the exit code.
+    void RenderFrame() noexcept;
+    void ReportCanvasFailure(HRESULT failure) noexcept;
+    void OnFrameLoopFailure(HRESULT failure) noexcept;
+    void ReleaseSurfacesWhileUnseen() noexcept;
+    [[nodiscard]] int ExitCode(int quitCode) const noexcept;
+    int RunRenderingSelfTest() noexcept;
     void OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     void OnCommand(int command) noexcept;
     void OnTool(EditorTool tool) noexcept;
@@ -161,6 +169,9 @@ class Application final
     void FinishBrushStroke() noexcept;
     void CancelBrushStroke() noexcept;
     void PushStrokeTiles() noexcept;
+    // Ends the composition's stroke preview; its working texture becomes `commit`'s only when the commit landed on
+    // the preview's own layer and target (RF-407).
+    void EndStrokePreview(const std::optional<BrushCommitInfo>& commit) noexcept;
     void SyncBrushCursor() noexcept;
     void DropBrushEngine() noexcept;
     [[nodiscard]] bool BrushErases() const noexcept;
@@ -286,8 +297,9 @@ class Application final
     void ShowError(UINT stringId) noexcept;
     [[nodiscard]] Vec2 DocumentSize() const noexcept;
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    LRESULT OnSize(HWND window, UINT width, UINT height) noexcept;
+    LRESULT OnSize(UINT width, UINT height) noexcept;
     LRESULT OnDpiChanged(HWND window, const RECT* suggestedBounds) noexcept;
+    void OnGetMinMaxInfo(HWND window, MINMAXINFO* info) const noexcept;
 
     HINSTANCE _instance = nullptr;
     wil::unique_hwnd _window;
@@ -358,6 +370,19 @@ class Application final
     std::optional<Vec2> _samplePoint; // document point under the eyedropper while sampling
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
+    double _overlayBacking = 0.0;
+    bool _marchingAnts = false; // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
+    // The Zoom tool's press: where, the zoom then, and whether the drag has gone past the click slop.
+    struct ZoomDrag
+    {
+        POINT start{};
+        double zoom = 1;
+        bool moved = false;
+    };
+    std::optional<ZoomDrag> _zoomDrag;
+    // The gradient or pixel-move raster the composition's stroke preview was begun for (never dereferenced: a new
+    // raster, or an expired one, restarts the preview).
+    std::weak_ptr<const BrushStroke> _previewSource;
     std::wstring _demo;
     bool _quietUi = false;
     int _notImplementedCount = 0;                    // notices raised; quiet runs count instead of showing them
@@ -393,4 +418,10 @@ class Application final
     bool _screenshotArmed = false;
     HRESULT _runtimeFailure = S_OK;
     HRESULT _screenshotResult = S_OK;
+    HRESULT _frameLoopFailure = S_OK; // drawing stopped; the close it asked for prompts to save (RF-401)
+    HRESULT _lastFrameFailure = S_OK;
+    int _failedFrames = 0;
+    bool _canvasFailureShown = false;
+    int _canvasFailureNotices = 0; // quiet runs count them
+    std::uint64_t _boundDeviceGeneration = 0;
 };

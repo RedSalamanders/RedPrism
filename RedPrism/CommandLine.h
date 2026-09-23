@@ -309,6 +309,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             text += L"\n";
         }
     }
-    text += L"\nExit codes: 0 ok, 1 allocation, 2 command line or window, 5 graphics, 8 screenshot.\n";
+    text += L"\nExit codes: 0 ok, 1 allocation, 2 command line or window, 5 graphics, 8 capture unsupported, 9 capture "
+            L"failed.\n";
     return text;
 }

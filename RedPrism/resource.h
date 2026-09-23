@@ -478,6 +478,8 @@
 #define IDS_UNIT_CENTIMETERS 649
 #define IDS_A11Y_PALETTE_NAME 650
 #define IDS_SHUTDOWN_UNSAVED 664
+// Rendering, viewport and frame loop (review fixes WP4, ids 680-687).
+#define IDS_ERROR_CANVAS_DRAW 680
 #define IDR_LUCIDE_MOVE 700
 #define IDR_LUCIDE_SQUARE_DASHED 701
 #define IDR_LUCIDE_LASSO 702

@@ -242,14 +242,13 @@ void Application::MergeLayersCommand() noexcept
         flat.layers.push_back(std::move(copy));
     }
     BindCompositionDevice();
-    _composition.InvalidateDocument();
-    bool composed = SUCCEEDED(_composition.Compose(flat));
+    // A full-resolution readback of `flat` (tiled past the texture limit, never the display proxy or a preview); the
+    // next frame composes the real document again.
     std::vector<std::uint8_t> bgra;
     UINT width = 0;
     UINT height = 0;
-    composed = composed && SUCCEEDED(_composition.Readback(bgra, width, height)) && width != 0 && height != 0;
-    // The next frame composes the real document again.
-    _composition.InvalidateDocument();
+    const bool composed =
+        SUCCEEDED(_composition.ComposeReadback(flat, bgra, width, height)) && width != 0 && height != 0;
     if (!composed)
     {
         ShowError(IDS_ERROR_FLATTEN);

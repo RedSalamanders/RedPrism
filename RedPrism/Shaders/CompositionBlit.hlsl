@@ -1,3 +1,12 @@
+// The canvas into the swap-chain back buffer (Rendering_Composition.md, Viewport). `zoom` is device pixels per
+// document pixel; the canvas texture covers `canvasExtent` document pixels (the document itself, or a little more
+// when a reduced proxy's last texel runs past it). CanvasViewport decides the flags from the same zoom: crisp
+// document pixels (point sampling) and the pixel grid. Zoomed out, the canvas's mips give a sharp reduction at
+// `canvasLod`, computed on the CPU from the zoom: the scale is the same everywhere, and implicit derivatives would be
+// undefined for the quads the early returns below split.
+
+#include "CompositionShared.h"
+
 cbuffer BlitConstants : register(b0)
 {
     float2 viewSize;
@@ -6,8 +15,10 @@ cbuffer BlitConstants : register(b0)
     float2 documentSize;
     float2 pan;
     float zoom;
-    float showGrid;
-    float4 pad;
+    uint blitFlags;
+    float2 canvasExtent;
+    float canvasLod;
+    float blitPad;
 };
 
 Texture2D<float4> g_canvas : register(t0);
@@ -48,11 +59,15 @@ float4 PixelMain(PixelInput input) : SV_TARGET
         return float4(checker, checker, checker, 1);
     }
 
-    float2 uv = document / documentSize;
-    float4 color = (zoom >= 8.0) ? g_canvas.Sample(g_point, uv) : g_canvas.Sample(g_linear, uv);
+    float2 uv = document / max(canvasExtent, float2(1e-5, 1e-5));
+    float4 color = g_canvas.SampleLevel(g_linear, uv, canvasLod);
+    if ((blitFlags & kCompositionBlitCrisp) != 0)
+    {
+        color = g_canvas.SampleLevel(g_point, uv, 0);
+    }
     float3 checker = (fmod(floor(document.x) + floor(document.y), 2.0) < 1.0) ? 0.85 : 0.75;
     float3 rgb = color.rgb + checker * (1.0 - color.a);
-    if (showGrid > 0.5)
+    if ((blitFlags & kCompositionBlitGrid) != 0)
     {
         float2 grid = abs(frac(document) - 0.5);
         float gridLine = step(0.46, max(grid.x, grid.y));

@@ -41,7 +41,6 @@ void CanvasOverlay::SetAntPhase(float phase) noexcept
         return;
     }
     _antPhase = phase;
-    _ants.reset();
     RequestInvalidate();
 }
 
@@ -92,6 +91,19 @@ D2D1_RECT_F CanvasOverlay::GetHitBounds() const noexcept
     return D2D1::RectF();
 }
 
+std::optional<D2D1_RECT_F> CanvasOverlay::ShadeFrame(const D2D1_RECT_F& bounds, const D2D1_RECT_F& frame) noexcept
+{
+    // std::clamp needs low <= high: a window shorter than the chrome around the hole leaves the bounds inverted.
+    if (!(bounds.right > bounds.left) || !(bounds.bottom > bounds.top))
+    {
+        return std::nullopt;
+    }
+    return D2D1::RectF(std::clamp(bounds.left + frame.left, bounds.left, bounds.right),
+                       std::clamp(bounds.top + frame.top, bounds.top, bounds.bottom),
+                       std::clamp(bounds.left + frame.right, bounds.left, bounds.right),
+                       std::clamp(bounds.top + frame.bottom, bounds.top, bounds.bottom));
+}
+
 void CanvasOverlay::Paint(DxUi::ControlHost& host) const
 {
     ID2D1DeviceContext* dc = host.GetDeviceContext();
@@ -99,7 +111,16 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     {
         return;
     }
+    if (_drawnContext.get() != dc)
+    {
+        _drawnContext = dc;
+    }
     const D2D1_RECT_F bounds = GetBounds();
+    if (!(bounds.right > bounds.left) || !(bounds.bottom > bounds.top))
+    {
+        // No hole to draw in (the window is shorter or narrower than the chrome around it).
+        return;
+    }
     // Outlines follow the document, which can run past the hole; nothing here may paint over other chrome.
     dc->PushAxisAlignedClip(bounds, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const DxUi::ThemePalette& theme = host.GetTheme();
@@ -118,14 +139,13 @@ void CanvasOverlay::Paint(DxUi::ControlHost& host) const
     PaintSelection(dc, host, bounds);
     PaintDraft(dc, host, bounds);
     PaintBrushCursor(dc, host, bounds);
-    if (_cropShade.has_value())
+    if (const std::optional<D2D1_RECT_F> shade =
+            _cropShade.has_value() ? ShadeFrame(bounds, _cropShade.value()) : std::nullopt;
+        shade.has_value())
     {
         // Everything outside the crop frame dims, so the frame reads as the canvas to come.
         ID2D1SolidColorBrush* dim = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.45f));
-        const D2D1_RECT_F frame = D2D1::RectF(std::clamp(bounds.left + _cropShade->left, bounds.left, bounds.right),
-                                              std::clamp(bounds.top + _cropShade->top, bounds.top, bounds.bottom),
-                                              std::clamp(bounds.left + _cropShade->right, bounds.left, bounds.right),
-                                              std::clamp(bounds.top + _cropShade->bottom, bounds.top, bounds.bottom));
+        const D2D1_RECT_F frame = shade.value();
         dc->FillRectangle(D2D1::RectF(bounds.left, bounds.top, bounds.right, frame.top), dim);
         dc->FillRectangle(D2D1::RectF(bounds.left, frame.bottom, bounds.right, bounds.bottom), dim);
         dc->FillRectangle(D2D1::RectF(bounds.left, frame.top, frame.left, frame.bottom), dim);
@@ -149,17 +169,21 @@ bool CanvasOverlay::EnsureSelectionResources(ID2D1DeviceContext* dc) const noexc
         // Geometry and stroke styles belong to the factory that made them.
         _factory = factory;
         _outlineGeometry.reset();
-        _ants.reset();
+        for (wil::com_ptr_nothrow<ID2D1StrokeStyle>& style : _antStyles)
+        {
+            style.reset();
+        }
         _outlineDirty = true;
     }
-    if (!_ants)
+    wil::com_ptr_nothrow<ID2D1StrokeStyle>& ants = _antStyles[AntStep()];
+    if (!ants)
     {
-        const D2D1_STROKE_STYLE_PROPERTIES properties =
-            D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT,
-                                        D2D1_LINE_JOIN_MITER, 10.0f, D2D1_DASH_STYLE_CUSTOM, _antPhase);
+        const D2D1_STROKE_STYLE_PROPERTIES properties = D2D1::StrokeStyleProperties(
+            D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_MITER, 10.0f,
+            D2D1_DASH_STYLE_CUSTOM, static_cast<float>(AntStep()));
         // Dash lengths are multiples of the stroke width: four DIP on, four off.
         const float dashes[] = {kAntsDashDip, kAntsDashDip};
-        if (FAILED(_factory->CreateStrokeStyle(properties, dashes, 2, _ants.put())))
+        if (FAILED(_factory->CreateStrokeStyle(properties, dashes, 2, ants.put())))
         {
             return false;
         }
@@ -210,7 +234,7 @@ void CanvasOverlay::PaintSelection(ID2D1DeviceContext* dc, DxUi::ControlHost& ho
     dc->GetTransform(&previous);
     dc->SetTransform(D2D1::Matrix3x2F::Translation(bounds.left, bounds.top) * previous);
     dc->DrawGeometry(_outlineGeometry.get(), white, kLineWidthDip);
-    dc->DrawGeometry(_outlineGeometry.get(), black, kLineWidthDip, _ants.get());
+    dc->DrawGeometry(_outlineGeometry.get(), black, kLineWidthDip, _antStyles[AntStep()].get());
     dc->SetTransform(previous);
 }
 

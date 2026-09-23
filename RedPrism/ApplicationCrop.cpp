@@ -90,8 +90,7 @@ void Application::ContinueCropDrag(Vec2 view) noexcept
     const std::optional<double> ratio = _session.CropRatio();
     CropRect rect = _cropDrag->Updated(pixel, ratio, symmetric);
     const SnapTargets targets = _session.CropSnapTargets();
-    const CropSnap snap{targets.xs, targets.ys,
-                        TransformSnap::kDistanceDip / std::max(_viewport.PointsPerPixel(), 0.0001)};
+    const CropSnap snap{targets.xs, targets.ys, _viewport.DipToDocument(TransformSnap::kDistanceDip)};
     rect = snap.Apply(rect, _cropDrag.value(), pixel, ratio, symmetric);
     if (CropGeometry::Valid(rect))
     {

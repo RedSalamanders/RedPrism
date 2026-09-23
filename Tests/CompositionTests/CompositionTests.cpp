@@ -4,12 +4,16 @@
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
 #include "Document.h"
+#include "FrameScheduler.h"
+#include "TransformOverlay.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <crtdbg.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <d3d11_1.h>
 #include <initializer_list>
 #include <vector>
@@ -188,41 +192,49 @@ void TestViewport()
     viewport.SetZoom(8, Vec2{100, 100}, Vec2{100, 100});
     Expect(viewport.ShowsPixelGrid(), "viewport.pixel-grid");
 
-    // Legacy CompositionTests: round trip at several zooms and backing scales, cursor pixel fixed under zoom.
+    // Legacy CompositionTests: round trip at several zooms and backing scales, cursor pixel fixed under zoom. The
+    // legacy view is AppKit points; RedPrism's is device pixels (the Win32 client area), so the legacy 800 x 600
+    // point view at backing 2 is 1600 x 1200 here and point offsets double.
     const Vec2 documentSize{1920, 1080};
     for (const double backing : {1.0, 2.0})
     {
         CanvasViewport v;
-        v.Resize(Vec2{800, 600}, backing, documentSize);
+        v.Resize(Vec2{800 * backing, 600 * backing}, backing, documentSize);
         for (const double zoom : {0.25, 1.0, 3.75})
         {
             v.SetZoom(zoom, v.Center(), documentSize);
-            v.Translate(Vec2{73.5, -44.25});
+            v.Translate(Vec2{73.5 * backing, -44.25 * backing});
             const Vec2 pixel{183.25, 837.5};
             const Vec2 view = v.ViewFromDocument(pixel, documentSize);
             const Vec2 back = v.DocumentFromView(view, documentSize);
             Expect(std::abs(back.x - pixel.x) < 1e-6 && std::abs(back.y - pixel.y) < 1e-6, "viewport.round-trip");
-            Expect(std::abs(documentSize.x * v.PointsPerPixel() * backing - documentSize.x * zoom) < 1e-6,
-                   "viewport.actual-pixels");
+            // Legacy `documentRect.width * backing == document.width * zoom`: zoom 1 is actual display pixels, so
+            // the document is `width x zoom` device pixels wide on any display (RF-403; the golden used to multiply
+            // a points width by the backing scale, which encoded the view-in-points wiring).
+            const double drawn = v.ViewFromDocument(Vec2{documentSize.x, 0}, documentSize).x -
+                                 v.ViewFromDocument(Vec2{0, 0}, documentSize).x;
+            Expect(std::abs(drawn - documentSize.x * zoom) < 1e-6, "viewport.actual-pixels");
         }
     }
     CanvasViewport anchored;
-    anchored.Resize(Vec2{1000, 700}, 2, documentSize);
-    const Vec2 anchor{157, 221};
+    anchored.Resize(Vec2{2000, 1400}, 2, documentSize);
+    const Vec2 anchor{314, 442};
     const Vec2 before = anchored.DocumentFromView(anchor, documentSize);
     anchored.SetZoom(4, anchor, documentSize);
     const Vec2 after = anchored.DocumentFromView(anchor, documentSize);
     Expect(std::abs(before.x - after.x) < 1e-6 && std::abs(before.y - after.y) < 1e-6, "viewport.zoom-keeps-cursor");
 
+    // Legacy fitAndResizeModes: 96 points of margin in an 800 x 600 point view at backing 2 (1600 x 1200 device
+    // pixels): the fitted document is at most 704 x 504 points, 1408 x 1008 device pixels, centered.
     CanvasViewport fit;
-    fit.Resize(Vec2{800, 600}, 2, documentSize);
+    fit.Resize(Vec2{1600, 1200}, 2, documentSize);
     const Vec2 origin = fit.DocumentRectOrigin(documentSize);
-    const double width = documentSize.x * fit.PointsPerPixel();
-    const double height = documentSize.y * fit.PointsPerPixel();
-    Expect(width <= 704.000001 && height <= 504.000001, "viewport.fit-margin");
-    Expect(std::abs(origin.x + width / 2 - 400) < 1e-6 && std::abs(origin.y + height / 2 - 300) < 1e-6,
+    const double width = documentSize.x * fit.ViewScale();
+    const double height = documentSize.y * fit.ViewScale();
+    Expect(width <= 1408.000001 && height <= 1008.000001 && width >= 1407.999, "viewport.fit-margin");
+    Expect(std::abs(origin.x + width / 2 - 800) < 1e-6 && std::abs(origin.y + height / 2 - 600) < 1e-6,
            "viewport.fit-centered");
-    fit.Translate(Vec2{60, -35});
+    fit.Translate(Vec2{120, -70});
     const Vec2 centerBefore = fit.DocumentFromView(fit.Center(), documentSize);
     const double zoomBefore = fit.zoom;
     fit.Resize(Vec2{1200, 800}, 1, documentSize);
@@ -238,6 +250,109 @@ void TestViewport()
     Expect(limits.zoom == CanvasViewport::kMaxZoom, "viewport.max-zoom");
     limits.SetZoom(0, limits.Center(), documentSize);
     Expect(limits.zoom == CanvasViewport::kMinZoom, "viewport.min-zoom");
+
+    // RF-403: chrome constants are DIPs and the view is device pixels; the fit margin is 96 DIP at 150 % too.
+    CanvasViewport scaled;
+    scaled.Resize(Vec2{900, 600}, 2.25, documentSize);
+    scaled.SetZoom(0.5, scaled.Center(), documentSize);
+    Expect(std::abs(scaled.DipToView(10) - 22.5) < 1e-9 && std::abs(scaled.DipToDocument(10) - 45.0) < 1e-9,
+           "viewport.dip-conversions");
+    CanvasViewport fitted;
+    fitted.Resize(Vec2{1200, 900}, 1.5, Vec2{1000, 1000});
+    Expect(std::abs(fitted.zoom - (900.0 - 144.0) / 1000.0) < 1e-12, "viewport.fit-margin-in-dip");
+    // One zoom scale decides crisp pixels (from 200 %) and the grid (from 800 %) on every display.
+    bool thresholds = true;
+    for (const double backing : {1.0, 1.5, 2.0})
+    {
+        CanvasViewport v;
+        v.Resize(Vec2{800, 600}, backing, documentSize);
+        v.SetZoom(1.5, v.Center(), documentSize);
+        thresholds = thresholds && !v.SamplesCrisp() && !v.ShowsPixelGrid();
+        v.SetZoom(4, v.Center(), documentSize);
+        thresholds = thresholds && v.SamplesCrisp() && !v.ShowsPixelGrid();
+        v.SetZoom(8, v.Center(), documentSize);
+        thresholds = thresholds && v.SamplesCrisp() && v.ShowsPixelGrid();
+    }
+    Expect(thresholds, "viewport.crisp-and-grid-one-scale");
+    // Actual pixels puts document pixels on whole device pixels, even with an odd hole at 150 %.
+    CanvasViewport actual;
+    actual.Resize(Vec2{1425, 975}, 1.5, Vec2{1280, 800});
+    actual.SetZoom(1.0, actual.Center(), Vec2{1280, 800});
+    const Vec2 actualOrigin = actual.DocumentRectOrigin(Vec2{1280, 800});
+    Expect(actualOrigin.x == std::round(actualOrigin.x) && actualOrigin.y == std::round(actualOrigin.y),
+           "viewport.actual-pixels-on-whole-pixels");
+
+    // RF-403: a handle hits where it is drawn: 10 DIP of hit radius and a knob 28 DIP up, at 225 % and at 100 %.
+    LayerTransform box;
+    box.origin = Vec2{100, 100};
+    box.size = Vec2{200, 100};
+    CanvasViewport at225;
+    at225.Resize(Vec2{1800, 1200}, 2.25, Vec2{1000, 800});
+    at225.SetZoom(1.0, at225.Center(), Vec2{1000, 800});
+    const TransformOverlayGeometry magnified = TransformOverlayGeometry::FromTransform(box, at225, Vec2{1000, 800});
+    const std::optional<TransformHit> largeHit =
+        magnified.Hit(Vec2{magnified.handles[0].x - 15, magnified.handles[0].y});
+    Expect(largeHit.has_value() && largeHit->mode == TransformDrag::Mode::Resize && largeHit->handle == 0 &&
+               std::abs(magnified.handles[1].y - magnified.rotationHandle.y - 28 * 2.25) < 1e-9,
+           "overlay.hit-radius-and-knob-in-dip");
+    CanvasViewport at100;
+    at100.Resize(Vec2{800, 600}, 1, Vec2{1000, 800});
+    at100.SetZoom(1.0, at100.Center(), Vec2{1000, 800});
+    const TransformOverlayGeometry normal = TransformOverlayGeometry::FromTransform(box, at100, Vec2{1000, 800});
+    Expect(!normal.Hit(Vec2{normal.handles[0].x - 15, normal.handles[0].y}).has_value() &&
+               std::abs(normal.handles[1].y - normal.rotationHandle.y - 28) < 1e-9,
+           "overlay.hit-radius-at-100");
+
+    // RF-404: wheel zoom follows the delta: 1.1 per 120, the same total from a touchpad's ten 12s, nothing for 0.
+    double partial = 1.0;
+    for (int step = 0; step < 10; ++step)
+    {
+        partial *= CanvasViewport::WheelZoomFactor(12);
+    }
+    Expect(std::abs(CanvasViewport::WheelZoomFactor(120) - 1.1) < 1e-12 &&
+               std::abs(CanvasViewport::WheelZoomFactor(240) - 1.21) < 1e-12 &&
+               std::abs(CanvasViewport::WheelZoomFactor(-120) * 1.1 - 1.0) < 1e-12 &&
+               CanvasViewport::WheelZoomFactor(0) == 1.0 && std::abs(partial - 1.1) < 1e-12,
+           "wheel.zoom-follows-delta");
+    // The Zoom tool: twice per 100 DIP dragged right, half per 100 left (legacy EditorCanvas).
+    Expect(std::abs(CanvasViewport::DragZoomFactor(100) - 2.0) < 1e-12 &&
+               std::abs(CanvasViewport::DragZoomFactor(-100) - 0.5) < 1e-12 &&
+               CanvasViewport::DragZoomFactor(0) == 1.0 &&
+               std::abs(CanvasViewport::DragZoomFactor(50) * CanvasViewport::DragZoomFactor(50) - 2.0) < 1e-12,
+           "zoomtool.doubles-per-100-dip");
+}
+
+// RF-408, RF-409, RF-410: the frame loop's pure decisions (FrameScheduler.h).
+void TestFrameLoop()
+{
+    // Marching ants step one DIP every 120 ms through the 8 DIP cycle (legacy EditorCanvas timer).
+    Expect(MarchingAntsPhase(0) == 0.0f && MarchingAntsPhase(119) == 0.0f && MarchingAntsPhase(120) == 1.0f &&
+               MarchingAntsPhase(959) == 7.0f && MarchingAntsPhase(960) == 0.0f,
+           "ants.step-cadence");
+    Expect(MillisecondsToNextAntStep(0) == 120 && MillisecondsToNextAntStep(119) == 1 &&
+               MillisecondsToNextAntStep(125) == 115,
+           "ants.wait-until-next-step");
+    // Occluded without the DXGI occlusion message: probe on each wake instead of waiting for it forever.
+    HostFrameState occluded;
+    occluded.windowVisible = true;
+    occluded.displayPoweredOn = true;
+    occluded.rendererSuspended = false;
+    occluded.rendererOccluded = true;
+    occluded.frameInvalidated = false;
+    Expect(SelectHostFrameAction(occluded) == HostFrameAction::WaitForMessage, "frame.occluded-waits-for-message");
+    occluded.occlusionMessages = false;
+    Expect(SelectHostFrameAction(occluded) == HostFrameAction::ProbeOcclusion, "frame.occluded-unregistered-probes");
+    // A screenshot capture draws whatever the display's power, the window's visibility or its occlusion say.
+    HostFrameState capture;
+    capture.windowVisible = false;
+    capture.displayPoweredOn = false;
+    capture.rendererSuspended = false;
+    capture.rendererOccluded = true;
+    capture.frameInvalidated = true;
+    capture.capturing = true;
+    Expect(SelectHostFrameAction(capture) == HostFrameAction::Render, "frame.capture-draws-with-display-off");
+    capture.capturing = false;
+    Expect(SelectHostFrameAction(capture) == HostFrameAction::WaitForMessage, "frame.display-off-waits");
 }
 
 void TestBlendModes(Harness& h)
@@ -683,7 +798,7 @@ void TestStrokePreview(Harness& h)
     // Commit: the snapshot covering the grid from (2, 2) is adopted from the working texture.
     const Raster committed =
         Raster::Replacing(Raster{}, 0, 0, {RasterTile{2, 2, red}, RasterTile{2, 2, green}}, 2, 2, 4, 4, 0);
-    h.composition.EndStroke(&committed, 2, 2);
+    h.composition.EndStroke(&committed, 2, 2, &blank.id);
     Expect(!h.composition.HasStroke() && !committed.IsMaterialized(), "stroke.ended");
     document.layers[0].asset = RasterAsset{committed, committed, L"Blank"};
     document.layers[0].transform.origin = Vec2{2, 2};
@@ -723,7 +838,15 @@ void TestStrokePreview(Harness& h)
     h.composition.ReleaseDocumentSurfaces();
     Expect(h.composition.HasStroke() && h.composition.StrokeTextureMissing(), "stroke.texture-dropped-with-surfaces");
     Expect(SUCCEEDED(h.composition.UpdateStrokeTiles(first)) && !h.composition.StrokeTextureMissing(), "stroke.rebuilt");
+    // The rebuilt texture draws the grid again from its placement: the red tile at (2, 2), nothing around it.
     pixels = h.Render(document);
+    const bool rebuiltDrawn = At(pixels, 8, 2, 2, 2) == 255 && At(pixels, 8, 5, 5, 2) == 255 &&
+                              At(pixels, 8, 1, 1, 3) == 0 && At(pixels, 8, 6, 6, 3) == 0;
+    if (!rebuiltDrawn)
+    {
+        PrintPixels("rebuilt", pixels);
+    }
+    Expect(rebuiltDrawn, "stroke.rebuilt-preview-drawn");
     h.composition.EndStroke(nullptr, 0, 0);
 }
 
@@ -857,6 +980,27 @@ void TestGpuBrushCoverage(Harness& h)
         PrintPixels("expected", expected);
     }
     return ok;
+}
+
+// The adjustment a failing parity case ran, for the failure's pixel dump.
+[[nodiscard]] const char* AdjustmentLabel(AdjustmentKind kind) noexcept
+{
+    switch (kind)
+    {
+    case AdjustmentKind::Hsv:
+        return "hue/saturation gpu vs cpu";
+    case AdjustmentKind::Levels:
+        return "levels gpu vs cpu";
+    case AdjustmentKind::Curves:
+        return "curves gpu vs cpu";
+    case AdjustmentKind::Exposure:
+        return "exposure gpu vs cpu";
+    case AdjustmentKind::GradientMap:
+        return "gradient map gpu vs cpu";
+    case AdjustmentKind::Grain:
+        return "grain gpu vs cpu";
+    }
+    return "unknown adjustment gpu vs cpu";
 }
 
 [[nodiscard]] std::vector<std::uint8_t> RasterBytes(const Raster& raster)
@@ -995,9 +1139,7 @@ void TestAdjustmentLayers(Harness& h)
             document.layers.push_back(AdjustmentLayer(adjustment, L"Adjustment"));
             const std::vector<std::uint8_t> pixels = h.Render(document);
             const std::vector<std::uint8_t> reference = RasterBytes(Adjust::ApplyAdjustment(adjustment, base));
-            Expect(PixelsClose(pixels, reference, slop,
-                               AdjustmentTitle(adjustment.kind) == nullptr ? "kind" : "gpu vs cpu"),
-                   "adjust.gpu-matches-cpu");
+            Expect(PixelsClose(pixels, reference, slop, AdjustmentLabel(adjustment.kind)), "adjust.gpu-matches-cpu");
         }
     }
     // The tables and the cube are released with the document surfaces.
@@ -1071,6 +1213,368 @@ int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*ret
     return 0;
 }
 #endif
+// ── Review fixes WP4: blit, oversize documents, readbacks, stroke previews ──────
+
+// `viewport` blitted into a width x height RGBA target over its whole area; RGBA rows.
+[[nodiscard]] std::vector<std::uint8_t> Blit(Harness& h, const CanvasViewport& viewport, UINT width, UINT height)
+{
+    D3D11_TEXTURE2D_DESC description{};
+    description.Width = width;
+    description.Height = height;
+    description.MipLevels = 1;
+    description.ArraySize = 1;
+    description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    description.SampleDesc.Count = 1;
+    description.BindFlags = D3D11_BIND_RENDER_TARGET;
+    wil::com_ptr_nothrow<ID3D11Texture2D> target;
+    wil::com_ptr_nothrow<ID3D11RenderTargetView> view;
+    if (FAILED(h.device->CreateTexture2D(&description, nullptr, target.put())) ||
+        FAILED(h.device->CreateRenderTargetView(target.get(), nullptr, view.put())))
+    {
+        return {};
+    }
+    const std::array<float, 4> clear{0, 0, 0, 0};
+    h.context->ClearRenderTargetView(view.get(), clear.data());
+    if (FAILED(h.composition.BlitToTarget(view.get(), width, height, viewport, 0, 0, static_cast<float>(width),
+                                         static_cast<float>(height))))
+    {
+        return {};
+    }
+    description.BindFlags = 0;
+    description.Usage = D3D11_USAGE_STAGING;
+    description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    wil::com_ptr_nothrow<ID3D11Texture2D> staging;
+    if (FAILED(h.device->CreateTexture2D(&description, nullptr, staging.put())))
+    {
+        return {};
+    }
+    h.context->CopyResource(staging.get(), target.get());
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (FAILED(h.context->Map(staging.get(), 0, D3D11_MAP_READ, 0, &mapped)))
+    {
+        return {};
+    }
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * height * 4u);
+    for (UINT y = 0; y < height; ++y)
+    {
+        std::memcpy(pixels.data() + static_cast<std::size_t>(y) * width * 4u,
+                    static_cast<const std::uint8_t*>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch,
+                    static_cast<std::size_t>(width) * 4u);
+    }
+    h.context->Unmap(staging.get(), 0);
+    return pixels;
+}
+
+// Opaque BGRA columns: `left` columns black and the rest white, or every `period` columns alternating.
+[[nodiscard]] Raster Columns(int width, int height, int split)
+{
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * height * 4u);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::uint8_t value = x < split ? 0 : 255;
+            std::uint8_t* pixel = pixels.data() + (static_cast<std::size_t>(y) * width + x) * 4u;
+            pixel[0] = value;
+            pixel[1] = value;
+            pixel[2] = value;
+            pixel[3] = 255;
+        }
+    }
+    return Raster::Make(width, height, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+}
+
+[[nodiscard]] CanvasDocument DocumentOf(int width, int height)
+{
+    CanvasDocument document{};
+    document.id = Guid::Generate();
+    document.width = width;
+    document.height = height;
+    return document;
+}
+
+void TestBlit(Harness& h)
+{
+    // RF-403: zoom is device pixels per document pixel. A 2 x 1 document (black, white) at zoom 2 on a backing-2
+    // display covers 4 device pixels, centered in a 16 x 8 hole: columns 6..9.
+    CanvasDocument pair = DocumentOf(2, 1);
+    pair.layers.push_back(LayerFrom(Columns(2, 1, 1), LayerBlendMode::Normal, L"Pair"));
+    (void)h.Render(pair);
+    const auto red = [](const std::vector<std::uint8_t>& pixels, int width, int x, int y)
+    {
+        const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + x) * 4u;
+        return index < pixels.size() ? static_cast<int>(pixels[index]) : -1;
+    };
+    CanvasViewport view;
+    view.Resize(Vec2{16, 8}, 2, Vec2{2, 1});
+    view.SetZoom(2, view.Center(), Vec2{2, 1});
+    std::vector<std::uint8_t> pixels = Blit(h, view, 16, 8);
+    const bool checkerLeft = red(pixels, 16, 5, 4) == 46 || red(pixels, 16, 5, 4) == 56;
+    const bool checkerRight = red(pixels, 16, 10, 4) == 46 || red(pixels, 16, 10, 4) == 56;
+    const bool devicePixels = checkerLeft && checkerRight && red(pixels, 16, 6, 4) < 10 && red(pixels, 16, 9, 4) > 245;
+    if (!devicePixels)
+    {
+        PrintPixels("zoom 2 at backing 2", pixels);
+    }
+    Expect(devicePixels, "blit.zoom-is-device-pixels");
+    // From 200 % the pixels are hard-edged: at zoom 4 the device pixel left of the boundary is pure black.
+    view.SetZoom(4, view.Center(), Vec2{2, 1});
+    pixels = Blit(h, view, 16, 8);
+    Expect(red(pixels, 16, 7, 4) < 3 && red(pixels, 16, 8, 4) > 252, "blit.crisp-from-200");
+    // Below 200 % they are filtered: at 150 % the same boundary blends.
+    view.SetZoom(1.5, view.Center(), Vec2{2, 1});
+    pixels = Blit(h, view, 16, 8);
+    Expect(red(pixels, 16, 7, 4) > 20 && red(pixels, 16, 7, 4) < 235, "blit.smooth-below-200");
+
+    // RF-412: zoomed out, the canvas reduces through its mips. One-pixel black and white columns at 25 %, sampled at
+    // exact texel centers of the black columns, read mid gray, not black.
+    CanvasDocument stripes = DocumentOf(64, 64);
+    std::vector<std::uint8_t> striped(64u * 64u * 4u);
+    for (std::size_t i = 0; i < 64u * 64u; ++i)
+    {
+        const std::uint8_t value = (i % 64u) % 2u == 0 ? 0 : 255;
+        striped[i * 4] = value;
+        striped[i * 4 + 1] = value;
+        striped[i * 4 + 2] = value;
+        striped[i * 4 + 3] = 255;
+    }
+    stripes.layers.push_back(LayerFrom(Raster::Make(64, 64, RasterFormat::Bgra8888, striped.data(), striped.size()),
+                                       LayerBlendMode::Normal, L"Stripes"));
+    (void)h.Render(stripes);
+    CanvasViewport out;
+    out.Resize(Vec2{16, 16}, 1, Vec2{64, 64});
+    out.SetZoom(0.25, out.Center(), Vec2{64, 64});
+    out.pan = Vec2{0.375, 0.375};
+    pixels = Blit(h, out, 16, 16);
+    bool gray = pixels.size() == 16u * 16u * 4u;
+    for (std::size_t i = 0; gray && i < pixels.size(); i += 4)
+    {
+        gray = pixels[i] >= 100 && pixels[i] <= 155;
+    }
+    if (!gray)
+    {
+        PrintPixels("25 % stripes", pixels);
+    }
+    Expect(gray, "blit.zoomed-out-reduces-through-mips");
+}
+
+void TestOversize(Harness& h)
+{
+    // Decision D1 (RF-401): a document and layers larger than the device's textures, with the limit lowered to 64
+    // (16 384 on the device) so a small document proves the paths.
+    h.composition.SetTextureLimitForTest(64);
+    CanvasDocument document = DocumentOf(100, 10);
+    std::vector<std::uint8_t> halves(100u * 10u * 4u);
+    for (std::size_t i = 0; i < 100u * 10u; ++i)
+    {
+        const bool left = i % 100u < 50u;
+        halves[i * 4] = left ? 0 : 255;
+        halves[i * 4 + 1] = 0;
+        halves[i * 4 + 2] = left ? 255 : 0;
+        halves[i * 4 + 3] = 255;
+    }
+    const Raster wide = Raster::Make(100, 10, RasterFormat::Bgra8888, halves.data(), halves.size());
+    document.layers.push_back(LayerFrom(wide, LayerBlendMode::Normal, L"Wide"));
+    h.composition.InvalidateDocument();
+    Expect(SUCCEEDED(h.composition.Compose(document)) && h.composition.CanvasScale() == 2 &&
+               h.composition.RegionTextureCount() == 1,
+           "oversize.display-proxy");
+    std::vector<std::uint8_t> ignored;
+    UINT ignoredWidth = 0;
+    UINT ignoredHeight = 0;
+    Expect(FAILED(h.composition.Readback(ignored, ignoredWidth, ignoredHeight)), "oversize.proxy-is-not-the-document");
+    // The display draws the proxy: red on the left, blue on the right, at actual pixels.
+    CanvasViewport view;
+    view.Resize(Vec2{100, 10}, 1, Vec2{100, 10});
+    view.SetZoom(1, view.Center(), Vec2{100, 10});
+    const std::vector<std::uint8_t> shown = Blit(h, view, 100, 10);
+    Expect(shown.size() == 100u * 10u * 4u && shown[(5u * 100u + 10u) * 4u] > 250 &&
+               shown[(5u * 100u + 90u) * 4u + 2u] > 250,
+           "oversize.display-shows-proxy");
+    // A readback composes the document at full resolution in tiles, each layer as the part the tile shows.
+    std::vector<std::uint8_t> flat;
+    UINT width = 0;
+    UINT height = 0;
+    bool exact = SUCCEEDED(h.composition.ComposeReadback(document, flat, width, height)) && width == 100 &&
+                 height == 10 && flat.size() == halves.size();
+    exact = exact && std::equal(flat.begin(), flat.end(), halves.begin());
+    Expect(exact, "oversize.readback-full-resolution");
+    // A mask larger than the limit: revealing the left 30 columns only.
+    std::vector<std::uint8_t> maskBytes(100u * 10u, 0);
+    for (std::size_t i = 0; i < maskBytes.size(); ++i)
+    {
+        maskBytes[i] = i % 100u < 30u ? 255 : 0;
+    }
+    document.layers[0].mask = MaskOf(Raster::Make(100, 10, RasterFormat::Gray8, maskBytes.data(), maskBytes.size()));
+    exact = SUCCEEDED(h.composition.ComposeReadback(document, flat, width, height)) && flat.size() == halves.size() &&
+            flat[(4u * 100u + 29u) * 4u + 3u] == 255 && flat[(4u * 100u + 30u) * 4u + 3u] == 0 &&
+            flat[(4u * 100u + 99u) * 4u + 3u] == 0;
+    Expect(exact, "oversize.mask-readback");
+    document.layers[0].mask.reset();
+    // A stroke whose grid is larger than the limit previews through a reduced working texture and is never adopted:
+    // the committed raster uploads on its own and reads back exactly.
+    CanvasDocument painting = DocumentOf(100, 10);
+    ImageLayer blank = ImageLayer::Blank(L"Blank", Vec2{100, 10});
+    blank.transform.sampling = LayerSampling::Nearest;
+    painting.layers.push_back(blank);
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = blank.id;
+    preview.width = 100;
+    preview.height = 10;
+    preview.transform = blank.transform;
+    h.composition.InvalidateDocument();
+    Expect(SUCCEEDED(h.composition.Compose(painting)), "oversize.stroke-document");
+    const std::array<RasterTile, 1> tile{RasterTile{0, 0, wide}};
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(tile)) &&
+               !h.composition.StrokeTextureMissing(),
+           "oversize.stroke-working-texture");
+    h.composition.InvalidateDocument();
+    Expect(SUCCEEDED(h.composition.Compose(painting)), "oversize.stroke-composes");
+    const std::vector<std::uint8_t> painted = Blit(h, view, 100, 10);
+    Expect(painted.size() == 100u * 10u * 4u && painted[(5u * 100u + 10u) * 4u] > 250 &&
+               painted[(5u * 100u + 90u) * 4u + 2u] > 250,
+           "oversize.stroke-preview-drawn");
+    h.composition.EndStroke(&wide, 0, 0, &blank.id);
+    painting.layers[0].asset = RasterAsset{wide, wide, L"Blank"};
+    exact = SUCCEEDED(h.composition.ComposeReadback(painting, flat, width, height)) && flat.size() == halves.size() &&
+            std::equal(flat.begin(), flat.end(), halves.begin());
+    Expect(exact, "oversize.stroke-commit-reads-back");
+    h.composition.SetTextureLimitForTest(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+
+    // The device's own limit: a 17 000 pixel document and layer (legacy allows 30 000 a side).
+    CanvasDocument panorama = DocumentOf(17000, 10);
+    std::vector<std::uint8_t> wideBytes(17000u * 10u * 4u);
+    for (std::size_t i = 0; i < 17000u * 10u; ++i)
+    {
+        const bool left = i % 17000u < 8500u;
+        wideBytes[i * 4] = left ? 0 : 255;
+        wideBytes[i * 4 + 1] = 0;
+        wideBytes[i * 4 + 2] = left ? 255 : 0;
+        wideBytes[i * 4 + 3] = 255;
+    }
+    const Raster wideLayer = Raster::Make(17000, 10, RasterFormat::Bgra8888, wideBytes.data(), wideBytes.size());
+    panorama.layers.push_back(LayerFrom(wideLayer, LayerBlendMode::Normal, L"Panorama"));
+    h.composition.InvalidateDocument();
+    Expect(SUCCEEDED(h.composition.Compose(panorama)) && h.composition.CanvasScale() == 2, "oversize.device-limit-proxy");
+    exact = SUCCEEDED(h.composition.ComposeReadback(panorama, flat, width, height)) && width == 17000 && height == 10 &&
+            std::equal(flat.begin(), flat.end(), wideBytes.begin(), wideBytes.end());
+    Expect(exact, "oversize.device-limit-readback");
+    h.composition.ReleaseDocumentSurfaces();
+}
+
+void TestReadbackIgnoresPreview(Harness& h)
+{
+    // RF-402: export, Copy Merged, the wand and the eyedroppers read the document, never the stroke preview.
+    CanvasDocument document = DocumentOf(8, 8);
+    document.layers.push_back(LayerFrom(Solid(8, 8, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = document.layers[0].id;
+    preview.width = 8;
+    preview.height = 8;
+    preview.transform = document.layers[0].transform;
+    preview.source = document.layers[0].asset->image;
+    const std::array<RasterTile, 1> red{RasterTile{0, 0, Solid(8, 8, 0, 0, 255, 255)}};
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
+           "readback.preview-begins");
+    std::vector<std::uint8_t> shown = h.Render(document);
+    std::vector<std::uint8_t> flat;
+    UINT width = 0;
+    UINT height = 0;
+    const bool read = SUCCEEDED(h.composition.ComposeReadback(document, flat, width, height));
+    Expect(shown.size() == 256 && At(shown, 8, 3, 3, 2) == 255 && At(shown, 8, 3, 3, 0) == 0 && read &&
+               At(flat, 8, 3, 3, 0) == 255 && At(flat, 8, 3, 3, 1) == 255 && At(flat, 8, 3, 3, 2) == 255,
+           "readback.document-not-preview");
+    // The display composes its preview again on the next frame.
+    std::vector<std::uint8_t> again;
+    Expect(SUCCEEDED(h.composition.Compose(document)) && SUCCEEDED(h.composition.Readback(again, width, height)) &&
+               At(again, 8, 3, 3, 2) == 255 && At(again, 8, 3, 3, 0) == 0,
+           "readback.display-composes-again");
+    h.composition.EndStroke();
+}
+
+void TestStrokePreviewMask(Harness& h)
+{
+    // RF-406: a preview whose grid grew past the layer keeps an unplaced mask on the layer's own pixels and reveals
+    // the paint beyond them, as the commit grows the mask with 255. A 4 x 4 red layer at the top-left of an 8 x 8
+    // canvas, its mask revealing the left two columns; the stroke paints the whole grown 8 x 8 grid red.
+    CanvasDocument document = DocumentOf(8, 8);
+    ImageLayer layer = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
+    layer.mask = MaskOf(Gray(4, 4, {255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0}));
+    document.layers.push_back(layer);
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = layer.id;
+    preview.width = 8;
+    preview.height = 8;
+    preview.transform.size = Vec2{8, 8};
+    preview.transform.sampling = LayerSampling::Nearest;
+    preview.source = layer.asset->image;
+    const std::array<RasterTile, 1> paint{RasterTile{0, 0, Solid(8, 8, 0, 0, 255, 255)}};
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(paint)),
+           "strokemask.preview-begins");
+    const std::vector<std::uint8_t> pixels = h.Render(document);
+    // Inside the layer's old pixels the mask decides (column 1 shown, column 2 hidden); beyond them paint shows.
+    const bool placed = At(pixels, 8, 1, 1, 3) == 255 && At(pixels, 8, 2, 1, 3) == 0 && At(pixels, 8, 5, 1, 3) == 255 &&
+                        At(pixels, 8, 6, 6, 3) == 255;
+    if (!placed)
+    {
+        PrintPixels("preview mask", pixels);
+    }
+    Expect(placed, "strokemask.unplaced-mask-stays-on-layer");
+    h.composition.EndStroke();
+    // A uniform 1 x 1 mask stays uniform over the grown grid.
+    document.layers[0].mask = MaskOf(Gray(1, 1, {0}));
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(paint)),
+           "strokemask.uniform-begins");
+    const std::vector<std::uint8_t> hidden = h.Render(document);
+    Expect(At(hidden, 8, 1, 1, 3) == 0 && At(hidden, 8, 6, 6, 3) == 0, "strokemask.uniform-mask-stays-uniform");
+    h.composition.EndStroke();
+}
+
+void TestStrokeAdoption(Harness& h)
+{
+    // RF-407: the working texture becomes a committed raster's texture only for its own layer and target.
+    CanvasDocument document = DocumentOf(4, 4);
+    ImageLayer first = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"First");
+    document.layers.push_back(first);
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = first.id;
+    preview.width = 4;
+    preview.height = 4;
+    preview.transform = first.transform;
+    const std::array<RasterTile, 1> red{RasterTile{0, 0, Solid(4, 4, 0, 0, 255, 255)}};
+    // Another layer's commit: blue pixels installed on `second`.
+    const Raster blue = Solid(4, 4, 255, 0, 0, 255);
+    ImageLayer second = LayerFrom(blue, LayerBlendMode::Normal, L"Second");
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
+           "adopt.preview-begins");
+    const std::uint64_t adoptions = h.composition.AdoptionCount();
+    h.composition.EndStroke(&blue, 0, 0, &second.id);
+    Expect(h.composition.AdoptionCount() == adoptions, "adopt.other-layer-not-adopted");
+    CanvasDocument other = DocumentOf(4, 4);
+    other.layers.push_back(second);
+    std::vector<std::uint8_t> pixels = h.Render(other);
+    Expect(At(pixels, 4, 1, 1, 0) == 255 && At(pixels, 4, 1, 1, 2) == 0, "adopt.other-layer-uploads-its-own");
+    // A mask commit (Gray8) never takes an image preview's texture.
+    const Raster reveal = Gray(4, 4, {255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255});
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
+           "adopt.preview-again");
+    h.composition.EndStroke(&reveal, 0, 0, &first.id);
+    document.layers[0].mask = MaskOf(reveal);
+    pixels = h.Render(document);
+    Expect(At(pixels, 4, 2, 2, 3) == 255 && At(pixels, 4, 2, 2, 2) == 255, "adopt.mask-commit-uploads-its-own");
+    // Its own commit is adopted: the cache holds the working texture for the committed raster, so the canvas shows
+    // the texture's red even though this raster's own bytes are blue (proof that nothing was uploaded).
+    const Raster committed =
+        Raster::Replacing(Raster{}, 0, 0, {RasterTile{0, 0, Solid(4, 4, 255, 0, 0, 255)}}, 0, 0, 4, 4, 0);
+    Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
+           "adopt.own-preview");
+    h.composition.EndStroke(&committed, 0, 0, &first.id);
+    document.layers[0].mask.reset();
+    document.layers[0].asset = RasterAsset{committed, committed, L"First"};
+    pixels = h.Render(document);
+    Expect(At(pixels, 4, 2, 2, 2) == 255 && At(pixels, 4, 2, 2, 0) == 0 && !committed.IsMaterialized(),
+           "adopt.own-commit-draws-the-texture");
+}
 
 int wmain()
 {
@@ -1085,6 +1589,7 @@ int wmain()
 #endif
     (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     TestViewport();
+    TestFrameLoop();
     Harness harness;
     if (harness.Ready())
     {
@@ -1101,6 +1606,11 @@ int wmain()
         TestGpuBrushCoverage(harness);
         TestAdjustmentLayers(harness);
         TestHslBlends(harness);
+        TestBlit(harness);
+        TestOversize(harness);
+        TestReadbackIgnoresPreview(harness);
+        TestStrokePreviewMask(harness);
+        TestStrokeAdoption(harness);
     }
     if (gFailures != 0 || gCrtReportFailures != 0)
     {
