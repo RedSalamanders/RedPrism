@@ -44,31 +44,17 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
     throw 'RedPrism.exe is missing its Windows version identity.'
 }
 
-Write-Host 'Running host contract tests...' -ForegroundColor Cyan
-& $hostTests
-if ($LASTEXITCODE -ne 0) {
-    throw "HostTests.exe failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Running document model tests...' -ForegroundColor Cyan
-$documentTests = Join-Path $outputRoot 'DocumentTests.exe'
-& $documentTests
-if ($LASTEXITCODE -ne 0) {
-    throw "DocumentTests.exe failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Running composition tests...' -ForegroundColor Cyan
-$compositionTests = Join-Path $outputRoot 'CompositionTests.exe'
-& $compositionTests
-if ($LASTEXITCODE -ne 0) {
-    throw "CompositionTests.exe failed with exit code $LASTEXITCODE."
-}
-
-Write-Host 'Running project I/O tests...' -ForegroundColor Cyan
-$ioTests = Join-Path $outputRoot 'IoTests.exe'
-& $ioTests
-if ($LASTEXITCODE -ne 0) {
-    throw "IoTests.exe failed with exit code $LASTEXITCODE."
+foreach ($suite in @(
+        @{ Name = 'HostTests'; Path = $hostTests; Label = 'host contract' },
+        @{ Name = 'DocumentTests'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
+        @{ Name = 'CompositionTests'; Path = (Join-Path $outputRoot 'CompositionTests.exe'); Label = 'composition' },
+        @{ Name = 'IoTests'; Path = (Join-Path $outputRoot 'IoTests.exe'); Label = 'project I/O' }
+    )) {
+    Write-Host "Running $($suite.Label) tests..." -ForegroundColor Cyan
+    & $suite.Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "$($suite.Name).exe failed with exit code $LASTEXITCODE."
+    }
 }
 
 if ($Configuration -eq 'ASan Debug') {
@@ -133,11 +119,23 @@ if ($unknown.ExitCode -ne 2) {
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
 $selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
 Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
-$selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -Wait -PassThru `
+$selfTestTimeoutSeconds = 1200
+$selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardError $selfTestErr
+if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
+    # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
+    # leave it running rather than kill it (RF-702).
+    throw "RedPrism.exe --self-test --warp did not finish within $selfTestTimeoutSeconds s (PID $($selfTest.Id) is still running; report it, do not kill it)."
+}
 if ($selfTest.ExitCode -ne 0) {
     $selfTestText = Get-Content -LiteralPath $selfTestErr -Raw -ErrorAction SilentlyContinue
     throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). $selfTestText"
+}
+
+Write-Host 'Running CRT report hook probe...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\CrtReportHookTests.ps1') -HostTestsPath $hostTests -Configuration $Configuration
+if ($LASTEXITCODE -ne 0) {
+    throw "CRT report hook tests failed with exit code $LASTEXITCODE."
 }
 
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
@@ -155,7 +153,72 @@ if ($LASTEXITCODE -ne 0) {
     throw "Build presentation tests failed with exit code $LASTEXITCODE."
 }
 
+Write-Host 'Validating the build preflight helper...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\BuildPreflightTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "Build preflight tests failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Validating tool discovery...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\ToolDiscoveryTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "Tool discovery tests failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Validating ARM64 ASan wiring...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\AsanArm64Tests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "ARM64 ASan wiring tests failed with exit code $LASTEXITCODE."
+}
+
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
+Add-Type -AssemblyName System.Drawing
+
+function Test-RedPrismScreenshotContent {
+    <#
+    .SYNOPSIS
+    Rejects a harness screenshot that is not a real capture. RF-701: the old gate only checked the 8-byte PNG
+    signature, so all 27 captures of the 2026-09-21 run — every one a fully transparent client area — passed.
+    This decodes the PNG and samples a grid of pixels across it, rejecting a capture that is too small to be a real
+    client area, fully transparent, or a single uniform color.
+    #>
+    param([Parameter(Mandatory)] [string] $Path)
+
+    $bitmap = [Drawing.Bitmap]::new($Path)
+    try {
+        $width = $bitmap.Width
+        $height = $bitmap.Height
+        if ($width -lt 32 -or $height -lt 32) {
+            return "the captured size ${width}x${height} is too small to be a real client area"
+        }
+        $stepX = [Math]::Max(1, [int]($width / 96))
+        $stepY = [Math]::Max(1, [int]($height / 96))
+        $first = $bitmap.GetPixel(0, 0)
+        $uniform = $true
+        $transparent = $true
+        for ($y = 0; $y -lt $height; $y += $stepY) {
+            for ($x = 0; $x -lt $width; $x += $stepX) {
+                $pixel = $bitmap.GetPixel($x, $y)
+                if ($pixel.A -ne 0) {
+                    $transparent = $false
+                }
+                if ($pixel.ToArgb() -ne $first.ToArgb()) {
+                    $uniform = $false
+                }
+            }
+        }
+        if ($transparent) {
+            return 'the captured client area is fully transparent'
+        }
+        if ($uniform) {
+            return 'the captured client area is a single uniform color'
+        }
+        return $null
+    } finally {
+        $bitmap.Dispose()
+    }
+}
+
 $shotDir = Join-Path $repoRoot '.build\screenshots'
 New-Item -ItemType Directory -Path $shotDir -Force | Out-Null
 foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ dpi = 96; demo = 'transform' }, @{ dpi = 96; demo = 'selection' }, @{ dpi = 96; demo = 'brush' }, @{ dpi = 96; demo = 'retouch' }, @{ dpi = 96; demo = 'adjust' }, @{ dpi = 96; demo = 'canvassize' }, @{ dpi = 96; demo = 'crop' })) {
@@ -167,27 +230,38 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     $shotLog = Join-Path $outputRoot "RedPrism.screenshot-$shotName.log"
     $shotErr = Join-Path $outputRoot "RedPrism.screenshot-$shotName.err.log"
     Remove-Item -LiteralPath $shotLog, $shotErr -ErrorAction SilentlyContinue
-    $shotArgs = @('--screenshot', $shotPath, '--warp', '--dpi', "$dpi")
+    # The path is quoted as its own argument: Start-Process -ArgumentList joins array elements with a bare space and
+    # does not quote them itself, so an unquoted path with a space (a username, "Program Files", ...) would split
+    # into two arguments (the crash probe below already quotes its directory the same way).
+    $shotArgs = @('--screenshot', ('"' + $shotPath + '"'), '--warp', '--dpi', "$dpi")
     if ($demo) { $shotArgs += @('--demo', $demo) }
     $shot = Start-Process -FilePath $executable -ArgumentList $shotArgs `
         -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
     if (-not $shot.WaitForExit(60000)) {
         $shot.Kill()
-        throw "RedPrism.exe --screenshot --dpi $dpi did not exit within 60 seconds."
+        throw "RedPrism.exe --screenshot ($shotName) did not exit within 60 seconds."
     }
     if ($shot.ExitCode -eq 8) {
-        Write-Host "SKIP harness screenshot at $dpi DPI (capture unavailable, exit 8)." -ForegroundColor Yellow
-    } elseif ($shot.ExitCode -ne 0) {
-        throw "RedPrism.exe --screenshot --dpi $dpi exited with code $($shot.ExitCode)."
-    } elseif (-not (Test-Path -LiteralPath $shotPath -PathType Leaf)) {
-        throw "Screenshot was not written: $shotPath"
-    } else {
-        $header = [IO.File]::ReadAllBytes($shotPath)
-        if ($header.Length -lt 8 -or $header[0] -ne 0x89 -or $header[1] -ne 0x50 -or $header[2] -ne 0x4E -or $header[3] -ne 0x47) {
-            throw "Screenshot is not a PNG: $shotPath"
-        }
-        Write-Host "PASS harness screenshot ($dpi DPI): $shotPath"
+        # WP4: RedPrism returns 8 only when the harness capture path is unsupported on this host. Any other
+        # nonzero exit (including the distinct "capture failed" code) is a real failure below, not a skip.
+        Write-Host "SKIP harness screenshot ($shotName): capture unsupported (exit 8)." -ForegroundColor Yellow
+        continue
     }
+    if ($shot.ExitCode -ne 0) {
+        throw "RedPrism.exe --screenshot ($shotName) exited with code $($shot.ExitCode)."
+    }
+    if (-not (Test-Path -LiteralPath $shotPath -PathType Leaf)) {
+        throw "Screenshot was not written: $shotPath"
+    }
+    $header = [IO.File]::ReadAllBytes($shotPath)
+    if ($header.Length -lt 8 -or $header[0] -ne 0x89 -or $header[1] -ne 0x50 -or $header[2] -ne 0x4E -or $header[3] -ne 0x47) {
+        throw "Screenshot is not a PNG: $shotPath"
+    }
+    $problem = Test-RedPrismScreenshotContent -Path $shotPath
+    if ($problem) {
+        throw "Screenshot ($shotName) failed content validation: $problem ($shotPath)."
+    }
+    Write-Host "PASS harness screenshot ($shotName): $shotPath"
 }
 
 Write-Host 'All tests passed.' -ForegroundColor Green

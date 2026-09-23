@@ -13,6 +13,7 @@
 #include "Selection.h"
 #include "SystemClipboard.h"
 #include "Version.h"
+#include "VersionInfo.h"
 #include "WarpStroke.h"
 #include "WindowCapture.h"
 
@@ -3072,8 +3073,11 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandAbout:
         if (!_quietUi && _window)
         {
-            const std::wstring text =
-                FormatStringResource(nullptr, IDS_ABOUT_TEXT, std::wstring(L"" REDPRISM_VERSION_STRING_W));
+            // REDPRISM_VERSION_BUILD is a ResourceCompile-only define (Specs/Build/Build_Toolchain.md), so the
+            // compile-time REDPRISM_VERSION_STRING_W is always "0.1.0.0"; read this module's own VS_VERSIONINFO
+            // resource instead, falling back to the compile-time string if that ever fails (RF-704).
+            const std::wstring text = FormatStringResource(
+                nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
             const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
             MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
         }

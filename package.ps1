@@ -18,6 +18,7 @@ Where the ZIP, its .sha256 and the staging folder go. Default: .build\packages (
 .PARAMETER BuildNumber
 Overrides the Git commit count that build.ps1 stamps as the third version field.
 #>
+#Requires -Version 7.4
 [CmdletBinding()]
 param(
     [ValidateSet('x64', 'ARM64')]
@@ -44,18 +45,7 @@ if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot '.build\packages'
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-
-function Find-VisualStudio {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (-not (Test-Path -LiteralPath $vswhere)) {
-        return $null
-    }
-    $path = & $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $path) {
-        return $null
-    }
-    return ($path | Select-Object -First 1).Trim()
-}
+Import-Module (Join-Path $repoRoot 'Build\VisualStudioDiscovery.psm1') -Force
 
 function Find-Dumpbin([string] $VisualStudio) {
     if (-not $VisualStudio) {
@@ -126,7 +116,7 @@ if (Test-Path -LiteralPath $stage) {
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 Copy-Item -LiteralPath $executable -Destination $stage
 
-$visualStudio = Find-VisualStudio
+$visualStudio = Find-RedPrismVisualStudioInstallationPath
 $dumpbin = Find-Dumpbin -VisualStudio $visualStudio
 $redistPlatform = if ($Platform -eq 'ARM64') { 'arm64' } else { 'x64' }
 $redistCrt = Find-RedistCrt -VisualStudio $visualStudio -RedistPlatform $redistPlatform
@@ -186,6 +176,17 @@ foreach ($port in 'yyjson', 'libzip', 'zlib', 'clipper2', 'wil') {
     }
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'ThirdParty\Lucide\LICENSE') -Destination (Join-Path $notices 'lucide.txt')
+
+# DxUi.lib is linked into RedPrism.exe, so its own license ships too. restore-dxui.ps1 (run by build.ps1 above)
+# leaves the pinned source under .build\dependencies\DxUi\source\<commit>, with its license at that root.
+$dxUiLock = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') | ConvertFrom-Json
+$dxUiSource = Join-Path $repoRoot ".build\dependencies\DxUi\source\$($dxUiLock.commit)"
+$dxUiLicense = Get-ChildItem -LiteralPath $dxUiSource -Filter 'LICENSE*' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $dxUiLicense) {
+    throw "DxUi's license file was not found under $dxUiSource. Run restore-dxui.ps1 -Platform $Platform before packaging."
+}
+Copy-Item -LiteralPath $dxUiLicense.FullName -Destination (Join-Path $notices 'dxui.txt')
+
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\README.md') -Destination (Join-Path $stage 'README.md')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\usage.md') -Destination (Join-Path $stage 'usage.md')
 

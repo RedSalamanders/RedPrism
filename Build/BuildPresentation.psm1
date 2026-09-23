@@ -108,192 +108,33 @@ function Get-RedPrismWordmarkColors {
     )
 }
 
-function Set-RedPrismSceneCell {
-    param(
-        [Parameter(Mandatory)]
-        [System.Collections.Generic.List[char[]]] $Grid,
-
-        [int] $X,
-        [int] $Y,
-        [char] $Char,
-        [int] $Width,
-        [int] $Height
-    )
-
-    if ($X -lt 0 -or $Y -lt 0 -or $X -ge $Width -or $Y -ge $Height) {
-        return
-    }
-    $Grid[$Y][$X] = $Char
-}
-
-function Test-RedPrismPointInTriangle {
-    param(
-        [int] $Px, [int] $Py,
-        [int] $Ax, [int] $Ay,
-        [int] $Bx, [int] $By,
-        [int] $Cx, [int] $Cy
-    )
-
-    $d1 = (($Px - $Cx) * ($Ay - $Cy)) - (($Ax - $Cx) * ($Py - $Cy))
-    $d2 = (($Px - $Ax) * ($By - $Ay)) - (($Bx - $Ax) * ($Py - $Ay))
-    $d3 = (($Px - $Bx) * ($Cy - $By)) - (($Cx - $Bx) * ($Py - $By))
-    $hasNeg = ($d1 -lt 0) -or ($d2 -lt 0) -or ($d3 -lt 0)
-    $hasPos = ($d1 -gt 0) -or ($d2 -gt 0) -or ($d3 -gt 0)
-    return -not ($hasNeg -and $hasPos)
-}
-
-function Add-RedPrismFilledTriangle {
-    param(
-        [Parameter(Mandatory)]
-        [System.Collections.Generic.List[char[]]] $Grid,
-
-        [int] $Ax, [int] $Ay,
-        [int] $Bx, [int] $By,
-        [int] $Cx, [int] $Cy,
-        [int] $Width,
-        [int] $Height
-    )
-
-    $minX = [Math]::Max(0, [Math]::Min($Ax, [Math]::Min($Bx, $Cx)))
-    $maxX = [Math]::Min($Width - 1, [Math]::Max($Ax, [Math]::Max($Bx, $Cx)))
-    $minY = [Math]::Max(0, [Math]::Min($Ay, [Math]::Min($By, $Cy)))
-    $maxY = [Math]::Min($Height - 1, [Math]::Max($Ay, [Math]::Max($By, $Cy)))
-    $left = @{}
-    $right = @{}
-
-    for ($y = $minY; $y -le $maxY; ++$y) {
-        for ($x = $minX; $x -le $maxX; ++$x) {
-            if (Test-RedPrismPointInTriangle -Px $x -Py $y -Ax $Ax -Ay $Ay -Bx $Bx -By $By -Cx $Cx -Cy $Cy) {
-                if (-not $left.ContainsKey($y) -or $x -lt $left[$y]) {
-                    $left[$y] = $x
-                }
-                if (-not $right.ContainsKey($y) -or $x -gt $right[$y]) {
-                    $right[$y] = $x
-                }
-            }
-        }
-    }
-
-    foreach ($y in @($left.Keys)) {
-        $span = $right[$y] - $left[$y]
-        for ($x = $left[$y]; $x -le $right[$y]; ++$x) {
-            $shade = 'c'
-            if ($span -gt 2) {
-                $t = ($x - $left[$y]) / [double]$span
-                if ($t -lt 0.18) {
-                    $shade = 'h'
-                }
-                elseif ($t -gt 0.78) {
-                    $shade = 'd'
-                }
-            }
-            Set-RedPrismSceneCell -Grid $Grid -X $x -Y $y -Char $shade -Width $Width -Height $Height
-        }
-    }
-
-    return [pscustomobject]@{
-        Left = $left
-        Right = $right
-    }
-}
-
 function New-RedPrismSceneRows {
-    $width = 62
-    $height = 20
-    $grid = [System.Collections.Generic.List[char[]]]::new()
-    for ($y = 0; $y -lt $height; ++$y) {
-        $grid.Add([char[]](('.' * $width).ToCharArray()))
-    }
-
-    $apexX = 34
-    $apexY = 1
-    $baseLeftX = 20
-    $baseRightX = 48
-    $baseY = 16
-    $edges = Add-RedPrismFilledTriangle -Grid $grid `
-        -Ax $apexX -Ay $apexY -Bx $baseLeftX -By $baseY -Cx $baseRightX -Cy $baseY `
-        -Width $width -Height $height
-
-    foreach ($y in @($edges.Left.Keys)) {
-        Set-RedPrismSceneCell -Grid $grid -X ($edges.Left[$y] - 1) -Y $y -Char 's' -Width $width -Height $height
-        Set-RedPrismSceneCell -Grid $grid -X ($edges.Right[$y] + 1) -Y $y -Char 's' -Width $width -Height $height
-    }
-
-    foreach ($y in 8, 9, 10, 11) {
-        if (-not $edges.Left.ContainsKey($y)) {
-            continue
-        }
-        $beamEnd = $edges.Left[$y] - 2
-        $core = ($y -eq 9 -or $y -eq 10)
-        $start = if ($core) { 4 } else { 8 }
-        for ($x = $start; $x -le $beamEnd; ++$x) {
-            $char = if ($core) { 'W' } else { 'e' }
-            Set-RedPrismSceneCell -Grid $grid -X $x -Y $y -Char $char -Width $width -Height $height
-        }
-    }
-
-    Set-RedPrismSceneCell -Grid $grid -X 2 -Y 9 -Char '*' -Width $width -Height $height
-    Set-RedPrismSceneCell -Grid $grid -X 3 -Y 10 -Char '*' -Width $width -Height $height
-
-    foreach ($pair in @(
-            @{ X = 1; Y = 1; Char = 'r' }, @{ X = 2; Y = 1; Char = 'r' }, @{ X = 3; Y = 1; Char = 'r' },
-            @{ X = 1; Y = 2; Char = 'r' }, @{ X = 2; Y = 2; Char = 'r' },
-            @{ X = 2; Y = 2; Char = 'n' }, @{ X = 3; Y = 2; Char = 'n' }, @{ X = 4; Y = 2; Char = 'n' },
-            @{ X = 2; Y = 3; Char = 'n' }, @{ X = 3; Y = 3; Char = 'n' },
-            @{ X = 3; Y = 3; Char = 'b' }, @{ X = 4; Y = 3; Char = 'b' }, @{ X = 5; Y = 3; Char = 'b' },
-            @{ X = 3; Y = 4; Char = 'b' }, @{ X = 4; Y = 4; Char = 'b' }
-        )) {
-        Set-RedPrismSceneCell -Grid $grid -X $pair.X -Y $pair.Y -Char $pair.Char -Width $width -Height $height
-    }
-
-    $spectrum = @('r', 'o', 'y', 'n', 't', 'b', 'm')
-    $exitY = 10
-    if ($edges.Right.ContainsKey($exitY)) {
-        Set-RedPrismSceneCell -Grid $grid -X ($edges.Right[$exitY] + 1) -Y $exitY -Char '*' `
-            -Width $width -Height $height
-    }
-    for ($i = 0; $i -lt $spectrum.Count; ++$i) {
-        $originY = 8 + $i
-        if (-not $edges.Right.ContainsKey($originY)) {
-            continue
-        }
-        $originX = $edges.Right[$originY] + 2
-        $length = 11 + $i
-        $fan = $i - 3
-        for ($t = 0; $t -lt $length; ++$t) {
-            $x = $originX + $t
-            $y = $originY + [int][Math]::Round($t * $fan * 0.12)
-            if ($x -ge ($width - 9)) {
-                break
-            }
-            Set-RedPrismSceneCell -Grid $grid -X $x -Y $y -Char $spectrum[$i] -Width $width -Height $height
-        }
-    }
-
-    for ($x = $baseLeftX; $x -le $baseRightX; ++$x) {
-        Set-RedPrismSceneCell -Grid $grid -X $x -Y ($baseY + 1) -Char 's' -Width $width -Height $height
-    }
-
-    $checkerX = $width - 8
-    $checkerY = $height - 5
-    for ($y = 0; $y -lt 4; ++$y) {
-        for ($x = 0; $x -lt 6; ++$x) {
-            $char = if ((($x + $y) % 2) -eq 0) { 'k' } else { 'W' }
-            Set-RedPrismSceneCell -Grid $grid -X ($checkerX + $x) -Y ($checkerY + $y) -Char $char `
-                -Width $width -Height $height
-        }
-    }
-
-    $rows = @(foreach ($row in $grid) { -join $row })
-    foreach ($row in $rows) {
-        if ($row.Length -ne $width) {
-            throw "RedPrism banner scene row width $($row.Length) does not match $width."
-        }
-    }
-    if (($rows.Count % 2) -ne 0) {
-        throw 'RedPrism banner scene must have an even row count for half-block pixels.'
-    }
-    return @($rows)
+    # A fixed 62x20 half-block pixel-art scene (incoming beam, glass prism, dispersed spectrum, composition layer
+    # chips, canvas checker): literal rows authored once, not a triangle rasterized at every build (RF-709). The
+    # pixel codes (r/o/y/n/t/b/m spectrum, c/h/d glass, e/W beam, s stroke, k/W checker, * highlight) are the keys
+    # of Get-RedPrismPixelPalette.
+    return @(
+        '..............................................................',
+        '.rrr.............................scs..........................',
+        '.rnnn............................scs..........................',
+        '..nbbb..........................scccs.........................',
+        '...bb..........................shcccds..............r.........',
+        '..............................shhcccdds..........rrr..........',
+        '.............................shhcccccdds.......rr.............',
+        '............................shhccccccddds...rrr...ooo.........',
+        '........eeeeeeeeeeeeeeeeeeeshhhcccccccdddsrr..oooo............',
+        '..*.WWWWWWWWWWWWWWWWWWWWWWshhhccccccccddddsooo...yyyy.........',
+        '...*WWWWWWWWWWWWWWWWWWWWWshhhccccccccccdddd*yyyyy.............',
+        '........eeeeeeeeeeeeeeeeshhhhcccccccccccddddsnnnnnnnn.........',
+        '.......................shhhhccccccccccccdddddsttttt...........',
+        '......................shhhhccccccccccccccdddddsbbb.tt.........',
+        '.....................shhhhhccccccccccccccddddddsmmbbb.........',
+        '....................shhhhhccccccccccccccccdddddds.mmm.kWkWkW..',
+        '...................shhhhhhccccccccccccccccddddddds....WkWkWk..',
+        '....................sssssssssssssssssssssssssssss.....kWkWkW..',
+        '......................................................WkWkWk..',
+        '..............................................................'
+    )
 }
 
 function Get-RedPrismWordmarkGlyphs {
@@ -598,25 +439,10 @@ function Get-RedPrismDxUiUpdateNoticeForegroundColor {
     return 'DarkYellow'
 }
 
-function Format-RedPrismDxUiUpdateNotice {
-    [CmdletBinding()]
-    param(
-        [AllowNull()]
-        [string] $Notice
-    )
-
-    if ([string]::IsNullOrWhiteSpace($Notice)) {
-        return $null
-    }
-
-    return $Notice
-}
-
 Export-ModuleMember -Function @(
     'Test-RedPrismInteractiveTerminal',
     'Test-RedPrismTrueColorHost',
     'Get-RedPrismBuildBannerModel',
     'Write-RedPrismBuildBanner',
-    'Get-RedPrismDxUiUpdateNoticeForegroundColor',
-    'Format-RedPrismDxUiUpdateNotice'
+    'Get-RedPrismDxUiUpdateNoticeForegroundColor'
 )

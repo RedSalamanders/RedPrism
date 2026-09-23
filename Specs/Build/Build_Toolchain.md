@@ -54,7 +54,7 @@ MUST refuse to run on a non-ARM64 host.
 | --- | --- |
 | Binaries | `.build/<Platform>/<Configuration>/` |
 | Intermediates | `.build/Intermediate/<Platform>/<Configuration>/<Project>/` |
-| vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64\|x64-asan>/` |
+| vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64\|x64-asan\|arm64-asan>/` |
 | vcpkg tool checkout | `.build/vcpkg-tool/` |
 | MSBuild logs | `.build/logs/` |
 
@@ -101,10 +101,12 @@ C0–C4 used WIL and yyjson only. C5 adds libzip; C9 adds Clipper2 for selection
 this contract.
 
 `vcpkg-install.ps1` clones the pinned tooling under `.build/vcpkg-tool/`, bootstraps it, and installs into the
-platform-scoped tree. `ASan Debug` links its own tree (`vcpkg-install.ps1 -Asan`, `.build/vcpkg_installed/x64-asan/`):
-the overlay triplet `Build/vcpkg-triplets/x64-windows-asan.cmake` builds every dependency with `/fsanitize=address`
-(its chainloaded toolchain drops vcpkg's `/RTC1`), so a static library such as Clipper2 carries the same STL container
-annotations as the sanitized application and DxUi objects and links cleanly. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
+platform-scoped tree. `ASan Debug` links its own tree per platform (`vcpkg-install.ps1 -Asan`,
+`.build/vcpkg_installed/x64-asan/` or `-Platform ARM64 -Asan`, `.build/vcpkg_installed/arm64-asan/`): the overlay
+triplet `Build/vcpkg-triplets/x64-windows-asan.cmake` (ARM64: `arm64-windows-asan.cmake`, mirrored, sharing the same
+`asan-toolchain.cmake`) builds every dependency with `/fsanitize=address` (its chainloaded toolchain drops vcpkg's
+`/RTC1`), so a static library such as Clipper2 carries the same STL container annotations as the sanitized
+application and DxUi objects and links cleanly. The MSBuild vcpkg integration is disabled (`VcpkgEnabled=false`); include and library directories
 are wired from that tree. `Directory.Build.targets` copies `yyjson.dll`, `zip.dll`, and the zlib runtime (`z.dll` /
 `zd.dll` or `zlib1.dll`) next to `RedPrism.exe`, `HostTests.exe`, `IoTests.exe`, and `CompositionTests.exe`.
 

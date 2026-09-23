@@ -6,6 +6,9 @@
 #include "SettingsStore.h"
 #include "resource.h"
 
+#include <crtdbg.h>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <new>
 #include <optional>
@@ -24,16 +27,44 @@ constexpr bool kDebugBuild = true;
 constexpr bool kDebugBuild = false;
 #endif
 
-struct LocalFreeDeleter
+// A per-run folder under the system temp directory for harness-mode crash dumps (--self-test, --screenshot, a
+// --demo, --bench): never the user's real %LocalAppData%\RedPrism\Crashes, so a crashing harness run cannot leave
+// a pending.txt that trips the "crashed last time" prompt on the next ordinary launch (RF-708,
+// Specs/Core/Core_CrashHandling.md). Falls back to the ordinary default directory if the temp path is unavailable.
+[[nodiscard]] std::wstring HarnessCrashDirectory()
 {
-    void operator()(wchar_t** value) const noexcept
+    wchar_t tempPath[MAX_PATH]{};
+    const DWORD tempLength = GetTempPathW(static_cast<DWORD>(MAX_PATH), tempPath);
+    if (tempLength == 0 || tempLength >= MAX_PATH)
     {
-        if (value)
-        {
-            LocalFree(value);
-        }
+        return CrashDumps::DefaultDirectory();
     }
-};
+    return std::wstring{tempPath, tempLength} + L"RedPrism.Harness\\" + std::to_wstring(GetCurrentProcessId());
+}
+
+#if defined(_DEBUG)
+// Installed only for harness runs. A Debug assertion or debug-heap error report has no one to click a dialog, and
+// the CRT's own default handling does not always abort by itself on a report (RF-702,
+// Specs/Testing/Testing_Validation.md): this hook writes the report to stderr itself and ends the process right
+// away instead of letting an untrustworthy heap wander on into a later, unrelated failure.
+int __cdecl HarnessCrtReportHook(int reportType, char* message, int* returnValue) noexcept
+{
+    if (reportType != _CRT_ERROR && reportType != _CRT_ASSERT)
+    {
+        return 0;
+    }
+    if (message)
+    {
+        std::fputs(message, stderr);
+        std::fflush(stderr);
+    }
+    if (returnValue)
+    {
+        *returnValue = 0;
+    }
+    std::_Exit(3);
+}
+#endif
 
 bool HasArgument(wchar_t* const* arguments, int argumentCount, std::wstring_view expected) noexcept
 {
@@ -98,7 +129,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     int argumentCount = 0;
-    std::unique_ptr<wchar_t*, LocalFreeDeleter> arguments{CommandLineToArgvW(GetCommandLineW(), &argumentCount)};
+    wil::unique_hlocal_ptr<wchar_t*[]> arguments{CommandLineToArgvW(GetCommandLineW(), &argumentCount)};
     if (!arguments)
     {
         return 1;
@@ -132,9 +163,16 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 2;
     }
 
+    // Settings, the language, and the user's real crash folder belong to ordinary runs: every harness switch
+    // (self-test, a screenshot, a demo, a benchmark) keeps the defaults (dark chrome, English) and its own crash
+    // dumps out of the user's directories (RF-708).
+    const bool harness =
+        parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
+
     // Crash handling comes first so every later failure leaves a dump (Specs/Core/Core_CrashHandling.md); the
     // probe raises a fault through it and never reaches the window.
     const std::wstring crashDirectory = parsed.crashProbeDirectory != nullptr ? std::wstring{parsed.crashProbeDirectory}
+                                        : harness                             ? HarnessCrashDirectory()
                                                                               : CrashDumps::DefaultDirectory();
     CrashDumps::InstallCrashHandler(crashDirectory.c_str());
     if (parsed.crashProbeDirectory != nullptr)
@@ -142,29 +180,33 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         CrashDumps::RaiseProbeCrash();
     }
 
+#if defined(_DEBUG)
+    if (harness)
+    {
+        // No one can click a dialog on a harness run, and the CRT's own default handling does not always abort by
+        // itself on a report (RF-702): install the hook that ends the process the moment one happens.
+        _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &HarnessCrtReportHook);
+    }
+#endif
+
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(com) && com != RPC_E_CHANGED_MODE)
     {
         return 1;
     }
-    const bool uninitializeCom = SUCCEEDED(com);
+    // Declared before Application: reverse destruction order then runs ~Application (UIA disconnect,
+    // DestroyWindow) before CoUninitialize, not after (RF-710). Armed only when this call actually initialized COM
+    // (RPC_E_CHANGED_MODE means something else already did, and only that owner may uninitialize it).
+    wil::unique_couninitialize_call comScope{SUCCEEDED(com)};
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
     const std::unique_ptr<Application> application{new (std::nothrow) Application(
         instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
     if (!application)
     {
-        if (uninitializeCom)
-        {
-            CoUninitialize();
-        }
         return 1;
     }
 
-    // Settings, the language and last time's crash report belong to ordinary runs: the harness switches keep the
-    // defaults (dark chrome, English) and never touch the user's directories.
-    const bool harness =
-        parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
     AppSettings settings;
     std::wstring settingsPath;
     wil::unique_hmodule satellite;
@@ -225,10 +267,6 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         MessageBoxW(nullptr, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
     }
     SetStringResourceSatellite(nullptr);
-    if (uninitializeCom)
-    {
-        CoUninitialize();
-    }
     return exitCode;
 }
 } // namespace

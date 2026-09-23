@@ -37,6 +37,7 @@ is no auto-update: RedPrism never contacts a server ([`Core_CrashHandling.md`](.
 | Visual C++ CRT | App-local from the installed Visual Studio's `VC\Redist\MSVC\<version>\<platform>\Microsoft.VC*.CRT` (`vcruntime140*.dll`, `msvcp140*.dll` as imported). Release links `/MD`; the Debug CRT is not redistributable, so a package is always Release. The Universal CRT ships with Windows 10 and later and is not staged |
 | `ThirdPartyNotices\<port>.txt` | vcpkg's `share/<port>/copyright` for `yyjson`, `libzip`, `zlib`, `clipper2` and `wil` |
 | `ThirdPartyNotices\lucide.txt` | `ThirdParty/Lucide/LICENSE` (ISC, plus the MIT notice for the Feather-derived icons) |
+| `ThirdPartyNotices\dxui.txt` | DxUi's own license (MIT), read from the pinned source `restore-dxui.ps1` leaves at `.build\dependencies\DxUi\source\<commit>\LICENSE*`; packaging fails if it is missing rather than shipping `DxUi.lib` without its notice |
 | `README.md`, `usage.md` | `docs/README.md` and `docs/usage.md` as shipped |
 | `Languages\<tag>\RedPrism.resources.dll` | Not staged in v1 (no translation exists); a release with one adds the folder ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md), Strings) |
 

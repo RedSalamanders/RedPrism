@@ -92,10 +92,6 @@ if ((Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $validated) -ne 'Yellow
     $null -ne (Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice '   ')) {
     throw 'DxUi update notices did not keep the RedSalamander severity colors.'
 }
-if ((Format-RedPrismDxUiUpdateNotice -Notice $validated) -ne $validated -or
-    $null -ne (Format-RedPrismDxUiUpdateNotice -Notice '')) {
-    throw 'DxUi update notice text was rewritten or a blank notice was shown.'
-}
 
 $buildScript = Get-Content -LiteralPath (Join-Path $repo 'build.ps1') -Raw
 $restoreScript = Get-Content -LiteralPath (Join-Path $repo 'restore-dxui.ps1') -Raw

@@ -49,14 +49,10 @@ if (-not (Test-Path -LiteralPath $source)) {
 
 & (Join-Path $source 'Tools/validate_consumer.ps1') -DxUiRoot $source -LockFile $pinPath
 if (-not $MSBuildPath) {
-    if ($env:MSBUILD_EXE_PATH) {
-        $MSBuildPath = $env:MSBUILD_EXE_PATH
-    } else {
-        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = & $vswhere -all -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath |
-            Select-Object -First 1
-        $MSBuildPath = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
-    }
+    Import-Module (Join-Path $PSScriptRoot 'Build/VisualStudioDiscovery.psm1') -Force
+    # Restricted to Visual Studio 2026 (18.x): an unranged vswhere lookup could pick an older MSBuild without the
+    # v145 toolset RedPrism requires (RF-707).
+    $MSBuildPath = Find-RedPrismMSBuild
 }
 
 Import-Module (Join-Path $source 'Tools/ConsumerBuild.psm1') -Force
@@ -97,7 +93,7 @@ if ($CheckUpdates) {
         }
         $foregroundColor = Get-RedPrismDxUiUpdateNoticeForegroundColor -Notice $notice
         if ($foregroundColor) {
-            Write-Host (Format-RedPrismDxUiUpdateNotice -Notice $notice) -ForegroundColor $foregroundColor
+            Write-Host $notice -ForegroundColor $foregroundColor
         }
     }
 }

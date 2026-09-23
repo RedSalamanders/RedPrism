@@ -8,11 +8,15 @@
     <TargetName>$(MSBuildProjectName)</TargetName>
 
     <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='ARM64'">arm64</RedPrismVcpkgPlatformScope>
-    <!-- ASan Debug links the sanitized dependency tree (vcpkg-install.ps1 -Asan, overlay triplet x64-windows-asan). -->
+    <!-- ASan Debug links a sanitized dependency tree per platform (vcpkg-install.ps1 -Asan, overlay triplets
+         x64-windows-asan / arm64-windows-asan; Decision D8, Specs/Plans/WIP/ReviewFixes_2026-09-23.md). Each
+         platform's ASan condition is evaluated after that platform's plain baseline above, so it wins. -->
     <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='x64' and '$(Configuration)'=='ASan Debug'">x64-asan</RedPrismVcpkgPlatformScope>
+    <RedPrismVcpkgPlatformScope Condition="'$(Platform)'=='ARM64' and '$(Configuration)'=='ASan Debug'">arm64-asan</RedPrismVcpkgPlatformScope>
     <RedPrismVcpkgPlatformScope Condition="'$(RedPrismVcpkgPlatformScope)'==''">x64</RedPrismVcpkgPlatformScope>
     <RedPrismVcpkgTriplet Condition="'$(Platform)'=='ARM64'">arm64-windows</RedPrismVcpkgTriplet>
     <RedPrismVcpkgTriplet Condition="'$(Platform)'=='x64' and '$(Configuration)'=='ASan Debug'">x64-windows-asan</RedPrismVcpkgTriplet>
+    <RedPrismVcpkgTriplet Condition="'$(Platform)'=='ARM64' and '$(Configuration)'=='ASan Debug'">arm64-windows-asan</RedPrismVcpkgTriplet>
     <RedPrismVcpkgTriplet Condition="'$(RedPrismVcpkgTriplet)'==''">x64-windows</RedPrismVcpkgTriplet>
     <VcpkgManifestRoot>$(MSBuildThisFileDirectory)</VcpkgManifestRoot>
     <VcpkgInstalledDir>$(RedPrismBuildRoot)vcpkg_installed\$(RedPrismVcpkgPlatformScope)\</VcpkgInstalledDir>
@@ -52,6 +56,12 @@
     <Link>
       <AdditionalLibraryDirectories>$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <!-- rc.exe never sees ClCompile's own _DEBUG (a separate PreprocessorDefinitions list); without this, every
+         RedPrism.rc VS_VERSION_INFO block takes the #else branch and a Debug build's version resource never carries
+         VS_FF_DEBUG (RF-707). -->
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='Release'">

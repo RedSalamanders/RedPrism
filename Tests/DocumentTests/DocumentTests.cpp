@@ -5934,14 +5934,33 @@ void TestPendingEdits()
     }
 }
 
+int gCrtReportFailures = 0; // incremented only in Debug / ASan Debug; see CountCrtReportFailures below.
+
+#if defined(_DEBUG)
+// Counts _CRT_ERROR / _CRT_ASSERT reports instead of trusting the CRT's own default handling to abort: a debug-heap
+// corruption report does not always abort by itself, so a run could otherwise print the report and still exit 0
+// (RF-702, Specs/Testing/Testing_Validation.md). _CRTDBG_MODE_FILE / _CRTDBG_FILE_STDERR (installed alongside this
+// hook, in wmain) still write the report text to stderr; this hook only has to observe it.
+int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*returnValue*/) noexcept
+{
+    if (reportType == _CRT_ERROR || reportType == _CRT_ASSERT)
+    {
+        ++gCrtReportFailures;
+    }
+    return 0;
+}
+#endif
+
 int wmain()
 {
 #if defined(_DEBUG)
-    // A Debug assertion reports on stderr and aborts instead of waiting on a dialog no harness can click.
+    // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
+    // counts it so this run fails even when the CRT's own default handling would just continue.
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &CountCrtReportFailures);
 #endif
     (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     TestHierarchy();
@@ -6019,9 +6038,9 @@ int wmain()
     TestCrop();
     TestMerge();
     TestPendingEdits();
-    if (gFailures != 0)
+    if (gFailures != 0 || gCrtReportFailures != 0)
     {
-        std::printf("%d document tests failed.\n", gFailures);
+        std::printf("%d document tests failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);
         return 1;
     }
     std::printf("All document tests passed.\n");

@@ -11,19 +11,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSCommandPath
-$command = Get-Command 'clang-format.exe' -ErrorAction SilentlyContinue
-$clangFormat = if ($command) { $command.Source } else { $null }
+Import-Module (Join-Path $repoRoot 'Build\VisualStudioDiscovery.psm1') -Force
+$clangFormat = Find-RedPrismClangFormat
 
 if (-not $clangFormat) {
-    $candidates = @(
-        (Join-Path $env:ProgramFiles 'LLVM\bin\clang-format.exe'),
-        (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\18\Insiders\VC\Tools\Llvm\x64\bin\clang-format.exe')
-    )
-    $clangFormat = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-}
-
-if (-not $clangFormat) {
-    throw 'clang-format was not found. Install the Visual Studio C++ Clang tools component or LLVM.'
+    throw 'clang-format was not found. Install the Visual Studio C++ Clang tools component (any Visual Studio 2026 edition, not only Insiders) or LLVM.'
 }
 
 $sourceRoots = @('Common', 'RedPrism', 'Tests') | ForEach-Object { Join-Path $repoRoot $_ }

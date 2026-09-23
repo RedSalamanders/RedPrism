@@ -36,51 +36,10 @@ $solutionPath = Join-Path $repoRoot 'RedPrism.sln'
 $executable = Join-Path $repoRoot ".build\$Platform\$Configuration\RedPrism.exe"
 
 Import-Module (Join-Path $repoRoot 'Build\BuildPresentation.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Build\BuildPreflight.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Build\VisualStudioDiscovery.psm1') -Force
 $useInteractiveTerminal = Test-RedPrismInteractiveTerminal
 Write-RedPrismBuildBanner -UseColor $useInteractiveTerminal
-
-function Assert-BuildOutputProcessNotRunning {
-    param([string] $ExpectedExecutablePath)
-    if (-not (Test-Path -LiteralPath $ExpectedExecutablePath -PathType Leaf)) {
-        return
-    }
-    $expected = [IO.Path]::GetFullPath($ExpectedExecutablePath)
-    Get-CimInstance Win32_Process -Filter "Name='RedPrism.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
-        if ($_.ExecutablePath) {
-            $running = [IO.Path]::GetFullPath($_.ExecutablePath)
-            if ($running -eq $expected) {
-                throw "RedPrism.exe is running from $expected (PID $($_.ProcessId)). Close it; this script will not terminate it."
-            }
-        }
-    }
-}
-
-function Find-MSBuild {
-    if ($env:MSBUILD_EXE_PATH -and (Test-Path -LiteralPath $env:MSBUILD_EXE_PATH -PathType Leaf)) {
-        return $env:MSBUILD_EXE_PATH
-    }
-
-    $pathCommand = Get-Command 'msbuild.exe' -ErrorAction SilentlyContinue
-    if ($pathCommand) {
-        return $pathCommand.Source
-    }
-
-    $vswhereCandidates = @(
-        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'),
-        (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Installer\vswhere.exe')
-    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
-
-    foreach ($vswhere in $vswhereCandidates) {
-        $matches = & $vswhere -all -prerelease -products '*' -requires Microsoft.Component.MSBuild `
-            -find 'MSBuild\**\Bin\amd64\MSBuild.exe' 2>$null
-        $candidate = $matches | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-        if ($candidate) {
-            return $candidate
-        }
-    }
-
-    throw 'MSBuild was not found. Install the Visual Studio Desktop development with C++ workload.'
-}
 
 function Resolve-BuildNumber {
     param([int] $Requested)
@@ -99,12 +58,12 @@ function Resolve-BuildNumber {
     return 0
 }
 
-Assert-BuildOutputProcessNotRunning -ExpectedExecutablePath $executable
+Assert-RedPrismBuildOutputProcessNotRunning -ExpectedExecutablePath $executable
 
 $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
 
-$msbuild = Find-MSBuild
+$msbuild = Find-RedPrismMSBuild
 $target = if ($Clean) { 'Clean' } elseif ($Rebuild) { 'Rebuild' } else { 'Build' }
 if (-not $Clean) {
     Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
