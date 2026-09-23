@@ -66,22 +66,6 @@ struct Manifest
     return full;
 }
 
-[[nodiscard]] bool PathIsInside(const std::wstring& root, const std::wstring& candidate)
-{
-    std::wstring prefix = root;
-    while (!prefix.empty() && (prefix.back() == L'\\' || prefix.back() == L'/'))
-    {
-        prefix.pop_back();
-    }
-    prefix += L'\\';
-    if (candidate.size() < prefix.size())
-    {
-        return false;
-    }
-    return CompareStringOrdinal(candidate.c_str(), static_cast<int>(prefix.size()), prefix.c_str(),
-                                static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
-}
-
 [[nodiscard]] bool HasReparse(const wchar_t* path) noexcept
 {
     const DWORD attributes = GetFileAttributesW(path);
@@ -147,32 +131,30 @@ struct Manifest
     return ProjectIoStatus::Ok;
 }
 
+// Shares ImageCodecs' file-write primitive (CreateFile/WriteFile/FlushFileBuffers) so there is one implementation
+// of "write these bytes durably" in the codebase; this wrapper just keeps ProjectStore's own status enum.
 [[nodiscard]] ProjectIoStatus WriteFileBytes(const wchar_t* path, const std::uint8_t* bytes, std::size_t size)
 {
-    if (path == nullptr)
-    {
-        return ProjectIoStatus::Encode;
-    }
-    const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE)
-    {
-        return ProjectIoStatus::Encode;
-    }
-    wil::unique_hfile owned{file};
-    DWORD written = 0;
-    if (size > 0 && (!WriteFile(owned.get(), bytes, static_cast<DWORD>(size), &written, nullptr) || written != size))
-    {
-        return ProjectIoStatus::Encode;
-    }
-    return ProjectIoStatus::Ok;
+    return WriteFileBytesToDisk(path, bytes, size) ? ProjectIoStatus::Ok : ProjectIoStatus::Encode;
 }
 
-[[nodiscard]] bool GetNumber(yyjson_val* object, const char* key, double& value, bool required)
+// Flushes an already-closed file to disk (libzip closes its own handle internally, so this reopens the path
+// briefly) before the caller renames or replaces another file with it.
+void FlushFileToDisk(const wchar_t* path) noexcept
 {
-    yyjson_val* field = yyjson_obj_get(object, key);
+    wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (file)
+    {
+        FlushFileBuffers(file.get());
+    }
+}
+
+[[nodiscard]] bool GetNumberValue(yyjson_val* field, double& value)
+{
     if (field == nullptr)
     {
-        return !required;
+        return false;
     }
     if (yyjson_is_real(field))
     {
@@ -185,6 +167,16 @@ struct Manifest
         return true;
     }
     return false;
+}
+
+[[nodiscard]] bool GetNumber(yyjson_val* object, const char* key, double& value, bool required)
+{
+    yyjson_val* field = yyjson_obj_get(object, key);
+    if (field == nullptr)
+    {
+        return !required;
+    }
+    return GetNumberValue(field, value);
 }
 
 [[nodiscard]] bool GetInt(yyjson_val* object, const char* key, int& value, bool required)
@@ -257,20 +249,37 @@ struct Manifest
     return true;
 }
 
+// A Swift CGPoint/CGSize (legacy `LayerTransform.origin`/`.size`): Apple's Codable overlay encodes these as a
+// 2-element unkeyed array, `[x, y]` / `[width, height]`, not a keyed object. RedPrism's writer now matches that
+// shape; the reader also accepts the `{x,y}` / `{width,height}` object shape RedPrism itself used to write, so
+// older saved projects keep loading.
+[[nodiscard]] bool ParseCoordinatePair(yyjson_val* value, const char* firstKey, const char* secondKey, double& first,
+                                       double& second)
+{
+    if (value == nullptr)
+    {
+        return false;
+    }
+    if (yyjson_is_arr(value))
+    {
+        return yyjson_arr_size(value) == 2 && GetNumberValue(yyjson_arr_get(value, 0), first) &&
+               GetNumberValue(yyjson_arr_get(value, 1), second);
+    }
+    if (yyjson_is_obj(value))
+    {
+        return GetNumber(value, firstKey, first, true) && GetNumber(value, secondKey, second, true);
+    }
+    return false;
+}
+
 [[nodiscard]] bool ParseTransform(yyjson_val* object, LayerTransform& transform)
 {
     if (object == nullptr || !yyjson_is_obj(object))
     {
         return false;
     }
-    yyjson_val* origin = yyjson_obj_get(object, "origin");
-    yyjson_val* size = yyjson_obj_get(object, "size");
-    if (!yyjson_is_obj(origin) || !yyjson_is_obj(size))
-    {
-        return false;
-    }
-    if (!GetNumber(origin, "x", transform.origin.x, true) || !GetNumber(origin, "y", transform.origin.y, true) ||
-        !GetNumber(size, "width", transform.size.x, true) || !GetNumber(size, "height", transform.size.y, true))
+    if (!ParseCoordinatePair(yyjson_obj_get(object, "origin"), "x", "y", transform.origin.x, transform.origin.y) ||
+        !ParseCoordinatePair(yyjson_obj_get(object, "size"), "width", "height", transform.size.x, transform.size.y))
     {
         return false;
     }
@@ -763,6 +772,20 @@ template <typename T, typename Parser>
     return true;
 }
 
+// `fileName` is `<id>suffix` where `<id>` names `id` (IO_ProjectFormat.md: "UUIDs are written uppercase and read
+// in either case") and `suffix` is the literal, case-sensitive ".png" / ".mask.png". Comparing by parsed value
+// instead of by text makes the case-insensitivity exact instead of an ad hoc re-casing of one side.
+[[nodiscard]] bool AssetNameMatches(const std::string& fileName, const Guid& id, const char* suffix)
+{
+    const std::size_t suffixLength = std::strlen(suffix);
+    if (fileName.size() <= suffixLength || fileName.compare(fileName.size() - suffixLength, suffixLength, suffix) != 0)
+    {
+        return false;
+    }
+    const std::optional<Guid> parsed = Guid::Parse(fileName.substr(0, fileName.size() - suffixLength));
+    return parsed.has_value() && parsed.value() == id;
+}
+
 [[nodiscard]] ProjectIoStatus ParseManifest(const std::vector<std::uint8_t>& bytes, Manifest& manifest)
 {
     manifest = {};
@@ -842,12 +865,11 @@ template <typename T, typename Parser>
         {
             return ProjectIoStatus::Invalid;
         }
-        const std::string id = record.layer.id.ToUtf8();
-        if (!record.imageFile.empty() && record.imageFile != id + ".png")
+        if (!record.imageFile.empty() && !AssetNameMatches(record.imageFile, record.layer.id, ".png"))
         {
             return ProjectIoStatus::Invalid;
         }
-        if (!record.maskFile.empty() && record.maskFile != id + ".mask.png")
+        if (!record.maskFile.empty() && !AssetNameMatches(record.maskFile, record.layer.id, ".mask.png"))
         {
             return ProjectIoStatus::Invalid;
         }
@@ -901,18 +923,20 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
 
 [[nodiscard]] yyjson_mut_val* WriteTransform(yyjson_mut_doc* doc, const LayerTransform& transform)
 {
+    // origin/size are Swift CGPoint/CGSize on the wire: a 2-element array, [x, y] / [width, height], matching
+    // Apple's Codable overlay for those types (legacy `LayerTransform`), not a keyed {x,y}/{width,height} object.
     yyjson_mut_val* object = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_bool(doc, object, "flipX", transform.flipX);
     yyjson_mut_obj_add_bool(doc, object, "flipY", transform.flipY);
-    yyjson_mut_val* origin = yyjson_mut_obj(doc);
-    yyjson_mut_obj_add_real(doc, origin, "x", transform.origin.x);
-    yyjson_mut_obj_add_real(doc, origin, "y", transform.origin.y);
+    yyjson_mut_val* origin = yyjson_mut_arr(doc);
+    yyjson_mut_arr_add_real(doc, origin, transform.origin.x);
+    yyjson_mut_arr_add_real(doc, origin, transform.origin.y);
     yyjson_mut_obj_add_val(doc, object, "origin", origin);
     yyjson_mut_obj_add_real(doc, object, "rotation", transform.rotation);
     AddStr(doc, object, "sampling", LayerSamplingName(transform.sampling));
-    yyjson_mut_val* size = yyjson_mut_obj(doc);
-    yyjson_mut_obj_add_real(doc, size, "height", transform.size.y);
-    yyjson_mut_obj_add_real(doc, size, "width", transform.size.x);
+    yyjson_mut_val* size = yyjson_mut_arr(doc);
+    yyjson_mut_arr_add_real(doc, size, transform.size.x);
+    yyjson_mut_arr_add_real(doc, size, transform.size.y);
     yyjson_mut_obj_add_val(doc, object, "size", size);
     return object;
 }
@@ -1125,7 +1149,12 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         {
             AddStr(doc.get(), object, "parentID", layer.parentID.value().ToUtf8().c_str());
         }
-        if (layer.shape.has_value())
+        // Liveness is image identity (BrushStroke.cpp's IsLive check): once the layer's pixels are painted over,
+        // `asset` no longer holds the raster the shape drew, and `shape` must not be written — otherwise reopening
+        // the project makes it live again and the next size change redraws the shape, discarding the paint
+        // (legacy EditorSession+Projects.swift writes `shape: layer.liveShape?.style`).
+        if (layer.shape.has_value() && layer.asset.has_value() && layer.shapeImage.HasStorage() &&
+            layer.asset.value().image == layer.shapeImage)
         {
             yyjson_mut_obj_add_val(doc.get(), object, "shape", WriteShape(doc.get(), layer.shape.value()));
         }
@@ -1445,9 +1474,15 @@ void DeleteTree(const std::wstring& path)
         return ProjectIoStatus::Encode;
     }
     zip_source_t* manifestSource = zip_source_buffer(zip.get(), const_cast<char*>(json.data()), json.size(), 0);
-    if (manifestSource == nullptr ||
-        zip_file_add(zip.get(), "manifest.json", manifestSource, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+    if (manifestSource == nullptr)
     {
+        return ProjectIoStatus::Encode;
+    }
+    if (zip_file_add(zip.get(), "manifest.json", manifestSource, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+    {
+        // zip_file_add only takes ownership of the source on success; on failure it is still ours to free
+        // (OpenZipArchive frees zip_source_win32w_create's source the same way on its own failure path).
+        zip_source_free(manifestSource);
         return ProjectIoStatus::Encode;
     }
     for (const auto& file : files)
@@ -1455,9 +1490,13 @@ void DeleteTree(const std::wstring& path)
         const std::string entry = std::string("images/") + file.first;
         zip_source_t* source =
             zip_source_buffer(zip.get(), const_cast<std::uint8_t*>(file.second.data()), file.second.size(), 0);
-        if (source == nullptr ||
-            zip_file_add(zip.get(), entry.c_str(), source, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+        if (source == nullptr)
         {
+            return ProjectIoStatus::Encode;
+        }
+        if (zip_file_add(zip.get(), entry.c_str(), source, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+        {
+            zip_source_free(source);
             return ProjectIoStatus::Encode;
         }
     }
@@ -1466,6 +1505,9 @@ void DeleteTree(const std::wstring& path)
         DeleteFileW(temp.c_str());
         return ProjectIoStatus::Encode;
     }
+    // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
+    // another file, so a crash right after a save can never leave `dest` pointing at an unflushed file.
+    FlushFileToDisk(temp.c_str());
     if (IsFile(dest.c_str()) &&
         !ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr))
     {
@@ -1603,13 +1645,42 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
         document.width = decoded.image.Width();
         document.height = decoded.image.Height();
     }
+    else
+    {
+        // legacy EditorSession.insert (no drop point supplied here: the host wires that separately): centered on
+        // the canvas, above the active layer inside its folder (`document.layers.append` puts it topmost of
+        // whichever layers share its parentID; parentID is the active layer's group, or the group it is inside).
+        const ImageLayer* active = nullptr;
+        if (activeLayerID.has_value())
+        {
+            for (const ImageLayer& candidate : document.layers)
+            {
+                if (candidate.id == activeLayerID.value())
+                {
+                    active = &candidate;
+                    break;
+                }
+            }
+        }
+        const Vec2 center{static_cast<double>(document.width) / 2.0, static_cast<double>(document.height) / 2.0};
+        layer.transform.origin = Vec2{std::floor(center.x - layer.transform.size.x / 2.0),
+                                      std::floor(center.y - layer.transform.size.y / 2.0)};
+        if (active != nullptr)
+        {
+            layer.parentID = active->isGroup ? std::optional<Guid>(active->id) : active->parentID;
+        }
+    }
+    const std::optional<Guid> previousActive = activeLayerID;
     document.layers.push_back(std::move(layer));
-    activeLayerID = document.layers.back().id;
-    if (ValidateDocument(document) != DocumentStatus::Ok)
+    const Guid importedID = document.layers.back().id;
+    const DocumentStatus validated = ValidateDocument(document);
+    if (validated != DocumentStatus::Ok)
     {
         document.layers.pop_back();
-        return ProjectIoStatus::Invalid;
+        activeLayerID = previousActive;
+        return validated == DocumentStatus::TooLarge ? ProjectIoStatus::TooLarge : ProjectIoStatus::Invalid;
     }
+    activeLayerID = importedID;
     return ProjectIoStatus::Ok;
 }
 

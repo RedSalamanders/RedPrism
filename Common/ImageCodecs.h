@@ -44,3 +44,8 @@ struct JpegExportOptions
 [[nodiscard]] ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options,
                                               const wchar_t* path) noexcept;
 [[nodiscard]] bool IsHeifContainer(std::wstring_view path) noexcept;
+// Writes `bytes` to `path` (replacing any existing file) and flushes it to disk before returning, so the caller's
+// own rename or replace of `path` never races an unflushed write. Callers that need the write itself to be atomic
+// write to a temp path with this function and then rename/replace `path` with it (ImageCodecs' own WriteAllBytes,
+// ProjectStore's SaveExploded/SaveZip); this function alone does not do that swap.
+[[nodiscard]] bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::size_t size) noexcept;

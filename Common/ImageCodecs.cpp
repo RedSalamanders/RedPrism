@@ -63,12 +63,178 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     return ImageCodecStatus::Ok;
 }
 
-[[nodiscard]] ImageCodecStatus CopyFrame(IWICImagingFactory* factory, IWICBitmapFrameDecode* frame, bool mask,
-                                         int remainingPixels, DecodedImage& decoded) noexcept
+// The EXIF/TIFF Orientation tag (274), read from whichever metadata path this container exposes it under, else 1
+// (identity). "System.Photo.Orientation" is the Windows Property System's container-agnostic mirror of the same tag.
+[[nodiscard]] int ReadOrientation(IWICBitmapFrameDecode* frame) noexcept
 {
+    wil::com_ptr_nothrow<IWICMetadataQueryReader> reader;
+    if (FAILED(frame->GetMetadataQueryReader(reader.put())) || !reader)
+    {
+        return 1;
+    }
+    static constexpr const wchar_t* kQueries[] = {L"/app1/ifd/{ushort=274}", L"/ifd/{ushort=274}",
+                                                  L"System.Photo.Orientation"};
+    for (const wchar_t* query : kQueries)
+    {
+        PROPVARIANT value;
+        PropVariantInit(&value);
+        if (SUCCEEDED(reader->GetMetadataByName(query, &value)))
+        {
+            int orientation = 0;
+            switch (value.vt)
+            {
+            case VT_UI1:
+                orientation = value.bVal;
+                break;
+            case VT_UI2:
+                orientation = value.uiVal;
+                break;
+            case VT_UI4:
+                orientation = static_cast<int>(value.ulVal);
+                break;
+            case VT_I4:
+                orientation = value.lVal;
+                break;
+            default:
+                break;
+            }
+            PropVariantClear(&value);
+            if (orientation >= 1 && orientation <= 8)
+            {
+                return orientation;
+            }
+        }
+        else
+        {
+            PropVariantClear(&value);
+        }
+    }
+    return 1;
+}
+
+// EXIF orientation -> the flip/rotate that corrects it (ExifTool's table). Only 6 has a golden
+// (ImageImportTests.orientationAndColorConversion: a 64x32 source at orientation 6 imports as 32x64); the others
+// follow the same well-established mapping.
+[[nodiscard]] WICBitmapTransformOptions TransformForOrientation(int orientation) noexcept
+{
+    switch (orientation)
+    {
+    case 2:
+        return WICBitmapTransformFlipHorizontal;
+    case 3:
+        return WICBitmapTransformRotate180;
+    case 4:
+        return WICBitmapTransformFlipVertical;
+    case 5:
+        return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate270);
+    case 6:
+        return WICBitmapTransformRotate90;
+    case 7:
+        return static_cast<WICBitmapTransformOptions>(WICBitmapTransformFlipHorizontal | WICBitmapTransformRotate90);
+    case 8:
+        return WICBitmapTransformRotate270;
+    default:
+        return WICBitmapTransformRotate0;
+    }
+}
+
+// True when the frame embeds a real ICC profile (`sourceContext` set to it), so IWICColorTransform has profile
+// bytes to convert from. The lightweight EXIF ColorSpace flag (WICColorContextExifColorSpace: sRGB or
+// "uncalibrated") carries no profile data to transform from either way, so it is left alone rather than risking an
+// IWICColorTransform call with nothing meaningful to source from; a source with no embedded profile is assumed
+// sRGB, the industry-standard fallback.
+[[nodiscard]] bool FindColorContextNeedingTransform(IWICImagingFactory* factory, IWICBitmapFrameDecode* frame,
+                                                    wil::com_ptr_nothrow<IWICColorContext>& sourceContext) noexcept
+{
+    UINT count = 0;
+    if (FAILED(frame->GetColorContexts(0, nullptr, &count)) || count == 0)
+    {
+        return false;
+    }
+    std::vector<wil::com_ptr_nothrow<IWICColorContext>> contexts(count);
+    std::vector<IWICColorContext*> raw(count);
+    for (UINT index = 0; index < count; ++index)
+    {
+        if (FAILED(factory->CreateColorContext(contexts[index].put())))
+        {
+            return false;
+        }
+        raw[index] = contexts[index].get();
+    }
+    UINT actual = 0;
+    if (FAILED(frame->GetColorContexts(count, raw.data(), &actual)))
+    {
+        return false;
+    }
+    for (UINT index = 0; index < actual; ++index)
+    {
+        WICColorContextType type{};
+        if (SUCCEEDED(contexts[index]->GetType(&type)) && type == WICColorContextProfile)
+        {
+            sourceContext = contexts[index];
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] ImageCodecStatus CopyFrame(IWICImagingFactory* factory, IWICBitmapFrameDecode* frame, bool mask,
+                                         bool applyImportTransforms, int remainingPixels,
+                                         DecodedImage& decoded) noexcept
+{
+    if (mask)
+    {
+        // IO_ProjectFormat.md / legacy LayerMask.isValid: a mask must already be monochrome 8-bit with no alpha.
+        // Converting a color source would silently desaturate it into a mask nobody asked for.
+        WICPixelFormatGUID nativeFormat{};
+        if (FAILED(frame->GetPixelFormat(&nativeFormat)) || !SameGuid(nativeFormat, GUID_WICPixelFormat8bppGray))
+        {
+            return ImageCodecStatus::Unreadable;
+        }
+    }
+
+    IWICBitmapSource* source = frame;
+    wil::com_ptr_nothrow<IWICBitmapFlipRotator> rotator;
+    wil::com_ptr_nothrow<IWICFormatConverter> straightConverter;
+    wil::com_ptr_nothrow<IWICColorContext> sourceContext;
+    wil::com_ptr_nothrow<IWICColorContext> destContext;
+    wil::com_ptr_nothrow<IWICColorTransform> colorTransform;
+    if (applyImportTransforms)
+    {
+        // Import only: project assets are RedPrism's own straight-sRGB PNGs and never carry orientation or a
+        // profile, so re-checking them on every load would cost steady-state work for nothing
+        // (Core_PerformanceAndResources.md).
+        const WICBitmapTransformOptions orientation = TransformForOrientation(ReadOrientation(frame));
+        if (orientation != WICBitmapTransformRotate0)
+        {
+            if (FAILED(factory->CreateBitmapFlipRotator(rotator.put())) ||
+                FAILED(rotator->Initialize(source, orientation)))
+            {
+                return ImageCodecStatus::Unreadable;
+            }
+            source = rotator.get();
+        }
+        if (!mask && FindColorContextNeedingTransform(factory, frame, sourceContext))
+        {
+            // Color-manage in straight alpha, then let the converter below premultiply once, at the end.
+            if (FAILED(factory->CreateFormatConverter(straightConverter.put())) ||
+                FAILED(straightConverter->Initialize(source, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
+                                                     nullptr, 0.0, WICBitmapPaletteTypeCustom)) ||
+                FAILED(factory->CreateColorContext(destContext.put())) ||
+                FAILED(destContext->InitializeFromExifColorSpace(1)) || // 1 = sRGB.
+                FAILED(factory->CreateColorTransformer(colorTransform.put())) ||
+                FAILED(colorTransform->Initialize(straightConverter.get(), sourceContext.get(), destContext.get(),
+                                                  GUID_WICPixelFormat32bppBGRA)))
+            {
+                return ImageCodecStatus::Unreadable;
+            }
+            source = colorTransform.get();
+        }
+    }
+
     UINT width = 0;
     UINT height = 0;
-    HRESULT result = frame->GetSize(&width, &height);
+    HRESULT result = source->GetSize(&width, &height);
     if (FAILED(result) || width == 0 || height == 0)
     {
         return ImageCodecStatus::Unreadable;
@@ -89,7 +255,7 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
         return ImageCodecStatus::Unreadable;
     }
     result =
-        converter->Initialize(frame, pixelFormat, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
+        converter->Initialize(source, pixelFormat, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(result))
     {
         return ImageCodecStatus::Unreadable;
@@ -157,7 +323,9 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     {
         return ImageCodecStatus::Unreadable;
     }
-    return CopyFrame(factory, frame.get(), mask, remainingPixels, decoded);
+    // `requirePng` is true only for RedPrism's own project assets (DecodeProjectPng/File); orientation and color
+    // management apply to arbitrary imports (ImportImageFile), never to what RedPrism wrote itself.
+    return CopyFrame(factory, frame.get(), mask, !requirePng, remainingPixels, decoded);
 }
 
 [[nodiscard]] ImageCodecStatus EncodeToFormat(const Raster& image, const GUID& container, double quality,
@@ -230,10 +398,12 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     WICPixelFormatGUID pixelFormat =
         image.Format() == RasterFormat::Gray8 ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
     std::vector<std::uint8_t> jpegBgr;
+    std::vector<std::uint8_t> straightBgra;
     const std::uint8_t* pixels = image.Data();
     UINT stride = static_cast<UINT>(image.Stride());
     UINT bufferSize = stride * height;
-    if (SameGuid(container, GUID_ContainerFormatJpeg) && image.Format() == RasterFormat::Bgra8888)
+    const bool jpegColor = SameGuid(container, GUID_ContainerFormatJpeg) && image.Format() == RasterFormat::Bgra8888;
+    if (jpegColor)
     {
         pixelFormat = GUID_WICPixelFormat24bppBGR;
         stride = width * 3;
@@ -246,9 +416,13 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
             std::uint8_t* dst = jpegBgr.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
             for (UINT x = 0; x < width; ++x)
             {
-                dst[x * 3 + 0] = src[x * 4 + 0];
-                dst[x * 3 + 1] = src[x * 4 + 1];
-                dst[x * 3 + 2] = src[x * 4 + 2];
+                // JPEG carries no alpha, so a transparent pixel is flattened onto a white matte, matching legacy
+                // ImageExporter.jpeg's default JPEGOptions() (red = green = blue = 1): source-over premultiplied
+                // color over opaque white is `premultiplied + (255 - alpha)` per channel.
+                const int white = 255 - src[x * 4 + 3];
+                dst[x * 3 + 0] = static_cast<std::uint8_t>(std::min(255, src[x * 4 + 0] + white));
+                dst[x * 3 + 1] = static_cast<std::uint8_t>(std::min(255, src[x * 4 + 1] + white));
+                dst[x * 3 + 2] = static_cast<std::uint8_t>(std::min(255, src[x * 4 + 2] + white));
             }
         }
         pixels = jpegBgr.data();
@@ -257,6 +431,44 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     if (FAILED(result))
     {
         return ImageCodecStatus::Encode;
+    }
+    if (!jpegColor)
+    {
+        const GUID requestedFormat =
+            image.Format() == RasterFormat::Gray8 ? GUID_WICPixelFormat8bppGray : GUID_WICPixelFormat32bppPBGRA;
+        if (!SameGuid(pixelFormat, requestedFormat))
+        {
+            // The PNG encoder has no premultiplied-alpha support and silently substitutes straight alpha
+            // (WindowCapture.cpp checks the same way); un-premultiply our premultiplied raster bytes before
+            // WritePixels, or every semi-transparent pixel is written roughly half as bright as it should be.
+            // Any other substitution isn't one we know how to feed correctly.
+            if (image.Format() != RasterFormat::Bgra8888 || !SameGuid(pixelFormat, GUID_WICPixelFormat32bppBGRA))
+            {
+                return ImageCodecStatus::Encode;
+            }
+            straightBgra.resize(bufferSize);
+            for (UINT y = 0; y < height; ++y)
+            {
+                const std::uint8_t* src =
+                    image.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride());
+                std::uint8_t* dst =
+                    straightBgra.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
+                for (UINT x = 0; x < width; ++x)
+                {
+                    const std::uint8_t alpha = src[x * 4 + 3];
+                    for (int channel = 0; channel < 3; ++channel)
+                    {
+                        const int premultiplied = src[x * 4 + channel];
+                        dst[x * 4 + channel] =
+                            alpha == 0
+                                ? 0
+                                : static_cast<std::uint8_t>(std::min(255, (premultiplied * 255 + alpha / 2) / alpha));
+                    }
+                    dst[x * 4 + 3] = alpha;
+                }
+            }
+            pixels = straightBgra.data();
+        }
     }
     if (resolution > 0)
     {
@@ -294,21 +506,53 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     {
         return ImageCodecStatus::Encode;
     }
-    const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE)
+    // A temp file beside the destination, flushed and then swapped in atomically, so a crash or a failed write
+    // never leaves a truncated PNG/JPEG at `path` and a concurrent reader never sees a partial file.
+    const std::wstring temp = std::wstring(path) + L".tmp";
+    if (!WriteFileBytesToDisk(temp.c_str(), bytes.data(), bytes.size()))
     {
+        DeleteFileW(temp.c_str());
         return ImageCodecStatus::Encode;
     }
-    wil::unique_hfile owned{file};
-    DWORD written = 0;
-    if (!WriteFile(owned.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) ||
-        written != bytes.size())
+    const DWORD existing = GetFileAttributesW(path);
+    bool replaced = false;
+    if (existing != INVALID_FILE_ATTRIBUTES && (existing & FILE_ATTRIBUTE_DIRECTORY) == 0)
     {
+        replaced = ReplaceFileW(path, temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr) != 0;
+    }
+    if (!replaced)
+    {
+        replaced = MoveFileExW(temp.c_str(), path, MOVEFILE_REPLACE_EXISTING) != 0;
+    }
+    if (!replaced)
+    {
+        DeleteFileW(temp.c_str());
         return ImageCodecStatus::Encode;
     }
     return ImageCodecStatus::Ok;
 }
 } // namespace
+
+bool WriteFileBytesToDisk(const wchar_t* path, const std::uint8_t* bytes, std::size_t size) noexcept
+{
+    if (path == nullptr)
+    {
+        return false;
+    }
+    const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
+    wil::unique_hfile owned{file};
+    DWORD written = 0;
+    if (size > 0 && (!WriteFile(owned.get(), bytes, static_cast<DWORD>(size), &written, nullptr) || written != size))
+    {
+        return false;
+    }
+    // Durable before the caller renames or replaces another file with this one.
+    return FlushFileBuffers(owned.get()) != 0;
+}
 
 bool IsHeifContainer(std::wstring_view path) noexcept
 {

@@ -27,8 +27,9 @@ asset or `manifest.json` is rejected when any path component after the project r
 A truncated, empty, or non-ZIP `.prism` is `Invalid` or `MissingImage` and yields no layers.
 
 Atomic save: exploded projects write into `dest.saving`, then rotate `dest` → `dest.old` and `dest.saving` → `dest`.
-ZIP projects write `path.tmp` then `ReplaceFileW`. A save that fails validation writes nothing and leaves the previous
-package intact.
+ZIP projects write `path.tmp` then `ReplaceFileW`. Every manifest and asset file is flushed to disk before it is
+renamed or replaces another file, so a crash never leaves `dest` pointing at an unflushed write. A save that fails
+validation writes nothing and leaves the previous package intact.
 
 ## Manifest
 
@@ -76,12 +77,17 @@ by a partial load.
 
 | Key | Rule |
 | --- | --- |
-| `id`, `name`, `isVisible`, `transform` | required; `transform` = `origin{x,y}`, `size{width,height}`, `rotation`, `flipX`, `flipY`, `sampling` (`Nearest`, `Smooth`, `High quality`) |
+| `id`, `name`, `isVisible`, `transform` | required; `transform` = `origin`, `size`, `rotation`, `flipX`, `flipY`, `sampling` (`Nearest`, `Smooth`, `High quality`) |
 | `imageFile`, `parentID`, `isGroup`, `opacity`, `blendMode` | optional; blend names are the thirteen legacy raw values (`Color Dodge`, `Color Burn`, …) |
-| `maskFile`, `maskEnabled`, `maskPlacement`, `maskLinked` | mask, its enabled flag (default true), its transform when moved apart from the layer, and the link flag (default true) |
+| `maskFile`, `maskEnabled`, `maskPlacement`, `maskLinked` | mask, its enabled flag (default true), its transform when moved apart from the layer (same shape as `transform`), and the link flag (default true) |
 | `maskSourceID` | live/clipping source UUID |
 | `adjustment` | see below |
-| `shape` | `kind` (`Rectangle`, `Ellipse`), `red`, `green`, `blue`, `cornerRadius` |
+| `shape` | `kind` (`Rectangle`, `Ellipse`), `red`, `green`, `blue`, `cornerRadius`; written only while the layer is still a live shape (its asset is still the raster the shape drew) |
+
+`transform.origin` and `transform.size` (and `maskPlacement`'s, the same shape) are `[x, y]` / `[width, height]`:
+Swift's `CGPoint`/`CGSize` Codable overlay (legacy `LayerTransform`) encodes them as a 2-element unkeyed array, not
+a `{x,y}`/`{width,height}` keyed object. The writer emits arrays; the reader also accepts the keyed-object shape
+RedPrism itself wrote before this fix, so already-saved projects keep loading.
 
 ## Adjustment payload (v7)
 

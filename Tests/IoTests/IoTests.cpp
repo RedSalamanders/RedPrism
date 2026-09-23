@@ -10,10 +10,18 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <objbase.h>
 #include <string>
 #include <vector>
+#include <wincodec.h>
 #include <windows.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/com.h>
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -40,6 +48,11 @@ void Expect(bool condition, const char* name) noexcept
 [[nodiscard]] std::wstring FixtureRoot()
 {
     return std::filesystem::path(__FILE__).parent_path() / L"Fixtures" / L"v7-exploded";
+}
+
+[[nodiscard]] std::wstring FixtureRootNamed(const wchar_t* name)
+{
+    return std::filesystem::path(__FILE__).parent_path() / L"Fixtures" / name;
 }
 
 [[nodiscard]] std::wstring ScratchRoot()
@@ -129,6 +142,25 @@ void WriteText(const std::filesystem::path& path, const std::string& text)
            std::to_string(version) + ",\n  \"width\": 1\n}\n";
 }
 
+// Two valid, distinct layers where the first clips to the second (a real sibling, not itself), so a version gate
+// that requires `maskSourceID` is the ONLY thing that can reject this manifest — a self-clip would also be caught
+// by the live-mask cycle check regardless of the gate, masking a regression there (RF-111).
+[[nodiscard]] std::string ManifestWithMaskSourceSibling(int version)
+{
+    return "{\n  \"colorSpace\": \"sRGB\",\n  \"documentID\": \"00000000-0000-4000-8000-000000000001\",\n"
+           "  \"format\": \"com.redprism.project\",\n  \"height\": 1,\n  \"layers\": [\n    {\n"
+           "      \"id\": \"00000000-0000-4000-8000-000000000002\",\n      \"isVisible\": true,\n"
+           "      \"maskSourceID\": \"00000000-0000-4000-8000-000000000003\",\n"
+           "      \"name\": \"Blank\",\n      \"transform\": {\"flipX\": false, \"flipY\": false, "
+           "\"origin\": {\"x\": 0, \"y\": 0}, \"rotation\": 0, \"sampling\": \"High quality\", "
+           "\"size\": {\"height\": 1, \"width\": 1}}\n    },\n    {\n"
+           "      \"id\": \"00000000-0000-4000-8000-000000000003\",\n      \"isVisible\": true,\n"
+           "      \"name\": \"Sibling\",\n      \"transform\": {\"flipX\": false, \"flipY\": false, "
+           "\"origin\": {\"x\": 0, \"y\": 0}, \"rotation\": 0, \"sampling\": \"High quality\", "
+           "\"size\": {\"height\": 1, \"width\": 1}}\n    }\n  ],\n  \"version\": " +
+           std::to_string(version) + ",\n  \"width\": 1\n}\n";
+}
+
 [[nodiscard]] ProjectIoStatus LoadManifestText(const wchar_t* name, const std::string& manifest)
 {
     const std::wstring root = EmptyProjectRoot(name);
@@ -151,7 +183,15 @@ void TestGuidParse()
     }
     const std::optional<Guid> fromLower = Guid::Parse(lower);
     Expect(fromLower.has_value() && fromLower.value() == id, "guid.lowercase");
-    Expect(id.ToUtf8().size() == 36 && id.ToUtf8() == std::string(id.ToUtf8()), "guid.uppercase-36");
+    // A GUID with hex letters actually exercises casing (Generate() may not roll any); compare against the
+    // independently-uppercased text, not a copy of itself.
+    const std::optional<Guid> hex = Guid::Parse("aabbccdd-eeff-1122-8899-aabbccddeeff");
+    std::string upper = "aabbccdd-eeff-1122-8899-aabbccddeeff";
+    for (char& ch : upper)
+    {
+        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    }
+    Expect(hex.has_value() && hex.value().ToUtf8().size() == 36 && hex.value().ToUtf8() == upper, "guid.uppercase-36");
 }
 
 void TestNameTables()
@@ -194,6 +234,83 @@ void TestPngRoundTrip()
     const Raster large = SolidBgra(300, 100, 1, 2, 3, 255);
     Expect(Raster::MakeThumbnail(large).Width() == 96 && Raster::MakeThumbnail(large).Height() == 32,
            "png.thumbnail-96-long-side");
+
+    // RF-109: a mask must already be 8-bit gray with no alpha (legacy LayerMask.isValid); a color PNG is rejected,
+    // not silently desaturated into a mask.
+    const Raster colorAsMask = SolidBgra(2, 2, 10, 20, 30, 255);
+    std::vector<std::uint8_t> colorPng;
+    Expect(EncodePng(colorAsMask, 72, colorPng) == ImageCodecStatus::Ok, "mask.reject-color-encode");
+    DecodedImage rejectedMask{};
+    Expect(DecodeProjectPng(colorPng.data(), colorPng.size(), true, kMaxMaskPixels, rejectedMask) ==
+               ImageCodecStatus::Unreadable,
+           "mask.reject-non-gray");
+
+    // RF-106: exports write a temp file and replace the destination, so re-exporting to an existing path still
+    // overwrites correctly and never leaves a `.tmp` file behind.
+    const std::wstring exportPath = ScratchRoot() + L"\\durable-export.png";
+    Expect(EncodePngFile(SolidBgra(2, 2, 1, 2, 3, 255), 72, exportPath.c_str()) == ImageCodecStatus::Ok,
+           "png.export-writes");
+    Expect(EncodePngFile(SolidBgra(3, 3, 9, 8, 7, 255), 72, exportPath.c_str()) == ImageCodecStatus::Ok,
+           "png.export-overwrites");
+    DecodedImage overwritten{};
+    Expect(DecodeProjectPngFile(exportPath.c_str(), false, kMaxLayerPixels, overwritten) == ImageCodecStatus::Ok &&
+               overwritten.image.Width() == 3 && overwritten.image.Height() == 3,
+           "png.export-overwrite-content");
+    Expect(!std::filesystem::exists(std::filesystem::path(exportPath + L".tmp")), "png.export-leaves-no-temporary");
+}
+
+void TestPngAlphaRoundTrip()
+{
+    // RF-101: the WIC PNG encoder has no premultiplied pixel format and silently substitutes straight alpha for
+    // the PBGRA we ask for; raster pixels are premultiplied (Document_Model.md), so every semi-transparent pixel
+    // must be un-premultiplied before WritePixels or it round-trips at roughly half its brightness (probe:
+    // premultiplied (B0,G0,R128,A128) decoded back as R64 without the fix).
+    constexpr std::uint8_t alphas[] = {1, 64, 128, 254, 255};
+    for (const std::uint8_t alpha : alphas)
+    {
+        // Premultiplied channels expressed as fractions of alpha itself (not of 255), so none collapse to 0 even
+        // at alpha = 1: straight blue = 255 (fully saturated), green = straight 25%, red = straight 50%.
+        const std::uint8_t b = alpha;
+        const std::uint8_t g = static_cast<std::uint8_t>(alpha / 4);
+        const std::uint8_t r = static_cast<std::uint8_t>(alpha / 2);
+        const Raster soft = SolidBgra(2, 2, b, g, r, alpha);
+        std::vector<std::uint8_t> png;
+        Expect(EncodePng(soft, 72, png) == ImageCodecStatus::Ok, "png.alpha-round-trip-encode");
+        DecodedImage decoded{};
+        Expect(DecodeProjectPng(png.data(), png.size(), false, kMaxLayerPixels, decoded) == ImageCodecStatus::Ok,
+               "png.alpha-round-trip-decode");
+        if (decoded.image.HasStorage())
+        {
+            const std::uint8_t* pixel = decoded.image.Data();
+            Expect(std::abs(static_cast<int>(pixel[0]) - b) <= 2 && std::abs(static_cast<int>(pixel[1]) - g) <= 2 &&
+                       std::abs(static_cast<int>(pixel[2]) - r) <= 2 && pixel[3] == alpha,
+                   "png.alpha-round-trip-pixels");
+        }
+    }
+
+    // A project save/load of a soft (semi-transparent) pixel goes through the same encoder path.
+    CanvasDocument document;
+    document.id = Guid::Generate();
+    document.width = 2;
+    document.height = 2;
+    ImageLayer layer = ImageLayer::Blank(L"Soft", Vec2{2, 2});
+    const Raster softAsset = SolidBgra(2, 2, 40, 60, 90, 128); // premultiplied, ~50% opacity
+    layer.asset = RasterAsset{softAsset, Raster::MakeThumbnail(softAsset), layer.name};
+    document.layers.push_back(layer);
+    const std::wstring path = ScratchRoot() + L"\\soft-alpha";
+    Expect(SaveProject(path.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "png.alpha-project-save");
+    const ProjectLoadResult reloaded = LoadProject(path.c_str());
+    Expect(reloaded.status == ProjectIoStatus::Ok && !reloaded.document.layers.empty() &&
+               reloaded.document.layers.front().asset.has_value(),
+           "png.alpha-project-load");
+    if (reloaded.status == ProjectIoStatus::Ok && !reloaded.document.layers.empty() &&
+        reloaded.document.layers.front().asset.has_value())
+    {
+        const std::uint8_t* pixel = reloaded.document.layers.front().asset.value().image.Data();
+        Expect(std::abs(static_cast<int>(pixel[0]) - 40) <= 2 && std::abs(static_cast<int>(pixel[1]) - 60) <= 2 &&
+                   std::abs(static_cast<int>(pixel[2]) - 90) <= 2 && pixel[3] == 128,
+               "png.alpha-project-round-trip-pixels");
+    }
 }
 
 void TestJpegExport()
@@ -201,9 +318,6 @@ void TestJpegExport()
     const Raster blue = SolidBgra(4, 4, 255, 0, 0, 128);
     std::vector<std::uint8_t> jpeg;
     Expect(EncodeJpeg(blue, JpegExportOptions{0.4, 72}, jpeg) == ImageCodecStatus::Ok && !jpeg.empty(), "jpeg.encode");
-    std::vector<std::uint8_t> better;
-    Expect(EncodeJpeg(blue, JpegExportOptions{1.0, 72}, better) == ImageCodecStatus::Ok && better.size() >= jpeg.size(),
-           "jpeg.quality-changes-bytes");
     const std::wstring path = ScratchRoot() + L"\\export.jpg";
     Expect(EncodeJpegFile(blue, JpegExportOptions{0.9, 300}, path.c_str()) == ImageCodecStatus::Ok, "jpeg.file");
     DecodedImage decoded{};
@@ -211,6 +325,78 @@ void TestJpegExport()
                decoded.image.Width() == 4 && decoded.image.Height() == 4 && decoded.name == L"export",
            "jpeg.import");
     Expect(decoded.image.HasStorage() && decoded.image.Data()[3] == 255, "jpeg.alpha-stripped");
+
+    // RF-108: JPEG carries no alpha, so a transparent pixel is flattened onto a white matte (legacy
+    // ImageExporter.jpeg's default JPEGOptions(), red = green = blue = 1), not dropped to black by discarding the
+    // premultiplied alpha. Premultiplied (B0,G0,R128,A128) over white -> straight (B~127,G~127,R~255).
+    const Raster halfRed = SolidBgra(2, 2, 0, 0, 128, 128);
+    const std::wstring flattenPath = ScratchRoot() + L"\\flatten.jpg";
+    Expect(EncodeJpegFile(halfRed, JpegExportOptions{1.0, 72}, flattenPath.c_str()) == ImageCodecStatus::Ok,
+           "jpeg.flatten-file");
+    DecodedImage flattened{};
+    Expect(ImportImageFile(flattenPath.c_str(), kMaxLayerPixels, flattened) == ImageCodecStatus::Ok &&
+               flattened.image.HasStorage(),
+           "jpeg.flatten-import");
+    if (flattened.image.HasStorage())
+    {
+        const std::uint8_t* pixel = flattened.image.Data();
+        Expect(std::abs(static_cast<int>(pixel[0]) - 127) <= 6 && std::abs(static_cast<int>(pixel[1]) - 127) <= 6 &&
+                   std::abs(static_cast<int>(pixel[2]) - 255) <= 6 && pixel[3] == 255,
+               "jpeg.flatten-white-matte");
+    }
+}
+
+void TestJpegQualityGolden()
+{
+    // Ported from legacy JPEGExportTests.qualityChangesBytesAndDecodedPixels: a 128x128 textured image (not a
+    // solid color, which compresses to about the same size at any quality and would make `<` meaningless).
+    constexpr int side = 128;
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(side) * side * 4);
+    for (int y = 0; y < side; ++y)
+    {
+        for (int x = 0; x < side; ++x)
+        {
+            std::uint8_t* p = &pixels[(static_cast<std::size_t>(y) * side + x) * 4];
+            p[0] = static_cast<std::uint8_t>((x * 79 + y * 7) % 256);  // B
+            p[1] = static_cast<std::uint8_t>((x * 11 + y * 53) % 256); // G
+            p[2] = static_cast<std::uint8_t>((x * 37 + y * 17) % 256); // R
+            p[3] = 255;
+        }
+    }
+    const Raster textured = Raster::Make(side, side, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+    std::vector<std::uint8_t> low;
+    std::vector<std::uint8_t> high;
+    Expect(EncodeJpeg(textured, JpegExportOptions{0.1, 72}, low) == ImageCodecStatus::Ok &&
+               EncodeJpeg(textured, JpegExportOptions{1.0, 72}, high) == ImageCodecStatus::Ok,
+           "jpeg.quality-golden-encode");
+    Expect(low.size() < high.size(), "jpeg.quality-golden-bytes");
+
+    const std::wstring lowPath = ScratchRoot() + L"\\quality-low.jpg";
+    const std::wstring highPath = ScratchRoot() + L"\\quality-high.jpg";
+    WriteText(lowPath, std::string(reinterpret_cast<const char*>(low.data()), low.size()));
+    WriteText(highPath, std::string(reinterpret_cast<const char*>(high.data()), high.size()));
+    DecodedImage lowDecoded{};
+    DecodedImage highDecoded{};
+    Expect(ImportImageFile(lowPath.c_str(), kMaxLayerPixels, lowDecoded) == ImageCodecStatus::Ok &&
+               ImportImageFile(highPath.c_str(), kMaxLayerPixels, highDecoded) == ImageCodecStatus::Ok &&
+               lowDecoded.image.HasStorage() && highDecoded.image.HasStorage(),
+           "jpeg.quality-golden-decode");
+    if (!lowDecoded.image.HasStorage() || !highDecoded.image.HasStorage())
+    {
+        return;
+    }
+    // legacy: sums abs(redComponent difference) (0…1 scale) over a 16x16 block and expects > 1.
+    double difference = 0;
+    for (int y = 0; y < 16; ++y)
+    {
+        for (int x = 0; x < 16; ++x)
+        {
+            const std::size_t index = (static_cast<std::size_t>(y) * side + x) * 4;
+            difference += std::abs(static_cast<double>(lowDecoded.image.Data()[index + 2]) / 255.0 -
+                                   static_cast<double>(highDecoded.image.Data()[index + 2]) / 255.0);
+        }
+    }
+    Expect(difference > 1, "jpeg.quality-golden-decoded-pixels-differ");
 }
 
 void TestHeifMissing()
@@ -231,6 +417,277 @@ void TestHeifMissing()
     Expect(IsHeifContainer(L"photo.HEIC") && !IsHeifContainer(L"photo.png"), "heif.extension");
     Expect(ImportImageFile(L"Z:\\no\\such\\file.png", kMaxLayerPixels, decoded) != ImageCodecStatus::Ok,
            "import.missing-file");
+}
+
+// Writes a small WIC TIFF fixture with an EXIF orientation tag (274) and, optionally, a real embedded ICC profile,
+// so RF-104 (import applies orientation and color management) can be tested without a checked-in binary asset.
+// `paintPixel`, when set, is called for every (x, y) to fill its 4 BGRA bytes; the default paints the same
+// per-quadrant pattern the orientation/color tests originally used.
+[[nodiscard]] std::wstring WriteOrientedFixture(const wchar_t* name, int width, int height, int orientation,
+                                                const wchar_t* iccProfilePath,
+                                                const std::function<void(int, int, std::uint8_t*)>& paintPixel = {})
+{
+    const std::wstring path = ScratchRoot() + L"\\" + name;
+    wil::com_ptr_nothrow<IWICImagingFactory> factory;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()))))
+    {
+        return {};
+    }
+    wil::com_ptr_nothrow<IWICStream> stream;
+    if (FAILED(factory->CreateStream(stream.put())) ||
+        FAILED(stream->InitializeFromFilename(path.c_str(), GENERIC_WRITE)))
+    {
+        return {};
+    }
+    wil::com_ptr_nothrow<IWICBitmapEncoder> encoder;
+    if (FAILED(factory->CreateEncoder(GUID_ContainerFormatTiff, nullptr, encoder.put())) ||
+        FAILED(encoder->Initialize(stream.get(), WICBitmapEncoderNoCache)))
+    {
+        return {};
+    }
+    wil::com_ptr_nothrow<IWICBitmapFrameEncode> frame;
+    wil::com_ptr_nothrow<IPropertyBag2> bag;
+    if (FAILED(encoder->CreateNewFrame(frame.put(), bag.put())) || FAILED(frame->Initialize(bag.get())))
+    {
+        return {};
+    }
+    if (FAILED(frame->SetSize(static_cast<UINT>(width), static_cast<UINT>(height))))
+    {
+        return {};
+    }
+    WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
+    if (FAILED(frame->SetPixelFormat(&format)))
+    {
+        return {};
+    }
+    wil::com_ptr_nothrow<IWICColorContext> iccContext;
+    if (iccProfilePath != nullptr)
+    {
+        if (FAILED(factory->CreateColorContext(iccContext.put())) ||
+            FAILED(iccContext->InitializeFromFilename(iccProfilePath)))
+        {
+            return {};
+        }
+        IWICColorContext* contexts[] = {iccContext.get()};
+        (void)frame->SetColorContexts(1, contexts);
+    }
+    // A distinct color per quadrant (or whatever `paintPixel` draws) so a rotation is visible in more than just
+    // the reported dimensions.
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            std::uint8_t* p = &pixels[(static_cast<std::size_t>(y) * width + x) * 4];
+            if (paintPixel)
+            {
+                paintPixel(x, y, p);
+                continue;
+            }
+            p[0] = x < width / 2 ? 255 : 0; // B
+            p[1] = 0;
+            p[2] = y < height / 2 ? 255 : 0; // R
+            p[3] = 255;
+        }
+    }
+    if (FAILED(frame->WritePixels(static_cast<UINT>(height), static_cast<UINT>(width) * 4,
+                                  static_cast<UINT>(pixels.size()), pixels.data())))
+    {
+        return {};
+    }
+    if (orientation != 1)
+    {
+        wil::com_ptr_nothrow<IWICMetadataQueryWriter> writer;
+        if (SUCCEEDED(frame->GetMetadataQueryWriter(writer.put())))
+        {
+            PROPVARIANT value;
+            PropVariantInit(&value);
+            value.vt = VT_UI2;
+            value.uiVal = static_cast<USHORT>(orientation);
+            (void)writer->SetMetadataByName(L"/ifd/{ushort=274}", &value);
+            PropVariantClear(&value);
+        }
+    }
+    if (FAILED(frame->Commit()) || FAILED(encoder->Commit()))
+    {
+        return {};
+    }
+    return path;
+}
+
+void TestImportOrientationAndColor()
+{
+    // Ported from legacy ImageImportTests.orientationAndColorConversion: a 64x32 source at EXIF orientation 6
+    // imports as 32x64 (rotated 90 degrees clockwise to correct it).
+    const std::wstring rotated = WriteOrientedFixture(L"oriented.tif", 64, 32, 6, nullptr);
+    Expect(!rotated.empty(), "orientation.fixture-written");
+    DecodedImage decoded{};
+    Expect(ImportImageFile(rotated.c_str(), kMaxLayerPixels, decoded) == ImageCodecStatus::Ok &&
+               decoded.image.HasStorage(),
+           "orientation.import-ok");
+    if (decoded.image.HasStorage())
+    {
+        Expect(decoded.image.Width() == 32 && decoded.image.Height() == 64, "orientation.dimensions-swapped");
+    }
+
+    // No orientation tag (1, identity): unrotated, as a plain image always was.
+    const std::wstring plain = WriteOrientedFixture(L"unoriented.tif", 64, 32, 1, nullptr);
+    DecodedImage plainDecoded{};
+    Expect(ImportImageFile(plain.c_str(), kMaxLayerPixels, plainDecoded) == ImageCodecStatus::Ok &&
+               plainDecoded.image.Width() == 64 && plainDecoded.image.Height() == 32,
+           "orientation.identity-unrotated");
+
+    // RedPrism's own project assets never carry orientation and must not be rotated by DecodeProjectPngFile; the
+    // gate is `requirePng` (only ImportImageFile passes false), proven structurally since a PNG round trip through
+    // EncodePngFile/DecodeProjectPngFile never changes dimensions anywhere else in this file (png.thumbnail etc).
+
+    // Color management: a real embedded ICC profile (the system's own sRGB one — the only profile guaranteed
+    // present on any machine) takes the code through IWICColorContext/IWICColorTransform; sRGB -> sRGB is near
+    // identity, so the corner colors survive, proving the transform wiring itself (context creation, the
+    // straight-alpha intermediate format, Initialize's argument order) is correct and does not fail or crash.
+    wchar_t systemDirectory[MAX_PATH]{};
+    const UINT length = GetSystemDirectoryW(systemDirectory, MAX_PATH);
+    const std::wstring iccPath =
+        (length > 0 && length < MAX_PATH)
+            ? std::wstring(systemDirectory) + L"\\spool\\drivers\\color\\sRGB Color Space Profile.icm"
+            : std::wstring{};
+    if (!iccPath.empty() && std::filesystem::exists(iccPath))
+    {
+        const std::wstring profiled = WriteOrientedFixture(L"profiled.tif", 4, 4, 1, iccPath.c_str());
+        Expect(!profiled.empty(), "orientation.icc-fixture-written");
+        DecodedImage profiledDecoded{};
+        Expect(ImportImageFile(profiled.c_str(), kMaxLayerPixels, profiledDecoded) == ImageCodecStatus::Ok &&
+                   profiledDecoded.image.HasStorage() && profiledDecoded.image.Width() == 4 &&
+                   profiledDecoded.image.Height() == 4,
+               "orientation.icc-import-ok");
+        if (profiledDecoded.image.HasStorage())
+        {
+            const std::uint8_t* topLeft = profiledDecoded.image.Data();
+            Expect(topLeft[0] > 200 && topLeft[2] > 200, "orientation.icc-srgb-round-trip-close");
+        }
+    }
+    else
+    {
+        std::printf("SKIP orientation.icc-fixture-written (no system sRGB profile)\n");
+    }
+}
+
+// The EXIF Orientation tag's definition (ISO/EXIF: "Row 0 is at the visual <edge>, Column 0 is at the visual
+// <edge>") turned into a direct display-pixel -> source-pixel map, independent of TransformForOrientation /
+// IWICBitmapFlipRotator, so it is a genuine oracle rather than re-checking this file's own logic against itself.
+// Orientations 5-8 swap which source axis maps to which display axis; 5 (transpose) and 7 (transverse) also each
+// combine a mirror with a 90-degree rotation, so they are the cases most likely to come out swapped depending on
+// the order an implementation applies "flip" and "rotate" in.
+void SourceCoordinateForDisplay(int orientation, int srcWidth, int srcHeight, int displayX, int displayY, int& srcX,
+                                int& srcY) noexcept
+{
+    switch (orientation)
+    {
+    case 2: // Mirror horizontal.
+        srcX = srcWidth - 1 - displayX;
+        srcY = displayY;
+        return;
+    case 3: // Rotate 180.
+        srcX = srcWidth - 1 - displayX;
+        srcY = srcHeight - 1 - displayY;
+        return;
+    case 4: // Mirror vertical.
+        srcX = displayX;
+        srcY = srcHeight - 1 - displayY;
+        return;
+    case 5: // Transpose (mirror across the top-left/bottom-right diagonal).
+        srcX = displayY;
+        srcY = displayX;
+        return;
+    case 6: // Rotate 90 clockwise.
+        srcX = displayY;
+        srcY = srcHeight - 1 - displayX;
+        return;
+    case 7: // Transverse (mirror across the other diagonal).
+        srcX = srcWidth - 1 - displayY;
+        srcY = srcHeight - 1 - displayX;
+        return;
+    case 8: // Rotate 270 clockwise (90 counterclockwise).
+        srcX = srcWidth - 1 - displayY;
+        srcY = displayX;
+        return;
+    default: // 1: identity.
+        srcX = displayX;
+        srcY = displayY;
+        return;
+    }
+}
+
+void TestImportAllOrientations()
+{
+    // All eight EXIF orientations, not just 6: a 3x2 source with a distinct color per pixel (so every position is
+    // individually identifiable), checked against SourceCoordinateForDisplay's independent oracle.
+    constexpr int srcWidth = 3;
+    constexpr int srcHeight = 2;
+    const std::uint8_t colors[srcHeight][srcWidth][3] = {{{10, 20, 30}, {40, 50, 60}, {70, 80, 90}},
+                                                         {{100, 110, 120}, {130, 140, 150}, {160, 170, 180}}};
+    const auto paint = [&colors](int x, int y, std::uint8_t* bgra)
+    {
+        bgra[0] = colors[y][x][0];
+        bgra[1] = colors[y][x][1];
+        bgra[2] = colors[y][x][2];
+        bgra[3] = 255;
+    };
+
+    for (int orientation = 1; orientation <= 8; ++orientation)
+    {
+        const std::wstring name = L"orientation-" + std::to_wstring(orientation) + L".tif";
+        const std::wstring path = WriteOrientedFixture(name.c_str(), srcWidth, srcHeight, orientation, nullptr, paint);
+        char label[48];
+        std::snprintf(label, sizeof(label), "orientation.all.%d-fixture-written", orientation);
+        Expect(!path.empty(), label);
+
+        DecodedImage decoded{};
+        std::snprintf(label, sizeof(label), "orientation.all.%d-import-ok", orientation);
+        Expect(ImportImageFile(path.c_str(), kMaxLayerPixels, decoded) == ImageCodecStatus::Ok &&
+                   decoded.image.HasStorage(),
+               label);
+        if (!decoded.image.HasStorage())
+        {
+            continue;
+        }
+
+        const bool swapped = orientation >= 5;
+        const int expectedWidth = swapped ? srcHeight : srcWidth;
+        const int expectedHeight = swapped ? srcWidth : srcHeight;
+        std::snprintf(label, sizeof(label), "orientation.all.%d-dimensions", orientation);
+        Expect(decoded.image.Width() == expectedWidth && decoded.image.Height() == expectedHeight, label);
+        if (decoded.image.Width() != expectedWidth || decoded.image.Height() != expectedHeight)
+        {
+            continue;
+        }
+
+        bool everyPixelCorrect = true;
+        for (int displayY = 0; displayY < expectedHeight && everyPixelCorrect; ++displayY)
+        {
+            for (int displayX = 0; displayX < expectedWidth; ++displayX)
+            {
+                int srcX = 0;
+                int srcY = 0;
+                SourceCoordinateForDisplay(orientation, srcWidth, srcHeight, displayX, displayY, srcX, srcY);
+                const std::uint8_t* pixel =
+                    decoded.image.Data() +
+                    (static_cast<std::size_t>(displayY) * expectedWidth + static_cast<std::size_t>(displayX)) * 4;
+                if (pixel[0] != colors[srcY][srcX][0] || pixel[1] != colors[srcY][srcX][1] ||
+                    pixel[2] != colors[srcY][srcX][2])
+                {
+                    everyPixelCorrect = false;
+                    std::printf("     orientation %d: display(%d,%d) expected src(%d,%d) = "
+                                "(%u,%u,%u), got (%u,%u,%u)\n",
+                                orientation, displayX, displayY, srcX, srcY, colors[srcY][srcX][0],
+                                colors[srcY][srcX][1], colors[srcY][srcX][2], pixel[0], pixel[1], pixel[2]);
+                    break;
+                }
+            }
+        }
+        std::snprintf(label, sizeof(label), "orientation.all.%d-every-pixel", orientation);
+        Expect(everyPixelCorrect, label);
+    }
 }
 
 [[nodiscard]] std::wstring MaterializeV7Fixture()
@@ -385,6 +842,118 @@ void TestExplodedGolden()
            "v7.overwrite-drops-removed-assets");
 }
 
+void TestTransformArrayShape()
+{
+    // RF-102: Swift's CGPoint/CGSize Codable overlay (legacy `LayerTransform.origin`/`.size`) encodes as a
+    // 2-element array, not the `{x,y}`/`{width,height}` object RedPrism used to write. The reader must accept the
+    // Swift-shaped fixture, the writer must emit arrays, and the old object shape must still load (compat).
+    const std::wstring dest = ScratchRoot() + L"\\v7-arrays";
+    std::error_code error;
+    std::filesystem::remove_all(dest, error);
+    std::filesystem::create_directories(std::filesystem::path(dest) / L"images", error);
+    std::filesystem::copy_file(std::filesystem::path(FixtureRootNamed(L"v7-arrays")) / L"manifest.json",
+                               std::filesystem::path(dest) / L"manifest.json",
+                               std::filesystem::copy_options::overwrite_existing, error);
+    const std::wstring images = dest + L"\\images\\";
+    (void)EncodePngFile(SolidBgra(2, 2, 9, 8, 7, 255), 72,
+                        (images + L"00000000-0000-4000-8000-000000000012.png").c_str());
+    (void)EncodePngFile(Gray(2, 2, {255, 255, 255, 255}), 72,
+                        (images + L"00000000-0000-4000-8000-000000000012.mask.png").c_str());
+
+    const ProjectLoadResult loaded = LoadProject(dest.c_str());
+    Expect(loaded.status == ProjectIoStatus::Ok, "transform.array-shape-loads");
+    if (loaded.status != ProjectIoStatus::Ok || loaded.document.layers.empty())
+    {
+        return;
+    }
+    const ImageLayer& layer = loaded.document.layers.front();
+    Expect(Near(layer.transform.origin.x, 0) && Near(layer.transform.origin.y, 0) && Near(layer.transform.size.x, 2) &&
+               Near(layer.transform.size.y, 2),
+           "transform.array-shape-transform-values");
+    Expect(layer.mask.has_value() && layer.mask.value().placement.has_value() &&
+               Near(layer.mask.value().placement.value().origin.x, 1) &&
+               Near(layer.mask.value().placement.value().origin.y, 0.5) &&
+               Near(layer.mask.value().placement.value().size.x, 2) &&
+               Near(layer.mask.value().placement.value().size.y, 3) && layer.mask.value().placement.value().flipY,
+           "transform.array-shape-mask-placement-values");
+
+    const std::wstring roundTrip = ScratchRoot() + L"\\v7-arrays-roundtrip";
+    Expect(SaveProject(roundTrip.c_str(), loaded.document, loaded.activeLayerID, false) == ProjectIoStatus::Ok,
+           "transform.writer-saves");
+    const std::string json = ReadText(std::filesystem::path(roundTrip) / L"manifest.json");
+    Expect(json.find("\"origin\": [") != std::string::npos && json.find("\"size\": [") != std::string::npos &&
+               json.find("\"origin\": {") == std::string::npos && json.find("\"size\": {") == std::string::npos,
+           "transform.writer-emits-arrays");
+    const ProjectLoadResult reloaded = LoadProject(roundTrip.c_str());
+    Expect(reloaded.status == ProjectIoStatus::Ok && !reloaded.document.layers.empty() &&
+               reloaded.document.layers.front().mask.has_value() &&
+               reloaded.document.layers.front().mask.value().placement.has_value() &&
+               Near(reloaded.document.layers.front().mask.value().placement.value().origin.x, 1),
+           "transform.array-shape-round-trip");
+
+    // Compat: the older RedPrism object shape `{x,y}`/`{width,height}` still reads, for already-saved projects.
+    const std::string objectShaped = MinimalManifest(
+        7, "\"maskFile\": \"00000000-0000-4000-8000-000000000002.mask.png\", \"maskPlacement\": {\"flipX\": false, "
+           "\"flipY\": false, \"origin\": {\"x\": 3, \"y\": 4}, \"rotation\": 0, \"sampling\": \"Nearest\", "
+           "\"size\": {\"width\": 5, \"height\": 6}}");
+    const std::wstring compatRoot = EmptyProjectRoot(L"transform-object-shape");
+    WriteText(std::filesystem::path(compatRoot) / L"manifest.json", objectShaped);
+    (void)EncodePngFile(Gray(1, 1, {255}), 72,
+                        (compatRoot + L"\\images\\00000000-0000-4000-8000-000000000002.mask.png").c_str());
+    const ProjectLoadResult compat = LoadProject(compatRoot.c_str());
+    Expect(compat.status == ProjectIoStatus::Ok && !compat.document.layers.empty() &&
+               compat.document.layers.front().mask.has_value() &&
+               compat.document.layers.front().mask.value().placement.has_value() &&
+               Near(compat.document.layers.front().mask.value().placement.value().origin.x, 3) &&
+               Near(compat.document.layers.front().mask.value().placement.value().size.x, 5),
+           "transform.object-shape-still-reads");
+}
+
+void TestShapeLiveness()
+{
+    // RF-103: `shape` is written only while the layer is still live (its asset is still the raster the shape
+    // drew); once the pixels are painted over, `shapeImage` no longer matches `asset.image`, and the shape must
+    // not round trip as live (legacy EditorSession+Projects.swift writes `shape: layer.liveShape?.style`).
+    CanvasDocument document;
+    document.id = Guid::Generate();
+    document.width = 2;
+    document.height = 2;
+    ImageLayer layer = ImageLayer::Blank(L"Shape", Vec2{2, 2});
+    LayerShapeStyle style{};
+    style.kind = ShapeKind::Rectangle;
+    style.red = 1;
+    style.green = 0;
+    style.blue = 0;
+    layer.shape = style;
+    const Raster shapePixels = SolidBgra(2, 2, 0, 0, 255, 255);
+    layer.asset = RasterAsset{shapePixels, Raster::MakeThumbnail(shapePixels), layer.name};
+    layer.shapeImage = shapePixels; // Live: the asset is exactly what the shape drew.
+    document.layers.push_back(layer);
+
+    const std::wstring livePath = ScratchRoot() + L"\\shape-live";
+    Expect(SaveProject(livePath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "shape.live-saves");
+    const std::string liveJson = ReadText(std::filesystem::path(livePath) / L"manifest.json");
+    Expect(liveJson.find("\"shape\"") != std::string::npos, "shape.live-writes-shape");
+    const ProjectLoadResult liveLoaded = LoadProject(livePath.c_str());
+    Expect(liveLoaded.status == ProjectIoStatus::Ok && !liveLoaded.document.layers.empty() &&
+               liveLoaded.document.layers.front().shape.has_value(),
+           "shape.live-round-trip");
+
+    // Paint over it: a different raster identity in `asset`, same shape metadata still attached, as BrushStroke's
+    // paint commit leaves it (it never clears `shape`, only `shapeImage` stops matching `asset`).
+    document.layers.back().asset =
+        RasterAsset{SolidBgra(2, 2, 9, 9, 9, 255), Raster::MakeThumbnail(shapePixels), layer.name};
+    const std::wstring paintedPath = ScratchRoot() + L"\\shape-painted";
+    Expect(SaveProject(paintedPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
+           "shape.painted-saves");
+    const std::string paintedJson = ReadText(std::filesystem::path(paintedPath) / L"manifest.json");
+    Expect(paintedJson.find("\"shape\"") == std::string::npos, "shape.painted-not-written");
+    const ProjectLoadResult paintedLoaded = LoadProject(paintedPath.c_str());
+    Expect(paintedLoaded.status == ProjectIoStatus::Ok && !paintedLoaded.document.layers.empty() &&
+               !paintedLoaded.document.layers.front().shape.has_value(),
+           "shape.painted-loads-not-live");
+}
+
 void TestExplodedReparseAndHostileZip()
 {
     const std::wstring root = L"C:\\proj";
@@ -456,6 +1025,15 @@ void TestPathTraversal()
     Expect(LoadManifestText(L"traverse", evil) == ProjectIoStatus::Invalid, "path.traversal");
     const std::string wrongName = MinimalManifest(7, "\"imageFile\": \"00000000-0000-4000-8000-000000000009.png\"");
     Expect(LoadManifestText(L"wrong-name", wrongName) == ProjectIoStatus::Invalid, "path.image-name-mismatch");
+
+    // RF-110: ids are read in either case (IO_ProjectFormat.md); a hex-letter id (Generate() rarely rolls one)
+    // matched by a lowercase filename must be ACCEPTED by the manifest parser and reach asset loading, where it
+    // fails for the unrelated, expected reason that no such file exists (MissingImage, not Invalid).
+    const std::string lowerCaseImage =
+        MinimalManifest(7, "\"id\": \"AABBCCDD-EEFF-4A99-8ABC-AABBCCDDEEFF\", "
+                           "\"imageFile\": \"aabbccdd-eeff-4a99-8abc-aabbccddeeff.png\"");
+    Expect(LoadManifestText(L"lowercase-image", lowerCaseImage) == ProjectIoStatus::MissingImage,
+           "path.image-name-case-insensitive");
 }
 
 void TestManifestTooLarge()
@@ -483,8 +1061,9 @@ void TestVersionGatesAndRejects()
            "reject.future-version");
     Expect(LoadManifestText(L"v0", MinimalManifest(0, {})) == ProjectIoStatus::UnsupportedVersion, "reject.version-0");
     Expect(LoadManifestText(L"corrupt", "not json") == ProjectIoStatus::Invalid, "reject.corrupt-json");
-    Expect(LoadManifestText(L"format", MinimalManifest(7, {}, "\"format\": \"other\"")) == ProjectIoStatus::Invalid ||
-               LoadManifestText(L"format2", "{\"format\":\"x\",\"version\":7}") == ProjectIoStatus::Invalid,
+    // A manifest that is valid except for `format`, so this can only pass because the format check specifically
+    // fires; the old `||` fallback (an unrelated, separately-invalid manifest) could mask a broken format check.
+    Expect(LoadManifestText(L"format", MinimalManifest(7, {}, "\"format\": \"other\"")) == ProjectIoStatus::Invalid,
            "reject.format");
     Expect(LoadManifestText(L"colorspace", MinimalManifest(7, {}, "\"colorSpace\": \"Display P3\"")) ==
                ProjectIoStatus::Invalid,
@@ -500,9 +1079,9 @@ void TestVersionGatesAndRejects()
                             MinimalManifest(3, "\"maskFile\": \"00000000-0000-4000-8000-000000000002.mask.png\"")) ==
                ProjectIoStatus::Invalid,
            "reject.v3-mask");
-    Expect(LoadManifestText(L"v4-clip",
-                            MinimalManifest(4, "\"maskSourceID\": \"00000000-0000-4000-8000-000000000002\"")) ==
-               ProjectIoStatus::Invalid,
+    // Clips to a different, valid sibling (not itself) so only the version gate can reject it; reject.self-clip
+    // below covers the self-cycle separately.
+    Expect(LoadManifestText(L"v4-clip", ManifestWithMaskSourceSibling(4)) == ProjectIoStatus::Invalid,
            "reject.v4-clip");
     Expect(
         LoadManifestText(
@@ -589,6 +1168,41 @@ void TestImportOntoDocument()
                document.layers.size() == 2,
            "import.second-keeps-size");
     Expect(ImportImageOnto(document, L"Z:\\no\\such.png", active) == ProjectIoStatus::MissingImage, "import.missing");
+
+    // RF-105: onto a non-empty document, the import is centered on the canvas and nested above the active layer
+    // inside its folder (legacy EditorSession.insert), not appended at the root at (0,0).
+    CanvasDocument nested;
+    nested.id = Guid::Generate();
+    nested.width = 200;
+    nested.height = 100;
+    ImageLayer folder = ImageLayer::Blank(L"Folder", Vec2{200, 100});
+    folder.isGroup = true;
+    nested.layers.push_back(folder);
+    std::optional<Guid> nestedActive = folder.id;
+    Expect(ImportImageOnto(nested, path.c_str(), nestedActive) == ProjectIoStatus::Ok, "import.nested-ok");
+    Expect(nested.layers.size() == 2 && nested.layers.back().parentID.has_value() &&
+               nested.layers.back().parentID.value() == folder.id,
+           "import.nested-into-active-folder");
+    Expect(Near(nested.layers.back().transform.origin.x, std::floor(100.0 - 6.0 / 2.0)) &&
+               Near(nested.layers.back().transform.origin.y, std::floor(50.0 - 3.0 / 2.0)),
+           "import.centered-on-canvas");
+    Expect(nestedActive.has_value() && nestedActive.value() == nested.layers.back().id, "import.nested-active-layer");
+
+    // RF-105: a budget failure pops the layer, restores the previous active layer, and reports TooLarge (not
+    // Invalid). `Raster::MakeSparse` with an empty base and no tiles reports 100,000,000 pixels for the budget
+    // check without allocating a 400 MB buffer.
+    CanvasDocument full;
+    full.id = Guid::Generate();
+    full.width = 100;
+    full.height = 100;
+    ImageLayer huge = ImageLayer::Blank(L"Huge", Vec2{10000, 10000});
+    const Raster hugeRaster = Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
+    huge.asset = RasterAsset{hugeRaster, Raster{}, huge.name};
+    full.layers.push_back(huge);
+    std::optional<Guid> fullActive = huge.id;
+    Expect(ImportImageOnto(full, path.c_str(), fullActive) == ProjectIoStatus::TooLarge, "import.budget-too-large");
+    Expect(full.layers.size() == 1 && fullActive.has_value() && fullActive.value() == huge.id,
+           "import.budget-failure-restores-active-layer");
 }
 
 void TestSaveRejectsInvalidDocument()
@@ -649,7 +1263,8 @@ void TestSettingsStore()
         R"({"commandId":"cmd/view/zoomIn","keyPosition":"numberRowPlus","ctrl":true},)"
         R"({"commandId":"cmd/edit/delete","vk":"Delete","shift":true},)"
         R"({"commandId":"cmd/edit/undo","vk":"Z","keyPosition":"bracketLeft"},{"command":1}]})");
-    Expect(chords.has_value() && chords->shortcuts.size() == 3 && chords->shortcuts[0].commandId == L"cmd/edit/swapPalette" &&
+    Expect(chords.has_value() && chords->shortcuts.size() == 3 &&
+               chords->shortcuts[0].commandId == L"cmd/edit/swapPalette" &&
                chords->shortcuts[0].virtualKey == static_cast<std::uint16_t>('Q') && !chords->shortcuts[0].ctrl &&
                chords->shortcuts[1].commandId == L"cmd/view/zoomIn" && chords->shortcuts[1].keyPosition == 2 &&
                chords->shortcuts[1].ctrl && chords->shortcuts[2].commandId == L"cmd/edit/delete" &&
@@ -758,9 +1373,15 @@ int wmain()
     TestGuidParse();
     TestNameTables();
     TestPngRoundTrip();
+    TestPngAlphaRoundTrip();
     TestJpegExport();
+    TestJpegQualityGolden();
     TestHeifMissing();
+    TestImportOrientationAndColor();
+    TestImportAllOrientations();
     TestExplodedGolden();
+    TestTransformArrayShape();
+    TestShapeLiveness();
     TestExplodedReparseAndHostileZip();
     TestPathTraversal();
     TestManifestTooLarge();
