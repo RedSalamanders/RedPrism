@@ -116,6 +116,17 @@ void Application::ApplySettings(const AppSettings& settings) noexcept
     {
         _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, settings.sampleRing);
         _chrome->SetLayersWidth(static_cast<float>(settings.layersPanelWidth));
+        std::vector<std::pair<int, std::wstring>> chords;
+        chords.reserve(settings.shortcuts.size());
+        for (const ShortcutBinding& binding : settings.shortcuts)
+        {
+            const int command = ChromeHost::CommandForTextId(binding.commandId);
+            if (command != 0)
+            {
+                chords.emplace_back(command, SettingsStore::ShortcutCatalogText(binding));
+            }
+        }
+        _chrome->SetShortcutOverrides(std::move(chords));
     }
     RefreshTheme();
     _layoutDirty = true;

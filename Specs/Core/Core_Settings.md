@@ -38,6 +38,7 @@ takes its default, field by field, so one bad value never discards the rest.
 | `sampleRing` | boolean (View › Sample Ring) | `true` | live |
 | `jpegQuality` | number clamped to 0–1 (File › Export JPEG) | 0.8 | live |
 | `window` | object `{x, y, width, height, maximized}`; ignored unless width ≥ 200, height ≥ 150 and every value fits ±32767 | absent | next start |
+| `shortcuts` | array of replacement chords. Each object names `commandId` (text, `cmd/...`, the same grammar RedSalamander uses) and exactly one of `vk` (a letter, digit, `F1`–`F24`, a named key such as `Delete` or `NumpadPlus`, or `VK_XX`) or `keyPosition` (`numberRowMinus`, `numberRowPlus`, `bracketLeft`, `bracketRight`). Optional `ctrl`, `alt`, `shift` booleans default to false. An entry that is not that shape, or whose `commandId` does not start with `cmd/`, is skipped. A later entry for the same `commandId` replaces an earlier one | `[]` (omitted on save when empty) | live |
 
 `theme: "system"` follows Windows' *Choose your app mode* (`AppsUseLightTheme`); Windows high contrast overrides
 any theme with the system colors while it is on. A document that is not an object, has no integral `schema` ≥ 1
@@ -61,8 +62,8 @@ creation changes) and waits on it beside the message queue and the frame-latency
 (`MsgWaitForMultipleObjectsEx`); nothing polls. A signal arms a 250 ms timer so an editor's several writes coalesce;
 the timer, on the UI thread, compares the file's last-write time and size with what the app last saw and, when
 they differ, calls `SettingsStore::LoadLive`. A settings document that differs from the last-good one applies at
-once (theme, sample ring, layers panel width, JPEG quality; the language and the window placement wait for the
-next start). A file that is not a settings document keeps the file as the user left it and the last-good settings
+once (theme, sample ring, layers panel width, JPEG quality, shortcut replacements; the language and the window
+placement wait for the next start). A file that is not a settings document keeps the file as the user left it and the last-good settings
 in memory, and says so on the debugger output; nothing is written. The app's own save updates the seen state so it
 never reloads itself.
 
@@ -85,9 +86,13 @@ palette, the sample ring and the layers width apply once the chrome exists.
 
 ## Command chords
 
-A finished command's default chord is not a settings field. It lives on the command id in
-[`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). A later override will name that same id. The settings
-document does not store a replacement chord today, and a key or control still runs the command through that id.
+Every finished command has one stable integer id. Its default chord lives on that id in
+[`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). `shortcuts` stores only the replacements. Each one is a
+RedSalamander binding: `commandId` is text (`cmd/edit/swapPalette`, not the integer menu id), `ctrl` / `alt` /
+`shift` are booleans, and the key is either `vk` or `keyPosition`. A key or a control still runs the integer
+command that `commandId` names. A replacement removes the catalog key for that command, including Ctrl+Y for Redo
+and the numpad plus and minus aliases of zoom. The Command List and the menu column show the layout name
+of the effective chord. An absent or non-array `shortcuts` field leaves every command on its catalog chord.
 
 ## Validation
 

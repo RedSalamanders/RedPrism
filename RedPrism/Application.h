@@ -205,6 +205,8 @@ class Application final
     void EndColorSampling() noexcept;
     void SyncToolOverlays() noexcept;
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false, UINT scanCode = 0) noexcept;
+    // A replacement chord for this key, 0 when the key's default command was replaced, or nullopt to use the catalog.
+    [[nodiscard]] std::optional<int> ShortcutOverride(UINT virtualKey, UINT modifiers, UINT scanCode) const noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
     [[nodiscard]] bool SaveDocument(bool saveAs) noexcept;

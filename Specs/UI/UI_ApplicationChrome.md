@@ -338,21 +338,20 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
-| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default), Keyboard Shortcuts |
-| Help | About RedPrism (version from `Common/Version.h`) |
+| View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
+| Help | Command List, About RedPrism (version from `Common/Version.h`). Help is the right-justified item on the menu bar |
 
 Every finished user action is a command, with no exception for an action whose only control is local. A canvas key,
 a menu item, and a rail hot zone are the same kind of action. Each one MUST have one stable integer id declared on
-`ChromeHost` (`kCommand…`). The id is the name a settings override will use; the id does not change when the chord
-does. `ChromeHost::CommandShortcuts` is the default chord for every id, including a command that has no menu row,
-and the caption's tab column is that chord. The Keyboard Shortcuts card lists those rows. A key, menu item, or
+`ChromeHost` (`kCommand…`). Settings name that command with a stable text id (`cmd/file/new`,
+`cmd/edit/swapPalette`); the integer does not change when the chord does. `ChromeHost::CommandShortcuts` is the default chord for every id, including a command that has no menu row,
+and the caption's tab column is that chord. The Command List lists those rows. A key, menu item, or
 control runs the action only by calling `Application::OnCommand` with that id. The key or the control does not call
 the session operation itself. Swap foreground and background is `kCommandSwapPalette` (default X). Restore black
-over white is `kCommandResetPalette` (default D). The settings document does not store chord overrides yet; when it
-does, each override names one of these ids. A letter chord (`Ctrl+S`, `V`, `X`) is the virtual key of that
+over white is `kCommandResetPalette` (default D). A letter chord (`Ctrl+S`, `V`, `X`) is the virtual key of that
 letter, so it follows the key that the active layout labels with that letter. It is not a fixed column on a US
 keyboard. The chords whose legend is not a letter are a physical key instead, set-1 scan code, the same rule
-RedSalamander uses for zoom. The Keyboard Shortcuts card and the menu accelerator column show a position key by the name the active layout
+RedSalamander uses for zoom. The Command List and the menu accelerator column show a position key by the name the active layout
 gives that scan code (`GetKeyNameTextW`). A letter or digit stays the character, because that chord follows the
 key that produces it. Named keys (arrows, Delete, F2, Backspace) use the layout's name for that key. The catalog
 chord stays the canonical label the self-test compares to the STRINGTABLE. A layout change retitles the displayed
@@ -376,7 +375,9 @@ the previous or next blend mode, and the Delete key (`kCommandDeleteKey`) are co
 Shift on a nudge command steps by ten. Holding Space to pan, typing into an open edit, and Escape or Enter that
 confirms or cancels an edit already under way are gestures of that edit, not separate commands.
 
-View › Keyboard Shortcuts lists every command in `ChromeHost::CommandShortcuts`, menu rows and local commands alike.
+Help › Command List lists every command in `ChromeHost::CommandShortcuts`, menu rows and local commands alike.
+A search field filters that list by the command name. The shortcut column is the layout name of the effective chord.
+Double-click or Enter on a row closes the list and runs that command.
 The self-test checks each STRINGTABLE tab column against that catalog. StatusStrip shows zoom percent, document size,
 and the current tool with its key. The tab title is the file name
 (or Untitled) with a dirty mark when history is modified.

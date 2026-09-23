@@ -704,6 +704,12 @@ class ChromeHost final
     [[nodiscard]] bool NoticeOpen() const noexcept;
     [[nodiscard]] D2D1_RECT_F NoticeBoundsDip() const noexcept;
     void OpenShortcuts() noexcept;
+    // Enter on the selected Command List row, or a double-click: close the list and run that command.
+    [[nodiscard]] bool ActivateSelectedShortcut() noexcept;
+    [[nodiscard]] bool RunShortcutRowForTest(std::size_t visibleIndex) noexcept;
+    // Replacement catalog chords. A command in the list uses that chord (empty clears it) instead of the default.
+    void SetShortcutOverrides(std::vector<std::pair<int, std::wstring>> chords) noexcept;
+    [[nodiscard]] std::wstring CatalogChord(int command, const wchar_t* fallback) const;
     void CloseShortcuts() noexcept;
     [[nodiscard]] bool ShortcutsOpen() const noexcept;
     // Retitle menu accelerators, and the open shortcuts card, from the active keyboard layout.
@@ -719,6 +725,9 @@ class ChromeHost final
     };
     // Every menu command and the chord shown after its tab. The self-test checks the STRINGTABLE matches.
     [[nodiscard]] static std::span<const CommandShortcutDefault> CommandShortcuts() noexcept;
+    // The textual id a settings chord names (`cmd/edit/swapPalette`). Stable; the integer command is the menu id.
+    [[nodiscard]] static const wchar_t* TextIdForCommand(int command) noexcept;
+    [[nodiscard]] static int CommandForTextId(std::wstring_view id) noexcept;
 
   private:
     class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
@@ -740,17 +749,22 @@ class ChromeHost final
         void OnTreeReorder(const DxUi::TreeDrop& drop) override;
     };
 
-    class ShortcutListModel final : public DxUi::IDxTreeModel
+    class ShortcutListModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
     {
       public:
         struct Row
         {
             std::wstring name;
             std::wstring chord;
+            int command = 0;
         };
+        std::vector<Row> all;
         std::vector<Row> rows;
+        std::wstring query;
+        std::function<void(int)> onInvoke;
         [[nodiscard]] std::size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
+        void OnTreeItemInvoked(uint64_t itemId) override;
     };
 
     HRESULT BindDevice(ID3D11Device* device) noexcept;
@@ -759,6 +773,8 @@ class ChromeHost final
     void ArrangePicker() noexcept;
     void ArrangeNotice() noexcept;
     void ArrangeShortcuts() noexcept;
+    void ApplyShortcutFilter() noexcept;
+    void LaunchShortcut(int command) noexcept;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
@@ -829,9 +845,11 @@ class ChromeHost final
     DxUi::Button* _noticeClose = nullptr;
     DxUi::CardPanel* _shortcutsCard = nullptr;
     DxUi::Label* _shortcutsTitle = nullptr;
+    DxUi::TextField* _shortcutsSearch = nullptr;
     DxUi::Tree* _shortcutsTree = nullptr;
     DxUi::Button* _shortcutsClose = nullptr;
     ShortcutListModel _shortcutModel;
+    std::vector<std::pair<int, std::wstring>> _shortcutOverrides;
     CanvasOverlay* _overlay = nullptr;
     DxUi::Panel* _transformHeader = nullptr;
     DxUi::Label* _transformTitle = nullptr;

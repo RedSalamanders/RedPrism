@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // The user settings document (Specs/Core/Core_Settings.md): a JSON object under %LocalAppData%\RedPrism whose
 // `schema` field carries compatibility (the file name tells Debug from Release). Fields the store does not know
@@ -27,6 +28,20 @@ struct WindowPlacementSetting
     [[nodiscard]] bool operator==(const WindowPlacementSetting&) const noexcept = default;
 };
 
+// One replacement chord, in RedSalamander's shape: a textual commandId (`cmd/...`) plus ctrl, alt, and shift,
+// and exactly one of a virtual key or a physical key position (1 number-row minus, 2 number-row plus, 3 bracket
+// left, 4 bracket right).
+struct ShortcutBinding
+{
+    std::wstring commandId;
+    bool ctrl = false;
+    bool alt = false;
+    bool shift = false;
+    std::uint16_t virtualKey = 0;
+    std::uint8_t keyPosition = 0;
+    [[nodiscard]] bool operator==(const ShortcutBinding&) const noexcept = default;
+};
+
 struct AppSettings
 {
     static constexpr int kSchema = 1;
@@ -41,6 +56,9 @@ struct AppSettings
     bool sampleRing = true;        // View > Sample Ring
     double jpegQuality = 0.8;      // 0..1 (the legacy JPEG export quality)
     WindowPlacementSetting window;
+    // Replacement chords. Empty means every command keeps the catalog default. A later entry for the same
+    // commandId replaces an earlier one.
+    std::vector<ShortcutBinding> shortcuts;
     [[nodiscard]] bool operator==(const AppSettings&) const noexcept = default;
 };
 
@@ -78,6 +96,8 @@ namespace SettingsStore
 // The document for `settings`, pretty-printed UTF-8. When `existingJson` is a settings document its other fields
 // and a newer schema are kept.
 [[nodiscard]] std::string Serialize(const AppSettings& settings, std::string_view existingJson = {});
+// The catalog label a replacement chord displays as (`Ctrl++`, `Shift+=`, `Q`). Empty when the command is cleared.
+[[nodiscard]] std::wstring ShortcutCatalogText(const ShortcutBinding& binding);
 
 // Startup: a missing file writes the template, an invalid one is backed up and replaced by the template.
 [[nodiscard]] SettingsLoadResult LoadCold(const std::wstring& path);

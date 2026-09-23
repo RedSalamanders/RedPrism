@@ -689,6 +689,32 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"D did not reset the palette into the wells.\n");
             return 5;
         }
+        ShortcutBinding swapOnQ;
+        swapOnQ.commandId = L"cmd/edit/swapPalette";
+        swapOnQ.virtualKey = static_cast<std::uint16_t>('Q');
+        AppSettings shortcutSettings = _settings;
+        shortcutSettings.shortcuts = {swapOnQ};
+        ApplySettings(shortcutSettings);
+        _chrome->SetCanvasFocused(true);
+        const std::uint32_t beforeOverride = _session.ForegroundColor();
+        if (HandleAccelerator('X', 0) && _session.ForegroundColor() != beforeOverride)
+        {
+            SelfTestFailure(L"X still swapped the palette after its chord was replaced.\n");
+            return 5;
+        }
+        if (!HandleAccelerator('Q', 0) || _session.ForegroundColor() == beforeOverride)
+        {
+            SelfTestFailure(L"The replacement chord Q did not swap the palette.\n");
+            return 5;
+        }
+        shortcutSettings.shortcuts.clear();
+        ApplySettings(shortcutSettings);
+        _chrome->SetCanvasFocused(true);
+        if (!HandleAccelerator('X', 0) || _session.ForegroundColor() != beforeOverride)
+        {
+            SelfTestFailure(L"Clearing shortcut replacements did not restore X.\n");
+            return 5;
+        }
         const auto clickPalette = [&](const D2D1_RECT_F& rect)
         {
             pointer.action = DxUi::PointerAction::Down;
@@ -744,7 +770,7 @@ int Application::RunSelfTest() noexcept
         _chrome->OpenShortcuts();
         if (!_chrome->ShortcutsOpen())
         {
-            SelfTestFailure(L"Keyboard Shortcuts did not open.\n");
+            SelfTestFailure(L"Command List did not open.\n");
             return 5;
         }
         const auto shortcutIndex = [](int command) -> std::size_t
@@ -786,7 +812,15 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(mismatch.c_str());
             return 5;
         }
-        _chrome->CloseShortcuts();
+        const bool sampleRing = _session.showsSampleRing;
+        if (!_chrome->RunShortcutRowForTest(shortcutIndex(ChromeHost::kCommandSampleRing)) || _chrome->ShortcutsOpen() ||
+            _session.showsSampleRing == sampleRing)
+        {
+            SelfTestFailure(L"Enter on a Command List row did not close the list and run the command.\n");
+            return 5;
+        }
+        _session.showsSampleRing = sampleRing;
+        _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, sampleRing);
 
         const int editsBeforeFilter = _session.history.UndoCount();
         const Guid painted = InsertPaintedLayer(_session, L"Filter", 16, 16, Vec2{}, 0.0, 0xFFFF0000u);
@@ -3405,7 +3439,176 @@ constexpr UINT kScanBracketRight = 0x1B;
         return KeyPosition::None;
     }
 }
+
+[[nodiscard]] bool BindingMatches(const ShortcutBinding& binding, UINT virtualKey, UINT modifiers, UINT scanCode,
+                                  bool alt) noexcept
+{
+    if (binding.ctrl != ((modifiers & MK_CONTROL) != 0) || binding.shift != ((modifiers & MK_SHIFT) != 0) || binding.alt != alt)
+    {
+        return false;
+    }
+    if (binding.virtualKey != 0)
+    {
+        return virtualKey == binding.virtualKey;
+    }
+    if (binding.keyPosition != 0)
+    {
+        return static_cast<std::uint8_t>(KeyPositionForAccelerator(virtualKey, scanCode)) == binding.keyPosition;
+    }
+    return false;
+}
+
+[[nodiscard]] std::optional<ShortcutBinding> ParseCatalogChord(std::wstring_view chord)
+{
+    if (chord.empty())
+    {
+        return std::nullopt;
+    }
+    ShortcutBinding binding;
+    std::wstring_view rest = chord;
+    const auto take = [&](std::wstring_view name)
+    {
+        if (rest.starts_with(name) && rest.size() > name.size() && rest[name.size()] == L'+')
+        {
+            rest.remove_prefix(name.size() + 1);
+            return true;
+        }
+        return false;
+    };
+    while (true)
+    {
+        if (take(L"Ctrl"))
+        {
+            binding.ctrl = true;
+            continue;
+        }
+        if (take(L"Alt"))
+        {
+            binding.alt = true;
+            continue;
+        }
+        if (take(L"Shift"))
+        {
+            binding.shift = true;
+            continue;
+        }
+        break;
+    }
+    if (rest == L"+" || rest == L"=")
+    {
+        binding.keyPosition = static_cast<std::uint8_t>(KeyPosition::NumberRowPlus);
+    }
+    else if (rest == L"-")
+    {
+        binding.keyPosition = static_cast<std::uint8_t>(KeyPosition::NumberRowMinus);
+    }
+    else if (rest == L"[")
+    {
+        binding.keyPosition = static_cast<std::uint8_t>(KeyPosition::BracketLeft);
+    }
+    else if (rest == L"]")
+    {
+        binding.keyPosition = static_cast<std::uint8_t>(KeyPosition::BracketRight);
+    }
+    else if (rest == L"Left")
+    {
+        binding.virtualKey = VK_LEFT;
+    }
+    else if (rest == L"Right")
+    {
+        binding.virtualKey = VK_RIGHT;
+    }
+    else if (rest == L"Up")
+    {
+        binding.virtualKey = VK_UP;
+    }
+    else if (rest == L"Down")
+    {
+        binding.virtualKey = VK_DOWN;
+    }
+    else if (rest == L"Delete")
+    {
+        binding.virtualKey = VK_DELETE;
+    }
+    else if (rest == L"Backspace")
+    {
+        binding.virtualKey = VK_BACK;
+    }
+    else if (rest == L"F2")
+    {
+        binding.virtualKey = VK_F2;
+    }
+    else if (rest == L"F4")
+    {
+        binding.virtualKey = VK_F4;
+    }
+    else if (rest.size() == 1 && ((rest[0] >= L'A' && rest[0] <= L'Z') || (rest[0] >= L'0' && rest[0] <= L'9')))
+    {
+        binding.virtualKey = static_cast<std::uint16_t>(rest[0]);
+    }
+    else
+    {
+        return std::nullopt;
+    }
+    return binding;
+}
+
 } // namespace
+
+std::optional<int> Application::ShortcutOverride(UINT virtualKey, UINT modifiers, UINT scanCode) const noexcept
+{
+    const bool alt = GetKeyState(VK_MENU) < 0;
+    for (auto binding = _settings.shortcuts.rbegin(); binding != _settings.shortcuts.rend(); ++binding)
+    {
+        if (BindingMatches(*binding, virtualKey, modifiers, scanCode, alt))
+        {
+            const int command = ChromeHost::CommandForTextId(binding->commandId);
+            if (command != 0)
+            {
+                return command;
+            }
+        }
+    }
+    int command = 0;
+    const bool ctrl = (modifiers & MK_CONTROL) != 0;
+    const bool shift = (modifiers & MK_SHIFT) != 0;
+    if (ctrl && !shift && !alt && virtualKey == static_cast<UINT>('Y'))
+    {
+        command = ChromeHost::kCommandRedo;
+    }
+    else if (ctrl && !shift && !alt && virtualKey == VK_ADD)
+    {
+        command = ChromeHost::kCommandZoomIn;
+    }
+    else if (ctrl && !shift && !alt && virtualKey == VK_SUBTRACT)
+    {
+        command = ChromeHost::kCommandZoomOut;
+    }
+    else
+    {
+        for (const ChromeHost::CommandShortcutDefault& row : ChromeHost::CommandShortcuts())
+        {
+            const std::optional<ShortcutBinding> catalog = ParseCatalogChord(row.chord != nullptr ? row.chord : L"");
+            if (catalog.has_value() && BindingMatches(catalog.value(), virtualKey, modifiers, scanCode, alt))
+            {
+                command = row.command;
+                break;
+            }
+        }
+    }
+    if (command != 0)
+    {
+        const wchar_t* const textId = ChromeHost::TextIdForCommand(command);
+        for (const ShortcutBinding& binding : _settings.shortcuts)
+        {
+            if (textId != nullptr && binding.commandId == textId)
+            {
+                return 0;
+            }
+        }
+    }
+    return std::nullopt;
+}
 
 bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat, UINT scanCode) noexcept
 {
@@ -3430,8 +3633,23 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
             return true;
         }
     }
+    if (virtualKey == VK_RETURN && _chrome != nullptr && _chrome->ShortcutsOpen() && (modifiers & MK_CONTROL) == 0)
+    {
+        if (_chrome->ActivateSelectedShortcut())
+        {
+            return true;
+        }
+    }
     const bool control = (modifiers & MK_CONTROL) != 0;
     const bool shift = (modifiers & MK_SHIFT) != 0;
+    if (const std::optional<int> replaced = ShortcutOverride(virtualKey, modifiers, scanCode); replaced.has_value())
+    {
+        if (replaced.value() != 0)
+        {
+            OnCommand(replaced.value());
+        }
+        return true;
+    }
     if (control)
     {
         switch (virtualKey)

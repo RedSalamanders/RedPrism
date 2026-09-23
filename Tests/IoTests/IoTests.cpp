@@ -642,8 +642,24 @@ void TestSettingsStore()
         R"("jpegQuality":0.65,"window":{"x":10,"y":20,"width":800,"height":600,"maximized":true},"future":[1,2]})");
     Expect(full.has_value() && full->theme == ThemePreference::Dark && full->language == L"fr-FR" &&
                full->layersPanelWidth == 300.5 && !full->sampleRing && full->jpegQuality == 0.65 &&
-               full->window == WindowPlacementSetting{true, 10, 20, 800, 600, true},
+               full->window == WindowPlacementSetting{true, 10, 20, 800, 600, true} && full->shortcuts.empty(),
            "settings.parse-fields");
+    const std::optional<AppSettings> chords = SettingsStore::Parse(
+        R"({"schema":1,"shortcuts":[{"commandId":"cmd/edit/swapPalette","vk":"Q"},{"commandId":"swap","vk":"Z"},)"
+        R"({"commandId":"cmd/view/zoomIn","keyPosition":"numberRowPlus","ctrl":true},)"
+        R"({"commandId":"cmd/edit/delete","vk":"Delete","shift":true},)"
+        R"({"commandId":"cmd/edit/undo","vk":"Z","keyPosition":"bracketLeft"},{"command":1}]})");
+    Expect(chords.has_value() && chords->shortcuts.size() == 3 && chords->shortcuts[0].commandId == L"cmd/edit/swapPalette" &&
+               chords->shortcuts[0].virtualKey == static_cast<std::uint16_t>('Q') && !chords->shortcuts[0].ctrl &&
+               chords->shortcuts[1].commandId == L"cmd/view/zoomIn" && chords->shortcuts[1].keyPosition == 2 &&
+               chords->shortcuts[1].ctrl && chords->shortcuts[2].commandId == L"cmd/edit/delete" &&
+               chords->shortcuts[2].virtualKey == VK_DELETE && chords->shortcuts[2].shift,
+           "settings.parse-shortcuts");
+    const std::string chordText = SettingsStore::Serialize(chords.value());
+    const std::optional<AppSettings> chordBack = SettingsStore::Parse(chordText);
+    Expect(chordBack.has_value() && chordBack->shortcuts == chords->shortcuts &&
+               chordText.find("\"shortcuts\"") != std::string::npos,
+           "settings.shortcuts-round-trip");
     const std::optional<AppSettings> odd = SettingsStore::Parse(
         R"({"schema":3,"theme":"neon","language":"not a tag!","layersPanelWidth":5,"sampleRing":"yes",)"
         R"("jpegQuality":7,"window":{"x":0,"y":0,"width":10,"height":10}})");

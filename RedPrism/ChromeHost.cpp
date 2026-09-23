@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 #include <iterator>
 #include <new>
 #include <string_view>
@@ -51,6 +52,14 @@ namespace
         if ((character >= L'A' && character <= L'Z') || (character >= L'0' && character <= L'9'))
         {
             return std::wstring{token};
+        }
+        if (character == L'+' || character == L'=')
+        {
+            return named(KeyNameFromScan(0x0D, false), token);
+        }
+        if (character == L'-')
+        {
+            return named(KeyNameFromScan(0x0C, false), token);
         }
         if (character == L'[')
         {
@@ -102,10 +111,13 @@ namespace
 {
     const auto named = [](std::wstring resolved, std::wstring_view fallback)
     { return resolved.empty() ? std::wstring{fallback} : resolved; };
-    if (chord == L"Ctrl++" || chord == L"Shift+=")
+    if (chord.size() >= 2 && chord.ends_with(L"++"))
     {
-        const wchar_t* prefix = chord == L"Ctrl++" ? L"Ctrl+" : L"Shift+";
-        return std::wstring{prefix} + named(KeyNameFromScan(0x0D, false), chord == L"Ctrl++" ? L"+" : L"=");
+        return std::wstring{chord.substr(0, chord.size() - 1)} + named(KeyNameFromScan(0x0D, false), L"+");
+    }
+    if (chord == L"Shift+=")
+    {
+        return L"Shift+" + named(KeyNameFromScan(0x0D, false), L"=");
     }
     if (chord == L"Ctrl+-" || chord == L"Shift+-")
     {
@@ -157,7 +169,7 @@ void AppendCommand(HMENU menu, int command, UINT stringId) noexcept
     (void)AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(command), caption.c_str());
 }
 
-void RewriteMenuChords(HMENU menu)
+void RewriteMenuChords(HMENU menu, const ChromeHost& host)
 {
     if (menu == nullptr)
     {
@@ -168,7 +180,7 @@ void RewriteMenuChords(HMENU menu)
     {
         if (HMENU child = GetSubMenu(menu, index))
         {
-            RewriteMenuChords(child);
+            RewriteMenuChords(child, host);
         }
         const UINT command = GetMenuItemID(menu, index);
         if (command == static_cast<UINT>(-1))
@@ -179,7 +191,7 @@ void RewriteMenuChords(HMENU menu)
         const ChromeHost::CommandShortcutDefault* match = nullptr;
         for (const ChromeHost::CommandShortcutDefault& row : rows)
         {
-            if (row.command == static_cast<int>(command) && row.chord != nullptr && row.chord[0] != L'\0')
+            if (row.command == static_cast<int>(command) && row.chord != nullptr)
             {
                 match = &row;
                 break;
@@ -189,7 +201,18 @@ void RewriteMenuChords(HMENU menu)
         {
             continue;
         }
-        const std::wstring caption = CommandCaption(match->captionId);
+        std::wstring caption = LoadStringResource(nullptr, match->captionId);
+        const std::size_t tab = caption.find(L'\t');
+        if (tab != std::wstring::npos)
+        {
+            caption.resize(tab);
+        }
+        const std::wstring chord = host.CatalogChord(match->command, match->chord);
+        if (!chord.empty())
+        {
+            caption.push_back(L'\t');
+            caption += LayoutChord(chord);
+        }
         const UINT state = GetMenuState(menu, command, MF_BYCOMMAND);
         UINT flags = MF_BYCOMMAND | MF_STRING;
         if (state != static_cast<UINT>(-1))
@@ -313,6 +336,15 @@ void ChromeHost::ShortcutListModel::GetVisibleItem(std::size_t visibleIndex, DxU
     outItem.badgeText = rows[visibleIndex].chord;
 }
 
+void ChromeHost::ShortcutListModel::OnTreeItemInvoked(uint64_t itemId)
+{
+    if (itemId == 0 || itemId > rows.size() || !onInvoke)
+    {
+        return;
+    }
+    onInvoke(rows[itemId - 1].command);
+}
+
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
 {
     if (itemId == 0 || itemId > rows.size() || onLayer == nullptr || !(*onLayer))
@@ -424,6 +456,7 @@ void ChromeHost::Detach() noexcept
     _noticeClose = nullptr;
     _shortcutsCard = nullptr;
     _shortcutsTitle = nullptr;
+    _shortcutsSearch = nullptr;
     _shortcutsTree = nullptr;
     _shortcutsClose = nullptr;
     _adjustCard = nullptr;
@@ -666,11 +699,11 @@ void ChromeHost::BuildMenus() noexcept
         AppendCommand(view, kCommandZoomOut, IDS_CMD_ZOOM_OUT);
         AppendSeparator(view);
         AppendCommand(view, kCommandSampleRing, IDS_CMD_SAMPLE_RING);
-        AppendCommand(view, kCommandKeyboardShortcuts, IDS_CMD_KEYBOARD_SHORTCUTS);
         (void)CheckMenuItem(view, static_cast<UINT>(kCommandSampleRing), MF_BYCOMMAND | MF_CHECKED);
     }
     if (HMENU help = _menus[static_cast<std::size_t>(MenuIndex::Help)].get())
     {
+        AppendCommand(help, kCommandKeyboardShortcuts, IDS_CMD_KEYBOARD_SHORTCUTS);
         AppendCommand(help, kCommandAbout, IDS_CMD_ABOUT);
     }
 }
@@ -711,8 +744,11 @@ HRESULT ChromeHost::Build() noexcept
         for (const UINT id : kMenuIds)
         {
             std::wstring caption = LoadStringResource(nullptr, id);
-            const wchar_t mnemonic = MenuMnemonic(caption);
-            items.push_back(DxUi::MenuBarItem{std::move(caption), mnemonic});
+            DxUi::MenuBarItem item;
+            item.text = std::move(caption);
+            item.mnemonic = MenuMnemonic(item.text);
+            item.rightJustified = id == IDS_MENU_HELP;
+            items.push_back(std::move(item));
         }
         _menu->SetItems(std::move(items));
         _menu->SetOnOpenItem([this](size_t index, POINT screen, bool keyboard) { OpenMenu(index, screen, keyboard); });
@@ -881,9 +917,20 @@ HRESULT ChromeHost::Build() noexcept
         _shortcutsCard->SetVisible(false);
         _shortcutsTitle = _shortcutsCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE));
         _shortcutsTitle->SetFontRole(DxUi::FontRole::BodyStrong);
+        _shortcutsSearch = _shortcutsCard->AddChild<DxUi::TextField>();
+        _shortcutsSearch->SetAccessibleName(LoadStringResource(nullptr, IDS_SHORTCUTS_SEARCH));
+        _shortcutsSearch->SetPlaceholder(LoadStringResource(nullptr, IDS_SHORTCUTS_SEARCH));
+        _shortcutsSearch->SetOnTextChanged(
+            [this](std::wstring_view text)
+            {
+                _shortcutModel.query = text;
+                ApplyShortcutFilter();
+            });
         _shortcutsTree = _shortcutsCard->AddChild<DxUi::Tree>();
         _shortcutsTree->SetAccessibleName(LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE));
         _shortcutsTree->SetModel(&_shortcutModel);
+        _shortcutModel.onInvoke = [this](int command) { LaunchShortcut(command); };
+        _shortcutsTree->SetDelegate(&_shortcutModel);
         _shortcutsClose = _shortcutsCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_PICKER_OK));
         _shortcutsClose->SetPrimary(true);
         _shortcutsClose->SetOnClick([this] { CloseShortcuts(); });
@@ -1392,8 +1439,12 @@ void ChromeHost::ArrangeShortcuts() noexcept
     const float width = std::min(440.0f, std::max(220.0f, right - left));
     const float height = std::max(160.0f, bottom - top);
     PlaceControl(_shortcutsCard, D2D1::RectF(left, top, left + width, top + height));
-    PlaceControl(_shortcutsTitle, D2D1::RectF(left + 12.0f, top + 10.0f, left + width - 12.0f, top + 34.0f));
-    PlaceControl(_shortcutsTree, D2D1::RectF(left + 8.0f, top + 40.0f, left + width - 8.0f, top + height - 46.0f));
+    PlaceControl(_shortcutsTitle, D2D1::RectF(left + 12.0f, top + 10.0f, left + width - 12.0f, top + 32.0f));
+    if (_shortcutsSearch != nullptr)
+    {
+        PlaceControl(_shortcutsSearch, D2D1::RectF(left + 12.0f, top + 36.0f, left + width - 12.0f, top + 64.0f));
+    }
+    PlaceControl(_shortcutsTree, D2D1::RectF(left + 8.0f, top + 70.0f, left + width - 8.0f, top + height - 46.0f));
     PlaceControl(_shortcutsClose,
                  D2D1::RectF(left + width - 102.0f, top + height - 40.0f, left + width - 12.0f, top + height - 10.0f));
 }
@@ -1445,6 +1496,97 @@ D2D1_RECT_F ChromeHost::NoticeBoundsDip() const noexcept
     return NoticeOpen() ? _noticeCard->GetBounds() : D2D1::RectF();
 }
 
+void ChromeHost::ApplyShortcutFilter() noexcept
+{
+    _shortcutModel.rows.clear();
+    for (const ShortcutListModel::Row& row : _shortcutModel.all)
+    {
+        if (_shortcutModel.query.empty())
+        {
+            _shortcutModel.rows.push_back(row);
+            continue;
+        }
+        const auto fold = [](wchar_t character)
+        { return static_cast<wchar_t>(towlower(static_cast<wint_t>(character))); };
+        bool found = false;
+        if (row.name.size() >= _shortcutModel.query.size())
+        {
+            for (std::size_t start = 0; start + _shortcutModel.query.size() <= row.name.size() && !found; ++start)
+            {
+                found = true;
+                for (std::size_t index = 0; index < _shortcutModel.query.size(); ++index)
+                {
+                    if (fold(row.name[start + index]) != fold(_shortcutModel.query[index]))
+                    {
+                        found = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if (found)
+        {
+            _shortcutModel.rows.push_back(row);
+        }
+    }
+    if (_shortcutsTree != nullptr)
+    {
+        _shortcutsTree->NotifyDataChanged();
+    }
+}
+
+std::wstring ChromeHost::CatalogChord(int command, const wchar_t* fallback) const
+{
+    for (const std::pair<int, std::wstring>& item : _shortcutOverrides)
+    {
+        if (item.first == command)
+        {
+            return item.second;
+        }
+    }
+    return fallback != nullptr ? fallback : std::wstring{};
+}
+
+void ChromeHost::SetShortcutOverrides(std::vector<std::pair<int, std::wstring>> chords) noexcept
+{
+    _shortcutOverrides = std::move(chords);
+    RefreshDisplayedChords();
+}
+
+void ChromeHost::LaunchShortcut(int command) noexcept
+{
+    CloseShortcuts();
+    if (command == kCommandKeyboardShortcuts || !_onCommand)
+    {
+        return;
+    }
+    _onCommand(command);
+}
+
+bool ChromeHost::ActivateSelectedShortcut() noexcept
+{
+    if (!ShortcutsOpen() || _shortcutsTree == nullptr)
+    {
+        return false;
+    }
+    const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId();
+    if (!selected.has_value() || selected.value() == 0 || selected.value() > _shortcutModel.rows.size())
+    {
+        return false;
+    }
+    LaunchShortcut(_shortcutModel.rows[selected.value() - 1].command);
+    return true;
+}
+
+bool ChromeHost::RunShortcutRowForTest(std::size_t visibleIndex) noexcept
+{
+    if (!ShortcutsOpen() || _shortcutsTree == nullptr || !_shortcutsTree->RequestSelectVisibleItem(visibleIndex))
+    {
+        return false;
+    }
+    return ActivateSelectedShortcut();
+}
+
 void ChromeHost::OpenShortcuts() noexcept
 {
     if (_shortcutsCard == nullptr || _shortcutsTree == nullptr)
@@ -1452,7 +1594,7 @@ void ChromeHost::OpenShortcuts() noexcept
         return;
     }
     CloseNotice();
-    _shortcutModel.rows.clear();
+    _shortcutModel.all.clear();
     for (const CommandShortcutDefault& row : CommandShortcuts())
     {
         std::wstring name = LoadStringResource(nullptr, row.captionId);
@@ -1481,9 +1623,11 @@ void ChromeHost::OpenShortcuts() noexcept
         {
             clean.pop_back();
         }
-        _shortcutModel.rows.push_back(ShortcutListModel::Row{std::move(clean), LayoutChord(row.chord)});
+        const std::wstring chord = CatalogChord(row.command, row.chord);
+        _shortcutModel.all.push_back(
+            ShortcutListModel::Row{std::move(clean), LayoutChord(chord), row.command});
     }
-    _shortcutsTree->NotifyDataChanged();
+    ApplyShortcutFilter();
     _shortcutsCard->SetVisible(true);
     if (_shortcutsTitle != nullptr)
     {
@@ -1494,7 +1638,12 @@ void ChromeHost::OpenShortcuts() noexcept
     {
         _shortcutsClose->SetVisible(true);
         _view.Controls().SetCancelButton(_shortcutsClose);
-        _view.Controls().SetDefaultButton(_shortcutsClose);
+        _view.Controls().SetDefaultButton(nullptr);
+    }
+    if (_shortcutsSearch != nullptr)
+    {
+        _shortcutsSearch->SetVisible(true);
+        _view.Controls().SetFocusControl(_shortcutsSearch);
     }
     ArrangeShortcuts();
     _canvasFocused = false;
@@ -1507,7 +1656,7 @@ void ChromeHost::RefreshDisplayedChords() noexcept
     {
         if (menu)
         {
-            RewriteMenuChords(menu.get());
+            RewriteMenuChords(menu.get(), *this);
         }
     }
     if (ShortcutsOpen())
@@ -1677,6 +1826,265 @@ std::span<const ChromeHost::CommandShortcutDefault> ChromeHost::CommandShortcuts
         {kCommandToggleShapeKind, IDS_CMD_TOGGLE_SHAPE, L"Shift+U"},
     };
     return kDefaults;
+}
+
+const wchar_t* ChromeHost::TextIdForCommand(int command) noexcept
+{
+    struct TextId
+    {
+        int command;
+        const wchar_t* id;
+    };
+    static constexpr TextId kIds[] = {
+        {kCommandNew, L"cmd/file/new"},
+        {kCommandOpen, L"cmd/file/open"},
+        {kCommandSave, L"cmd/file/save"},
+        {kCommandSaveAs, L"cmd/file/saveAs"},
+        {kCommandExportPng, L"cmd/file/exportPng"},
+        {kCommandExportJpeg, L"cmd/file/exportJpeg"},
+        {kCommandExit, L"cmd/file/exit"},
+        {kCommandNewCanvas, L"cmd/file/newCanvas"},
+        {kCommandImportImages, L"cmd/file/importImages"},
+        {kCommandCloseProject, L"cmd/file/closeProject"},
+        {kCommandUndo, L"cmd/edit/undo"},
+        {kCommandRedo, L"cmd/edit/redo"},
+        {kCommandFreeTransform, L"cmd/edit/freeTransform"},
+        {kCommandCut, L"cmd/edit/cut"},
+        {kCommandCopy, L"cmd/edit/copy"},
+        {kCommandCopyMerged, L"cmd/edit/copyMerged"},
+        {kCommandPaste, L"cmd/edit/paste"},
+        {kCommandFillForeground, L"cmd/edit/fillForeground"},
+        {kCommandFillBackground, L"cmd/edit/fillBackground"},
+        {kCommandClearPixels, L"cmd/edit/clearPixels"},
+        {kCommandInvert, L"cmd/edit/invert"},
+        {kCommandContentAwareFill, L"cmd/edit/contentAwareFill"},
+        {kCommandSwapPalette, L"cmd/edit/swapPalette"},
+        {kCommandResetPalette, L"cmd/edit/resetPalette"},
+        {kCommandDeleteKey, L"cmd/edit/delete"},
+        {kCommandNewLayer, L"cmd/layer/new"},
+        {kCommandNewFolder, L"cmd/layer/newFolder"},
+        {kCommandDeleteLayer, L"cmd/layer/delete"},
+        {kCommandToggleLayerVisibility, L"cmd/layer/toggleVisibility"},
+        {kCommandMoveOutOfGroup, L"cmd/layer/moveOutOfGroup"},
+        {kCommandFlipLayerHorizontal, L"cmd/layer/flipHorizontal"},
+        {kCommandFlipLayerVertical, L"cmd/layer/flipVertical"},
+        {kCommandLayerViaCopy, L"cmd/layer/viaCopy"},
+        {kCommandAddMask, L"cmd/layer/addMask"},
+        {kCommandAddBlackMask, L"cmd/layer/addBlackMask"},
+        {kCommandNewLevelsAdjustment, L"cmd/layer/newLevels"},
+        {kCommandNewCurvesAdjustment, L"cmd/layer/newCurves"},
+        {kCommandNewHueSaturationAdjustment, L"cmd/layer/newHueSaturation"},
+        {kCommandNewExposureAdjustment, L"cmd/layer/newExposure"},
+        {kCommandNewGradientMapAdjustment, L"cmd/layer/newGradientMap"},
+        {kCommandNewGrainAdjustment, L"cmd/layer/newGrain"},
+        {kCommandEditAdjustment, L"cmd/layer/editAdjustment"},
+        {kCommandGroupLayers, L"cmd/layer/group"},
+        {kCommandRenameLayer, L"cmd/layer/rename"},
+        {kCommandMoveLayerUp, L"cmd/layer/moveUp"},
+        {kCommandMoveLayerDown, L"cmd/layer/moveDown"},
+        {kCommandClipToggle, L"cmd/layer/clip"},
+        {kCommandMergeDown, L"cmd/layer/mergeDown"},
+        {kCommandZoomFit, L"cmd/view/zoomFit"},
+        {kCommandZoomActual, L"cmd/view/zoomActual"},
+        {kCommandZoomIn, L"cmd/view/zoomIn"},
+        {kCommandZoomOut, L"cmd/view/zoomOut"},
+        {kCommandSampleRing, L"cmd/view/sampleRing"},
+        {kCommandKeyboardShortcuts, L"cmd/help/keyboardShortcuts"},
+        {kCommandAbout, L"cmd/help/about"},
+        {kCommandFlipCanvasHorizontal, L"cmd/image/flipHorizontal"},
+        {kCommandFlipCanvasVertical, L"cmd/image/flipVertical"},
+        {kCommandCurves, L"cmd/image/curves"},
+        {kCommandLevels, L"cmd/image/levels"},
+        {kCommandHueSaturation, L"cmd/image/hueSaturation"},
+        {kCommandExposure, L"cmd/image/exposure"},
+        {kCommandGradientMap, L"cmd/image/gradientMap"},
+        {kCommandGrain, L"cmd/image/grain"},
+        {kCommandCanvasSize, L"cmd/image/canvasSize"},
+        {kCommandImageSize, L"cmd/image/imageSize"},
+        {kCommandSelectAll, L"cmd/select/all"},
+        {kCommandDeselect, L"cmd/select/deselect"},
+        {kCommandInverse, L"cmd/select/inverse"},
+        {kCommandLoadLayerSelection, L"cmd/select/loadLayer"},
+        {kCommandLoadMaskSelection, L"cmd/select/loadMask"},
+        {kCommandGaussianBlur, L"cmd/filter/gaussianBlur"},
+        {kCommandMotionBlur, L"cmd/filter/motionBlur"},
+        {kCommandAddNoise, L"cmd/filter/addNoise"},
+        {kCommandLensCorrection, L"cmd/filter/lensCorrection"},
+        {SelectToolCommand(EditorTool::Move), L"cmd/tool/move"},
+        {SelectToolCommand(EditorTool::Marquee), L"cmd/tool/marquee"},
+        {SelectToolCommand(EditorTool::Lasso), L"cmd/tool/lasso"},
+        {SelectToolCommand(EditorTool::Wand), L"cmd/tool/wand"},
+        {SelectToolCommand(EditorTool::Crop), L"cmd/tool/crop"},
+        {SelectToolCommand(EditorTool::Brush), L"cmd/tool/brush"},
+        {SelectToolCommand(EditorTool::Eraser), L"cmd/tool/eraser"},
+        {SelectToolCommand(EditorTool::Heal), L"cmd/tool/heal"},
+        {SelectToolCommand(EditorTool::Clone), L"cmd/tool/clone"},
+        {SelectToolCommand(EditorTool::Smear), L"cmd/tool/smear"},
+        {SelectToolCommand(EditorTool::Gradient), L"cmd/tool/gradient"},
+        {SelectToolCommand(EditorTool::Shape), L"cmd/tool/shape"},
+        {SelectToolCommand(EditorTool::Eyedropper), L"cmd/tool/eyedropper"},
+        {SelectToolCommand(EditorTool::Hand), L"cmd/tool/hand"},
+        {SelectToolCommand(EditorTool::Zoom), L"cmd/tool/zoom"},
+        {kCommandNudgeSelectionLeft, L"cmd/nudge/selectionLeft"},
+        {kCommandNudgeSelectionRight, L"cmd/nudge/selectionRight"},
+        {kCommandNudgeSelectionUp, L"cmd/nudge/selectionUp"},
+        {kCommandNudgeSelectionDown, L"cmd/nudge/selectionDown"},
+        {kCommandNudgeLayerLeft, L"cmd/nudge/layerLeft"},
+        {kCommandNudgeLayerRight, L"cmd/nudge/layerRight"},
+        {kCommandNudgeLayerUp, L"cmd/nudge/layerUp"},
+        {kCommandNudgeLayerDown, L"cmd/nudge/layerDown"},
+        {kCommandNudgePixelsLeft, L"cmd/nudge/pixelsLeft"},
+        {kCommandNudgePixelsRight, L"cmd/nudge/pixelsRight"},
+        {kCommandNudgePixelsUp, L"cmd/nudge/pixelsUp"},
+        {kCommandNudgePixelsDown, L"cmd/nudge/pixelsDown"},
+        {kCommandBrushSmaller, L"cmd/brush/smaller"},
+        {kCommandBrushLarger, L"cmd/brush/larger"},
+        {kCommandBrushSofter, L"cmd/brush/softer"},
+        {kCommandBrushHarder, L"cmd/brush/harder"},
+        {kCommandBlendPrevious, L"cmd/blend/previous"},
+        {kCommandBlendNext, L"cmd/blend/next"},
+        {kCommandToggleMarqueeKind, L"cmd/tool/toggleMarquee"},
+        {kCommandToggleLassoKind, L"cmd/tool/toggleLasso"},
+        {kCommandToggleShapeKind, L"cmd/tool/toggleShape"},
+    };
+    for (const TextId& row : kIds)
+    {
+        if (row.command == command)
+        {
+            return row.id;
+        }
+    }
+    return nullptr;
+}
+
+int ChromeHost::CommandForTextId(std::wstring_view id) noexcept
+{
+    struct TextId
+    {
+        int command;
+        const wchar_t* id;
+    };
+    // The same table as TextIdForCommand. Duplicated so each lookup stays a straight scan.
+    static constexpr TextId kIds[] = {
+        {kCommandNew, L"cmd/file/new"},
+        {kCommandOpen, L"cmd/file/open"},
+        {kCommandSave, L"cmd/file/save"},
+        {kCommandSaveAs, L"cmd/file/saveAs"},
+        {kCommandExportPng, L"cmd/file/exportPng"},
+        {kCommandExportJpeg, L"cmd/file/exportJpeg"},
+        {kCommandExit, L"cmd/file/exit"},
+        {kCommandNewCanvas, L"cmd/file/newCanvas"},
+        {kCommandImportImages, L"cmd/file/importImages"},
+        {kCommandCloseProject, L"cmd/file/closeProject"},
+        {kCommandUndo, L"cmd/edit/undo"},
+        {kCommandRedo, L"cmd/edit/redo"},
+        {kCommandFreeTransform, L"cmd/edit/freeTransform"},
+        {kCommandCut, L"cmd/edit/cut"},
+        {kCommandCopy, L"cmd/edit/copy"},
+        {kCommandCopyMerged, L"cmd/edit/copyMerged"},
+        {kCommandPaste, L"cmd/edit/paste"},
+        {kCommandFillForeground, L"cmd/edit/fillForeground"},
+        {kCommandFillBackground, L"cmd/edit/fillBackground"},
+        {kCommandClearPixels, L"cmd/edit/clearPixels"},
+        {kCommandInvert, L"cmd/edit/invert"},
+        {kCommandContentAwareFill, L"cmd/edit/contentAwareFill"},
+        {kCommandSwapPalette, L"cmd/edit/swapPalette"},
+        {kCommandResetPalette, L"cmd/edit/resetPalette"},
+        {kCommandDeleteKey, L"cmd/edit/delete"},
+        {kCommandNewLayer, L"cmd/layer/new"},
+        {kCommandNewFolder, L"cmd/layer/newFolder"},
+        {kCommandDeleteLayer, L"cmd/layer/delete"},
+        {kCommandToggleLayerVisibility, L"cmd/layer/toggleVisibility"},
+        {kCommandMoveOutOfGroup, L"cmd/layer/moveOutOfGroup"},
+        {kCommandFlipLayerHorizontal, L"cmd/layer/flipHorizontal"},
+        {kCommandFlipLayerVertical, L"cmd/layer/flipVertical"},
+        {kCommandLayerViaCopy, L"cmd/layer/viaCopy"},
+        {kCommandAddMask, L"cmd/layer/addMask"},
+        {kCommandAddBlackMask, L"cmd/layer/addBlackMask"},
+        {kCommandNewLevelsAdjustment, L"cmd/layer/newLevels"},
+        {kCommandNewCurvesAdjustment, L"cmd/layer/newCurves"},
+        {kCommandNewHueSaturationAdjustment, L"cmd/layer/newHueSaturation"},
+        {kCommandNewExposureAdjustment, L"cmd/layer/newExposure"},
+        {kCommandNewGradientMapAdjustment, L"cmd/layer/newGradientMap"},
+        {kCommandNewGrainAdjustment, L"cmd/layer/newGrain"},
+        {kCommandEditAdjustment, L"cmd/layer/editAdjustment"},
+        {kCommandGroupLayers, L"cmd/layer/group"},
+        {kCommandRenameLayer, L"cmd/layer/rename"},
+        {kCommandMoveLayerUp, L"cmd/layer/moveUp"},
+        {kCommandMoveLayerDown, L"cmd/layer/moveDown"},
+        {kCommandClipToggle, L"cmd/layer/clip"},
+        {kCommandMergeDown, L"cmd/layer/mergeDown"},
+        {kCommandZoomFit, L"cmd/view/zoomFit"},
+        {kCommandZoomActual, L"cmd/view/zoomActual"},
+        {kCommandZoomIn, L"cmd/view/zoomIn"},
+        {kCommandZoomOut, L"cmd/view/zoomOut"},
+        {kCommandSampleRing, L"cmd/view/sampleRing"},
+        {kCommandKeyboardShortcuts, L"cmd/help/keyboardShortcuts"},
+        {kCommandAbout, L"cmd/help/about"},
+        {kCommandFlipCanvasHorizontal, L"cmd/image/flipHorizontal"},
+        {kCommandFlipCanvasVertical, L"cmd/image/flipVertical"},
+        {kCommandCurves, L"cmd/image/curves"},
+        {kCommandLevels, L"cmd/image/levels"},
+        {kCommandHueSaturation, L"cmd/image/hueSaturation"},
+        {kCommandExposure, L"cmd/image/exposure"},
+        {kCommandGradientMap, L"cmd/image/gradientMap"},
+        {kCommandGrain, L"cmd/image/grain"},
+        {kCommandCanvasSize, L"cmd/image/canvasSize"},
+        {kCommandImageSize, L"cmd/image/imageSize"},
+        {kCommandSelectAll, L"cmd/select/all"},
+        {kCommandDeselect, L"cmd/select/deselect"},
+        {kCommandInverse, L"cmd/select/inverse"},
+        {kCommandLoadLayerSelection, L"cmd/select/loadLayer"},
+        {kCommandLoadMaskSelection, L"cmd/select/loadMask"},
+        {kCommandGaussianBlur, L"cmd/filter/gaussianBlur"},
+        {kCommandMotionBlur, L"cmd/filter/motionBlur"},
+        {kCommandAddNoise, L"cmd/filter/addNoise"},
+        {kCommandLensCorrection, L"cmd/filter/lensCorrection"},
+        {SelectToolCommand(EditorTool::Move), L"cmd/tool/move"},
+        {SelectToolCommand(EditorTool::Marquee), L"cmd/tool/marquee"},
+        {SelectToolCommand(EditorTool::Lasso), L"cmd/tool/lasso"},
+        {SelectToolCommand(EditorTool::Wand), L"cmd/tool/wand"},
+        {SelectToolCommand(EditorTool::Crop), L"cmd/tool/crop"},
+        {SelectToolCommand(EditorTool::Brush), L"cmd/tool/brush"},
+        {SelectToolCommand(EditorTool::Eraser), L"cmd/tool/eraser"},
+        {SelectToolCommand(EditorTool::Heal), L"cmd/tool/heal"},
+        {SelectToolCommand(EditorTool::Clone), L"cmd/tool/clone"},
+        {SelectToolCommand(EditorTool::Smear), L"cmd/tool/smear"},
+        {SelectToolCommand(EditorTool::Gradient), L"cmd/tool/gradient"},
+        {SelectToolCommand(EditorTool::Shape), L"cmd/tool/shape"},
+        {SelectToolCommand(EditorTool::Eyedropper), L"cmd/tool/eyedropper"},
+        {SelectToolCommand(EditorTool::Hand), L"cmd/tool/hand"},
+        {SelectToolCommand(EditorTool::Zoom), L"cmd/tool/zoom"},
+        {kCommandNudgeSelectionLeft, L"cmd/nudge/selectionLeft"},
+        {kCommandNudgeSelectionRight, L"cmd/nudge/selectionRight"},
+        {kCommandNudgeSelectionUp, L"cmd/nudge/selectionUp"},
+        {kCommandNudgeSelectionDown, L"cmd/nudge/selectionDown"},
+        {kCommandNudgeLayerLeft, L"cmd/nudge/layerLeft"},
+        {kCommandNudgeLayerRight, L"cmd/nudge/layerRight"},
+        {kCommandNudgeLayerUp, L"cmd/nudge/layerUp"},
+        {kCommandNudgeLayerDown, L"cmd/nudge/layerDown"},
+        {kCommandNudgePixelsLeft, L"cmd/nudge/pixelsLeft"},
+        {kCommandNudgePixelsRight, L"cmd/nudge/pixelsRight"},
+        {kCommandNudgePixelsUp, L"cmd/nudge/pixelsUp"},
+        {kCommandNudgePixelsDown, L"cmd/nudge/pixelsDown"},
+        {kCommandBrushSmaller, L"cmd/brush/smaller"},
+        {kCommandBrushLarger, L"cmd/brush/larger"},
+        {kCommandBrushSofter, L"cmd/brush/softer"},
+        {kCommandBrushHarder, L"cmd/brush/harder"},
+        {kCommandBlendPrevious, L"cmd/blend/previous"},
+        {kCommandBlendNext, L"cmd/blend/next"},
+        {kCommandToggleMarqueeKind, L"cmd/tool/toggleMarquee"},
+        {kCommandToggleLassoKind, L"cmd/tool/toggleLasso"},
+        {kCommandToggleShapeKind, L"cmd/tool/toggleShape"},
+    };
+    for (const TextId& row : kIds)
+    {
+        if (id == row.id)
+        {
+            return row.command;
+        }
+    }
+    return 0;
 }
 
 void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept

@@ -3,10 +3,12 @@
 #include "Utf8.h"
 
 #include <algorithm>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <memory>
 
 #include <shlobj.h>
@@ -113,6 +115,124 @@ constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
         }
     }
     return true;
+}
+
+// RedSalamander's stable vk spelling: a letter or digit, F1–F24, a named key, or VK_XX.
+[[nodiscard]] std::string VkStableName(UINT virtualKey)
+{
+    const UINT key = virtualKey & 0xFFu;
+    if (key >= VK_F1 && key <= VK_F24)
+    {
+        return std::format("F{}", key - VK_F1 + 1);
+    }
+    if ((key >= static_cast<UINT>('0') && key <= static_cast<UINT>('9')) ||
+        (key >= static_cast<UINT>('A') && key <= static_cast<UINT>('Z')))
+    {
+        return std::string(1, static_cast<char>(key));
+    }
+    switch (key)
+    {
+    case VK_BACK:
+        return "Backspace";
+    case VK_TAB:
+        return "Tab";
+    case VK_RETURN:
+        return "Enter";
+    case VK_SPACE:
+        return "Space";
+    case VK_PRIOR:
+        return "PageUp";
+    case VK_NEXT:
+        return "PageDown";
+    case VK_END:
+        return "End";
+    case VK_HOME:
+        return "Home";
+    case VK_LEFT:
+        return "Left";
+    case VK_UP:
+        return "Up";
+    case VK_RIGHT:
+        return "Right";
+    case VK_DOWN:
+        return "Down";
+    case VK_INSERT:
+        return "Insert";
+    case VK_DELETE:
+        return "Delete";
+    case VK_ESCAPE:
+        return "Escape";
+    case VK_ADD:
+        return "NumpadPlus";
+    case VK_SUBTRACT:
+        return "NumpadMinus";
+    default:
+        return std::format("VK_{:02X}", key);
+    }
+}
+
+[[nodiscard]] bool TryParseVk(std::string_view text, UINT& out) noexcept
+{
+    if (text.empty())
+    {
+        return false;
+    }
+    if (text.size() == 1)
+    {
+        char character = text[0];
+        if (character >= 'a' && character <= 'z')
+        {
+            character = static_cast<char>(character - 'a' + 'A');
+        }
+        if ((character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z'))
+        {
+            out = static_cast<UINT>(static_cast<unsigned char>(character));
+            return true;
+        }
+        return false;
+    }
+    if ((text[0] == 'F' || text[0] == 'f') && text.size() >= 2 && text.size() <= 3)
+    {
+        unsigned number = 0;
+        const char* const end = text.data() + text.size();
+        const auto parsed = std::from_chars(text.data() + 1, end, number);
+        if (parsed.ec == std::errc{} && parsed.ptr == end && number >= 1 && number <= 24)
+        {
+            out = VK_F1 + (number - 1);
+            return true;
+        }
+    }
+    if (text.size() == 5 && (text[0] == 'V' || text[0] == 'v') && (text[1] == 'K' || text[1] == 'k') && text[2] == '_')
+    {
+        unsigned key = 0;
+        const auto parsed = std::from_chars(text.data() + 3, text.data() + 5, key, 16);
+        if (parsed.ec == std::errc{} && parsed.ptr == text.data() + 5 && key <= 0xFFu)
+        {
+            out = key;
+            return true;
+        }
+    }
+    struct Named
+    {
+        std::string_view name;
+        UINT key;
+    };
+    constexpr Named kNamed[] = {
+        {"Backspace", VK_BACK}, {"Tab", VK_TAB},     {"Enter", VK_RETURN},  {"Return", VK_RETURN},
+        {"Space", VK_SPACE},    {"PageUp", VK_PRIOR}, {"PageDown", VK_NEXT}, {"End", VK_END},
+        {"Home", VK_HOME},      {"Left", VK_LEFT},   {"Up", VK_UP},         {"Right", VK_RIGHT},
+        {"Down", VK_DOWN},      {"Insert", VK_INSERT}, {"Delete", VK_DELETE}, {"Escape", VK_ESCAPE},
+        {"NumpadPlus", VK_ADD}, {"NumpadMinus", VK_SUBTRACT},
+    };
+    for (const Named& named : kNamed)
+    {
+        if (text == named.name)
+        {
+            out = named.key;
+            return true;
+        }
+    }
+    return false;
 }
 
 [[nodiscard]] const char* ThemeName(ThemePreference theme) noexcept
@@ -254,6 +374,89 @@ std::optional<AppSettings> Parse(std::string_view json)
             settings.window = placement;
         }
     }
+    if (yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts"); shortcuts != nullptr && yyjson_is_arr(shortcuts))
+    {
+        const std::size_t count = yyjson_arr_size(shortcuts);
+        settings.shortcuts.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            yyjson_val* binding = yyjson_arr_get(shortcuts, index);
+            if (binding == nullptr || !yyjson_is_obj(binding))
+            {
+                continue;
+            }
+            ShortcutBinding chord;
+            const std::optional<std::string_view> commandId = ReadString(binding, "commandId");
+            if (!commandId.has_value() || commandId->size() < 5 || !commandId->starts_with("cmd/"))
+            {
+                continue;
+            }
+            const auto readFlag = [&](const char* name, bool& out)
+            {
+                yyjson_val* value = yyjson_obj_get(binding, name);
+                if (value == nullptr)
+                {
+                    return true;
+                }
+                if (!yyjson_is_bool(value))
+                {
+                    return false;
+                }
+                out = yyjson_get_bool(value);
+                return true;
+            };
+            if (!readFlag("ctrl", chord.ctrl) || !readFlag("alt", chord.alt) || !readFlag("shift", chord.shift))
+            {
+                continue;
+            }
+            const bool hasVk = yyjson_obj_get(binding, "vk") != nullptr;
+            const bool hasPosition = yyjson_obj_get(binding, "keyPosition") != nullptr;
+            if (hasVk == hasPosition)
+            {
+                continue;
+            }
+            if (hasVk)
+            {
+                const std::optional<std::string_view> vk = ReadString(binding, "vk");
+                UINT key = 0;
+                if (!vk.has_value() || !TryParseVk(vk.value(), key))
+                {
+                    continue;
+                }
+                chord.virtualKey = static_cast<std::uint16_t>(key);
+            }
+            else
+            {
+                const std::optional<std::string_view> position = ReadString(binding, "keyPosition");
+                if (!position.has_value())
+                {
+                    continue;
+                }
+                if (*position == "numberRowMinus")
+                {
+                    chord.keyPosition = 1;
+                }
+                else if (*position == "numberRowPlus")
+                {
+                    chord.keyPosition = 2;
+                }
+                else if (*position == "bracketLeft")
+                {
+                    chord.keyPosition = 3;
+                }
+                else if (*position == "bracketRight")
+                {
+                    chord.keyPosition = 4;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+            chord.commandId = Utf8ToWide(commandId.value());
+            settings.shortcuts.push_back(std::move(chord));
+        }
+    }
     return settings;
 }
 
@@ -319,6 +522,53 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     {
         (void)yyjson_mut_obj_remove_str(root, "window");
     }
+    if (settings.shortcuts.empty())
+    {
+        (void)yyjson_mut_obj_remove_str(root, "shortcuts");
+    }
+    else
+    {
+        yyjson_mut_val* shortcuts = yyjson_mut_arr(doc.get());
+        ok = shortcuts != nullptr && ok;
+        for (const ShortcutBinding& binding : settings.shortcuts)
+        {
+            yyjson_mut_val* chord = yyjson_mut_obj(doc.get());
+            if (chord == nullptr || shortcuts == nullptr)
+            {
+                ok = false;
+                break;
+            }
+            const std::string commandId = WideToUtf8(binding.commandId);
+            ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "commandId", commandId.c_str()) && ok;
+            if (binding.ctrl)
+            {
+                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "ctrl", true) && ok;
+            }
+            if (binding.alt)
+            {
+                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "alt", true) && ok;
+            }
+            if (binding.shift)
+            {
+                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "shift", true) && ok;
+            }
+            if (binding.keyPosition != 0)
+            {
+                const char* position = binding.keyPosition == 1   ? "numberRowMinus"
+                                       : binding.keyPosition == 2 ? "numberRowPlus"
+                                       : binding.keyPosition == 3 ? "bracketLeft"
+                                                                  : "bracketRight";
+                ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "keyPosition", position) && ok;
+            }
+            else
+            {
+                const std::string vk = VkStableName(binding.virtualKey);
+                ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "vk", vk.c_str()) && ok;
+            }
+            ok = yyjson_mut_arr_add_val(shortcuts, chord) && ok;
+        }
+        ok = put("shortcuts", shortcuts) && ok;
+    }
     if (!ok)
     {
         return {};
@@ -332,6 +582,86 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     std::string result(text.get(), length);
     result += '\n';
     return result;
+}
+
+std::wstring ShortcutCatalogText(const ShortcutBinding& binding)
+{
+    std::wstring text;
+    if (binding.ctrl)
+    {
+        text += L"Ctrl+";
+    }
+    if (binding.alt)
+    {
+        text += L"Alt+";
+    }
+    if (binding.shift)
+    {
+        text += L"Shift+";
+    }
+    if (binding.keyPosition == 0 && binding.virtualKey != 0 &&
+        ((binding.virtualKey >= 'A' && binding.virtualKey <= 'Z') ||
+         (binding.virtualKey >= '0' && binding.virtualKey <= '9')))
+    {
+        text.push_back(static_cast<wchar_t>(binding.virtualKey));
+    }
+    else if (binding.keyPosition == 2)
+    {
+        text += binding.shift && !binding.ctrl ? L"=" : L"+";
+    }
+    else if (binding.keyPosition == 1)
+    {
+        text += L"-";
+    }
+    else if (binding.keyPosition == 3)
+    {
+        text += L"[";
+    }
+    else if (binding.keyPosition == 4)
+    {
+        text += L"]";
+    }
+    else if (binding.virtualKey == VK_LEFT)
+    {
+        text += L"Left";
+    }
+    else if (binding.virtualKey == VK_RIGHT)
+    {
+        text += L"Right";
+    }
+    else if (binding.virtualKey == VK_UP)
+    {
+        text += L"Up";
+    }
+    else if (binding.virtualKey == VK_DOWN)
+    {
+        text += L"Down";
+    }
+    else if (binding.virtualKey == VK_DELETE)
+    {
+        text += L"Delete";
+    }
+    else if (binding.virtualKey == VK_BACK)
+    {
+        text += L"Backspace";
+    }
+    else if (binding.virtualKey == VK_F2)
+    {
+        text += L"F2";
+    }
+    else if (binding.virtualKey == VK_F4)
+    {
+        text += L"F4";
+    }
+    else if (binding.virtualKey == VK_ADD)
+    {
+        text += L"+";
+    }
+    else if (binding.virtualKey == VK_SUBTRACT)
+    {
+        text += L"-";
+    }
+    return text;
 }
 
 SettingsLoadResult LoadCold(const std::wstring& path)
