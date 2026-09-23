@@ -262,10 +262,12 @@ void ChromeHost::ArrangeSizeCard(float right, float top, float bottom) noexcept
 
 void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
 {
-    if (!_sizeCard)
+    // The card writes only a state it has not shown (RF-1001, `_resync`).
+    if (!_sizeCard || (!TakeResync(kResyncSize) && state == _sizeState))
     {
         return;
     }
+    ++_syncCounters.headers;
     const auto hold = HoldReports();
     const bool wasOpen = _sizeCard->IsVisible();
     _sizeState = state;

@@ -56,9 +56,17 @@ the pin. Do not float onto sibling `main`.
 - `EmbeddedHost::Prepare(width, height, dpi)` lays out and rasterizes; `Composite(context, viewport)` draws with the
   app's context. Both run on the idle Present path; neither creates a swap chain.
 - The embedded UI Automation tree is a snapshot that DxUi republishes only when `EmbeddedHost::UpdateAccessibility`
-  is called after a preparation (with nothing prepared since and the same placement it returns `S_FALSE` at once):
-  call it after every `Prepare` that prepared, not only when the placement moves, or a panel or card shown later
-  never reaches UI Automation (`ChromeHost::Prepare`).
+  is called after a preparation (with nothing prepared since and the same placement it returns `S_FALSE` at once), and
+  each call walks the whole control tree. `ChromeHost::Prepare` calls it after a preparation while a client listens
+  (`UiaClientsAreListening`), when the accessible structure changed (`_accessibleStructureChanged`: a tool switch, a
+  card, `ShowControl`, the layer rows, the title) or when a client asked meanwhile; otherwise the snapshot waits until
+  `WM_GETOBJECT` or `ChromeHost::AccessibilityRoot` publishes it (`PublishAccessibilityForClient`). Never publish only
+  when the placement moves, or a panel or card shown later never reaches UI Automation, and never on every preparation,
+  or every pointer move walks the tree.
+- Most DxUi setters invalidate even when the value is unchanged (`ComboBox::SetSelectedIndex`,
+  `StatusStrip::SetSectionText`, `NumericStepper::SetValue`, `ColorSwatch::SetSwatchValue`, `TabControl::SetTabTitle`),
+  and any invalidation repaints the whole embedded surface: ChromeHost writes a region only when its state changed
+  (`_resync`, RF-1001).
 
 ## Host boundary
 

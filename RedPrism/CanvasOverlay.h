@@ -39,9 +39,11 @@ class CanvasOverlay final : public DxUi::Control
         std::optional<D2D1_POINT_2F> cursor;
     };
 
-    // Points and guide positions are DIPs relative to the overlay's own top-left corner.
-    void SetGeometry(std::optional<Geometry> geometry) noexcept;
-    void SetGuides(std::vector<float> xs, std::vector<float> ys);
+    // Points and guide positions are DIPs relative to the overlay's own top-left corner. Each setter below redraws
+    // (invalidates the chrome) only when what it draws changed, and says so: the chrome syncs them on every pointer
+    // move, and a DxUi invalidation repaints the whole chrome surface (RF-1001).
+    bool SetGeometry(const std::optional<Geometry>& geometry) noexcept;
+    bool SetGuides(const std::vector<float>& xs, const std::vector<float>& ys);
     void SetSelectionOutline(std::vector<OutlineLoop> loops);
     // Dash offset in DIP (whole steps 0-7 of the 8 DIP cycle). The outline geometry stays; each step's stroke style
     // is made once and kept.
@@ -50,7 +52,7 @@ class CanvasOverlay final : public DxUi::Control
     {
         return _antPhase;
     }
-    void SetDraft(std::optional<Draft> draft);
+    bool SetDraft(std::optional<Draft> draft);
     // The brush tip over the canvas: a circle of the tip's diameter at the pointer (DIP relative to the overlay).
     struct BrushCursor
     {
@@ -58,9 +60,9 @@ class CanvasOverlay final : public DxUi::Control
         float radius = 0;
         float hardness = 1;
     };
-    void SetBrushCursor(std::optional<BrushCursor> cursor) noexcept;
+    bool SetBrushCursor(const std::optional<BrushCursor>& cursor) noexcept;
     // A pending gradient's line in DIP, with a handle at each end.
-    void SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept;
+    bool SetGradientLine(const std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>>& line) noexcept;
     // The shape being dragged, filled with the color it will get and outlined so it reads on any background.
     struct ShapeDraftOverlay
     {
@@ -69,9 +71,9 @@ class CanvasOverlay final : public DxUi::Control
         float cornerRadius = 0;
         uint32_t argb = 0xFF000000u;
     };
-    void SetShapeDraft(std::optional<ShapeDraftOverlay> draft) noexcept;
+    bool SetShapeDraft(const std::optional<ShapeDraftOverlay>& draft) noexcept;
     // The crop frame (DIPs relative to the overlay): everything outside it dims.
-    void SetCropShade(std::optional<D2D1_RECT_F> frame) noexcept;
+    bool SetCropShade(const std::optional<D2D1_RECT_F>& frame) noexcept;
     // The eyedropper's comparison ring: the new color above, the color from before the drag below.
     struct SampleRing
     {
@@ -79,9 +81,9 @@ class CanvasOverlay final : public DxUi::Control
         uint32_t originalArgb = 0xFF000000u;
         uint32_t sampledArgb = 0xFF000000u;
     };
-    void SetSampleRing(std::optional<SampleRing> ring) noexcept;
+    bool SetSampleRing(const std::optional<SampleRing>& ring) noexcept;
     // Clone Stamp's source crosshair.
-    void SetCloneSource(std::optional<D2D1_POINT_2F> point) noexcept;
+    bool SetCloneSource(const std::optional<D2D1_POINT_2F>& point) noexcept;
     [[nodiscard]] std::optional<D2D1_POINT_2F> CloneSource() const noexcept
     {
         return _cloneSource;

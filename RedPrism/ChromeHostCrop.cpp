@@ -41,10 +41,13 @@ void ChromeHost::ArrangeCropHeader(float left, float top, float right, float bot
 
 void ChromeHost::SetCropInspector(const CropInspectorState& state) noexcept
 {
-    if (!_cropHeader)
+    // The header writes only a state it has not shown (RF-1001, `_resync`).
+    if (!_cropHeader || (!TakeResync(kResyncCrop) && state == _cropInspector))
     {
         return;
     }
+    _cropInspector = state;
+    ++_syncCounters.headers;
     const auto hold = HoldReports();
     _cropRatio->SetSelectedIndex(static_cast<size_t>(std::clamp(state.ratio, 0, 4)));
     _cropRatio->SetEnabled(state.enabled);
@@ -68,5 +71,8 @@ void ChromeHost::SetCropShade(std::optional<D2D1_RECT_F> framePixels) noexcept
     {
         framePixels = PixelToDip(*framePixels);
     }
-    _overlay->SetCropShade(framePixels);
+    if (_overlay->SetCropShade(framePixels))
+    {
+        ++_syncCounters.overlays;
+    }
 }

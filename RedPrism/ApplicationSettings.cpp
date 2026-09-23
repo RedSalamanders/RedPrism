@@ -86,7 +86,6 @@ void Application::UseSettings(std::wstring path, const AppSettings& settings) no
 void Application::ApplySettings(const AppSettings& settings) noexcept
 {
     _settings = settings;
-    _session.showsSampleRing = settings.sampleRing;
     // One effective binding table (RedPrism/CommandBindings.h): the key path dispatches from it and the chrome
     // (menus, Command List, tooltips) shows its chords.
     _bindings.Build(settings.shortcuts, &NormalizeLayoutChord);
@@ -256,7 +255,6 @@ void Application::SaveSettings() noexcept
     {
         _settings.layersPanelWidth = _chrome->LayersWidthDip();
     }
-    _settings.sampleRing = _session.showsSampleRing;
     if (SettingsStore::Save(_settingsPath, _settings))
     {
         NoteSettingsFileState(); // our own write is not a change to reload
@@ -510,7 +508,7 @@ int Application::RunProductHardeningSelfTest() noexcept
         return 5;
     }
     UseSettings(path, initial);
-    if (!_settingsWatch || !_chrome->ThemeIsDark() || !_session.showsSampleRing)
+    if (!_settingsWatch || !_chrome->ThemeIsDark() || !_settings.sampleRing)
     {
         SelfTestFailure(L"The settings watch did not start from the self-test file.\n");
         return 5;
@@ -527,7 +525,7 @@ int Application::RunProductHardeningSelfTest() noexcept
         return 5;
     }
     OnSettingsDirectoryChanged(true);
-    if (_chrome->ThemeIsDark() || _session.showsSampleRing || _settings.layersPanelWidth != 300 ||
+    if (_chrome->ThemeIsDark() || _settings.sampleRing || _settings.layersPanelWidth != 300 ||
         _renderer.ClearColor() != kLightClearColor)
     {
         SelfTestFailure(L"A valid edit of the settings file did not apply live.\n");
@@ -546,7 +544,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     }
     OnSettingsDirectoryChanged(true);
     std::string bytes;
-    if (_chrome->ThemeIsDark() || _session.showsSampleRing || !SettingsStore::ReadFileBytes(path, bytes) ||
+    if (_chrome->ThemeIsDark() || _settings.sampleRing || !SettingsStore::ReadFileBytes(path, bytes) ||
         bytes != "{ broken")
     {
         SelfTestFailure(L"An invalid settings file changed the live settings or was rewritten.\n");
@@ -558,7 +556,7 @@ int Application::RunProductHardeningSelfTest() noexcept
         return 5;
     }
     OnSettingsDirectoryChanged(true);
-    if (!_chrome->ThemeIsDark() || !_session.showsSampleRing || _renderer.ClearColor() != kDarkClearColor)
+    if (!_chrome->ThemeIsDark() || !_settings.sampleRing || _renderer.ClearColor() != kDarkClearColor)
     {
         SelfTestFailure(L"Restoring the settings file did not apply live.\n");
         return 5;

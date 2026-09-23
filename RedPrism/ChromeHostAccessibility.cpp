@@ -227,6 +227,10 @@ void ChromeHost::AttachAccessibility() noexcept
         site->Disconnect();
         return;
     }
+    if (_accessibilityStatus == S_OK)
+    {
+        ++_syncCounters.publishes; // attaching publishes the first snapshot
+    }
     wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> chrome;
     _accessibilityStatus = _view.GetAccessibilityProvider(chrome.put());
     if (SUCCEEDED(_accessibilityStatus) && chrome)
@@ -238,6 +242,8 @@ void ChromeHost::AttachAccessibility() noexcept
     _accessibilitySite = std::move(site);
     _accessibilityPlacementDirty = false;
     _accessibilityPreparations = _view.GetStatistics().preparations;
+    _accessibleStructureChanged = false;
+    _accessibilityRequested = false;
 }
 
 void ChromeHost::DetachAccessibility() noexcept
@@ -271,6 +277,8 @@ LRESULT ChromeHost::HandleGetObject(WPARAM wParam, LPARAM lParam) noexcept
     {
         return 0;
     }
+    // A client connecting reads the snapshot next: what waited while nobody listened is published first (RF-1001).
+    PublishAccessibilityForClient();
     return UiaReturnRawElementProvider(_owner, wParam, lParam,
                                        static_cast<IRawElementProviderSimple*>(_accessibilityRoot.get()));
 }
@@ -308,16 +316,58 @@ void ChromeHost::FlushAccessibilityPlacement() noexcept
         return;
     }
     _accessibilityPreparations = _view.GetStatistics().preparations;
+    _accessibleStructureChanged = false;
+    _accessibilityRequested = false;
     const DxUi::EmbeddedAccessibilityPlacement placement = AccessibilityPlacement();
-    (void)_view.UpdateAccessibility(placement);
+    if (_view.UpdateAccessibility(placement) == S_OK)
+    {
+        ++_syncCounters.publishes;
+    }
     if (_accessibilityRoot)
     {
         _accessibilityRoot->SetChromeHasFocus(placement.hasKeyboardFocus);
     }
 }
 
-IRawElementProviderFragmentRoot* ChromeHost::AccessibilityRoot() const noexcept
+bool ChromeHost::AccessibilityBehind() const noexcept
 {
+    return _accessibilityPlacementDirty || _view.GetStatistics().preparations != _accessibilityPreparations;
+}
+
+bool ChromeHost::AccessibilityStaleForTest() const noexcept
+{
+    return _accessibilitySite != nullptr && AccessibilityBehind();
+}
+
+bool ChromeHost::AccessibilityListened() const noexcept
+{
+    return _accessibilityListenerForTest.has_value() ? _accessibilityListenerForTest.value()
+                                                     : UiaClientsAreListening() != FALSE;
+}
+
+void ChromeHost::PublishAccessibilityForClient() noexcept
+{
+    if (!_accessibilitySite || !_attached || !AccessibilityBehind())
+    {
+        return;
+    }
+    // UpdateAccessibility publishes only a prepared view, and its calls would cancel a press in progress: the next
+    // Prepare publishes instead, whoever listens.
+    if (_inDispatch || _pointerPressed || _view.NeedsPreparation())
+    {
+        _accessibilityRequested = true;
+        if (_requestFrame != nullptr)
+        {
+            _requestFrame(_requestContext);
+        }
+        return;
+    }
+    FlushAccessibilityPlacement();
+}
+
+IRawElementProviderFragmentRoot* ChromeHost::AccessibilityRoot() noexcept
+{
+    PublishAccessibilityForClient();
     return _accessibilityRoot ? static_cast<IRawElementProviderFragmentRoot*>(_accessibilityRoot.get()) : nullptr;
 }
 

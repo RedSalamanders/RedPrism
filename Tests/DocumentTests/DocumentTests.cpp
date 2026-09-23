@@ -5,6 +5,7 @@
 #include "Document.h"
 #include "ImageFilters.h"
 #include "Selection.h"
+#include "SettingsStore.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
 
@@ -2135,7 +2136,7 @@ DocumentSession BrushSession(int width = 600, int height = 80)
     DocumentSession session;
     session.CreateDocument(width, height, false);
     session.AddBlankLayer();
-    session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
     return session;
 }
 
@@ -2319,7 +2320,7 @@ void TestBrushStroke()
     DocumentSession colored;
     colored.CreateDocument(80, 80, false);
     colored.AddBlankLayer();
-    colored.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    colored.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
     colored.SetForegroundColor(0xFF00FF00u);
     Expect(colored.BeginBrush(Vec2{40, 40}), "brush.foreground-begin");
     const std::array<std::uint8_t, 4> green = StrokePixel(*colored.PendingBrush(), 40, 40);
@@ -2504,7 +2505,7 @@ struct RawStroke
         session.CreateDocument(800, 800, false);
         session.AddBlankLayer();
         stroke = std::make_unique<BrushStroke>(*session.ActiveLayer(), false,
-                                               BrushSettings{diameter, 0, 1, 1, 1, opacity, false}, 800, 800, nullptr);
+                                               BrushSettings{diameter, 0, 1, 1, 1, opacity}, 800, 800, nullptr);
     }
     void Trace(const std::vector<Vec2>& points, double step = 12)
     {
@@ -2599,7 +2600,7 @@ void TestBrushSnapshots()
     DocumentSession session;
     session.CreateDocument(2000, 2000, false);
     session.AddBlankLayer();
-    session.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1, false};
+    session.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1};
     Expect(session.BeginBrush(Vec2{400, 1600}), "snapshot.begin");
     session.ContinueBrush(Vec2{400, 400});
     session.ContinueBrush(Vec2{1600, 400});
@@ -2652,7 +2653,7 @@ void TestBrushSnapshots()
     DocumentSession ridges;
     ridges.CreateDocument(2000, 2000, false);
     ridges.AddBlankLayer();
-    ridges.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1, false};
+    ridges.brushSettings = BrushSettings{400, 0, 1, 1, 1, 1};
     Expect(ridges.BeginBrush(Vec2{300, 800}), "ridges.begin");
     ridges.ContinueBrush(Vec2{1700, 800});
     ridges.FinishBrush();
@@ -2820,8 +2821,8 @@ void TestBrushRejectsAndKeys()
     Expect(line.ShiftLineStart() == Vec2{30, 20}, "line.start-at-last-point");
     line.AddBlankLayer();
     Expect(!line.ShiftLineStart().has_value(), "line.other-layer");
-    Expect(!BrushSettings{0, 1, 0, 0, 0, 1, false}.IsValid() && !BrushSettings{40, 1.5, 0, 0, 0, 1, false}.IsValid() &&
-               !BrushSettings{40, 1, 0, 0, 0, 0, false}.IsValid() && BrushSettings{}.IsValid(),
+    Expect(!BrushSettings{0, 1, 0, 0, 0, 1}.IsValid() && !BrushSettings{40, 1.5, 0, 0, 0, 1}.IsValid() &&
+               !BrushSettings{40, 1, 0, 0, 0, 0}.IsValid() && BrushSettings{}.IsValid(),
            "keys.settings-validity");
 }
 
@@ -2844,7 +2845,7 @@ void TestBrushExpansion()
         session.Document()->layers.push_back(imported);
         session.SelectLayer(imported.id);
         const std::optional<CanvasDocument> original = session.Document();
-        session.brushSettings = BrushSettings{16, 1, 0, 1, 0, 1, false};
+        session.brushSettings = BrushSettings{16, 1, 0, 1, 0, 1};
         Expect(session.BeginBrush(Vec2{12, 12}), "expand.begin");
         session.ContinueBrush(Vec2{580, 12});
         const BrushStroke* stroke = session.PendingBrush();
@@ -2877,7 +2878,7 @@ void TestBrushExpansion()
     masked.mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
     grown.Document()->layers.push_back(masked);
     grown.SelectLayer(masked.id);
-    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1, false};
+    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
     Expect(grown.BeginBrush(Vec2{20, 50}), "expand.mask-begin");
     grown.FinishBrush();
     const Raster newMask = grown.ActiveLayer()->mask->asset.image;
@@ -2906,7 +2907,7 @@ void TestBrushSelectionClip()
     scaled.SelectLayer(blue.id);
     scaled.selectionAntialiased = true;
     scaled.ApplySelection({SelectionLoop{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 40}}}, SelectionMode::New, L"Select");
-    scaled.brushSettings = BrushSettings{300, 1, 0, 0, 0, 1, false};
+    scaled.brushSettings = BrushSettings{300, 1, 0, 0, 0, 1};
     Expect(scaled.BeginBrush(Vec2{50, 20}, true), "clip.erase-begin");
     scaled.ContinueBrush(Vec2{51, 20});
     scaled.FinishBrush();
@@ -3015,7 +3016,7 @@ void TestSpotHealing()
         session.CreateDocument(120, 80, false);
         InsertPixels(session, surface, L"Surface");
         session.spotHealingMode = mode;
-        session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1, false};
+        session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1};
         const int count = session.history.UndoCount();
         bool ok = session.BeginBrush(Vec2{60, 40}, BrushKind::Heal);
         // While painting, the spot shows as a dark wash.
@@ -3081,7 +3082,7 @@ void TestCloneStamp()
     DocumentSession session;
     session.CreateDocument(80, 40, false);
     InsertPixels(session, colors, L"Colors");
-    session.brushSettings = BrushSettings{6, 1, 0, 0, 0, 1, false};
+    session.brushSettings = BrushSettings{6, 1, 0, 0, 0, 1};
     // Nothing to copy until a source is set.
     Expect(!session.BeginBrush(Vec2{60, 20}, BrushKind::Clone) && session.PendingBrush() == nullptr &&
                !session.CloneStrokeOffset(Vec2{60, 20}).has_value(),
@@ -3144,7 +3145,7 @@ void TestBlurTool()
     DocumentSession session;
     session.CreateDocument(40, 40, false);
     InsertPixels(session, edge, L"Edge");
-    session.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1, false};
+    session.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1};
     const int count = session.history.UndoCount();
     Expect(Dab(session, Vec2{20, 20}, BrushKind::Blur) && session.history.UndoCount() == count + 1 &&
                session.history.UndoName() == L"Blur",
@@ -3178,7 +3179,7 @@ void TestBlurTool()
         }
     }
     masked.SelectLayerTarget(id, true);
-    masked.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1, false};
+    masked.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1};
     Expect(masked.IsMaskSelected() && Dab(masked, Vec2{20, 20}, BrushKind::Blur) &&
                masked.history.UndoName() == L"Blur",
            "blur.mask-entry");
@@ -3199,7 +3200,7 @@ void TestSmearWarp()
     smudge.CreateDocument(60, 20, false);
     InsertPixels(smudge, halves, L"Halves");
     smudge.smearMode = SmearMode::Smudge;
-    smudge.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+    smudge.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8};
     Expect(smudge.BeginWarp(Vec2{25, 10}) && smudge.PendingWarp() != nullptr && smudge.PendingBrush() == nullptr,
            "smudge.begins");
     smudge.ContinueWarp(Vec2{45, 10});
@@ -3216,7 +3217,7 @@ void TestSmearWarp()
     liquify.CreateDocument(60, 20, false);
     InsertPixels(liquify, halves, L"Halves");
     liquify.smearMode = SmearMode::Liquify;
-    liquify.brushSettings = BrushSettings{12, 0.5, 0, 0, 0, 1, false};
+    liquify.brushSettings = BrushSettings{12, 0.5, 0, 0, 0, 1};
     Expect(liquify.BeginWarp(Vec2{30, 10}), "liquify.begins");
     liquify.ContinueWarp(Vec2{38, 10});
     liquify.FinishWarp();
@@ -3228,7 +3229,7 @@ void TestSmearWarp()
     cancel.CreateDocument(60, 20, false);
     const Guid id = InsertPixels(cancel, halves, L"Halves");
     cancel.smearMode = SmearMode::Smudge;
-    cancel.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+    cancel.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8};
     const int before = cancel.history.UndoCount();
     Expect(cancel.BeginWarp(Vec2{25, 10}), "warp.cancel-begins");
     cancel.ContinueWarp(Vec2{35, 10});
@@ -3575,7 +3576,7 @@ void TestShapeTool()
                    LiveShape(*scaled).has_value() && ActivePixel(session, 11, 11)[3] == 0 &&
                    ActivePixel(session, 20, 20) == red,
                "shape.redraws-when-scaled");
-        session.brushSettings = BrushSettings{10, 1, 0, 0, 1, 1, false};
+        session.brushSettings = BrushSettings{10, 1, 0, 0, 1, 1};
         Expect(session.BeginBrush(Vec2{40, 30}, BrushKind::Paint), "shape.paint-begins");
         session.FinishBrush();
         Expect(!LiveShape(*session.ActiveLayer()).has_value(), "shape.painted-is-plain-pixels");
@@ -3598,9 +3599,8 @@ void TestEyedropper()
                !DocumentSession::SampleCompositeColor(composite, Vec2{4, 1}).has_value() &&
                !DocumentSession::SampleCompositeColor(composite, Vec2{-1, 1}).has_value(),
            "eyedropper.nothing-over-transparency-or-outside");
-    DocumentSession session;
-    session.CreateDocument(4, 4, true);
-    Expect(session.showsSampleRing, "eyedropper.ring-shown-by-default");
+    // The comparison ring shows by default: the View > Sample Ring setting, which the host reads (RF-810).
+    Expect(AppSettings{}.sampleRing, "eyedropper.ring-shown-by-default");
 }
 
 // ── Pixel edits (C9b) ─────────────────────────────────────────
@@ -3670,7 +3670,7 @@ void TestPixelEdits()
     {
         DocumentSession session = PixelEditSession();
         SelectRect(session, 0, 0, 50, 40);
-        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         Expect(session.BeginBrush(Vec2{5, 20}), "edit.brush-begins");
         session.ContinueBrush(Vec2{95, 20});
         session.FinishBrush();
@@ -3685,7 +3685,7 @@ void TestPixelEdits()
         Expect(session.Selection().has_value() && session.Selection()->IsEmpty(), "edit.empty-selection");
         const CanvasDocument before = session.Document().value();
         const int count = session.history.UndoCount();
-        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         static_cast<void>(session.BeginBrush(Vec2{5, 20}));
         session.ContinueBrush(Vec2{95, 20});
         session.FinishBrush();
@@ -6038,7 +6038,7 @@ void TestPendingEdits()
         TwoColorLayer(session);
         const int count = session.history.UndoCount();
         const CanvasDocument before = session.Document().value();
-        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         Expect(session.BeginBrush(Vec2{10, 10}), "pending.brush-begins");
         session.Undo();
         Expect(session.PendingBrush() == nullptr && session.history.UndoCount() == count &&
@@ -6170,7 +6170,7 @@ void TestMaskFillAcrossCommits()
     session.AddLayerMask(false);
     Expect(session.IsMaskSelected() && MaskValue(session, 600.5, 600.5) == 0, "maskfill.hide-all");
     session.maskPaintWhite = true;
-    session.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1, false};
+    session.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1};
     Expect(session.BeginBrush(Vec2{100, 100}), "maskfill.first-begin");
     session.FinishBrush();
     Expect(MaskValue(session, 100.5, 100.5) == 255 && MaskValue(session, 600.5, 600.5) == 0, "maskfill.first-stroke");
@@ -6191,11 +6191,11 @@ void TestMaskFillAcrossCommits()
     const Guid id = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
     grown.AddLayerMask(false);
     grown.maskPaintWhite = true;
-    grown.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1, false};
+    grown.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1};
     Expect(grown.BeginBrush(Vec2{50, 50}), "maskfill.growth-mask-begin");
     grown.FinishBrush();
     grown.SelectLayerTarget(id, false);
-    grown.brushSettings = BrushSettings{20, 1, 0, 1, 0, 1, false};
+    grown.brushSettings = BrushSettings{20, 1, 0, 1, 0, 1};
     Expect(!grown.IsMaskSelected() && grown.BeginBrush(Vec2{900, 150}), "maskfill.growth-image-begin");
     grown.FinishBrush();
     const ImageLayer* layer = grown.ActiveLayer();
@@ -6227,7 +6227,7 @@ void TestStretchedMaskPainting()
     Expect(session.IsMaskSelected() && MaskValue(session, 280.5, 280.5) == 0 && MaskValue(session, 450.5, 200.5) == 255,
            "stretchmask.before");
     session.maskPaintWhite = true;
-    session.brushSettings = BrushSettings{10, 1, 0, 0, 0, 1, false};
+    session.brushSettings = BrushSettings{10, 1, 0, 0, 0, 1};
     Expect(session.BeginBrush(Vec2{40, 20}), "stretchmask.begin");
     session.FinishBrush();
     const Raster& painted = session.ActiveLayer()->mask->asset.image;
@@ -6240,7 +6240,7 @@ void TestStretchedMaskPainting()
     const Guid grownId = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
     grown.Document().value().layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
     grown.SelectLayer(grownId);
-    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1, false};
+    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
     Expect(!grown.IsMaskSelected() && grown.BeginBrush(Vec2{900, 150}), "stretchmask.growth-begin");
     grown.FinishBrush();
     Expect(grown.ActiveLayer()->asset->image.Width() > 600 && MaskValue(grown, 100.5, 100.5) == 0 &&
@@ -6258,7 +6258,7 @@ void TestActiveLayerTargets()
     Expect(session.IsMaskSelected(), "active.mask-targeted");
     session.AddBlankLayer();
     Expect(!session.IsMaskSelected() && session.CanPaint(), "active.new-layer-drops-the-mask-target");
-    session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1, false};
+    session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1};
     Expect(session.BeginBrush(Vec2{20, 20}), "active.new-layer-paints");
     session.FinishBrush();
     Expect(session.ActiveLayer()->asset.has_value() && session.history.UndoName() == L"Brush Stroke",
@@ -6981,7 +6981,7 @@ void TestGradientAppliesFirst()
     {
         DocumentSession session = PixelEditSession();
         PendGradient(session);
-        session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1, false};
+        session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1};
         Expect(session.BeginBrush(Vec2{50, 20}), "gradientfirst.brush-begins");
         session.FinishBrush();
         session.Undo();

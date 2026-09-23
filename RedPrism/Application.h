@@ -30,6 +30,7 @@
 #pragma warning(pop)
 
 class ChromeHost;
+struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
 {
@@ -95,7 +96,19 @@ class Application final : public ChromeEvents
     [[nodiscard]] HANDLE SettingsWatchHandle() const noexcept;
     int RunProductHardeningSelfTest() noexcept;
     static constexpr UINT_PTR kSettingsTimerId = 7;
+    // The chrome mirrors the session (RF-1001): SyncChrome after anything that may have changed it, each region
+    // writing only what changed; SyncView after a pan or a zoom, which changes only the status bar's zoom and what the
+    // overlay draws over the canvas.
     void SyncChrome() noexcept;
+    void SyncView() noexcept;
+    void SyncStatus() noexcept;
+    [[nodiscard]] TransformInspectorState TransformInspector() const;
+    // The Move tool's box in view pixels (nullopt when it is not shown), and the box and snap guides on the overlay.
+    [[nodiscard]] std::optional<TransformOverlayGeometry> TransformBox() const;
+    void SyncTransformOverlay() noexcept;
+    // The selection outline and the lasso draft over the canvas; `shown` null keeps the selection shown last.
+    void SyncSelectionOverlay(const std::optional<DocumentSelection>* shown) noexcept;
+    [[nodiscard]] float ChromeDpi() const noexcept;
     void DocumentChanged() noexcept;
     void BindCompositionDevice() noexcept;
     void CloseMainWindow() noexcept;
@@ -151,8 +164,35 @@ class Application final : public ChromeEvents
     void BeginTransformDrag(Vec2 view, UINT modifiers) noexcept;
     void ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept;
     void EndTransformDrag() noexcept;
-    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(Vec2 pixel, bool control) const;
+    // What a Move-tool press picks: the session's part of the rule (the pending edit, the active layer and whether it
+    // can transform alone, the group box, auto-select), then the pointer's (RF-1002: the cursor keeps one rule per
+    // `_cursorRevision`, as building it walks every layer).
+    struct TransformPressRule
+    {
+        bool document = false;
+        bool picks = false; // no pending edit: a press may pick another layer
+        bool autoSelect = false;
+        std::optional<Guid> active;
+        bool group = false; // the selected layers or the active folder transform together
+        std::optional<LayerTransform> groupBox;
+        std::optional<LayerTransform> activeBox; // the active layer's box, when it can transform alone
+    };
+    [[nodiscard]] TransformPressRule CurrentTransformPressRule() const;
+    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(const TransformPressRule& rule, Vec2 pixel,
+                                                                           bool control) const;
+    [[nodiscard]] std::optional<std::pair<Guid, bool>> TransformPressLayer(Vec2 pixel, bool control) const
+    {
+        return TransformPressLayer(CurrentTransformPressRule(), pixel, control);
+    }
+    // The top-most visible pixel layer at a document point.
+    [[nodiscard]] std::optional<Guid> LayerUnderPointer(Vec2 pixel) const;
     [[nodiscard]] bool ApplyCanvasCursor() noexcept;
+    // The canvas's cursor at a client point (RF-1002): nullopt off the canvas (the chrome decides); a null id hides
+    // the cursor (the brush tip is the cursor). The parts that depend on the pixel under the pointer are decided once
+    // per pointer position and session state: WM_SETCURSOR comes with every pointer message.
+    [[nodiscard]] std::optional<LPCWSTR> CanvasCursorAt(POINT client) noexcept;
+    [[nodiscard]] bool CursorPressesLayer(Vec2 pixel, bool control) noexcept;
+    [[nodiscard]] bool CursorOverSelection(Vec2 pixel) noexcept;
     void ApplyDemo() noexcept;
     // Selection tools (C9, Specs/Document/Document_Tools.md): header actions, pointer rules, keys and the wand's
     // composite sample. Outline and draft changes touch chrome only; the canvas never re-composites for them.
@@ -385,6 +425,8 @@ class Application final : public ChromeEvents
     // Refusals the host reports (review fixes wave 1b): Load Mask / Layer Selection past the outline limit, and edits
     // the document's pixel budget refused (Decision D7).
     int RunRefusalSelfTest() noexcept;
+    // ApplicationChromeSync.cpp (review fixes RF-1001, RF-1002): what a pointer move costs the chrome and the cursor.
+    int RunChromeSyncSelfTest() noexcept;
     void ZoomBy(double factor) noexcept;
     void ShowError(UINT stringId) noexcept;
     // An edit the document's 100 M pixel budget refused (Decision D7, `DocumentSession::TakeBudgetRefusal`) shows
@@ -416,6 +458,13 @@ class Application final : public ChromeEvents
     std::wstring _documentPath;
     uint32_t _screenshotDpi = 0;
     EditorTool _tool = EditorTool::Move;
+    // The Move tool's and the selection tools' header choices: host state, never the document session's (RF-810).
+    // The eyedropper's comparison ring follows the settings (`_settings.sampleRing`).
+    bool _locksTransformRatio = true;
+    bool _transformAutoSelect = false;
+    bool _showsTransformControls = true;
+    int _selectionExpandAmount = 1; // 1…DocumentSession::kSelectionModifyLimit
+    int _selectionContractAmount = 1;
     bool _spacePan = false;
     bool _acceleratorShift = false;
     CommandBindings _bindings;        // the effective binding table: catalog defaults and the settings' replacements
@@ -502,6 +551,43 @@ class Application final : public ChromeEvents
     double _overlayScale = 0.0;
     double _overlayBacking = 0.0;
     bool _marchingAnts = false; // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
+    std::uint64_t _chromeSyncs = 0; // SyncChrome runs (the self-test counts what a pointer move costs)
+    std::vector<float> _guideXs;    // the snap guides in view pixels, reused between syncs
+    std::vector<float> _guideYs;
+    // What the status bar's texts were formatted from (SyncStatus).
+    struct StatusKey
+    {
+        int percent = 0;
+        bool document = false;
+        int width = 0;
+        int height = 0;
+        EditorTool tool = EditorTool::Move;
+        std::uint64_t chrome = 0; // ChromeHost::DisplayRevision: rebuilt controls or new chords
+        [[nodiscard]] bool operator==(const StatusKey&) const noexcept = default;
+    };
+    std::optional<StatusKey> _statusKey;
+    // The cursor's decisions that depend on the pixel under the pointer (RF-1002): each holds for one document pixel
+    // (and Ctrl, for the layer) until SyncChrome, through which every session change passes, moves `_cursorRevision`.
+    struct CursorProbe
+    {
+        Vec2 pixel{};
+        bool control = false;
+        std::uint64_t revision = 0;
+        bool result = false;
+        bool valid = false;
+    };
+    std::uint64_t _cursorRevision = 1;
+    TransformPressRule _pressRule; // the cursor's, as of `_pressRuleRevision`
+    std::uint64_t _pressRuleRevision = 0;
+    CursorProbe _layerProbe;
+    CursorProbe _selectionProbe;
+    std::optional<SelectionBounds> _selectionReach; // the selection's bounds: nothing outside them is inside it
+    std::uint64_t _selectionReachRevision = 0;
+    // LayerUnderPointer's visible pixel layers top-first (index into the document's layers, id), per `_cursorRevision`.
+    mutable std::vector<std::pair<std::size_t, Guid>> _pointerLayers;
+    mutable std::uint64_t _pointerLayersRevision = 0;
+    mutable std::uint64_t _pointerLayerScans = 0; // LayerUnderPointer runs (the self-test counts them)
+    std::uint64_t _cursorSelectionTests = 0;      // CanMoveSelection calls the cursor made (the self-test counts them)
     // The gradient or pixel-move raster the composition's stroke preview was begun for (never dereferenced: a new
     // raster, or an expired one, restarts the preview).
     std::weak_ptr<const BrushStroke> _previewSource;

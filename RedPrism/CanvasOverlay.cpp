@@ -12,19 +12,91 @@ constexpr float kLineWidthDip = 1.0f;
 constexpr float kDraftShadowWidthDip = 2.0f;
 constexpr float kDraftCornerHalfDip = 4.0f;
 constexpr float kAntsDashDip = 4.0f;
-} // namespace
 
-void CanvasOverlay::SetGeometry(std::optional<Geometry> geometry) noexcept
+// What the overlay draws, compared value for value: an unchanged setter call must not invalidate.
+[[nodiscard]] bool Same(const D2D1_POINT_2F& left, const D2D1_POINT_2F& right) noexcept
 {
-    _geometry = geometry;
-    RequestInvalidate();
+    return left.x == right.x && left.y == right.y;
 }
 
-void CanvasOverlay::SetGuides(std::vector<float> xs, std::vector<float> ys)
+[[nodiscard]] bool Same(const D2D1_RECT_F& left, const D2D1_RECT_F& right) noexcept
 {
-    _guideXs = std::move(xs);
-    _guideYs = std::move(ys);
+    return left.left == right.left && left.top == right.top && left.right == right.right && left.bottom == right.bottom;
+}
+
+[[nodiscard]] bool Same(const std::pair<D2D1_POINT_2F, D2D1_POINT_2F>& left,
+                        const std::pair<D2D1_POINT_2F, D2D1_POINT_2F>& right) noexcept
+{
+    return Same(left.first, right.first) && Same(left.second, right.second);
+}
+
+[[nodiscard]] bool Same(const std::vector<D2D1_POINT_2F>& left, const std::vector<D2D1_POINT_2F>& right) noexcept
+{
+    return std::equal(left.begin(), left.end(), right.begin(), right.end(),
+                      [](const D2D1_POINT_2F& a, const D2D1_POINT_2F& b) noexcept { return Same(a, b); });
+}
+
+[[nodiscard]] bool Same(const CanvasOverlay::Geometry& left, const CanvasOverlay::Geometry& right) noexcept
+{
+    return std::equal(left.handles.begin(), left.handles.end(), right.handles.begin(),
+                      [](const D2D1_POINT_2F& a, const D2D1_POINT_2F& b) noexcept { return Same(a, b); }) &&
+           Same(left.rotation, right.rotation) && left.showsRotation == right.showsRotation;
+}
+
+[[nodiscard]] bool Same(const CanvasOverlay::BrushCursor& left, const CanvasOverlay::BrushCursor& right) noexcept
+{
+    return Same(left.center, right.center) && left.radius == right.radius && left.hardness == right.hardness;
+}
+
+[[nodiscard]] bool Same(const CanvasOverlay::ShapeDraftOverlay& left,
+                        const CanvasOverlay::ShapeDraftOverlay& right) noexcept
+{
+    return left.ellipse == right.ellipse && Same(left.rect, right.rect) && left.cornerRadius == right.cornerRadius &&
+           left.argb == right.argb;
+}
+
+[[nodiscard]] bool Same(const CanvasOverlay::SampleRing& left, const CanvasOverlay::SampleRing& right) noexcept
+{
+    return Same(left.center, right.center) && left.originalArgb == right.originalArgb &&
+           left.sampledArgb == right.sampledArgb;
+}
+
+[[nodiscard]] bool Same(const CanvasOverlay::Draft& left, const CanvasOverlay::Draft& right) noexcept;
+
+template <typename Value>
+[[nodiscard]] bool Same(const std::optional<Value>& left, const std::optional<Value>& right) noexcept
+{
+    return left.has_value() == right.has_value() && (!left.has_value() || Same(left.value(), right.value()));
+}
+
+bool Same(const CanvasOverlay::Draft& left, const CanvasOverlay::Draft& right) noexcept
+{
+    return left.kind == right.kind && Same(left.points, right.points) && Same(left.cursor, right.cursor);
+}
+} // namespace
+
+bool CanvasOverlay::SetGeometry(const std::optional<Geometry>& geometry) noexcept
+{
+    if (Same(_geometry, geometry))
+    {
+        return false;
+    }
+    _geometry = geometry;
     RequestInvalidate();
+    return true;
+}
+
+bool CanvasOverlay::SetGuides(const std::vector<float>& xs, const std::vector<float>& ys)
+{
+    if (_guideXs == xs && _guideYs == ys)
+    {
+        return false;
+    }
+    // Assignment keeps the vectors' storage: steady guides allocate nothing.
+    _guideXs = xs;
+    _guideYs = ys;
+    RequestInvalidate();
+    return true;
 }
 
 void CanvasOverlay::SetSelectionOutline(std::vector<OutlineLoop> loops)
@@ -44,46 +116,81 @@ void CanvasOverlay::SetAntPhase(float phase) noexcept
     RequestInvalidate();
 }
 
-void CanvasOverlay::SetDraft(std::optional<Draft> draft)
+bool CanvasOverlay::SetDraft(std::optional<Draft> draft)
 {
+    if (Same(_draft, draft))
+    {
+        return false;
+    }
     _draft = std::move(draft);
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetBrushCursor(std::optional<BrushCursor> cursor) noexcept
+bool CanvasOverlay::SetBrushCursor(const std::optional<BrushCursor>& cursor) noexcept
 {
+    if (Same(_brushCursor, cursor))
+    {
+        return false;
+    }
     _brushCursor = cursor;
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept
+bool CanvasOverlay::SetGradientLine(const std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>>& line) noexcept
 {
+    if (Same(_gradientLine, line))
+    {
+        return false;
+    }
     _gradientLine = line;
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetShapeDraft(std::optional<ShapeDraftOverlay> draft) noexcept
+bool CanvasOverlay::SetShapeDraft(const std::optional<ShapeDraftOverlay>& draft) noexcept
 {
+    if (Same(_shapeDraft, draft))
+    {
+        return false;
+    }
     _shapeDraft = draft;
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetCropShade(std::optional<D2D1_RECT_F> frame) noexcept
+bool CanvasOverlay::SetCropShade(const std::optional<D2D1_RECT_F>& frame) noexcept
 {
+    if (Same(_cropShade, frame))
+    {
+        return false;
+    }
     _cropShade = frame;
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetSampleRing(std::optional<SampleRing> ring) noexcept
+bool CanvasOverlay::SetSampleRing(const std::optional<SampleRing>& ring) noexcept
 {
+    if (Same(_sampleRing, ring))
+    {
+        return false;
+    }
     _sampleRing = ring;
     RequestInvalidate();
+    return true;
 }
 
-void CanvasOverlay::SetCloneSource(std::optional<D2D1_POINT_2F> point) noexcept
+bool CanvasOverlay::SetCloneSource(const std::optional<D2D1_POINT_2F>& point) noexcept
 {
+    if (Same(_cloneSource, point))
+    {
+        return false;
+    }
     _cloneSource = point;
     RequestInvalidate();
+    return true;
 }
 
 D2D1_RECT_F CanvasOverlay::GetHitBounds() const noexcept

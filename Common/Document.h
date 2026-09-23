@@ -862,11 +862,6 @@ struct BrushSettings
     double blue = 0;
     // Caps the whole stroke, as in Photoshop: overlapping dabs never exceed it (0.01–1).
     double opacity = 1;
-    // Unread: BrushStroke derives whether it erases or heals from the BrushKind passed to its constructor instead
-    // (BrushStroke::Erasing() / Healing()), never from here. Kept at this position, always false, only so the
-    // BrushSettings{...} aggregate initializers across the codebase (self-test and demo brush setup; none set a
-    // field past this one) keep compiling.
-    bool erasing = false;
     [[nodiscard]] bool operator==(const BrushSettings&) const noexcept = default;
     [[nodiscard]] bool IsValid() const noexcept;
     // Soft-tip deposition rate shared by the continuous integral and the dab fallback.
@@ -1340,9 +1335,6 @@ class DocumentSession
     // The document as the canvas draws it: the pending transform, mask placement and distortion (at preview size)
     // applied to a cached copy that shares every raster with the real document.
     [[nodiscard]] const CanvasDocument* DisplayDocument() const;
-    bool locksTransformRatio = true;
-    bool transformAutoSelect = false;
-    bool showsTransformControls = true;
 
     // Selection (C9, Specs/Document/Document_Tools.md). Outlines live in the document, so history covers them;
     // drafts, the outline-move origin and the header settings are session state.
@@ -1418,8 +1410,7 @@ class DocumentSession
     std::optional<SelectionMode> heldSelectionMode;
     bool selectionAntialiased = true;
     WandSettings wandSettings;
-    int selectionExpandAmount = 1;
-    int selectionContractAmount = 1;
+    // Expand and Contract take 1 to this many pixels (the amounts are the host's header state).
     static constexpr int kSelectionModifyLimit = 500;
 
     // Brush and eraser (C10, Specs/Rendering/Rendering_Brush.md). A stroke edits the active layer's pixels or
@@ -1728,8 +1719,6 @@ class DocumentSession
     ShapeKind shapeKind = ShapeKind::Rectangle;
     // Corner radius in pixels for rectangles the Shape tool draws; 0 keeps the corners square.
     double shapeCornerRadius = 0;
-    // The eyedropper's comparison ring (new color above, previous below) while sampling.
-    bool showsSampleRing = true;
 
     // Palette (foreground/background paint colors, opaque ARGB). Session state outside history, as in the legacy
     // EditorSession brush settings: X swaps, D resets. A targeted mask has its own black/white palette (legacy

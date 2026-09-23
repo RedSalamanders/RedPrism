@@ -785,6 +785,13 @@ void ChromeHost::OpenMenu(size_t index, POINT screen, bool keyboard) noexcept
 
 HRESULT ChromeHost::Build() noexcept
 {
+    // New controls show nothing of the Application's yet: every region writes on its first push.
+    _resync = kResyncAll;
+    _menuTargets = {};
+    _documentTitle.clear();
+    _transformInspector = {};
+    _cropInspector = {};
+    ++_displayRevision;
     // DxUi construction allocates; std::bad_alloc is the only exception these calls raise and the host reports it as
     // a startup failure (exit code 1) instead of terminating inside chrome construction.
     try
@@ -1062,6 +1069,7 @@ void ChromeHost::OpenMoreTools() noexcept
         return;
     }
     _moreToolsOpen = true;
+    _accessibleStructureChanged = true;
     ArrangeMoreTools();
     _view.MarkDirty();
     if (_requestFrame != nullptr)
@@ -1085,6 +1093,7 @@ void ChromeHost::CloseMoreTools() noexcept
         return;
     }
     _moreToolsOpen = false;
+    _accessibleStructureChanged = true;
     ArrangeMoreTools();
     _view.MarkDirty();
     if (_requestFrame != nullptr)
@@ -1186,6 +1195,7 @@ void ChromeHost::ShowControl(DxUi::Control* control, bool visible) noexcept
     if (control != nullptr && control->IsVisible() != visible)
     {
         control->SetVisible(visible);
+        _accessibleStructureChanged = true;
     }
 }
 
@@ -1694,6 +1704,7 @@ bool ChromeHost::EscapeFloatingCard() noexcept
 
 void ChromeHost::PushCard(ModalCard card, DxUi::Control* panel, DxUi::Control* home) noexcept
 {
+    _accessibleStructureChanged = true; // a card joins the tree
     DxUi::ControlHost& controls = _view.Controls();
     OpenCard entry{card, panel, home, _canvasFocused ? nullptr : controls.GetFocusControl(), _canvasFocused};
     // A card opened again moves to the top and keeps the keyboard it first opened on.
@@ -1732,6 +1743,7 @@ void ChromeHost::PopCard(ModalCard card) noexcept
     {
         return;
     }
+    _accessibleStructureChanged = true; // a card leaves the tree
     const OpenCard& entry = taken.value();
     DxUi::ControlHost& controls = _view.Controls();
     DxUi::Control* const focus = controls.GetFocusControl();
@@ -2177,6 +2189,9 @@ void ChromeHost::RefreshDisplayedChords() noexcept
         const std::optional<KeyChord> chord = Bindings().ChordFor(entry.command);
         _chordTexts.push_back(chord.has_value() ? ChordDisplayText(chord.value()) : std::wstring{});
     }
+    // Text built from the old chords (the status bar's tool key) is stale; the dynamic menu rows rebuild too.
+    ++_displayRevision;
+    _resync |= kResyncUndoRedo | kResyncEditTargets | kResyncMaskCommands;
     RefreshMenuChords();
     RefreshShortcutHints();
     if (ShortcutsOpen())
@@ -2654,20 +2669,23 @@ void ChromeHost::SetActiveLayerOpacity(std::optional<double> opacity) noexcept
     {
         return;
     }
+    // A stepper value write invalidates even when it is the value shown: compare with what the stepper holds (the
+    // user may have typed another one) before writing.
+    const auto show = [this](double percent) noexcept
+    {
+        if (!_opacity->IsEditing() && _opacity->GetValue() != percent)
+        {
+            _opacity->SetValue(percent);
+        }
+    };
     if (!opacity.has_value() || !std::isfinite(opacity.value()))
     {
         _opacity->SetEnabled(false);
-        if (!_opacity->IsEditing())
-        {
-            _opacity->SetValue(100.0);
-        }
+        show(100.0);
         return;
     }
     _opacity->SetEnabled(true);
-    if (!_opacity->IsEditing())
-    {
-        _opacity->SetValue(std::round(std::min(1.0, std::max(0.0, opacity.value())) * 100.0));
-    }
+    show(std::round(std::min(1.0, std::max(0.0, opacity.value())) * 100.0));
 }
 
 void ChromeHost::SetLayersWidth(float widthDip) noexcept
@@ -2798,24 +2816,36 @@ POINT ChromeHost::MenuAnchorScreen(size_t index, POINT callbackPoint) const noex
 
 void ChromeHost::SetDocumentTitle(std::wstring title, bool dirty)
 {
-    if (_tabs && _tabs->GetTabCount() > 0)
+    if (!_tabs || _tabs->GetTabCount() == 0 ||
+        (!TakeResync(kResyncTitle) && dirty == _documentDirty && title == _documentTitle))
     {
-        _tabs->SetTabTitle(0, dirty ? FormatStringResource(nullptr, IDS_DIRTY_MARK, title) : std::move(title));
+        return;
     }
+    _documentDirty = dirty;
+    _documentTitle = title;
+    _tabs->SetTabTitle(0, dirty ? FormatStringResource(nullptr, IDS_DIRTY_MARK, title) : std::move(title));
+    _accessibleStructureChanged = true; // the tab's name
+    ++_syncCounters.texts;
 }
 
 void ChromeHost::SetStatus(std::wstring zoom, std::wstring size, std::wstring tool)
 {
-    if (_status && _status->GetSectionCount() >= 3)
+    if (!_status || _status->GetSectionCount() < 3)
     {
-        _status->SetSectionText(0, std::move(zoom));
-        _status->SetSectionText(1, std::move(size));
-        _status->SetSectionText(2, std::move(tool));
+        return;
     }
-    if (_header)
+    // StatusStrip writes invalidate even when the text is the same.
+    const auto section = [this](std::size_t index, std::wstring& text)
     {
-        _header->SetText(LoadStringResource(nullptr, EditorToolNameId(_tool)));
-    }
+        if (_status->GetSectionText(index) != text)
+        {
+            _status->SetSectionText(index, std::move(text));
+            ++_syncCounters.texts;
+        }
+    };
+    section(0, zoom);
+    section(1, size);
+    section(2, tool);
 }
 
 void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo,
@@ -2826,6 +2856,17 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
     {
         return;
     }
+    MenuTargets& shown = _menuTargets;
+    if (!TakeResync(kResyncUndoRedo) && canUndo == shown.canUndo && canRedo == shown.canRedo &&
+        undoName == shown.undoName && redoName == shown.redoName)
+    {
+        return;
+    }
+    shown.undoName = undoName;
+    shown.redoName = redoName;
+    shown.canUndo = canUndo;
+    shown.canRedo = canRedo;
+    ++_syncCounters.menus;
     // The name from the STRINGTABLE, the chord from the effective table (a replaced Undo shows its replacement).
     const std::wstring undo =
         CommandMenuCaption(undoName.empty() ? LoadStringResource(nullptr, IDS_CMD_UNDO)
@@ -2841,6 +2882,17 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
 
 void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped, int merge)
 {
+    MenuTargets& shown = _menuTargets;
+    if (!TakeResync(kResyncEditTargets) && masksTargeted == shown.masksTargeted &&
+        transformsSelection == shown.transformsSelection && clipped == shown.clipped && merge == shown.merge)
+    {
+        return;
+    }
+    shown.masksTargeted = masksTargeted;
+    shown.transformsSelection = transformsSelection;
+    shown.clipped = clipped;
+    shown.merge = merge;
+    ++_syncCounters.menus;
     const auto rename = [this](HMENU menu, int command, UINT stringId)
     { SetMenuCaption(menu, command, CommandMenuCaption(stringId, command), MF_ENABLED); };
     HMENU edit = _menus[static_cast<std::size_t>(MenuIndex::Edit)].get();
@@ -2855,6 +2907,17 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bo
 
 void ChromeHost::SetMaskCommands(bool present, bool targeted, bool linked, bool enabled)
 {
+    MenuTargets& shown = _menuTargets;
+    if (!TakeResync(kResyncMaskCommands) && present == shown.maskPresent && targeted == shown.maskTargeted &&
+        linked == shown.maskLinked && enabled == shown.maskEnabled)
+    {
+        return;
+    }
+    shown.maskPresent = present;
+    shown.maskTargeted = targeted;
+    shown.maskLinked = linked;
+    shown.maskEnabled = enabled;
+    ++_syncCounters.menus;
     HMENU layer = _menus[static_cast<std::size_t>(MenuIndex::Layer)].get();
     const UINT state = present ? MF_ENABLED : MF_GRAYED;
     const auto caption = [&](int command, UINT stringId)
@@ -2902,7 +2965,12 @@ void ChromeHost::SyncToolVisuals() noexcept
 
 void ChromeHost::SetTool(EditorTool tool) noexcept
 {
+    if (!TakeResync(kResyncTool) && tool == _tool)
+    {
+        return; // the latch follows on its own (Prepare, the release of a press)
+    }
     _tool = tool;
+    _accessibleStructureChanged = true; // another header
     SyncToolVisuals();
     if (_transformHeader)
     {
@@ -2937,6 +3005,20 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
 
 void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted)
 {
+    // The same rows, target and mask write nothing (RF-1001): a rebuild re-measures every row's text and repaints.
+    const auto sameRow = [](const HierarchyEntry& left, const HierarchyEntry& right) noexcept
+    {
+        return left.id == right.id && left.depth == right.depth && left.visible == right.visible &&
+               left.isGroup == right.isGroup && left.collapsed == right.collapsed && left.hasMask == right.hasMask &&
+               left.maskEnabled == right.maskEnabled && left.name == right.name;
+    };
+    if (!TakeResync(kResyncLayers) && active == _treeModel.active && maskTargeted == _treeModel.maskTargeted &&
+        std::equal(rows.begin(), rows.end(), _treeModel.rows.begin(), _treeModel.rows.end(), sameRow))
+    {
+        return;
+    }
+    ++_syncCounters.layerRows;
+    _accessibleStructureChanged = true;
     // RF-506: also rebuilds each row's display text and Mask badge once, not per paint.
     _treeModel.SetRows(std::move(rows), active, maskTargeted);
     if (_layers)
@@ -2958,17 +3040,26 @@ void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional
     }
 }
 
+void ChromeHost::Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept
+{
+    if (!_attached)
+    {
+        return;
+    }
+    _width = widthPixels;
+    _height = heightPixels;
+    _dpi = dpi > 0.0f ? dpi : 96.0f;
+    Arrange();
+}
+
 HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept
 {
     if (!_attached)
     {
         return E_UNEXPECTED;
     }
-    _width = widthPixels;
-    _height = heightPixels;
-    _dpi = dpi > 0.0f ? dpi : 96.0f;
     SyncToolVisuals();
-    Arrange();
+    Layout(widthPixels, heightPixels, dpi);
     const HRESULT prepared = _view.Prepare(widthPixels, heightPixels, _dpi);
     // DxUi attaches UI Automation lazily, after preparation, and drops it on hide or a device swap: (re)arm here.
     // Its accessibility calls cancel a press in progress, so both wait for the pointer to be up.
@@ -2976,12 +3067,13 @@ HRESULT ChromeHost::Prepare(UINT widthPixels, UINT heightPixels, float dpi) noex
     {
         AttachAccessibility();
     }
-    else if (SUCCEEDED(prepared) && !_inDispatch && !_pointerPressed &&
-             (_accessibilityPlacementDirty || _view.GetStatistics().preparations != _accessibilityPreparations))
+    else if (SUCCEEDED(prepared) && !_inDispatch && !_pointerPressed && AccessibilityBehind() &&
+             (_accessibilityRequested || _accessibleStructureChanged || AccessibilityListened()))
     {
-        // DxUi republishes its UI Automation snapshot only when told after a preparation: the controls a panel, a
-        // card or a header shows join the tree with the frame that lays them out, and a frame that prepared
-        // nothing publishes nothing.
+        // DxUi republishes its UI Automation snapshot only when told after a preparation, walking every control. A
+        // listening client hears every change, and the controls a panel, a card or a header shows join the tree with
+        // the frame that lays them out. Anything else (the overlay, values, the status bar under a moving pointer)
+        // waits until a client asks for the tree (PublishAccessibilityForClient, RF-1001).
         FlushAccessibilityPlacement();
     }
     return prepared;
@@ -3287,10 +3379,17 @@ void ChromeHost::SyncStepper(DxUi::NumericStepper* stepper, double value, bool e
 
 void ChromeHost::SetTransformInspector(const TransformInspectorState& state) noexcept
 {
-    if (!_transformHeader)
+    // A header writes only a state it has not shown (RF-1001, `_resync`).
+    if (!_transformHeader || (!TakeResync(kResyncTransform) && state == _transformInspector))
     {
         return;
     }
+    if (state.targetsMask != _transformInspector.targetsMask)
+    {
+        _accessibleStructureChanged = true; // the title names the target
+    }
+    _transformInspector = state;
+    ++_syncCounters.headers;
     const auto hold = HoldReports();
     _transformTitle->SetText(
         LoadStringResource(nullptr, state.targetsMask ? IDS_TRANSFORM_MASK_TITLE : IDS_TRANSFORM_TITLE));
@@ -3334,18 +3433,22 @@ void ChromeHost::SetTransformOverlay(const std::optional<TransformOverlayGeometr
         result.showsRotation = geometry->showsRotation;
         converted = result;
     }
-    std::vector<float> xs;
-    std::vector<float> ys;
+    // The DIP guides go through buffers kept between calls: a drag's steady guides allocate nothing.
+    _guideXsDip.clear();
+    _guideYsDip.clear();
     for (const float x : guideXs)
     {
-        xs.push_back(PixelToDip(x));
+        _guideXsDip.push_back(PixelToDip(x));
     }
     for (const float y : guideYs)
     {
-        ys.push_back(PixelToDip(y));
+        _guideYsDip.push_back(PixelToDip(y));
     }
-    _overlay->SetGeometry(converted);
-    _overlay->SetGuides(std::move(xs), std::move(ys));
+    const bool moved = _overlay->SetGeometry(converted);
+    if (_overlay->SetGuides(_guideXsDip, _guideYsDip) || moved)
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 void ChromeHost::BuildSelectionHeader(DxUi::Panel& root)
@@ -3443,11 +3546,13 @@ void ChromeHost::ArrangeSelectionHeader(float left, float top, float right, floa
 
 void ChromeHost::SetSelectionInspector(const SelectionInspectorState& state) noexcept
 {
-    _selectionInspector = state;
-    if (!_selectionHeader)
+    if (!_selectionHeader || (!TakeResync(kResyncSelection) && state == _selectionInspector))
     {
+        _selectionInspector = state;
         return;
     }
+    _selectionInspector = state;
+    ++_syncCounters.headers;
     // Values only: the next Prepare arranges the slots the state wants (never SetBounds from a chrome callback).
     const auto hold = HoldReports();
     _selectionTitle->SetText(LoadStringResource(nullptr, EditorToolNameId(state.tool)));
@@ -3480,6 +3585,7 @@ void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loo
     {
         return;
     }
+    ++_syncCounters.overlays; // the Application pushes an outline only when it or the view mapping changed
     for (std::vector<D2D1_POINT_2F>& loop : loops)
     {
         for (D2D1_POINT_2F& point : loop)
@@ -3520,7 +3626,10 @@ void ChromeHost::SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexce
             draft->cursor = PixelToDip(*draft->cursor);
         }
     }
-    _overlay->SetDraft(std::move(draft));
+    if (_overlay->SetDraft(std::move(draft)))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
@@ -3614,11 +3723,13 @@ void ChromeHost::ArrangeBrushHeader(float left, float top, float right, float bo
 
 void ChromeHost::SetBrushInspector(const BrushInspectorState& state) noexcept
 {
-    _brushInspector = state;
-    if (!_brushHeader)
+    if (!_brushHeader || (!TakeResync(kResyncBrush) && state == _brushInspector))
     {
+        _brushInspector = state;
         return;
     }
+    _brushInspector = state;
+    ++_syncCounters.headers;
     // Values only; the next Prepare arranges the slots the state wants.
     const auto hold = HoldReports();
     _brushTitle->SetText(LoadStringResource(nullptr, EditorToolNameId(state.tool)));
@@ -3655,7 +3766,10 @@ void ChromeHost::SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor
         cursor->center = PixelToDip(cursor->center);
         cursor->radius = PixelToDip(cursor->radius);
     }
-    _overlay->SetBrushCursor(cursor);
+    if (_overlay->SetBrushCursor(cursor))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 bool ChromeHost::GenericHeaderWanted(EditorTool tool) noexcept
@@ -3721,11 +3835,13 @@ void ChromeHost::ArrangeGradientHeader(float left, float top, float right, float
 
 void ChromeHost::SetGradientInspector(const GradientInspectorState& state) noexcept
 {
-    _gradientInspector = state;
-    if (!_gradientHeader)
+    if (!_gradientHeader || (!TakeResync(kResyncGradient) && state == _gradientInspector))
     {
+        _gradientInspector = state;
         return;
     }
+    _gradientInspector = state;
+    ++_syncCounters.headers;
     // Values only; the next Prepare arranges the slots the state wants.
     const auto hold = HoldReports();
     _gradientShape->SetSelectedIndex(static_cast<size_t>(std::clamp(state.shape, 0, 1)));
@@ -3780,11 +3896,13 @@ void ChromeHost::ArrangeShapeHeader(float left, float top, float right, float bo
 
 void ChromeHost::SetShapeInspector(const ShapeInspectorState& state) noexcept
 {
-    _shapeInspector = state;
-    if (!_shapeHeader)
+    if (!_shapeHeader || (!TakeResync(kResyncShape) && state == _shapeInspector))
     {
+        _shapeInspector = state;
         return;
     }
+    _shapeInspector = state;
+    ++_syncCounters.headers;
     const auto hold = HoldReports();
     _shapeKind->SetSelectedIndex(static_cast<size_t>(std::clamp(state.kind, 0, 1)));
     _shapeKind->SetEnabled(state.enabled);
@@ -3804,7 +3922,10 @@ void ChromeHost::SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POI
         line->first = PixelToDip(line->first);
         line->second = PixelToDip(line->second);
     }
-    _overlay->SetGradientLine(line);
+    if (_overlay->SetGradientLine(line))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 void ChromeHost::SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept
@@ -3818,7 +3939,10 @@ void ChromeHost::SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> d
         draft->rect = PixelToDip(draft->rect);
         draft->cornerRadius = PixelToDip(draft->cornerRadius);
     }
-    _overlay->SetShapeDraft(draft);
+    if (_overlay->SetShapeDraft(draft))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 void ChromeHost::SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept
@@ -3831,7 +3955,10 @@ void ChromeHost::SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) no
     {
         ring->center = PixelToDip(ring->center);
     }
-    _overlay->SetSampleRing(ring);
+    if (_overlay->SetSampleRing(ring))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 void ChromeHost::SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept
@@ -3844,7 +3971,10 @@ void ChromeHost::SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept
     {
         point = PixelToDip(*point);
     }
-    _overlay->SetCloneSource(point);
+    if (_overlay->SetCloneSource(point))
+    {
+        ++_syncCounters.overlays;
+    }
 }
 
 std::optional<D2D1_POINT_2F> ChromeHost::CloneSourceMarkDip() const noexcept

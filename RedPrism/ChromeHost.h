@@ -131,6 +131,7 @@ struct BrushInspectorState
     bool cloneAllLayers = false;
     bool cloneHasSource = false;
     int smearMode = 0; // Liquify, Blur, Smudge
+    [[nodiscard]] bool operator==(const BrushInspectorState&) const noexcept = default;
 };
 
 // The Gradient header (C11): shape, the two end colors, style, Reverse, opacity, and Cancel / Apply while a line is
@@ -157,6 +158,7 @@ struct GradientInspectorState
     bool pending = false;
     uint32_t startArgb = 0xFF000000u;
     uint32_t endArgb = 0x00000000u; // alpha 0: the transparent end
+    [[nodiscard]] bool operator==(const GradientInspectorState&) const noexcept = default;
 };
 
 // The Shape header (C11): kind, corner radius (rectangles) and the fill swatch.
@@ -173,6 +175,7 @@ struct ShapeInspectorState
     int kind = 0; // Rectangle, Ellipse
     double radius = 0;
     uint32_t foregroundArgb = 0xFF000000u;
+    [[nodiscard]] bool operator==(const ShapeInspectorState&) const noexcept = default;
 };
 
 // The Crop header (C16): the ratio choice, the frame's size, Cancel and Apply Crop.
@@ -190,6 +193,7 @@ struct CropInspectorState
     bool hasFrame = false;
     int width = 0;
     int height = 0;
+    [[nodiscard]] bool operator==(const CropInspectorState&) const noexcept = default;
 };
 
 // The adjustment panel (C12, Specs/UI/UI_ApplicationChrome.md): which editor it shows and every value the session
@@ -253,6 +257,7 @@ struct AdjustInspectorState
     bool limitedToSelection = false;
     bool editsAdjustment = false;
     bool previewFailed = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
+    [[nodiscard]] bool operator==(const AdjustInspectorState&) const noexcept = default;
 };
 
 // The size cards (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): New Canvas, Canvas Size and Image Size,
@@ -302,6 +307,7 @@ struct SizeCardState
     bool valid = true;
     int resultWidth = 0; // the rounded pixels the card announces
     int resultHeight = 0;
+    [[nodiscard]] bool operator==(const SizeCardState&) const noexcept = default;
 };
 
 // The selection tools' header state, mirrored from the session (Specs/Document/Document_Tools.md).
@@ -324,6 +330,7 @@ struct SelectionInspectorState
     int contractAmount = 1;
     bool hasSelection = false;
     bool isEmpty = false;
+    [[nodiscard]] bool operator==(const SelectionInspectorState&) const noexcept = default;
 };
 
 // The Move tool's header state: the numbers describe the edited transform (draft or active layer).
@@ -344,6 +351,7 @@ struct TransformInspectorState
     bool autoSelect = false;
     bool showControls = true;
     bool lockRatio = true;
+    [[nodiscard]] bool operator==(const TransformInspectorState&) const noexcept = default;
 };
 
 // Editor chrome on the one HWND: MenuBar, document tabs, tool rail with the palette wells, tool header, layers
@@ -498,6 +506,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] std::wstring AdjustRadiusTextForTest() const;
     [[nodiscard]] bool FocusSizeUnitForTest() noexcept;
     [[nodiscard]] D2D1_RECT_F SpectrumBoundsDipForTest() const noexcept;
+    // Lays the chrome out for the client size and DPI without drawing: HolePixels follows. Prepare lays out and draws.
+    void Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -507,6 +517,27 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] bool NeedsPreparation() const noexcept;
     [[nodiscard]] bool NeedsAnimation() const noexcept;
     [[nodiscard]] DxUi::EmbeddedStatistics Statistics() const noexcept;
+    // What the chrome wrote for the Application's pushes (RF-1001), for the self-test's steady-state checks: each
+    // count is one push that changed something, never one that found its region as it was.
+    struct SyncCounters
+    {
+        std::uint64_t layerRows = 0; // SetLayers rebuilt the rows and told the tree
+        std::uint64_t menus = 0;     // SetUndoRedoNames, SetEditTargets or SetMaskCommands rebuilt their captions
+        std::uint64_t texts = 0;     // SetStatus or SetDocumentTitle wrote a text
+        std::uint64_t headers = 0;   // a tool header, the adjust panel or a size card wrote its controls
+        std::uint64_t overlays = 0;  // the canvas overlay took something new to draw
+        std::uint64_t publishes = 0; // the UI Automation snapshot was republished
+    };
+    [[nodiscard]] const SyncCounters& SyncCountersForTest() const noexcept
+    {
+        return _syncCounters;
+    }
+    // Bumped when the chrome rebuilds its controls or retitles its chords (bindings, keyboard layout): text the
+    // Application built for it before then (the status bar's) must be pushed again.
+    [[nodiscard]] std::uint64_t DisplayRevision() const noexcept
+    {
+        return _displayRevision;
+    }
     [[nodiscard]] CanvasHole HolePixels() const noexcept;
     // Whether a client-area point (pixels) belongs to the canvas: inside the hole and not on a floating card.
     [[nodiscard]] bool IsCanvasPoint(float xPixels, float yPixels) const noexcept;
@@ -552,18 +583,33 @@ class ChromeHost final : public CommandIds
     {
         return _palette.highContrast;
     }
-    // UI Automation (ChromeHostAccessibility.cpp): the window's root with the DxUi tree beneath it.
+    // UI Automation (ChromeHostAccessibility.cpp): the window's root with the DxUi tree beneath it. DxUi serves the
+    // tree from a snapshot it republishes when told (EmbeddedHost::UpdateAccessibility walks every control). After a
+    // preparation that changed the chrome, Prepare republishes while a client listens (UiaClientsAreListening), when
+    // the accessible structure changed (a tool switch, a card or panel, a header control shown or hidden, the layers
+    // panel's rows, the document title) or when a client asked for the tree meanwhile; otherwise the snapshot waits
+    // until a client asks for the tree (RF-1001). A pointer move changes none of those.
     void AttachAccessibility() noexcept;
     void DetachAccessibility() noexcept;
+    // WM_GETOBJECT: a client connecting (UiaRootObjectId) gets the window root, the waiting snapshot republished first.
     [[nodiscard]] LRESULT HandleGetObject(WPARAM wParam, LPARAM lParam) noexcept;
     // Marks the placement (client rectangle, keyboard focus in the chrome) for the next Prepare and asks for a
     // frame: DxUi is never re-entered from a pointer, key or focus path.
     void UpdateAccessibilityPlacement() noexcept;
-    [[nodiscard]] IRawElementProviderFragmentRoot* AccessibilityRoot() const noexcept; // not add-referenced
+    // The window root as an in-process client reads it (the self-test's walks): the waiting snapshot is republished
+    // first, as for WM_GETOBJECT. Not add-referenced.
+    [[nodiscard]] IRawElementProviderFragmentRoot* AccessibilityRoot() noexcept;
     [[nodiscard]] HRESULT AccessibilityStatus() const noexcept // the last attach attempt (S_FALSE: none yet)
     {
         return _accessibilityStatus;
     }
+    // Self-test hooks (RF-1001): whether a UI Automation client listens, as the self-test decides (nullopt: ask UI
+    // Automation), and whether the published snapshot is behind the chrome (a preparation or a placement since).
+    void SetAccessibilityListenerForTest(std::optional<bool> listening) noexcept
+    {
+        _accessibilityListenerForTest = listening;
+    }
+    [[nodiscard]] bool AccessibilityStaleForTest() const noexcept;
     // Self-test gate: interactive controls without an accessible name, described by kind and parent.
     [[nodiscard]] std::vector<std::wstring> UnnamedInteractiveControls() const;
     [[nodiscard]] bool ColorPickerOpen() const noexcept;
@@ -912,9 +958,10 @@ class ChromeHost final : public CommandIds
     std::shared_ptr<ChromeAccessibilitySite> _accessibilitySite;
     HRESULT _accessibilityStatus = S_FALSE;
     // Layout writes only when something changes: DxUi reacts to every SetBounds/SetVisible, and the arrange paths
-    // run every frame, including between a press and its release.
+    // run every frame, including between a press and its release. A control shown or hidden changes the accessible
+    // structure.
     static void PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds) noexcept;
-    static void ShowControl(DxUi::Control* control, bool visible) noexcept;
+    void ShowControl(DxUi::Control* control, bool visible) noexcept;
     // Canvas-hole pixels to DIP at the current layout DPI, for the overlay geometry the setters below hand to
     // CanvasOverlay (96/_dpi, or 1 before the first layout knows a DPI).
     [[nodiscard]] float PixelToDip(float pixels) const noexcept
@@ -940,10 +987,67 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] int RailSlotsThatFit(float wellTop) const noexcept;
     [[nodiscard]] DxUi::EmbeddedAccessibilityPlacement AccessibilityPlacement() const noexcept;
     void FlushAccessibilityPlacement() noexcept;
+    // A client is about to read the tree (WM_GETOBJECT, AccessibilityRoot): a waiting snapshot is republished now
+    // from the prepared view, or by the next Prepare when a press, a dispatch or a pending preparation is in the way.
+    void PublishAccessibilityForClient() noexcept;
+    [[nodiscard]] bool AccessibilityListened() const noexcept;
+    // The published snapshot is behind the chrome: a preparation or a placement change since.
+    [[nodiscard]] bool AccessibilityBehind() const noexcept;
     bool _accessibilityPlacementDirty = false;
     // DxUi's preparation count when the UI Automation snapshot was last published: a preparation since then changed
-    // the controls, and the next Prepare republishes them (EmbeddedHost::UpdateAccessibility).
+    // the controls, and a later Prepare or a client's request republishes them (EmbeddedHost::UpdateAccessibility).
     std::uint64_t _accessibilityPreparations = 0;
+    bool _accessibleStructureChanged = false; // since the last publish (see AttachAccessibility above)
+    bool _accessibilityRequested = false;     // a client asked for the tree while the snapshot could not be published
+    std::optional<bool> _accessibilityListenerForTest;
+    SyncCounters _syncCounters;
+    std::uint64_t _displayRevision = 0;
+    // A region's next push writes its controls whatever its state (RF-1001): set for every region when the controls
+    // are built, and for a header or card when one of its controls changed itself (Report and the adjust panel's
+    // drawn editors), so a value the session did not take goes back to the control. Otherwise a push that finds its
+    // state as last written writes nothing: every DxUi write dirties the whole chrome surface.
+    static constexpr std::uint32_t kResyncTransform = 1u << 0;
+    static constexpr std::uint32_t kResyncSelection = 1u << 1;
+    static constexpr std::uint32_t kResyncBrush = 1u << 2;
+    static constexpr std::uint32_t kResyncGradient = 1u << 3;
+    static constexpr std::uint32_t kResyncShape = 1u << 4;
+    static constexpr std::uint32_t kResyncCrop = 1u << 5;
+    static constexpr std::uint32_t kResyncAdjust = 1u << 6;
+    static constexpr std::uint32_t kResyncSize = 1u << 7;
+    static constexpr std::uint32_t kResyncUndoRedo = 1u << 8;
+    static constexpr std::uint32_t kResyncEditTargets = 1u << 9;
+    static constexpr std::uint32_t kResyncMaskCommands = 1u << 10;
+    static constexpr std::uint32_t kResyncTitle = 1u << 11;
+    static constexpr std::uint32_t kResyncLayers = 1u << 12;
+    static constexpr std::uint32_t kResyncTool = 1u << 13;
+    static constexpr std::uint32_t kResyncAll = ~0u;
+    std::uint32_t _resync = kResyncAll;
+    // Clears `region`'s mark; true when it was set.
+    [[nodiscard]] bool TakeResync(std::uint32_t region) noexcept
+    {
+        const bool marked = (_resync & region) != 0;
+        _resync &= ~region;
+        return marked;
+    }
+    // The dynamic menu rows and the tab title as last written.
+    struct MenuTargets
+    {
+        std::wstring undoName;
+        std::wstring redoName;
+        bool canUndo = false;
+        bool canRedo = false;
+        bool masksTargeted = false;
+        bool transformsSelection = false;
+        bool clipped = false;
+        int merge = 0;
+        bool maskPresent = false;
+        bool maskTargeted = false;
+        bool maskLinked = false;
+        bool maskEnabled = false;
+    };
+    MenuTargets _menuTargets;
+    std::wstring _documentTitle;
+    bool _documentDirty = false;
     bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
     bool _syncing = false;        // a header or card sync is writing its controls (HoldReports)
@@ -993,6 +1097,8 @@ class ChromeHost final : public CommandIds
     // A menu row, a rail tool, a palette hot zone or a Command List row: ChromeEvents::OnCommand (or the probe).
     void RunCommand(int command) noexcept;
     CanvasOverlay* _overlay = nullptr;
+    std::vector<float> _guideXsDip; // SetTransformOverlay's snap guides in DIP, reused between calls
+    std::vector<float> _guideYsDip;
     DxUi::Panel* _transformHeader = nullptr;
     DxUi::Label* _transformTitle = nullptr;
     DxUi::Checkbox* _autoSelect = nullptr;
@@ -1009,6 +1115,7 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _flipVertical = nullptr;
     DxUi::Button* _transformCancel = nullptr;
     DxUi::Button* _transformApply = nullptr;
+    TransformInspectorState _transformInspector;
     DxUi::Panel* _selectionHeader = nullptr;
     DxUi::Label* _selectionTitle = nullptr;
     DxUi::ComboBox* _marqueeShape = nullptr;
@@ -1064,6 +1171,7 @@ class ChromeHost final : public CommandIds
     DxUi::Label* _cropSize = nullptr;
     DxUi::Button* _cropCancel = nullptr;
     DxUi::Button* _cropApply = nullptr;
+    CropInspectorState _cropInspector;
     DxUi::Label* _shapeTitle = nullptr;
     DxUi::ComboBox* _shapeKind = nullptr;
     DxUi::NumericStepper* _shapeRadius = nullptr;
@@ -1207,37 +1315,47 @@ template <typename Action> void ChromeHost::Report(Action action, double value) 
     {
         return;
     }
+    // The reporting control shows what the user did, which the session may not take: its header or card writes on
+    // its next push whatever its state (`_resync`).
     if constexpr (std::is_same_v<Action, TransformAction>)
     {
+        _resync |= kResyncTransform;
         _events.OnTransformAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, SelectionAction>)
     {
+        _resync |= kResyncSelection;
         _events.OnSelectionAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, BrushAction>)
     {
+        _resync |= kResyncBrush;
         _events.OnBrushAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, GradientAction>)
     {
+        _resync |= kResyncGradient;
         _events.OnGradientAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, ShapeAction>)
     {
+        _resync |= kResyncShape;
         _events.OnShapeAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, CropAction>)
     {
+        _resync |= kResyncCrop;
         _events.OnCropAction(action, value);
     }
     else if constexpr (std::is_same_v<Action, AdjustAction>)
     {
+        _resync |= kResyncAdjust;
         _events.OnAdjustAction(action, value);
     }
     else
     {
         static_assert(std::is_same_v<Action, SizeAction>, "an action ChromeEvents does not report");
+        _resync |= kResyncSize;
         _events.OnSizeAction(action, value);
     }
 }

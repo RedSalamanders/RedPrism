@@ -692,9 +692,13 @@ a device swap; the next `Prepare` re-arms it) with a `ChromeAccessibilitySite` (
 focus requests to the HWND, a frame after a UIA action). The placement (client rectangle in screen pixels, whether
 the chrome rather than the canvas holds the keyboard focus) follows `WM_SIZE`, `WM_MOVE`, focus changes and the
 canvas-focus toggle. DxUi republishes its tree only when told after a preparation
-(`EmbeddedHost::UpdateAccessibility`), so `ChromeHost::Prepare` tells it after every preparation that changed the
-chrome, not only when the placement moved: a panel, a card or a header joins the tree with the frame that lays it
-out, and a frame that prepared nothing publishes nothing. Every interactive control carries an accessible name:
+(`EmbeddedHost::UpdateAccessibility`, a walk of every control), so `ChromeHost::Prepare` tells it after a preparation
+that changed the chrome while a client listens (`UiaClientsAreListening`), when the accessible structure changed (a
+tool switch, a card or panel, a header control shown or hidden, the layer rows, the document title: a panel, a card or
+a header joins the tree with the frame that lays it out) or when a client asked while it could not publish; anything
+else waits until a client asks: `WM_GETOBJECT` and the in-process root publish the waiting snapshot before answering
+([`Core_PerformanceAndResources.md`](../Core/Core_PerformanceAndResources.md), "Pointer input and the chrome"). A frame
+that prepared nothing publishes nothing. Every interactive control carries an accessible name:
 buttons and checkboxes from their captions, steppers and sliders from their labels, combo boxes from their tooltips,
 the wells, swatches, tree, tabs, rail, splitter, picker and the drawn adjustment controls from `IDS_A11Y_*` strings.
 `ChromeHost::UnnamedInteractiveControls` walks the tree and the WARP self-test requires it empty, walks the UIA

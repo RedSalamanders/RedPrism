@@ -998,7 +998,7 @@ int Application::RunFilesSelfTest() noexcept
         const bool imageTargeted = opened && _session.ActiveLayerID() == masked && _session.ActiveLayer() != nullptr &&
                                    _session.ActiveLayer()->mask.has_value() && !_session.IsMaskSelected();
         OnTool(EditorTool::Brush);
-        _session.brushSettings = BrushSettings{8, 1, 1, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{8, 1, 1, 0, 0, 1};
         BeginBrushStroke(_viewport.ViewFromDocument(Vec2{30, 20}, DocumentSize()), 0);
         FinishBrushStroke();
         const std::wstring painted = _session.history.UndoName();
@@ -1274,7 +1274,7 @@ int Application::RunSessionSelfTest() noexcept
     {
         OnTool(EditorTool::Brush);
         _chrome->SetCanvasFocused(true);
-        _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 320.0, 250.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 380.0, 250.0);
         const bool stroking = _session.PendingBrush() != nullptr;

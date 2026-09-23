@@ -116,10 +116,10 @@ mirrors every layer and placed mask across the canvas middle and reflects the se
 `Flip Canvas Horizontal` / `Flip Canvas Vertical` entry. Both commit a pending transform and apply a pending gradient
 first; `FlipCanvas` also drops the crop frame (legacy `flipCanvas`).
 
-## Session flags
+## Header flags
 
-`locksTransformRatio` (default on), `transformAutoSelect` (default off) and `showsTransformControls` (default on)
-are session state the header toggles; nothing here is serialized beyond the layer transforms already in `.prism`.
+Lock ratio (default on), Auto-Select (default off) and Show Transform Controls (default on) are the host's header state
+(`Application`), not `DocumentSession`'s; nothing here is serialized beyond the layer transforms already in `.prism`.
 
 ## Selection model (C9)
 
@@ -147,8 +147,8 @@ the pointer rounds, `square` evens the sides toward the drag direction, `fromCen
 
 Selection state on `DocumentSession`: `lassoKind` (Freehand default, Polygonal), `marqueeKind` (Rectangle default,
 Ellipse), `selectionModeChoice` (New default, Add, Subtract), `heldSelectionMode`, `selectionAntialiased` (default
-on), `wandSettings`, `selectionExpandAmount` and `selectionContractAmount` (1–500, default 1). `CanEditSelection`
-needs a document and no pending transform (commands settle the transform first).
+on) and `wandSettings`; the Expand and Contract amounts (1–500, `kSelectionModifyLimit`, default 1) are the host's
+header state. `CanEditSelection` needs a document and no pending transform (commands settle the transform first).
 
 - `SelectionModeFor(shift, option)`: Alt subtracts (with or without Shift), Shift adds, else the header choice.
   `LassoCursorMode` keeps an outline's starting mode; `DisplayedSelectionMode` (what the header highlights) uses the
@@ -307,7 +307,8 @@ composite)`; the kernels, the tile composition and the warp model live in
   rounded corner's radius; a mask on its grid takes an explicit placement so it stays put. Loaded shape layers are
   live; painting on one makes it plain pixels.
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
-  document pixel (nullopt outside or over transparency); `showsSampleRing` (default on) shows the comparison ring.
+  document pixel (nullopt outside or over transparency); the host shows the comparison ring while View › Sample Ring
+  (the `sampleRing` setting, [`Core_Settings.md`](../Core/Core_Settings.md), default on) is checked.
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.
 

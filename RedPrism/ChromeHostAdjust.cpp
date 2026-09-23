@@ -173,6 +173,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
         {
             if (!_syncing)
             {
+                _resync |= kResyncAdjust; // the editor shows the user's curve: the next push writes it back
                 _events.OnCurveChanged(std::move(points));
             }
         });
@@ -199,6 +200,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
             {
                 return;
             }
+            _resync |= kResyncAdjust;
             const LevelRange& range = Adjust::LevelsCurrent(_adjustInspector.levels);
             if (handle == 0)
             {
@@ -271,6 +273,7 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
         {
             if (!_syncing)
             {
+                _resync |= kResyncAdjust;
                 _events.OnBandChanged(index, degrees);
             }
         });
@@ -487,10 +490,13 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
 
 void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
 {
-    if (!_adjustCard)
+    // The panel writes only a state it has not shown (RF-1001, `_resync`): an open panel is synced on every pointer
+    // move over the canvas.
+    if (!_adjustCard || (!TakeResync(kResyncAdjust) && state == _adjustInspector))
     {
         return;
     }
+    ++_syncCounters.headers;
     const auto hold = HoldReports();
     const bool wasOpen = _adjustCard->IsVisible();
     _adjustInspector = state;

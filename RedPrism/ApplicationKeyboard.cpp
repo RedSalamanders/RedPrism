@@ -935,7 +935,7 @@ int Application::RunKeyboardSelfTest() noexcept
     }
 
     // The Command List: Enter in the search field runs the only match, and a typed space is text there, not a pan.
-    const bool sampleRing = _session.showsSampleRing;
+    const bool sampleRing = _settings.sampleRing;
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
     typeText(PlainCommandName(LoadStringResource(nullptr, IDS_CMD_SAMPLE_RING)));
     if (_spacePan || _chrome->ShortcutRowCountForTest() != 1 ||
@@ -945,7 +945,7 @@ int Application::RunKeyboardSelfTest() noexcept
                                 _chrome->ShortcutRowCountForTest(), _spacePan));
     }
     (void)key(VK_RETURN, 0);
-    if (_chrome->ShortcutsOpen() || _session.showsSampleRing == sampleRing)
+    if (_chrome->ShortcutsOpen() || _settings.sampleRing == sampleRing)
     {
         return fail(L"Enter in the Command List's search field did not run the matching command.\n");
     }
@@ -974,7 +974,7 @@ int Application::RunKeyboardSelfTest() noexcept
     _chrome->SelectShortcutForTest(ChromeHost::kCommandSampleRing);
     _chrome->FocusShortcutListForTest();
     (void)key(VK_RETURN, 0);
-    if (_chrome->ShortcutsOpen() || _session.showsSampleRing == sampleRing)
+    if (_chrome->ShortcutsOpen() || _settings.sampleRing == sampleRing)
     {
         return fail(L"Enter on the Command List did not run its selected row.\n");
     }
@@ -1132,16 +1132,16 @@ int Application::RunKeyboardSelfTest() noexcept
                                     L"(row focus {}, row pans {}, released {}, swap zone pans {}).\n",
                                     rowFocused, rowPans, rowReleased, zonePans));
         }
-        const bool ring = _session.showsSampleRing;
+        const bool ring = _settings.sampleRing;
         OnCommand(ChromeHost::kCommandKeyboardShortcuts);
         _chrome->SelectShortcutForTest(ChromeHost::kCommandSampleRing);
         (void)key(VK_TAB, 0);
         const bool listReached = _chrome->FocusFromKeyboard() && _chrome->FocusedControlNameForTest() ==
                                                                      LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE);
         (void)key(VK_SPACE, 0, true);
-        const bool heldNothing = _chrome->ShortcutsOpen() && _session.showsSampleRing == ring && !_spacePan;
+        const bool heldNothing = _chrome->ShortcutsOpen() && _settings.sampleRing == ring && !_spacePan;
         (void)key(VK_SPACE, 0);
-        const bool pressed = !_chrome->ShortcutsOpen() && _session.showsSampleRing != ring && !_spacePan;
+        const bool pressed = !_chrome->ShortcutsOpen() && _settings.sampleRing != ring && !_spacePan;
         OnCommand(ChromeHost::kCommandSampleRing);
         // Space held on the Rename Layer row: its press opens the card, and with the card laid out (a frame) the
         // repeats type nothing into its field.

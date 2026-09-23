@@ -901,7 +901,7 @@ void TestGpuBrushCoverage(Harness& h)
     DocumentSession cpuSession;
     cpuSession.CreateDocument(300, 120, false);
     cpuSession.AddBlankLayer();
-    cpuSession.brushSettings = BrushSettings{40, 0, 1, 0, 0, 0.8, false};
+    cpuSession.brushSettings = BrushSettings{40, 0, 1, 0, 0, 0.8};
     DocumentSession gpuSession;
     gpuSession.CreateDocument(300, 120, false);
     gpuSession.AddBlankLayer();

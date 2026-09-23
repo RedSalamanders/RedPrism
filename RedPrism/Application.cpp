@@ -27,6 +27,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <windowsx.h>
 
@@ -1184,7 +1185,7 @@ int Application::RunSelfTest() noexcept
         // The selection block leaves a lasso outline behind, and strokes are clipped to the selection.
         OnCommand(ChromeHost::kCommandDeselect);
         OnCommand(ChromeHost::kCommandNewLayer);
-        _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1};
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         SyncChrome();
         const CanvasHole hole = _chrome->HolePixels();
@@ -1350,7 +1351,7 @@ int Application::RunSelfTest() noexcept
         };
         // A red mark to copy.
         _session.brushMode = BrushToolMode::Paint;
-        _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 100.0);
         std::array<int, 4> mark{};
@@ -1366,7 +1367,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Clone Stamp did not get its own soft tip.\n");
             return 5;
         }
-        _session.brushSettings = BrushSettings{12, 1, 0, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{12, 1, 0, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
         pointer(WM_LBUTTONUP, 0, 200.0, 200.0);
         if (_session.history.UndoName() != L"Brush Stroke" || _session.PendingBrush() != nullptr)
@@ -1396,7 +1397,7 @@ int Application::RunSelfTest() noexcept
         }
         // Spot Healing blends the stamped mark into the plate.
         OnTool(EditorTool::Heal);
-        _session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1, false};
+        _session.brushSettings = BrushSettings{24, 1, 0, 0, 0, 1};
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 200.5, 200.0);
         pointer(WM_LBUTTONUP, 0, 200.5, 200.0);
@@ -1409,7 +1410,7 @@ int Application::RunSelfTest() noexcept
         // Smear: Smudge drags the red along through a live warp; Blur commits its own entry.
         OnTool(EditorTool::Smear);
         _session.smearMode = SmearMode::Smudge;
-        _session.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
+        _session.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8};
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 100.0);
         if (_session.PendingWarp() == nullptr || !_composition.HasStroke())
@@ -2048,6 +2049,11 @@ int Application::RunSelfTest() noexcept
     {
         return adjust;
     }
+    // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
+    if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
+    {
+        return chromeSync;
+    }
     // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
     // loss, a close inside a chrome dispatch and the session end.
     if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
@@ -2376,6 +2382,8 @@ void Application::SyncChrome() noexcept
     {
         return;
     }
+    ++_chromeSyncs;
+    ++_cursorRevision; // the session may have changed: the cursor decides afresh (RF-1002)
     // Every document change ends here: an edit the document's pixel budget refused (a paste, Layer via Copy, a
     // duplicate, a mask, the floating selection's merge, a filter's grown grid, a distortion, a shape) says so once,
     // whichever path ran it (Decision D7).
@@ -2394,6 +2402,8 @@ void Application::SyncChrome() noexcept
             CloseRenameCard();
         }
     }
+    // Each push below writes only what changed (ChromeHost's `_resync`, RF-1001): a sync that finds the chrome as it
+    // shows writes nothing and costs no preparation.
     const bool dirty = _session.history.IsModified();
     _chrome->SetDocumentTitle(FileTitle(_documentPath), dirty);
     // The active layer's mask: its row's badge shows the target, and the Layer menu's mask commands follow it (RF-907).
@@ -2416,17 +2426,7 @@ void Application::SyncChrome() noexcept
         }());
     SyncAdjustPanel();
     SyncSizeCard();
-    const CanvasDocument* document = _session.DisplayDocument();
-    const int percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
-    std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
-    std::wstring size = document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, document->width, document->height)
-                                 : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
-    // The tool's effective chord (a replacement or the catalog default); a tool whose key was cleared shows its name.
-    std::wstring toolName = LoadStringResource(nullptr, EditorToolNameId(_tool));
-    const std::wstring toolChord = _chrome->CommandChordText(ChromeHost::SelectToolCommand(_tool));
-    std::wstring tool =
-        toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
-    _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
+    SyncStatus();
     _chrome->SetTool(_tool);
     // A targeted mask's wells show the mask palette per the Paint choice (RF-1113, legacy paletteColor).
     _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor(),
@@ -2437,112 +2437,23 @@ void Application::SyncChrome() noexcept
                                        ? std::optional<double>(activeLayer->opacity)
                                        : std::nullopt);
 
-    const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi)
-                                          : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
-    (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi > 0.0f ? dpi : 96.0f);
+    // The canvas hole follows the layout the pushes above asked for, and the overlays below follow the hole: lay out,
+    // push the rest, then prepare once, so the frame after this finds the chrome prepared (RF-1001).
+    const float dpi = ChromeDpi();
+    _chrome->Layout(_renderer.Width(), _renderer.Height(), dpi);
     const CanvasHole hole = _chrome->HolePixels();
     _viewport.Resize(Vec2{std::max(1.0f, hole.width), std::max(1.0f, hole.height)}, std::max(1.0f, dpi / 96.0f),
                      DocumentSize());
 
-    // The Move tool's box, snap guides and header follow the pending edit or the active layer.
-    std::optional<TransformOverlayGeometry> geometry;
-    std::vector<float> guideXs;
-    std::vector<float> guideYs;
-    TransformInspectorState inspector;
-    inspector.visible = _tool == EditorTool::Move;
-    if (document != nullptr && inspector.visible)
-    {
-        const Vec2 documentSize = DocumentSize();
-        const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-        const ImageLayer* active = _session.ActiveLayer();
-        const bool shows = _session.showsTransformControls || (edit.has_value() && edit->persistent);
-        std::optional<LayerTransform> value;
-        if (edit.has_value())
-        {
-            value = edit->draft;
-        }
-        else if (active != nullptr)
-        {
-            value = _session.EditedTransform(*active);
-        }
-        if (shows)
-        {
-            if ((edit.has_value() && edit->group.has_value()) || (!edit.has_value() && _session.TransformsAsGroup()))
-            {
-                if (edit.has_value() && edit->corners.has_value())
-                {
-                    geometry = TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
-                }
-                else
-                {
-                    const std::optional<LayerTransform> box =
-                        edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
-                    if (box.has_value())
-                    {
-                        geometry = TransformOverlayGeometry::FromTransform(box.value(), _viewport, documentSize);
-                    }
-                }
-            }
-            else if (active != nullptr && active->asset.has_value() && !active->isGroup && _session.CanTransform())
-            {
-                if (edit.has_value() && edit->layerID == active->id && edit->corners.has_value())
-                {
-                    geometry = TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
-                }
-                else
-                {
-                    geometry = TransformOverlayGeometry::FromTransform(_session.EditedTransform(*active), _viewport,
-                                                                       documentSize);
-                }
-            }
-        }
-        for (const double x : _session.LastSnapGuides().xs)
-        {
-            guideXs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{x, 0.0}, documentSize).x));
-        }
-        for (const double y : _session.LastSnapGuides().ys)
-        {
-            guideYs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{0.0, y}, documentSize).y));
-        }
-        inspector.enabled = _session.CanTransform() || edit.has_value();
-        inspector.editing = edit.has_value();
-        inspector.distorted = edit.has_value() && edit->corners.has_value();
-        inspector.targetsMask = _session.TransformTargetsMask();
-        if (value.has_value())
-        {
-            const std::optional<Vec2> pixels = _session.TransformPixelSize();
-            Vec2 pixelSize = value->size;
-            if (pixels.has_value())
-            {
-                pixelSize = pixels.value();
-            }
-            else if (active != nullptr && active->asset.has_value() && active->asset->image.HasStorage())
-            {
-                pixelSize = Vec2{static_cast<double>(active->asset->image.Width()),
-                                 static_cast<double>(active->asset->image.Height())};
-            }
-            inspector.x = value->origin.x;
-            inspector.y = value->origin.y;
-            inspector.width = value->size.x;
-            inspector.height = value->size.y;
-            inspector.scale = value->ScalePercent(pixelSize);
-            inspector.rotation = value->rotation;
-            inspector.sampling = value->sampling == LayerSampling::Nearest  ? 0
-                                 : value->sampling == LayerSampling::Smooth ? 1
-                                                                            : 2;
-        }
-        inspector.autoSelect = _session.transformAutoSelect;
-        inspector.showControls = _session.showsTransformControls;
-        inspector.lockRatio = _session.locksTransformRatio;
-    }
-    _overlayGeometry = geometry;
-    _chrome->SetTransformOverlay(geometry, guideXs, guideYs);
-    _chrome->SetTransformInspector(inspector);
+    // The Move tool's header, box and snap guides follow the pending edit or the active layer.
+    _chrome->SetTransformInspector(TransformInspector());
+    SyncTransformOverlay();
 
     // Selection tools: the header mirrors the session; the outline shows in every tool.
+    const bool hasDocument = _session.Document().has_value();
     SelectionInspectorState selection;
     selection.visible = EditorToolIsSelection(_tool);
-    selection.enabled = document != nullptr;
+    selection.enabled = hasDocument;
     selection.tool = selection.visible ? _tool : EditorTool::Marquee;
     selection.marqueeKind = _session.marqueeKind == LassoKind::Ellipse ? 1 : 0;
     selection.lassoKind = _session.lassoKind == LassoKind::Polygonal ? 1 : 0;
@@ -2555,78 +2466,19 @@ void Application::SyncChrome() noexcept
     selection.sampleAllLayers = _session.wandSettings.sampleAllLayers;
     selection.contiguous = _session.wandSettings.contiguous;
     selection.canModify = _session.CanModifySelection();
-    selection.expandAmount = _session.selectionExpandAmount;
-    selection.contractAmount = _session.selectionContractAmount;
+    selection.expandAmount = _selectionExpandAmount;
+    selection.contractAmount = _selectionContractAmount;
     // The outline follows a pixel move and the floating pixels of a selection transform.
     const std::optional<DocumentSelection> current = _session.DisplayedSelection();
     selection.hasSelection = current.has_value();
     selection.isEmpty = current.has_value() && current->IsEmpty();
     _chrome->SetSelectionInspector(selection);
-    const Vec2 documentSize = DocumentSize();
-    const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
-    const double scale = _viewport.ViewScale();
-    // The frame loop steps the ants only while a non-empty outline shows (RF-408): read here, never per loop pass.
-    _marchingAnts = document != nullptr && current.has_value() && !current->IsEmpty();
-    // The outline geometry is rebuilt only when the selection or the view mapping changes (the chrome converts the
-    // device pixels to DIPs, so a new display scale rebuilds it too).
-    if (document == nullptr)
-    {
-        if (_overlaySelection.has_value())
-        {
-            _overlaySelection.reset();
-            _chrome->SetSelectionOutline({});
-        }
-    }
-    else if (current != _overlaySelection || origin != _overlayOrigin || scale != _overlayScale ||
-             _viewport.backingScale != _overlayBacking)
-    {
-        std::vector<std::vector<D2D1_POINT_2F>> loops;
-        if (current.has_value())
-        {
-            loops.reserve(current->loops.size());
-            for (const SelectionLoop& loop : current->loops)
-            {
-                std::vector<D2D1_POINT_2F> converted;
-                converted.reserve(loop.size());
-                for (const Vec2& point : loop)
-                {
-                    converted.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
-                                                      static_cast<float>(origin.y + point.y * scale)));
-                }
-                loops.push_back(std::move(converted));
-            }
-        }
-        _overlaySelection = current;
-        _overlayOrigin = origin;
-        _overlayScale = scale;
-        _overlayBacking = _viewport.backingScale;
-        _chrome->SetSelectionOutline(std::move(loops));
-    }
-    std::optional<CanvasOverlay::Draft> draft;
-    if (document != nullptr && _session.PendingLasso().has_value())
-    {
-        const LassoDraft& pending = _session.PendingLasso().value();
-        CanvasOverlay::Draft converted;
-        converted.kind = pending.kind;
-        converted.points.reserve(pending.points.size());
-        for (const Vec2& point : pending.points)
-        {
-            converted.points.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
-                                                     static_cast<float>(origin.y + point.y * scale)));
-        }
-        if (pending.cursor.has_value())
-        {
-            converted.cursor = D2D1::Point2F(static_cast<float>(origin.x + pending.cursor->x * scale),
-                                             static_cast<float>(origin.y + pending.cursor->y * scale));
-        }
-        draft = std::move(converted);
-    }
-    _chrome->SetLassoDraft(std::move(draft));
+    SyncSelectionOverlay(&current);
 
     // Brush and Eraser: the header mirrors the session; the tip circle follows the pointer.
     BrushInspectorState brush;
     brush.visible = EditorToolIsBrush(_tool);
-    brush.enabled = document != nullptr;
+    brush.enabled = hasDocument;
     brush.tool = EditorToolIsBrush(_tool) ? _tool : EditorTool::Brush;
     brush.mode = _session.brushMode == BrushToolMode::Erase ? 1 : 0;
     brush.size = _session.brushSettings.diameter;
@@ -2652,7 +2504,7 @@ void Application::SyncChrome() noexcept
     };
     const std::array<std::array<double, 4>, 2> ends = _session.GradientColors();
     GradientInspectorState gradient;
-    gradient.enabled = document != nullptr;
+    gradient.enabled = hasDocument;
     gradient.shape = _session.gradientSettings.shape == GradientShape::Radial ? 1 : 0;
     gradient.style = _session.gradientSettings.style == GradientStyle::ForegroundToTransparent ? 1 : 0;
     gradient.reversed = _session.gradientSettings.reversed;
@@ -2663,7 +2515,7 @@ void Application::SyncChrome() noexcept
     gradient.endArgb = argbOf(ends[1]);
     _chrome->SetGradientInspector(gradient);
     ShapeInspectorState shape;
-    shape.enabled = document != nullptr;
+    shape.enabled = hasDocument;
     shape.kind = _session.shapeKind == ShapeKind::Ellipse ? 1 : 0;
     shape.radius = _session.shapeCornerRadius;
     shape.foregroundArgb = _session.ForegroundColor();
@@ -2671,6 +2523,248 @@ void Application::SyncChrome() noexcept
     SyncCropChrome();
     SyncToolOverlays();
     SyncStrokePreview();
+    (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), dpi);
+}
+
+void Application::SyncView() noexcept
+{
+    if (!_chrome)
+    {
+        return;
+    }
+    // A pan or a zoom moves the canvas under the chrome: the status bar's zoom and what the overlay draws over the
+    // canvas follow it. No header, panel, menu, title or layer row depends on the view, so none is rebuilt, and the
+    // frame prepares whatever changed (RF-1001).
+    SyncStatus();
+    SyncTransformOverlay();
+    SyncSelectionOverlay(nullptr);
+    SyncBrushCursor();
+    SyncCropChrome();
+    SyncToolOverlays();
+    _frameInvalidated = true;
+}
+
+float Application::ChromeDpi() const noexcept
+{
+    const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi)
+                                          : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
+    return dpi > 0.0f ? dpi : 96.0f;
+}
+
+void Application::SyncStatus() noexcept
+{
+    // The three texts are formatted only when what they show changed: a pan changes none of them.
+    const std::optional<CanvasDocument>& document = _session.Document();
+    StatusKey key;
+    key.percent = static_cast<int>(_viewport.zoom * 100.0 + 0.5);
+    key.document = document.has_value();
+    key.width = document.has_value() ? document->width : 0;
+    key.height = document.has_value() ? document->height : 0;
+    key.tool = _tool;
+    key.chrome = _chrome->DisplayRevision();
+    if (_statusKey == key)
+    {
+        return;
+    }
+    _statusKey = key;
+    std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, key.percent);
+    std::wstring size = key.document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, key.width, key.height)
+                                     : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
+    // The tool's effective chord (a replacement or the catalog default); a tool whose key was cleared shows its name.
+    std::wstring toolName = LoadStringResource(nullptr, EditorToolNameId(_tool));
+    const std::wstring toolChord = _chrome->CommandChordText(ChromeHost::SelectToolCommand(_tool));
+    std::wstring tool =
+        toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
+    _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
+}
+
+TransformInspectorState Application::TransformInspector() const
+{
+    TransformInspectorState inspector;
+    inspector.visible = _tool == EditorTool::Move;
+    if (!_session.Document().has_value() || !inspector.visible)
+    {
+        return inspector;
+    }
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    const ImageLayer* active = _session.ActiveLayer();
+    std::optional<LayerTransform> value;
+    if (edit.has_value())
+    {
+        value = edit->draft;
+    }
+    else if (active != nullptr)
+    {
+        value = _session.EditedTransform(*active);
+    }
+    inspector.enabled = _session.CanTransform() || edit.has_value();
+    inspector.editing = edit.has_value();
+    inspector.distorted = edit.has_value() && edit->corners.has_value();
+    inspector.targetsMask = _session.TransformTargetsMask();
+    if (value.has_value())
+    {
+        const std::optional<Vec2> pixels = _session.TransformPixelSize();
+        Vec2 pixelSize = value->size;
+        if (pixels.has_value())
+        {
+            pixelSize = pixels.value();
+        }
+        else if (active != nullptr && active->asset.has_value() && active->asset->image.HasStorage())
+        {
+            pixelSize = Vec2{static_cast<double>(active->asset->image.Width()),
+                             static_cast<double>(active->asset->image.Height())};
+        }
+        inspector.x = value->origin.x;
+        inspector.y = value->origin.y;
+        inspector.width = value->size.x;
+        inspector.height = value->size.y;
+        inspector.scale = value->ScalePercent(pixelSize);
+        inspector.rotation = value->rotation;
+        inspector.sampling = value->sampling == LayerSampling::Nearest  ? 0
+                             : value->sampling == LayerSampling::Smooth ? 1
+                                                                        : 2;
+    }
+    inspector.autoSelect = _transformAutoSelect;
+    inspector.showControls = _showsTransformControls;
+    inspector.lockRatio = _locksTransformRatio;
+    return inspector;
+}
+
+std::optional<TransformOverlayGeometry> Application::TransformBox() const
+{
+    if (_tool != EditorTool::Move || !_session.Document().has_value())
+    {
+        return std::nullopt;
+    }
+    const Vec2 documentSize = DocumentSize();
+    const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+    const ImageLayer* active = _session.ActiveLayer();
+    if (!_showsTransformControls && !(edit.has_value() && edit->persistent))
+    {
+        return std::nullopt;
+    }
+    if ((edit.has_value() && edit->group.has_value()) || (!edit.has_value() && _session.TransformsAsGroup()))
+    {
+        if (edit.has_value() && edit->corners.has_value())
+        {
+            return TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
+        }
+        const std::optional<LayerTransform> box =
+            edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
+        if (box.has_value())
+        {
+            return TransformOverlayGeometry::FromTransform(box.value(), _viewport, documentSize);
+        }
+        return std::nullopt;
+    }
+    if (active != nullptr && active->asset.has_value() && !active->isGroup && _session.CanTransform())
+    {
+        if (edit.has_value() && edit->layerID == active->id && edit->corners.has_value())
+        {
+            return TransformOverlayGeometry::FromCorners(edit->corners.value(), _viewport, documentSize);
+        }
+        return TransformOverlayGeometry::FromTransform(_session.EditedTransform(*active), _viewport, documentSize);
+    }
+    return std::nullopt;
+}
+
+void Application::SyncTransformOverlay() noexcept
+{
+    // The Crop tool's frame is the box there (SyncCropChrome).
+    const bool hasDocument = _session.Document().has_value();
+    if (_tool == EditorTool::Crop && hasDocument)
+    {
+        return;
+    }
+    _overlayGeometry = TransformBox();
+    // The guides go through buffers kept between calls: a drag's guides allocate nothing once they have room.
+    _guideXs.clear();
+    _guideYs.clear();
+    if (_tool == EditorTool::Move && hasDocument)
+    {
+        const Vec2 documentSize = DocumentSize();
+        for (const double x : _session.LastSnapGuides().xs)
+        {
+            _guideXs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{x, 0.0}, documentSize).x));
+        }
+        for (const double y : _session.LastSnapGuides().ys)
+        {
+            _guideYs.push_back(static_cast<float>(_viewport.ViewFromDocument(Vec2{0.0, y}, documentSize).y));
+        }
+    }
+    _chrome->SetTransformOverlay(_overlayGeometry, _guideXs, _guideYs);
+}
+
+void Application::SyncSelectionOverlay(const std::optional<DocumentSelection>* shown) noexcept
+{
+    const bool hasDocument = _session.Document().has_value();
+    // A view change keeps the selection shown last (`shown` null): only the mapping moved.
+    const std::optional<DocumentSelection>& current = shown != nullptr ? *shown : _overlaySelection;
+    const Vec2 documentSize = DocumentSize();
+    const Vec2 origin = _viewport.DocumentRectOrigin(documentSize);
+    const double scale = _viewport.ViewScale();
+    // The frame loop steps the ants only while a non-empty outline shows (RF-408): read here, never per loop pass.
+    _marchingAnts = hasDocument && current.has_value() && !current->IsEmpty();
+    // The outline geometry is rebuilt only when the selection or the view mapping changes (the chrome converts the
+    // device pixels to DIPs, so a new display scale rebuilds it too).
+    if (!hasDocument)
+    {
+        if (_overlaySelection.has_value())
+        {
+            _overlaySelection.reset();
+            _chrome->SetSelectionOutline({});
+        }
+    }
+    else if ((shown != nullptr && *shown != _overlaySelection) ||
+             (current.has_value() &&
+              (origin != _overlayOrigin || scale != _overlayScale || _viewport.backingScale != _overlayBacking)))
+    {
+        // (Without a selection a new view mapping draws nothing new: the outline stays empty.)
+        std::vector<std::vector<D2D1_POINT_2F>> loops;
+        if (current.has_value())
+        {
+            loops.reserve(current->loops.size());
+            for (const SelectionLoop& loop : current->loops)
+            {
+                std::vector<D2D1_POINT_2F> converted;
+                converted.reserve(loop.size());
+                for (const Vec2& point : loop)
+                {
+                    converted.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
+                                                      static_cast<float>(origin.y + point.y * scale)));
+                }
+                loops.push_back(std::move(converted));
+            }
+        }
+        if (shown != nullptr)
+        {
+            _overlaySelection = *shown;
+        }
+        _overlayOrigin = origin;
+        _overlayScale = scale;
+        _overlayBacking = _viewport.backingScale;
+        _chrome->SetSelectionOutline(std::move(loops));
+    }
+    std::optional<CanvasOverlay::Draft> draft;
+    if (hasDocument && _session.PendingLasso().has_value())
+    {
+        const LassoDraft& pending = _session.PendingLasso().value();
+        CanvasOverlay::Draft converted;
+        converted.kind = pending.kind;
+        converted.points.reserve(pending.points.size());
+        for (const Vec2& point : pending.points)
+        {
+            converted.points.push_back(D2D1::Point2F(static_cast<float>(origin.x + point.x * scale),
+                                                     static_cast<float>(origin.y + point.y * scale)));
+        }
+        if (pending.cursor.has_value())
+        {
+            converted.cursor = D2D1::Point2F(static_cast<float>(origin.x + pending.cursor->x * scale),
+                                             static_cast<float>(origin.y + pending.cursor->y * scale));
+        }
+        draft = std::move(converted);
+    }
+    _chrome->SetLassoDraft(std::move(draft));
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -2814,8 +2908,7 @@ void Application::CheckDeviceAdapter() noexcept
 void Application::ZoomBy(double factor) noexcept
 {
     _viewport.SetZoom(_viewport.zoom * factor, _viewport.Center(), DocumentSize());
-    SyncChrome();
-    _frameInvalidated = true;
+    SyncView();
 }
 
 void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -2931,8 +3024,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             if (factor != 1.0)
             {
                 _viewport.SetZoom(_viewport.zoom * factor, view, DocumentSize());
-                SyncChrome();
-                _frameInvalidated = true;
+                SyncView();
             }
         }
         return;
@@ -3098,8 +3190,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
             return true;
         }
         _viewport.Translate(delta);
-        SyncChrome();
-        _frameInvalidated = true;
+        SyncView();
         return true;
     }
     if (ZoomDrag* zoom = std::get_if<ZoomDrag>(&_drag))
@@ -3115,8 +3206,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
             {
                 _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), drag.anchor,
                                   DocumentSize());
-                SyncChrome();
-                _frameInvalidated = true;
+                SyncView();
             }
             return true;
         }
@@ -3125,8 +3215,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
         if (zoom->moved)
         {
             _viewport.SetZoom(drag.zoom * CanvasViewport::DragZoomFactor(dragDip), drag.anchor, DocumentSize());
-            SyncChrome();
-            _frameInvalidated = true;
+            SyncView();
         }
         return true;
     }
@@ -3481,13 +3570,11 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandZoomFit:
         _viewport.Fit(DocumentSize());
-        SyncChrome();
-        _frameInvalidated = true;
+        SyncView();
         break;
     case ChromeHost::kCommandZoomActual:
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
-        SyncChrome();
-        _frameInvalidated = true;
+        SyncView();
         break;
     case ChromeHost::kCommandZoomIn:
         ZoomBy(kCommandZoomStep);
@@ -3496,10 +3583,10 @@ void Application::OnCommand(int command) noexcept
         ZoomBy(1.0 / kCommandZoomStep);
         break;
     case ChromeHost::kCommandSampleRing:
-        _session.showsSampleRing = !_session.showsSampleRing;
+        _settings.sampleRing = !_settings.sampleRing;
         if (_chrome)
         {
-            _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _session.showsSampleRing);
+            _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, _settings.sampleRing);
         }
         break;
     case ChromeHost::kCommandKeyboardShortcuts:
@@ -4631,13 +4718,12 @@ void Application::ApplyDemo() noexcept
             }
             _session.FinishBrush();
         };
-        stroke(BrushSettings{90, 0, 0.90, 0.54, 0.18, 1, false},
+        stroke(BrushSettings{90, 0, 0.90, 0.54, 0.18, 1},
                {Vec2{220, 200}, Vec2{420, 160}, Vec2{620, 260}, Vec2{800, 200}}, false);
-        stroke(BrushSettings{36, 1, 0.96, 0.96, 0.96, 1, false}, {Vec2{230, 360}, Vec2{500, 300}, Vec2{760, 380}},
-               false);
-        stroke(BrushSettings{60, 0.5, 0.20, 0.72, 0.36, 0.6, false}, {Vec2{300, 440}, Vec2{700, 430}}, false);
-        stroke(BrushSettings{70, 1, 0, 0, 0, 1, false}, {Vec2{560, 330}, Vec2{620, 420}}, true);
-        _session.brushSettings = BrushSettings{60, 0.5, 0.90, 0.54, 0.18, 1, false};
+        stroke(BrushSettings{36, 1, 0.96, 0.96, 0.96, 1}, {Vec2{230, 360}, Vec2{500, 300}, Vec2{760, 380}}, false);
+        stroke(BrushSettings{60, 0.5, 0.20, 0.72, 0.36, 0.6}, {Vec2{300, 440}, Vec2{700, 430}}, false);
+        stroke(BrushSettings{70, 1, 0, 0, 0, 1}, {Vec2{560, 330}, Vec2{620, 420}}, true);
+        _session.brushSettings = BrushSettings{60, 0.5, 0.90, 0.54, 0.18, 1};
         _brushHover = Vec2{880, 430};
         OnTool(EditorTool::Brush);
         return;
@@ -4720,16 +4806,16 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
         (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
         return;
     case TransformAction::AutoSelect:
-        _session.transformAutoSelect = value != 0.0;
+        _transformAutoSelect = value != 0.0;
         SyncChrome();
         return;
     case TransformAction::ShowControls:
-        _session.showsTransformControls = value != 0.0;
+        _showsTransformControls = value != 0.0;
         SyncChrome();
         _frameInvalidated = true;
         return;
     case TransformAction::LockRatio:
-        _session.locksTransformRatio = value != 0.0;
+        _locksTransformRatio = value != 0.0;
         SyncChrome();
         return;
     case TransformAction::FlipHorizontal:
@@ -4747,7 +4833,7 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
     case TransformAction::SetWidth:
         if (value >= 1.0)
         {
-            const bool lock = _session.locksTransformRatio;
+            const bool lock = _locksTransformRatio;
             ChangeTransform(
                 [value, lock](LayerTransform& transform)
                 {
@@ -4762,7 +4848,7 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
     case TransformAction::SetHeight:
         if (value >= 1.0)
         {
-            const bool lock = _session.locksTransformRatio;
+            const bool lock = _locksTransformRatio;
             ChangeTransform(
                 [value, lock](LayerTransform& transform)
                 {
@@ -4819,62 +4905,129 @@ void Application::ChangeTransform(const std::function<void(LayerTransform&)>& up
     DocumentChanged();
 }
 
-std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(Vec2 pixel, bool control) const
+Application::TransformPressRule Application::CurrentTransformPressRule() const
 {
-    if (!_session.Document().has_value())
+    TransformPressRule rule;
+    rule.document = _session.Document().has_value();
+    if (!rule.document)
     {
-        return std::nullopt;
-    }
-    const CanvasDocument& document = _session.Document().value();
-    // The top-most visible pixel layer under the pointer.
-    std::optional<Guid> underPointer;
-    const std::vector<Guid> order = RenderLayerIds(document);
-    for (auto it = order.rbegin(); it != order.rend() && !underPointer.has_value(); ++it)
-    {
-        for (const ImageLayer& layer : document.layers)
-        {
-            if (layer.id == *it)
-            {
-                if (layer.asset.has_value() && _session.DisplayedTransform(layer).Contains(pixel))
-                {
-                    underPointer = layer.id;
-                }
-                break;
-            }
-        }
+        return rule;
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     const ImageLayer* active = _session.ActiveLayer();
-    const bool activeUsable = active != nullptr && active->asset.has_value() && !active->isGroup &&
-                              !_session.TransformsAsGroup() && _session.CanTransform();
-    const bool picks = !edit.has_value();
+    rule.picks = !edit.has_value();
+    rule.autoSelect = _transformAutoSelect;
+    rule.active = _session.ActiveLayerID();
+    rule.group = _session.TransformsAsGroup() && rule.active.has_value();
+    if (rule.group)
+    {
+        rule.groupBox = edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
+    }
+    if (active != nullptr && active->asset.has_value() && !active->isGroup && !_session.TransformsAsGroup() &&
+        _session.CanTransform())
+    {
+        rule.activeBox = _session.EditedTransform(*active);
+    }
+    return rule;
+}
+
+std::optional<std::pair<Guid, bool>> Application::TransformPressLayer(const TransformPressRule& rule, Vec2 pixel,
+                                                                      bool control) const
+{
+    if (!rule.document)
+    {
+        return std::nullopt;
+    }
+    // The top-most visible pixel layer under the pointer, looked for only when a rule below needs it: with a usable
+    // active layer and neither Ctrl nor auto-select, none does (RF-1002, the cursor asks on every move).
+    std::optional<std::optional<Guid>> found;
+    const auto underPointer = [&]() -> const std::optional<Guid>&
+    {
+        if (!found.has_value())
+        {
+            found = LayerUnderPointer(pixel);
+        }
+        return found.value();
+    };
     // Ctrl picks the layer under the pointer; otherwise the active layer, unless auto-select finds another layer
     // under a press outside it. A press on empty canvas still drags the active layer.
-    if (control && picks && underPointer.has_value())
+    if (control && rule.picks && underPointer().has_value())
     {
-        return std::make_pair(underPointer.value(), true);
+        return std::make_pair(underPointer().value(), true);
     }
-    if (_session.TransformsAsGroup() && _session.ActiveLayerID().has_value())
+    if (rule.group)
     {
-        const std::optional<LayerTransform> box =
-            edit.has_value() ? std::optional<LayerTransform>(edit->draft) : _session.GroupTransformBox();
-        if ((box.has_value() && box->Contains(pixel)) || !(picks && _session.transformAutoSelect) ||
-            !underPointer.has_value())
+        if ((rule.groupBox.has_value() && rule.groupBox->Contains(pixel)) || !(rule.picks && rule.autoSelect) ||
+            !underPointer().has_value())
         {
-            return std::make_pair(_session.ActiveLayerID().value(), false);
+            return std::make_pair(rule.active.value(), false);
         }
     }
-    if (activeUsable && _session.EditedTransform(*active).Contains(pixel))
+    if (rule.activeBox.has_value() && rule.activeBox->Contains(pixel))
     {
-        return std::make_pair(active->id, false);
+        return std::make_pair(rule.active.value(), false);
     }
-    if (picks && (_session.transformAutoSelect || control) && underPointer.has_value())
+    if (rule.picks && (rule.autoSelect || control) && underPointer().has_value())
     {
-        return std::make_pair(underPointer.value(), true);
+        return std::make_pair(underPointer().value(), true);
     }
-    if (activeUsable)
+    if (rule.activeBox.has_value())
     {
-        return std::make_pair(active->id, false);
+        return std::make_pair(rule.active.value(), false);
+    }
+    return std::nullopt;
+}
+
+std::optional<Guid> Application::LayerUnderPointer(Vec2 pixel) const
+{
+    const CanvasDocument& document = _session.Document().value();
+    ++_pointerLayerScans;
+    // The visible pixel layers top-first, as indices into the document's layers, rebuilt once per session change
+    // (`_cursorRevision`); an index that no longer names its layer rebuilds them before the scan goes on.
+    const auto rebuild = [&]
+    {
+        _pointerLayers.clear();
+        std::unordered_map<Guid, std::size_t> index;
+        index.reserve(document.layers.size());
+        for (std::size_t position = 0; position < document.layers.size(); ++position)
+        {
+            (void)index.try_emplace(document.layers[position].id, position);
+        }
+        const std::vector<Guid> order = RenderLayerIds(document);
+        for (auto it = order.rbegin(); it != order.rend(); ++it)
+        {
+            if (const auto entry = index.find(*it); entry != index.end())
+            {
+                _pointerLayers.emplace_back(entry->second, *it);
+            }
+        }
+        _pointerLayersRevision = _cursorRevision;
+    };
+    if (_pointerLayersRevision != _cursorRevision)
+    {
+        rebuild();
+    }
+    for (int attempt = 0; attempt < 2; ++attempt)
+    {
+        bool stale = false;
+        for (const auto& [position, id] : _pointerLayers)
+        {
+            if (position >= document.layers.size() || document.layers[position].id != id)
+            {
+                stale = true;
+                break;
+            }
+            const ImageLayer& layer = document.layers[position];
+            if (layer.asset.has_value() && _session.DisplayedTransform(layer).Contains(pixel))
+            {
+                return layer.id;
+            }
+        }
+        if (!stale)
+        {
+            return std::nullopt;
+        }
+        rebuild();
     }
     return std::nullopt;
 }
@@ -4962,7 +5115,7 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     {
         // Dragging, scaling and rotating land on whole pixels and degrees; typed values stay exact. Moving snaps
         // to the canvas and the other layers unless Ctrl is held; resizing and rotating are left alone.
-        LayerTransform draft = drag.Updated(pixel, _session.locksTransformRatio, shift, alt).Rounded();
+        LayerTransform draft = drag.Updated(pixel, _locksTransformRatio, shift, alt).Rounded();
         if (drag.mode == TransformDrag::Mode::Move && !control)
         {
             std::unordered_set<Guid> moving;
@@ -5011,12 +5164,27 @@ bool Application::ApplyCanvasCursor() noexcept
     {
         return false;
     }
+    const std::optional<LPCWSTR> cursor = CanvasCursorAt(point);
+    if (!cursor.has_value())
+    {
+        return false;
+    }
+    SetCursor(cursor.value() != nullptr ? LoadCursorW(nullptr, cursor.value()) : nullptr);
+    return true;
+}
+
+std::optional<LPCWSTR> Application::CanvasCursorAt(POINT point) noexcept
+{
+    if (!_chrome)
+    {
+        return std::nullopt;
+    }
     const CanvasHole hole = _chrome->HolePixels();
     const bool inHole = _chrome->IsCanvasPoint(static_cast<float>(point.x), static_cast<float>(point.y));
     const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
     if (!inHole && move == nullptr)
     {
-        return false;
+        return std::nullopt;
     }
     LPCWSTR cursor = IDC_ARROW;
     const Vec2 view{static_cast<double>(point.x) - hole.left, static_cast<double>(point.y) - hole.top};
@@ -5038,12 +5206,10 @@ bool Application::ApplyCanvasCursor() noexcept
         // Alt with Clone Stamp is waiting for the click that sets the source: a crosshair, not the tip ring.
         if (_tool == EditorTool::Clone && KeyboardState::Held(VK_MENU))
         {
-            SetCursor(LoadCursorW(nullptr, IDC_CROSS));
-            return true;
+            return IDC_CROSS;
         }
         // The tip circle in the overlay is the cursor; the arrow would only hide the pixels under it.
-        SetCursor(_session.Document().has_value() ? nullptr : LoadCursorW(nullptr, IDC_CROSS));
-        return true;
+        return _session.Document().has_value() ? nullptr : IDC_CROSS;
     }
     else if (EditorToolIsSelection(_tool))
     {
@@ -5055,8 +5221,7 @@ bool Application::ApplyCanvasCursor() noexcept
         cursor = IDC_CROSS;
         const bool control = KeyboardState::Held(VK_CONTROL);
         if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag) ||
-            ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) &&
-             _session.CanMoveSelection(pixel)))
+            ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) && CursorOverSelection(pixel)))
         {
             cursor = IDC_SIZEALL;
         }
@@ -5101,13 +5266,63 @@ bool Application::ApplyCanvasCursor() noexcept
                 cursor = IDC_SIZEALL;
             }
         }
-        else if (TransformPressLayer(_viewport.DocumentFromView(view, DocumentSize()), control).has_value())
+        else if (CursorPressesLayer(_viewport.DocumentFromView(view, DocumentSize()), control))
         {
             cursor = IDC_SIZEALL;
         }
     }
-    SetCursor(LoadCursorW(nullptr, cursor));
-    return true;
+    return cursor;
+}
+
+bool Application::CursorPressesLayer(Vec2 pixel, bool control) noexcept
+{
+    // Once per pointer position and session state: WM_SETCURSOR repeats for one position (every pointer message,
+    // Alt), and the session changes only through SyncChrome, which moves `_cursorRevision` (RF-1002).
+    CursorProbe& probe = _layerProbe;
+    if (!probe.valid || probe.revision != _cursorRevision || probe.pixel != pixel || probe.control != control)
+    {
+        if (_pressRuleRevision != _cursorRevision)
+        {
+            _pressRule = CurrentTransformPressRule();
+            _pressRuleRevision = _cursorRevision;
+        }
+        probe = CursorProbe{pixel, control, _cursorRevision,
+                            TransformPressLayer(_pressRule, pixel, control).has_value(), true};
+    }
+    return probe.result;
+}
+
+bool Application::CursorOverSelection(Vec2 pixel) noexcept
+{
+    CursorProbe& probe = _selectionProbe;
+    if (probe.valid && probe.revision == _cursorRevision && probe.pixel == pixel)
+    {
+        return probe.result;
+    }
+    // Outside the outline's bounds nothing can be inside it: the winding test walks every point of the selection.
+    if (_selectionReachRevision != _cursorRevision)
+    {
+        _selectionReachRevision = _cursorRevision;
+        _selectionReach.reset();
+        const std::optional<DocumentSelection>& selection = _session.Selection();
+        if (selection.has_value() && !selection->loops.empty())
+        {
+            _selectionReach = SelectionGeometry::Bounds(selection->loops);
+        }
+    }
+    // The winding test counts a point on the outline (within 1e-9) as inside: the bounds keep a margin for it.
+    constexpr double kMargin = 1e-6;
+    const bool reachable = _selectionReach.has_value() && pixel.x >= _selectionReach->minX - kMargin &&
+                           pixel.x <= _selectionReach->maxX + kMargin && pixel.y >= _selectionReach->minY - kMargin &&
+                           pixel.y <= _selectionReach->maxY + kMargin;
+    bool inside = false;
+    if (reachable)
+    {
+        ++_cursorSelectionTests;
+        inside = _session.CanMoveSelection(pixel);
+    }
+    probe = CursorProbe{pixel, false, _cursorRevision, inside, true};
+    return inside;
 }
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
@@ -5143,16 +5358,16 @@ void Application::OnSelectionAction(SelectionAction action, double value) noexce
         _session.wandSettings.contiguous = value != 0.0;
         break;
     case SelectionAction::SetExpandAmount:
-        _session.selectionExpandAmount = whole(1, DocumentSession::kSelectionModifyLimit);
+        _selectionExpandAmount = whole(1, DocumentSession::kSelectionModifyLimit);
         break;
     case SelectionAction::Expand:
-        _session.ExpandSelection(_session.selectionExpandAmount);
+        _session.ExpandSelection(_selectionExpandAmount);
         break;
     case SelectionAction::SetContractAmount:
-        _session.selectionContractAmount = whole(1, DocumentSession::kSelectionModifyLimit);
+        _selectionContractAmount = whole(1, DocumentSession::kSelectionModifyLimit);
         break;
     case SelectionAction::Contract:
-        _session.ContractSelection(_session.selectionContractAmount);
+        _session.ContractSelection(_selectionContractAmount);
         break;
     case SelectionAction::Deselect:
         EndSelectionInteraction(false);
@@ -5881,7 +6096,7 @@ int Application::RunBenchmark() noexcept
             }
             _session.history.MarkSaved();
             _viewport.followsFit = true;
-            _session.brushSettings = BrushSettings{diameter, 0, 1, 1, 1, 1, false};
+            _session.brushSettings = BrushSettings{diameter, 0, 1, 1, 1, 1};
             OnTool(EditorTool::Brush);
             DocumentChanged();
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
@@ -6407,7 +6622,7 @@ int Application::RunRenderingSelfTest() noexcept
     DocumentChanged();
     OnTool(EditorTool::Brush);
     _session.brushMode = BrushToolMode::Paint;
-    _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
+    _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1};
     _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
     SyncChrome();
     BeginBrushStroke(_viewport.ViewFromDocument(Vec2{40, 75}, DocumentSize()), 0);
@@ -6443,7 +6658,7 @@ int Application::RunRenderingSelfTest() noexcept
     _session.AddBlankLayer();
     DocumentChanged();
     OnTool(EditorTool::Brush);
-    _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1, false};
+    _session.brushSettings = BrushSettings{12, 1, 1, 0, 0, 1};
     _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
     SyncChrome();
     const std::uint64_t adoptionsBefore = _composition.AdoptionCount();
@@ -6993,7 +7208,7 @@ void Application::SyncToolOverlays() noexcept
     _chrome->SetShapeDraft(draft);
     std::optional<CanvasOverlay::SampleRing> ring;
     if (const ColorSampling* sampling = std::get_if<ColorSampling>(&_drag);
-        hasDocument && sampling != nullptr && sampling->point.has_value() && _session.showsSampleRing)
+        hasDocument && sampling != nullptr && sampling->point.has_value() && _settings.sampleRing)
     {
         CanvasOverlay::SampleRing sample;
         sample.center = viewPoint(sampling->point.value());
