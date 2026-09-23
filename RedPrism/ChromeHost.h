@@ -734,6 +734,10 @@ class ChromeHost final
     {
       public:
         std::vector<HierarchyEntry> rows;
+        // Each row's display text (the name, or the "(hidden)" suffixed form), built once by SetRows so
+        // GetVisibleItem's per-paint call is an assignment into the caller's reused buffer, never a
+        // FormatStringResource call.
+        std::vector<std::wstring> displayText;
         std::optional<Guid> active;
         std::wstring hiddenPattern;
         std::function<void(Guid)>* onLayer = nullptr;
@@ -741,6 +745,9 @@ class ChromeHost final
         std::function<void(Guid)>* onInvoke = nullptr;
         std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)>* onReorder = nullptr;
         bool useFluentIcons = true;
+        // Stores the hierarchy and rebuilds displayText once; SetLayers calls this instead of assigning rows
+        // directly so a settled layers panel does not re-format every row's name on every repaint.
+        void SetRows(std::vector<HierarchyEntry> newRows);
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;

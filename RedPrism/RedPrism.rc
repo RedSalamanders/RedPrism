@@ -519,4 +519,9 @@ BEGIN
     IDS_CMD_TOGGLE_MARQUEE          "Switch Marquee Shape\tM"
     IDS_CMD_TOGGLE_LASSO            "Switch Lasso Kind\tL"
     IDS_CMD_TOGGLE_SHAPE            "Switch Shape Kind\tShift+U"
+
+    // WP5 review fixes (RF-508): Image Size's print units and the rail palette's joined accessible name.
+    IDS_UNIT_INCHES                 "in"
+    IDS_UNIT_CENTIMETERS            "cm"
+    IDS_A11Y_PALETTE_NAME           "{0}, {1}"
 END

@@ -269,6 +269,18 @@ void AppendSeparator(HMENU menu) noexcept
 }
 } // namespace
 
+void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows)
+{
+    rows = std::move(newRows);
+    displayText.resize(rows.size());
+    for (std::size_t index = 0; index < rows.size(); ++index)
+    {
+        const HierarchyEntry& row = rows[index];
+        const std::wstring name = row.name.empty() ? row.id.ToString() : row.name;
+        displayText[index] = row.visible ? name : FormatStringResource(nullptr, IDS_LAYER_HIDDEN_SUFFIX, name);
+    }
+}
+
 size_t ChromeHost::LayerTreeModel::GetVisibleItemCount() const noexcept
 {
     return rows.size();
@@ -276,19 +288,25 @@ size_t ChromeHost::LayerTreeModel::GetVisibleItemCount() const noexcept
 
 void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const
 {
-    outItem = {};
     if (visibleIndex >= rows.size())
     {
+        outItem = {};
         return;
     }
+    // DxUi's Tree::Paint declares one TreeItemData outside its per-row loop and reuses it for every visible row
+    // (Tree::Paint, DxUi.Tree.cpp): assigning into each field, rather than resetting the whole struct first,
+    // keeps outItem.text's existing heap buffer instead of dropping it every row of every paint.
     const HierarchyEntry& row = rows[visibleIndex];
     outItem.id = visibleIndex + 1;
-    const std::wstring name = row.name.empty() ? row.id.ToString() : row.name;
-    outItem.text = row.visible ? name : FormatStringResource(nullptr, IDS_LAYER_HIDDEN_SUFFIX, name);
+    outItem.parentId.reset();
+    outItem.text = displayText[visibleIndex];
+    outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
+    outItem.badgeText.clear();
+    outItem.tooltipText.clear();
     outItem.depth = static_cast<uint32_t>(row.depth);
     outItem.hasChildren = row.isGroup;
     outItem.expanded = row.isGroup && !row.collapsed;
-    outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
+    outItem.badgeTone = DxUi::AdornmentTone::Accent;
 }
 
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
@@ -1137,11 +1155,19 @@ void ChromeHost::PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds)
 
 void ChromeHost::SetPressedVisualIfChanged(DxUi::Button* button, bool& current, bool pressed) noexcept
 {
-    if (button != nullptr && current != pressed)
+    if (button == nullptr)
+    {
+        return;
+    }
+    // DxUi clears the button's own latch on mouse-up and mouse-leave (Button::OnMouseUp, Button::OnMouseLeave),
+    // so the cached `current` bool can still say "pressed" after the control itself reverted (the pointer moved
+    // on to the canvas while the eyedropper stayed armed, or a re-clicked anchor lost its selection look).
+    // Compare the button's real state, not just the last value this function wrote.
+    if (button->DebugIsPressed() != pressed)
     {
         button->SetPressedVisual(pressed);
-        current = pressed;
     }
+    current = pressed;
 }
 
 void ChromeHost::ShowControl(DxUi::Control* control, bool visible) noexcept
@@ -1203,8 +1229,18 @@ void ChromeHost::Arrange() noexcept
     {
         // The splitter owns the clamp: canvas minimum, layers minimum and maximum, and the persisted preference.
         PlaceControl(_splitter, D2D1::RectF(kRailWidthDip, tabBottom, widthDip, statusTop));
-        _splitter->SetMinimumFirstPane(std::max(kCanvasMinDip, extent - kLayersMaxDip - kSplitterWidthDip));
-        _splitter->SetMinimumSecondPane(kLayersMinDip);
+        // Unlike SetPosition, DxUi's minimum setters RequestInvalidate unconditionally, even when the value does
+        // not change (Splitter::SetMinimumFirstPane/SetMinimumSecondPane); written every Prepare, that keeps
+        // EmbeddedHost from ever taking its settled-tree early-out. Write only on a real change.
+        const float minimumFirst = std::max(kCanvasMinDip, extent - kLayersMaxDip - kSplitterWidthDip);
+        if (_splitter->GetMinimumFirstPane() != minimumFirst)
+        {
+            _splitter->SetMinimumFirstPane(minimumFirst);
+        }
+        if (_splitter->GetMinimumSecondPane() != kLayersMinDip)
+        {
+            _splitter->SetMinimumSecondPane(kLayersMinDip);
+        }
         _splitter->SetPosition(extent - _preferredLayersWidthDip - kSplitterWidthDip);
         _layersWidthDip = std::max(0.0f, extent - _splitter->GetPosition() - kSplitterWidthDip);
     }
@@ -2210,6 +2246,11 @@ void ChromeHost::OpenColorPicker(bool background) noexcept
     {
         return;
     }
+    // A palette well always targets the palette: drop a stale Gradient Map or Canvas Size custom-color claim on
+    // the shared picker so OnPickerChange routes this pick to _onPalette instead of a handler for a panel that
+    // may already be closed.
+    _pickerForAdjust = false;
+    _pickerForSize = false;
     _pickerBackground = background;
     _picker->SetColor(background ? _backgroundArgb : _foregroundArgb);
     ArrangePicker();
@@ -2551,7 +2592,7 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
 
 void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active)
 {
-    _treeModel.rows = std::move(rows);
+    _treeModel.SetRows(std::move(rows)); // RF-506: also rebuilds each row's display text once, not per paint
     _treeModel.active = active;
     if (_layers)
     {
@@ -3369,6 +3410,9 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
     {
         DxUi::NumericStepper* control = _brushHeader->AddChild<DxUi::NumericStepper>();
         control->SetLabel(LoadStringResource(nullptr, labelId), labelWidth);
+        // Steppers are named from their label (Specs/UI/UI_ApplicationChrome.md, Accessibility), not the
+        // tooltip: a second SetAccessibleName(tipId) here used to win, so a screen reader heard the tooltip's
+        // "Brush diameter in pixels; [ and ] step it" instead of "Size". The tooltip stays the tooltip.
         control->SetAccessibleName(LoadStringResource(nullptr, labelId));
         control->SetUnit(LoadStringResource(nullptr, unitId), unitWidth);
         control->SetMinimum(minimum);
@@ -3378,7 +3422,6 @@ void ChromeHost::BuildBrushHeader(DxUi::Panel& root)
         control->SetDecimals(0);
         control->SetValue(value);
         control->SetTooltipText(LoadStringResource(nullptr, tipId));
-        control->SetAccessibleName(LoadStringResource(nullptr, tipId));
         control->SetOnChange(
             [this, action](DxUi::NumericStepperChange change)
             {

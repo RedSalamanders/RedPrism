@@ -53,9 +53,9 @@ constexpr std::array<UINT, 4> kUnitIds{IDS_SIZE_UNIT_PIXELS, IDS_SIZE_UNIT_PERCE
     case 1:
         return LoadStringResource(nullptr, IDS_UNIT_PERCENT);
     case 2:
-        return L"in";
+        return LoadStringResource(nullptr, IDS_UNIT_INCHES);
     case 3:
-        return L"cm";
+        return LoadStringResource(nullptr, IDS_UNIT_CENTIMETERS);
     default:
         return LoadStringResource(nullptr, IDS_UNIT_PIXELS);
     }
@@ -307,28 +307,23 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
         const bool newCanvas = state.kind == SizeCardKind::NewCanvas;
         const bool canvas = state.kind == SizeCardKind::CanvasSize;
         const bool image = state.kind == SizeCardKind::ImageSize;
-        const auto show = [](DxUi::Control* control, bool visible)
-        {
-            if (control != nullptr)
-            {
-                control->SetVisible(visible);
-            }
-        };
+        // ShowControl (ChromeHost.cpp) already writes SetVisible only when it changes; a local re-implementation
+        // without that check re-issued it for every control on every sync (every pan move re-syncs the card).
         _sizeTitle->SetText(LoadStringResource(nullptr, newCanvas ? IDS_SIZE_NEW_CANVAS_TITLE
                                                         : canvas  ? IDS_SIZE_CANVAS_TITLE
                                                                   : IDS_SIZE_IMAGE_TITLE));
-        show(_sizeTitle, true);
+        ShowControl(_sizeTitle, true);
         _sizeCurrent->SetText(
             newCanvas ? LoadStringResource(nullptr, IDS_SIZE_NEW_CANVAS_HINT)
                       : FormatStringResource(nullptr, IDS_SIZE_CURRENT, state.originalWidth, state.originalHeight));
-        show(_sizeCurrent, true);
-        show(_sizeBytes, canvas);
+        ShowControl(_sizeCurrent, true);
+        ShowControl(_sizeBytes, canvas);
         if (canvas)
         {
             _sizeBytes->SetText(
                 FormatStringResource(nullptr, IDS_SIZE_BYTES, ByteText(state.originalWidth, state.originalHeight)));
         }
-        show(_sizeUnit, !newCanvas);
+        ShowControl(_sizeUnit, !newCanvas);
         if (!newCanvas)
         {
             // Without resampling only the print units make sense.
@@ -341,6 +336,18 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
             }
             _sizeUnit->SetItems(std::move(entries));
             _sizeUnit->SetSelectedIndex(static_cast<size_t>(std::max(0, state.unit - static_cast<int>(first))));
+            // The combo reports the list position it was clicked at, not the unit value: without resampling the
+            // list starts at Inches (first == 2), so position 0 means unit 2, not unit 0. Re-map position -> unit
+            // with the same offset the list was just built with (SetOnSelectionChanged only fires from a real
+            // pick; a sync-driven SetSelectedIndex above is swallowed by _syncingSize like every other control here).
+            _sizeUnit->SetOnSelectionChanged(
+                [this, first](size_t selected)
+                {
+                    if (!_syncingSize && _onSize)
+                    {
+                        _onSize(SizeAction::SetUnit, static_cast<double>(selected + first));
+                    }
+                });
         }
         const int decimals = newCanvas || state.unit == 0 ? 0 : (state.unit == 1 ? 2 : 3);
         const std::wstring suffix = newCanvas ? LoadStringResource(nullptr, IDS_UNIT_PIXELS) : UnitSuffix(state.unit);
@@ -350,13 +357,13 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
             control->SetUnit(suffix, 26.0f);
             control->SetMinimum(newCanvas ? 1.0 : -1.0e6);
             control->SetMaximum(newCanvas ? static_cast<double>(kMaxCanvasSide) : 1.0e6);
-            show(control, true);
+            ShowControl(control, true);
         }
         _sizeWidth->SetValue(state.width);
         _sizeHeight->SetValue(state.height);
-        show(_sizeRelative, canvas);
+        ShowControl(_sizeRelative, canvas);
         _sizeRelative->SetChecked(state.relative);
-        show(_sizeLocked, !newCanvas);
+        ShowControl(_sizeLocked, !newCanvas);
         _sizeLocked->SetText(LoadStringResource(nullptr, canvas ? IDS_SIZE_LOCK_ORIGINAL : IDS_SIZE_LOCK));
         _sizeLocked->SetChecked(state.locked);
         _sizeLocked->SetEnabled(!image || state.resample);
@@ -378,16 +385,16 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
                 state.valid ? FormatStringResource(nullptr, IDS_SIZE_RESULT, state.resultWidth, state.resultHeight)
                             : LoadStringResource(nullptr, IDS_SIZE_IMAGE_INVALID));
         }
-        show(_sizeResult, true);
-        show(_sizeAnchorLabel, canvas);
+        ShowControl(_sizeResult, true);
+        ShowControl(_sizeAnchorLabel, canvas);
         for (std::size_t index = 0; index < _sizeAnchors.size(); ++index)
         {
-            show(_sizeAnchors[index], canvas);
+            ShowControl(_sizeAnchors[index], canvas);
             SetPressedVisualIfChanged(_sizeAnchors[index], _sizeAnchorPressed[index],
                                       canvas && static_cast<int>(index) == state.anchor);
         }
-        show(_sizeAnchorName, canvas);
-        show(_sizeAnchorHint, canvas);
+        ShowControl(_sizeAnchorName, canvas);
+        ShowControl(_sizeAnchorHint, canvas);
         if (canvas)
         {
             _sizeAnchorName->SetText(
@@ -395,13 +402,13 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
             _sizeExtension->SetSelectedIndex(static_cast<size_t>(std::clamp(state.extension, 0, 5)));
             _sizeExtensionSwatch->SetSwatchValue(state.extensionArgb);
         }
-        show(_sizeExtension, canvas);
-        show(_sizeExtensionSwatch, canvas && state.extension == 5);
-        show(_sizeResolution, image);
-        show(_sizePpi, image);
-        show(_sizeResample, image);
-        show(_sizeSampling, image && state.resample);
-        show(_sizeNote, image);
+        ShowControl(_sizeExtension, canvas);
+        ShowControl(_sizeExtensionSwatch, canvas && state.extension == 5);
+        ShowControl(_sizeResolution, image);
+        ShowControl(_sizePpi, image);
+        ShowControl(_sizeResample, image);
+        ShowControl(_sizeSampling, image && state.resample);
+        ShowControl(_sizeNote, image);
         if (image)
         {
             _sizeResolution->SetValue(state.resolution);
@@ -410,10 +417,10 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
             _sizeNote->SetText(
                 LoadStringResource(nullptr, state.resample ? IDS_SIZE_RESAMPLE_NOTE : IDS_SIZE_NO_RESAMPLE_NOTE));
         }
-        show(_sizeOpen, newCanvas);
-        show(_sizeImport, newCanvas);
-        show(_sizeCancel, true);
-        show(_sizeApply, true);
+        ShowControl(_sizeOpen, newCanvas);
+        ShowControl(_sizeImport, newCanvas);
+        ShowControl(_sizeCancel, true);
+        ShowControl(_sizeApply, true);
         _sizeApply->SetText(LoadStringResource(nullptr, newCanvas ? IDS_SIZE_CREATE
                                                         : canvas  ? IDS_ADJUST_OK
                                                                   : IDS_SIZE_RESIZE));

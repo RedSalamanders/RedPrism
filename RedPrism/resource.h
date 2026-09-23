@@ -467,6 +467,10 @@
 #define IDS_CMD_TOGGLE_MARQUEE 620
 #define IDS_CMD_TOGGLE_LASSO 621
 #define IDS_CMD_TOGGLE_SHAPE 622
+// WP5 review fixes (RF-508): Image Size's print units and the rail palette's joined accessible name.
+#define IDS_UNIT_INCHES 648
+#define IDS_UNIT_CENTIMETERS 649
+#define IDS_A11Y_PALETTE_NAME 650
 #define IDR_LUCIDE_MOVE 700
 #define IDR_LUCIDE_SQUARE_DASHED 701
 #define IDR_LUCIDE_LASSO 702

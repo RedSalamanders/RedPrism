@@ -325,7 +325,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 453> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 456> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -789,7 +789,10 @@ void TestStringTable() noexcept
                                          IDS_CMD_DELETE_KEY,
                                          IDS_CMD_TOGGLE_MARQUEE,
                                          IDS_CMD_TOGGLE_LASSO,
-                                         IDS_CMD_TOGGLE_SHAPE};
+                                         IDS_CMD_TOGGLE_SHAPE,
+                                         IDS_UNIT_INCHES,
+                                         IDS_UNIT_CENTIMETERS,
+                                         IDS_A11Y_PALETTE_NAME};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -804,6 +807,9 @@ void TestStringTable() noexcept
     Expect(FormatStringResource(exe.get(), IDS_STATUS_SIZE, 1280, 800) == L"1280 × 800", "strings.format-positional");
     Expect(FormatStringResource(exe.get(), IDS_TOOL_TOOLTIP, std::wstring(L"Move"), std::wstring(L"V")) == L"Move (V)",
            "strings.format-two-arguments");
+    Expect(FormatStringResource(exe.get(), IDS_A11Y_PALETTE_NAME, std::wstring(L"Foreground"), std::wstring(L"Background")) ==
+               L"Foreground, Background",
+           "strings.format-palette-name");
     Expect(StripAcceleratorColumn(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save As...",
            "strings.strip-accelerator-column");
     for (std::size_t index = 0; index < kEditorToolCount; ++index)

@@ -293,7 +293,9 @@ Adjustment` when an adjustment layer is edited), the kind's controls, a Preview 
 selection` note for a pixel layer with a selection, and Cancel / OK (the host's default and cancel buttons while
 open; Enter and Escape with the canvas focused do the same). Value rows are a label, a `Slider` (logarithmic
 for radius, distance, amount, gamma and grain size, so the small values get most of the travel) and an exact
-`NumericStepper`. The drawn controls live in `RedPrism/AdjustControls.*`:
+`NumericStepper`; typing into one previews live and is never reformatted out from under the typing (the stepper
+stays in its own edit until Enter, a step button or focus loss commits it, the same rule the transform, selection,
+brush, gradient and shape headers use). The drawn controls live in `RedPrism/AdjustControls.*`:
 
 - **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
   points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the
@@ -305,7 +307,9 @@ for radius, distance, amount, gamma and grain size, so the small values get most
 - **Hue/Saturation**: the range choice, the Sample / Add / Remove eyedroppers and the Targeted toggle (a color
   range only; a canvas click samples, a Targeted drag changes that color's saturation, or its hue with Ctrl), the
   Hue (±180°, 0–360° colorizing), Saturation and Lightness rows, the `SpectrumEditor` (the hues as they are, the
-  four band handles, the hues as they leave) with `Apply outside this range instead`, and Colorize.
+  four band handles in the row between the two hue strips, the hues as they leave; a press in that handle row
+  drags the nearest handle to it, a press on either strip does nothing, matching legacy) with
+  `Apply outside this range instead`, and Colorize.
 - **Exposure**: Exposure, Offset, Gamma. **Gradient Map**: a `GradientRamp` of the ends, the Shadows and
   Highlights swatches (each opens the color picker on that end; its preview follows the working color, Cancel
   restores it, OK keeps it, the palette is untouched) and Reverse. **Grain**: Amount, Size, Roughness.

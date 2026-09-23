@@ -9,6 +9,18 @@ constexpr float kPointRadiusDip = 4.0f;
 constexpr float kHandleHalfDip = 7.0f;
 constexpr double kPointPickDistance = 14.0; // in curve units (0-255)
 
+// SpectrumEditor's three rows: the hues as they are, the band handles, the hues as they leave (kSpectrumGapDip
+// between each). Legacy (HueSaturationSheet.swift's `handles` view) attaches its DragGesture to only the middle
+// row, so a click on either hue bar does nothing; RedPrism matches that with SpectrumEditor::HandleStripContainsDip.
+constexpr float kSpectrumBarDip = 16.0f;
+constexpr float kSpectrumGapDip = 5.0f;
+constexpr float kSpectrumHandleStripDip = 12.0f;
+
+[[nodiscard]] float SpectrumHandleTopDip(const D2D1_RECT_F& bounds) noexcept
+{
+    return bounds.top + kSpectrumBarDip + kSpectrumGapDip;
+}
+
 [[nodiscard]] D2D1_COLOR_F HueColor(double hue) noexcept
 {
     // Saturation and brightness 1: the spectrum bars.
@@ -457,18 +469,17 @@ void SpectrumEditor::Paint(DxUi::ControlHost& host) const
     const D2D1_RECT_F bounds = GetBounds();
     const float width = bounds.right - bounds.left;
     constexpr int kSlices = 72;
-    constexpr float kBarDip = 16.0f;
-    constexpr float kGapDip = 5.0f;
-    const float handleTop = bounds.top + kBarDip + kGapDip;
-    const float handleBottom = handleTop + 12.0f;
-    const float afterTop = handleBottom + kGapDip;
+    const float handleTop = SpectrumHandleTopDip(bounds);
+    const float handleBottom = handleTop + kSpectrumHandleStripDip;
+    const float afterTop = handleBottom + kSpectrumGapDip;
     for (int slice = 0; slice < kSlices; ++slice)
     {
         const double hue = static_cast<double>(slice) / kSlices * 360.0;
         const float x0 = bounds.left + width * static_cast<float>(slice) / kSlices;
         const float x1 = x0 + width / kSlices + 0.5f;
-        dc->FillRectangle(D2D1::RectF(x0, bounds.top, x1, bounds.top + kBarDip), host.GetSolidBrush(HueColor(hue)));
-        dc->FillRectangle(D2D1::RectF(x0, afterTop, x1, afterTop + kBarDip),
+        dc->FillRectangle(D2D1::RectF(x0, bounds.top, x1, bounds.top + kSpectrumBarDip),
+                          host.GetSolidBrush(HueColor(hue)));
+        dc->FillRectangle(D2D1::RectF(x0, afterTop, x1, afterTop + kSpectrumBarDip),
                           host.GetSolidBrush(HueColor(Adjust::ShiftedHue(hue, _settings))));
     }
     // Outer marks are the falloff shoulders; inner bars the full-strength range.
@@ -503,6 +514,12 @@ int SpectrumEditor::NearestHandle(double degrees) const noexcept
     return nearest;
 }
 
+bool SpectrumEditor::HandleStripContainsDip(const D2D1_RECT_F& bounds, D2D1_POINT_2F point) noexcept
+{
+    const float top = SpectrumHandleTopDip(bounds);
+    return point.y >= top && point.y <= top + kSpectrumHandleStripDip;
+}
+
 bool SpectrumEditor::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT)
 {
     if (rightButton || !IsEnabled())
@@ -510,6 +527,12 @@ bool SpectrumEditor::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, b
         return false;
     }
     const D2D1_RECT_F bounds = GetBounds();
+    if (!HandleStripContainsDip(bounds, point))
+    {
+        // Legacy scopes the drag gesture to the handle row between the two hue bars (HueSaturationSheet.swift's
+        // `handles` view carries the only DragGesture); a press on either bar is consumed but changes nothing.
+        return true;
+    }
     const float width = std::max(1.0f, bounds.right - bounds.left);
     const double degrees = std::min(360.0, std::max(0.0, static_cast<double>((point.x - bounds.left) / width) * 360.0));
     _dragging = NearestHandle(degrees);

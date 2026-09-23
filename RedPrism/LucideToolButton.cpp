@@ -13,6 +13,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/com.h>
+#include <wil/resource.h>
 #pragma warning(pop)
 
 namespace
@@ -36,10 +37,18 @@ constexpr IconResource kIcons[] = {
 
 int g_drawnMask = 0;
 int g_preparedMask = 0;
+int g_createCount = 0;
+// Every tool's icon is warmed once (in the inactive color) the first time any rail button paints, so a tool
+// hidden behind More already has a cached document before it is ever shown; each button's own Paint call then
+// only ever touches its own slot, so a settled rail costs zero CreateSvgDocument calls per frame.
+bool g_allToolsWarmed = false;
 
 struct DocumentCache
 {
-    ID2D1DeviceContext* context = nullptr;
+    // A strong reference, not a raw pointer: a cache keyed by pointer identity must own a reference that keeps
+    // the address stable, or a device swap that frees the old context can have a new one reallocated at the same
+    // address, aliasing a document built for a context that no longer exists.
+    wil::com_ptr_nothrow<ID2D1DeviceContext> context;
     std::uint32_t rgb = 0;
     float size = 0.0f;
     wil::com_ptr_nothrow<ID2D1SvgDocument> document;
@@ -139,6 +148,11 @@ int LucideIconsPrepared() noexcept
     return count;
 }
 
+int LucideSvgCreateCount() noexcept
+{
+    return g_createCount;
+}
+
 bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_F& bounds, const D2D1_COLOR_F& color)
 {
     if (context == nullptr || resourceId == 0)
@@ -159,7 +173,8 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
     struct Slot
     {
         int resourceId = 0;
-        ID2D1DeviceContext* context = nullptr;
+        // A strong reference, not a raw pointer: see DocumentCache's comment above.
+        wil::com_ptr_nothrow<ID2D1DeviceContext> context;
         std::uint32_t rgb = 0;
         float size = 0.0f;
         wil::com_ptr_nothrow<ID2D1SvgDocument> document;
@@ -178,7 +193,7 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
             slot = &candidate;
         }
     }
-    if (slot->resourceId != resourceId || slot->context != context || slot->rgb != rgb || slot->size != size ||
+    if (slot->resourceId != resourceId || slot->context.get() != context || slot->rgb != rgb || slot->size != size ||
         !slot->document)
     {
         std::string xml = LoadSvg(resourceId);
@@ -191,30 +206,31 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
         {
             return false;
         }
-        HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, xml.size());
-        if (memory == nullptr)
+        wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, xml.size()));
+        if (!memory)
         {
             return false;
         }
-        void* destination = GlobalLock(memory);
+        void* destination = GlobalLock(memory.get());
         if (destination == nullptr)
         {
-            GlobalFree(memory);
             return false;
         }
         std::memcpy(destination, xml.data(), xml.size());
-        GlobalUnlock(memory);
+        GlobalUnlock(memory.get());
         wil::com_ptr_nothrow<IStream> stream;
-        if (FAILED(CreateStreamOnHGlobal(memory, TRUE, stream.put())) || !stream)
+        if (FAILED(CreateStreamOnHGlobal(memory.get(), TRUE, stream.put())) || !stream)
         {
-            GlobalFree(memory);
             return false;
         }
+        // CreateStreamOnHGlobal(..., TRUE, ...) made the stream the HGLOBAL's owner (it frees it on release).
+        static_cast<void>(memory.release());
         wil::com_ptr_nothrow<ID2D1SvgDocument> document;
         if (FAILED(svgContext->CreateSvgDocument(stream.get(), D2D1::SizeF(size, size), document.put())) || !document)
         {
             return false;
         }
+        ++g_createCount;
         slot->resourceId = resourceId;
         slot->context = context;
         slot->rgb = rgb;
@@ -238,7 +254,7 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
                                      std::uint32_t rgb, float size)
 {
     DocumentCache& cache = g_caches[index];
-    if (cache.context == context && cache.rgb == rgb && cache.size == size && cache.document)
+    if (cache.context.get() == context && cache.rgb == rgb && cache.size == size && cache.document)
     {
         g_preparedMask |= 1 << index;
         return true;
@@ -251,31 +267,32 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
     {
         return false;
     }
-    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, xml.size());
-    if (memory == nullptr)
+    wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, xml.size()));
+    if (!memory)
     {
         return false;
     }
-    void* destination = GlobalLock(memory);
+    void* destination = GlobalLock(memory.get());
     if (destination == nullptr)
     {
-        GlobalFree(memory);
         return false;
     }
     std::memcpy(destination, xml.data(), xml.size());
-    GlobalUnlock(memory);
+    GlobalUnlock(memory.get());
     wil::com_ptr_nothrow<IStream> stream;
-    if (FAILED(CreateStreamOnHGlobal(memory, TRUE, stream.put())) || !stream)
+    if (FAILED(CreateStreamOnHGlobal(memory.get(), TRUE, stream.put())) || !stream)
     {
-        GlobalFree(memory);
         return false;
     }
+    // CreateStreamOnHGlobal(..., TRUE, ...) made the stream the HGLOBAL's owner (it frees it on release).
+    static_cast<void>(memory.release());
     wil::com_ptr_nothrow<ID2D1SvgDocument> document;
     const HRESULT created = svgContext->CreateSvgDocument(stream.get(), D2D1::SizeF(size, size), document.put());
     if (FAILED(created) || !document)
     {
         return false;
     }
+    ++g_createCount;
     cache.context = context;
     cache.rgb = rgb;
     cache.size = size;
@@ -333,15 +350,29 @@ void LucideToolButton::Paint(DxUi::ControlHost& host) const
     }
 
     const std::size_t toolIndex = EditorToolIndex(_tool);
-    for (std::size_t index = 0; index < kEditorToolCount; ++index)
+    if (!EnsureSvgDocument(context, svgContext.get(), toolIndex, rgb, size))
     {
-        if (!EnsureSvgDocument(context, svgContext.get(), index, rgb, size) && index == toolIndex)
+        _svgFailed = true;
+        const_cast<LucideToolButton*>(this)->SetText(glyph);
+        RequestInvalidate();
+        return;
+    }
+    if (!g_allToolsWarmed)
+    {
+        // A tool hidden behind More never paints on its own until chosen, so its icon would otherwise stay
+        // unprepared. Warm every other tool once here, in the ordinary (inactive) color, using this call's
+        // context and size (the same for every rail button). Steady state costs nothing after that: each
+        // button's own Paint call above is the only one that ever touches its slot again, and EnsureSvgDocument
+        // is a cache hit once a slot already matches.
+        const std::uint32_t restRgb = RgbOf(theme.text);
+        for (std::size_t index = 0; index < kEditorToolCount; ++index)
         {
-            _svgFailed = true;
-            const_cast<LucideToolButton*>(this)->SetText(glyph);
-            RequestInvalidate();
-            return;
+            if (index != toolIndex)
+            {
+                static_cast<void>(EnsureSvgDocument(context, svgContext.get(), index, restRgb, size));
+            }
         }
+        g_allToolsWarmed = true;
     }
     DocumentCache& cache = g_caches[toolIndex];
 

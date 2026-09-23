@@ -86,6 +86,29 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
 
 [[nodiscard]] const wchar_t* InteractiveKind(const DxUi::Control& control) noexcept
 {
+    // The drawn adjust controls and the palette zones derive from DxUi::Button so DxUi's own accessibility walk
+    // recognizes them (RF-507); check for them ahead of the generic Button/ColorSwatch cases below so a gap in
+    // one of them is still reported under its own name instead of the generic one it also now satisfies.
+    if (dynamic_cast<const CurveEditor*>(&control))
+    {
+        return L"CurveEditor";
+    }
+    if (dynamic_cast<const LevelsBar*>(&control))
+    {
+        return L"LevelsBar";
+    }
+    if (dynamic_cast<const SpectrumEditor*>(&control))
+    {
+        return L"SpectrumEditor";
+    }
+    if (dynamic_cast<const GradientRamp*>(&control))
+    {
+        return L"GradientRamp";
+    }
+    if (dynamic_cast<const PaletteZone*>(&control))
+    {
+        return L"ColorSwatch";
+    }
     if (dynamic_cast<const DxUi::Button*>(&control))
     {
         return L"Button";
@@ -106,7 +129,7 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
     {
         return L"Slider";
     }
-    if (dynamic_cast<const DxUi::ColorSwatch*>(&control) || dynamic_cast<const PaletteZone*>(&control))
+    if (dynamic_cast<const DxUi::ColorSwatch*>(&control))
     {
         return L"ColorSwatch";
     }
@@ -133,22 +156,6 @@ constexpr std::uint64_t kChromeAccessibilityRuntimeId = 1;
     if (dynamic_cast<const DxUi::Toolbar*>(&control))
     {
         return L"Toolbar";
-    }
-    if (dynamic_cast<const CurveEditor*>(&control))
-    {
-        return L"CurveEditor";
-    }
-    if (dynamic_cast<const LevelsBar*>(&control))
-    {
-        return L"LevelsBar";
-    }
-    if (dynamic_cast<const SpectrumEditor*>(&control))
-    {
-        return L"SpectrumEditor";
-    }
-    if (dynamic_cast<const GradientRamp*>(&control))
-    {
-        return L"GradientRamp";
     }
     return nullptr;
 }

@@ -1,6 +1,7 @@
 #include "PaletteControl.h"
 
 #include "LucideToolButton.h"
+#include "Resources.h"
 #include "resource.h"
 
 #include <d2d1.h>
@@ -34,7 +35,9 @@ namespace
     return brush;
 }
 
-void Invoke(const std::function<void()>& onClick)
+// Named FireClick, not Invoke: PaletteZone now derives from DxUi::Button, whose own (unused) Invoke(host, bool)
+// member would otherwise hide this free function for every unqualified call inside PaletteZone's methods.
+void FireClick(const std::function<void()>& onClick)
 {
     const std::function<void()> callback = onClick;
     if (callback)
@@ -44,9 +47,17 @@ void Invoke(const std::function<void()>& onClick)
 }
 } // namespace
 
-PaletteZone::PaletteZone(Kind kind, std::function<void()> onClick) : _kind(kind), _onClick(std::move(onClick))
+PaletteZone::PaletteZone(Kind kind, std::function<void()> onClick)
+    : DxUi::Button(std::wstring{}), _kind(kind), _onClick(std::move(onClick))
 {
     SetFocusable(true);
+    // UIA Invoke (AccessibilityProvider::ExecuteInvokeOnWindowThread, DxUi.Accessibility.cpp) calls
+    // InvokeAccessible() when SupportsAccessibleInvoke() is true, and otherwise falls back to the inherited
+    // Button::Invoke, which fires Button's own _onClick — a callback PaletteZone never sets, since it keeps its
+    // own separate _onClick here. Register the zone's current action through the Control-level
+    // SetAccessibleInvoke so an assistive-technology Invoke reaches it; capturing `this` (not _onClick's value)
+    // keeps this in sync with SetOnClick called later.
+    SetAccessibleInvoke([this](DxUi::ControlHost&) { FireClick(_onClick); });
 }
 
 void PaletteZone::SetSwatch(std::uint32_t argb) noexcept
@@ -142,7 +153,7 @@ bool PaletteZone::OnMouseUp(DxUi::ControlHost& host, D2D1_POINT_2F point, bool r
     Invalidate(host);
     if (wasPressed && Contains(GetHitBounds(), point))
     {
-        Invoke(_onClick);
+        FireClick(_onClick);
     }
     return wasPressed;
 }
@@ -153,7 +164,7 @@ bool PaletteZone::OnKeyDown(DxUi::ControlHost& host, UINT virtualKey, UINT /*mod
     {
         return false;
     }
-    Invoke(_onClick);
+    FireClick(_onClick);
     Invalidate(host);
     return true;
 }
@@ -170,7 +181,7 @@ void PaletteZone::OnCaptureLost(DxUi::ControlHost& host)
 PaletteControl::PaletteControl(std::wstring foregroundName, std::wstring backgroundName, std::wstring swapName,
                                std::wstring resetName)
 {
-    SetAccessibleName(foregroundName + L", " + backgroundName);
+    SetAccessibleName(FormatStringResource(nullptr, IDS_A11Y_PALETTE_NAME, foregroundName, backgroundName));
     _background = AddChild<PaletteZone>(PaletteZone::Kind::Background, nullptr);
     _foreground = AddChild<PaletteZone>(PaletteZone::Kind::Foreground, nullptr);
     _reset = AddChild<PaletteZone>(PaletteZone::Kind::Reset, nullptr);

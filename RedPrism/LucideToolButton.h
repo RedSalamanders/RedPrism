@@ -20,10 +20,15 @@ class LucideToolButton final : public DxUi::Button
     mutable bool _svgFailed = false;
 };
 
-// How many distinct tool icons have drawn, and how many SVG documents have been created. A tool hidden
-// above the palette wells is prepared but not drawn.
+// How many distinct tool icons have drawn, and how many have a cached SVG document ready. A tool hidden above
+// the palette wells is prepared but not drawn.
 [[nodiscard]] int LucideIconsDrawn() noexcept;
 [[nodiscard]] int LucideIconsPrepared() noexcept;
+// Total ID2D1SvgDocument creations across both caches in this process (LucideToolButton's per-tool cache and
+// DrawLucideSvg's small shared one), for a steady-state cost measurement: a settled rail should stop growing
+// this after its first frame, and a tool switch should grow it by at most two (the tool that lost the latch,
+// the one that gained it).
+[[nodiscard]] int LucideSvgCreateCount() noexcept;
 
 // Strokes one pinned SVG into bounds, in color. Used by the palette hot zones as well as the rail.
 bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_F& bounds, const D2D1_COLOR_F& color);

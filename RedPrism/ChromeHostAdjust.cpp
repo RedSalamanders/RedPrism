@@ -589,30 +589,30 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
     {
         _adjustTitle->SetText(state.title);
         _adjustTitle->SetVisible(true);
-        const auto show = [](DxUi::Control* control, bool visible)
-        {
-            if (control != nullptr)
-            {
-                control->SetVisible(visible);
-            }
-        };
+        // ShowControl (ChromeHost.cpp) already writes SetVisible only when it changes; re-implementing it here
+        // without that check re-issued it for every control on every sync (every pan move re-syncs the panel).
         const auto showRow = [&](AdjustRowId id, bool visible, double value)
         {
             const AdjustRow& entry = _adjustRows[static_cast<std::size_t>(id)];
-            show(entry.label, visible);
-            show(entry.slider, visible);
-            show(entry.stepper, visible);
+            ShowControl(entry.label, visible);
+            ShowControl(entry.slider, visible);
+            ShowControl(entry.stepper, visible);
             if (visible)
             {
                 entry.slider->SetValue(entry.logarithmic ? std::log(std::max(value, entry.minimum)) : value);
-                entry.stepper->SetValue(value);
+                // A typed value in progress reformats on every keystroke otherwise (SetValue clears IsEditing()
+                // and re-renders the text), mangling a second '.' or a partial decimal before Enter commits it.
+                if (!entry.stepper->IsEditing())
+                {
+                    entry.stepper->SetValue(value);
+                }
             }
         };
         const bool levels = state.panel == AdjustPanelKind::Levels;
         const bool hsv = state.panel == AdjustPanelKind::HueSaturation;
         const bool filter = state.panel == AdjustPanelKind::Filter;
         const auto kind = [&](FilterKind which) { return filter && state.filter == which; };
-        show(_adjustChannel, levels || kind(FilterKind::Curves));
+        ShowControl(_adjustChannel, levels || kind(FilterKind::Curves));
         if (levels)
         {
             _adjustChannel->SetSelectedIndex(static_cast<size_t>(state.levels.channel));
@@ -621,11 +621,19 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
             const LevelRange range = Adjust::LevelsCurrent(state.levels).Normalized();
             _levelsInput->SetRange(range);
             _levelsOutput->SetRange(range);
-            _levelsBlack->SetValue(range.black);
-            _levelsGamma->SetValue(range.gamma);
-            _levelsWhite->SetValue(range.white);
-            _levelsOutBlack->SetValue(range.outputBlack);
-            _levelsOutWhite->SetValue(range.outputWhite);
+            // Same guard as the value rows below: never reformat a stepper the user is still typing into.
+            const auto syncLevel = [](DxUi::NumericStepper* stepper, double value)
+            {
+                if (!stepper->IsEditing())
+                {
+                    stepper->SetValue(value);
+                }
+            };
+            syncLevel(_levelsBlack, range.black);
+            syncLevel(_levelsGamma, range.gamma);
+            syncLevel(_levelsWhite, range.white);
+            syncLevel(_levelsOutBlack, range.outputBlack);
+            syncLevel(_levelsOutWhite, range.outputWhite);
             for (int index = 0; index < 3; ++index)
             {
                 SetPressedVisualIfChanged(_levelsSample[static_cast<std::size_t>(index)],
@@ -660,31 +668,31 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
               static_cast<DxUi::Control*>(_levelsWhite), static_cast<DxUi::Control*>(_levelsOutBlack),
               static_cast<DxUi::Control*>(_levelsOutWhite)})
         {
-            show(control, levels);
+            ShowControl(control, levels);
         }
         for (DxUi::Button* control : _levelsSample)
         {
-            show(control, levels);
+            ShowControl(control, levels);
         }
         for (DxUi::Button* control : _levelsAuto)
         {
-            show(control, levels);
+            ShowControl(control, levels);
         }
-        show(_curveEditor, kind(FilterKind::Curves));
-        show(_curveCaption, kind(FilterKind::Curves));
-        show(_curveRemove, kind(FilterKind::Curves));
-        show(_curveReset, kind(FilterKind::Curves));
+        ShowControl(_curveEditor, kind(FilterKind::Curves));
+        ShowControl(_curveCaption, kind(FilterKind::Curves));
+        ShowControl(_curveRemove, kind(FilterKind::Curves));
+        ShowControl(_curveReset, kind(FilterKind::Curves));
         // Hue / Saturation.
         const bool spectrum = hsv && state.hsv.range != ColorRange::Master && !state.hsv.colorize;
-        show(_hueRange, hsv);
+        ShowControl(_hueRange, hsv);
         for (DxUi::Button* control : _hueSample)
         {
-            show(control, spectrum);
+            ShowControl(control, spectrum);
         }
-        show(_hueTargeting, hsv && !state.hsv.colorize);
-        show(_spectrum, spectrum);
-        show(_hueInvert, spectrum);
-        show(_hueColorize, hsv);
+        ShowControl(_hueTargeting, hsv && !state.hsv.colorize);
+        ShowControl(_spectrum, spectrum);
+        ShowControl(_hueInvert, spectrum);
+        ShowControl(_hueColorize, hsv);
         if (hsv)
         {
             _hueRange->SetSelectedIndex(static_cast<size_t>(state.hsv.range));
@@ -724,12 +732,12 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         showRow(AdjustRowId::Offset, kind(FilterKind::Exposure), settings.exposure.offset);
         showRow(AdjustRowId::Gamma, kind(FilterKind::Exposure), settings.exposure.gamma);
         const bool map = kind(FilterKind::GradientMap);
-        show(_gradientRamp, map);
-        show(_mapShadows, map);
-        show(_mapShadowsLabel, map);
-        show(_mapHighlights, map);
-        show(_mapHighlightsLabel, map);
-        show(_mapReverse, map);
+        ShowControl(_gradientRamp, map);
+        ShowControl(_mapShadows, map);
+        ShowControl(_mapShadowsLabel, map);
+        ShowControl(_mapHighlights, map);
+        ShowControl(_mapHighlightsLabel, map);
+        ShowControl(_mapReverse, map);
         if (map)
         {
             const AdjustmentColor& dark =
@@ -748,23 +756,23 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         showRow(AdjustRowId::Angle, kind(FilterKind::MotionBlur), settings.angle);
         showRow(AdjustRowId::Distance, kind(FilterKind::MotionBlur), settings.distance);
         showRow(AdjustRowId::Amount, kind(FilterKind::AddNoise), settings.amount);
-        show(_noiseDistribution, kind(FilterKind::AddNoise));
-        show(_noiseMono, kind(FilterKind::AddNoise));
+        ShowControl(_noiseDistribution, kind(FilterKind::AddNoise));
+        ShowControl(_noiseMono, kind(FilterKind::AddNoise));
         if (kind(FilterKind::AddNoise))
         {
             _noiseDistribution->SetSelectedIndex(settings.gaussian ? 1u : 0u);
             _noiseMono->SetChecked(settings.monochromatic);
         }
         showRow(AdjustRowId::Distortion, kind(FilterKind::LensCorrection), settings.distortion);
-        show(_lensHint, kind(FilterKind::LensCorrection));
-        show(_fillHint, kind(FilterKind::ContentAwareFill));
-        show(_fillNoSource, kind(FilterKind::ContentAwareFill) && state.previewFailed);
+        ShowControl(_lensHint, kind(FilterKind::LensCorrection));
+        ShowControl(_fillHint, kind(FilterKind::ContentAwareFill));
+        ShowControl(_fillNoSource, kind(FilterKind::ContentAwareFill) && state.previewFailed);
         // Footer.
-        show(_adjustPreview, true);
+        ShowControl(_adjustPreview, true);
         _adjustPreview->SetChecked(state.preview);
-        show(_adjustNote, state.limitedToSelection && !state.editsAdjustment);
-        show(_adjustCancel, true);
-        show(_adjustApply, true);
+        ShowControl(_adjustNote, state.limitedToSelection && !state.editsAdjustment);
+        ShowControl(_adjustCancel, true);
+        ShowControl(_adjustApply, true);
         _adjustApply->SetEnabled(!(kind(FilterKind::ContentAwareFill) && state.previewFailed));
         _view.Controls().SetDefaultButton(_adjustApply);
         _view.Controls().SetCancelButton(_adjustCancel);
@@ -776,6 +784,15 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         if (_curveEditor)
         {
             _curveEditor->ClearSelection();
+        }
+        // The panel closing (Cancel/OK, a tool switch, the document going away) must take its Gradient Map color
+        // picker with it, the way the size card already does for its custom-extension picker: otherwise the next
+        // palette-well pick still finds _pickerForAdjust set and is routed to OnAdjustColor, which drops it because
+        // no Gradient Map edit is pending any more.
+        if (_pickerForAdjust && _pickerCard)
+        {
+            _pickerForAdjust = false;
+            _pickerCard->SetVisible(false);
         }
     }
     _syncingAdjust = false;
