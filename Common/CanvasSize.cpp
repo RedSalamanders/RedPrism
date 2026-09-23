@@ -142,18 +142,24 @@ template <int Channels>
     return top + (bottom - top) * ty;
 }
 
+// False when the source's pixels cannot be read (a sparse raster that could not be assembled): the caller fails
+// with Memory rather than installing a transparent layer.
 template <int Channels>
-void RenderPlaced(const Raster& source, const Affine2& pixelToTarget, int width, int height, LayerSampling sampling,
-                  std::vector<std::uint8_t>& bytes)
+[[nodiscard]] bool RenderPlaced(const Raster& source, const Affine2& pixelToTarget, int width, int height,
+                                LayerSampling sampling, std::vector<std::uint8_t>& bytes)
 {
     const int imageWidth = source.Width();
     const int imageHeight = source.Height();
     const std::size_t stride = static_cast<std::size_t>(source.Stride());
     const std::uint8_t* pixels = source.Data();
-    const TargetSpan span = SpanOf(pixelToTarget, imageWidth, imageHeight, width, height);
-    if (pixels == nullptr || !span.finite)
+    if (pixels == nullptr)
     {
-        return;
+        return false;
+    }
+    const TargetSpan span = SpanOf(pixelToTarget, imageWidth, imageHeight, width, height);
+    if (!span.finite)
+    {
+        return true;
     }
     const Affine2 toPixel = pixelToTarget.Inverted();
     const int grid = SampleGrid(toPixel, sampling);
@@ -198,6 +204,7 @@ void RenderPlaced(const Raster& source, const Affine2& pixelToTarget, int width,
             }
         }
     }
+    return true;
 }
 
 [[nodiscard]] std::int64_t UsedLayerPixels(const CanvasDocument& document) noexcept
@@ -383,9 +390,10 @@ Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int 
     try
     {
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height), 0);
-        if (image.HasStorage() && image.Format() == RasterFormat::Bgra8888)
+        if (image.HasStorage() && image.Format() == RasterFormat::Bgra8888 &&
+            !RenderPlaced<4>(image, pixelToTarget, width, height, sampling, bytes))
         {
-            RenderPlaced<4>(image, pixelToTarget, width, height, sampling, bytes);
+            return {};
         }
         return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     }
@@ -405,9 +413,10 @@ Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int wi
     try
     {
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), background);
-        if (mask.HasStorage() && mask.Format() == RasterFormat::Gray8)
+        if (mask.HasStorage() && mask.Format() == RasterFormat::Gray8 &&
+            !RenderPlaced<1>(mask, pixelToTarget, width, height, sampling, bytes))
         {
-            RenderPlaced<1>(mask, pixelToTarget, width, height, sampling, bytes);
+            return {};
         }
         return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
     }

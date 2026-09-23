@@ -17,18 +17,37 @@ constexpr std::array<Vec2, 4> kSubSamples{Vec2{-0.25, -0.25}, Vec2{0.25, -0.25},
     return std::isfinite(point.x) && std::isfinite(point.y);
 }
 
-// Pixel `(x, y)` of a raster clamped to its edges.
-[[nodiscard]] const std::uint8_t* PixelAt(const Raster& image, int x, int y) noexcept
+// A raster's contiguous pixels, read once: a sparse raster assembles here, and nullopt means it could not.
+struct Pixels
 {
-    x = std::clamp(x, 0, image.Width() - 1);
-    y = std::clamp(y, 0, image.Height() - 1);
-    const int channels = image.Format() == RasterFormat::Gray8 ? 1 : 4;
-    return image.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride()) +
-           static_cast<std::size_t>(x) * static_cast<std::size_t>(channels);
+    const std::uint8_t* data = nullptr;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+    int channels = 4;
+};
+
+[[nodiscard]] std::optional<Pixels> PixelsOf(const Raster& image) noexcept
+{
+    const std::uint8_t* data = image.Data();
+    if (data == nullptr)
+    {
+        return std::nullopt;
+    }
+    return Pixels{data, image.Width(), image.Height(), image.Stride(), image.Format() == RasterFormat::Gray8 ? 1 : 4};
+}
+
+// Pixel `(x, y)` clamped to the edges.
+[[nodiscard]] const std::uint8_t* PixelAt(const Pixels& image, int x, int y) noexcept
+{
+    x = std::clamp(x, 0, image.width - 1);
+    y = std::clamp(y, 0, image.height - 1);
+    return image.data + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.stride) +
+           static_cast<std::size_t>(x) * static_cast<std::size_t>(image.channels);
 }
 
 // The source sampled at pixel coordinates (`fx`, `fy`; pixel i spans [i, i + 1)), bilinear unless `nearest`.
-void Sample(const Raster& image, double fx, double fy, bool nearest, std::uint8_t* out, int channels) noexcept
+void Sample(const Pixels& image, double fx, double fy, bool nearest, std::uint8_t* out, int channels) noexcept
 {
     if (nearest)
     {
@@ -126,6 +145,12 @@ struct WarpBounds
     {
         return std::nullopt;
     }
+    // Pixels that cannot be read (a sparse raster that could not be assembled) fail the warp, never a null read.
+    const std::optional<Pixels> source = PixelsOf(image);
+    if (!source.has_value())
+    {
+        return std::nullopt;
+    }
     const int stride = width * channels;
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(stride) * static_cast<std::size_t>(height),
                                     isMask ? outside : std::uint8_t{0});
@@ -159,7 +184,7 @@ struct WarpBounds
             const double u = transform.flipX ? 1.0 - unit.x : unit.x;
             const double v = transform.flipY ? 1.0 - unit.y : unit.y;
             std::uint8_t* out = row + static_cast<std::size_t>(x) * channels;
-            Sample(image, u * sourceWidth, v * sourceHeight, nearest, out, channels);
+            Sample(source.value(), u * sourceWidth, v * sourceHeight, nearest, out, channels);
             if (inside < 4)
             {
                 const double coverage = static_cast<double>(inside) / 4.0;
@@ -494,6 +519,11 @@ std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransfo
         return std::nullopt;
     }
     const Raster& full = warped->image;
+    const std::optional<Pixels> pixels = PixelsOf(full);
+    if (!pixels.has_value())
+    {
+        return std::nullopt;
+    }
     WarpedTrimmed result;
     result.cropWidth = full.Width();
     result.cropHeight = full.Height();
@@ -505,7 +535,7 @@ std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransfo
     {
         for (int x = 0; x < full.Width(); ++x)
         {
-            if (PixelAt(full, x, y)[3] != 0)
+            if (PixelAt(pixels.value(), x, y)[3] != 0)
             {
                 left = std::min(left, x);
                 right = std::max(right, x);
@@ -528,7 +558,7 @@ std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransfo
     for (int y = 0; y < height; ++y)
     {
         std::memcpy(bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * 4u,
-                    PixelAt(full, left, top + y), static_cast<std::size_t>(width) * 4u);
+                    PixelAt(pixels.value(), left, top + y), static_cast<std::size_t>(width) * 4u);
     }
     result.image = Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     if (!result.image.HasStorage())
@@ -546,9 +576,9 @@ std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransfo
 }
 
 std::optional<Warped> WarpMask(const Raster& mask, const LayerTransform& transform, const std::array<Vec2, 4>& corners,
-                               double background)
+                               double background, double limit)
 {
-    return WarpImpl(mask, transform, corners, true, 0.0, background >= 0.5 ? std::uint8_t{255} : std::uint8_t{0});
+    return WarpImpl(mask, transform, corners, true, limit, background >= 0.5 ? std::uint8_t{255} : std::uint8_t{0});
 }
 
 std::array<Vec2, 4> Carried(const LayerTransform& placement, const LayerTransform& transform,

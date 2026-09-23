@@ -628,8 +628,12 @@ bool BrushStroke::Render(const std::vector<BrushSegment>& settled, const std::ve
     for (const std::uint64_t key : ordered)
     {
         Tile& tile = _tiles[_index[key]];
+        if (!ComposeTile(tile))
+        {
+            _failed = true;
+            return false;
+        }
         tile.touched = true;
-        ComposeTile(tile);
         tile.changed = true;
     }
     return true;
@@ -658,25 +662,17 @@ namespace
 [[nodiscard]] bool SampleAt(const Raster& raster, double x, double y, std::array<double, 4>& out) noexcept;
 }
 
-void BrushStroke::ComposeTile(Tile& tile)
+bool BrushStroke::ComposeTile(Tile& tile)
 {
-    const int channels = _mask ? 1 : 4;
-    const std::size_t count = static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
-    std::vector<std::uint8_t> bytes;
-    try
-    {
-        bytes.resize(count * static_cast<std::size_t>(channels));
-    }
-    catch (const std::bad_alloc&)
-    {
-        return;
-    }
+    // The pointer hot path never catches: an allocation failure here is fatal (AGENTS.md, Core_Architecture.md).
     const std::uint8_t* base = tile.base.Data();
     if (base == nullptr)
     {
-        return;
+        return false;
     }
-    std::memcpy(bytes.data(), base, bytes.size());
+    const int channels = _mask ? 1 : 4;
+    const std::size_t count = static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
+    std::vector<std::uint8_t> bytes(base, base + count * static_cast<std::size_t>(channels));
     const double gray = _settings.red * 255.0;
     const double paintB = _settings.blue * 255.0;
     const double paintG = _settings.green * 255.0;
@@ -770,6 +766,7 @@ void BrushStroke::ComposeTile(Tile& tile)
     }
     tile.image = Raster::Make(tile.rect.width, tile.rect.height, _mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888,
                               bytes.data(), bytes.size());
+    return tile.image.HasStorage();
 }
 
 std::vector<std::size_t> BrushStroke::TakeChanged()
@@ -863,16 +860,29 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
     }
     Commit commit;
     commit.bounds = crop;
-    // A source stretched over the grid (a uniform mask) cannot sit under the tiles as a base: its one value is
-    // the fill instead, which is exact because a mask grid never grows past the layer.
+    // A source stretched over the grid (a mask whose pixels differ in size from its layer's) cannot sit under the
+    // tiles as it is: a uniform 1 × 1 mask becomes its one value as the fill (exact, since a mask grid never grows
+    // past the layer), any other is resampled onto the grid the way the tiles read it, so untouched pixels stay.
+    // Beyond the source the fill is FillValue(); a sparse source keeps its own fill (Raster::Replacing).
     Raster base = _source;
     std::uint8_t fill = FillValue();
     if (_source.HasStorage() && (_source.Width() != _sourceRect.width || _source.Height() != _sourceRect.height))
     {
-        base = Raster{};
-        std::uint8_t uniform = fill;
-        _source.ReadRegion(0, 0, 1, 1, &uniform, _source.Channels(), fill);
-        fill = uniform;
+        if (_source.Width() == 1 && _source.Height() == 1)
+        {
+            base = Raster{};
+            std::uint8_t uniform = fill;
+            _source.ReadRegion(0, 0, 1, 1, &uniform, _source.Channels(), fill);
+            fill = uniform;
+        }
+        else
+        {
+            base = _source.Stretched(_sourceRect.width, _sourceRect.height);
+            if (!base.HasStorage())
+            {
+                return std::nullopt;
+            }
+        }
     }
     commit.image =
         Raster::Replacing(base, _sourceRect.x, _sourceRect.y, Patches(), crop.x, crop.y, crop.width, crop.height, fill);
@@ -950,33 +960,13 @@ bool DocumentSession::CanPaint() const noexcept
 
 std::int64_t DocumentSession::RasterEditPixelLimit(const ImageLayer& layer, bool mask) const noexcept
 {
-    if (!_document.has_value())
-    {
-        return 0;
-    }
-    std::int64_t used = 0;
-    std::int64_t maskUsed = 0;
-    for (const ImageLayer& other : _document->layers)
-    {
-        if (other.id == layer.id)
-        {
-            continue;
-        }
-        if (other.asset.has_value())
-        {
-            used += static_cast<std::int64_t>(other.asset->image.PixelCount());
-        }
-        if (other.mask.has_value())
-        {
-            maskUsed += static_cast<std::int64_t>(other.mask->asset.image.PixelCount());
-        }
-    }
-    std::int64_t limit = static_cast<std::int64_t>(mask ? kMaxMaskPixels : kMaxLayerPixels) - (mask ? maskUsed : used);
+    std::int64_t limit = PixelBudgetLeft(mask, {layer.id});
+    // An image edit that grows the layer grows a mask on its grid too.
     if (!mask && layer.mask.has_value())
     {
-        limit = std::min(limit, static_cast<std::int64_t>(kMaxMaskPixels) - maskUsed);
+        limit = std::min(limit, PixelBudgetLeft(true, {layer.id}));
     }
-    return std::max<std::int64_t>(0, limit);
+    return limit;
 }
 
 bool DocumentSession::BeginBrush(Vec2 point, bool erase)
@@ -986,6 +976,8 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
 {
+    // A pending gradient applies first, so the stroke paints over it and never drops it (Decision D3).
+    ResolveGradient();
     if (!CanPaint())
     {
         return false;
@@ -1121,28 +1113,28 @@ void DocumentSession::FinishBrush()
     CommitStroke(stroke);
 }
 
-void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply)
+bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply)
 {
     if (!stroke || !_document.has_value())
     {
-        return;
+        return false;
     }
     const std::optional<BrushStroke::Commit> result = stroke->PaintSnapshot();
     if (!result.has_value())
     {
-        return;
+        return false;
     }
     ImageLayer* current = MutableLayer(stroke->LayerID());
     if (current == nullptr)
     {
-        return;
+        return false;
     }
     // The raster was built from this layer's pixels and transform; never write it over content that changed.
     if (stroke->IsMask())
     {
         if (!current->mask.has_value() || !(current->mask->asset.image == stroke->SourceImage()))
         {
-            return;
+            return false;
         }
     }
     else
@@ -1150,7 +1142,7 @@ void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, c
         const Raster currentImage = current->asset.has_value() ? current->asset->image : Raster{};
         if (!(currentImage == stroke->SourceImage()) || current->transform != stroke->SourceTransform())
         {
-            return;
+            return false;
         }
     }
     const std::wstring name = !stroke->EditName().empty()  ? stroke->EditName()
@@ -1165,13 +1157,15 @@ void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, c
     }
     else
     {
-        // A mask on the layer's own grid grows with the layer; new area is revealed. A uniform mask stays as is.
+        // A mask on the layer's own grid grows with the layer; only the new area is revealed (the old one keeps the
+        // mask's pixels and fill). A uniform mask stays as is.
         if (current->mask.has_value() && !current->mask->placement.has_value() &&
             result->bounds != stroke->SourceRect() && current->mask->asset.image.PixelCount() > 1)
         {
             const GridRect& source = stroke->SourceRect();
-            const Raster grown = Raster::Replacing(current->mask->asset.image, source.x, source.y, {}, result->bounds.x,
-                                                   result->bounds.y, result->bounds.width, result->bounds.height, 255);
+            const Raster grown =
+                CarriedMask(current->mask->asset.image, source.width, source.height, source.x - result->bounds.x,
+                            source.y - result->bounds.y, result->bounds.width, result->bounds.height, 255);
             if (grown.HasStorage())
             {
                 current->mask->asset.image = grown;
@@ -1190,6 +1184,7 @@ void DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, c
     EndEdit();
     _lastBrushCommit = BrushCommitInfo{result->image,        result->bounds.x,      result->bounds.y,
                                        result->bounds.width, result->bounds.height, stroke->IsMask()};
+    return true;
 }
 
 std::optional<Vec2> DocumentSession::ShiftLineStart() const noexcept
@@ -1261,12 +1256,19 @@ int DocumentSession::TypedOpacityPercent(int digit, double timeSeconds) noexcept
 
 void DocumentSession::AddLayerMask(bool revealing)
 {
+    // Targeting the new mask is a target switch: a pending gradient applies first.
+    ResolveGradient();
     ImageLayer* layer = ActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->mask.has_value())
     {
         return;
     }
     CommitTransform();
+    if (PixelBudgetLeft(true) < 1)
+    {
+        _budgetRefused = true;
+        return;
+    }
     const std::uint8_t value = revealing ? 255 : 0;
     const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &value, 1);
     BeginEdit(revealing ? L"Add Reveal-All Mask" : L"Add Hide-All Mask");
@@ -1764,6 +1766,7 @@ Raster DocumentSession::BlurSample(bool mask) const
 
 bool DocumentSession::BeginWarp(Vec2 point)
 {
+    ResolveGradient();
     if (!CanPaint() || _maskSelected || _warp)
     {
         return false;
@@ -1936,11 +1939,19 @@ std::optional<LayerShapeStyle> LiveShape(const ImageLayer& layer) noexcept
 
 std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noexcept
 {
-    const std::array<double, 4> foreground = StraightColor(_foregroundArgb, 1.0);
+    // A mask has its own palette (legacy paletteColor): black hides and white reveals, the foreground per
+    // `maskPaintWhite` and the background the other one.
+    const bool mask = _gradient ? _gradient->raster->IsMask() : _maskSelected;
+    constexpr std::array<double, 4> kBlack{0.0, 0.0, 0.0, 1.0};
+    constexpr std::array<double, 4> kWhite{1.0, 1.0, 1.0, 1.0};
+    const std::array<double, 4> foreground =
+        mask ? (maskPaintWhite ? kWhite : kBlack) : StraightColor(_foregroundArgb, 1.0);
+    const std::array<double, 4> background =
+        mask ? (maskPaintWhite ? kBlack : kWhite) : StraightColor(_backgroundArgb, 1.0);
     std::array<std::array<double, 4>, 2> colors{foreground, foreground};
     if (gradientSettings.style == GradientStyle::ForegroundToBackground)
     {
-        colors[1] = StraightColor(_backgroundArgb, 1.0);
+        colors[1] = background;
     }
     else
     {
@@ -1964,7 +1975,8 @@ bool DocumentSession::BeginGradient(Vec2 point)
     {
         return false;
     }
-    // Dragging a new line replaces the pending one on the same target.
+    // Dragging a new line replaces the pending one on the same target; a line on another target applies the
+    // pending one first (Decision D3), never dropping it.
     if (_gradient && _gradient->raster->LayerID() == layer->id && _gradient->raster->IsMask() == _maskSelected)
     {
         _gradient->start = point;
@@ -1972,7 +1984,9 @@ bool DocumentSession::BeginGradient(Vec2 point)
         RefreshGradient();
         return _gradient != nullptr;
     }
-    if (!CanPaint())
+    ResolveGradient();
+    layer = ActiveLayer();
+    if (layer == nullptr || !CanPaint())
     {
         return false;
     }
@@ -2216,8 +2230,15 @@ void DocumentSession::FinishShape()
 void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
                                     bool dropsSelection, std::optional<LayerShapeStyle> shape)
 {
+    ResolveGradient();
     if (!_document.has_value() || !image.HasStorage())
     {
+        return;
+    }
+    // Decision D7: the new layer's pixels fit the document's budget, or nothing is added.
+    if (static_cast<std::int64_t>(image.PixelCount()) > PixelBudgetLeft(false))
+    {
+        _budgetRefused = true;
         return;
     }
     ImageLayer layer =
@@ -2246,8 +2267,10 @@ void DocumentSession::RedrawShape(std::size_t index)
     }
     const int width = std::max(1, static_cast<int>(std::lround(layer.transform.size.x)));
     const int height = std::max(1, static_cast<int>(std::lround(layer.transform.size.y)));
+    // Past the document's budget (Decision D7) the shape keeps its pixels, stretched, instead of redrawing.
     if ((width == layer.asset->image.Width() && height == layer.asset->image.Height()) ||
-        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels)
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels ||
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > PixelBudgetLeft(false, {layer.id}))
     {
         return;
     }
@@ -2362,11 +2385,40 @@ bool BrushStroke::LiftSelection()
     return true;
 }
 
+bool BrushStroke::AllocateTilesIn(const GridRect& rect, std::vector<std::uint64_t>& keys)
+{
+    const GridRect clipped = rect.Intersect(GridRect{0, 0, _width, _height});
+    if (clipped.Empty())
+    {
+        return true;
+    }
+    const int columns = (_width + kTileSize - 1) / kTileSize;
+    for (int ty = clipped.y / kTileSize; ty <= (clipped.y + clipped.height - 1) / kTileSize; ++ty)
+    {
+        for (int tx = clipped.x / kTileSize; tx <= (clipped.x + clipped.width - 1) / kTileSize; ++tx)
+        {
+            const std::uint64_t key =
+                static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) + static_cast<std::uint64_t>(tx);
+            if (!AllocateTile(key))
+            {
+                return false;
+            }
+            keys.push_back(key);
+        }
+    }
+    return true;
+}
+
 bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
 {
     if (!_lifted.has_value() || !_selection.has_value())
     {
         return false;
+    }
+    // A pointer update that rounds to the offset already shown changes nothing.
+    if (_moved.has_value() && _moved->offset == offset && _moved->duplicate == duplicate)
+    {
+        return true;
     }
     const Affine2 inverse = _pixelToDocument.Inverted();
     const Vec2 zero = inverse.Apply(Vec2{0, 0});
@@ -2374,31 +2426,38 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
     const double targetX = _lifted->rect.x + (moved.x - zero.x);
     const double targetY = _lifted->rect.y + (moved.y - zero.y);
     const bool whole = targetX == std::round(targetX) && targetY == std::round(targetY);
-    // Every tile the pixels leave or land on is rebuilt, as is any tile a previous preview changed.
-    const GridRect landing{static_cast<int>(std::floor(targetX)), static_cast<int>(std::floor(targetY)),
-                           _lifted->rect.width + 1, _lifted->rect.height + 1};
-    const GridRect needed = _lifted->rect.Union(landing).Intersect(GridRect{0, 0, _width, _height});
-    std::vector<std::uint64_t> keys = _moveTiles;
-    if (!needed.Empty())
+    // Only the tiles the pixels land on now, the ones they landed on last time and, on the first update (or when
+    // duplicating switches), the hole's tiles are rebuilt; each rebuild starts from the original tile, so a preview
+    // never accumulates and every other tile already shows what it should.
+    std::vector<std::uint64_t> landing;
+    if (!AllocateTilesIn(GridRect{static_cast<int>(std::floor(targetX)), static_cast<int>(std::floor(targetY)),
+                                  _lifted->rect.width + 1, _lifted->rect.height + 1},
+                         landing))
     {
-        const int columns = (_width + kTileSize - 1) / kTileSize;
-        for (int ty = needed.y / kTileSize; ty <= (needed.y + needed.height - 1) / kTileSize; ++ty)
+        _failed = true;
+        return false;
+    }
+    std::vector<std::uint64_t> keys = landing;
+    const auto add = [&](const std::vector<std::uint64_t>& more)
+    {
+        for (const std::uint64_t key : more)
         {
-            for (int tx = needed.x / kTileSize; tx <= (needed.x + needed.width - 1) / kTileSize; ++tx)
+            if (std::find(keys.begin(), keys.end(), key) == keys.end())
             {
-                const std::uint64_t key = static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) +
-                                          static_cast<std::uint64_t>(tx);
-                if (!AllocateTile(key))
-                {
-                    _failed = true;
-                    return false;
-                }
-                if (std::find(keys.begin(), keys.end(), key) == keys.end())
-                {
-                    keys.push_back(key);
-                }
+                keys.push_back(key);
             }
         }
+    };
+    add(_landingTiles);
+    if (!_moved.has_value() || _moved->duplicate != duplicate)
+    {
+        std::vector<std::uint64_t> hole;
+        if (!AllocateTilesIn(_lifted->rect, hole))
+        {
+            _failed = true;
+            return false;
+        }
+        add(hole);
     }
     const Raster& lifted = _lifted->image;
     for (const std::uint64_t key : keys)
@@ -2412,20 +2471,12 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         const std::uint8_t* base = tile.base.Data();
         if (base == nullptr)
         {
-            continue;
-        }
-        const std::size_t count =
-            static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
-        std::vector<std::uint8_t> bytes;
-        try
-        {
-            bytes.assign(base, base + count * 4u);
-        }
-        catch (const std::bad_alloc&)
-        {
             _failed = true;
             return false;
         }
+        const std::size_t count =
+            static_cast<std::size_t>(tile.rect.width) * static_cast<std::size_t>(tile.rect.height);
+        std::vector<std::uint8_t> bytes(base, base + count * 4u);
         for (std::size_t index = 0; index < count; ++index)
         {
             const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
@@ -2486,7 +2537,8 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         tile.touched = true;
         tile.changed = true;
     }
-    _moveTiles = std::move(keys);
+    _landingTiles = std::move(landing);
+    _moved = MoveState{offset, duplicate};
     return true;
 }
 
@@ -2630,16 +2682,18 @@ std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& l
     return edit;
 }
 
-void DocumentSession::FillSelection(FillSource source)
+bool DocumentSession::FillSelection(FillSource source)
 {
+    // Pixel edits apply a pending gradient first (Decision D3; legacy refuses them while one is pending).
+    ResolveGradient();
     if (!CanPaint())
     {
-        return;
+        return false;
     }
     const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr)
     {
-        return;
+        return false;
     }
     const bool mask = _maskSelected;
     // A mask has its own palette: black hides and white reveals, the foreground per `maskPaintWhite`.
@@ -2653,27 +2707,27 @@ void DocumentSession::FillSelection(FillSource source)
     const std::shared_ptr<BrushStroke> edit = MakeRasterEdit(*layer, mask);
     if (!edit)
     {
-        return;
+        return false;
     }
     edit->SetEditName(mask ? L"Fill Mask" : L"Fill");
     if (!edit->Fill(color) || !edit->HasPaint())
     {
-        return;
+        return false;
     }
-    CommitStroke(edit);
+    return CommitStroke(edit);
 }
 
 bool DocumentSession::ClearSelectedPixels()
 {
+    ResolveGradient();
     if (!_document.has_value() || !_document->selection.has_value() || !CanPaint())
     {
         return false;
     }
     if (_maskSelected)
     {
-        const int before = history.UndoCount();
-        FillSelection(FillSource::Background);
-        return history.UndoCount() == before + 1;
+        // Whether the fill was recorded, never a count of entries (a full history trims one as it adds one).
+        return FillSelection(FillSource::Background);
     }
     const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr || !layer->asset.has_value())
@@ -2690,12 +2744,12 @@ bool DocumentSession::ClearSelectedPixels()
     {
         return false;
     }
-    CommitStroke(edit);
-    return true;
+    return CommitStroke(edit);
 }
 
 void DocumentSession::DeleteLayerMask()
 {
+    ResolveGradient();
     if (!_activeLayerID.has_value())
     {
         return;
@@ -2790,6 +2844,7 @@ void DocumentSession::InvertPixels()
 
 bool DocumentSession::BeginPixelMove(bool duplicate)
 {
+    ResolveGradient();
     if (_pixelMove || !_document.has_value() || !_document->selection.has_value() || _document->selection->IsEmpty() ||
         !CanPaint() || _maskSelected)
     {
@@ -2899,6 +2954,7 @@ void DocumentSession::NudgePixels(double dx, double dy)
 
 void DocumentSession::AddMask(bool revealing)
 {
+    ResolveGradient();
     if (!_document.has_value() || !_document->selection.has_value())
     {
         AddLayerMask(revealing);
@@ -2920,6 +2976,12 @@ void DocumentSession::AddMask(bool revealing)
                                                 : static_cast<int>(std::lround(layer->transform.size.y));
     if (width < 1 || height < 1 || static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > 100'000'000)
     {
+        return;
+    }
+    // Decision D7: the new mask fits the document's mask budget, or nothing is added.
+    if (static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > PixelBudgetLeft(true))
+    {
+        _budgetRefused = true;
         return;
     }
     const DocumentSelection& selection = _document->selection.value();
@@ -2988,6 +3050,8 @@ void DocumentSession::TransformCommand()
 
 void DocumentSession::BeginSelectionTransform()
 {
+    // Before the snapshot Escape restores, so a pending gradient is never part of what a cancel undoes.
+    ResolveGradient();
     if (!CanTransformSelection())
     {
         return;
@@ -3013,7 +3077,7 @@ void DocumentSession::BeginSelectionTransform()
     if (!ClearSelectedPixels())
     {
         _document = *before;
-        _activeLayerID = beforeActive;
+        SetActiveLayerID(beforeActive);
         EndEdit();
         return;
     }
@@ -3021,7 +3085,7 @@ void DocumentSession::BeginSelectionTransform()
     if (!index.has_value())
     {
         _document = *before;
-        _activeLayerID = beforeActive;
+        SetActiveLayerID(beforeActive);
         EndEdit();
         return;
     }
@@ -3033,8 +3097,7 @@ void DocumentSession::BeginSelectionTransform()
     floating.opacity = source.opacity;
     floating.blendMode = source.blendMode;
     _document->layers.insert(_document->layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, floating);
-    _activeLayerID = floating.id;
-    _selected = {floating.id};
+    SetActiveLayerID(floating.id);
     _maskSelected = false;
     TransformEdit edit;
     edit.layerID = floating.id;
@@ -3105,6 +3168,18 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         {
             break;
         }
+        // Decision D7: the merged layer (and a mask on its grid growing with it) fits the document's budget, the
+        // floating layer and the source's old pixels no longer counted; otherwise the document is restored.
+        const std::int64_t mergedPixels =
+            static_cast<std::int64_t>(extent.width) * static_cast<std::int64_t>(extent.height);
+        const bool maskGrows = source.mask.has_value() && !source.mask->placement.has_value() && extent != original &&
+                               source.mask->asset.image.PixelCount() > 1;
+        if (mergedPixels > PixelBudgetLeft(false, {floating.sourceID, edit.layerID}) ||
+            (maskGrows && mergedPixels > PixelBudgetLeft(true, {floating.sourceID, edit.layerID})))
+        {
+            _budgetRefused = true;
+            break;
+        }
         std::vector<std::uint8_t> bytes;
         try
         {
@@ -3159,9 +3234,9 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         if (mask.has_value() && !mask->placement.has_value() && extent != original &&
             mask->asset.image.PixelCount() > 1)
         {
-            // A mask on the layer's grid grows with it, revealing the new area; a uniform mask stays as is.
-            const Raster grown =
-                Raster::Replacing(mask->asset.image, 0, 0, {}, extent.x, extent.y, extent.width, extent.height, 255);
+            // A mask on the layer's grid grows with it, revealing only the new area; a uniform mask stays as is.
+            const Raster grown = CarriedMask(mask->asset.image, sourceWidth, sourceHeight, -extent.x, -extent.y,
+                                             extent.width, extent.height, 255);
             if (grown.HasStorage())
             {
                 mask->asset.image = grown;
@@ -3195,15 +3270,14 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         installed.transform = mergedTransform;
         installed.mask = mask;
         _document->selection = moved;
-        _activeLayerID = floating.sourceID;
-        _selected = {floating.sourceID};
+        SetActiveLayerID(floating.sourceID);
         _maskSelected = false;
         merged = true;
     } while (false);
     if (!merged && floating.before)
     {
         _document = *floating.before;
-        _activeLayerID = floating.beforeActive;
+        SetActiveLayerID(floating.beforeActive);
     }
     ++_editRevision;
     EndEdit();
@@ -3215,11 +3289,7 @@ void DocumentSession::CancelFloating(const FloatingTransform& floating)
     {
         _document = *floating.before;
     }
-    _activeLayerID = floating.beforeActive;
-    if (floating.beforeActive.has_value())
-    {
-        _selected = {floating.beforeActive.value()};
-    }
+    SetActiveLayerID(floating.beforeActive);
     ++_editRevision;
     EndEdit();
 }
@@ -3396,6 +3466,8 @@ std::optional<PixelClipboard> DocumentSession::RenderMergedPixels(const Raster& 
 
 bool DocumentSession::CopySelection()
 {
+    // The copy takes the pixels the canvas shows, a pending gradient applied.
+    ResolveGradient();
     if (!CanCopyPixels())
     {
         return false;
@@ -3426,6 +3498,7 @@ bool DocumentSession::CopyMergedSelection(const Raster& composite)
 
 void DocumentSession::CutSelection()
 {
+    ResolveGradient();
     if (!_document.has_value() || !_document->selection.has_value() || !CanCopyPixels() || !CanPaint())
     {
         return;
@@ -3464,6 +3537,7 @@ void DocumentSession::PasteImage(const Raster& image)
 
 void DocumentSession::LayerViaCopy()
 {
+    ResolveGradient();
     const ImageLayer* layer = ActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->isGroup ||
         (_document->selection.has_value() && _document->selection->IsEmpty()))

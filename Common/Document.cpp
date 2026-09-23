@@ -528,6 +528,56 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
     return raster;
 }
 
+namespace
+{
+// The part of `area` outside `inside`, as windows of one shared block of `value` no larger than a brush tile, so
+// padding a grown grid costs one small allocation however much area it adds.
+[[nodiscard]] std::vector<RasterTile> UniformTiles(const IntRect& area, const IntRect& inside, RasterFormat format,
+                                                   std::uint8_t value)
+{
+    constexpr int kBlock = 256;
+    std::vector<IntRect> pieces;
+    const IntRect overlap = area.Intersect(inside);
+    if (overlap.Empty())
+    {
+        pieces.push_back(area);
+    }
+    else
+    {
+        Subtract(area, overlap, pieces);
+    }
+    std::vector<RasterTile> tiles;
+    int blockWidth = 0;
+    int blockHeight = 0;
+    for (const IntRect& piece : pieces)
+    {
+        blockWidth = std::max(blockWidth, std::min(kBlock, piece.width));
+        blockHeight = std::max(blockHeight, std::min(kBlock, piece.height));
+    }
+    if (blockWidth < 1 || blockHeight < 1)
+    {
+        return tiles;
+    }
+    const int channels = format == RasterFormat::Gray8 ? 1 : 4;
+    const std::vector<std::uint8_t> bytes(static_cast<std::size_t>(blockWidth) * static_cast<std::size_t>(blockHeight) *
+                                              static_cast<std::size_t>(channels),
+                                          value);
+    const Raster block = Raster::Make(blockWidth, blockHeight, format, bytes.data(), bytes.size());
+    for (const IntRect& piece : pieces)
+    {
+        for (int y = piece.y; y < piece.y + piece.height; y += blockHeight)
+        {
+            for (int x = piece.x; x < piece.x + piece.width; x += blockWidth)
+            {
+                tiles.push_back(RasterTile{x, y, block, 0, 0, std::min(blockWidth, piece.x + piece.width - x),
+                                           std::min(blockHeight, piece.y + piece.height - y)});
+            }
+        }
+    }
+    return tiles;
+}
+} // namespace
+
 Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles, int cropX,
                          int cropY, int cropWidth, int cropHeight, std::uint8_t fill)
 {
@@ -541,17 +591,26 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
     Raster base;
     int baseX = sourceX;
     int baseY = sourceY;
+    std::uint8_t gridFill = fill;
     std::vector<RasterTile> older;
     if (source.IsSparse())
     {
         base = source.Base();
         baseX = sourceX + source.BaseX();
         baseY = sourceY + source.BaseY();
-        older = source.Tiles();
-        for (RasterTile& tile : older)
+        // What neither the base nor a tile reaches keeps the source's own fill (a hide-all mask painted once stays
+        // hidden elsewhere); only area the crop adds beyond the source reads `fill`, as the oldest tiles.
+        gridFill = source.Fill();
+        if (gridFill != fill)
+        {
+            older = UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
+                                 IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill);
+        }
+        for (RasterTile tile : source.Tiles())
         {
             tile.x += sourceX;
             tile.y += sourceY;
+            older.push_back(std::move(tile));
         }
     }
     else if (source.HasStorage())
@@ -601,7 +660,64 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         tile.x -= cropX;
         tile.y -= cropY;
     }
-    return MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), fill);
+    return MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), gridFill);
+}
+
+Raster Raster::Stretched(int width, int height) const
+{
+    if (!_storage || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
+    {
+        return {};
+    }
+    if (width == Width() && height == Height())
+    {
+        return *this;
+    }
+    const int channels = Channels();
+    const int sourceWidth = Width();
+    const int sourceHeight = Height();
+    std::vector<int> columns(static_cast<std::size_t>(width));
+    for (int x = 0; x < width; ++x)
+    {
+        columns[static_cast<std::size_t>(x)] =
+            static_cast<int>(static_cast<std::int64_t>(x) * sourceWidth / static_cast<std::int64_t>(width));
+    }
+    std::vector<std::uint8_t> row(static_cast<std::size_t>(sourceWidth) * static_cast<std::size_t>(channels));
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) *
+                                    static_cast<std::size_t>(channels));
+    int loaded = -1;
+    for (int y = 0; y < height; ++y)
+    {
+        const int sourceY =
+            static_cast<int>(static_cast<std::int64_t>(y) * sourceHeight / static_cast<std::int64_t>(height));
+        if (sourceY != loaded)
+        {
+            // One source row per run of target rows; a sparse raster reads its tiles without assembling.
+            ReadRegion(0, sourceY, sourceWidth, 1, row.data(), sourceWidth * channels, Fill());
+            loaded = sourceY;
+        }
+        std::uint8_t* out = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) *
+                                               static_cast<std::size_t>(channels);
+        for (int x = 0; x < width; ++x)
+        {
+            std::memcpy(out + static_cast<std::size_t>(x) * static_cast<std::size_t>(channels),
+                        row.data() + static_cast<std::size_t>(columns[static_cast<std::size_t>(x)]) *
+                                         static_cast<std::size_t>(channels),
+                        static_cast<std::size_t>(channels));
+        }
+    }
+    return Make(width, height, Format(), bytes.data(), bytes.size());
+}
+
+Raster CarriedMask(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width, int height,
+                   std::uint8_t outside)
+{
+    const Raster onGrid = mask.Stretched(oldWidth, oldHeight);
+    if (!onGrid.HasStorage())
+    {
+        return {};
+    }
+    return Raster::Replacing(onGrid, x, y, {}, 0, 0, width, height, outside);
 }
 
 bool LayerTransform::IsValid() const noexcept
@@ -1120,18 +1236,77 @@ void DocumentSession::BeginEdit(std::wstring name)
 void DocumentSession::EndEdit()
 {
     history.End(_document, _activeLayerID);
+    // Every document edit ends here, so the display copy kept while a transform or panel preview is pending never
+    // outlives a change it did not see (opacity, blend mode, a moved, deleted or merged layer, a flip, a resize).
+    ++_editRevision;
+}
+
+namespace
+{
+template <typename Excluded>
+[[nodiscard]] std::int64_t BudgetLeft(const std::optional<CanvasDocument>& document, bool mask,
+                                      const Excluded& excluded) noexcept
+{
+    if (!document.has_value())
+    {
+        return 0;
+    }
+    std::int64_t used = 0;
+    for (const ImageLayer& layer : document->layers)
+    {
+        if (excluded(layer.id))
+        {
+            continue;
+        }
+        if (mask && layer.mask.has_value())
+        {
+            used += static_cast<std::int64_t>(layer.mask->asset.image.PixelCount());
+        }
+        if (!mask && layer.asset.has_value())
+        {
+            used += static_cast<std::int64_t>(layer.asset->image.PixelCount());
+        }
+    }
+    return std::max<std::int64_t>(0, static_cast<std::int64_t>(mask ? kMaxMaskPixels : kMaxLayerPixels) - used);
+}
+} // namespace
+
+std::int64_t DocumentSession::PixelBudgetLeft(bool mask, std::initializer_list<Guid> excluding) const noexcept
+{
+    return BudgetLeft(_document, mask, [&](const Guid& id)
+                      { return std::find(excluding.begin(), excluding.end(), id) != excluding.end(); });
+}
+
+std::int64_t DocumentSession::PixelBudgetLeft(bool mask, const std::unordered_set<Guid>& excluding) const noexcept
+{
+    return BudgetLeft(_document, mask, [&](const Guid& id) { return excluding.contains(id); });
+}
+
+void DocumentSession::SetActiveLayerID(const std::optional<Guid>& id)
+{
+    if (id != _activeLayerID)
+    {
+        _maskSelected = false;
+    }
+    _activeLayerID = id;
+    _selected.clear();
+    if (id.has_value())
+    {
+        _selected.insert(id.value());
+    }
+    if (_maskSelected)
+    {
+        const ImageLayer* active = ActiveLayer();
+        _maskSelected = active != nullptr && active->mask.has_value();
+    }
 }
 
 void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 {
+    CancelCrop();
     const bool keepMaskTarget = _maskSelected && _activeLayerID == snapshot.activeLayerID;
     _document = snapshot.document;
-    _activeLayerID = snapshot.activeLayerID;
-    _selected.clear();
-    if (_activeLayerID.has_value())
-    {
-        _selected.insert(_activeLayerID.value());
-    }
+    SetActiveLayerID(snapshot.activeLayerID);
     const ImageLayer* active = ActiveLayer();
     _maskSelected = keepMaskTarget && active != nullptr && active->mask.has_value();
     ++_editRevision;
@@ -1177,11 +1352,8 @@ bool DocumentSession::CancelPendingEdit()
         CancelShape();
         return true;
     }
-    if (_cropRect.has_value())
-    {
-        CancelCrop();
-        return true;
-    }
+    // A crop frame is not an edit in progress (the Crop tool always shows one): Undo and Redo drop it and still move
+    // history, as legacy restore() cancels the crop.
     return false;
 }
 
@@ -1217,16 +1389,13 @@ void DocumentSession::SelectLayer(const std::optional<Guid>& id)
     {
         ResolveGradient();
         CommitTransform();
-        _maskSelected = false;
     }
     if (!id.has_value() || FindLayer(id.value()) == nullptr)
     {
-        _activeLayerID.reset();
-        _selected.clear();
+        SetActiveLayerID(std::nullopt);
         return;
     }
-    _activeLayerID = id;
-    _selected = {id.value()};
+    SetActiveLayerID(id);
 }
 
 void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
@@ -1235,23 +1404,22 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
     {
         return;
     }
+    ResolveGradient();
     _lassoDraft.reset();
     BeginEdit(L"New Canvas");
     CanvasDocument document;
     document.id = Guid::Generate();
     document.width = width;
     document.height = height;
+    std::optional<Guid> active;
     if (emptyLayer)
     {
         ImageLayer layer = ImageLayer::Blank(L"Layer 1", Vec2{static_cast<double>(width), static_cast<double>(height)});
-        _activeLayerID = layer.id;
+        active = layer.id;
         document.layers.push_back(std::move(layer));
     }
-    else
-    {
-        _activeLayerID.reset();
-    }
     _document = std::move(document);
+    SetActiveLayerID(active);
     _collapsed.clear();
     EndEdit();
 }
@@ -1331,13 +1499,13 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
     {
         _document.value().selection.reset();
     }
-    _activeLayerID = layer.id;
-    _selected = {layer.id};
+    SetActiveLayerID(layer.id);
     EndEdit();
 }
 
 void DocumentSession::AddGroup()
 {
+    ResolveGradient();
     if (!_document.has_value() || static_cast<int>(_document.value().layers.size()) >= kMaxLayerCount)
     {
         return;
@@ -1377,7 +1545,7 @@ void DocumentSession::AddGroup()
     }
     BeginEdit(L"New Folder");
     _document.value().layers = std::move(layers);
-    _activeLayerID = group.id;
+    SetActiveLayerID(group.id);
     if (group.parentID.has_value())
     {
         _collapsed.erase(group.parentID.value());
@@ -1439,6 +1607,7 @@ bool DocumentSession::CanPlaceLayer(const Guid& id, const std::optional<Guid>& p
 bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& parent, const std::optional<Guid>& above,
                                  bool atBottom, bool before)
 {
+    ResolveGradient();
     const std::optional<Guid> destination = parent;
     const std::optional<Guid> aboveId = above;
     if (!CanPlaceLayer(id, destination) || !_document.has_value() || (aboveId.has_value() && aboveId.value() == id))
@@ -1473,7 +1642,7 @@ bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& pare
     }
     BeginEdit(L"Move Layer");
     _document.value().layers = std::move(layers);
-    _activeLayerID = id;
+    SetActiveLayerID(id);
     if (destination.has_value())
     {
         _collapsed.erase(destination.value());
@@ -1576,6 +1745,7 @@ void DocumentSession::MoveActiveLayer(int offset)
 
 void DocumentSession::GroupSelectedLayers()
 {
+    ResolveGradient();
     if (!_document.has_value() || static_cast<int>(_document.value().layers.size()) >= kMaxLayerCount)
     {
         return;
@@ -1717,8 +1887,7 @@ void DocumentSession::GroupSelectedLayers()
     }
     BeginEdit(L"Group Layers");
     _document.value().layers = std::move(next);
-    _activeLayerID = group.id;
-    _selected = {group.id};
+    SetActiveLayerID(group.id);
     if (parent.has_value())
     {
         _collapsed.erase(parent.value());
@@ -1764,8 +1933,28 @@ void DocumentSession::ToggleClippingMask(const Guid& id)
     }
     if (layer->maskSourceID.has_value())
     {
+        // Releasing a clipped layer releases the run of clipped layers stacked on it that share its base; the ones
+        // below it stay clipped (legacy LiveLayerMask.removeLiveMask).
+        const Guid source = layer->maskSourceID.value();
+        const std::vector<Guid> siblings = SiblingIds(_document.value().layers, layer->parentID);
+        std::vector<Guid> releases;
+        for (auto sibling = std::find(siblings.begin(), siblings.end(), id); sibling != siblings.end(); ++sibling)
+        {
+            const ImageLayer* above = FindLayer(*sibling);
+            if (above == nullptr || (!(*sibling == id) && above->maskSourceID != source))
+            {
+                break;
+            }
+            releases.push_back(*sibling);
+        }
         BeginEdit(L"Release Clipping Mask");
-        layer->maskSourceID.reset();
+        for (const Guid& release : releases)
+        {
+            if (ImageLayer* released = MutableLayer(release))
+            {
+                released->maskSourceID.reset();
+            }
+        }
         EndEdit();
         return;
     }
@@ -1783,8 +1972,7 @@ void DocumentSession::ToggleClippingMask(const Guid& id)
 void DocumentSession::ClearDocument()
 {
     _document.reset();
-    _activeLayerID.reset();
-    _selected.clear();
+    SetActiveLayerID(std::nullopt);
     _collapsed.clear();
     _transformEdit.reset();
     _transformDuplicate.reset();
@@ -1798,6 +1986,7 @@ void DocumentSession::ClearDocument()
     _brush.reset();
     _lastBrushPoint.reset();
     _pendingOpacityDigit.reset();
+    _budgetRefused = false;
     _lastBrushCommit.reset();
     _cloneOffset.reset();
     _warp.reset();
@@ -1811,6 +2000,14 @@ void DocumentSession::ClearDocument()
     _adjustmentEditingID.reset();
     _adjustmentOriginal.reset();
     history.Reset();
+}
+
+void DocumentSession::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active)
+{
+    ClearDocument();
+    _document = std::move(document);
+    SetActiveLayerID(active.has_value() && FindLayer(active.value()) != nullptr ? active : std::nullopt);
+    history.MarkSaved();
 }
 
 void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring name)
@@ -1921,6 +2118,7 @@ std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
 
 bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
 {
+    ResolveGradient();
     if (!_document.has_value() || !composite.HasStorage() || composite.Width() != _document.value().width ||
         composite.Height() != _document.value().height || plan.ids.empty())
     {
@@ -1939,6 +2137,13 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
     const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas);
     if (!trimmed.image.HasStorage())
     {
+        return false;
+    }
+    // Decision D7: the merged pixels fit the document's budget once the merged layers are gone (layers far apart
+    // merge into their whole bounding box).
+    if (static_cast<std::int64_t>(trimmed.image.PixelCount()) > PixelBudgetLeft(false, plan.removed))
+    {
+        _budgetRefused = true;
         return false;
     }
     ImageLayer merged = ImageLayer::Blank(plan.name, trimmed.transform.size);
@@ -1981,9 +2186,7 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
     }
     BeginEdit(plan.action);
     _document.value().layers = std::move(next);
-    _activeLayerID = merged.id;
-    _selected = {merged.id};
-    _maskSelected = false;
+    SetActiveLayerID(merged.id);
     EndEdit();
     return true;
 }
@@ -2051,11 +2254,14 @@ void DocumentSession::ChangeCropRatio() noexcept
 
 bool DocumentSession::CommitCrop()
 {
+    ResolveGradient();
     if (!_document.has_value() || !_cropRect.has_value() || !CropGeometry::Valid(_cropRect.value()))
     {
         return false;
     }
-    const CropRect rect = _cropRect.value();
+    // Whole pixels, so the content moves without resampling (Decision D6: a frame between pixels never truncates its
+    // size or offsets the layers by a fraction).
+    const CropRect rect = CropGeometry::Snapped(_cropRect.value());
     CanvasSizeOptions options;
     options.width = static_cast<int>(rect.width);
     options.height = static_cast<int>(rect.height);
@@ -2073,6 +2279,7 @@ bool DocumentSession::CommitCrop()
 
 void DocumentSession::DeleteLayer(const Guid& id)
 {
+    ResolveGradient();
     if (!_document.has_value())
     {
         return;
@@ -2098,14 +2305,8 @@ void DocumentSession::DeleteLayer(const Guid& id)
     }
     if (_activeLayerID.has_value() && removed.contains(_activeLayerID.value()))
     {
-        if (layers.empty())
-        {
-            _activeLayerID.reset();
-        }
-        else
-        {
-            _activeLayerID = layers[std::min(index.value(), layers.size() - 1)].id;
-        }
+        SetActiveLayerID(layers.empty() ? std::nullopt
+                                        : std::optional<Guid>(layers[std::min(index.value(), layers.size() - 1)].id));
     }
     EndEdit();
 }
@@ -2335,6 +2536,26 @@ struct CornerBounds
     double maxY = 0;
 };
 
+// A linked mask placed apart from its layer under a distortion that takes the layer from `from` to `transform` and
+// that transform's corners to `corners`: carried along with the layer, then warped by the same perspective over its
+// own bounds (legacy Distort.distort). Nullopt when the carried shape is unusable (the placement then stays).
+[[nodiscard]] std::optional<DistortWarp::Warped> DistortedPlacedMask(const LayerMask& mask, const LayerTransform& from,
+                                                                     const LayerTransform& transform,
+                                                                     const std::array<Vec2, 4>& corners, double limit)
+{
+    if (!mask.linked || !mask.placement.has_value())
+    {
+        return std::nullopt;
+    }
+    const LayerTransform placement = mask.placement->Following(from, transform);
+    const std::array<Vec2, 4> carried = DistortWarp::Carried(placement, transform, corners);
+    if (!DistortWarp::IsUsable(carried))
+    {
+        return std::nullopt;
+    }
+    return DistortWarp::WarpMask(mask.asset.image, placement, carried, MaskEdgeBackground(mask.asset.thumbnail), limit);
+}
+
 [[nodiscard]] CornerBounds BoundsOfCorners(const std::array<Vec2, 4>& corners) noexcept
 {
     CornerBounds bounds{corners[0].x, corners[0].y, corners[0].x, corners[0].y};
@@ -2528,7 +2749,9 @@ std::optional<LayerTransform> MaskPlacementMoving(const LayerMask& mask, const L
 
 bool DocumentSession::CanTransform() const noexcept
 {
-    if (!_document.has_value())
+    // An open color or filter panel owns the layer until OK or Cancel (its edit is anchored to the layer's
+    // placement), so moves, transforms, nudges and flips wait.
+    if (!_document.has_value() || HasColorEdit())
     {
         return false;
     }
@@ -2622,6 +2845,10 @@ std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
 
 void DocumentSession::BeginTransform(bool persistent)
 {
+    if (!_transformEdit.has_value())
+    {
+        ResolveGradient();
+    }
     if (_transformEdit.has_value() || !CanTransform())
     {
         return;
@@ -2700,6 +2927,7 @@ void DocumentSession::BeginDuplicateTransform()
     }
     const Guid source = _activeLayerID.value();
     CommitTransform();
+    ResolveGradient();
     if (!CanTransform())
     {
         return;
@@ -2811,14 +3039,31 @@ void DocumentSession::CommitTransform()
         {
             ids.push_back(edit.layerID);
         }
+        // Decision D7: the distorted layers' new pixels (and masks) fit the document's budget, their old pixels no
+        // longer counted; a layer that would not fit keeps its own and the refusal is reported.
+        const std::unordered_set<Guid> distorted(ids.begin(), ids.end());
+        std::int64_t imageLeft = PixelBudgetLeft(false, distorted);
+        std::int64_t maskLeft = PixelBudgetLeft(true, distorted);
         for (const Guid& id : ids)
         {
             const std::optional<std::size_t> index = IndexOf(layers, id);
-            if (!index.has_value() || !layers[index.value()].asset.has_value())
+            if (!index.has_value())
             {
                 continue;
             }
             ImageLayer& layer = layers[index.value()];
+            // A layer the distortion leaves as it is still holds its pixels against the budget.
+            const auto keep = [&]
+            {
+                imageLeft -= layer.asset.has_value() ? static_cast<std::int64_t>(layer.asset->image.PixelCount()) : 0;
+                maskLeft -=
+                    layer.mask.has_value() ? static_cast<std::int64_t>(layer.mask->asset.image.PixelCount()) : 0;
+            };
+            if (!layer.asset.has_value())
+            {
+                keep();
+                continue;
+            }
             LayerTransform transform = edit.draft;
             std::array<Vec2, 4> corners = edit.corners.value();
             if (edit.group.has_value())
@@ -2827,12 +3072,14 @@ void DocumentSession::CommitTransform()
                                                    [&](const auto& entry) { return entry.first == id; });
                 if (original == edit.group->originals.end())
                 {
+                    keep();
                     continue;
                 }
                 transform = original->second.Following(edit.group->box, edit.draft);
                 corners = DistortWarp::Carried(transform, edit.draft, edit.corners.value());
                 if (!DistortWarp::IsUsable(corners))
                 {
+                    keep();
                     continue;
                 }
             }
@@ -2840,14 +3087,17 @@ void DocumentSession::CommitTransform()
                 DistortWarp::WarpTrimmed(layer.asset->image, transform, corners);
             if (!warped.has_value())
             {
+                keep();
                 continue;
             }
-            if (layer.mask.has_value() && !layer.mask->placement.has_value() && layer.mask->linked)
+            // The mask as the distortion leaves it (legacy Distort.distort), built apart so the budget can refuse.
+            std::optional<LayerMask> mask = layer.mask;
+            if (mask.has_value() && !mask->placement.has_value() && mask->linked)
             {
                 // A uniform mask passes through; any other is warped and cropped with the pixels.
                 const std::optional<DistortWarp::Warped> warpedMask =
-                    DistortWarp::Warp(layer.mask->asset.image, transform, corners, true);
-                if (warpedMask.has_value() && !(warpedMask->image == layer.mask->asset.image))
+                    DistortWarp::Warp(mask->asset.image, transform, corners, true);
+                if (warpedMask.has_value() && !(warpedMask->image == mask->asset.image))
                 {
                     const Raster& full = warpedMask->image;
                     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(warped->cropWidth) *
@@ -2869,11 +3119,44 @@ void DocumentSession::CommitTransform()
                                                   bytes.data(), bytes.size());
                     if (cropped.HasStorage())
                     {
-                        layer.mask->asset.image = cropped;
-                        layer.mask->asset.thumbnail = Raster::MakeThumbnail(cropped);
+                        mask->asset.image = cropped;
+                        mask->asset.thumbnail = Raster::MakeThumbnail(cropped);
                     }
                 }
             }
+            else if (mask.has_value() && mask->linked)
+            {
+                // A linked mask placed apart takes the same perspective over its own bounds.
+                if (const std::optional<DistortWarp::Warped> moved =
+                        DistortedPlacedMask(mask.value(), layer.transform, transform, corners, 0.0);
+                    moved.has_value())
+                {
+                    if (!(moved->image == mask->asset.image))
+                    {
+                        mask->asset.image = moved->image;
+                        mask->asset.thumbnail = Raster::MakeThumbnail(moved->image);
+                    }
+                    mask->placement = moved->transform;
+                }
+            }
+            else if (mask.has_value() && !mask->placement.has_value())
+            {
+                // An unlinked mask keeps its place on the document while its layer is resampled into the shape.
+                mask->placement = layer.transform;
+            }
+            // Decision D7: the new pixels and mask fit the document's budget, or the layer keeps its own.
+            const std::int64_t newPixels = static_cast<std::int64_t>(warped->image.PixelCount());
+            const std::int64_t newMaskPixels =
+                mask.has_value() ? static_cast<std::int64_t>(mask->asset.image.PixelCount()) : 0;
+            if (newPixels > imageLeft || newMaskPixels > maskLeft)
+            {
+                _budgetRefused = true;
+                keep();
+                continue;
+            }
+            imageLeft -= newPixels;
+            maskLeft -= newMaskPixels;
+            layer.mask = std::move(mask);
             layer.asset->image = warped->image;
             layer.asset->thumbnail = Raster::MakeThumbnail(warped->image);
             layer.transform = warped->transform;
@@ -2946,8 +3229,7 @@ void DocumentSession::CancelTransform()
         layers.erase(
             std::remove_if(layers.begin(), layers.end(), [&](const ImageLayer& layer) { return layer.id == copy; }),
             layers.end());
-        _activeLayerID = source;
-        _selected = {source};
+        SetActiveLayerID(source);
         _transformDuplicate.reset();
         EndEdit();
     }
@@ -3163,6 +3445,7 @@ LayerTransform DocumentSession::SnappedMove(const LayerTransform& draft, const s
 void DocumentSession::FlipLayers(bool horizontally)
 {
     CommitTransform();
+    ResolveGradient();
     if (!CanTransform() || !_document.has_value())
     {
         return;
@@ -3213,11 +3496,16 @@ void DocumentSession::FlipLayers(bool horizontally)
 
 void DocumentSession::FlipCanvas(bool horizontally)
 {
-    CommitTransform();
-    if (!_document.has_value())
+    // An open color or filter panel owns the document until OK or Cancel.
+    if (!_document.has_value() || HasColorEdit())
     {
         return;
     }
+    // Legacy flipCanvas: the pending transform commits and the crop frame goes; a pending gradient applies first
+    // (Decision D3).
+    CommitTransform();
+    CancelCrop();
+    ResolveGradient();
     CanvasDocument& document = _document.value();
     const double axis = horizontally ? document.width / 2.0 : document.height / 2.0;
     BeginEdit(horizontally ? L"Flip Canvas Horizontal" : L"Flip Canvas Vertical");
@@ -3252,6 +3540,7 @@ void DocumentSession::FlipCanvas(bool horizontally)
 
 void DocumentSession::DuplicateActiveLayer()
 {
+    ResolveGradient();
     if (!_document.has_value())
     {
         return;
@@ -3267,14 +3556,20 @@ void DocumentSession::DuplicateActiveLayer()
     {
         return;
     }
+    // Decision D7: the copy's pixels count again (it is saved on its own), so it must fit the document's budget.
+    const std::int64_t pixels = active->asset.has_value() ? active->asset->image.PixelCount() : 0;
+    const std::int64_t maskPixels = active->mask.has_value() ? active->mask->asset.image.PixelCount() : 0;
+    if (pixels > PixelBudgetLeft(false) || maskPixels > PixelBudgetLeft(true))
+    {
+        _budgetRefused = true;
+        return;
+    }
     ImageLayer copy = *active;
     copy.id = Guid::Generate();
     copy.name = active->name + L" copy";
     BeginEdit(L"Duplicate Layer");
     layers.insert(layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, copy);
-    _activeLayerID = copy.id;
-    _selected = {copy.id};
-    _maskSelected = false;
+    SetActiveLayerID(copy.id);
     EndEdit();
 }
 
@@ -3363,13 +3658,14 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
                         DistortWarp::Warp(layer.asset->image, pending.value(), corners, false, 1024.0);
                     if (preview.has_value())
                     {
+                        const LayerTransform original = layer.transform;
                         layer.asset->image = preview->image;
                         layer.transform = preview->transform;
                         if (layer.mask.has_value() && !layer.mask->placement.has_value() && layer.mask->linked)
                         {
                             const std::optional<DistortWarp::Warped> mask =
                                 DistortWarp::WarpMask(layer.mask->asset.image, pending.value(), corners,
-                                                      MaskEdgeBackground(layer.mask->asset.thumbnail));
+                                                      MaskEdgeBackground(layer.mask->asset.thumbnail), 1024.0);
                             if (mask.has_value())
                             {
                                 layer.mask->asset.image = mask->image;
@@ -3377,6 +3673,22 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
                                                             ? std::nullopt
                                                             : std::optional<LayerTransform>(mask->transform);
                             }
+                        }
+                        else if (layer.mask.has_value() && layer.mask->linked)
+                        {
+                            // As Apply will: a linked mask placed apart warps over its own bounds.
+                            if (const std::optional<DistortWarp::Warped> moved =
+                                    DistortedPlacedMask(layer.mask.value(), original, pending.value(), corners, 1024.0);
+                                moved.has_value())
+                            {
+                                layer.mask->asset.image = moved->image;
+                                layer.mask->placement = moved->transform;
+                            }
+                        }
+                        else if (layer.mask.has_value() && !layer.mask->placement.has_value())
+                        {
+                            // An unlinked mask stays where it was on the document.
+                            layer.mask->placement = original;
                         }
                         warped = true;
                     }

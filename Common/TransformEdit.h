@@ -100,9 +100,10 @@ struct WarpedTrimmed
 // A full-resolution warp cropped to its visible pixels, with the crop in the warp's pixels (for a mask to match).
 [[nodiscard]] std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransform& transform,
                                                        const std::array<Vec2, 4>& corners);
-// A mask warped like its layer, filled with `background` (0 hides, 1 reveals) outside the shape.
+// A mask warped like its layer, filled with `background` (0 hides, 1 reveals) outside the shape; `limit` caps the
+// longest side for previews (0 keeps full resolution).
 [[nodiscard]] std::optional<Warped> WarpMask(const Raster& mask, const LayerTransform& transform,
-                                             const std::array<Vec2, 4>& corners, double background);
+                                             const std::array<Vec2, 4>& corners, double background, double limit = 0.0);
 // Where `placement`'s corners land when the perspective taking `transform`'s corners to `corners` is applied to
 // it too: how a linked mask placed apart from its layer distorts with the layer.
 [[nodiscard]] std::array<Vec2, 4> Carried(const LayerTransform& placement, const LayerTransform& transform,

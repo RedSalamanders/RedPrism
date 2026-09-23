@@ -66,6 +66,18 @@ ImageLayer RasterLayer(int width, int height, const wchar_t* name)
     return nullptr;
 }
 
+[[nodiscard]] const ImageLayer* Find(const CanvasDocument& document, const Guid& id) noexcept
+{
+    for (const ImageLayer& layer : document.layers)
+    {
+        if (layer.id == id)
+        {
+            return &layer;
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]] bool InRender(const std::optional<CanvasDocument>& document, const Guid& id) noexcept
 {
     if (!document.has_value())
@@ -2164,6 +2176,29 @@ void TestSparseRaster()
     Expect(Raster::Replacing(Raster{}, 0, 0, {RasterTile{0, 0, blue}}, 0, 0, 3, 3, 0).Width() == 3 &&
                !Raster::Replacing(red, 0, 0, {}, 0, 0, 0, 3, 0).HasStorage(),
            "sparse.replacing-edge-cases");
+    // RF-201: a sparse source keeps its own fill over its extent (a painted hide-all mask stays hidden); only the
+    // area a crop adds beyond it reads the new fill, as windows of one small shared block.
+    const Raster dabs = GrayRaster(2, 2, 200);
+    const Raster hidden = Raster::MakeSparse(4, 4, RasterFormat::Gray8, Raster{}, 0, 0, {RasterTile{1, 1, dabs}}, 0);
+    const Raster same = Raster::Replacing(hidden, 0, 0, {}, 0, 0, 4, 4, 255);
+    std::array<std::uint8_t, 16> sameRead{};
+    same.ReadRegion(0, 0, 4, 4, sameRead.data(), 4, 255);
+    Expect(same.Fill() == 0 && sameRead[0] == 0 && sameRead[5] == 200 && sameRead[15] == 0,
+           "sparse.replacing-keeps-source-fill");
+    const Raster wider = Raster::Replacing(hidden, 2, 0, {}, 0, 0, 600, 4, 255);
+    std::vector<std::uint8_t> widerRead(600u * 4u, 7);
+    wider.ReadRegion(0, 0, 600, 4, widerRead.data(), 600, 7);
+    const auto at = [&](int x, int y)
+    { return widerRead[static_cast<std::size_t>(y) * 600u + static_cast<std::size_t>(x)]; };
+    Expect(wider.Fill() == 0 && at(0, 0) == 255 && at(1, 3) == 255 && at(2, 0) == 0 && at(3, 1) == 200 &&
+               at(4, 2) == 200 && at(5, 3) == 0 && at(6, 0) == 255 && at(599, 3) == 255 && !wider.IsMaterialized(),
+           "sparse.replacing-pads-only-new-area");
+    std::set<const void*> widerStorages;
+    wider.ForEachStorage([&](const Raster& storage) { widerStorages.insert(storage.Identity()); });
+    Expect(widerStorages.size() == 3 && wider.Tiles().size() <= 5, "sparse.replacing-padding-shares-one-block");
+    const std::uint8_t* widerData = wider.Data();
+    Expect(widerData != nullptr && std::memcmp(widerData, widerRead.data(), widerRead.size()) == 0,
+           "sparse.replacing-padding-assembles");
 }
 
 void TestBrushKernel()
@@ -3311,6 +3346,37 @@ void TestGradientTool()
         Expect(session.history.UndoName() == L"Gradient Mask" && Near(ActiveMaskValue(session, 0, 2), 0) &&
                    Near(ActiveMaskValue(session, 100, 2), 255) && Near(ActiveMaskValue(session, 50, 2), 128),
                "gradient.mask");
+    }
+    // The same legacy case with a colored palette (RF-205, legacy paletteColor): a mask gradient runs from the mask
+    // palette's foreground (black unless `maskPaintWhite`) to its background, whatever the RGB colors are.
+    for (const bool paintWhite : {false, true})
+    {
+        DocumentSession session = GradientSession();
+        DragGradient(session, Vec2{0, 2}, Vec2{0.6, 2});
+        session.CommitGradient();
+        session.AddLayerMask(true);
+        // Colors whose red channel would give the opposite gray, so the old "first component" rule shows.
+        session.SetForegroundColor(paintWhite ? 0xFF0000FFu : 0xFFFF0000u);
+        session.SetBackgroundColor(paintWhite ? 0xFFFF0000u : 0xFF0000FFu);
+        session.maskPaintWhite = paintWhite;
+        const std::array<double, 4> black{0, 0, 0, 1};
+        const std::array<double, 4> white{1, 1, 1, 1};
+        const std::array<std::array<double, 4>, 2> ends = session.GradientColors();
+        Expect(session.IsMaskSelected() && ends[0] == (paintWhite ? white : black) &&
+                   ends[1] == (paintWhite ? black : white),
+               paintWhite ? "gradient.mask-palette-colors-white" : "gradient.mask-palette-colors");
+        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+        session.CommitGradient();
+        const int start = ActiveMaskValue(session, 0, 2);
+        const int end = ActiveMaskValue(session, 100, 2);
+        Expect(session.history.UndoName() == L"Gradient Mask" && Near(start, paintWhite ? 255 : 0) &&
+                   Near(end, paintWhite ? 0 : 255) && Near(ActiveMaskValue(session, 50, 2), 128),
+               paintWhite ? "gradient.mask-palette-white-first" : "gradient.mask-palette-ignores-rgb");
+        // Off the mask the RGB palette is back.
+        session.SelectLayerTarget(session.ActiveLayerID().value(), false);
+        Expect(session.GradientColors()[0] ==
+                   (paintWhite ? std::array<double, 4>{0, 0, 1, 1} : std::array<double, 4>{1, 0, 0, 1}),
+               paintWhite ? "gradient.layer-palette-colors-after-white" : "gradient.layer-palette-colors");
     }
     // Legacy paletteChangesUpdatePendingPreview, and the pending tiles feed the preview.
     {
@@ -5314,12 +5380,48 @@ void TestClippingToggle()
     Expect(shared != nullptr && shared->maskSourceID == base, "clip.shares-clipped-base");
     session.ToggleClippingMask(middle);
     clipped = Find(session.Document(), middle);
-    Expect(clipped != nullptr && !clipped->maskSourceID.has_value() &&
-               session.history.UndoName() == L"Release Clipping Mask",
+    shared = Find(session.Document(), top);
+    // RF-208 (legacy LiveLayerMask.removeLiveMask): releasing a clipped layer releases the clipped layers above it
+    // that share its base.
+    Expect(clipped != nullptr && !clipped->maskSourceID.has_value() && shared != nullptr &&
+               !shared->maskSourceID.has_value() && session.history.UndoName() == L"Release Clipping Mask",
            "clip.release");
     session.Undo();
     clipped = Find(session.Document(), middle);
-    Expect(clipped != nullptr && clipped->maskSourceID == base, "clip.undo-restores");
+    shared = Find(session.Document(), top);
+    Expect(clipped != nullptr && clipped->maskSourceID == base && shared != nullptr && shared->maskSourceID == base,
+           "clip.undo-restores");
+    // Legacy LiveMaskTests.optionClickCreatesSharedStackAndDragOutReleases: releasing the top layer of a shared
+    // stack leaves the one below clipped; releasing the lower one releases both; a layer dragged below its base
+    // stops clipping.
+    DocumentSession stack;
+    stack.CreateDocument(2, 2);
+    std::array<Guid, 3> ids{};
+    for (Guid& id : ids)
+    {
+        stack.AddBlankLayer();
+        id = stack.ActiveLayerID().value();
+    }
+    const auto sourceOf = [&](std::size_t index) { return stack.Document().value().layers[index].maskSourceID; };
+    Expect(!stack.CanToggleClippingMask(ids[0]) && stack.CanToggleClippingMask(ids[1]), "clip.stack-can-toggle");
+    stack.ToggleClippingMask(ids[0]);
+    Expect(!sourceOf(0).has_value(), "clip.stack-bottom-stays");
+    stack.ToggleClippingMask(ids[1]);
+    stack.ToggleClippingMask(ids[2]);
+    Expect(sourceOf(1) == ids[0] && sourceOf(2) == ids[0] && stack.CanToggleClippingMask(ids[2]),
+           "clip.stack-shares-the-base");
+    stack.ToggleClippingMask(ids[2]);
+    Expect(!sourceOf(2).has_value() && sourceOf(1) == ids[0], "clip.stack-top-release-leaves-below");
+    stack.ToggleClippingMask(ids[2]);
+    stack.ToggleClippingMask(ids[1]);
+    Expect(!sourceOf(1).has_value() && !sourceOf(2).has_value(), "clip.stack-lower-release-releases-above");
+    stack.Undo();
+    Expect(sourceOf(2) == ids[0], "clip.stack-undo");
+    Expect(stack.PlaceLayer(ids[2], std::nullopt, std::nullopt, true), "clip.stack-drag-out");
+    Expect(stack.Document().value().layers.front().id == ids[2] && !sourceOf(0).has_value() && sourceOf(2) == ids[0],
+           "clip.stack-dragged-below-releases");
+    stack.Undo();
+    Expect(stack.Document().value().layers.back().id == ids[2] && sourceOf(2) == ids[0], "clip.stack-drag-undo");
     session.SelectLayer(std::nullopt);
     session.AddGroup();
     const Guid folder = session.ActiveLayerID().value();
@@ -5870,7 +5972,7 @@ void TestPendingEdits()
                    std::fabs(session.ActiveLayer()->opacity - 0.5) < 1e-9,
                "pending.second-redo-restores");
     }
-    // Warp, a pixel move and a crop frame are the same kind of pending edit.
+    // Warp and a pixel move are the same kind of pending edit.
     {
         DocumentSession session = PixelEditSession();
         TwoColorLayer(session);
@@ -5883,10 +5985,25 @@ void TestPendingEdits()
         session.Undo();
         Expect(session.PendingPixelMove() == nullptr && session.history.UndoName() == L"Select",
                "pending.undo-cancels-pixel-move");
+        // RF-214 (legacy EditorSession.undo / restore): a crop frame, even the Crop tool's default whole-canvas one,
+        // is not an edit in progress; Undo drops it and still undoes, and Redo does the same.
         session.SetCropFrame(CropRect{5, 5, 40, 20});
         const int cropped = session.history.UndoCount();
         session.Undo();
-        Expect(!session.CropFrame().has_value() && session.history.UndoCount() == cropped, "pending.undo-cancels-crop");
+        Expect(!session.CropFrame().has_value() && session.history.UndoCount() == cropped - 1 &&
+                   session.history.RedoName() == L"Select",
+               "pending.undo-with-a-crop-frame-undoes");
+        session.SetCropFrame(session.VisibleCropRect());
+        session.Redo();
+        Expect(!session.CropFrame().has_value() && session.history.UndoCount() == cropped &&
+                   session.history.UndoName() == L"Select",
+               "pending.redo-with-a-crop-frame-redoes");
+        DocumentSession empty = PixelEditSession();
+        empty.history.Reset();
+        empty.SetCropFrame(CropRect{1, 1, 10, 10});
+        empty.Undo();
+        Expect(empty.CropFrame().has_value() && !empty.history.CanUndo(),
+               "pending.undo-with-nothing-to-undo-keeps-the-frame");
     }
     // Cut on a hidden layer, and Cut while a color panel is open, leaves the clipboard and the pixels alone.
     {
@@ -5950,6 +6067,720 @@ int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*ret
     return 0;
 }
 #endif
+// ── Review fixes (Specs/Plans/WIP/ReviewFixes_2026-09-23.md, WP2) ──────────
+
+void TestMaskFillAcrossCommits()
+{
+    // RF-201: a hide-all mask painted on two tiles of a 1024 × 1024 layer keeps hiding everything the strokes did not
+    // touch; the second commit must not stamp the reveal value over the first commit's fill.
+    DocumentSession session = PixelEditSession(1024, 1024);
+    InsertPixels(session, SolidRaster(1024, 1024, 0, 0, 255, 255), L"Red");
+    session.AddLayerMask(false);
+    Expect(session.IsMaskSelected() && MaskValue(session, 600.5, 600.5) == 0, "maskfill.hide-all");
+    session.maskPaintWhite = true;
+    session.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1, false};
+    Expect(session.BeginBrush(Vec2{100, 100}), "maskfill.first-begin");
+    session.FinishBrush();
+    Expect(MaskValue(session, 100.5, 100.5) == 255 && MaskValue(session, 600.5, 600.5) == 0, "maskfill.first-stroke");
+    Expect(session.BeginBrush(Vec2{800, 800}), "maskfill.second-begin");
+    session.FinishBrush();
+    const Raster& twice = session.ActiveLayer()->mask->asset.image;
+    Expect(MaskValue(session, 800.5, 800.5) == 255 && MaskValue(session, 100.5, 100.5) == 255 &&
+               MaskValue(session, 600.5, 600.5) == 0 && MaskValue(session, 1000.5, 20.5) == 0 && twice.IsSparse() &&
+               !twice.IsMaterialized(),
+           "maskfill.second-stroke-keeps-hiding");
+    session.Undo();
+    Expect(MaskValue(session, 800.5, 800.5) == 0 && MaskValue(session, 100.5, 100.5) == 255 &&
+               MaskValue(session, 600.5, 600.5) == 0,
+           "maskfill.undo");
+    // The image growing past its edge carries the painted hide-all mask: its old area keeps hiding and only the new
+    // area reveals (a 600 × 300 layer on a 1000 × 300 canvas, so the growth spans tiles).
+    DocumentSession grown = PixelEditSession(1000, 300);
+    const Guid id = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
+    grown.AddLayerMask(false);
+    grown.maskPaintWhite = true;
+    grown.brushSettings = BrushSettings{20, 1, 1, 1, 1, 1, false};
+    Expect(grown.BeginBrush(Vec2{50, 50}), "maskfill.growth-mask-begin");
+    grown.FinishBrush();
+    grown.SelectLayerTarget(id, false);
+    grown.brushSettings = BrushSettings{20, 1, 0, 1, 0, 1, false};
+    Expect(!grown.IsMaskSelected() && grown.BeginBrush(Vec2{900, 150}), "maskfill.growth-image-begin");
+    grown.FinishBrush();
+    const ImageLayer* layer = grown.ActiveLayer();
+    Expect(layer != nullptr && layer->asset->image.Width() > 600 && layer->mask.has_value() &&
+               layer->mask->asset.image.Width() == layer->asset->image.Width() &&
+               layer->mask->asset.image.Height() == layer->asset->image.Height(),
+           "maskfill.growth-carries-the-mask");
+    Expect(MaskValue(grown, 50.5, 50.5) == 255 && MaskValue(grown, 300.5, 150.5) == 0 &&
+               MaskValue(grown, 590.5, 290.5) == 0 && MaskValue(grown, 900.5, 150.5) == 255,
+           "maskfill.growth-keeps-the-old-area-hidden");
+}
+
+void TestStretchedMaskPainting()
+{
+    // RF-211: a 300 × 150 mask stretched over a 600 × 300 layer (its left half hidden) keeps its place when painted:
+    // the untouched pixels, in tiles the stroke never reached, are resampled onto the layer grid instead of
+    // collapsing to the value of pixel (0, 0).
+    std::vector<std::uint8_t> halves(300u * 150u);
+    for (std::size_t index = 0; index < halves.size(); ++index)
+    {
+        halves[index] = index % 300u < 150u ? 0 : 255;
+    }
+    const Raster half = Raster::Make(300, 150, RasterFormat::Gray8, halves.data(), halves.size());
+    DocumentSession session = PixelEditSession(600, 300);
+    const Guid id = InsertPixels(session, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
+    session.Document().value().layers.back().mask =
+        LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
+    session.SelectLayerTarget(id, true);
+    Expect(session.IsMaskSelected() && MaskValue(session, 280.5, 280.5) == 0 && MaskValue(session, 450.5, 200.5) == 255,
+           "stretchmask.before");
+    session.maskPaintWhite = true;
+    session.brushSettings = BrushSettings{10, 1, 0, 0, 0, 1, false};
+    Expect(session.BeginBrush(Vec2{40, 20}), "stretchmask.begin");
+    session.FinishBrush();
+    const Raster& painted = session.ActiveLayer()->mask->asset.image;
+    Expect(painted.Width() == 600 && painted.Height() == 300 && MaskValue(session, 40.5, 20.5) == 255 &&
+               MaskValue(session, 100.5, 100.5) == 0 && MaskValue(session, 280.5, 280.5) == 0 &&
+               MaskValue(session, 450.5, 200.5) == 255 && MaskValue(session, 599.5, 299.5) == 255,
+           "stretchmask.untouched-pixels-keep-their-place");
+    // Growing the image carries the stretched mask onto the new grid in place, revealing only the new area.
+    DocumentSession grown = PixelEditSession(1000, 300);
+    const Guid grownId = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
+    grown.Document().value().layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
+    grown.SelectLayer(grownId);
+    grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1, false};
+    Expect(!grown.IsMaskSelected() && grown.BeginBrush(Vec2{900, 150}), "stretchmask.growth-begin");
+    grown.FinishBrush();
+    Expect(grown.ActiveLayer()->asset->image.Width() > 600 && MaskValue(grown, 100.5, 100.5) == 0 &&
+               MaskValue(grown, 280.5, 280.5) == 0 && MaskValue(grown, 450.5, 200.5) == 255 &&
+               MaskValue(grown, 900.5, 150.5) == 255,
+           "stretchmask.growth-keeps-its-place");
+}
+
+void TestActiveLayerTargets()
+{
+    // RF-203 (legacy EditorSession.activeLayerID didSet): every change of the active layer drops the mask target and
+    // makes the selection that layer alone. Add Mask, then New Layer: the new layer is the target, so it paints.
+    DocumentSession session = PixelEditSession(100, 40);
+    session.AddLayerMask(true);
+    Expect(session.IsMaskSelected(), "active.mask-targeted");
+    session.AddBlankLayer();
+    Expect(!session.IsMaskSelected() && session.CanPaint(), "active.new-layer-drops-the-mask-target");
+    session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1, false};
+    Expect(session.BeginBrush(Vec2{20, 20}), "active.new-layer-paints");
+    session.FinishBrush();
+    Expect(session.ActiveLayer()->asset.has_value() && session.history.UndoName() == L"Brush Stroke",
+           "active.new-layer-painted");
+    // After File > New (CreateDocument) Ctrl+G wraps Layer 1 instead of making an empty folder.
+    DocumentSession created;
+    created.CreateDocument(50, 50, true);
+    const Guid layer1 = created.ActiveLayerID().value();
+    created.GroupSelectedLayers();
+    const ImageLayer* wrapped = Find(created.Document(), layer1);
+    Expect(wrapped != nullptr && created.ActiveLayer() != nullptr && created.ActiveLayer()->isGroup &&
+               wrapped->parentID == created.ActiveLayerID(),
+           "active.new-document-group-wraps-layer-1");
+    // After New Folder the Move tool moves the folder's (empty) contents, never the layer that was active before.
+    DocumentSession folder = PixelEditSession(100, 40);
+    const Guid painted = InsertPixels(folder, SolidRaster(20, 20, 0, 0, 255, 255), L"Painted");
+    folder.AddGroup();
+    Expect(folder.GroupTransformMemberIDs().empty() && !folder.CanTransform(), "active.new-folder-moves-nothing-else");
+    const LayerTransform before = Find(folder.Document(), painted)->transform;
+    folder.NudgeLayer(5, 0);
+    Expect(Find(folder.Document(), painted)->transform == before, "active.new-folder-nudge-leaves-the-image");
+    // A duplicate, a merge, a deletion and a paste each leave the new active layer as the only selected one.
+    DocumentSession mixed = PixelEditSession(40, 40);
+    InsertPixels(mixed, SolidRaster(10, 10, 0, 0, 255, 255), L"Red");
+    mixed.AddLayerMask(true);
+    mixed.DuplicateActiveLayer();
+    Expect(!mixed.IsMaskSelected() && mixed.ActiveLayer()->name == L"Red copy" && !mixed.TransformsAsGroup(),
+           "active.duplicate-targets-the-copy");
+    mixed.SelectLayerTarget(mixed.ActiveLayerID().value(), true);
+    Expect(mixed.IsMaskSelected(), "active.copy-mask-targeted");
+    mixed.DeleteLayer(mixed.ActiveLayerID().value());
+    Expect(!mixed.IsMaskSelected() && mixed.ActiveLayer() != nullptr && mixed.ActiveLayer()->name == L"Red",
+           "active.delete-drops-the-mask-target");
+    // A reopened document never keeps a mask target, even on a layer with the same id.
+    DocumentSession reopened = PixelEditSession(40, 40);
+    reopened.AddLayerMask(true);
+    const Guid same = reopened.ActiveLayerID().value();
+    const CanvasDocument copy = reopened.Document().value();
+    reopened.ReplaceDocument(copy, same);
+    Expect(!reopened.IsMaskSelected() && reopened.ActiveLayerID() == same && !reopened.history.CanUndo() &&
+               !reopened.history.IsModified() && reopened.Document().value() == copy,
+           "active.replace-document-drops-the-mask-target");
+    reopened.ReplaceDocument(copy, Guid::Generate());
+    Expect(!reopened.ActiveLayerID().has_value() && !reopened.TransformsAsGroup(),
+           "active.replace-document-unknown-id");
+    // Selecting the same layer again after its mask is gone drops the target too.
+    DocumentSession lost = PixelEditSession(40, 40);
+    lost.AddLayerMask(true);
+    lost.Document().value().layers.back().mask.reset();
+    lost.SelectLayer(lost.ActiveLayerID());
+    Expect(!lost.IsMaskSelected() && lost.CanPaint(), "active.reselect-without-a-mask");
+}
+
+void TestCutWithFullHistory()
+{
+    // RF-204: Cut on a mask when the history is full (100 entries: every new entry trims one) still publishes the copy;
+    // whether the clear painted comes from the fill itself, never from the entry count.
+    DocumentSession session = PixelEditSession();
+    const Guid id = InsertPixels(session, SolidRaster(100, 40, 0, 0, 255, 255), L"Red");
+    session.AddLayerMask(false);
+    SelectRect(session, 10, 10, 20, 20, false);
+    for (int index = 0; index < kHistoryEntryLimit + 1; ++index)
+    {
+        session.RenameLayer(id, index % 2 == 0 ? L"Even" : L"Odd");
+    }
+    Expect(session.history.UndoCount() == kHistoryEntryLimit && session.IsMaskSelected(), "cutfull.history-full");
+    session.CutSelection();
+    Expect(session.Clipboard().has_value() && session.Clipboard()->image.Width() == 20 &&
+               PixelOf(session.Clipboard()->image, 5, 5) == std::array<std::uint8_t, 4>{0, 0, 0, 255} &&
+               session.history.UndoName() == L"Fill Mask" && session.history.UndoCount() == kHistoryEntryLimit &&
+               ActiveMaskValue(session, 15, 15) == 255 && ActiveMaskValue(session, 50, 5) == 0,
+           "cutfull.mask-cut-keeps-the-copy");
+    // The image path reports the same way.
+    session.SelectLayerTarget(id, false);
+    SelectRect(session, 60, 10, 10, 10, false);
+    Expect(session.ClearSelectedPixels() && ActivePixel(session, 65, 15)[3] == 0 &&
+               session.history.UndoCount() == kHistoryEntryLimit,
+           "cutfull.clear-reports-with-a-full-history");
+}
+
+void TestTransformWaitsForPanels()
+{
+    // RF-206: an open color or filter panel owns the layer until OK or Cancel, so a Move drag, a nudge, Free
+    // Transform and both flips do nothing meanwhile; OK then applies at the layer's own place.
+    DocumentSession session = PixelEditSession();
+    InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
+    const LayerTransform before = session.ActiveLayer()->transform;
+    session.BeginLevels();
+    Expect(session.PendingLevels().has_value() && !session.CanTransform(), "panelowns.levels-blocks-transform");
+    session.BeginTransform(false);
+    session.NudgeLayer(10, 0);
+    session.TransformCommand();
+    session.FlipLayers(true);
+    session.FlipCanvas(true);
+    Expect(!session.PendingTransformEdit().has_value() && session.ActiveLayer()->transform == before,
+           "panelowns.levels-transform-refused");
+    LevelsSettings levels;
+    levels.ranges[0].black = 50;
+    session.UpdateLevels(levels, true);
+    session.CommitLevels();
+    Expect(session.history.UndoName() == L"Levels" && session.ActiveLayer()->transform == before &&
+               ActivePixel(session, 5, 5)[2] < 200,
+           "panelowns.levels-applies");
+    session.BeginHueSaturation();
+    session.NudgeLayer(0, 7);
+    session.FlipCanvas(false);
+    HueSaturationSettings hue;
+    hue.adjustments[static_cast<std::size_t>(ColorRange::Master)].hue = 120;
+    session.UpdateHueSaturation(hue, true);
+    session.CommitHueSaturation();
+    Expect(session.history.UndoName() == L"Hue/Saturation" && session.ActiveLayer()->transform == before,
+           "panelowns.hue-applies-in-place");
+    session.BeginFilter(FilterKind::AddNoise);
+    Expect(session.PendingFilter().has_value() && !session.CanTransform(), "panelowns.filter-blocks-transform");
+    session.CancelFilter();
+    Expect(session.CanTransform(), "panelowns.transform-after-cancel");
+}
+
+void TestDisplayCopyFollowsEdits()
+{
+    // RF-209: while a transform is pending the canvas draws a cached display copy; an edit the pending transform does
+    // not own (opacity, blend mode, deleting another layer) must show in it at once.
+    DocumentSession session = PixelEditSession();
+    const Guid other = InsertPixels(session, SolidRaster(20, 20, 255, 0, 0, 255), L"Blue");
+    const Guid moving = InsertPixels(session, SolidRaster(20, 20, 0, 0, 255, 255), L"Red");
+    session.BeginTransform(true);
+    LayerTransform draft = session.PendingTransformEdit()->draft;
+    draft.origin.x += 30;
+    session.PreviewTransform(draft);
+    const CanvasDocument* display = session.DisplayDocument();
+    Expect(display != nullptr && Find(*display, moving) != nullptr && Find(*display, moving)->transform == draft,
+           "displaycopy.shows-the-draft");
+    session.SetOpacity(0.25);
+    display = session.DisplayDocument();
+    Expect(display != nullptr && Find(*display, moving)->opacity == 0.25 && Find(*display, moving)->transform == draft,
+           "displaycopy.follows-opacity");
+    session.SetBlendMode(LayerBlendMode::Multiply);
+    display = session.DisplayDocument();
+    Expect(display != nullptr && Find(*display, moving)->blendMode == LayerBlendMode::Multiply,
+           "displaycopy.follows-blend-mode");
+    session.ToggleVisibility(other);
+    display = session.DisplayDocument();
+    Expect(display != nullptr && !Find(*display, other)->visible && session.PendingTransformEdit().has_value(),
+           "displaycopy.follows-visibility");
+}
+
+void TestSelectionLoadRefusals()
+{
+    // RF-217: a mask or layer whose outline would pass 8 000 000 pixel edges (a 2100 × 2100 checkerboard: 8.8 M) is
+    // refused with a reason the host can show, instead of silently loading nothing.
+    constexpr int kSide = 2100;
+    std::vector<std::uint8_t> checker(static_cast<std::size_t>(kSide) * static_cast<std::size_t>(kSide));
+    std::vector<std::uint8_t> alpha(checker.size() * 4u, 0);
+    for (int y = 0; y < kSide; ++y)
+    {
+        for (int x = 0; x < kSide; ++x)
+        {
+            const std::size_t index =
+                static_cast<std::size_t>(y) * static_cast<std::size_t>(kSide) + static_cast<std::size_t>(x);
+            const bool dark = (x + y) % 2 == 0;
+            checker[index] = dark ? 0 : 255;
+            alpha[index * 4u + 3u] = dark ? 255 : 0;
+        }
+    }
+    const Raster detailed = Raster::Make(kSide, kSide, RasterFormat::Gray8, checker.data(), checker.size());
+    WandFailure failure = WandFailure::None;
+    Expect(!MaskTracing::DarkPixels(detailed, &failure).has_value() && failure == WandFailure::TooDetailed,
+           "loadrefused.dark-pixels-too-detailed");
+    DocumentSession session = SelectionSession(kSide, kSide);
+    const Guid id = session.ActiveLayerID().value();
+    session.Document().value().layers.back().mask =
+        LayerMask{RasterAsset{detailed, Raster::MakeThumbnail(detailed), L"mask"}, true, std::nullopt, true};
+    const int count = session.history.UndoCount();
+    failure = WandFailure::None;
+    Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::TooDetailed &&
+               !session.Selection().has_value() && session.history.UndoCount() == count,
+           "loadrefused.mask-too-detailed");
+    // Nothing to trace is not a refusal.
+    const Raster white = GrayRaster(1, 1, 255);
+    session.Document().value().layers.back().mask =
+        LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
+    failure = WandFailure::TooDetailed;
+    Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::None,
+           "loadrefused.nothing-is-not-a-refusal");
+    const Guid layer =
+        InsertPixels(session, Raster::Make(kSide, kSide, RasterFormat::Bgra8888, alpha.data(), alpha.size()), L"Dots");
+    failure = WandFailure::None;
+    Expect(!session.LoadLayerSelection(layer, SelectionMode::New, &failure) && failure == WandFailure::TooDetailed &&
+               !session.Selection().has_value(),
+           "loadrefused.layer-too-detailed");
+}
+
+void TestCropWholePixels()
+{
+    // RF-215 (Decision D6): an Alt-drawn (symmetric) frame mirrors about the press point rounded to the half-pixel
+    // grid, so it lands on whole pixels even when a snap target moved the dragged edge; legacy mirrored about the
+    // unrounded point and left the frame between pixels.
+    const auto whole = [](const CropRect& rect)
+    {
+        return rect.x == std::round(rect.x) && rect.y == std::round(rect.y) && rect.width == std::round(rect.width) &&
+               rect.height == std::round(rect.height) && rect.width >= 1 && rect.height >= 1;
+    };
+    const CropSnap snap{{0, 200, 90}, {0, 100, 70}, 6};
+    const CropDrag create{Vec2{50.3, 40.3}, CropRect{}, CropDrag::Mode::Create, -1};
+    const Vec2 dragged{80.7, 61.2};
+    const CropRect free = snap.Apply(create.Updated(dragged, std::nullopt, true), create, dragged, std::nullopt, true);
+    const Vec2 snapTo{87.4, 67.9};
+    const CropRect snapped = snap.Apply(create.Updated(snapTo, std::nullopt, true), create, snapTo, std::nullopt, true);
+    Expect(whole(free) && std::abs(free.MidX() - 50.3) <= 0.5 && std::abs(free.MidY() - 40.3) <= 0.5,
+           "crop.symmetric-create-whole-pixels");
+    Expect(whole(snapped) && snapped.MaxX() == 90 && snapped.MaxY() == 70 && snapped.MidX() == 50.5 &&
+               snapped.MidY() == 40.5,
+           "crop.symmetric-snap-whole-pixels");
+    // Resizing an odd-sized frame about its center stays on whole pixels too.
+    const CropRect odd{10, 10, 21, 11};
+    const CropDrag resize{Vec2{31, 21}, odd, CropDrag::Mode::Resize, 4};
+    const Vec2 corner{40.6, 25.3};
+    Expect(whole(snap.Apply(resize.Updated(corner, std::nullopt, true), resize, corner, std::nullopt, true)),
+           "crop.symmetric-resize-whole-pixels");
+    // A frame between pixels commits on whole pixels: the canvas takes the rounded edges and the layers move by
+    // whole pixels, never truncated or resampled.
+    DocumentSession session;
+    session.CreateDocument(64, 32);
+    ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
+    const Raster fixture = RedLeftRaster(64, 32);
+    layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
+    session.Document().value().layers.push_back(layer);
+    session.SelectLayer(layer.id);
+    session.SetCropFrame(CropRect{8.4, 4.6, 32.2, 15.7});
+    Expect(session.CommitCrop() && session.Document().value().width == 33 && session.Document().value().height == 15,
+           "crop.fractional-frame-commits-rounded");
+    const ImageLayer* moved = Find(session.Document(), layer.id);
+    Expect(moved != nullptr && moved->transform.origin == Vec2{-8, -5} && moved->asset->image == fixture,
+           "crop.fractional-frame-moves-whole-pixels");
+}
+
+void TestDistortMasks()
+{
+    // RF-207 (legacy Distort.distort): an unlinked mask keeps its place on the document while its layer is
+    // resampled into the shape, and a linked mask placed apart takes the same perspective over its own bounds, in
+    // the preview and on Apply.
+    const std::array<Vec2, 4> shape{Vec2{10, 10}, Vec2{60, 10}, Vec2{30, 30}, Vec2{10, 30}};
+    std::vector<std::uint8_t> halves(20u * 20u);
+    for (std::size_t index = 0; index < halves.size(); ++index)
+    {
+        halves[index] = index % 20u < 10u ? 0 : 255;
+    }
+    const Raster half = Raster::Make(20, 20, RasterFormat::Gray8, halves.data(), halves.size());
+    {
+        DocumentSession session;
+        session.CreateDocument(100, 60, false);
+        const Guid id = InsertPainted(session, 20, 20, Vec2{10, 10});
+        session.Document().value().layers.back().mask =
+            LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, false};
+        const LayerTransform original = session.ActiveLayer()->transform;
+        session.BeginTransform(false);
+        session.BeginDistort();
+        session.PreviewCorners(shape);
+        const CanvasDocument* display = session.DisplayDocument();
+        const ImageLayer* shown = display != nullptr ? Find(*display, id) : nullptr;
+        Expect(shown != nullptr && shown->transform.size == Vec2{50, 20} && shown->mask->placement == original,
+               "distortmask.unlinked-preview-stays");
+        session.CommitTransform();
+        const ImageLayer* layer = session.ActiveLayer();
+        Expect(layer->transform.size == Vec2{50, 20} && layer->mask->placement == original &&
+                   layer->mask->asset.image == half && !layer->mask->linked,
+               "distortmask.unlinked-stays-on-the-document");
+    }
+    {
+        DocumentSession session;
+        session.CreateDocument(100, 60, false);
+        const Guid id = InsertPainted(session, 20, 20, Vec2{10, 10});
+        LayerTransform apart;
+        apart.origin = Vec2{15, 12};
+        apart.size = Vec2{20, 20};
+        session.Document().value().layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, apart, true};
+        const LayerTransform original = session.ActiveLayer()->transform;
+        const std::array<Vec2, 4> carried = DistortWarp::Carried(apart, original, shape);
+        double minX = carried[0].x;
+        double maxX = carried[0].x;
+        double minY = carried[0].y;
+        double maxY = carried[0].y;
+        for (const Vec2& corner : carried)
+        {
+            minX = std::min(minX, corner.x);
+            maxX = std::max(maxX, corner.x);
+            minY = std::min(minY, corner.y);
+            maxY = std::max(maxY, corner.y);
+        }
+        const Vec2 origin{std::floor(minX), std::floor(minY)};
+        const Vec2 size{std::ceil(maxX) - std::floor(minX), std::ceil(maxY) - std::floor(minY)};
+        session.BeginTransform(false);
+        session.BeginDistort();
+        session.PreviewCorners(shape);
+        const CanvasDocument* display = session.DisplayDocument();
+        const ImageLayer* shown = display != nullptr ? Find(*display, id) : nullptr;
+        Expect(shown != nullptr && shown->mask->placement.has_value() && shown->mask->placement->origin == origin &&
+                   shown->mask->placement->size == size,
+               "distortmask.placed-preview-follows");
+        session.CommitTransform();
+        const ImageLayer* layer = session.ActiveLayer();
+        Expect(layer->mask->placement.has_value() && layer->mask->placement->origin == origin &&
+                   layer->mask->placement->size == size && layer->mask->linked &&
+                   layer->mask->asset.image.Width() == static_cast<int>(size.x) && !(layer->mask->asset.image == half),
+               "distortmask.placed-takes-the-perspective");
+        session.Undo();
+        Expect(session.ActiveLayer()->mask->placement == apart && session.ActiveLayer()->mask->asset.image == half,
+               "distortmask.undo");
+    }
+}
+
+// A hidden layer holding `width` × `height` image pixels of the document's budget without allocating them (an empty
+// sparse raster), shown 100 × 100 at the canvas origin.
+ImageLayer BudgetLayer(int width, int height)
+{
+    ImageLayer layer = ImageLayer::Blank(L"Budget", Vec2{100, 100});
+    layer.asset = RasterAsset{Raster::MakeSparse(width, height, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0),
+                              Raster::Make(1, 1, RasterFormat::Bgra8888), L"Budget"};
+    layer.visible = false;
+    return layer;
+}
+
+void TestDocumentPixelBudget()
+{
+    // RF-212 (Decision D7): every edit that grows pixels checks the document's 100 M image and mask budgets (legacy
+    // enforced them only on save, where the document was then rejected), refuses when they would be exceeded and
+    // reports it once through TakeBudgetRefusal.
+    const Raster red = SolidRaster(100, 100, 0, 0, 255, 255);
+    {
+        DocumentSession session = PixelEditSession(200, 200);
+        session.Document().value().layers.push_back(BudgetLayer(10000, 10000));
+        const std::size_t count = session.Document().value().layers.size();
+        Expect(session.PixelBudgetLeft(false) == 0 && !session.TakeBudgetRefusal(), "docbudget.full");
+        session.PasteImage(SolidRaster(20, 20, 0, 0, 255, 255));
+        Expect(session.Document().value().layers.size() == count && session.TakeBudgetRefusal() &&
+                   !session.TakeBudgetRefusal() && ValidateDocument(session.Document().value()) == DocumentStatus::Ok,
+               "docbudget.paste-refused");
+    }
+    {
+        // 100 000 pixels left for a 300 × 300 layer (90 000): room for its own edits, not for a copy or growth.
+        DocumentSession session = PixelEditSession(300, 300);
+        session.Document().value().layers.push_back(BudgetLayer(10000, 9990));
+        InsertPixels(session, SolidRaster(300, 300, 0, 0, 255, 255), L"Red");
+        const std::size_t count = session.Document().value().layers.size();
+        session.DuplicateActiveLayer();
+        session.BeginDuplicateTransform();
+        Expect(session.Document().value().layers.size() == count && !session.PendingTransformEdit().has_value() &&
+                   session.TakeBudgetRefusal() && ValidateDocument(session.Document().value()) == DocumentStatus::Ok,
+               "docbudget.duplicate-refused");
+        session.filterSettings.radius = 10;
+        session.BeginFilter(FilterKind::GaussianBlur);
+        Expect(!session.PendingFilter().has_value() && session.TakeBudgetRefusal(), "docbudget.blur-grid-refused");
+        session.BeginFilter(FilterKind::AddNoise);
+        Expect(session.PendingFilter().has_value() && !session.TakeBudgetRefusal(), "docbudget.noise-needs-no-room");
+        session.CancelFilter();
+        // A floating selection moved past the layer's edge would grow it: the merge is refused and the document
+        // restored.
+        SelectRect(session, 40, 40, 20, 20, false);
+        session.TransformCommand();
+        Expect(session.PendingTransformEdit().has_value() && session.PendingTransformEdit()->floating.has_value(),
+               "docbudget.float-begins");
+        LayerTransform draft =
+            session.PendingTransformEdit().has_value() ? session.PendingTransformEdit()->draft : LayerTransform{};
+        draft.origin.x += 280;
+        session.PreviewTransform(draft);
+        session.CommitTransform();
+        Expect(session.TakeBudgetRefusal() && session.Document().value().layers.size() == count &&
+                   session.ActiveLayer()->name == L"Red" && session.ActiveLayer()->asset->image.Width() == 300 &&
+                   ActivePixel(session, 50, 50) == std::array<std::uint8_t, 4>{0, 0, 255, 255} &&
+                   ValidateDocument(session.Document().value()) == DocumentStatus::Ok,
+               "docbudget.floating-merge-refused");
+    }
+    {
+        DocumentSession session = PixelEditSession(200, 200);
+        ImageLayer masked = BudgetLayer(100, 100);
+        masked.mask =
+            LayerMask{RasterAsset{Raster::MakeSparse(10000, 10000, RasterFormat::Gray8, Raster{}, 0, 0, {}, 255),
+                                  Raster::Make(1, 1, RasterFormat::Gray8), L"mask"},
+                      true, std::nullopt, true};
+        session.Document().value().layers.push_back(masked);
+        InsertPixels(session, red, L"Red");
+        SelectRect(session, 10, 10, 20, 20);
+        session.AddMask(true);
+        Expect(!session.ActiveLayer()->mask.has_value() && session.Selection().has_value() &&
+                   session.TakeBudgetRefusal(),
+               "docbudget.mask-from-selection-refused");
+        session.Deselect();
+        session.AddMask(true);
+        Expect(!session.ActiveLayer()->mask.has_value() && session.TakeBudgetRefusal(),
+               "docbudget.uniform-mask-refused");
+    }
+    {
+        DocumentSession session = PixelEditSession(200, 200);
+        session.Document().value().layers.push_back(BudgetLayer(10000, 9999));
+        const Guid a = InsertPixels(session, SolidRaster(20, 20, 0, 0, 255, 255), L"A");
+        const Guid b = InsertPixels(session, SolidRaster(20, 20, 255, 0, 0, 255), L"B");
+        for (ImageLayer& layer : session.Document().value().layers)
+        {
+            if (layer.id == b)
+            {
+                layer.transform.origin = Vec2{180, 180};
+            }
+        }
+        const std::optional<DocumentSession::MergePlan> plan = session.PlanMerge();
+        std::vector<std::uint8_t> bytes(200u * 200u * 4u, 0);
+        for (const int corner : {0, 180})
+        {
+            for (int y = corner; y < corner + 20; ++y)
+            {
+                for (int x = corner; x < corner + 20; ++x)
+                {
+                    bytes[(static_cast<std::size_t>(y) * 200u + static_cast<std::size_t>(x)) * 4u + 3u] = 255;
+                }
+            }
+        }
+        const Raster composite = Raster::Make(200, 200, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        Expect(plan.has_value() && plan->ids == std::vector<Guid>{a, b} &&
+                   !session.MergeLayers(plan.value(), composite) && session.TakeBudgetRefusal() &&
+                   Find(session.Document(), a) != nullptr,
+               "docbudget.merge-refused");
+    }
+    {
+        DocumentSession session;
+        session.CreateDocument(200, 200, false);
+        session.Document().value().layers.push_back(BudgetLayer(10000, 9999));
+        InsertPainted(session, 20, 20, Vec2{10, 10});
+        session.BeginTransform(false);
+        session.BeginDistort();
+        session.PreviewCorners(std::array<Vec2, 4>{Vec2{10, 10}, Vec2{190, 10}, Vec2{190, 190}, Vec2{10, 190}});
+        session.CommitTransform();
+        Expect(session.ActiveLayer()->asset->image.Width() == 20 && session.TakeBudgetRefusal() &&
+                   ValidateDocument(session.Document().value()) == DocumentStatus::Ok,
+               "docbudget.distort-refused");
+        session.BeginTransform(false);
+        session.BeginDistort();
+        session.PreviewCorners(std::array<Vec2, 4>{Vec2{10, 10}, Vec2{90, 10}, Vec2{90, 90}, Vec2{10, 90}});
+        session.CommitTransform();
+        Expect(session.ActiveLayer()->asset->image.Width() == 80 && !session.TakeBudgetRefusal(),
+               "docbudget.distort-that-fits");
+    }
+}
+
+void TestPixelMoveTiles()
+{
+    // RF-216: a pixel drag rebuilds only the tiles its pixels land on now and landed on last time (and the hole's
+    // tiles once), and nothing on a pointer update that rounds to the offset already shown; the committed pixels are
+    // those of one direct move to the same offset.
+    const auto pattern = [](int x, int y) -> std::array<std::uint8_t, 4>
+    {
+        const int alpha = 64 + (x * 7 + y * 13) % 192;
+        return {static_cast<std::uint8_t>(alpha * (x % 3) / 2), static_cast<std::uint8_t>(alpha * (y % 5) / 4),
+                static_cast<std::uint8_t>(alpha / 2), static_cast<std::uint8_t>(alpha)};
+    };
+    const Raster source = BytesRaster(1200, 300, pattern);
+    const auto setup = [&](DocumentSession& session)
+    {
+        session.CreateDocument(1200, 300, true);
+        InsertPixels(session, source, L"Pattern");
+        SelectRect(session, 10.5, 20.25, 60, 40, true);
+        return session.BeginPixelMove();
+    };
+    DocumentSession path;
+    DocumentSession direct;
+    Expect(setup(path) && setup(direct), "movetiles.begin");
+    BrushStroke& raster = *path.MutablePixelMove()->raster;
+    path.MovePixels(0, 0);
+    static_cast<void>(raster.TakeChanged());
+    path.MovePixels(300.2, 10);
+    Expect(!raster.TakeChanged().empty(), "movetiles.move-rebuilds");
+    path.MovePixels(299.8, 10.4);
+    Expect(raster.TakeChanged().empty(), "movetiles.same-offset-rebuilds-nothing");
+    path.MovePixels(900, 200);
+    const std::vector<std::size_t> far = raster.TakeChanged();
+    bool onlyLandings = !far.empty() && far.size() <= 4;
+    for (const std::size_t index : far)
+    {
+        // The hole's tile (the first column) is never rebuilt again, nor anything between the landings.
+        onlyLandings = onlyLandings && raster.Tiles()[index].rect.x >= 256;
+    }
+    Expect(onlyLandings, "movetiles.only-the-old-and-new-landings");
+    path.MovePixels(650, 120);
+    direct.MovePixels(650, 120);
+    path.FinishPixelMove();
+    direct.FinishPixelMove();
+    const Raster& moved = path.ActiveLayer()->asset->image;
+    const Raster& once = direct.ActiveLayer()->asset->image;
+    bool same = moved.Width() == once.Width() && moved.Height() == once.Height() &&
+                path.ActiveLayer()->transform == direct.ActiveLayer()->transform;
+    if (same)
+    {
+        std::vector<std::uint8_t> a(static_cast<std::size_t>(moved.Width()) * static_cast<std::size_t>(moved.Height()) *
+                                    4u);
+        std::vector<std::uint8_t> b(a.size());
+        moved.ReadRegion(0, 0, moved.Width(), moved.Height(), a.data(), moved.Width() * 4, 0);
+        once.ReadRegion(0, 0, once.Width(), once.Height(), b.data(), once.Width() * 4, 0);
+        same = a == b;
+    }
+    Expect(same && path.history.UndoName() == L"Move Pixels", "movetiles.path-matches-a-direct-move");
+}
+
+void PendGradient(DocumentSession& session)
+{
+    session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+    session.BeginGradient(Vec2{0.5, 20});
+    session.MoveGradient(std::nullopt, Vec2{99.5, 20});
+}
+
+void TestGradientAppliesFirst()
+{
+    // RF-202 (Decision D3): an edit under a pending gradient applies the gradient first instead of dropping it
+    // (legacy refuses those edits while a gradient is pending). A fill records both, the gradient first.
+    {
+        DocumentSession session = PixelEditSession();
+        PendGradient(session);
+        SelectRect(session, 0, 0, 10, 10);
+        Expect(session.PendingGradient() != nullptr, "gradientfirst.fill-pending");
+        session.FillSelection(FillSource::Foreground);
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Fill" &&
+                   ActivePixel(session, 90, 30)[3] == 255 &&
+                   ActivePixel(session, 5, 5) == std::array<std::uint8_t, 4>{0, 0, 0, 255},
+               "gradientfirst.fill-applies-the-gradient");
+        session.Undo();
+        Expect(session.history.UndoName() == L"Gradient" && ActivePixel(session, 90, 30)[3] == 255,
+               "gradientfirst.fill-undo-leaves-the-gradient");
+    }
+    // A layer flip records the gradient before the flip; the mirrored gradient runs white to black.
+    {
+        DocumentSession session = PixelEditSession();
+        const Guid clear = InsertPixels(session, SolidRaster(100, 40, 0, 0, 0, 0), L"Clear");
+        PendGradient(session);
+        session.FlipLayers(true);
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Flip Horizontal" &&
+                   LayerPixelOf(session, clear, 3, 20)[0] > 240 && LayerPixelOf(session, clear, 96, 20)[0] < 15,
+               "gradientfirst.flip-layer");
+        session.Undo();
+        Expect(session.history.UndoName() == L"Gradient", "gradientfirst.flip-layer-undo");
+    }
+    // Flip Canvas applies the gradient and drops the crop frame (legacy flipCanvas).
+    {
+        DocumentSession session = PixelEditSession();
+        InsertPixels(session, SolidRaster(100, 40, 0, 0, 0, 0), L"Clear");
+        PendGradient(session);
+        session.SetCropFrame(CropRect{5, 5, 20, 20});
+        session.FlipCanvas(true);
+        Expect(session.PendingGradient() == nullptr && !session.CropFrame().has_value() &&
+                   session.history.UndoName() == L"Flip Canvas Horizontal",
+               "gradientfirst.flip-canvas");
+        session.Undo();
+        Expect(session.history.UndoName() == L"Gradient", "gradientfirst.flip-canvas-undo");
+    }
+    // Cut copies the pixels the canvas shows: the gradient, applied first.
+    {
+        DocumentSession session = PixelEditSession();
+        PendGradient(session);
+        SelectRect(session, 0, 0, 20, 20, false);
+        session.CutSelection();
+        Expect(session.PendingGradient() == nullptr && session.Clipboard().has_value() &&
+                   PixelOf(session.Clipboard()->image, 10, 10)[3] == 255 && session.history.UndoName() == L"Clear" &&
+                   ActivePixel(session, 10, 10)[3] == 0 && ActivePixel(session, 50, 20)[3] == 255,
+               "gradientfirst.cut");
+    }
+    // A pixel nudge moves the gradient's pixels.
+    {
+        DocumentSession session = PixelEditSession();
+        PendGradient(session);
+        SelectRect(session, 0, 0, 20, 40, false);
+        session.NudgePixels(10, 0);
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Move Pixels" &&
+                   ActivePixel(session, 5, 20)[3] == 0 && ActivePixel(session, 25, 20)[3] == 255,
+               "gradientfirst.nudge-pixels");
+    }
+    // A brush stroke paints over the applied gradient.
+    {
+        DocumentSession session = PixelEditSession();
+        PendGradient(session);
+        session.brushSettings = BrushSettings{10, 1, 1, 0, 0, 1, false};
+        Expect(session.BeginBrush(Vec2{50, 20}), "gradientfirst.brush-begins");
+        session.FinishBrush();
+        session.Undo();
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Gradient",
+               "gradientfirst.brush");
+    }
+    // Deleting a layer records its gradient first, so Undo brings the layer back with it; a new gradient on the
+    // next layer is its own edit.
+    {
+        DocumentSession session = PixelEditSession();
+        session.AddBlankLayer();
+        const Guid top = session.ActiveLayerID().value();
+        PendGradient(session);
+        session.DeleteLayer(top);
+        Expect(session.PendingGradient() == nullptr && session.history.UndoName() == L"Delete Layer",
+               "gradientfirst.delete-layer");
+        PendGradient(session);
+        session.Undo();
+        session.Undo();
+        const ImageLayer* restored = Find(session.Document(), top);
+        Expect(restored != nullptr && restored->asset.has_value() && session.history.UndoName() == L"Gradient",
+               "gradientfirst.delete-layer-undo-keeps-the-gradient");
+    }
+    // Switching to a new mask applies the layer's gradient; the mask's gradient is an entry of its own.
+    {
+        DocumentSession session = PixelEditSession();
+        InsertPixels(session, SolidRaster(100, 40, 0, 0, 255, 255), L"Red");
+        PendGradient(session);
+        session.AddLayerMask(true);
+        Expect(session.PendingGradient() == nullptr && session.IsMaskSelected(), "gradientfirst.mask-switch");
+        PendGradient(session);
+        session.CommitGradient();
+        Expect(session.history.UndoName() == L"Gradient Mask", "gradientfirst.mask-gradient");
+        session.Undo();
+        session.Undo();
+        Expect(session.history.UndoName() == L"Gradient", "gradientfirst.mask-switch-kept-the-gradient");
+    }
+}
 
 int wmain()
 {
@@ -6038,6 +6869,18 @@ int wmain()
     TestCrop();
     TestMerge();
     TestPendingEdits();
+    TestMaskFillAcrossCommits();
+    TestStretchedMaskPainting();
+    TestActiveLayerTargets();
+    TestGradientAppliesFirst();
+    TestCutWithFullHistory();
+    TestTransformWaitsForPanels();
+    TestDisplayCopyFollowsEdits();
+    TestSelectionLoadRefusals();
+    TestCropWholePixels();
+    TestDistortMasks();
+    TestDocumentPixelBudget();
+    TestPixelMoveTiles();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {
         std::printf("%d document tests failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);

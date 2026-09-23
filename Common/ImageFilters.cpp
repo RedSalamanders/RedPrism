@@ -125,7 +125,12 @@ namespace
 {
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), background);
     const std::uint8_t* source = mask.Data();
-    if (source == nullptr || !transform.IsValid())
+    if (source == nullptr)
+    {
+        // A sparse mask that could not be assembled: nothing to render, never the background in its place.
+        return {};
+    }
+    if (!transform.IsValid())
     {
         return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
     }

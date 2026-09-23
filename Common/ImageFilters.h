@@ -13,7 +13,8 @@ namespace ImageFilters
 [[nodiscard]] Raster GaussianBlur(const Raster& source, double sigma);
 
 // A mask's pixels placed by `transform` on a document-size Gray8 canvas filled with `background` (its edge tone),
-// sampled bilinearly with the edges clamped inside the placed box. Empty when the mask is empty or memory runs out.
+// sampled bilinearly with the edges clamped inside the placed box. Empty when the mask is empty, its pixels cannot be
+// read or memory runs out.
 [[nodiscard]] Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int width, int height,
                                       std::uint8_t background);
 } // namespace ImageFilters

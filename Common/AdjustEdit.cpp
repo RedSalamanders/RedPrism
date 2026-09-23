@@ -196,6 +196,16 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
     {
         return false;
     }
+    // Decision D7: the grown layer (and a mask on its grid carried onto it) fits the document's budget.
+    const ImageLayer* layer = FindLayer(edit.layerID);
+    const bool maskGrows = layer != nullptr && layer->mask.has_value() && !layer->mask->placement.has_value() &&
+                           layer->mask->asset.image.PixelCount() > 1;
+    if (grownWidth * grownHeight > PixelBudgetLeft(false, {edit.layerID}) ||
+        (maskGrows && grownWidth * grownHeight > PixelBudgetLeft(true, {edit.layerID})))
+    {
+        _budgetRefused = true;
+        return false;
+    }
     const Raster grown = Raster::Replacing(edit.original, -targetLeft, -targetTop, {}, 0, 0,
                                            static_cast<int>(grownWidth), static_cast<int>(grownHeight), 0);
     if (!grown.HasStorage())
@@ -411,8 +421,8 @@ void DocumentSession::CommitFilter()
         const std::uint8_t tone =
             static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(mask->asset.thumbnail) * 255.0));
         const Raster carried =
-            Raster::Replacing(mask->asset.image, edit.grownOffsetX - cropX, edit.grownOffsetY - cropY, {}, 0, 0,
-                              image.Width(), image.Height(), tone);
+            CarriedMask(mask->asset.image, edit.original.Width(), edit.original.Height(), edit.grownOffsetX - cropX,
+                        edit.grownOffsetY - cropY, image.Width(), image.Height(), tone);
         if (carried.HasStorage())
         {
             mask->asset.image = carried;

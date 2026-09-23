@@ -119,7 +119,8 @@ enum class ResizeStatus : std::uint8_t
 
 // `image` drawn through `pixelToTarget` (image pixel → target pixel) into a transparent BGRA target of the given
 // size: Nearest picks the nearest source pixel, Smooth samples bilinearly, High also averages a grid of samples per
-// target pixel when the map shrinks the image. Pixels the source does not reach stay transparent.
+// target pixel when the map shrinks the image. Pixels the source does not reach stay transparent. Empty when memory
+// runs out or the source's pixels cannot be read.
 [[nodiscard]] Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int width, int height,
                                        LayerSampling sampling);
 // The Gray8 counterpart for a mask: pixels the mask does not reach take `background`.

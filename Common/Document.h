@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -126,11 +127,15 @@ class Raster
                                            int baseY, std::vector<RasterTile> tiles, std::uint8_t fill);
     // `source` (its top-left at (sourceX, sourceY) of a working grid) with `tiles` of that grid written over it,
     // cropped to the given rectangle of the grid. Older tiles are split around newer ones so the tile list stays
-    // disjoint; the base and untouched tiles are shared, never copied.
+    // disjoint; the base and untouched tiles are shared, never copied. `fill` is what the crop reads beyond the
+    // source; a sparse source keeps its own fill over its own extent (a painted hide-all mask stays hidden).
     [[nodiscard]] static Raster Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles,
                                           int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill);
     // A contiguous copy of the region (pixels outside this raster read `fill`).
     [[nodiscard]] Raster Crop(int x, int y, int width, int height, std::uint8_t fill) const;
+    // This raster resampled to `width` × `height` by the nearest pixel (grid pixel x reads x · Width() / width), as
+    // a mask stretched over its layer is painted; itself when the size already matches, empty when out of range.
+    [[nodiscard]] Raster Stretched(int width, int height) const;
     [[nodiscard]] bool operator==(const Raster& other) const noexcept
     {
         return _storage == other._storage;
@@ -1100,6 +1105,13 @@ struct HierarchyEntry
 // of its edge is, read from the thumbnail (legacy LayerMask.background). A missing thumbnail reveals.
 [[nodiscard]] double MaskEdgeBackground(const Raster& thumbnail) noexcept;
 
+// A mask on its layer's pixel grid (`oldWidth` × `oldHeight`; stretched onto it first when its own size differs)
+// carried onto a new grid of that layer: the old grid's top-left lands at (`x`, `y`) of the `width` × `height` result
+// and only the area beyond the old grid reads `outside`. A sparse mask keeps its tiles and its own fill. Empty when
+// the sizes are out of range.
+[[nodiscard]] Raster CarriedMask(const Raster& mask, int oldWidth, int oldHeight, int x, int y, int width, int height,
+                                 std::uint8_t outside);
+
 // Where a mask's pixels sit on the document: its own placement, else the layer's transform.
 [[nodiscard]] inline LayerTransform MaskTransform(const ImageLayer& layer) noexcept
 {
@@ -1220,6 +1232,10 @@ class DocumentSession
     [[nodiscard]] bool CanToggleClippingMask(const Guid& id) const;
     void ToggleClippingMask(const Guid& id);
     void ClearDocument();
+    // A loaded or new document takes the session over (File > Open, a new project from images): everything
+    // ClearDocument drops, then `document` with `active` as the only selected layer (its layer, not its mask,
+    // targeted) and an unmodified history.
+    void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active);
     // A resized document (Canvas Size, Image Size, Crop: the same id, every layer still there) installed as one
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
@@ -1410,8 +1426,10 @@ class DocumentSession
     void InvertSelection();
     // A mask's black (hidden) areas, or a layer's pixels at least 50 % opaque, become the selection; false when
     // there is nothing to trace.
-    bool LoadMaskSelection(const Guid& id, SelectionMode mode = SelectionMode::New);
-    bool LoadLayerSelection(const Guid& id, SelectionMode mode = SelectionMode::New);
+    // A refused outline is false too, with `failure` saying why (TooDetailed past 8 000 000 pixel edges, Memory), so
+    // the host can tell the user instead of silently loading nothing; `failure` is None for "nothing to trace".
+    bool LoadMaskSelection(const Guid& id, SelectionMode mode = SelectionMode::New, WandFailure* failure = nullptr);
+    bool LoadLayerSelection(const Guid& id, SelectionMode mode = SelectionMode::New, WandFailure* failure = nullptr);
     // Selects pixels similar to the one at `point`, read from `composite` (the visible canvas at document size,
     // required when `wandSettings.sampleAllLayers`) or the active layer's own pixels as placed. One entry.
     WandFailure MagicWand(Vec2 point, SelectionMode mode, const Raster* composite = nullptr);
@@ -1484,7 +1502,9 @@ class DocumentSession
     void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
     // Re-renders the pending gradient from the current endpoints, settings and palette.
     void RefreshGradient();
-    // Straight red, green, blue, alpha of both ends after the style and Reverse; a mask takes the first component.
+    // Straight red, green, blue, alpha of both ends after the style and Reverse. On a mask (the pending gradient's
+    // target, else the current one) the ends come from the mask palette: black or white per `maskPaintWhite` for the
+    // foreground and the other for the background; the mask takes the first component.
     [[nodiscard]] std::array<std::array<double, 4>, 2> GradientColors() const noexcept;
     // Ends a drag; a click without a line leaves nothing pending.
     void EndGradientDrag();
@@ -1525,8 +1545,9 @@ class DocumentSession
         return CanPaint();
     }
     // Fills the selection (the whole canvas without one; an empty selection nothing) with the palette color as one
-    // entry (`Fill`, `Fill Mask`); a mask takes the color's first component, so black hides and white reveals.
-    void FillSelection(FillSource source);
+    // entry (`Fill`, `Fill Mask`); a mask has its own palette, so black hides and white reveals. True when the fill
+    // was recorded.
+    bool FillSelection(FillSource source);
     // Delete with a selection: image pixels become transparent (`Clear`); on a mask the selection fills with the
     // background color, as in Photoshop.
     // True when the selection was cleared as a history entry. False leaves the document unchanged.
@@ -1716,6 +1737,20 @@ class DocumentSession
     }
     // The pixel budget left for a raster edit of `layer` (100 M image or mask pixels less the other layers).
     [[nodiscard]] std::int64_t RasterEditPixelLimit(const ImageLayer& layer, bool mask) const noexcept;
+    // The document's 100 M image (or mask) pixel budget left once every layer but those in `excluding` is counted.
+    // Decision D7: every edit that grows pixels (brush and raster edits, pastes, shapes, duplicates, masks, the
+    // floating selection's merge, filters that grow the layer, merges, distortions) checks it, so a document never
+    // outgrows what it can save.
+    [[nodiscard]] std::int64_t PixelBudgetLeft(bool mask, std::initializer_list<Guid> excluding = {}) const noexcept;
+    [[nodiscard]] std::int64_t PixelBudgetLeft(bool mask, const std::unordered_set<Guid>& excluding) const noexcept;
+    // True once after an edit was refused because it would take the document past its 100 M image or mask pixel
+    // budget (Decision D7); the host says so (IDS_ERROR_TOO_LARGE).
+    [[nodiscard]] bool TakeBudgetRefusal() noexcept
+    {
+        const bool refused = _budgetRefused;
+        _budgetRefused = false;
+        return refused;
+    }
     BrushSettings brushSettings;
     BrushToolMode brushMode = BrushToolMode::Paint;
     bool maskPaintWhite = false;
@@ -1778,6 +1813,10 @@ class DocumentSession
     // True when Undo/Redo should not move history: an open color panel, or a pending edit that this call drops.
     [[nodiscard]] bool CancelPendingEdit();
     void Restore(const DocumentHistory::Snapshot& snapshot);
+    // Every change of the active layer goes through here (legacy EditorSession.activeLayerID didSet): another layer
+    // drops the mask target, and the selection becomes that layer alone. A mask stays targeted only while the
+    // active layer has one.
+    void SetActiveLayerID(const std::optional<Guid>& id);
     static void AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers);
     static void ReleaseDetachedClipping(std::vector<ImageLayer>& layers);
     [[nodiscard]] ImageLayer* MutableLayer(const Guid& id) noexcept;
@@ -1828,6 +1867,7 @@ class DocumentSession
     std::optional<FilterEdit> _filter;
     std::optional<LevelsEdit> _levels;
     std::optional<HueSaturationEdit> _hueSaturation;
+    bool _budgetRefused = false;
     std::optional<Guid> _adjustmentEditingID;
     std::optional<LayerAdjustment> _adjustmentOriginal;
     struct PreviewLayer
@@ -1857,8 +1897,9 @@ class DocumentSession
     // A shape layer scaled to a new size draws its shape again at that size, so a rounded corner keeps its radius
     // instead of stretching. Part of the edit that changed the size.
     void RedrawShape(std::size_t index);
-    // Installs a raster edit as one entry; `alsoApply` runs inside the same entry (a moved selection).
-    void CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply = {});
+    // Installs a raster edit as one entry; `alsoApply` runs inside the same entry (a moved selection). False when
+    // nothing was installed (no pixels, or the layer changed under the edit).
+    bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply = {});
     [[nodiscard]] std::uint32_t NextHealSeed() noexcept
     {
         _healSeed = _healSeed * 1664525u + 1013904223u;

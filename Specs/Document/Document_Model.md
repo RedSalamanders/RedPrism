@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-23
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -28,6 +28,13 @@ The requirements below and `ProjectStore` validation own document behavior.
 | Group appearance | opacity 1 and blend Normal (on disk and in the live graph) |
 | Manifest (I/O) | ≤4 MiB; this contract validates the graph, not JSON |
 
+The session enforces both 100 M sums on every edit that grows pixels (`PixelBudgetLeft`): brush and raster edits,
+pastes, shapes, Layer via Copy, duplicates, masks, the floating selection's merge, filters that grow the layer's
+grid, merges and distortions (a live shape past the budget keeps its pixels instead of redrawing). An edit that would
+exceed them is refused and the document stays as it was; `TakeBudgetRefusal()` reports it once so the host can say
+so. Decision D7 of the 2026-09-23 review: legacy enforces the sums only when it saves, where such a document is then
+rejected.
+
 ## Types
 
 `CanvasDocument` holds `id`, integer width/height, `resolution` (default 72, finite 1…9600 when set), layers
@@ -49,12 +56,20 @@ the codecs and the composition use) and Gray8 masks. Consumers that cache by `Ra
 
 A raster is contiguous or sparse (C10). A sparse raster is an unchanged *base* placed in its grid, disjoint
 replacement *tiles* (`RasterTile`: a window into shared pixels at a grid position) and a *fill* byte for pixels
-neither reaches. `MakeSparse` builds one; `Replacing(source, tiles, crop)` writes tiles of a working grid over a
-source and crops the result, splitting older tiles around newer ones so the list stays disjoint while the base and
-every untouched tile stay shared; `Crop` copies a region; `ReadRegion` samples any raster without assembling it
-(thumbnails use it); `ForEachStorage` visits the base and every tile once (history counts bytes that way).
+neither reaches. `MakeSparse` builds one; `Replacing(source, tiles, crop, fill)` writes tiles of a working grid over
+a source and crops the result, splitting older tiles around newer ones so the list stays disjoint while the base and
+every untouched tile stay shared. A sparse source keeps its own fill over its own extent (a hide-all mask painted
+twice keeps hiding what neither stroke touched); only the area the crop adds beyond the source reads `fill`, as
+windows of one shared uniform block of at most 256 × 256. `Stretched(width, height)` resamples a raster by the
+nearest pixel (target pixel x reads source pixel ⌊x · own width / width⌋), which is how a mask whose pixel size
+differs from its layer's is painted; `CarriedMask` moves a mask on its layer's grid onto a grown or cropped grid of
+that layer (stretched first; the old area keeps its pixels and fill, only new area takes the given value). `Crop`
+copies a region; `ReadRegion` samples any raster without assembling it (thumbnails use it); `ForEachStorage` visits
+the base and every tile once (history counts bytes that way).
 `Data()` assembles a contiguous copy on first use and keeps it (`IsMaterialized`); consumers that can read tiles
-(the composition, the brush, thumbnails) MUST NOT call it. Identity is the storage itself, sparse or not.
+(the composition, the brush, thumbnails) MUST NOT call it. When that assembly cannot allocate, `Data()` is null and
+every consumer fails its own operation (Image Size reports Memory, a warp, trace, wand or sample fails) instead of
+reading a null pointer or substituting transparency. Identity is the storage itself, sparse or not.
 
 `LayerTransform` matches archived behavioral reference: origin, size, clockwise rotation
 degrees, flipX/flipY, sampling. Valid when all values are finite, size is 1…300 000 per side, and
@@ -109,9 +124,10 @@ bottom-to-top order.
   (a selected folder carries its subtree) move into a new `Folder N` placed at the topmost selected branch of their
   common parent, an empty selection makes an empty folder, the folder becomes active and its parent uncollapses;
   one `Group Layers` entry, refused when the hierarchy would not validate. Clipping toggle (`ToggleClippingMask`,
-  legacy `LiveLayerMask.toggleClippingMask`): a clipped layer releases (`Release Clipping Mask`); otherwise a
-  non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself
-  (`Create Clipping Mask`); `CanToggleClippingMask` mirrors the legacy gate.
+  legacy `LiveLayerMask.toggleClippingMask`): a clipped layer releases (`Release Clipping Mask`) together with the
+  run of clipped layers stacked on it that share its base, the ones below staying clipped (legacy
+  `removeLiveMask`); otherwise a non-folder layer clips to the sibling below it, sharing that sibling's base when it
+  is clipped itself (`Create Clipping Mask`); `CanToggleClippingMask` mirrors the legacy gate.
 - Merge (`PlanMerge`, `MergeLayers`, legacy `LayerMerge.swift`): the plan lists the layers to merge in stacking
   order, the ids that go, the result's name (the lower layer's, the folder's or the top selected one's), its
   parent, the anchor whose slot it takes and the action name (`Merge Down`, `Merge Group`, `Merge Layers`); no plan
@@ -121,14 +137,26 @@ bottom-to-top order.
   the clip graph, and records one entry named by the plan; a plan whose layers are gone is refused.
 - `ClearDocument` drops the document, the active layer and selection, the collapsed set, every draft and pending
   edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
+  `ReplaceDocument(document, active)` (File › Open, a new project from images) drops what `ClearDocument` drops and
+  installs the document unmodified, `active` (when it names a layer) the only selected layer with its pixels, not
+  its mask, targeted.
+- The active layer changes in one place (legacy `EditorSession.activeLayerID` didSet): every edit that makes another
+  layer active (a new layer, folder, shape, paste or duplicate, a moved layer, a group, a merge, a deletion, the
+  floating selection, Undo and Redo) drops the mask target and makes the selected set that layer alone, so a new
+  layer paints and `GroupSelectedLayers` / the Move tool act on it; a mask stays targeted only while the active
+  layer has one.
 - Nested `BeginEdit`/`EndEdit` follow `DocumentHistory`; every edit is one undo step.
 
 ## Validation
 
 `Tests/DocumentTests` MUST cover cycles, missing parents, raster-as-parent, group+image, group opacity/blend, v1
 groups, v4/v6 masks, adjustment-on-group, clipping cycles, canvas/name limits, mask placement helpers, collapsed
-rows, clip release on delete, the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill,
-`Replacing` splits, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
+rows, clip release on delete, the legacy `LiveMaskTests` shared clipping stack (`clip.stack-*`: releasing the top
+layer leaves the one below clipped, releasing the lower one releases both, a layer dragged below its base stops
+clipping), the active-layer rules (`active.*`), the document pixel budget (`docbudget.*`: a paste, a duplicate, a
+blur's grown grid, the floating merge, masks, a merge and a distortion refused past 100 M while an edit that fits
+goes through), the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill, `Replacing`
+splits and fills, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
 
 ```powershell
 .\test.ps1 -Platform x64 -Configuration Debug

@@ -57,10 +57,13 @@ namespace MagicWand
 
 namespace MaskTracing
 {
-// Outline of a Gray8 mask's pixels darker than 50 %, in the mask's pixel coordinates; nullopt when none.
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask);
-// Outline of a BGRA image's pixels at least 50 % opaque; nullopt when none.
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image);
+// Outline of a Gray8 mask's pixels darker than 50 %, in the mask's pixel coordinates; nullopt when none, or when the
+// outline is refused (`failure`: TooDetailed past 8 000 000 pixel edges, Memory when the pixels cannot be read or the
+// outline allocated).
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure = nullptr);
+// Outline of a BGRA image's pixels at least 50 % opaque; nullopt when none or refused, as DarkPixels.
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image,
+                                                                     WandFailure* failure = nullptr);
 } // namespace MaskTracing
 
 // The map from an image's pixel coordinates to the document for a layer placed by `transform` (legacy
@@ -68,5 +71,5 @@ namespace MaskTracing
 [[nodiscard]] Affine2 PixelToDocument(const LayerTransform& transform, int width, int height) noexcept;
 
 // `image` drawn at `transform` onto a transparent document-size BGRA canvas, sampled bilinearly (premultiplied,
-// transparent beyond the pixels). What the wand reads for one layer.
+// transparent beyond the pixels). What the wand reads for one layer. Empty when the image's pixels cannot be read.
 [[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height);

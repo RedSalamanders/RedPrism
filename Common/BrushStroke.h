@@ -272,7 +272,8 @@ class BrushStroke
     [[nodiscard]] bool Render(const std::vector<BrushSegment>& settled, const std::vector<BrushSegment>& tail);
     void TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys) const;
     [[nodiscard]] bool AllocateTile(std::uint64_t key);
-    void ComposeTile(Tile& tile);
+    // The tile's image from its base, coverage and the settings; false (the stroke fails) when the base cannot be read.
+    [[nodiscard]] bool ComposeTile(Tile& tile);
     [[nodiscard]] double SelectionAt(Vec2 document) const noexcept;
     // Runs `shade` in document coordinates over every tile the canvas and selection cover (only the layer's existing
     // pixels with `withinSource`), starting from each tile's original content; `shade` returns false to leave a
@@ -319,5 +320,14 @@ class BrushStroke
         GridRect rect;
     };
     std::optional<Lifted> _lifted;
-    std::vector<std::uint64_t> _moveTiles;
+    // The pixel move last rendered: its offset and mode, and the tiles its lifted pixels landed on.
+    struct MoveState
+    {
+        Vec2 offset;
+        bool duplicate = false;
+    };
+    std::optional<MoveState> _moved;
+    std::vector<std::uint64_t> _landingTiles;
+    // Allocates every tile `rect` (grid pixels) touches and appends their keys; false when one cannot be allocated.
+    [[nodiscard]] bool AllocateTilesIn(const GridRect& rect, std::vector<std::uint64_t>& keys);
 };

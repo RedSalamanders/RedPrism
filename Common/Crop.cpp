@@ -192,12 +192,15 @@ CropRect CropSnap::Apply(const CropRect& rect, const CropDrag& drag, Vec2 point,
     }
     if (symmetric)
     {
-        // The snapped (dragged) edge sets the half size; the opposite edge mirrors it about the center.
+        // The snapped (dragged) edge sets the half size; the opposite edge mirrors it about the center. The center
+        // sits on the half-pixel grid, so both edges land on whole pixels (Decision D6: legacy mirrors about the
+        // unrounded press point, which leaves the frame between pixels and makes Apply resample every layer).
         Vec2 center{drag.original.MidX(), drag.original.MidY()};
         if (drag.mode == CropDrag::Mode::Create)
         {
             center = drag.start;
         }
+        center = Vec2{std::round(center.x * 2.0) / 2.0, std::round(center.y * 2.0) / 2.0};
         if (horizontal)
         {
             const double half = point.x >= center.x ? result.MaxX() - center.x : center.x - result.MinX();
@@ -216,6 +219,7 @@ CropRect CropSnap::Apply(const CropRect& rect, const CropDrag& drag, Vec2 point,
                 result.height = half * 2.0;
             }
         }
+        return CropGeometry::Snapped(result);
     }
     return result;
 }

@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-23
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
@@ -64,14 +64,18 @@ overlay can draw them. Resizing and rotating do not snap; Ctrl during a move dra
 layers have no pixels and cannot transform; folders alone cannot either), or the selection transforms as a group
 (several selected layers, or one selected folder: its visible pixel layers). The draft starts at the layer's
 transform, the mask's placement when an unlinked mask is selected (`SelectLayerTarget(id, mask)` and
-`TransformTargetsMask`), or the upright box around the group's members.
+`TransformTargetsMask`), or the upright box around the group's members. Nothing transforms while a color or filter
+panel is open (`HasColorEdit`): the panel's edit is anchored to the layer's placement, so moves, Free Transform,
+nudges, the Alt-drag duplicate and both flips wait for OK or Cancel (legacy `canEditLayers`).
 
 `PreviewTransform(value)` changes only the draft (invalid values are ignored); the document, history and
 `ActiveLayer()->transform` do not change while previewing. Rendering reads `DisplayDocument()`: the real document
 when no edit is pending, else a cached copy sharing every raster where each moved layer carries
 `PendingTransform` (the draft, or for a group each original `Following` the box) and `DisplayedMaskPlacement` (a
 linked placement follows; an unlinked mask stays where it was; a uniform 1 × 1 mask never needs a placement).
-`EditedTransform(layer)` is where the handles sit. `TransformPixelSize()` is what 100 % scale draws 1:1.
+The copy is rebuilt after every document edit (each `EndEdit`), so an opacity, blend mode, visibility, order, deletion
+or flip made while a transform or a panel preview is pending shows at once. `EditedTransform(layer)` is where the
+handles sit. `TransformPixelSize()` is what 100 % scale draws 1:1.
 
 `CommitTransform()` records one history entry and clears the edit: `Transform Layer`, `Transform Layers` (group,
 masks following), `Transform Layer Mask` (placement only; nothing when it lands on the layer),
@@ -93,7 +97,12 @@ or collapsed shape is ignored, `IsUsable`). The edit becomes persistent. A disto
 pixels at a bounded preview size (longest side 1024) into the shape; Apply (`CommitTransform`) resamples at full
 resolution (`WarpTrimmed`: the shape's whole-pixel bounds, then cropped to the visible pixels so a stroke hugs what
 is there), replaces the layer's pixels and thumbnail, and sets an ordinary axis-aligned transform over the result.
-A linked mask without a placement is warped and cropped with the pixels; a uniform mask passes through. The warp is
+A linked mask without a placement is warped and cropped with the pixels; a uniform mask passes through. A linked
+mask placed apart takes the same perspective over its own bounds: its placement is carried with the layer
+(`Following`), its corners through the distortion (`Carried`), and it is warped into them with its edge tone outside
+(`WarpMask`). An unlinked mask keeps its place on the document: its placement becomes the layer's transform before
+the distortion. The preview does the same at the bounded size (legacy `Distort.distort` and `distortPreview`). The
+warp is
 the perspective map of the unit square onto the corners (`MakeHomography`), sampled bilinearly (nearest when the
 layer's sampling is Nearest) from the source with the layer's flips honored, edges antialiased by four sub-samples.
 Group distortions carry each member's transform by the same perspective (`Carried`). A distorted mask edited alone
@@ -104,7 +113,8 @@ is warped over its shape with its edge background outside (`WarpMask`).
 `FlipLayers(horizontally)` mirrors the active layer about its own center, or the group's members about the box
 center, as one `Flip Horizontal` / `Flip Vertical` entry; masks follow the link rule. `FlipCanvas(horizontally)`
 mirrors every layer and placed mask across the canvas middle and reflects the selection outline, as one
-`Flip Canvas Horizontal` / `Flip Canvas Vertical` entry. Both settle a pending edit first.
+`Flip Canvas Horizontal` / `Flip Canvas Vertical` entry. Both commit a pending transform and apply a pending gradient
+first; `FlipCanvas` also drops the crop frame (legacy `flipCanvas`).
 
 ## Session flags
 
@@ -168,7 +178,9 @@ needs a document and no pending transform (commands settle the transform first).
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
   ignoring its mask, mapped through the layer transform, flips included (`Load Layer Selection`); false for a
-  folder, a blank layer or an image with no opaque pixel.
+  folder, a blank layer or an image with no opaque pixel. Both refuse an outline past 8 000 000 pixel edges (the
+  wand's limit) or one that cannot be allocated: false with `failure` TooDetailed or Memory and the selection
+  unchanged, so the host can say so instead of silently loading nothing (`failure` stays None for nothing to trace).
 - Undo and Redo drop a draft in progress. `FlipCanvas` mirrors the loops with the layers.
 
 ## Magic Wand
@@ -214,9 +226,16 @@ mask is selected, and no explicitly empty selection.
   (`PendingBrush` becomes null). `FinishBrush` settles the tail and records one entry (`Brush Stroke`, `Erase`,
   `Paint Mask`) unless nothing was painted or the layer's pixels or transform changed under the stroke;
   `TakeLastBrushCommit` hands the host that commit (raster and grid rectangle) once, for the preview's adoption.
-  `CancelBrush` drops the stroke. The first Undo or Redo while a stroke, warp, pixel move, shape draft or crop
-  frame is pending drops that edit and does not move history; a committed stroke's Undo and Redo still share
-  every untouched tile.
+  A commit keeps a painted sparse mask's own fill, so a hide-all mask painted any number of times still hides
+  everything no stroke touched; a mask whose pixel size differs from its layer's (stretched over it) is resampled
+  onto the layer's grid by the nearest pixel, as its tiles were read, the first time a stroke commits on it (a
+  uniform 1 × 1 mask stays one value). When the layer grows, a mask on its grid is carried along (`CarriedMask`):
+  the old area keeps its pixels and fill and only the new area reveals (255); a uniform mask stays uniform. The
+  floating selection's merge and a filter's grown grid carry masks the same way (with the edge tone for filters).
+  `CancelBrush` drops the stroke. The first Undo or Redo while a stroke, warp, pixel move or shape draft is pending
+  drops that edit and does not move history (a crop frame is dropped and history still moves, see
+  [`Document_History.md`](Document_History.md)); a committed stroke's Undo and Redo still share every untouched
+  tile.
 - `ShiftLineStart` is the last sample of the previous stroke on the same layer or mask, for Shift-click lines.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
   `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
@@ -255,10 +274,18 @@ composite)`; the kernels, the tile composition and the warp model live in
   (a new line on the same target replaces the pending one); `MoveGradient(start, end)` and `RefreshGradient`
   re-render from the endpoints, settings and palette (the palette setters refresh it); `GradientColors` are the two
   straight ends; `EndGradientDrag` drops a click without a line (under half a pixel); `CommitGradient` records
-  `Gradient` / `Gradient Mask`; `ResolveGradient` commits a pending edit and runs on layer and target switches and
-  before a new layer is inserted; `CancelGradient` and the first Undo drop it. The fill covers the canvas (before the
+  `Gradient` / `Gradient Mask`; `ResolveGradient` commits a pending edit. It runs on every layer or target switch (a
+  new layer, folder, shape, paste, duplicate or mask, a selected, moved, grouped, merged or deleted layer, a deleted
+  mask) and before every edit that reads or changes the target's pixels or placement (brush, warp, fill, Clear, Cut,
+  Copy, Layer via Copy, pixel moves and nudges, the floating selection, transforms, both flips, Crop, the color
+  panels, Invert), so a pending gradient is never dropped under another edit; a line started on another target
+  applies the pending one first. Decision D3 of the 2026-09-23 review: legacy refuses those edits while a gradient
+  is pending (`canEditLayers`); RedPrism applies the gradient, as its Invert already did. `CancelGradient` and the
+  first Undo drop it. The fill covers the canvas (before the
   start and past the end take the end colors; radial is centered on the start with the end on its rim) within the
-  selection, composited over the original pixels at the opacity; a mask takes the colors' first component as gray.
+  selection, composited over the original pixels at the opacity. On a mask the ends come from the mask palette
+  (legacy `paletteColor`): the foreground is black, or white with `maskPaintWhite`, the background the other one,
+  whatever the RGB palette holds (`GradientColors` follows the pending gradient's target, else the current one).
 - **Shape** (`shapeKind` Rectangle default / Ellipse, `shapeCornerRadius` 0–5000): `BeginShape` anchors at a whole
   pixel; `DragShape(point, square, fromCenter)` uses `DragBox`; `FinishShape` adds a layer above the active one named
   `Rectangle N` / `Ellipse N` filled with the foreground color (`ShapeImage`: exact-area coverage of the rectangle,
@@ -297,7 +324,9 @@ mask, no pending transform or stroke, and no explicitly empty selection.
 - **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):
   `BeginPixelMove(duplicate)` cuts the selected image pixels out of the layer through the coverage (false without a
   non-empty selection, with a mask targeted, or over no pixels); `MovePixels(dx, dy)` previews them a whole-pixel
-  offset away (the hole stays unless duplicating; the raster's tiles feed the host's stroke preview);
+  offset away (the hole stays unless duplicating; the raster's tiles feed the host's stroke preview): an update that
+  rounds to the offset already shown rebuilds nothing, and a new offset rebuilds only the tiles the pixels landed on
+  last time and land on now (the hole's tiles once), each from its original content;
   `FinishPixelMove` commits the raster and the moved outline as one `Move Pixels` / `Duplicate Pixels` entry (a zero
   offset commits nothing); `CancelPixelMove` drops it; `NudgePixels(dx, dy)` is one entry per press.
   `DisplayedSelection` is the outline to draw: during a move the original shifted by the offset; while transforming
@@ -324,11 +353,12 @@ mask, no pending transform or stroke, and no explicitly empty selection.
   layer with pixels and `RenderMergedPixels(composite)` crops the host's document-size composite the same way.
   `CopySelection` and `CopyMergedSelection(composite)` keep the copy on the session (`Clipboard`); `CutSelection`
   copies then clears, and when the clear does not paint (`CanPaint` is false, or the clear allocates nothing) the
-  clipboard is left as it was and the pixels stay; `CanPaste` / `Paste` insert the copy in place as a new layer
-  (`Layer N`; `Paste`; the selection dropped); `PasteImage(image)` centers another app's pixels; `LayerViaCopy`
-  copies the selection to a new layer without the clipboard (`Layer via Copy`), or `DuplicateActiveLayer` without
-  one. `NextLayerName` is the first unused `Layer N`. `BeginSelectionTransform` restores the document and records
-  nothing when `ClearSelectedPixels` does not paint.
+  clipboard is left as it was and the pixels stay (the clear and `FillSelection` report whether they recorded their
+  entry, so a full history, which trims one entry as it adds one, never reads as a refusal); `CanPaste` / `Paste`
+  insert the copy in place as a new layer (`Layer N`; `Paste`; the selection dropped); `PasteImage(image)` centers
+  another app's pixels; `LayerViaCopy` copies the selection to a new layer without the clipboard (`Layer via Copy`),
+  or `DuplicateActiveLayer` without one. `NextLayerName` is the first unused `Layer N`. `BeginSelectionTransform`
+  restores the document and records nothing when `ClearSelectedPixels` does not paint.
 
 ## Color adjustments and filters (C12)
 
@@ -344,7 +374,8 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
 
 - `CanAdjustColors`: a document, no open panel, no stroke, warp or pixel move, a visible image layer (not a group,
   not its mask) with pixels and no explicitly empty selection. While a panel is open (`HasColorEdit`) painting,
-  Undo and Redo wait; a new panel, a tool switch or another layer's panel applies the open one first (the host).
+  transforms, nudges, flips, Undo and Redo wait; a new panel, a tool switch or another layer's panel applies the
+  open one first (the host).
 - **Filters** (`FilterEdit`, `FilterSettings` normalized: radius 0.1–250, angle −90–90, distance 1–2000, amount
   0.1–400, distortion −100–100, the curves, exposure, gradient map and grain settings). `BeginFilter(kind)` commits a
   pending transform, applies a pending gradient, drops a lasso draft and starts from the last applied settings
@@ -461,11 +492,14 @@ pixels; the session holds the pending frame, `CropFrame`, and shows the whole ca
 - `CropSnap::Apply(rect, drag, point, ratio, symmetric)`: with a positive tolerance, a move shifts the frame by the
   smallest offset that lands one of its edges on a target per axis (its size kept); creating or resizing snaps only
   the edge on the pointer's side of each dragged axis (a corner handle both axes, an edge handle one) and never
-  with a fixed ratio; symmetric mirrors the snapped edge about the center (the press point while creating).
+  with a fixed ratio; symmetric mirrors the snapped edge about the center (the press point while creating),
+  rounded to the half-pixel grid so both edges stay on whole pixels. Decision D6 of the 2026-09-23 review: legacy
+  mirrors about the unrounded press point, which leaves an Alt-drawn frame between pixels.
 - `DocumentSession`: `SetCropFrame`, `CancelCrop`, `cropRatioChoice` with `CropRatio` (Free, Original = the
   canvas ratio, 1:1, 4:3, 16:9), `ChangeCropRatio` (the visible frame re-shaped to the ratio about its center,
-  keeping its width, when valid), `CommitCrop` (`ResizeCanvas` with `contentOffset` = −origin as one `Crop`
-  entry: the content moves, nothing resamples; a frame equal to the canvas records nothing) and
+  keeping its width, when valid), `CommitCrop` (the frame rounded to whole pixels first, then `ResizeCanvas` with
+  `contentOffset` = −origin as one `Crop` entry: the content moves by whole pixels, nothing resamples; a frame equal
+  to the canvas records nothing) and
   `CropSnapTargets` (the canvas edges and every visible pixel layer's rounded upright bounds). `ClearDocument`
   drops the frame.
 
@@ -475,14 +509,18 @@ pixels; the session holds the pending frame, `CropFrame`, and shows the whole ca
 , drag modes (`drag.*`), snapping (`snap.*`), the session lifecycle
 (preview keeps the document, commit/undo/redo, no-op commit, invalid previews, select-commits, undo-cancels-pending,
 nudge), duplicate (`duplicate.*`), group (`group.*`), masks (`mask.*`), flips (`flip.*`) and the warp
-(`distort.*`), each ported from the legacy `TransformTests`, `TransformPressTests`, `MaskTransformTests` and
-`DistortTests`. `HostTests` proves the overlay geometry (rotated edges, corners, rotation knob, zoomed document
-mapping, resize cursor directions, distortion midpoints). The WARP self-test drives a pointer drag, Free Transform
-with a typed rotation, Apply, Escape, Shift+arrow and both flips through `Application`.
+(`distort.*`, `distortmask.*`: an unlinked mask staying on the document and a linked placed mask taking the
+perspective, in the preview and on Apply), each ported from the legacy `TransformTests`, `TransformPressTests`,
+`MaskTransformTests` and `DistortTests`, plus `displaycopy.*` (opacity, blend mode and visibility changed under a
+pending transform show in the display copy). `HostTests` proves the overlay geometry (rotated edges, corners,
+rotation knob, zoomed document mapping, resize cursor directions, distortion midpoints). The WARP self-test drives
+a pointer drag, Free Transform with a typed rotation, Apply, Escape, Shift+arrow and both flips through
+`Application`.
 
 Selection: `DocumentTests` `geometry.*` (Clipper2 booleans, holes, offsets, ellipse, drag boxes), `coverage.*`
 (exact rectangles, half-pixel edges, the top-left rule, the antialiased diagonal, off-canvas loops, rings),
-`selection.*`, `move.*`, `modify.*`, `load.*`, `marquee.*` (the legacy `SelectionTests` cases) and `wand.*`,
+`selection.*`, `move.*`, `modify.*`, `load.*`, `marquee.*` (the legacy `SelectionTests` cases), `loadrefused.*` (a
+2100 × 2100 checkerboard mask or layer refused as TooDetailed, nothing to trace not a refusal) and `wand.*`,
 `wandsession.*` (the legacy `MagicWandTests` cases plus the layer sampler). The WARP self-test drives a Marquee
 drag, a Shift add, the M key, an outline move, a deselecting click, a wand click with exact bounds, Ctrl+Shift+I,
 Ctrl+A, Ctrl+D, a polygonal lasso closed with Enter, Expand from the header and Escape through `Application`.
@@ -490,12 +528,18 @@ Ctrl+A, Ctrl+D, a polygonal lasso closed with Enter, Expand from the header and 
 Brush: `DocumentTests` `sparse.*`, `kernel.*`, `brush.*`, the brush `mask.*` cases, `opacity.*`, `accumulate.*`,
 `ripple.*`, `curve.*`, `tail.*`, `crossing.*`, `snapshot.*`, `ridges.*`, `bounds.*`, `budget.*`, `reject.*`,
 `line.*`, `keys.*`, `expand.*` and `clip.*` (the legacy `BrushStrokeTests`, `BrushIntersectionTests`,
-`RasterSnapshotTests` and mask painting cases), listed in [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md).
+`RasterSnapshotTests` and mask painting cases), listed in [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md),
+plus `maskfill.*` (a hide-all mask on a 1024² layer painted on two tiles keeps hiding the rest, and keeps hiding its
+old area when the layer grows) and `stretchmask.*` (a 300 × 150 mask stretched over a 600 × 300 layer keeps its
+place when painted and when the layer grows).
 The WARP self-test paints, erases, keys and cancels a stroke through `Application`.
 
 Retouch: `DocumentTests` `heal.*` (the legacy `SpotHealingTests` blemish for every mode), `clone.*` and `tips.*`
 (`CloneStampTests`), `blur.*`, `smudge.*`, `liquify.*` and `warp.*` (own goldens: a softened edge, carried color, a
-pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`), `shape.*` (`ShapeToolTests` plus the redraw on
+pushed edge, changed tiles, cancel), `gradient.*` (`GradientTests`; the mask row also with a colored palette and with
+`maskPaintWhite`), `gradientfirst.*` (a fill, both flips, Cut, a
+pixel nudge, a brush stroke, a layer deletion and a mask switch under a pending gradient record the gradient first;
+Flip Canvas drops the crop frame), `shape.*` (`ShapeToolTests` plus the redraw on
 scaling) and `eyedropper.*`. The WARP self-test drives each tool through `Application`.
 
 Sizes: `DocumentTests` `canvasdraft.*` (the legacy `CanvasSizeTests` draft case plus the anchor offsets),
@@ -509,13 +553,16 @@ white extension growing from the bottom-right anchor, Escape), Image Size (neare
 through the cards' actions and keys. Crop: `DocumentTests` `crop.*` (the legacy `CropTests`: the reverse ratio
 create, the move, every handle keeping the ratio, the translating commit with undo and redo, the same-size offset
 and the expansion, the cancelling and the whole-canvas commit that record nothing, the ratio re-shape, the snap
-cases and the snap targets, the cleared session); the WARP self-test drives the tool through the pointer path.
+cases and the snap targets, the cleared session; D6: Alt-drawn and Alt-resized frames on whole pixels, a fractional
+frame committed on whole pixels); the WARP self-test drives the tool through the pointer path.
 
 Pixel edits: `DocumentTests` `edit.*` (the legacy `SelectionEditTests`: brush and gradient clipped to the selection,
 an empty selection edits nothing, fills, Clear and the Delete key, mask fills, the clip on scaled layers, masks from
 the selection on the layer grid, mask deletion, invert keeping transparency, inside the selection, on masks, on a
 uniform mask with a selection and after a pending gradient), `pixelmove.*` (moves and duplicates as one entry with
-the outline, nudges, masks refusing, the outline never at its old spot, the preview tiles), `clipboard.*` (the
+the outline, nudges, masks refusing, the outline never at its old spot, the preview tiles), `movetiles.*` (a repeated
+offset rebuilds nothing, a far move rebuilds only the old and new landings, a dragged path commits the pixels of one
+direct move), `clipboard.*` (the
 legacy `SelectionClipboardTests`: copy and paste in place, cut, layer via copy, a lasso-shaped copy, copy merged
 with a hand-built composite, an external paste centered) and `floating.*` (Ctrl+T on a selection as one entry with
 the outline following the handles, Escape restoring exactly, an unchanged transform leaving soft edges untouched,
@@ -534,9 +581,11 @@ validity, new layers from the palette with their own grain seed, the Image menu'
 (`FilterTests`: a Gaussian blur growing the layer and softening its edges as one entry, motion blur along its
 angle, noise on color but never alpha, lens correction opening only the pincushion corners), `adjustlayer.*`
 (`AdjustmentLayerTests`: settings surviving undo, redo and duplicate, the identity curve and the Image command
-keeping alpha, every kind's editor keeping pixels dynamic and supporting cancel, the blend-mode step) and `blend.*`
-(the HSL formulas). `CompositionTests` `adjust.*` and `blend.hsl-golden` prove the live layers and the blends on
-the GPU ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)). The WARP self-test drives Ctrl+L with a
+keeping alpha, every kind's editor keeping pixels dynamic and supporting cancel, the blend-mode step), `blend.*`
+(the HSL formulas) and `panelowns.*` (Levels, Hue/Saturation and a filter open: a Move drag, a nudge, Free
+Transform and both flips change nothing and OK applies in place). `CompositionTests` `adjust.*` and
+`blend.hsl-golden` prove the live layers and the blends on the GPU
+([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)). The WARP self-test drives Ctrl+L with a
 preview, Escape and Enter, the Filter menu's Gaussian Blur, a Hue/Saturation adjustment layer edited live and kept
 with Enter, and Shift+= through `Application`.
 

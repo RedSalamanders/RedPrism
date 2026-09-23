@@ -661,6 +661,11 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
     const int height = image.Height();
     const std::size_t stride = static_cast<std::size_t>(image.Stride());
     const std::uint8_t* rgba = image.Data();
+    if (rgba == nullptr)
+    {
+        count = -1;
+        return {};
+    }
     try
     {
         mask.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), 0);
@@ -834,30 +839,55 @@ std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point
 
 namespace MaskTracing
 {
-std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask)
+std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure)
 {
+    if (failure)
+    {
+        *failure = WandFailure::None;
+    }
     if (!mask.HasStorage() || mask.Format() != RasterFormat::Gray8)
     {
         return std::nullopt;
     }
+    // A sparse mask assembles its pixels here; when that fails there is nothing to read.
     const std::uint8_t* data = mask.Data();
+    if (data == nullptr)
+    {
+        if (failure)
+        {
+            *failure = WandFailure::Memory;
+        }
+        return std::nullopt;
+    }
     const std::size_t stride = static_cast<std::size_t>(mask.Stride());
     return TraceEdges(
         mask.Width(), mask.Height(), [&](int x, int y)
-        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x)] < 128; }, nullptr);
+        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x)] < 128; }, failure);
 }
 
-std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image)
+std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image, WandFailure* failure)
 {
+    if (failure)
+    {
+        *failure = WandFailure::None;
+    }
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
         return std::nullopt;
     }
     const std::uint8_t* data = image.Data();
+    if (data == nullptr)
+    {
+        if (failure)
+        {
+            *failure = WandFailure::Memory;
+        }
+        return std::nullopt;
+    }
     const std::size_t stride = static_cast<std::size_t>(image.Stride());
     return TraceEdges(
         image.Width(), image.Height(), [&](int x, int y)
-        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x) * 4u + 3u] >= 128; }, nullptr);
+        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x) * 4u + 3u] >= 128; }, failure);
 }
 } // namespace MaskTracing
 
@@ -885,6 +915,11 @@ Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, i
     const int imageHeight = image.Height();
     const std::size_t imageStride = static_cast<std::size_t>(image.Stride());
     const std::uint8_t* source = image.Data();
+    if (source == nullptr)
+    {
+        // A sparse image that could not be assembled: the caller fails rather than reading transparency.
+        return {};
+    }
     const Affine2 toPixel = PixelToDocument(transform, imageWidth, imageHeight).Inverted();
     // Only the rows and columns the placed corners span can hold pixels.
     const std::array<Vec2, 4> corners = transform.Corners();
@@ -1282,8 +1317,12 @@ void DocumentSession::InvertSelection()
                  L"Inverse");
 }
 
-bool DocumentSession::LoadMaskSelection(const Guid& id, SelectionMode mode)
+bool DocumentSession::LoadMaskSelection(const Guid& id, SelectionMode mode, WandFailure* failure)
 {
+    if (failure)
+    {
+        *failure = WandFailure::None;
+    }
     if (!CanEditSelection())
     {
         return false;
@@ -1294,7 +1333,7 @@ bool DocumentSession::LoadMaskSelection(const Guid& id, SelectionMode mode)
         return false;
     }
     const Raster& mask = layer->mask->asset.image;
-    const std::optional<std::vector<SelectionLoop>> traced = MaskTracing::DarkPixels(mask);
+    const std::optional<std::vector<SelectionLoop>> traced = MaskTracing::DarkPixels(mask, failure);
     if (!traced.has_value())
     {
         return false;
@@ -1304,8 +1343,12 @@ bool DocumentSession::LoadMaskSelection(const Guid& id, SelectionMode mode)
     return true;
 }
 
-bool DocumentSession::LoadLayerSelection(const Guid& id, SelectionMode mode)
+bool DocumentSession::LoadLayerSelection(const Guid& id, SelectionMode mode, WandFailure* failure)
 {
+    if (failure)
+    {
+        *failure = WandFailure::None;
+    }
     if (!CanEditSelection())
     {
         return false;
@@ -1316,7 +1359,7 @@ bool DocumentSession::LoadLayerSelection(const Guid& id, SelectionMode mode)
         return false;
     }
     const Raster& image = layer->asset->image;
-    const std::optional<std::vector<SelectionLoop>> traced = MaskTracing::OpaquePixels(image);
+    const std::optional<std::vector<SelectionLoop>> traced = MaskTracing::OpaquePixels(image, failure);
     if (!traced.has_value())
     {
         return false;
@@ -1364,7 +1407,9 @@ WandFailure DocumentSession::MagicWand(Vec2 point, SelectionMode mode, const Ras
     const Raster sample = WandSample(composite);
     if (!sample.HasStorage())
     {
-        return WandFailure::None;
+        // All Layers without a usable composite does nothing; the layer's own pixels always render unless they
+        // cannot be read.
+        return wandSettings.sampleAllLayers ? WandFailure::None : WandFailure::Memory;
     }
     WandFailure failure = WandFailure::None;
     const std::optional<std::vector<SelectionLoop>> outline = MagicWand::Select(sample, point, wandSettings, &failure);
