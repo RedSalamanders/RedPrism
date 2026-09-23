@@ -359,6 +359,9 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandOpen, Ctrl(Key('O'))},
         {C::kCommandSave, Ctrl(Key('S'))},
         {C::kCommandSaveAs, Ctrl(Shift(Key('S')))},
+        // The legacy key equivalents, Command as Ctrl and Option as Alt (RF-1117).
+        {C::kCommandExportPng, Ctrl(Shift(Key('E')))},
+        {C::kCommandExportJpeg, Ctrl(Alt(Shift(Key('S'))))},
         {C::kCommandCloseProject, Ctrl(Key('W'))},
         {C::kCommandExit, Alt(Key(V::kF4)), DefaultChordKind::System},
         {C::kCommandUndo, Ctrl(Key('Z'))},
@@ -378,6 +381,8 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandCurves, Ctrl(Key('M'))},
         {C::kCommandLevels, Ctrl(Key('L'))},
         {C::kCommandHueSaturation, Ctrl(Key('U'))},
+        {C::kCommandCanvasSize, Ctrl(Alt(Key('C')))},
+        {C::kCommandImageSize, Ctrl(Alt(Key('I')))},
         {C::kCommandNewLayer, Ctrl(Shift(Key('N')))},
         {C::kCommandNewFolder, Ctrl(Key('G'))},
         {C::kCommandLayerViaCopy, Ctrl(Key('J'))},

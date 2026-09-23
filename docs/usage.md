@@ -37,6 +37,7 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 | Keys | Action |
 | --- | --- |
 | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S / Ctrl+W | New, open, save, save as, close project (a modified project asks to save first) |
+| Ctrl+Shift+E / Ctrl+Alt+Shift+S | Export PNG / JPEG |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y | Undo, redo |
 | Ctrl+Shift+N / Ctrl+G / Ctrl+Shift+G / Ctrl+J | New layer, new folder, move out of folder, layer via copy (the selection to a new layer, or a duplicate) |
 | Ctrl+] / Ctrl+[ / Ctrl+Alt+G / F2 / Ctrl+E | Move the layer up / down among its siblings, clip it to the layer below (again releases), rename it (double-click its row also does), merge it down onto the layer beneath (a folder merges into one layer) |
@@ -48,6 +49,7 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 | Alt+Backspace / Ctrl+Backspace / Ctrl+I | Fill the selection (or the whole layer) with the foreground / background color; invert the layer or its mask |
 | X / D | Swap the foreground and background colors / reset them to black over white; with a mask targeted, switch its Paint between black and white / reset it to black (canvas focused) |
 | Ctrl+T / Enter / Escape | Free Transform, or Transform Selection with a selection (the selected pixels float and merge back); apply / cancel a pending transform (canvas focused) |
+| Enter / Escape after a click in the chrome | Still apply / cancel the edit under way (transform, crop, gradient, lasso, adjustment panel, size card): the clicked button is not pressed again; a control reached with Tab takes Enter as its press |
 | Ctrl-drag / Ctrl+Alt-drag / Ctrl+Arrows | Move / duplicate the selected pixels with a selection tool; nudge them by 1 (Shift 10) in any tool |
 | Arrows / Shift+Arrows | Nudge the layer by 1 / 10 pixels with the Move tool; nudge the selection outline with a selection tool |
 | M / L (again) | Switch the Marquee between Rectangle and Ellipse / the Lasso between Freehand and Polygonal |
@@ -59,6 +61,7 @@ Import Images… always adds layers. A drop of several images asks once. Close P
 | Shift-click / Escape | Straight brush line from the last stroke / drop the stroke in progress |
 | Alt-click | Set the Clone Stamp source; with the Brush, Spot Healing or Gradient, sample a color |
 | Ctrl+M / Ctrl+L / Ctrl+U | Curves, Levels, Hue/Saturation on the active layer (the Image menu adds Exposure, Gradient Map, Grain; the Filter menu the blurs, noise and lens correction) |
+| Ctrl+Alt+C / Ctrl+Alt+I | Canvas Size, Image Size (Image menu) |
 | Enter / Escape | OK / Cancel the open adjustment panel (canvas focused) |
 | Shift+= / Shift+- | Step the active layer's blend mode forward / back |
 | Enter / Escape | Apply / drop a pending gradient; Escape also drops a shape draft (canvas focused) |

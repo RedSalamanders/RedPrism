@@ -1497,6 +1497,13 @@ D2D1_RECT_F ChromeHost::LayerMaskBadgeBoundsDip(std::size_t index) const noexcep
     return metrics.hasBadge ? metrics.badgeRect : D2D1::RectF();
 }
 
+D2D1_RECT_F ChromeHost::FlipHorizontalBoundsDipForTest() const noexcept
+{
+    const bool shown = _attached && _transformHeader != nullptr && _transformHeader->IsVisible() &&
+                       _flipHorizontal != nullptr && _flipHorizontal->IsVisible();
+    return shown ? _flipHorizontal->GetBounds() : D2D1::RectF();
+}
+
 std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPixels, float yPixels) const
 {
     if (!_attached || _layers == nullptr || !_layers->IsVisible())
@@ -2249,6 +2256,35 @@ bool ChromeHost::NoteKeyFocusMove(const KeyboardFocusMark& before, bool navigati
 bool ChromeHost::FocusFromKeyboard() const noexcept
 {
     return _focusFromKeyboard && _attached && !_canvasFocused && _view.Controls().GetFocusControl() != nullptr;
+}
+
+bool ChromeHost::FocusTakesEnterAndEscape() const noexcept
+{
+    if (!_attached || _canvasFocused)
+    {
+        return false;
+    }
+    const DxUi::Control* const focus = _view.Controls().GetFocusControl();
+    if (focus == nullptr)
+    {
+        return false;
+    }
+    if (FocusFromKeyboard() || _view.Controls().HasActiveTextInput())
+    {
+        return true;
+    }
+    if (const auto* const combo = dynamic_cast<const DxUi::ComboBox*>(focus); combo != nullptr && combo->IsPopupOpen())
+    {
+        return true; // Enter chooses from the open list, Escape closes it
+    }
+    for (std::size_t index = 0; index < _cardCount; ++index)
+    {
+        if (_cards[index].home != nullptr && Contains(_cards[index].panel, focus))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ChromeHost::MenuKeyboardActive() const noexcept

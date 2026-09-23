@@ -135,10 +135,10 @@ with a byte order mark (loaded), an invalid file (backup with the original bytes
 unreadable path; the live load of an invalid file (file untouched, nullopt), a valid one and a missing one; a save
 over an invalid file (backup), keeping unknown fields, leaving no temporary and creating the directory. `HostTests`
 `chords.*`, `commands.*` and `bindings.*` prove the key names and positions, the catalog (unique ids and text ids,
-tool keys, only window-manager defaults reserved) and the binding table (defaults and aliases, a replacement
-removing every default, the later entry winning, shadowing, the shared label, ignored entries, exact modifiers,
-AltGr, the Shift and repeat rules, Shift added to a chord against a chord holding Shift, a `vk` replacement compared
-as its position, the scopes and conditions).
+tool keys, only window-manager defaults reserved, one default chord shared only across conditions) and the binding
+table (defaults and aliases, the legacy File and Image chords, a replacement removing every default, the later entry
+winning, shadowing, the shared label, ignored entries, exact modifiers, AltGr, the Shift and repeat rules, Shift added
+to a chord against a chord holding Shift, a `vk` replacement compared as its position, the scopes and conditions).
 The WARP self-test edits its own settings file and
 proves the reload applies the theme, the sample ring and the layers width live, that a broken file changes nothing
 and is not rewritten, that restoring it applies again, that a save records the window placement and that deleting

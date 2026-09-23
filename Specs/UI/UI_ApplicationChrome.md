@@ -384,9 +384,9 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 
 | Menu | Commands |
 | --- | --- |
-| File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG…, Export JPEG…; Close Project (Ctrl+W); Exit |
+| File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG… (Ctrl+Shift+E), Export JPEG… (Ctrl+Alt+Shift+S); Close Project (Ctrl+W); Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
-| Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size…, Image Size…; Flip Canvas Horizontal, Flip Canvas Vertical |
+| Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size… (Ctrl+Alt+C), Image Size… (Ctrl+Alt+I); Flip Canvas Horizontal, Flip Canvas Vertical |
 | Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one), Target Layer Mask / Target Layer Pixels, Unlink / Link Layer Mask, Disable / Enable Layer Mask (the active layer's mask: the captions follow it, grayed without one; no default chords, as legacy had none); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
@@ -420,7 +420,14 @@ keys do and what the chrome shows. A key down goes, in order (`RedPrism/Applicat
 2. With the canvas focused, the gestures of an edit under way, which are not commands, in the order of Canvas
    interactions: Enter and Escape of the size card, an open panel, the Crop frame, a pending gradient or transform;
    Escape of a pixel drag, a warp, a shape draft or a stroke; Enter, Escape, Backspace and Delete of a lasso outline
-   in progress.
+   in progress. Enter and Escape take that path also from a chrome control a click focused
+   (`ChromeHost::FocusTakesEnterAndEscape`, as Space in 4): after a click on Flip Horizontal during Ctrl+T, Enter
+   applies the transform with that one flip instead of pressing the button again and Escape cancels it with no
+   entry, and after a click on a size card's checkbox or closed dropdown they are the card's OK and Cancel (the
+   legacy Apply and Cancel are the default and cancel buttons, and a macOS button never takes the keyboard). A
+   control the keyboard reached, a text input (Escape reverts its typed edit), a dropdown showing its list (Enter
+   chooses from it, Escape closes it) and a control in a card that took the keyboard (the notice, the Command List,
+   the Rename card, the picker) keep both keys; with no edit under way a clicked control keeps them too.
 3. The table: the first binding whose chord matches and whose scope and condition hold runs its command.
 4. Space, which pans while held wherever the keyboard is, except in a chrome text input and on a chrome control the
    keyboard reached (Tab, or a key that moved the focus to it), which takes Space as its press. A click leaves its
@@ -464,7 +471,9 @@ Matching:
   itself (the right Alt without the left one) or a chrome text input: left Ctrl with left Alt stays a chord, so
   Ctrl+Alt+G toggles the clipping mask even where AltGr+G types a character (Czech, Slovak, Hungarian, Croatian,
   Slovenian, Bosnian and Serbian Latin: `]`), while in a text field left Ctrl with left Alt types the AltGr character
-  as Windows does.
+  as Windows does. The same holds for the legacy File and Image chords with Ctrl+Alt (Export JPEG, Canvas Size, Image
+  Size): the left keys run them on every layout, AltGr only where it types nothing for the key (Polish AltGr+C is
+  `ć`, AltGr+Shift+S is `Ś`).
 - Scope. Canvas commands (tools, palette keys, nudges of the layer and the outline, brush keys, blend modes, the
   Delete key, Alt+Backspace) need the canvas focused. App commands (the menu chords, F2, Ctrl-arrows) run from the
   canvas and from chrome that is not a text input. Decision D4: while a chrome text input has the focus (the Rename
@@ -834,27 +843,32 @@ does nothing, Q clears, Delete Layer loses and regains the layout's Delete label
 once per press, nudge a layer by one pixel with a replacement on Shift+J and by ten with Shift+Left, type into the
 Command List's search field without running Q, Ctrl+A, Ctrl+Backspace, Ctrl+Z or Delete, run no Ctrl chord from
 Ctrl+Alt, run a Ctrl+Alt replacement on a letter AltGr types a character for (E on French and German layouts; none on
-US) from the left Ctrl and Alt but not from AltGr, filter the list to Sample Ring and run it with Enter (a typed space
-is text, not a pan), keep a selection from moving to another command's row and run the first match without one, run a
-selected row with Enter on the list, only select the first row with the first Enter or Space on a list without a
-selection (the next Enter runs it), fill the row item DxUi reuses for every row without dropping its buffers (a repaint
-of the open list allocates nothing per row, as the layers tree), rename through the Rename card with Enter while a
-Delete Layer row is selected in the open list, give the keyboard back to the Rename card when the list closes, give it
-back to the canvas when a notice or the Rename card opened with F2 closes, close the Canvas Size card with an Escape the
-focused layers panel leaves (the panel keeping the keyboard), pan with Space only while it is held, pan with Space after
-a click on a layer row (no Rename card opens) and on the palette's swap zone (no second swap), press a control the
-keyboard reached (Tab to the Command List) with Space once per press (an auto-repeated Space runs nothing) and keep a
-Space held on the Rename Layer row out of the card it opened, give the menu bar the keyboard from a tapped Alt, F10 and
-`SC_KEYMENU` without a system-menu loop (a timer ends one if it starts), open the File menu with Alt+F but not when
-Alt+F is a command, take the keyboard back from the menu bar with a canvas press (B then chooses the Brush),
-`WM_KILLFOCUS` and `WM_ACTIVATEAPP`, and with the next key once the bar lost DxUi's focus, release Alt after
-Alt+Backspace (each key's own down and up messages, Backspace or Alt let go first) without the menu bar taking the
-keyboard, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the legacy golden does (the 5 follows the 4 with no
-frame between, so a slow frame cannot stretch the pair past 0.6 s), set 50 % once from a held 5 (no 55 %, no entry per
-repeat), keep the position of a key message without a scan code (the layout's right bracket key grows the brush, Ctrl
-with its number-row plus key zooms in), keep digits typed after a canvas press out of the focused opacity field (the
-Move tool's 7 sets 70 %, the Marquee's 3 types nothing), leave the layer opacity alone under an open adjustment panel
-(the digit, the stepper and a typed preview; Cancel keeps it), show the table's name for a key the layout does not name
-(VK_E7), and show the layout's key names, the STRINGTABLE modifiers and replacements in the Command
-List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string table (every
-command caption's column is its first default chord), the key names, the catalog and the binding table.
+US) from the left Ctrl and Alt but not from AltGr, open the Canvas Size and Image Size cards with Ctrl+Alt+C and
+Ctrl+Alt+I from the left keys (from AltGr only where the layout types nothing for the key), run the exports with
+Ctrl+Shift+E and Ctrl+Alt+Shift+S and show those four chords in the menus and the Command List, filter the list to
+Sample Ring and run it with Enter (a typed space is text, not a pan), keep a selection from moving to another command's
+row and run the first match without one, run a selected row with Enter on the list, only select the first row with the
+first Enter or Space on a list without a selection (the next Enter runs it), fill the row item DxUi reuses for every row
+without dropping its buffers (a repaint of the open list allocates nothing per row, as the layers tree), rename through
+the Rename card with Enter while a Delete Layer row is selected in the open list, give the keyboard back to the Rename
+card when the list closes, give it back to the canvas when a notice or the Rename card opened with F2 closes, close the
+Canvas Size card with an Escape the focused layers panel leaves (the panel keeping the keyboard), pan with Space only
+while it is held, pan with Space after a click on a layer row (no Rename card opens) and on the palette's swap zone (no
+second swap), press a control the keyboard reached (Tab to the Command List) with Space once per press (an auto-repeated
+Space runs nothing) and keep a Space held on the Rename Layer row out of the card it opened, cancel a transform with
+Escape after Ctrl+T and a click on Flip Horizontal (no entry) and apply one with Enter (one flip, the button not
+pressed again), close the Canvas Size card's open units list with Enter or Escape and apply or cancel the card with the
+next, keep Enter for Flip Horizontal once Tab and Shift+Tab reached it and Enter and Escape for the opacity field,
+give the menu bar the keyboard from a tapped Alt, F10 and `SC_KEYMENU` without a system-menu loop (a timer ends one if
+it starts), open the File menu with Alt+F but not when Alt+F is a command, take the keyboard back from the menu bar with
+a canvas press (B then chooses the Brush), `WM_KILLFOCUS` and `WM_ACTIVATEAPP`, and with the next key once the bar lost
+DxUi's focus, release Alt after Alt+Backspace (each key's own down and up messages, Backspace or Alt let go first)
+without the menu bar taking the keyboard, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the legacy golden
+does (the 5 follows the 4 with no frame between, so a slow frame cannot stretch the pair past 0.6 s), set 50 % once from
+a held 5 (no 55 %, no entry per repeat), keep the position of a key message without a scan code (the layout's right
+bracket key grows the brush, Ctrl with its number-row plus key zooms in), keep digits typed after a canvas press out of
+the focused opacity field (the Move tool's 7 sets 70 %, the Marquee's 3 types nothing), leave the layer opacity alone
+under an open adjustment panel (the digit, the stepper and a typed preview; Cancel keeps it), show the table's name for
+a key the layout does not name (VK_E7), and show the layout's key names, the STRINGTABLE modifiers and replacements in
+the Command List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string
+table (every command caption's column is its first default chord), the key names, the catalog and the binding table.

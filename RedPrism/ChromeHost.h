@@ -593,6 +593,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F LayerRowBoundsDip(std::size_t index) const noexcept;
     // A row's Mask badge in DIP (empty without one) and the row as the tree paints it (RF-907 self-test).
     [[nodiscard]] D2D1_RECT_F LayerMaskBadgeBoundsDip(std::size_t index) const noexcept;
+    // The Move tool header's Flip Horizontal button, for a self-test click; empty while hidden.
+    [[nodiscard]] D2D1_RECT_F FlipHorizontalBoundsDipForTest() const noexcept;
     [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
     [[nodiscard]] bool MenuItemGrayedForTest(int command) const noexcept;
     // 0 none, 1 layers tree, 2 splitter, 3 shortcuts, 4 notice, 5 adjust, 6 picker, 7 overlay, 8 other.
@@ -642,6 +644,13 @@ class ChromeHost final : public CommandIds
     // Whether the chrome control holding the focus was reached with the keyboard (Tab), not with a press: Space then
     // presses it instead of panning (Specs/UI/UI_ApplicationChrome.md "Menus and accelerators").
     [[nodiscard]] bool FocusFromKeyboard() const noexcept;
+    // Whether the focused chrome control takes Enter and Escape as its own: a control the keyboard reached, a text
+    // input (Escape reverts its typed edit), a dropdown showing its list (Enter chooses, Escape closes it) and a
+    // control in a card that took the keyboard (the notice, the Command List, the Rename card, the picker) do. A
+    // control a click focused does not: its Enter applies and its Escape cancels the edit under way, as the legacy
+    // Apply and Cancel are the default and cancel buttons (a clicked header button is not pressed again, and Escape
+    // still cancels).
+    [[nodiscard]] bool FocusTakesEnterAndEscape() const noexcept;
     // Keyboard access to the menu bar (a tapped Alt or F10, SC_KEYMENU): the bar takes the focus with its first
     // item highlighted; arrows move, Enter, Space or Down open, a letter opens that menu, Escape leaves and the
     // focus returns where it was. A pointer press anywhere (the canvas included), the canvas taking the keyboard

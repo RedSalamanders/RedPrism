@@ -983,9 +983,33 @@ void TestCommandCatalog()
     }
     Expect(known, "commands.defaults-name-catalog-commands");
     Expect(reserved, "commands.only-system-defaults-are-window-manager-chords");
+    // Two commands dispatch one default chord only under different conditions, the conditioned one first (M on the
+    // Marquee, the arrows): a new default never lands on another command's chord (RF-1117).
+    bool unambiguous = true;
+    const std::span<const DefaultChord> defaultChords = DefaultChords();
+    for (std::size_t first = 0; first < defaultChords.size(); ++first)
+    {
+        for (std::size_t second = first + 1; second < defaultChords.size(); ++second)
+        {
+            const DefaultChord& earlier = defaultChords[first];
+            const DefaultChord& later = defaultChords[second];
+            if (earlier.kind != DefaultChordKind::Dispatch || later.kind != DefaultChordKind::Dispatch ||
+                earlier.command == later.command || !(earlier.chord == later.chord))
+            {
+                continue;
+            }
+            const CommandCatalogEntry* const earlierEntry = FindCommand(earlier.command);
+            const CommandCatalogEntry* const laterEntry = FindCommand(later.command);
+            unambiguous = unambiguous && earlierEntry != nullptr && laterEntry != nullptr &&
+                          earlierEntry->condition != CommandCondition::None &&
+                          earlierEntry->condition != laterEntry->condition;
+        }
+    }
+    Expect(unambiguous, "commands.default-chords-unambiguous");
     Expect(PrimaryDefaultChord(CommandIds::kCommandRedo) == Ctrl(Shift(Key('Z'))) &&
                PrimaryDefaultChord(CommandIds::kCommandZoomIn) == Ctrl(At(KeyPosition::NumberRowPlus)) &&
-               PrimaryDefaultChord(CommandIds::kCommandExportPng).IsEmpty(),
+               PrimaryDefaultChord(CommandIds::kCommandExportPng) == Ctrl(Shift(Key('E'))) &&
+               PrimaryDefaultChord(CommandIds::kCommandImportImages).IsEmpty(),
            "commands.primary-defaults");
 }
 
@@ -1099,6 +1123,24 @@ void TestCommandBindings()
     const int clip = runs(defaults, altGr, chrome);
     altGr.typesCharacter = true;
     Expect(clip == C::kCommandClipToggle && runs(defaults, altGr, chrome) == 0, "bindings.altgr-text-is-not-a-chord");
+    // The legacy File and Image key equivalents (RF-1117), beside the chords they differ from by a modifier: the
+    // exports run from a text input too (the File menu is global), the size cards do not, and AltGr text is not the
+    // chord (Polish AltGr+C types ć).
+    KeyPress altGrC = press(Ctrl(Alt(Key('C'))));
+    altGrC.typesCharacter = true;
+    Expect(runs(defaults, press(Ctrl(Shift(Key('E')))), chrome) == C::kCommandExportPng &&
+               runs(defaults, press(Ctrl(Alt(Shift(Key('S'))))), canvas) == C::kCommandExportJpeg &&
+               runs(defaults, press(Ctrl(Alt(Key('C')))), canvas) == C::kCommandCanvasSize &&
+               runs(defaults, press(Ctrl(Alt(Key('I')))), chrome) == C::kCommandImageSize &&
+               runs(defaults, press(Ctrl(Shift(Key('E')))), text) == C::kCommandExportPng &&
+               runs(defaults, press(Ctrl(Alt(Shift(Key('S'))))), text) == C::kCommandExportJpeg &&
+               runs(defaults, press(Ctrl(Alt(Key('C')))), text) == 0 && runs(defaults, altGrC, canvas) == 0 &&
+               runs(defaults, press(Ctrl(Key('E'))), chrome) == C::kCommandMergeDown &&
+               runs(defaults, press(Ctrl(Shift(Key('S')))), chrome) == C::kCommandSaveAs &&
+               runs(defaults, press(Ctrl(Key('C'))), chrome) == C::kCommandCopy &&
+               runs(defaults, press(Ctrl(Shift(Key('I')))), chrome) == C::kCommandInverse &&
+               defaults.ChordFor(C::kCommandCanvasSize) == Ctrl(Alt(Key('C'))),
+           "bindings.legacy-file-and-image-chords");
     // A command that allows Shift takes its chord with Shift added (a nudge steps by ten, a tool key ignores it);
     // an exact Shift chord comes first.
     Expect(runs(defaults, press(Shift(Key('B'))), canvas) == C::SelectToolCommand(EditorTool::Brush) &&

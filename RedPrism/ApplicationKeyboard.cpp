@@ -383,7 +383,13 @@ bool Application::HandleKey(const KeyPress& press) noexcept
         return true;
     }
     const KeyState state = CurrentKeyState();
-    if (state.focus == KeyFocus::Canvas && !press.ctrl && HandleEditGesture(press))
+    // The gestures of an edit under way take the key with the canvas focused, and Enter and Escape also from a chrome
+    // control a click focused: a clicked header button is not pressed again by the Enter that applies the transform,
+    // and Escape still cancels it (legacy Apply and Cancel are the default and cancel buttons). A control the keyboard
+    // reached, a text input, an open dropdown and a card that took the keyboard keep both keys.
+    const bool clickedEditKey = (press.virtualKey == VK_RETURN || press.virtualKey == VK_ESCAPE) &&
+                                state.focus == KeyFocus::Chrome && !_chrome->FocusTakesEnterAndEscape();
+    if ((state.focus == KeyFocus::Canvas || clickedEditKey) && !press.ctrl && HandleEditGesture(press))
     {
         return true;
     }
@@ -855,6 +861,79 @@ int Application::RunKeyboardSelfTest() noexcept
         }
     }
 
+    // The legacy File and Image key equivalents (RF-1117): Ctrl+Alt+C and Ctrl+Alt+I open the Canvas Size and Image
+    // Size cards from the left Ctrl and Alt on every layout, and from AltGr only where the layout types nothing for the
+    // key; Ctrl+Shift+E and Ctrl+Alt+Shift+S run the exports (a quiet run opens no dialog). The menus and the Command
+    // List show all four.
+    {
+        const auto altGrTypes = [](UINT letter, bool shift) noexcept
+        {
+            std::array<BYTE, 256> saved{};
+            const bool restore = KeyboardState::Read(saved);
+            std::array<BYTE, 256> altGr{};
+            for (const UINT held : {VK_CONTROL, VK_LCONTROL, VK_MENU, VK_RMENU})
+            {
+                altGr[held] = 0x80;
+            }
+            if (shift)
+            {
+                altGr[VK_SHIFT] = 0x80;
+                altGr[VK_LSHIFT] = 0x80;
+            }
+            KeyboardState::Write(altGr);
+            const bool text = KeyTypesCharacter(letter, MapVirtualKeyW(letter, MAPVK_VK_TO_VSC));
+            if (restore)
+            {
+                KeyboardState::Write(saved);
+            }
+            return text;
+        };
+        const auto opensCard = [this, &key](UINT letter, UINT modifiers, SizeCardKind kind)
+        {
+            _chrome->SetCanvasFocused(true);
+            const bool opened = key(letter, modifiers) && SizeCardOpen() && _sizeDialog.kind == kind;
+            if (SizeCardOpen())
+            {
+                CancelSizeCard();
+            }
+            return opened;
+        };
+        const bool canvasCard = opensCard('C', MK_CONTROL | kKeyAlt, SizeCardKind::CanvasSize);
+        const bool imageCard = opensCard('I', MK_CONTROL | kKeyAlt, SizeCardKind::ImageSize);
+        const bool altGrCanvas = opensCard('C', kKeyAltGr, SizeCardKind::CanvasSize) != altGrTypes('C', false);
+        const bool altGrImage = opensCard('I', kKeyAltGr, SizeCardKind::ImageSize) != altGrTypes('I', false);
+        _chrome->SetCanvasFocused(true);
+        const bool exportsRan = key('E', MK_CONTROL | MK_SHIFT) && key('S', MK_CONTROL | MK_SHIFT | kKeyAlt);
+        const bool altGrJpeg = key('S', MK_SHIFT | kKeyAltGr) != altGrTypes('S', true);
+        const std::array<std::pair<int, KeyChord>, 4> legacy{{
+            {ChromeHost::kCommandExportPng, Ctrl(Shift(Key('E')))},
+            {ChromeHost::kCommandExportJpeg, Ctrl(Alt(Shift(Key('S'))))},
+            {ChromeHost::kCommandCanvasSize, Ctrl(Alt(Key('C')))},
+            {ChromeHost::kCommandImageSize, Ctrl(Alt(Key('I')))},
+        }};
+        bool shown = true;
+        OnCommand(ChromeHost::kCommandKeyboardShortcuts);
+        for (const auto& [command, chord] : legacy)
+        {
+            std::size_t row = 0;
+            while (row < _chrome->ShortcutRowCountForTest() && _chrome->ShortcutCommandAtForTest(row) != command)
+            {
+                ++row;
+            }
+            const std::wstring text = ChromeHost::ChordDisplayText(chord);
+            shown = shown && _chrome->ShortcutChordAt(row) == text &&
+                    _chrome->MenuItemCaption(command).ends_with(L"\t" + text);
+        }
+        _chrome->CloseShortcuts();
+        _chrome->SetCanvasFocused(true);
+        if (!canvasCard || !imageCard || !altGrCanvas || !altGrImage || !exportsRan || !altGrJpeg || !shown)
+        {
+            return fail(std::format(L"The legacy File and Image chords did not run or show (Canvas Size {}, Image Size "
+                                    L"{}, AltGr {}/{}/{}, exports {}, shown {}).\n",
+                                    canvasCard, imageCard, altGrCanvas, altGrImage, altGrJpeg, exportsRan, shown));
+        }
+    }
+
     // The Command List: Enter in the search field runs the only match, and a typed space is text there, not a pan.
     const bool sampleRing = _session.showsSampleRing;
     OnCommand(ChromeHost::kCommandKeyboardShortcuts);
@@ -1098,6 +1177,104 @@ int Application::RunKeyboardSelfTest() noexcept
                                     L"typed into the card it opened (Tab {}, held {}, pressed {}, field '{}' then "
                                     L"'{}').\n",
                                     listReached, heldNothing, pressed, opened, held));
+        }
+    }
+
+    // Enter and Escape as Space (RF-1118, RF-1119): a control a click focused does not take the Enter that applies or
+    // the Escape that cancels the edit under way. After Ctrl+T and a click on Flip Horizontal, Escape cancels the
+    // transform with no entry, and Enter applies it with that one flip instead of pressing the button again (legacy
+    // Apply and Cancel are the default and cancel buttons). The button keeps Enter once the keyboard reached it (Tab,
+    // Shift+Tab back), and the opacity field keeps both keys. In the Canvas Size card, the units dropdown the
+    // self-test focused keeps the Enter or Escape that closes its open list; the next one is the card's OK or Cancel.
+    {
+        const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+        const auto click = [this, scale](const D2D1_RECT_F& bounds)
+        {
+            const LPARAM at = MAKELPARAM(static_cast<int>(std::lround((bounds.left + bounds.right) * 0.5f * scale)),
+                                         static_cast<int>(std::lround((bounds.top + bounds.bottom) * 0.5f * scale)));
+            OnPointer(WM_MOUSEMOVE, 0, at);
+            OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, at);
+            OnPointer(WM_LBUTTONUP, 0, at);
+        };
+        const auto pendingFlip = [this]() -> std::optional<bool>
+        {
+            const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+            return edit.has_value() ? std::optional<bool>(edit->draft.flipX) : std::nullopt;
+        };
+        OnTool(EditorTool::Move);
+        const Guid painted = InsertPaintedLayer(_session, L"Enter", 64, 64, Vec2{32.0, 32.0}, 0.0, 0xFF3366CCu);
+        DocumentChanged();
+        // The minimum layers width leaves the header room for Flip Horizontal in the self-test's 1280 DIP window.
+        _chrome->SetLayersWidth(ChromeHost::kLayersMinDip);
+        _chrome->SetCanvasFocused(true);
+        const int entries = _session.history.UndoCount();
+        (void)key('T', MK_CONTROL);
+        settle();
+        const D2D1_RECT_F flip = _chrome->FlipHorizontalBoundsDipForTest();
+        click(flip);
+        const bool escapeClicked =
+            pendingFlip() == std::optional<bool>(true) && !_chrome->CanvasFocused() && !_chrome->FocusFromKeyboard();
+        (void)key(VK_ESCAPE, 0);
+        const ImageLayer* const unflipped = _session.ActiveLayer();
+        const bool cancelled = !pendingFlip().has_value() && unflipped != nullptr && unflipped->id == painted &&
+                               !unflipped->transform.flipX && _session.history.UndoCount() == entries;
+        (void)key('T', MK_CONTROL);
+        settle();
+        click(flip);
+        const bool clicked =
+            pendingFlip() == std::optional<bool>(true) && !_chrome->CanvasFocused() && !_chrome->FocusFromKeyboard();
+        (void)key(VK_RETURN, 0);
+        const ImageLayer* const active = _session.ActiveLayer();
+        const bool applied =
+            !pendingFlip().has_value() && active != nullptr && active->id == painted && active->transform.flipX;
+        // No key has moved the keyboard since the click: the dropdown's focus is not the keyboard's either.
+        const auto sizeCardRound = [&](UINT closeKey)
+        {
+            OnCommand(ChromeHost::kCommandCanvasSize);
+            settle();
+            const bool unitFocused = _chrome->FocusSizeUnitForTest();
+            (void)key(VK_F4, 0);
+            const bool listOpen = _chrome->FocusTakesEnterAndEscape();
+            (void)key(closeKey, 0);
+            const bool listClosed = SizeCardOpen() && !_chrome->FocusTakesEnterAndEscape();
+            (void)key(closeKey, 0);
+            const bool cardClosed = !SizeCardOpen();
+            if (SizeCardOpen())
+            {
+                CancelSizeCard();
+            }
+            return unitFocused && listOpen && listClosed && cardClosed;
+        };
+        const bool cardApplied = sizeCardRound(VK_RETURN);
+        const bool cardCancelled = sizeCardRound(VK_ESCAPE);
+        _chrome->SetCanvasFocused(true);
+        (void)key('T', MK_CONTROL);
+        settle();
+        click(flip);
+        const ChromeHost::KeyboardFocusMark button = _chrome->KeyboardFocus();
+        (void)key(VK_TAB, 0);
+        (void)key(VK_TAB, MK_SHIFT);
+        const bool reached = _chrome->FocusFromKeyboard() && _chrome->KeyboardFocus() == button;
+        (void)key(VK_RETURN, 0);
+        const bool buttonPressed = pendingFlip() == std::optional<bool>(true);
+        _chrome->FocusLayerOpacityForTest();
+        (void)key(VK_RETURN, 0);
+        _chrome->FocusLayerOpacityForTest();
+        (void)key(VK_ESCAPE, 0);
+        const bool fieldKept = pendingFlip().has_value();
+        (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Escape);
+        _chrome->SetLayersWidth(static_cast<float>(_settings.layersPanelWidth));
+        undoTo(historyStart);
+        _chrome->SetCanvasFocused(true);
+        if (!escapeClicked || !cancelled || !clicked || !applied || !reached || !buttonPressed || !fieldKept ||
+            !cardApplied || !cardCancelled)
+        {
+            return fail(std::format(L"Enter or Escape on a clicked control did not apply or cancel the edit under way, "
+                                    L"or a control that keeps them lost one (Flip Horizontal at {},{} clicked {}/{}, "
+                                    L"cancelled {}, applied {}, reached {}, pressed {}, field {}, size card OK {}, "
+                                    L"Cancel {}).\n",
+                                    flip.left, flip.top, escapeClicked, clicked, cancelled, applied, reached,
+                                    buttonPressed, fieldKept, cardApplied, cardCancelled));
         }
     }
 
