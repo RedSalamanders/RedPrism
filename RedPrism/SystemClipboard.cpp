@@ -3,10 +3,19 @@
 #include "ImageCodecs.h"
 
 #include <algorithm>
+#include <array>
 #include <climits>
 #include <cstring>
 #include <new>
 #include <vector>
+
+// ole2.h before WIL declares wil::unique_hglobal_locked (WIN32_LEAN_AND_MEAN leaves it out of windows.h).
+#include <ole2.h>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -20,9 +29,9 @@ namespace
 class ClipboardScope
 {
   public:
-    explicit ClipboardScope(HWND owner) noexcept
+    explicit ClipboardScope(HWND owner, int attempts = 5) noexcept
     {
-        for (int attempt = 0; attempt < 5 && !_open; ++attempt)
+        for (int attempt = 0; attempt < attempts && !_open; ++attempt)
         {
             if (attempt > 0)
             {
@@ -49,23 +58,91 @@ class ClipboardScope
     bool _open = false;
 };
 
-// Copies bytes into a movable global block for SetClipboardData (the clipboard owns it once placed).
-[[nodiscard]] HGLOBAL GlobalCopy(const void* bytes, std::size_t size) noexcept
+// Copies bytes into a movable global block for SetClipboardData, which owns it once placed.
+[[nodiscard]] wil::unique_hglobal GlobalCopy(const void* bytes, std::size_t size) noexcept
 {
-    HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, size);
-    if (handle == nullptr)
+    wil::unique_hglobal handle(GlobalAlloc(GMEM_MOVEABLE, size));
+    if (!handle)
     {
-        return nullptr;
+        return handle;
     }
-    void* target = GlobalLock(handle);
-    if (target == nullptr)
+    const wil::unique_hglobal_locked target(handle.get());
+    if (target.get() == nullptr)
     {
-        (void)GlobalFree(handle);
-        return nullptr;
+        handle.reset();
+        return handle;
     }
-    std::memcpy(target, bytes, size);
-    (void)GlobalUnlock(handle);
+    if (size != 0)
+    {
+        std::memcpy(target.get(), bytes, size);
+    }
     return handle;
+}
+
+// Places `bytes` on the open clipboard as `format`; the clipboard owns the block once SetClipboardData takes it.
+[[nodiscard]] bool PlaceData(UINT format, const void* bytes, std::size_t size) noexcept
+{
+    wil::unique_hglobal handle = GlobalCopy(bytes, size);
+    if (!handle || SetClipboardData(format, handle.get()) == nullptr)
+    {
+        return false;
+    }
+    (void)handle.release();
+    return true;
+}
+
+// Formats whose data is a GDI object or belongs to its owner: nothing a memory copy can give back. CF_LOCALE only
+// qualifies text Windows synthesizes it for again.
+[[nodiscard]] bool MemoryFormat(UINT format) noexcept
+{
+    switch (format)
+    {
+    case CF_BITMAP:
+    case CF_METAFILEPICT:
+    case CF_PALETTE:
+    case CF_ENHMETAFILE:
+    case CF_OWNERDISPLAY:
+    case CF_DSPBITMAP:
+    case CF_DSPMETAFILEPICT:
+    case CF_DSPENHMETAFILE:
+    case CF_LOCALE:
+        return false;
+    default:
+        return !(format >= CF_PRIVATEFIRST && format <= CF_PRIVATELAST) &&
+               !(format >= CF_GDIOBJFIRST && format <= CF_GDIOBJLAST);
+    }
+}
+
+// The formats Windows converts among. EnumClipboardFormats lists a format an app placed, then the formats it can
+// synthesize from it, so the first member of a group met is the one placed; asking for a later one makes Windows
+// convert (GDI for bitmaps) and adds nothing a restore does not synthesize again.
+enum class SynthesisGroup : std::uint8_t
+{
+    None,
+    Text,
+    Image,
+    Metafile,
+};
+
+[[nodiscard]] SynthesisGroup GroupOf(UINT format) noexcept
+{
+    switch (format)
+    {
+    case CF_TEXT:
+    case CF_OEMTEXT:
+    case CF_UNICODETEXT:
+        return SynthesisGroup::Text;
+    case CF_BITMAP:
+    case CF_DIB:
+    case CF_DIBV5:
+    case CF_PALETTE:
+        return SynthesisGroup::Image;
+    case CF_METAFILEPICT:
+    case CF_ENHMETAFILE:
+        return SynthesisGroup::Metafile;
+    default:
+        return SynthesisGroup::None;
+    }
 }
 
 // A 32-bit BGRA DIB (V5 header, bitfields, bottom-up) with straight alpha, the form other editors write and read.
@@ -258,33 +335,9 @@ bool WriteImage(HWND owner, const Raster& image) noexcept
     {
         return false;
     }
-    bool placed = false;
-    if (HGLOBAL handle = GlobalCopy(png.data(), png.size()); handle != nullptr)
-    {
-        if (SetClipboardData(PngFormat(), handle) != nullptr)
-        {
-            placed = true;
-        }
-        else
-        {
-            (void)GlobalFree(handle);
-        }
-    }
-    if (hasDib)
-    {
-        if (HGLOBAL handle = GlobalCopy(dib.data(), dib.size()); handle != nullptr)
-        {
-            if (SetClipboardData(CF_DIBV5, handle) != nullptr)
-            {
-                placed = true;
-            }
-            else
-            {
-                (void)GlobalFree(handle);
-            }
-        }
-    }
-    return placed;
+    const bool pngPlaced = PlaceData(PngFormat(), png.data(), png.size());
+    const bool dibPlaced = hasDib && PlaceData(CF_DIBV5, dib.data(), dib.size());
+    return pngPlaced || dibPlaced;
 }
 
 bool HasImage() noexcept
@@ -300,33 +353,17 @@ bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image) noexcept
     {
         return false;
     }
-    const auto locked = [](UINT format, const std::uint8_t*& bytes, std::size_t& size) -> HGLOBAL
+    // The clipboard owns its data: it is locked for the read, never freed here.
+    if (const HANDLE data = GetClipboardData(PngFormat()); data != nullptr)
     {
-        HGLOBAL handle = GetClipboardData(format);
-        if (handle == nullptr)
-        {
-            return nullptr;
-        }
-        bytes = static_cast<const std::uint8_t*>(GlobalLock(handle));
-        if (bytes == nullptr)
-        {
-            return nullptr;
-        }
-        size = GlobalSize(handle);
-        return handle;
-    };
-    const std::uint8_t* bytes = nullptr;
-    std::size_t size = 0;
-    if (HGLOBAL handle = locked(PngFormat(), bytes, size); handle != nullptr)
-    {
+        const wil::unique_hglobal_locked locked(data);
+        const auto* bytes = static_cast<const std::uint8_t*>(locked.get());
+        const std::size_t size = bytes != nullptr ? GlobalSize(data) : 0;
         DecodedImage decoded;
-        const bool ok =
-            size > 0 && pixelBudget > 0 &&
+        if (size > 0 && pixelBudget > 0 &&
             DecodeProjectPng(bytes, size, false, static_cast<int>(std::min<std::int64_t>(pixelBudget, INT_MAX)),
                              decoded) == ImageCodecStatus::Ok &&
-            decoded.image.HasStorage();
-        (void)GlobalUnlock(handle);
-        if (ok)
+            decoded.image.HasStorage())
         {
             image = decoded.image;
             return true;
@@ -334,13 +371,11 @@ bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image) noexcept
     }
     for (const UINT format : {static_cast<UINT>(CF_DIBV5), static_cast<UINT>(CF_DIB)})
     {
-        bytes = nullptr;
-        size = 0;
-        if (HGLOBAL handle = locked(format, bytes, size); handle != nullptr)
+        if (const HANDLE data = GetClipboardData(format); data != nullptr)
         {
-            const bool ok = DecodeDib(bytes, size, pixelBudget, image);
-            (void)GlobalUnlock(handle);
-            if (ok)
+            const wil::unique_hglobal_locked locked(data);
+            const auto* bytes = static_cast<const std::uint8_t*>(locked.get());
+            if (bytes != nullptr && DecodeDib(bytes, GlobalSize(data), pixelBudget, image))
             {
                 return true;
             }
@@ -352,5 +387,79 @@ bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image) noexcept
 DWORD SequenceNumber() noexcept
 {
     return GetClipboardSequenceNumber();
+}
+
+bool SaveContents(HWND owner, SavedContents& contents) noexcept
+{
+    contents.formats.clear();
+    // Longer than a copy waits: a clipboard manager reads the clipboard right after every change.
+    const ClipboardScope scope(owner, 50);
+    if (!scope.IsOpen())
+    {
+        return false;
+    }
+    // A copy that cannot be allocated fails the save: the caller must not borrow a clipboard it cannot give back.
+    try
+    {
+        std::array<bool, 4> groupSeen{};
+        for (UINT format = EnumClipboardFormats(0); format != 0; format = EnumClipboardFormats(format))
+        {
+            // Only the format an app placed: the ones synthesized from it (a DIB from a DIBV5 or a bitmap, ANSI text
+            // from Unicode) come back by themselves, and asking for them converts. A placed GDI object (a bitmap, a
+            // metafile) cannot be copied, and neither can what Windows synthesizes from it.
+            if (const SynthesisGroup group = GroupOf(format); group != SynthesisGroup::None)
+            {
+                bool& seen = groupSeen[static_cast<std::size_t>(group)];
+                if (seen)
+                {
+                    continue;
+                }
+                seen = true;
+            }
+            if (!MemoryFormat(format))
+            {
+                continue;
+            }
+            const HANDLE data = GetClipboardData(format);
+            if (data == nullptr)
+            {
+                continue;
+            }
+            const wil::unique_hglobal_locked locked(data);
+            const auto* bytes = static_cast<const std::uint8_t*>(locked.get());
+            if (bytes == nullptr)
+            {
+                continue;
+            }
+            contents.formats.emplace_back(format, std::vector<std::uint8_t>(bytes, bytes + GlobalSize(data)));
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        contents.formats.clear();
+        return false;
+    }
+    return true;
+}
+
+bool RestoreContents(HWND owner, const SavedContents& contents) noexcept
+{
+    const ClipboardScope scope(owner, 50);
+    if (!scope.IsOpen() || !EmptyClipboard())
+    {
+        return false;
+    }
+    bool restored = true;
+    for (const auto& [format, bytes] : contents.formats)
+    {
+        restored = PlaceData(format, bytes.data(), bytes.size()) && restored;
+    }
+    return restored;
+}
+
+bool Clear(HWND owner) noexcept
+{
+    const ClipboardScope scope(owner, 50);
+    return scope.IsOpen() && EmptyClipboard() != FALSE;
 }
 } // namespace SystemClipboard

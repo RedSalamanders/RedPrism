@@ -1132,15 +1132,21 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Mouse-up after Undo painted the cancelled stroke.\n");
             return 5;
         }
+        // The save prompt counts a live stroke as a change, so a clean document with one still asks; Cancel leaves
+        // the stroke live (nothing settles before the answer), and the release then records it.
+        _session.history.MarkSaved();
         pointer(WM_LBUTTONDOWN, 0, 520.0, 500.0);
         _forcedDiscard = false;
         const int beforePrompt = _session.history.UndoCount();
         const bool stayed = !ConfirmDiscardChanges();
         _forcedDiscard.reset();
-        if (!stayed || _session.PendingBrush() != nullptr || _session.history.UndoCount() != beforePrompt + 1 ||
+        const bool strokeLive = _brushDragging && _session.PendingBrush() != nullptr;
+        pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
+        if (!stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
             _session.history.UndoName() != L"Brush Stroke")
         {
-            SelfTestFailure(L"The save prompt did not commit the live stroke before asking.\n");
+            SelfTestFailure(L"The save prompt did not ask for a live stroke on a clean document, or its Cancel did "
+                            L"not leave the stroke live.\n");
             return 5;
         }
         OnTool(EditorTool::Move);
@@ -1411,6 +1417,32 @@ int Application::RunSelfTest() noexcept
                              out.data(), 4, 0);
             return true;
         };
+        // The block borrows the user's clipboard: it comes back on every way out, and it starts empty so the mirror
+        // checks below read this run's copies, never an image that was there before.
+        SystemClipboard::SavedContents userClipboard;
+        if (!SystemClipboard::SaveContents(_window.get(), userClipboard) || !SystemClipboard::Clear(_window.get()))
+        {
+            SelfTestFailure(L"The self-test could not set the user's clipboard aside.\n");
+            return 5;
+        }
+        const auto restoreClipboard =
+            wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
+        // The system clipboard holds exactly the session's clip: same size, same first pixel.
+        const auto mirrorsClip = [&]() -> bool
+        {
+            const std::optional<PixelClipboard>& clip = _session.Clipboard();
+            Raster mirrored;
+            if (!clip.has_value() || !SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, mirrored) ||
+                mirrored.Width() != clip->image.Width() || mirrored.Height() != clip->image.Height())
+            {
+                return false;
+            }
+            std::array<std::uint8_t, 4> expected{};
+            std::array<std::uint8_t, 4> actual{};
+            clip->image.ReadRegion(0, 0, 1, 1, expected.data(), 4, 0);
+            mirrored.ReadRegion(0, 0, 1, 1, actual.data(), 4, 0);
+            return expected == actual;
+        };
         const Guid sheet = InsertPaintedLayer(_session, L"Sheet", 200, 200, Vec2{0, 0}, 0.0, 0xFF2F6FB0u);
         OnTool(EditorTool::Marquee);
         _chrome->SetCanvasFocused(true);
@@ -1427,9 +1459,9 @@ int Application::RunSelfTest() noexcept
         }
         const std::size_t layersBefore = _session.Document()->layers.size();
         if (!HandleAccelerator('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
-            !pixelAt(40, 40, pixel) || pixel[2] > 250 || !SystemClipboard::HasImage())
+            !pixelAt(40, 40, pixel) || pixel[2] > 250 || !mirrorsClip())
         {
-            SelfTestFailure(L"Ctrl+X did not cut the selection to the clipboard.\n");
+            SelfTestFailure(L"Ctrl+X did not cut the selection to the clipboard and mirror it to the system.\n");
             return 5;
         }
         if (!HandleAccelerator('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" ||
@@ -1570,9 +1602,9 @@ int Application::RunSelfTest() noexcept
         OnCommand(ChromeHost::kCommandSelectAll);
         if (!HandleAccelerator('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
             _session.Clipboard()->image.Width() != _session.Document()->width ||
-            _session.Clipboard()->image.Height() != _session.Document()->height)
+            _session.Clipboard()->image.Height() != _session.Document()->height || !mirrorsClip())
         {
-            SelfTestFailure(L"Ctrl+Shift+C did not copy the merged canvas.\n");
+            SelfTestFailure(L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system.\n");
             return 5;
         }
         OnCommand(ChromeHost::kCommandDeselect);
@@ -1735,6 +1767,16 @@ int Application::RunSelfTest() noexcept
     {
         return edits;
     }
+    // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
+    // loss, a close inside a chrome dispatch and the session end.
+    if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
+    {
+        return clipboard;
+    }
+    if (const int session = RunSessionSelfTest(); session != 0)
+    {
+        return session;
+    }
 
     _chrome->SetVisible(false);
     _composition.ReleaseDocumentSurfaces();
@@ -1891,6 +1933,8 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetLayerHandler(
         [this](Guid id)
         {
+            // A typed opacity belongs to the layer it started on: it records its entry before another is active.
+            CloseOpacityEdit();
             _session.SelectLayer(id);
             SyncChrome();
             _frameInvalidated = true;
@@ -1912,6 +1956,7 @@ HRESULT Application::InitializeChrome() noexcept
     chrome->SetLayerReorderHandler(
         [this](Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place)
         {
+            CloseOpacityEdit();
             bool moved = false;
             if (place == DxUi::TreeDropPlace::Inside)
             {
@@ -1939,51 +1984,7 @@ HRESULT Application::InitializeChrome() noexcept
             _layoutDirty = true;
             _frameInvalidated = true;
         });
-    chrome->SetOpacityHandler(
-        [this](double opacity, ChromeEditPhase phase)
-        {
-            ImageLayer* layer = _session.ActiveLayer();
-            if (layer == nullptr || layer->isGroup)
-            {
-                return;
-            }
-            const double clamped = std::min(1.0, std::max(0.0, opacity));
-            switch (phase)
-            {
-            case ChromeEditPhase::Preview:
-                // One history entry spans the whole typed edit; the snapshot is taken before the first preview.
-                if (!_opacityEditing)
-                {
-                    _session.BeginEdit(L"Layer Opacity");
-                    _opacityEditing = true;
-                }
-                layer->opacity = clamped;
-                break;
-            case ChromeEditPhase::Commit:
-                if (_opacityEditing)
-                {
-                    layer->opacity = clamped;
-                    _session.EndEdit();
-                    _opacityEditing = false;
-                }
-                else
-                {
-                    _session.SetOpacity(clamped);
-                }
-                break;
-            case ChromeEditPhase::Cancel:
-            default:
-                // Restoring the start value makes the pending snapshot equal to the document: no entry is recorded.
-                if (_opacityEditing)
-                {
-                    layer->opacity = clamped;
-                    _session.EndEdit();
-                    _opacityEditing = false;
-                }
-                break;
-            }
-            DocumentChanged();
-        });
+    chrome->SetOpacityHandler([this](double opacity, ChromeEditPhase phase) { OnLayerOpacity(opacity, phase); });
     chrome->SetLayoutHandler(
         [this]
         {
@@ -2051,6 +2052,17 @@ void Application::SyncChrome() noexcept
     {
         return;
     }
+    if (_renameLayer.has_value())
+    {
+        // The Rename card closes once its layer is gone (Undo, a delete, a merge, another document).
+        const bool present = _session.Document().has_value() &&
+                             std::any_of(_session.Document()->layers.begin(), _session.Document()->layers.end(),
+                                         [&](const ImageLayer& layer) { return layer.id == _renameLayer.value(); });
+        if (!present)
+        {
+            CloseRenameCard();
+        }
+    }
     const bool dirty = _session.history.IsModified();
     _chrome->SetDocumentTitle(FileTitle(_documentPath), dirty);
     _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
@@ -2072,9 +2084,11 @@ void Application::SyncChrome() noexcept
     std::wstring zoom = FormatStringResource(nullptr, IDS_STATUS_ZOOM, percent);
     std::wstring size = document ? FormatStringResource(nullptr, IDS_STATUS_SIZE, document->width, document->height)
                                  : LoadStringResource(nullptr, IDS_STATUS_NO_DOCUMENT);
+    // The tool's effective chord (a replacement or the catalog default); a tool whose key was cleared shows its name.
+    std::wstring toolName = LoadStringResource(nullptr, EditorToolNameId(_tool));
+    const std::wstring toolChord = _chrome->CommandChordText(ChromeHost::SelectToolCommand(_tool));
     std::wstring tool =
-        FormatStringResource(nullptr, IDS_STATUS_TOOL, LoadStringResource(nullptr, EditorToolNameId(_tool)),
-                             std::wstring(1, EditorToolKey(_tool)));
+        toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
     _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
     _chrome->SetTool(_tool);
     _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor());
@@ -2348,7 +2362,15 @@ void Application::CloseMainWindow() noexcept
     if (_window)
     {
         (void)KillTimer(_window.get(), kScreenshotTimerId);
+        if (_endSessionPending)
+        {
+            (void)ShutdownBlockReasonDestroy(_window.get());
+        }
     }
+    _endSessionPending = false;
+    _endSessionPromptDeferred = false;
+    _closeDeferred = false;
+    _closeConfirmed = false;
     _renderer.SetChrome(nullptr);
     DropBrushEngine();
     _composition.ReleaseDeviceResources();
@@ -2474,6 +2496,11 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         event.action = DxUi::PointerAction::Leave;
         _mouseTracked = false;
+        if (GetCapture() == _window.get())
+        {
+            // A drag holds the pointer: leaving the window does not end it; losing the capture does.
+            return;
+        }
         _canvasDrag = false;
     }
     else if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN)
@@ -2486,7 +2513,10 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         event.action = DxUi::PointerAction::Up;
         if (GetCapture() == _window.get())
         {
+            // This release is not a capture loss: the button-up below ends the drag.
+            _releasingCapture = true;
             ReleaseCapture();
+            _releasingCapture = false;
         }
     }
     else
@@ -2505,19 +2535,28 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     event.yPixels = static_cast<float>(point.y);
     if (_chrome->DispatchPointer(event))
     {
-        if (_brushHover.has_value() && !_brushDragging)
-        {
-            // The pointer is over the chrome: the tip circle leaves the canvas.
-            _brushHover.reset();
-            SyncBrushCursor();
-        }
         _frameInvalidated = true;
-        return;
+        // DxUi takes every leave for its hover; the canvas still hears it (the tip circle and a drag end there).
+        if (event.action != DxUi::PointerAction::Leave)
+        {
+            if (_brushHover.has_value() && !_brushDragging)
+            {
+                // The pointer is over the chrome: the tip circle leaves the canvas.
+                _brushHover.reset();
+                SyncBrushCursor();
+            }
+            return;
+        }
     }
 
     const CanvasHole hole = _chrome->HolePixels();
     const bool inHole = event.xPixels >= hole.left && event.yPixels >= hole.top &&
                         event.xPixels < hole.left + hole.width && event.yPixels < hole.top + hole.height;
+    if (event.action == DxUi::PointerAction::Down && inHole)
+    {
+        // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
+        CloseOpacityEdit();
+    }
     const Vec2 documentSize = DocumentSize();
     const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
     const bool panMode = _spacePan || _tool == EditorTool::Hand;
@@ -2781,6 +2820,12 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     switch (command)
     {
+    // The save prompt's Cancel keeps a pending transform: these settle after the answer, or apply it as they write.
+    case ChromeHost::kCommandNew:
+    case ChromeHost::kCommandNewCanvas:
+    case ChromeHost::kCommandOpen:
+    case ChromeHost::kCommandCloseProject:
+    case ChromeHost::kCommandExit:
     case ChromeHost::kCommandUndo:
     case ChromeHost::kCommandRedo:
     case ChromeHost::kCommandZoomFit:
@@ -2823,6 +2868,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
+    CloseOpacityEdit();
     // Commands that change layers or files settle a pending transform first; view, history and About do not.
     if (!SkipsTransformSettle(command))
     {
@@ -2889,9 +2936,11 @@ void Application::OnCommand(int command) noexcept
         (void)SaveDocument(true);
         break;
     case ChromeHost::kCommandExportPng:
+        SettleForWrite();
         ExportFlattened(false);
         break;
     case ChromeHost::kCommandExportJpeg:
+        SettleForWrite();
         ExportFlattened(true);
         break;
     case ChromeHost::kCommandExit:
@@ -2902,13 +2951,16 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandUndo:
     case ChromeHost::kCommandRedo:
-        // The session drops the pending edit. The composition stroke has to go with it, or the preview stays up.
+        // The session drops the pending edit. The composition stroke has to go with it, or the preview stays up; a
+        // transform drag goes too, or the next move would duplicate the layer again after an Alt-press.
         _brushDragging = false;
         _warpDragging = false;
         _shapeDragging = false;
         _gradientHandle.reset();
         _pixelDragStart.reset();
         _cropDrag.reset();
+        _transformDrag.reset();
+        _duplicateOnDrag = false;
         if (_composition.HasStroke())
         {
             _composition.EndStroke(nullptr, 0, 0);
@@ -3247,6 +3299,8 @@ void Application::OnCommand(int command) noexcept
 
 void Application::SettleInteractions(bool applyPanels) noexcept
 {
+    CloseOpacityEdit();
+    CloseRenameCard();
     _transformDrag.reset();
     _duplicateOnDrag = false;
     _session.CommitTransform();
@@ -3369,7 +3423,16 @@ bool Application::SaveDocument(bool saveAs) noexcept
             return false;
         }
     }
-    const bool zip = PathLooksLikeZipProject(path.c_str()) || EndsWithNoCase(path, L".prism");
+    // The file holds what the canvas shows, and a panel's Cancel can no longer restore a value the file already has.
+    SettleForWrite();
+    if (!_session.Document().has_value())
+    {
+        return false;
+    }
+    // A folder (an exploded project, whatever its name) saves in place as a folder; a `.prism` file or a ZIP as ZIP.
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    const bool zip = !folder && (PathLooksLikeZipProject(path.c_str()) || EndsWithNoCase(path, L".prism"));
     const ProjectIoStatus status =
         SaveProject(path.c_str(), _session.Document().value(), _session.ActiveLayerID(), zip);
     if (status != ProjectIoStatus::Ok)
@@ -3448,7 +3511,15 @@ LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM 
 
     if (application)
     {
-        return application->HandleMessage(window, message, wParam, lParam);
+        // Depth counts the window-procedure calls on the stack: above one, a modal loop (a dialog, a menu, a caption
+        // drag) runs inside another message, so a close that arrives there waits until the outermost call returns.
+        ++application->_messageDepth;
+        const LRESULT result = application->HandleMessage(window, message, wParam, lParam);
+        if (--application->_messageDepth == 0)
+        {
+            application->ReleaseDeferredClose();
+        }
+        return result;
     }
     return DefWindowProcW(window, message, wParam, lParam);
 }
@@ -3476,12 +3547,51 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         break;
     case WM_MOVE:
     case WM_SETFOCUS:
-    case WM_KILLFOCUS:
         if (_chrome)
         {
             _chrome->UpdateAccessibilityPlacement();
         }
         break;
+    case WM_KILLFOCUS:
+        // The keys and the pointer go elsewhere: a Space held for panning or a drag would never hear its release.
+        if (HonorsPointerLoss())
+        {
+            EndPointerInteractions();
+        }
+        if (_chrome)
+        {
+            _chrome->UpdateAccessibilityPlacement();
+        }
+        break;
+    case WM_CAPTURECHANGED:
+        // Our own button-up release ends its drag itself; a dialog, a menu or another window taking the pointer
+        // ends every drag as the legacy canvas does when it resigns first responder.
+        if (!_releasingCapture && reinterpret_cast<HWND>(lParam) != window && HonorsPointerLoss())
+        {
+            EndPointerInteractions();
+        }
+        return 0;
+    case WM_CANCELMODE:
+        // A dialog or message box is about to show: end the drags, then let DefWindowProc release the capture.
+        if (HonorsPointerLoss())
+        {
+            EndPointerInteractions();
+        }
+        break;
+    case WM_ACTIVATEAPP:
+        if (wParam == FALSE && HonorsPointerLoss())
+        {
+            EndPointerInteractions();
+        }
+        break;
+    case WM_QUERYENDSESSION:
+        return OnQueryEndSession(lParam) ? TRUE : FALSE;
+    case WM_ENDSESSION:
+        OnEndSession(wParam != FALSE);
+        return 0;
+    case kEndSessionMessage:
+        RunEndSessionPrompt();
+        return 0;
     case WM_SETTINGCHANGE:
     case WM_THEMECHANGED:
     case WM_SYSCOLORCHANGE:
@@ -3628,8 +3738,15 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         ValidateRect(window, nullptr);
         return 0;
     case WM_CLOSE:
-        // A modified document asks first; a failure on its way out and a quiet run never ask.
-        if (_runtimeFailure == S_OK && !_quietUi && !ConfirmDiscardChanges())
+        // Inside a modal loop or a chrome dispatch the chrome is still on the stack: the close runs once it unwinds.
+        if (CloseMustWait())
+        {
+            _closeDeferred = true;
+            return 0;
+        }
+        // A modified document asks first; a failure on its way out and a quiet run never ask, and neither does the
+        // close the answered session-end prompt posted.
+        if (!std::exchange(_closeConfirmed, false) && _runtimeFailure == S_OK && !_quietUi && !ConfirmDiscardChanges())
         {
             return 0;
         }
@@ -5579,11 +5696,11 @@ void Application::MirrorClipboard() noexcept
         return;
     }
     // Other apps read the copy as PNG or a 32-bit DIB. The sequence number lets a later Paste tell that the system
-    // clipboard still holds this copy, so the exact pixels and their place come from the session instead.
-    if (SystemClipboard::WriteImage(_window.get(), clip->image))
-    {
-        _clipboardSequence = SystemClipboard::SequenceNumber();
-    }
+    // clipboard has not changed since this copy, so the exact pixels and their place come from the session instead.
+    // It is taken even when the write failed (another app held the clipboard): this copy is still newer than
+    // whatever the system clipboard holds, and only a later change there makes Paste read it.
+    (void)SystemClipboard::WriteImage(_window.get(), clip->image);
+    _clipboardSequence = SystemClipboard::SequenceNumber();
 }
 
 void Application::PasteFromClipboard() noexcept

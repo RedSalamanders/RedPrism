@@ -199,7 +199,14 @@ class Application final
     void RenameActiveLayer() noexcept;
     void OnLayerInvoked(Guid id) noexcept;
     void OnRename(std::optional<std::wstring> name) noexcept;
+    // The card closes without renaming: its layer or the document went away, or an interaction settled.
+    void CloseRenameCard() noexcept;
     void MergeLayersCommand() noexcept;
+    // The layers panel's opacity stepper: a typed edit previews on the layer it started on and records one entry
+    // when it commits, or when anything else (a command, a tool, a canvas press, another layer, a save) closes it.
+    void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept;
+    void CloseOpacityEdit() noexcept;
+    [[nodiscard]] ImageLayer* OpacityEditLayer() noexcept;
     int RunLayerEditsSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
     void SampleColorAt(Vec2 view) noexcept;
@@ -238,8 +245,29 @@ class Application final
         Cancel,
     };
     static constexpr UINT kNotImplementedMessage = WM_APP + 7; // Renderer owns WM_APP + 1
+    static constexpr UINT kEndSessionMessage = WM_APP + 8;     // the save prompt a refused session end posts
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
     [[nodiscard]] bool ConfirmDiscardChanges() noexcept;
+    // Modified history, or a pending edit that Save would record (a live stroke or warp, a pending gradient, a
+    // changed transform, a typed opacity).
+    [[nodiscard]] bool HasUnsavedWork() const noexcept;
+    // Before Save and Export (Decision D2): the typed opacity records its entry, a live stroke, warp or pending
+    // gradient commits, a pending transform applies, and an open panel applies as its OK would.
+    void SettleForWrite() noexcept;
+    // Session end (Specs/UI/UI_Windowing.md): a modified document refuses with a block reason and asks through the
+    // posted prompt; the settings are saved when the session ends.
+    [[nodiscard]] bool OnQueryEndSession(LPARAM reasons) noexcept;
+    void OnEndSession(bool ending) noexcept;
+    void RunEndSessionPrompt() noexcept;
+    // A close or the session-end prompt waits while a message it arrived inside (a modal loop, a chrome dispatch) is
+    // still on the stack; the outermost window-procedure return posts it again.
+    [[nodiscard]] bool CloseMustWait() const noexcept;
+    void ReleaseDeferredClose() noexcept;
+    // Capture or focus went elsewhere (a dialog, a menu, another app): every pointer interaction ends.
+    void EndPointerInteractions() noexcept;
+    // Quiet runs drive the pointer synthetically from a hidden window: they honor only the losses their own thread
+    // causes, never a capture or focus change another thread or process sends.
+    [[nodiscard]] bool HonorsPointerLoss() const noexcept;
     void OpenPaths(const std::vector<std::wstring>& paths) noexcept;
     [[nodiscard]] bool OpenProjectPath(const wchar_t* path) noexcept;
     void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
@@ -252,6 +280,8 @@ class Application final
     void ShowNotImplementedNotice(UINT captionId) noexcept;
     void ShowUnavailable(UINT captionId) noexcept;
     int RunFilesSelfTest() noexcept;
+    int RunSessionSelfTest() noexcept;
+    int RunClipboardSelfTest() noexcept;
     void ZoomBy(double factor) noexcept;
     void ShowError(UINT stringId) noexcept;
     [[nodiscard]] Vec2 DocumentSize() const noexcept;
@@ -280,7 +310,25 @@ class Application final
     bool _suppressCharacter = false; // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
     bool _lastKeyHandled = false;    // the last key down went to a command or a gesture (read by the self-test driver)
     bool _canvasDrag = false;
-    bool _opacityEditing = false;
+    bool _releasingCapture = false; // a button-up releases the capture: not a capture loss
+    // The typed opacity edit: the layer it started on, that layer's opacity before the first preview (what history
+    // holds) and the value previewed. Previews change the document outside history; one entry records the edit.
+    struct OpacityEdit
+    {
+        Guid layer;
+        double start = 1.0;
+        double shown = 1.0;
+    };
+    std::optional<OpacityEdit> _opacityEdit;
+    // The value an edit closed from outside recorded while the field kept its text: the field's late commit of that
+    // same value is already in history and changes nothing (not even another document's layer).
+    std::optional<double> _opacityRecorded;
+    std::optional<Guid> _renameLayer; // the layer the open Rename card renames
+    int _messageDepth = 0;            // window-procedure calls on the stack
+    bool _closeDeferred = false;      // a WM_CLOSE waits for the stack to unwind
+    bool _closeConfirmed = false;     // the session-end prompt already asked: the next WM_CLOSE does not
+    bool _endSessionPending = false;  // a session end was refused and its prompt has not answered yet
+    bool _endSessionPromptDeferred = false;
     bool _layoutDirty = false;
     bool _duplicateOnDrag = false;
     std::optional<TransformDrag> _transformDrag;
@@ -294,7 +342,7 @@ class Application final
     std::optional<Vec2> _pixelDragStart;      // document point where a Ctrl-drag lifted the selected pixels
     std::optional<double> _hueTargetStart;    // view x where a targeted Hue/Saturation drag began
     GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
-    DWORD _clipboardSequence = 0;             // the system clipboard's sequence number at the last mirrored copy
+    DWORD _clipboardSequence = 0; // the system clipboard's sequence number right after the last copy was offered to it
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;

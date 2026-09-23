@@ -535,6 +535,11 @@ class ChromeHost final : public CommandIds
     {
         return _canvasFocused;
     }
+    // Inside a DxUi dispatch (pointer, key or character): a callback running there must not destroy the chrome.
+    [[nodiscard]] bool InDispatch() const noexcept
+    {
+        return _inDispatch;
+    }
     void SetCanvasFocused(bool focused) noexcept
     {
         _canvasFocused = focused;

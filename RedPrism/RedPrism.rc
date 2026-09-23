@@ -529,4 +529,5 @@ BEGIN
     IDS_UNIT_INCHES                 "in"
     IDS_UNIT_CENTIMETERS            "cm"
     IDS_A11Y_PALETTE_NAME           "{0}, {1}"
+    IDS_SHUTDOWN_UNSAVED            "{0} has unsaved changes."
 END

@@ -7,8 +7,11 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -138,16 +141,24 @@ void Application::ApplySizeCard() noexcept
         CancelSizeCard();
         return;
     }
+    if ((kind == SizeCardKind::CanvasSize && !_sizeDialog.canvas.Valid()) ||
+        (kind == SizeCardKind::ImageSize && !_sizeDialog.image.Valid()))
+    {
+        return;
+    }
+    // A pending gradient or transform commits first, so the resize starts from the document that holds it (the
+    // settle closes the card; the draft stays in _sizeDialog).
+    SettleInteractions(false);
+    if (!_session.Document().has_value())
+    {
+        return;
+    }
     CanvasDocument resized;
     ResizeStatus status = ResizeStatus::Invalid;
     const wchar_t* name = L"";
     if (kind == SizeCardKind::CanvasSize)
     {
         const CanvasSizeDraft& draft = _sizeDialog.canvas;
-        if (!draft.Valid())
-        {
-            return;
-        }
         CanvasSizeOptions options;
         options.width = draft.RoundedWidth();
         options.height = draft.RoundedHeight();
@@ -178,10 +189,6 @@ void Application::ApplySizeCard() noexcept
     else
     {
         const ImageSizeDraft& draft = _sizeDialog.image;
-        if (!draft.Valid())
-        {
-            return;
-        }
         ImageSizeOptions options;
         options.width = draft.resample ? draft.RoundedWidth() : _session.Document().value().width;
         options.height = draft.resample ? draft.RoundedHeight() : _session.Document().value().height;
@@ -194,7 +201,6 @@ void Application::ApplySizeCard() noexcept
     switch (status)
     {
     case ResizeStatus::Ok:
-        SettleInteractions(false);
         _session.ApplyDocumentSize(std::move(resized), name);
         _viewport.followsFit = true;
         DocumentChanged();
@@ -533,6 +539,54 @@ int Application::RunSizeSelfTest() noexcept
         document()->layers.size() != 1 || _session.history.IsModified())
     {
         ReportSizeSelfTestFailure(L"New Canvas did not create a 300 × 200 document with one blank layer.\n");
+        return 5;
+    }
+    // A pending gradient commits before Canvas Size resizes: the resized canvas keeps it, one entry below.
+    OnTool(EditorTool::Gradient);
+    _session.SetForegroundColor(0xFF000000u);
+    _session.SetBackgroundColor(0xFFFFFFFFu);
+    _session.gradientSettings = GradientSettings{};
+    _session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+    const std::optional<Guid> plate = _session.ActiveLayerID();
+    if (!plate.has_value() || !_session.BeginGradient(Vec2{10, 100}))
+    {
+        ReportSizeSelfTestFailure(L"The blank layer did not take a gradient.\n");
+        return 5;
+    }
+    _session.MoveGradient(std::nullopt, Vec2{290, 100});
+    _session.EndGradientDrag();
+    SyncChrome();
+    const bool pending = _session.PendingGradient() != nullptr;
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    OnSizeAction(SizeAction::SetRelative, 1.0);
+    OnSizeAction(SizeAction::SetWidth, 20.0);
+    OnSizeAction(SizeAction::SetHeight, 20.0);
+    OnSizeAction(SizeAction::Apply, 0.0);
+    std::array<std::uint8_t, 4> center{};
+    bool painted = false;
+    if (document() != nullptr)
+    {
+        for (const ImageLayer& layer : document()->layers)
+        {
+            if (layer.id == plate.value() && layer.asset.has_value() && layer.asset->image.HasStorage())
+            {
+                layer.asset->image.ReadRegion(layer.asset->image.Width() / 2, layer.asset->image.Height() / 2, 1, 1,
+                                              center.data(), 4, 0);
+                painted = center[3] == 255;
+            }
+        }
+    }
+    const bool resized = document() != nullptr && document()->width == 320 && document()->height == 220 &&
+                         _session.history.UndoName() == L"Canvas Size";
+    _session.Undo();
+    const bool gradientBelow = _session.history.UndoName() == L"Gradient";
+    DocumentChanged();
+    OnTool(EditorTool::Move);
+    if (!pending || !resized || !painted || !gradientBelow)
+    {
+        ReportSizeSelfTestFailure(std::format(L"Canvas Size over a pending gradient did not keep it (pending {}, "
+                                              L"resized {}, painted {}, gradient entry {}).\n",
+                                              pending, resized, painted, gradientBelow));
         return 5;
     }
     return 0;

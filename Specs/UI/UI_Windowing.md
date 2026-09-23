@@ -1,7 +1,7 @@
 # RedPrism windowing and host command line
 
 Status: current normative product contract
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-23
 Owner: `Application` HWND, DPI, and `RedPrism/CommandLine.h`
 
 ## Scope
@@ -37,12 +37,45 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 | Binding | `Application*` at `WM_NCCREATE`; destroy via `wil::unique_hwnd::reset()` |
 | Background | `WM_ERASEBKGND` returns 1; no GDI fill |
 | Paint | `WM_PAINT` invalidates one coalesced GPU frame and `ValidateRect`; no `Present` |
-| Close | `WM_CLOSE` shuts the renderer down and resets the HWND |
+| Close | `WM_CLOSE` asks for a document with unsaved work ([`UI_ApplicationChrome.md`](UI_ApplicationChrome.md) Files), then shuts the renderer down and resets the HWND. A close that arrives while another window-procedure call is on the stack (a modal loop: a dialog, a message box, a menu, a caption drag) or inside a chrome dispatch MUST wait: it is posted again once the outermost call returns, so the chrome is never destroyed under its own stack and one prompt never opens over another |
+| Session end | See below |
+| Pointer loss | See below |
 | Power | `RegisterPowerSettingNotification` for `GUID_SESSION_DISPLAY_STATUS`; display-off blocks Present |
 | Adapter follow | `WM_EXITSIZEMOVE`, `WM_DISPLAYCHANGE`, and `WM_DPICHANGED` call `EnsureDeviceForWindowMonitor` |
 
 No chrome child HWND is created over the swap chain. Common file dialogs (`IFileDialog`) are allowed from C7; they are
 not chrome.
+
+### Session end
+
+- `WM_QUERYENDSESSION` for a document with unsaved work (the save prompt's test) MUST NOT return TRUE at once unless
+  the end is critical (`ENDSESSION_CRITICAL`): it calls `ShutdownBlockReasonCreate` with `IDS_SHUTDOWN_UNSAVED`,
+  returns FALSE and posts the save prompt (`kEndSessionMessage`), which runs like a close (after any modal loop has
+  unwound). A second request while the prompt waits is refused again without a second prompt. Quiet runs never ask
+  unless the self-test answers.
+- Save (when it saved) or Don't Save destroys the reason and closes the window without asking again, and Windows goes
+  on ending the session; Cancel destroys the reason and keeps the window.
+- `WM_ENDSESSION(TRUE)` saves the settings as a close does ([`Core_Settings.md`](../Core/Core_Settings.md)): the
+  process may end as soon as it returns. `WM_ENDSESSION(FALSE)` (the end was cancelled) destroys the reason, and a
+  prompt still waiting or showing no longer closes the window.
+- The busy-state policy of the active `UiNeverBlocks` plan (a save in progress at session end) supersedes these rules
+  when it lands.
+
+### Pointer loss
+
+Capture, focus and activation loss end every pointer interaction, as the legacy canvas does when it resigns first
+responder: `WM_CAPTURECHANGED` (another window or the system took the pointer; the window's own release at
+button-up is not a loss), `WM_CANCELMODE` (a dialog or message box is about to show; DefWindowProc then releases the
+capture), `WM_KILLFOCUS` and `WM_ACTIVATEAPP(FALSE)`. A brush stroke or warp keeps what it painted, as a release
+would; a transform drag goes back to where it started (a drag-only edit drops, an Alt-drag's duplicate with it);
+marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place; lifted pixels and a
+shape draft drop; crop, gradient and eyedropper drags stop where they are; Space panning ends (its key-up goes
+elsewhere); and DxUi receives `PointerAction::Cancel` then `Leave`, so its own drags restore (the layers splitter
+goes back to its start). `WM_MOUSELEAVE` reaches the canvas as well as DxUi's hover (the tip circle goes, a drag
+without a capture ends); while a drag holds the capture, leaving the window does not end it. Quiet runs (the
+self-test, screenshots, the benchmark) drive the pointer synthetically from a hidden window whose capture follows no
+real button, so Windows may take it back whenever the user's mouse moves: they honor only the losses their own thread
+sends (`InSendMessage` false), never a change another thread or process reports.
 
 Debug and Release use the same titled window. There is no XENEON-only placement path and no missing-display prompt.
 
@@ -84,4 +117,10 @@ Before initializing the renderer, `--self-test` MUST verify:
 ```
 
 `HostTests` pins the catalog. `test.ps1` runs `--help` with redirected stdout, rejects `--no-such-switch` with exit 2,
-runs hidden `--self-test --warp`, and captures `--screenshot --dpi 96` and `--dpi 144` without stealing focus.
+runs hidden `--self-test --warp`, and captures `--screenshot --dpi 96` and `--dpi 144` without stealing focus. The
+self-test sends `WM_CLOSE` from inside a chrome command callback (the window and the chrome survive, and the close is
+posted once the click has returned), sends `WM_QUERYENDSESSION` to a modified document (refused with the block
+reason, the posted prompt's Cancel keeps the window, Don't Save posts a close that does not ask again, a critical end
+is allowed) and `WM_ENDSESSION(TRUE)` (the settings file is written), and sends `WM_CAPTURECHANGED`, `WM_KILLFOCUS`,
+`WM_ACTIVATEAPP` and `WM_MOUSELEAVE` mid-gesture (a stroke commits, a Move drag goes back, a splitter drag
+restores, Space panning ends).

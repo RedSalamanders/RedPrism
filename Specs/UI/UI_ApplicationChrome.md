@@ -134,14 +134,18 @@ Pointer rules in the hole (`Application::OnPointer`, geometry from `TransformOve
 resizes (Alt about the center; Shift inverts the ratio lock; Ctrl, or an already distorted edit, distorts), on the
 knob rotates (Shift snaps to 15°), anywhere else drags the layer a press would move: the layer under the pointer
 with Ctrl or Auto Select, else the active layer, even from empty canvas. Alt-drag duplicates. Moves snap unless
-Ctrl is held; drags land on whole pixels and degrees and commit on release. Cursors: the resize arrows follow the
-box's rotation, the knob and a distortion show a cross, a movable layer shows the four-way arrow.
+Ctrl is held; drags land on whole pixels and degrees and commit on release. Losing the pointer capture or the focus
+mid-drag puts the box back where the drag started (a drag-only edit drops, an Alt-drag's duplicate with it;
+[`UI_Windowing.md`](UI_Windowing.md)). Cursors: the resize arrows follow the box's rotation, the knob and a
+distortion show a cross, a movable layer shows the four-way arrow.
 
 Keys with the canvas focused: arrows nudge by one pixel (Shift ten), Enter applies and Escape cancels a pending
 edit, Ctrl+T starts Free Transform (a persistent edit) and selects the Move tool; with a non-empty selection it
 transforms the selected pixels instead (`TransformCommand`: a `Floating Selection` layer that merges back as one
 `Transform Selection` entry on Apply or Enter, restored exactly by Escape or Undo, the outline following the handles
-and a distortion). Undo during a pending edit cancels it; switching tools or selecting another layer commits it. The transform contract itself lives in
+and a distortion). Undo during a pending edit cancels it and ends a drag in progress with it, so moving on neither
+moves nor duplicates (an Alt-press, Ctrl+Z, then a drag adds no layer); switching tools or selecting another layer
+commits it. The transform contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 The bottom 48 DIP of the rail are one palette control. The foreground and background squares, 20 DIP each, overlap
@@ -197,7 +201,9 @@ Delete clears them, and without a selection deletes the targeted mask, or the la
 Content-Aware Fill on them ([`Document_Tools.md`](../Document/Document_Tools.md)); Ctrl+X, Ctrl+C, Ctrl+Shift+C
 and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
 PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
-system clipboard changed since that copy); Alt+Backspace and Ctrl+Backspace fill with the foreground and background
+system clipboard changed since that copy; a copy that could not reach the system clipboard, because another app held
+it open, is still the newest, so Paste keeps taking it until the system clipboard changes again); Alt+Backspace and
+Ctrl+Backspace fill with the foreground and background
 colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
@@ -240,8 +246,9 @@ without a document the arrow or crosshair returns. The ring follows the zoom.
 Pointer rules in the hole (`Application::BeginBrushStroke` / `ContinueBrushStroke` / `FinishBrushStroke`): a left
 press starts a stroke on the active layer, or on its mask when the mask is selected (Shift-click paints a straight
 line from the end of the previous stroke on that target); moving adds samples and shows them at once through the
-composition's stroke preview; release, the pointer leaving the window and switching tools each commit one history
-entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke. The Eraser and the Brush's Erase mode both
+composition's stroke preview; release, the pointer capture or the focus going elsewhere (a dialog, a menu, another
+app; [`UI_Windowing.md`](UI_Windowing.md)), the pointer leaving the window once no drag holds the capture, and
+switching tools each commit one history entry (`Brush Stroke`, `Erase`, `Paint Mask`); Escape drops the stroke. The Eraser and the Brush's Erase mode both
 erase; a mask is never erased but painted black or white. A stroke over the pixel budget or an engine failure is
 dropped with `IDS_ERROR_BRUSH_BUDGET`. A press does nothing on a folder without its mask, a hidden or adjustment
 layer, a disabled mask or an empty selection.
@@ -264,7 +271,7 @@ their cursor, except while Alt is held with Clone Stamp: the ring hides and the 
 so the click that sets the source is waiting. Clone Stamp adds a crosshair at the point it copies from. The crosshair stays on the source until a
 stroke fixes the offset, then follows the pointer while that stroke is dragged and afterwards. Pointer rules: Alt-click with Clone Stamp sets the source; a press starts a stroke of the tool's kind
 (Smear's Liquify and Smudge start a warp instead, shown live through the stroke preview), Shift-click a line;
-release, leaving the window or a tool switch commits, Escape drops; a stroke on a mask does nothing for Spot Healing
+release, capture or focus loss, leaving the window without a capture, or a tool switch commits, Escape drops; a stroke on a mask does nothing for Spot Healing
 and Clone Stamp and reports `IDS_ERROR_SMEAR_MASK` for Liquify and Smudge; Clone Stamp without a source reports
 `IDS_ERROR_CLONE_SOURCE`. Switching between the Brush family (Brush, Eraser, Spot Healing), Clone Stamp and Smear
 parks each family's size, hardness and opacity.
@@ -481,7 +488,9 @@ Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`IDxTree
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
 holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK
 commits the name through `DocumentSession::RenameLayer` (trimmed, a blank name ignored) as one `Rename Layer`
-entry, Escape or Cancel leaves it. Merge (C16, legacy `LayerMerge.swift`): Ctrl+E follows
+entry, Escape or Cancel leaves it. The card renames the layer it was opened for, whichever row is selected when it
+commits; it closes without renaming when that layer goes away (Undo, a delete, a merge), when the document is
+replaced, and when an interaction settles (a tool switch). Merge (C16, legacy `LayerMerge.swift`): Ctrl+E follows
 `DocumentSession::PlanMerge` — the active layer merges with the layer beneath it in its folder (`Merge Down`), a
 folder merges its contents and goes (`Merge Group`), several selected layers merge together (`Merge Layers`); the
 Layer menu's caption names the plan. The host composites the planned layers alone — cut loose from any parent or
@@ -492,11 +501,16 @@ entry; a failed composite reports `IDS_ERROR_FLATTEN`. The self-test renames thr
 leaves a name alone on Escape, and merges a blue layer down onto a red one into one 14 × 14 layer.
 
 The 32 DIP title row holds the `Layers` label and a `DxUi::NumericStepper` (0–100 %, step 1, Shift 10, unit `%`,
-accessible name `Layer opacity`) bound to the active raster layer's opacity. Typing previews live; Enter, focus
-loss, the buttons, Up/Down and `RequestValue` commit; Escape restores the start value. One typed edit is one
-`Layer Opacity` history entry: the snapshot is taken before the first preview and closed on commit, and a cancelled
-edit leaves no entry. The stepper is disabled for folders or without an active layer and is never rewritten while
-the user is typing in it.
+accessible name `Layer opacity`) bound to the active raster layer's opacity. Typing previews live on the layer the
+edit started on; Enter, focus loss, the buttons, Up/Down and `RequestValue` commit; Escape restores the start value.
+One typed edit is one `Layer Opacity` history entry from the value before the first preview; a cancelled edit leaves
+no entry, and so does one typed back to its start value (the stepper reports nothing then). No history transaction
+stays open while the field edits: the preview changes the document outside history, and anything else first records
+the typed value as its own entry — a command (menu, key, Command List), a tool switch, a press on the canvas,
+another layer selected or a row dragged, a save, or the document replaced — so no other edit folds into it or bakes
+the preview in; the field's later commit of that same value adds nothing, to another layer or another document
+alike. The stepper is disabled for folders or without an active layer and is never rewritten while the user is
+typing in it.
 
 ## Palette and color picker
 
@@ -548,9 +562,10 @@ canvas hole at the layers side like the adjustment panel; a point on it is chrom
 New Canvas size) and mirrors it through `SetSizeCard`; every control reports one `SizeAction` with one value, a typed
 number counting when committed (Enter, a step button, the focus leaving) so a locked ratio never follows a
 half-typed value. Enter is the card's OK and Escape its Cancel (the card's default and cancel buttons inside it, the
-accelerators with the canvas focused); a tool switch or a document on its way out cancels the card. Apply resizes
-through `ResizeCanvas` / `ResizeImage` ([`Document_Tools.md`](../Document/Document_Tools.md)) as one `Canvas Size` /
-`Image Size` entry and fits the viewport; `TooLarge` reports `IDS_ERROR_TOO_LARGE`, any other failure
+accelerators with the canvas focused); a tool switch or a document on its way out cancels the card. Apply first
+settles the interactions in flight as a document on its way out does (a pending gradient or transform commits as its
+own entry), then resizes that document through `ResizeCanvas` / `ResizeImage`
+([`Document_Tools.md`](../Document/Document_Tools.md)) as one `Canvas Size` / `Image Size` entry and fits the viewport; `TooLarge` reports `IDS_ERROR_TOO_LARGE`, any other failure
 `IDS_ERROR_RESIZE`; an unchanged size closes the card.
 
 | Card | Rows |
@@ -572,18 +587,41 @@ shell asks, in a task dialog owned by the main window (`IDS_OPEN_IMAGE_TITLE`, `
 canvas keeps its size) or to open it as a **New Project** (the current document is replaced by a document of the
 image's size holding the image as its only layer, the history reset and marked saved, no path, the viewport
 fitted); Cancel changes nothing. A drop of several files asks once for the batch (`IDS_OPEN_IMAGES_TITLE`): New
-Project takes the first image and the others join it as layers; projects in the batch open as projects first. With
+Project takes the first image that loads (legacy `importImages`: one that fails before it is reported with the batch
+and the next is tried) and the others join it as layers; projects in the batch open as projects first. With
 no document open an image opens as a new project without asking. Quiet runs take a forced answer (Add as Layer
-unless the self-test sets another). Import failures report `IDS_ERROR_IMPORT_IMAGE` or `IDS_ERROR_TOO_LARGE` once
-for the batch and keep the images that loaded.
+unless the self-test sets another). Images added as layers join the document as it stands: the interactions in flight
+settle first, as a tool switch settles them (an open panel applies, so the import never folds into its entry).
+Import failures report `IDS_ERROR_IMPORT_IMAGE` or `IDS_ERROR_TOO_LARGE` once for the batch and keep the images that
+loaded.
 
 Before a document is replaced or dropped — New, New Canvas…, Open (a project or a new-project image), Close
 Project, Exit and the window's close button — a modified document asks `IDS_CONFIRM_SAVE_TITLE` ("Save changes to
 <name>?") with Save, Don't Save and Cancel: Save runs the Save command and proceeds only when it saved, Don't Save
-proceeds, Cancel keeps everything as it was. Quiet runs never ask (they proceed, or take the self-test's forced
-answer). Close Project (Ctrl+W) leaves the shell without a document: the status strip shows `—`, the layers panel is
-empty, the canvas hole shows the clear color and the document commands do nothing; New, Open, Import Images… and a
-drop start the next document.
+proceeds, Cancel keeps everything as it was. Nothing settles before the answer, so Cancel leaves open panels, cards,
+the crop frame, drafts, a pending transform and a live stroke exactly as they were; the document's interactions
+settle only once Save or Don't Save lets it go. A pending edit that Save would record — a live stroke or warp, a
+pending gradient, a changed transform, a typed opacity — counts as a change, so a clean document with one still
+asks. Quiet runs never ask (they proceed, or take the self-test's forced answer). Close Project (Ctrl+W) leaves the
+shell without a document: the status strip shows `—`, the layers panel is empty, the canvas hole shows the clear
+color and the document commands do nothing; New, Open, Import Images… and a drop start the next document.
+
+Save, Save As and Export write what the canvas shows (review-fix Decision D2): before writing they settle the
+document as Enter would — a typed opacity records its entry, a live stroke or warp and a pending gradient commit, a
+pending transform applies, and an open color panel applies as its OK does. An adjustment layer's panel previews
+inside the document, so a file written under it would hold a value the panel's Cancel later takes back while the
+document shows clean; applying first leaves nothing to take back. A crop frame, a shape draft, a lifted-pixel drag
+and the size card are not document edits and stay. (The legacy app refuses file operations while a stroke, a panel
+or an adjustment edit is open; RedPrism applies instead.) Save writes a ZIP `.prism` for a `.prism` name or a ZIP
+file; a project opened from a folder — an exploded project, whatever its name, `*.prism` included — saves in place as
+a folder, and Save As with the folder filter writes a folder.
+
+When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
+work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")
+that Windows shows while it waits, and the save prompt above runs from the message queue; Save or Don't Save closes
+the window without asking again and Windows goes on, Cancel keeps it and the user cancels the end in Windows. A
+critical end is never refused. The settings are saved when the session ends, as a close saves them; the message
+handling lives in [`UI_Windowing.md`](UI_Windowing.md).
 
 Dropped files (long paths included) open a `.prism` or exploded folder, or import an image as above. Load failures
 report the `ProjectIoStatus` through a localized message (unsupported version names the version); `--screenshot`
@@ -613,6 +651,14 @@ stamp away with Spot Healing, drags it with Smudge through a live warp, blurs it
 with Enter after a digit set its opacity, adds a Rectangle layer with the Shape tool, switches the kind with Shift-U,
 drops a draft with Escape and samples the shape's color with the Eyedropper. `--demo retouch` writes
 `docs/screenshots/retouch-96.png`: a radial gradient, a rounded rectangle and an ellipse under the Shape header.
+The session checks drive the typed opacity (typed back to its start, a command before Enter, a new document, Escape,
+a commit), the Rename card's own layer, Cancel at the save prompt over a panel, the size card, a crop frame, a shape
+draft and a pending transform, a clean document with a live stroke, Save under an adjustment layer's panel, a folder
+project saved in place, an image batch whose first file fails, Canvas Size over a pending gradient, a copy the system
+clipboard refused (the user's clipboard is set aside, cleared and restored around every clipboard step, and each
+mirror is read back), capture loss mid-stroke and mid-drag, a splitter drag cancelled, a leave without a capture,
+Space panning across a focus loss, Alt-press then Undo then a drag, a close inside a chrome callback and the session
+end.
 The self-test's keys all go through the window procedure (`Application::HandleAccelerator` sends the key down —
 a system key with Alt —, the character `TranslateMessage` would post and the key up, with a real scan code and the
 modifiers in the thread's key state, after a frame). Its keyboard steps (`RunKeyboardSelfTest`) replace X with Q

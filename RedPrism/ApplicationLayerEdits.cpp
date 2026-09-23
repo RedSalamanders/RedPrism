@@ -4,10 +4,13 @@
 #include "Resources.h"
 #include "resource.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 // The Layer menu's rename and merge (C16, Specs/UI/UI_ApplicationChrome.md "Layers panel"): the Rename Layer card
@@ -65,6 +68,8 @@ void Application::RenameActiveLayer() noexcept
     {
         return;
     }
+    // The card renames the layer it opened for, whichever layer is active when it commits.
+    _renameLayer = active->id;
     _chrome->OpenRenameCard(active->name);
     _frameInvalidated = true;
 }
@@ -72,6 +77,7 @@ void Application::RenameActiveLayer() noexcept
 void Application::OnLayerInvoked(Guid id) noexcept
 {
     // A double-click on a row renames that layer (legacy: the inline editor of the layer list).
+    CloseOpacityEdit();
     _session.SelectLayer(id);
     SyncChrome();
     RenameActiveLayer();
@@ -79,12 +85,129 @@ void Application::OnLayerInvoked(Guid id) noexcept
 
 void Application::OnRename(std::optional<std::wstring> name) noexcept
 {
+    const std::optional<Guid> layer = std::exchange(_renameLayer, std::nullopt);
+    if (!layer.has_value())
+    {
+        // The host closed the card (its layer or the document went away): nothing to rename.
+        return;
+    }
     if (name.has_value())
     {
-        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr)
+        _session.RenameLayer(layer.value(), name.value());
+    }
+    DocumentChanged();
+}
+
+void Application::CloseRenameCard() noexcept
+{
+    _renameLayer.reset();
+    if (_chrome && _chrome->RenameCardOpen())
+    {
+        // The card reports a cancel, which OnRename ignores now that no layer is waiting for a name.
+        _chrome->CloseRenameCard(false);
+    }
+}
+
+ImageLayer* Application::OpacityEditLayer() noexcept
+{
+    // The typed edit's layer while it still shows the previewed value; anything else changed it, and the edit is
+    // over.
+    if (!_opacityEdit.has_value() || !_session.Document().has_value())
+    {
+        _opacityEdit.reset();
+        return nullptr;
+    }
+    for (ImageLayer& layer : _session.Document().value().layers)
+    {
+        if (layer.id == _opacityEdit->layer)
         {
-            _session.RenameLayer(active->id, name.value());
+            if (layer.isGroup || layer.opacity != _opacityEdit->shown)
+            {
+                break;
+            }
+            return &layer;
         }
+    }
+    _opacityEdit.reset();
+    return nullptr;
+}
+
+void Application::CloseOpacityEdit() noexcept
+{
+    ImageLayer* layer = OpacityEditLayer();
+    if (layer == nullptr)
+    {
+        return;
+    }
+    const OpacityEdit edit = _opacityEdit.value();
+    _opacityEdit.reset();
+    if (edit.shown == edit.start)
+    {
+        return;
+    }
+    // History still holds the start value: the previewed one becomes its own entry before anything else records.
+    // The field keeps its text, so its Enter or focus loss may still commit this value.
+    layer->opacity = edit.start;
+    _session.BeginEdit(L"Layer Opacity");
+    layer->opacity = edit.shown;
+    _session.EndEdit();
+    _opacityRecorded = edit.shown;
+    DocumentChanged();
+}
+
+void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
+{
+    if (!std::isfinite(opacity))
+    {
+        return;
+    }
+    const double value = std::clamp(opacity, 0.0, 1.0);
+    const std::optional<double> recorded = std::exchange(_opacityRecorded, std::nullopt);
+    ImageLayer* layer = OpacityEditLayer();
+    switch (phase)
+    {
+    case ChromeEditPhase::Preview:
+        // Typing previews on the layer the edit started on, outside history; the first preview remembers the value
+        // history holds. No transaction stays open, so an edit that ends without a word (the value typed back to
+        // where it started) leaves history as it was.
+        if (layer == nullptr)
+        {
+            layer = _session.ActiveLayer();
+            if (layer == nullptr || layer->isGroup)
+            {
+                return;
+            }
+            _opacityEdit = OpacityEdit{layer->id, layer->opacity, layer->opacity};
+        }
+        layer->opacity = value;
+        _opacityEdit->shown = value;
+        break;
+    case ChromeEditPhase::Commit:
+        if (layer != nullptr)
+        {
+            // One entry from the value before the first preview to the committed one (none when they are equal).
+            const OpacityEdit edit = _opacityEdit.value();
+            _opacityEdit.reset();
+            layer->opacity = edit.start;
+            _session.BeginEdit(L"Layer Opacity");
+            layer->opacity = value;
+            _session.EndEdit();
+        }
+        else if (recorded != value)
+        {
+            // A button, an arrow key or RequestValue: the active layer, one entry.
+            _session.SetOpacity(value);
+        }
+        break;
+    case ChromeEditPhase::Cancel:
+    default:
+        // Escape restores the value history holds; an edit that already closed keeps its entry.
+        if (layer != nullptr)
+        {
+            layer->opacity = _opacityEdit->start;
+        }
+        _opacityEdit.reset();
+        break;
     }
     DocumentChanged();
 }
@@ -248,6 +371,166 @@ int Application::RunLayerEditsSelfTest() noexcept
     if (_session.Document().value().layers.size() != 3)
     {
         ReportLayerEditsSelfTestFailure(L"Undo did not restore the merged layers.\n");
+        return 5;
+    }
+    const auto layerNamed = [&](const wchar_t* name) -> Guid
+    {
+        for (const ImageLayer& layer : _session.Document().value().layers)
+        {
+            if (layer.name == name)
+            {
+                return layer.id;
+            }
+        }
+        return Guid{};
+    };
+    const auto nameOf = [&](const Guid& id) -> std::wstring
+    {
+        for (const ImageLayer& layer : _session.Document().value().layers)
+        {
+            if (layer.id == id)
+            {
+                return layer.name;
+            }
+        }
+        return {};
+    };
+    // The Rename card renames the layer it opened for: another row selected while it is open keeps its name.
+    const Guid redId = layerNamed(L"Red");
+    const Guid blueId = layerNamed(L"Blue");
+    _session.SelectLayer(redId);
+    SyncChrome();
+    OnCommand(ChromeHost::kCommandRenameLayer);
+    settle();
+    _session.SelectLayer(blueId);
+    SyncChrome();
+    for (const wchar_t character : std::wstring(L"Kept"))
+    {
+        (void)_chrome->DispatchCharacter(character, 0);
+    }
+    (void)_chrome->DispatchKey(VK_RETURN, true, 0);
+    (void)_chrome->DispatchKey(VK_RETURN, false, 0);
+    settle();
+    if (_chrome->RenameCardOpen() || nameOf(redId) != L"Kept" || nameOf(blueId) != L"Blue" ||
+        _session.history.UndoName() != L"Rename Layer")
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"The Rename card did not rename the layer it opened for (opened "
+                                                    L"on Red, committed with Blue active: '{}', '{}').\n",
+                                                    nameOf(redId), nameOf(blueId)));
+        return 5;
+    }
+    // It closes once its layer is gone, and when the document is replaced.
+    OnCommand(ChromeHost::kCommandNewLayer);
+    OnCommand(ChromeHost::kCommandRenameLayer);
+    settle();
+    const bool openedOnNewLayer = _chrome->RenameCardOpen();
+    OnCommand(ChromeHost::kCommandUndo);
+    settle();
+    const bool closedWithLayer = !_chrome->RenameCardOpen();
+    OnCommand(ChromeHost::kCommandRenameLayer);
+    settle();
+    const bool openedAgain = _chrome->RenameCardOpen();
+    _forcedDiscard = true;
+    OnCommand(ChromeHost::kCommandNew);
+    _forcedDiscard.reset();
+    settle();
+    if (!openedOnNewLayer || !closedWithLayer || !openedAgain || _chrome->RenameCardOpen())
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"The Rename card outlived its layer or its document (opened {}, "
+                                                    L"closed by Undo {}, reopened {}, open after New {}).\n",
+                                                    openedOnNewLayer, closedWithLayer, openedAgain,
+                                                    _chrome->RenameCardOpen()));
+        return 5;
+    }
+    // The opacity stepper's typed edit: no path leaves history open or bakes a preview into another entry.
+    const std::optional<Guid> activeId = _session.ActiveLayerID();
+    if (!activeId.has_value())
+    {
+        ReportLayerEditsSelfTestFailure(L"The new document has no active layer for the opacity checks.\n");
+        return 5;
+    }
+    const Guid target = activeId.value();
+    const auto opacityOf = [&](const Guid& id) -> double
+    {
+        for (const ImageLayer& layer : _session.Document().value().layers)
+        {
+            if (layer.id == id)
+            {
+                return layer.opacity;
+            }
+        }
+        return -1.0;
+    };
+    // Typed back to its start value ("100" → "10" → "100", Enter): the field sends no commit at all.
+    int entries = _session.history.UndoCount();
+    OnLayerOpacity(0.1, ChromeEditPhase::Preview);
+    const bool previewed = opacityOf(target) == 0.1;
+    OnLayerOpacity(1.0, ChromeEditPhase::Preview);
+    OnCommand(ChromeHost::kCommandNewLayer);
+    if (!previewed || !_session.history.CanUndo() || _session.history.UndoName() != L"New Blank Layer" ||
+        _session.history.UndoCount() != entries + 1 || opacityOf(target) != 1.0)
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"A typed opacity that ended at its start value left history open "
+                                                    L"(can undo {}, undo '{}', {} entries, expected {}).\n",
+                                                    _session.history.CanUndo(), _session.history.UndoName(),
+                                                    _session.history.UndoCount(), entries + 1));
+        return 5;
+    }
+    OnCommand(ChromeHost::kCommandUndo);
+    // A command runs before the field sees Enter (Ctrl+G): the typed value records its own entry first, the folder
+    // its own, and the field's late commit of the same value adds nothing to the folder now active.
+    _session.SelectLayer(target);
+    SyncChrome();
+    entries = _session.history.UndoCount();
+    OnLayerOpacity(0.4, ChromeEditPhase::Preview);
+    OnCommand(ChromeHost::kCommandNewFolder);
+    OnLayerOpacity(0.4, ChromeEditPhase::Commit);
+    const bool folderLast = _session.history.UndoName() == L"New Folder" && _session.history.CanUndo() &&
+                            _session.history.UndoCount() == entries + 2 && opacityOf(target) == 0.4;
+    OnCommand(ChromeHost::kCommandUndo);
+    const bool opacityBelow = _session.history.UndoName() == L"Layer Opacity" && opacityOf(target) == 0.4;
+    OnCommand(ChromeHost::kCommandUndo);
+    if (!folderLast || !opacityBelow || opacityOf(target) != 1.0)
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"A command during a typed opacity did not record the opacity as "
+                                                    L"its own entry (folder last {}, opacity below {}, opacity {}).\n",
+                                                    folderLast, opacityBelow, opacityOf(target)));
+        return 5;
+    }
+    // A new document closes the edit with the old history; the field's late commit changes nothing in the new one.
+    OnLayerOpacity(0.3, ChromeEditPhase::Preview);
+    _forcedDiscard = true;
+    OnCommand(ChromeHost::kCommandNew);
+    _forcedDiscard.reset();
+    OnLayerOpacity(0.3, ChromeEditPhase::Commit);
+    const ImageLayer* fresh = _session.ActiveLayer();
+    if (fresh == nullptr || fresh->opacity != 1.0 || _session.history.IsModified() ||
+        _session.history.UndoName() != L"New Canvas")
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"A typed opacity carried over into the new document (opacity {}, "
+                                                    L"modified {}, undo '{}').\n",
+                                                    fresh != nullptr ? fresh->opacity : -1.0,
+                                                    _session.history.IsModified(), _session.history.UndoName()));
+        return 5;
+    }
+    // Escape restores the start value without an entry; a commit records one entry from before the first preview.
+    const Guid freshId = fresh->id;
+    entries = _session.history.UndoCount();
+    OnLayerOpacity(0.6, ChromeEditPhase::Preview);
+    OnLayerOpacity(1.0, ChromeEditPhase::Cancel);
+    const bool cancelled =
+        opacityOf(freshId) == 1.0 && _session.history.UndoCount() == entries && !_session.history.IsModified();
+    OnLayerOpacity(0.2, ChromeEditPhase::Preview);
+    OnLayerOpacity(0.25, ChromeEditPhase::Preview);
+    OnLayerOpacity(0.25, ChromeEditPhase::Commit);
+    const bool committed = opacityOf(freshId) == 0.25 && _session.history.UndoCount() == entries + 1 &&
+                           _session.history.UndoName() == L"Layer Opacity";
+    OnCommand(ChromeHost::kCommandUndo);
+    if (!cancelled || !committed || opacityOf(freshId) != 1.0)
+    {
+        ReportLayerEditsSelfTestFailure(std::format(L"The opacity stepper's Escape or commit did not record as one "
+                                                    L"entry (cancelled {}, committed {}, opacity {}).\n",
+                                                    cancelled, committed, opacityOf(freshId)));
         return 5;
     }
     return 0;
