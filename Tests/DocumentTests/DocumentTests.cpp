@@ -3692,8 +3692,8 @@ void TestPixelEdits()
         session.FillSelection(FillSource::Foreground);
         session.ClearSelectedPixels();
         Expect(!session.BeginGradient(Vec2{0, 20}) && session.PendingGradient() == nullptr, "edit.empty-no-gradient");
-        Expect(!session.CanPaint() && session.Document().value() == before &&
-                   session.history.UndoCount() == count && ActivePixel(session, 50, 20)[3] == 0,
+        Expect(!session.CanPaint() && session.Document().value() == before && session.history.UndoCount() == count &&
+                   ActivePixel(session, 50, 20)[3] == 0,
                "edit.empty-selection-edits-nothing");
     }
     // Legacy gradientStaysInsideTheSelection.

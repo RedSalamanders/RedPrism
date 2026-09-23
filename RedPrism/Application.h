@@ -550,7 +550,7 @@ class Application final : public ChromeEvents
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
     double _overlayBacking = 0.0;
-    bool _marchingAnts = false; // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
+    bool _marchingAnts = false;     // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
     std::uint64_t _chromeSyncs = 0; // SyncChrome runs (the self-test counts what a pointer move costs)
     std::vector<float> _guideXs;    // the snap guides in view pixels, reused between syncs
     std::vector<float> _guideYs;

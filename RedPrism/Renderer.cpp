@@ -613,7 +613,7 @@ bool Renderer::IsSuspended() const noexcept
 
 bool Renderer::IsOccluded() const noexcept
 {
-    return _occluded;
+    return _occludedForTest.value_or(_occluded);
 }
 
 bool Renderer::IsWarp() const noexcept

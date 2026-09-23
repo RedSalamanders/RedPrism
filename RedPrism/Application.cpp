@@ -3611,7 +3611,7 @@ void Application::OnCommand(int command) noexcept
             nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
         _prompts->ShowInfo(_window.get(), text, LoadStringResource(nullptr, IDS_APP_TITLE));
     }
-        break;
+    break;
     case ChromeHost::kCommandSwapPalette:
         if (_chrome != nullptr && _chrome->ColorPickerOpen())
         {
@@ -6863,12 +6863,17 @@ int Application::RunRenderingSelfTest() noexcept
         return 5;
     }
 
-    // Minimized or occluded, the document keeps no surfaces; the next frame composes them again (RF-411).
+    // Minimized or occluded, the document keeps no surfaces; the next frame composes them again (RF-411). The
+    // display's power and the occlusion DWM reports for the hidden window are the machine's (asleep displays report
+    // both), so the step pins them and restores them after.
     frame();
     RECT client{};
     (void)GetClientRect(_window.get(), &client);
     const UINT clientWidth = static_cast<UINT>(client.right - client.left);
     const UINT clientHeight = static_cast<UINT>(client.bottom - client.top);
+    const bool displayPoweredOn = _displayPoweredOn;
+    _displayPoweredOn = true;
+    _renderer.SetOccludedForTest(false);
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_MINIMIZED, 0);
     const bool minimizedReleased = _composition.CanvasSurfaceBytes() == 0 && _renderer.IsSuspended();
     (void)HandleMessage(_window.get(), WM_SIZE, SIZE_RESTORED, MAKELPARAM(clientWidth, clientHeight));
@@ -6882,10 +6887,14 @@ int Application::RunRenderingSelfTest() noexcept
     frame();
     ReleaseSurfacesWhileUnseen();
     const bool visibleKept = _composition.CanvasSurfaceBytes() != 0;
+    _renderer.SetOccludedForTest(std::nullopt);
     _windowVisible = false;
+    _displayPoweredOn = displayPoweredOn;
     if (!minimizedReleased || !restoredDrawn || !occludedReleased || !visibleKept)
     {
-        SelfTestFailure(L"A minimized or occluded window kept its document surfaces.\n");
+        SelfTestFailure(std::format(L"A minimized or occluded window kept its document surfaces (minimized released "
+                                    L"{}, restored drawn {}, occluded released {}, visible kept {}).\n",
+                                    minimizedReleased, restoredDrawn, occludedReleased, visibleKept));
         return 5;
     }
 

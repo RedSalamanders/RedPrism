@@ -1294,11 +1294,12 @@ struct PaletteLayout
     const float left = 7.0f;
     const float foregroundTop = blockTop + 7.0f;
     layout.foreground = D2D1::RectF(left, foregroundTop, left + swatch, foregroundTop + swatch);
-    layout.background = D2D1::RectF(left + step, foregroundTop + step, left + step + swatch, foregroundTop + step + swatch);
-    layout.swap = D2D1::RectF(layout.foreground.right, layout.foreground.top, layout.background.right,
-                              layout.background.top);
-    layout.reset = D2D1::RectF(layout.foreground.left, layout.foreground.bottom, layout.background.left,
-                               layout.background.bottom);
+    layout.background =
+        D2D1::RectF(left + step, foregroundTop + step, left + step + swatch, foregroundTop + step + swatch);
+    layout.swap =
+        D2D1::RectF(layout.foreground.right, layout.foreground.top, layout.background.right, layout.background.top);
+    layout.reset =
+        D2D1::RectF(layout.foreground.left, layout.foreground.bottom, layout.background.left, layout.background.bottom);
     return layout;
 }
 

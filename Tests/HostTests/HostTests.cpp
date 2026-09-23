@@ -836,8 +836,8 @@ void TestStringTable() noexcept
     Expect(FormatStringResource(exe.get(), IDS_STATUS_SIZE, 1280, 800) == L"1280 × 800", "strings.format-positional");
     Expect(FormatStringResource(exe.get(), IDS_TOOL_TOOLTIP, std::wstring(L"Move"), std::wstring(L"V")) == L"Move (V)",
            "strings.format-two-arguments");
-    Expect(FormatStringResource(exe.get(), IDS_A11Y_PALETTE_NAME, std::wstring(L"Foreground"), std::wstring(L"Background")) ==
-               L"Foreground, Background",
+    Expect(FormatStringResource(exe.get(), IDS_A11Y_PALETTE_NAME, std::wstring(L"Foreground"),
+                                std::wstring(L"Background")) == L"Foreground, Background",
            "strings.format-palette-name");
     Expect(PlainCommandName(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save As" &&
                CaptionWithoutChord(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save &As..." &&

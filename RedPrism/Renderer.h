@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <d3d11_1.h>
 #include <dxgi1_3.h>
+#include <optional>
 #include <windows.h>
 
 #pragma warning(push)
@@ -119,10 +120,12 @@ class Renderer final
         _injectedResult = result;
         _injecting = true;
     }
-    // Self-test seam: the state a Present that reported DXGI_STATUS_OCCLUDED leaves.
-    void SetOccludedForTest(bool occluded) noexcept
+    // Self-test seam: IsOccluded() reports `occluded` (the state a Present that reported DXGI_STATUS_OCCLUDED
+    // leaves, or not) until cleared with nullopt, whatever the real Present of the hidden harness window returns
+    // meanwhile (DWM may report it occluded while the displays sleep).
+    void SetOccludedForTest(std::optional<bool> occluded) noexcept
     {
-        _occluded = occluded;
+        _occludedForTest = occluded;
     }
 
   private:
@@ -150,6 +153,7 @@ class Renderer final
     bool _forceWarp = false;
     bool _suspended = true;
     bool _occluded = false;
+    std::optional<bool> _occludedForTest;
     UINT _width = 0;
     UINT _height = 0;
     D3D_FEATURE_LEVEL _featureLevel = D3D_FEATURE_LEVEL_11_0;
