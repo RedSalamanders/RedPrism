@@ -263,23 +263,9 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     _acceleratorShift = press.shift;
     const auto clearAcceleratorShift = wil::scope_exit([this]() noexcept { _acceleratorShift = false; });
     // Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl)
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && _chrome->EscapeFloatingCard())
     {
-        if (_chrome->MoreToolsOpen())
-        {
-            _chrome->CloseMoreTools();
-            return true;
-        }
-        if (_chrome->NoticeOpen())
-        {
-            _chrome->CloseNotice();
-            return true;
-        }
-        if (_chrome->ShortcutsOpen())
-        {
-            _chrome->CloseShortcuts();
-            return true;
-        }
+        return true;
     }
     const KeyState state = CurrentKeyState();
     if (state.focus == KeyFocus::Canvas && !press.ctrl && HandleEditGesture(press))
@@ -824,6 +810,31 @@ int Application::RunKeyboardSelfTest() noexcept
                                 focusedName, renamed != nullptr ? renamed->name : std::wstring{}));
     }
     undoTo(historyStart);
+    _chrome->SetCanvasFocused(true);
+
+    // A card gives the keyboard back when it closes: a notice raised from the canvas and the Rename card opened with
+    // F2 return it to the canvas. An Escape the focused control leaves is the top card's Cancel (DxUi's embedded host
+    // routes no cancel button): on the layers panel it closes the Canvas Size card, and the panel keeps the keyboard.
+    _chrome->ShowNotice(L"Notice");
+    const bool noticeHeld = _chrome->NoticeOpen() && !_chrome->CanvasFocused();
+    (void)key(VK_ESCAPE, 0);
+    const bool noticeReturned = !_chrome->NoticeOpen() && _chrome->CanvasFocused();
+    OnCommand(ChromeHost::kCommandRenameLayer);
+    const bool renameHeld = _chrome->RenameCardOpen() && _chrome->TextInputFocused();
+    (void)key(VK_ESCAPE, 0);
+    const bool renameReturned = !_chrome->RenameCardOpen() && _chrome->CanvasFocused();
+    OnCommand(ChromeHost::kCommandCanvasSize);
+    const bool sizeOpened = SizeCardOpen() && _chrome->SizeCardOpen() && _chrome->CanvasFocused();
+    _chrome->FocusLayersForTest();
+    (void)key(VK_ESCAPE, 0);
+    const bool sizeCancelled = !SizeCardOpen() && !_chrome->SizeCardOpen() && !_chrome->CanvasFocused() &&
+                               _chrome->FocusedControlNameForTest() == LoadStringResource(nullptr, IDS_A11Y_LAYERS);
+    if (!noticeHeld || !noticeReturned || !renameHeld || !renameReturned || !sizeOpened || !sizeCancelled)
+    {
+        return fail(std::format(L"A card did not give the keyboard back or take the Escape its focused control left "
+                                L"(notice {}/{}, rename {}/{}, Canvas Size {}/{}).\n",
+                                noticeHeld, noticeReturned, renameHeld, renameReturned, sizeOpened, sizeCancelled));
+    }
     _chrome->SetCanvasFocused(true);
 
     // Space pans with the canvas focused, for as long as it is held.

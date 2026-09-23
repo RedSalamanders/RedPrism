@@ -55,7 +55,7 @@ The layers splitter is a `DxUi::Splitter` sized over canvas and layers between t
 only its separator is hittable, so the hole and the panel beneath keep their own input. Dragging previews, release
 commits, Escape or capture loss restores the drag start; Left/Right step 8 DIP (Shift 32), Home/End go to the
 limits. The splitter owns the clamp (canvas ≥ 200 DIP, layers 160–480 DIP); `ChromeHost` keeps the preferred width
-across resizes and reports every change through the layout handler, and the host re-syncs the viewport on the next
+across resizes and reports every change (`ChromeEvents::OnChromeLayout`), and the host re-syncs the viewport on the next
 frame. Pane bounds are applied on the next `Prepare`, never inside the change callback. That layout keeps the drag
 while the splitter stays enabled and visible. There is no app-owned split geometry any more.
 
@@ -304,8 +304,8 @@ Every color adjustment and filter edits in one card (`ChromeHost::BuildAdjustPan
 floats over the top-right of the canvas hole below the header while a session edit is open (`AdjustInspectorState`
 mirrors the session; the panel never re-lays out inside a drag callback). It shows the edit's title (`<Kind>
 Adjustment` when an adjustment layer is edited), the kind's controls, a Preview checkbox, a `Limited to the
-selection` note for a pixel layer with a selection, and Cancel / OK (the host's default and cancel buttons while
-open; Enter and Escape with the canvas focused do the same). Value rows are a label, a `Slider` (logarithmic
+selection` note for a pixel layer with a selection, and Cancel / OK (Enter and Escape do the same, with the canvas
+focused or as the keys a chrome control leaves: Modal cards). Value rows are a label, a `Slider` (logarithmic
 for radius, distance, amount, gamma and grain size, so the small values get most of the travel) and an exact
 `NumericStepper`; typing into one previews live and is never reformatted out from under the typing (the stepper
 stays in its own edit until Enter, a step button or focus loss commits it, the same rule the transform, selection,
@@ -387,7 +387,18 @@ keys do and what the chrome shows. A key down goes, in order (`RedPrism/Applicat
 3. The table: the first binding whose chord matches and whose scope and condition hold runs its command.
 4. With the canvas focused, the canvas's own keys: the opacity digits, and Space, which pans while held.
 5. The chrome (DxUi), unless the canvas has the focus: a key the canvas did not use goes nowhere, never to the chrome
-   control that held the focus before the canvas took it; Escape and Tab move the keyboard to the chrome.
+   control that held the focus before the canvas took it; Escape and Tab move the keyboard to the chrome. An Enter or
+   Escape (without Ctrl) the focused control leaves is the OK or Cancel of a modal card (below).
+
+Modal cards (`ChromeHost::PushCard` / `PopCard`): the notice, the Command List, the Rename card, the size cards, the
+adjustment panel and the color picker stack in the order they open, each remembering where the keyboard was. The
+notice, the Command List, the Rename card and the picker take the keyboard when they open (their OK button, search
+field, name field, picker); the size cards and the panel do not. A card that holds the keyboard when it closes gives
+it back: to the chrome control that had it (never the menu bar a click left it on), else to that of the card now on
+top, else to the canvas. An Enter or Escape its focused control leaves goes to the card holding the focus, else to the
+top card: the notice's OK, the Command List's Escape (Enter runs a row only from its field or list), the Rename card's
+OK and Cancel, the size card's and the panel's OK and Cancel, the picker's OK and Cancel. DxUi's embedded host routes
+no default or cancel button, so the chrome sets none.
 
 A key a command or a gesture took types no character (its `WM_CHAR` / `WM_SYSCHAR` is dropped). Matching:
 
@@ -455,8 +466,8 @@ while its command is listed and never moves to another command's row. In the sea
 selection and Enter runs the selected row, or the first listed row when none is selected (nothing when the list is
 empty); on the list, Enter, Space or a double-click runs its row. Running a row closes the list first. Enter runs a
 row only while the list's search field or list has the keyboard: in a card underneath (the Rename card's field) it
-belongs to that card. Escape or OK closes the list; the card underneath gets its default and cancel buttons back
-and, when the list held the keyboard, the focus: the Rename card's field, the color picker, or else the canvas.
+belongs to that card. Escape or OK closes the list; when the list held the keyboard it goes back where it was (the
+Rename card's field, the color picker) or else to the canvas (Modal cards).
 StatusStrip shows zoom percent, document size, and the current tool with its effective chord
 (`ChromeHost::CommandChordText`). The tab title is the file name (or Untitled) with a dirty mark when history is
 modified.
@@ -490,7 +501,8 @@ Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`IDxTree
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
 holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK
 commits the name through `DocumentSession::RenameLayer` (trimmed, a blank name ignored) as one `Rename Layer`
-entry, Escape or Cancel leaves it. The card renames the layer it was opened for, whichever row is selected when it
+entry, Escape or Cancel leaves it; the keyboard goes back where it was (the layers panel after a double-click, the
+canvas after F2). The card renames the layer it was opened for, whichever row is selected when it
 commits; it closes without renaming when that layer goes away (Undo, a delete, a merge), when the document is
 replaced, and when an interaction settles (a tool switch). Merge (C16, legacy `LayerMerge.swift`): Ctrl+E follows
 `DocumentSession::PlanMerge` — the active layer merges with the layer beneath it in its folder (`Merge Down`), a
@@ -523,8 +535,10 @@ Clicking a well opens the `DxUi::ColorPicker` on a `CardPanel` just above that w
 right of the rail, so the card sits beside the palette instead of under the tool header. If the card would leave
 the window it stays below the tabs and above the status strip. Chrome composites over the canvas with premultiplied
 alpha, so the card is visible there. The picker edits the clicked well: field and hue-strip drags, typed R/G/B, six-digit hex and
-host-sampled colors (`ChromeHost::SampleColor`, the eyedropper feed) preview into the well; OK or Enter commit and
-notify the palette handler; Cancel, Escape (also when a picker child has focus) or capture loss restore the well.
+host-sampled colors (`ChromeHost::SampleColor`, the eyedropper feed) preview into the well; OK or Enter commit it
+(`ChromeEvents::OnPickerColor`, which reports every change of the one picker with its `PickerTarget`: a well, a
+Gradient Map end, the Canvas Size custom color); Cancel, Escape (also when a picker child has focus) or capture loss
+restore the well.
 Pointer input inside the card belongs to chrome even though it lies in the hole; a canvas click outside it focuses
 the canvas and leaves the picker open. Captions come from the STRINGTABLE (`IDS_PICKER_*`, `IDS_PALETTE_*`).
 Mask-selected black/white policy arrives with mask painting.
@@ -563,7 +577,7 @@ canvas hole at the layers side like the adjustment panel; a point on it is chrom
 (`SizeDialog`: a `CanvasSizeDraft`, an `ImageSizeDraft`, the anchor, the extension choice and its custom color, the
 New Canvas size) and mirrors it through `SetSizeCard`; every control reports one `SizeAction` with one value, a typed
 number counting when committed (Enter, a step button, the focus leaving) so a locked ratio never follows a
-half-typed value. Enter is the card's OK and Escape its Cancel (the card's default and cancel buttons inside it, the
+half-typed value. Enter is the card's OK and Escape its Cancel (the keys a chrome control leaves, Modal cards; the
 accelerators with the canvas focused); a tool switch or a document on its way out cancels the card. Apply first
 settles the interactions in flight as a document on its way out does (a pending gradient or transform commits as its
 own entry), then resizes that document through `ResizeCanvas` / `ResizeImage`
@@ -671,7 +685,9 @@ Command List's search field without running Q, Ctrl+A, Ctrl+Backspace, Ctrl+Z or
 Ctrl+Alt, filter the list to Sample Ring and run it with Enter (a typed space is text, not a pan), keep a selection
 from moving to another command's row and run the first match without one, run a selected row with Enter on the
 list, rename through the Rename card with Enter while a Delete Layer row is selected in the open list, give the
-keyboard back to the Rename card when the list closes, pan with Space only while it is held, give the menu bar the
+keyboard back to the Rename card when the list closes, give it back to the canvas when a notice or the Rename card
+opened with F2 closes, close the Canvas Size card with an Escape the focused layers panel leaves (the panel keeping
+the keyboard), pan with Space only while it is held, give the menu bar the
 keyboard from a tapped Alt, F10 and `SC_KEYMENU` without a system-menu loop (a timer ends one if it starts), open the
 File menu with Alt+F but not when Alt+F is a command, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the
 legacy golden does, and show the layout's key names, the STRINGTABLE modifiers and replacements in the Command

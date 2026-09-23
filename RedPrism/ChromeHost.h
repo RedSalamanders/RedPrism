@@ -3,12 +3,15 @@
 #include "AccessibilityRoot.h"
 #include "AdjustControls.h"
 #include "CanvasOverlay.h"
+#include "ChromeEvents.h"
 #include "CommandBindings.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "Resources.h"
 #include "TransformOverlay.h"
 
 #include <array>
+#include <cstdint>
 #include <d3d11.h>
 #include <functional>
 #include <initializer_list>
@@ -16,6 +19,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <windows.h>
 
@@ -351,7 +356,8 @@ struct TransformInspectorState
 // Editor chrome on the one HWND: MenuBar, document tabs, tool rail with the palette wells, tool header, layers
 // splitter, layers panel with the opacity stepper, status strip, and the color picker card. Owns one DxUi
 // EmbeddedHost that borrows the application device. Every visible string comes from the STRINGTABLE. The command
-// ids (`kCommand…`) live on CommandIds (RedPrism/CommandCatalog.h) and read as `ChromeHost::kCommand…`.
+// ids (`kCommand…`) live on CommandIds (RedPrism/CommandCatalog.h) and read as `ChromeHost::kCommand…`. What the user
+// does in it goes to the ChromeEvents it is constructed with.
 class ChromeHost final : public CommandIds
 {
   public:
@@ -387,7 +393,7 @@ class ChromeHost final : public CommandIds
         Count,
     };
 
-    ChromeHost() = default;
+    explicit ChromeHost(ChromeEvents& events) noexcept;
     ~ChromeHost();
 
     ChromeHost(const ChromeHost&) = delete;
@@ -398,35 +404,16 @@ class ChromeHost final : public CommandIds
     void Detach() noexcept;
     void SetVisible(bool visible) noexcept;
     void SetOwnerWindow(HWND window) noexcept;
-    void SetCommandHandler(std::function<void(int)> handler);
-    void SetToolHandler(std::function<void(EditorTool)> handler);
-    void SetLayerHandler(std::function<void(Guid)> handler);
-    void SetLayerExpandHandler(std::function<void(Guid, bool)> handler);
-    // A double-click on a layer row (C16): the host renames it.
-    void SetLayerInvokeHandler(std::function<void(Guid)> handler);
-    // A row drag. `parent` is the target's parent for Before/After, and is ignored for Inside (the target is the
-    // folder). The document move is `PlaceLayer`.
-    void SetLayerReorderHandler(
-        std::function<void(Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place)> handler);
-    // The Rename Layer card (C16): opened on a name; the handler gets the committed name, nullopt on cancel.
-    void SetRenameHandler(std::function<void(std::optional<std::wstring>)> handler);
+    // The Rename Layer card (C16): opened on a name; closing it reports ChromeEvents::OnRename.
     void OpenRenameCard(const std::wstring& name) noexcept;
     void CloseRenameCard(bool commit) noexcept;
     [[nodiscard]] bool RenameCardOpen() const noexcept;
-    // Committed palette (foreground, background) after the picker's OK or Enter.
-    void SetPaletteHandler(std::function<void(uint32_t, uint32_t)> handler);
-    // Active layer opacity in 0…1 from the stepper: typing previews, Enter/blur/buttons commit, Escape cancels.
-    void SetOpacityHandler(std::function<void(double, ChromeEditPhase)> handler);
-    // The canvas hole changed from inside chrome (splitter drag or keyboard); the host re-syncs the viewport.
-    void SetLayoutHandler(std::function<void()> handler);
     // The Move tool's header: typed numbers, flips, sampling, Apply/Cancel and the toggles.
-    void SetTransformHandler(std::function<void(TransformAction, double)> handler);
     void SetTransformInspector(const TransformInspectorState& state) noexcept;
     // The transform box in canvas-hole pixels (nullopt hides it) and snap guides in canvas-hole pixels.
     void SetTransformOverlay(const std::optional<TransformOverlayGeometry>& geometry, const std::vector<float>& guideXs,
                              const std::vector<float>& guideYs) noexcept;
     // The selection tools' header: kinds, mode, wand settings, Anti-alias, Expand / Contract and Deselect.
-    void SetSelectionHandler(std::function<void(SelectionAction, double)> handler);
     void SetSelectionInspector(const SelectionInspectorState& state) noexcept;
     // The selection outline (marching ants) and the lasso draft, in canvas-hole pixels.
     void SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loops) noexcept;
@@ -434,37 +421,23 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] float SelectionAntPhase() const noexcept;
     void SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexcept;
     // The Brush and Eraser header: mode, size, hardness, opacity, mask paint and the color swatch.
-    void SetBrushHandler(std::function<void(BrushAction, double)> handler);
     void SetBrushInspector(const BrushInspectorState& state) noexcept;
     // The tip circle over the canvas, in canvas-hole pixels (nullopt hides it).
     void SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor) noexcept;
     // The Gradient and Shape headers (C11), and the tool overlays in canvas-hole pixels (nullopt hides each).
-    void SetGradientHandler(std::function<void(GradientAction, double)> handler);
     void SetGradientInspector(const GradientInspectorState& state) noexcept;
-    void SetShapeHandler(std::function<void(ShapeAction, double)> handler);
     void SetShapeInspector(const ShapeInspectorState& state) noexcept;
     // The Crop header (C16) and the shade outside the crop frame (canvas-hole pixels; nullopt clears it).
-    void SetCropHandler(std::function<void(CropAction, double)> handler);
     void SetCropInspector(const CropInspectorState& state) noexcept;
     void SetCropShade(std::optional<D2D1_RECT_F> framePixels) noexcept;
-    // The adjustment panel (C12): actions with a value, the curve editor's points, a spectrum band handle, and the
-    // Gradient Map's color picks (the picker's phase, the color and which end).
-    void SetAdjustHandler(std::function<void(AdjustAction, double)> handler);
-    void SetCurveHandler(std::function<void(std::vector<CurvePoint>)> handler);
-    void SetBandHandler(std::function<void(int, double)> handler);
-    void SetAdjustColorHandler(std::function<void(ChromeEditPhase, uint32_t, bool)> handler);
+    // The adjustment panel (C12): the mirrored session edit; its controls report adjust actions, the curve editor's
+    // points and the spectrum's band handles.
     void SetAdjustInspector(const AdjustInspectorState& state) noexcept;
     [[nodiscard]] bool AdjustPanelOpen() const noexcept;
     [[nodiscard]] D2D1_RECT_F AdjustPanelBoundsDip() const noexcept;
-    // The color picker on a Gradient Map end; its changes go to the adjust color handler, never the palette.
-    void OpenAdjustColorPicker(uint32_t argb, bool highlights) noexcept;
-    // The size cards (C16): actions with a value, the custom extension color's picks, and the mirrored draft.
-    void SetSizeHandler(std::function<void(SizeAction, double)> handler);
-    void SetSizeColorHandler(std::function<void(ChromeEditPhase, uint32_t)> handler);
+    // The size cards (C16): the mirrored draft; the controls report size actions.
     void SetSizeCard(const SizeCardState& state) noexcept;
     [[nodiscard]] bool SizeCardOpen() const noexcept;
-    // The color picker on the Canvas Size card's custom extension color; changes go to the size color handler.
-    void OpenSizeColorPicker(uint32_t argb) noexcept;
     void SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POINT_2F>> line) noexcept;
     void SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> draft) noexcept;
     void SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) noexcept;
@@ -494,7 +467,9 @@ class ChromeHost final : public CommandIds
     void SetActiveLayerOpacity(std::optional<double> opacity) noexcept;
     // Persisted layers width; clamped by the splitter on the next Prepare.
     void SetLayersWidth(float widthDip) noexcept;
-    void OpenColorPicker(bool background) noexcept;
+    // The color picker card on `target`, starting from `argb`: a palette well previews into the well and OK sets it;
+    // every change goes to ChromeEvents::OnPickerColor with the target.
+    void OpenColorPicker(PickerTarget target, uint32_t argb) noexcept;
     // Host-driven close (Escape fallback, self-test): commits or cancels the open picker.
     void CloseColorPicker(bool commit) noexcept;
     // Host eyedropper result while the picker is open (previews, does not commit).
@@ -505,6 +480,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] bool ForceTooltipForTest() noexcept;
     // Self-test hook: DxUi's focus on the layer opacity stepper, as a click on it would leave it.
     void FocusLayerOpacityForTest() noexcept;
+    // Self-test hook: the keyboard on the layers panel's list, as a click on a row would leave it.
+    void FocusLayersForTest() noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Composite(ID3D11DeviceContext* context, const D3D11_VIEWPORT& viewport) noexcept;
     bool DispatchPointer(const DxUi::PointerEvent& event) noexcept;
@@ -598,6 +575,8 @@ class ChromeHost final : public CommandIds
     void ShowNotice(std::wstring text) noexcept;
     void CloseNotice() noexcept;
     [[nodiscard]] bool NoticeOpen() const noexcept;
+    // Escape closes the floating card on top wherever the focus is: More tools, the notice, the Command List.
+    bool EscapeFloatingCard() noexcept;
     [[nodiscard]] D2D1_RECT_F NoticeBoundsDip() const noexcept;
     // Help › Command List: every catalog command with its effective chord, a search field that filters by name.
     // Enter in the search field runs the selected row, or the first row when none is selected; Enter, Space or a
@@ -628,8 +607,10 @@ class ChromeHost final : public CommandIds
     // Alt+letter, or a letter while the menu bar has the keyboard: opens the menu with that mnemonic.
     bool OpenMenuByMnemonic(wchar_t mnemonic) noexcept;
     // Self-test hooks: menus are recorded instead of shown (a native flyout runs a modal loop), and the Command List
-    // and focus are read and steered without the pointer.
+    // and focus are read and steered without the pointer. A command probe, while set, takes the commands the chrome
+    // would report (a command that runs a modal loop inside a chrome callback).
     void SetMenusRecordOnlyForTest(bool recordOnly) noexcept;
+    void SetCommandProbeForTest(std::function<void(int)> probe) noexcept;
     [[nodiscard]] std::optional<std::size_t> TakeRecordedMenuForTest() noexcept;
     [[nodiscard]] std::size_t ShortcutRowCountForTest() const noexcept;
     [[nodiscard]] int ShortcutCommandAtForTest(std::size_t index) const noexcept;
@@ -652,6 +633,8 @@ class ChromeHost final : public CommandIds
     class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
     {
       public:
+        explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
+        ChromeEvents& events;
         std::vector<HierarchyEntry> rows;
         // Each row's display text (the name, or the "(hidden)" suffixed form), built once by SetRows so
         // GetVisibleItem's per-paint call is an assignment into the caller's reused buffer, never a
@@ -659,10 +642,6 @@ class ChromeHost final : public CommandIds
         std::vector<std::wstring> displayText;
         std::optional<Guid> active;
         std::wstring hiddenPattern;
-        std::function<void(Guid)>* onLayer = nullptr;
-        std::function<void(Guid, bool)>* onExpand = nullptr;
-        std::function<void(Guid)>* onInvoke = nullptr;
-        std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)>* onReorder = nullptr;
         bool useFluentIcons = true;
         // Stores the hierarchy and rebuilds displayText once; SetLayers calls this instead of assigning rows
         // directly so a settled layers panel does not re-format every row's name on every repaint.
@@ -686,10 +665,11 @@ class ChromeHost final : public CommandIds
             std::wstring chord;
             int command = 0;
         };
+        explicit ShortcutListModel(ChromeHost& host) noexcept : host(host) {}
+        ChromeHost& host; // a row invoked runs through LaunchShortcut
         std::vector<Row> all;
         std::vector<Row> rows;
         std::wstring query;
-        std::function<void(int)> onInvoke;
         [[nodiscard]] std::size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
@@ -723,6 +703,82 @@ class ChromeHost final : public CommandIds
     void RefreshShortcutHints() noexcept;
     // `text` with the chords of `commands` that have one, as "text (A, B)"; `text` alone when none has.
     [[nodiscard]] std::wstring WithChordHint(std::wstring text, std::initializer_list<int> commands) const;
+    // Control factories for the tool headers and the cards. Each adds its control to `parent`, names it and wires
+    // `handler`: an action (reported through ChromeEvents unless a sync is writing the controls) or a callable taking
+    // what the control reports (the stepper's change, the combo's index, the checkbox's state, nothing for a button).
+    struct ComboSpec
+    {
+        UINT nameId = 0; // the accessible name; 0: the tooltip names it
+        UINT tipId = 0;
+        std::size_t selected = 0;
+    };
+    struct StepperSpec
+    {
+        UINT labelId = 0;     // also the accessible name (never the tooltip)
+        float labelWidth = 0; // 0: the label names the stepper without being painted
+        UINT unitId = 0;
+        float unitWidth = 0;
+        double minimum = 0;
+        double maximum = 0;
+        double step = 1; // the large step is ten steps
+        std::uint8_t decimals = 0;
+        std::optional<double> value;
+        UINT tipId = 0;
+    };
+    struct CheckSpec
+    {
+        UINT labelId = 0;
+        UINT tipId = 0;
+        UINT nameId = 0; // 0: the caption names it
+        bool checked = false;
+    };
+    struct ButtonSpec
+    {
+        UINT labelId = 0;
+        UINT tipId = 0;
+        bool primary = false;
+    };
+    template <typename Handler>
+    DxUi::ComboBox* MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items, const ComboSpec& spec,
+                              Handler handler);
+    template <typename Handler>
+    DxUi::NumericStepper* MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler);
+    template <typename Handler> DxUi::Checkbox* MakeCheck(DxUi::Panel& parent, const CheckSpec& spec, Handler handler);
+    template <typename Handler> DxUi::Button* MakeButton(DxUi::Panel& parent, const ButtonSpec& spec, Handler handler);
+    // Combo items with stable values, or numbered from `first` (the unit list starts at Inches without resampling).
+    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NamedItems(
+        std::initializer_list<std::pair<const wchar_t*, UINT>> items);
+    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NumberedItems(std::span<const UINT> ids,
+                                                                         std::size_t first = 0);
+    [[nodiscard]] static std::vector<DxUi::ComboBox::Item> NumberedItems(std::initializer_list<UINT> ids)
+    {
+        return NumberedItems(std::span<const UINT>(ids.begin(), ids.size()));
+    }
+    // A header's or card's action from one of its controls, unless a sync is writing the controls.
+    template <typename Action> void Report(Action action, double value) noexcept;
+    // Set*Inspector, SetSizeCard and SetAdjustInspector write their controls with the reports held back.
+    [[nodiscard]] auto HoldReports() noexcept
+    {
+        const bool outer = std::exchange(_syncing, true);
+        return wil::scope_exit([this, outer]() noexcept { _syncing = outer; });
+    }
+    // A header stepper shows `value` unless the user is typing in it.
+    static void SyncStepper(DxUi::NumericStepper* stepper, double value, bool enabled) noexcept;
+    // One control of a tool header's row: its width, whether the header's state wants it, a vertical inset (the
+    // swatches) and the gap after it.
+    struct HeaderSlot
+    {
+        DxUi::Control* control = nullptr;
+        float width = 0;
+        bool wanted = true;
+        float inset = 0;
+        float gap = 6.0f;
+    };
+    // A tool header's row: the pinned slots take the right end from the right (with `keepTitleRoom`, each only while
+    // it leaves 80 DIP to its left); the flow slots run from the left in order and stop at the first wanted slot that
+    // does not fit. A slot that is not wanted or has no room hides.
+    void ArrangeHeaderRow(DxUi::Panel* header, const D2D1_RECT_F& bounds, std::span<const HeaderSlot> pinned,
+                          std::span<const HeaderSlot> flow, bool keepTitleRoom) noexcept;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
@@ -740,10 +796,42 @@ class ChromeHost final : public CommandIds
     void SyncToolVisuals() noexcept;
     void OnSplitterChange(DxUi::SplitterChange change) noexcept;
     void OnPickerChange(DxUi::ColorPickerChange change) noexcept;
-    void FinishPicker(bool commit, uint32_t argb) noexcept;
+    // A palette well shows `argb` (the picker's working color while it previews there).
+    void ShowPaletteWell(PickerTarget target, uint32_t argb) noexcept;
+    // Hides the picker card without reporting a pick (its target's card closed).
+    void ClosePickerCard() noexcept;
+    // The modal cards, oldest first, each with the keyboard as it was when it opened. A card with a `home` control
+    // takes the keyboard when it opens; a card that holds the keyboard when it closes gives it back: to the chrome
+    // control that had it (never the menu bar a click left it on), else to the home of the card now on top, else to
+    // the canvas. An Enter or Escape the focused control leaves is the OK or Cancel of the card holding the focus,
+    // else of the top card (DxUi's embedded host routes no default or cancel button).
+    enum class ModalCard : std::uint8_t
+    {
+        Notice,
+        Shortcuts,
+        Rename,
+        Size,
+        Adjust,
+        Picker,
+        Count,
+    };
+    struct OpenCard
+    {
+        ModalCard card = ModalCard::Notice;
+        DxUi::Control* panel = nullptr;
+        DxUi::Control* home = nullptr;     // takes the keyboard when the card opens (none for the size card and panel)
+        DxUi::Control* keyboard = nullptr; // the chrome control that had the keyboard before
+        bool canvas = false;               // the canvas had the keyboard before
+    };
+    void PushCard(ModalCard card, DxUi::Control* panel, DxUi::Control* home) noexcept;
+    void PopCard(ModalCard card) noexcept;
+    [[nodiscard]] std::optional<OpenCard> TakeCard(ModalCard card) noexcept; // removes the card's entry
+    [[nodiscard]] const OpenCard* KeyboardCard() const noexcept;
+    bool CardKey(bool enter) noexcept;
     [[nodiscard]] float WidthDip() const noexcept;
     [[nodiscard]] float HeightDip() const noexcept;
 
+    ChromeEvents& _events;
     DxUi::EmbeddedHost _view;
     std::shared_ptr<DxUi::GraphicsDevice> _graphics;
     void* _requestContext = nullptr;
@@ -770,6 +858,9 @@ class ChromeHost final : public CommandIds
     bool _accessibilityPlacementDirty = false;
     bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
+    bool _syncing = false;        // a header or card sync is writing its controls (HoldReports)
+    std::array<OpenCard, static_cast<std::size_t>(ModalCard::Count)> _cards{}; // one entry per open card
+    std::size_t _cardCount = 0;
     std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
     DxUi::MenuBar* _menu = nullptr;
     DxUi::TabControl* _tabs = nullptr;
@@ -804,6 +895,9 @@ class ChromeHost final : public CommandIds
     bool _menuReturnCanvas = false;
     bool _menusRecordOnly = false;
     std::optional<std::size_t> _recordedMenu;
+    std::function<void(int)> _commandProbe; // SetCommandProbeForTest
+    // A menu row, a rail tool, a palette hot zone or a Command List row: ChromeEvents::OnCommand (or the probe).
+    void RunCommand(int command) noexcept;
     CanvasOverlay* _overlay = nullptr;
     DxUi::Panel* _transformHeader = nullptr;
     DxUi::Label* _transformTitle = nullptr;
@@ -822,7 +916,6 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _transformCancel = nullptr;
     DxUi::Button* _transformApply = nullptr;
     TransformInspectorState _inspector;
-    bool _syncingInspector = false;
     DxUi::Panel* _selectionHeader = nullptr;
     DxUi::Label* _selectionTitle = nullptr;
     DxUi::ComboBox* _marqueeShape = nullptr;
@@ -840,7 +933,6 @@ class ChromeHost final : public CommandIds
     DxUi::Label* _selectionEmpty = nullptr;
     DxUi::Button* _deselectButton = nullptr;
     SelectionInspectorState _selectionInspector;
-    bool _syncingSelection = false;
     DxUi::Panel* _brushHeader = nullptr;
     DxUi::Label* _brushTitle = nullptr;
     DxUi::ComboBox* _brushMode = nullptr;
@@ -868,7 +960,6 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _gradientCancel = nullptr;
     DxUi::Button* _gradientApply = nullptr;
     GradientInspectorState _gradientInspector;
-    bool _syncingGradient = false;
     DxUi::Panel* _shapeHeader = nullptr;
     // ChromeHostCrop.cpp: the Crop header.
     void BuildCropHeader(DxUi::Panel& root);
@@ -881,26 +972,16 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _cropCancel = nullptr;
     DxUi::Button* _cropApply = nullptr;
     CropInspectorState _cropInspector;
-    bool _syncingCrop = false;
-    std::function<void(CropAction, double)> _onCrop;
     DxUi::Label* _shapeTitle = nullptr;
     DxUi::ComboBox* _shapeKind = nullptr;
     DxUi::NumericStepper* _shapeRadius = nullptr;
     DxUi::Label* _shapeFillLabel = nullptr;
     DxUi::ColorSwatch* _shapeFill = nullptr;
     ShapeInspectorState _shapeInspector;
-    bool _syncingShape = false;
     BrushInspectorState _brushInspector;
-    bool _syncingBrush = false;
     std::array<DxUi::Button*, kEditorToolCount> _toolButtons{}; // icon buttons; the active tool's is latched
     bool _toolVisualsDirty = false;                             // a latch change waits for the pointer to come up
     LayerTreeModel _treeModel;
-    std::function<void(int)> _onCommand;
-    std::function<void(EditorTool)> _onTool;
-    std::function<void(Guid)> _onLayer;
-    std::function<void(Guid, bool)> _onExpand;
-    std::function<void(Guid)> _onLayerInvoke;
-    std::function<void(Guid, Guid, std::optional<Guid>, DxUi::TreeDropPlace)> _onReorder;
     // ChromeHostRename.cpp: the Rename Layer card.
     void BuildRenameCard(DxUi::Panel& root);
     void ArrangeRenameCard(float right, float top) noexcept;
@@ -909,15 +990,6 @@ class ChromeHost final : public CommandIds
     DxUi::TextField* _renameField = nullptr;
     DxUi::Button* _renameCancel = nullptr;
     DxUi::Button* _renameOk = nullptr;
-    std::function<void(std::optional<std::wstring>)> _onRename;
-    std::function<void(uint32_t, uint32_t)> _onPalette;
-    std::function<void(double, ChromeEditPhase)> _onOpacity;
-    std::function<void()> _onLayout;
-    std::function<void(TransformAction, double)> _onTransform;
-    std::function<void(SelectionAction, double)> _onSelection;
-    std::function<void(BrushAction, double)> _onBrush;
-    std::function<void(GradientAction, double)> _onGradient;
-    std::function<void(ShapeAction, double)> _onShape;
     // The adjustment panel (ChromeHostAdjust.cpp).
     enum class AdjustRowId : std::uint8_t
     {
@@ -992,13 +1064,6 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _adjustCancel = nullptr;
     DxUi::Button* _adjustApply = nullptr;
     AdjustInspectorState _adjustInspector;
-    bool _syncingAdjust = false;
-    std::function<void(AdjustAction, double)> _onAdjust;
-    std::function<void(std::vector<CurvePoint>)> _onCurve;
-    std::function<void(int, double)> _onBand;
-    std::function<void(ChromeEditPhase, uint32_t, bool)> _onAdjustColor;
-    bool _pickerForAdjust = false;
-    bool _pickerHighlights = false;
     // ChromeHostSize.cpp: the size cards.
     void BuildSizeCard(DxUi::Panel& root);
     void ArrangeSizeCard(float right, float top, float bottom) noexcept;
@@ -1029,10 +1094,7 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _sizeCancel = nullptr;
     DxUi::Button* _sizeApply = nullptr;
     SizeCardState _sizeState;
-    bool _syncingSize = false;
-    bool _pickerForSize = false;
-    std::function<void(SizeAction, double)> _onSize;
-    std::function<void(ChromeEditPhase, uint32_t)> _onSizeColor;
+    std::size_t _sizeUnitFirst = 0; // the unit the size card's unit list starts at
     UINT _width = 0;
     UINT _height = 0;
     float _dpi = 96.0f;
@@ -1041,7 +1103,156 @@ class ChromeHost final : public CommandIds
     uint32_t _foregroundArgb = 0xFF000000u;
     uint32_t _backgroundArgb = 0xFFFFFFFFu;
     EditorTool _tool = EditorTool::Move;
-    bool _pickerBackground = false;
+    PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
     bool _canvasFocused = true;
     bool _attached = false;
 };
+
+template <typename Action> void ChromeHost::Report(Action action, double value) noexcept
+{
+    if (_syncing)
+    {
+        return;
+    }
+    if constexpr (std::is_same_v<Action, TransformAction>)
+    {
+        _events.OnTransformAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, SelectionAction>)
+    {
+        _events.OnSelectionAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, BrushAction>)
+    {
+        _events.OnBrushAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, GradientAction>)
+    {
+        _events.OnGradientAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, ShapeAction>)
+    {
+        _events.OnShapeAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, CropAction>)
+    {
+        _events.OnCropAction(action, value);
+    }
+    else if constexpr (std::is_same_v<Action, AdjustAction>)
+    {
+        _events.OnAdjustAction(action, value);
+    }
+    else
+    {
+        static_assert(std::is_same_v<Action, SizeAction>, "an action ChromeEvents does not report");
+        _events.OnSizeAction(action, value);
+    }
+}
+
+template <typename Handler>
+DxUi::ComboBox* ChromeHost::MakeCombo(DxUi::Panel& parent, std::vector<DxUi::ComboBox::Item> items,
+                                      const ComboSpec& spec, Handler handler)
+{
+    DxUi::ComboBox* control = parent.AddChild<DxUi::ComboBox>();
+    control->SetItems(std::move(items));
+    control->SetSelectedIndex(spec.selected);
+    control->SetAccessibleName(LoadStringResource(nullptr, spec.nameId != 0 ? spec.nameId : spec.tipId));
+    if (spec.tipId != 0)
+    {
+        control->SetTooltipText(LoadStringResource(nullptr, spec.tipId));
+    }
+    if constexpr (std::is_enum_v<Handler>)
+    {
+        control->SetOnSelectionChanged([this, handler](size_t index) { Report(handler, static_cast<double>(index)); });
+    }
+    else
+    {
+        control->SetOnSelectionChanged(std::move(handler));
+    }
+    return control;
+}
+
+template <typename Handler>
+DxUi::NumericStepper* ChromeHost::MakeStepper(DxUi::Panel& parent, const StepperSpec& spec, Handler handler)
+{
+    DxUi::NumericStepper* control = parent.AddChild<DxUi::NumericStepper>();
+    std::wstring label = LoadStringResource(nullptr, spec.labelId);
+    control->SetLabel(label, spec.labelWidth);
+    control->SetAccessibleName(std::move(label));
+    if (spec.unitId != 0)
+    {
+        control->SetUnit(LoadStringResource(nullptr, spec.unitId), spec.unitWidth);
+    }
+    control->SetMinimum(spec.minimum);
+    control->SetMaximum(spec.maximum);
+    control->SetStep(spec.step);
+    control->SetLargeStep(spec.step * 10);
+    control->SetDecimals(spec.decimals);
+    if (spec.value.has_value())
+    {
+        control->SetValue(spec.value.value());
+    }
+    if (spec.tipId != 0)
+    {
+        control->SetTooltipText(LoadStringResource(nullptr, spec.tipId));
+    }
+    if constexpr (std::is_enum_v<Handler>)
+    {
+        control->SetOnChange([this, handler](DxUi::NumericStepperChange change) { Report(handler, change.value); });
+    }
+    else
+    {
+        control->SetOnChange(std::move(handler));
+    }
+    return control;
+}
+
+template <typename Handler>
+DxUi::Checkbox* ChromeHost::MakeCheck(DxUi::Panel& parent, const CheckSpec& spec, Handler handler)
+{
+    DxUi::Checkbox* control = parent.AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, spec.labelId));
+    if (spec.tipId != 0)
+    {
+        control->SetTooltipText(LoadStringResource(nullptr, spec.tipId));
+    }
+    if (spec.nameId != 0)
+    {
+        control->SetAccessibleName(LoadStringResource(nullptr, spec.nameId));
+    }
+    if (spec.checked)
+    {
+        control->SetChecked(true);
+    }
+    if constexpr (std::is_enum_v<Handler>)
+    {
+        control->SetOnToggled([this, handler](bool checked) { Report(handler, checked ? 1.0 : 0.0); });
+    }
+    else
+    {
+        control->SetOnToggled(std::move(handler));
+    }
+    return control;
+}
+
+template <typename Handler>
+DxUi::Button* ChromeHost::MakeButton(DxUi::Panel& parent, const ButtonSpec& spec, Handler handler)
+{
+    DxUi::Button* control = parent.AddChild<DxUi::Button>(LoadStringResource(nullptr, spec.labelId));
+    if (spec.primary)
+    {
+        control->SetPrimary(true);
+    }
+    if (spec.tipId != 0)
+    {
+        control->SetTooltipText(LoadStringResource(nullptr, spec.tipId));
+    }
+    if constexpr (std::is_enum_v<Handler>)
+    {
+        control->SetOnClick([this, handler] { Report(handler, 0.0); });
+    }
+    else
+    {
+        control->SetOnClick(std::move(handler));
+    }
+    return control;
+}

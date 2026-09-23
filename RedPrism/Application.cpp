@@ -756,7 +756,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The color picker did not commit the foreground color.\n");
             return 5;
         }
-        _chrome->OpenColorPicker(true);
+        _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
         _chrome->SampleColor(0xFF112233u);
         _chrome->CloseColorPicker(false);
         if (_chrome->ColorPickerOpen() || _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
@@ -2022,7 +2022,8 @@ HRESULT Application::InitializeRenderer() noexcept
 
 HRESULT Application::InitializeChrome() noexcept
 {
-    auto chrome = std::unique_ptr<ChromeHost>(new (std::nothrow) ChromeHost());
+    // Every chrome event lands on this Application (ChromeEvents).
+    auto chrome = std::unique_ptr<ChromeHost>(new (std::nothrow) ChromeHost(*this));
     if (!chrome)
     {
         return E_OUTOFMEMORY;
@@ -2033,88 +2034,94 @@ HRESULT Application::InitializeChrome() noexcept
         return result;
     }
     chrome->SetOwnerWindow(_window.get());
-    chrome->SetCommandHandler([this](int command) { OnCommand(command); });
-    chrome->SetToolHandler([this](EditorTool tool) { OnTool(tool); });
-    chrome->SetLayerHandler(
-        [this](Guid id)
-        {
-            // A typed opacity belongs to the layer it started on: it records its entry before another is active.
-            CloseOpacityEdit();
-            _session.SelectLayer(id);
-            SyncChrome();
-            _frameInvalidated = true;
-        });
-    chrome->SetLayerExpandHandler(
-        [this](Guid id, bool expanded)
-        {
-            if (expanded)
-            {
-                _session.CollapsedGroupIDs().erase(id);
-            }
-            else
-            {
-                _session.CollapsedGroupIDs().insert(id);
-            }
-            SyncChrome();
-            _frameInvalidated = true;
-        });
-    chrome->SetLayerReorderHandler(
-        [this](Guid source, Guid target, std::optional<Guid> parent, DxUi::TreeDropPlace place)
-        {
-            CloseOpacityEdit();
-            bool moved = false;
-            if (place == DxUi::TreeDropPlace::Inside)
-            {
-                moved = _session.PlaceLayer(source, target);
-            }
-            else if (place == DxUi::TreeDropPlace::Before)
-            {
-                moved = _session.PlaceLayer(source, parent, target);
-            }
-            else
-            {
-                moved = _session.PlaceLayer(source, parent, target, false, true);
-            }
-            if (moved)
-            {
-                DocumentChanged();
-            }
-        });
-    chrome->SetPaletteHandler(
-        [this](uint32_t foreground, uint32_t background)
-        {
-            // Reached from inside a DxUi callback: sync chrome on the next frame rather than re-entering Prepare.
-            _session.SetForegroundColor(foreground);
-            _session.SetBackgroundColor(background);
-            _layoutDirty = true;
-            _frameInvalidated = true;
-        });
-    chrome->SetOpacityHandler([this](double opacity, ChromeEditPhase phase) { OnLayerOpacity(opacity, phase); });
-    chrome->SetLayoutHandler(
-        [this]
-        {
-            _layoutDirty = true;
-            _frameInvalidated = true;
-        });
-    chrome->SetTransformHandler([this](TransformAction action, double value) { OnTransformAction(action, value); });
-    chrome->SetSelectionHandler([this](SelectionAction action, double value) { OnSelectionAction(action, value); });
-    chrome->SetBrushHandler([this](BrushAction action, double value) { OnBrushAction(action, value); });
-    chrome->SetGradientHandler([this](GradientAction action, double value) { OnGradientAction(action, value); });
-    chrome->SetShapeHandler([this](ShapeAction action, double value) { OnShapeAction(action, value); });
-    chrome->SetCropHandler([this](CropAction action, double value) { OnCropAction(action, value); });
-    chrome->SetLayerInvokeHandler([this](Guid id) { OnLayerInvoked(id); });
-    chrome->SetRenameHandler([this](std::optional<std::wstring> name) { OnRename(std::move(name)); });
-    chrome->SetAdjustHandler([this](AdjustAction action, double value) { OnAdjustAction(action, value); });
-    chrome->SetCurveHandler([this](std::vector<CurvePoint> points) { OnCurveChanged(std::move(points)); });
-    chrome->SetBandHandler([this](int index, double degrees) { OnBandChanged(index, degrees); });
-    chrome->SetAdjustColorHandler([this](ChromeEditPhase phase, uint32_t argb, bool highlights)
-                                  { OnAdjustColor(phase, argb, highlights); });
-    chrome->SetSizeHandler([this](SizeAction action, double value) { OnSizeAction(action, value); });
-    chrome->SetSizeColorHandler([this](ChromeEditPhase phase, uint32_t argb) { OnSizeColor(phase, argb); });
     _chrome = std::move(chrome);
     _renderer.SetChrome(_chrome.get());
     _frameInvalidated = true;
     return S_OK;
+}
+
+void Application::OnLayerSelected(Guid id) noexcept
+{
+    // A typed opacity belongs to the layer it started on: it records its entry before another is active.
+    CloseOpacityEdit();
+    _session.SelectLayer(id);
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
+{
+    if (expanded)
+    {
+        _session.CollapsedGroupIDs().erase(id);
+    }
+    else
+    {
+        _session.CollapsedGroupIDs().insert(id);
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+}
+
+void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
+                                   DxUi::TreeDropPlace place) noexcept
+{
+    CloseOpacityEdit();
+    bool moved = false;
+    if (place == DxUi::TreeDropPlace::Inside)
+    {
+        moved = _session.PlaceLayer(source, target);
+    }
+    else if (place == DxUi::TreeDropPlace::Before)
+    {
+        moved = _session.PlaceLayer(source, parent, target);
+    }
+    else
+    {
+        moved = _session.PlaceLayer(source, parent, target, false, true);
+    }
+    if (moved)
+    {
+        DocumentChanged();
+    }
+}
+
+void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint32_t argb) noexcept
+{
+    switch (target)
+    {
+    case PickerTarget::Foreground:
+    case PickerTarget::Background:
+        // A well previews in the chrome and OK sets the palette. Reached from inside a DxUi callback: sync chrome on
+        // the next frame rather than re-entering Prepare.
+        if (phase == ChromeEditPhase::Commit)
+        {
+            if (target == PickerTarget::Foreground)
+            {
+                _session.SetForegroundColor(argb);
+            }
+            else
+            {
+                _session.SetBackgroundColor(argb);
+            }
+            _layoutDirty = true;
+            _frameInvalidated = true;
+        }
+        return;
+    case PickerTarget::GradientShadows:
+    case PickerTarget::GradientHighlights:
+        OnAdjustColor(phase, argb, target == PickerTarget::GradientHighlights);
+        return;
+    case PickerTarget::SizeExtension:
+        OnSizeColor(phase, argb);
+        return;
+    }
+}
+
+void Application::OnChromeLayout() noexcept
+{
+    _layoutDirty = true;
+    _frameInvalidated = true;
 }
 
 HRESULT Application::InitializeDocument() noexcept
@@ -4899,7 +4906,7 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
     case BrushAction::OpenColor:
         if (_chrome)
         {
-            _chrome->OpenColorPicker(false);
+            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
         }
         break;
     case BrushAction::SetHealMode:
@@ -5485,7 +5492,7 @@ void Application::OnGradientAction(GradientAction action, double value) noexcept
     case GradientAction::OpenColor:
         if (_chrome)
         {
-            _chrome->OpenColorPicker(false);
+            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
         }
         break;
     }
@@ -6092,7 +6099,7 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
     case ShapeAction::OpenColor:
         if (_chrome)
         {
-            _chrome->OpenColorPicker(false);
+            _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
         }
         break;
     }

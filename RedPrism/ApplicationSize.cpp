@@ -292,7 +292,7 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
             if (_sizeDialog.extension == 5 && _chrome)
             {
                 _sizeDialog.customBefore = _sizeDialog.customArgb;
-                _chrome->OpenSizeColorPicker(_sizeDialog.customArgb);
+                _chrome->OpenColorPicker(PickerTarget::SizeExtension, _sizeDialog.customArgb);
             }
             break;
         default:

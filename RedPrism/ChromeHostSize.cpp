@@ -8,6 +8,7 @@
 #include <cmath>
 #include <format>
 #include <initializer_list>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -62,16 +63,6 @@ constexpr std::array<UINT, 4> kUnitIds{IDS_SIZE_UNIT_PIXELS, IDS_SIZE_UNIT_PERCE
 }
 } // namespace
 
-void ChromeHost::SetSizeHandler(std::function<void(SizeAction, double)> handler)
-{
-    _onSize = std::move(handler);
-}
-
-void ChromeHost::SetSizeColorHandler(std::function<void(ChromeEditPhase, uint32_t)> handler)
-{
-    _onSizeColor = std::move(handler);
-}
-
 bool ChromeHost::SizeCardOpen() const noexcept
 {
     return _sizeCard != nullptr && _sizeCard->IsVisible();
@@ -82,112 +73,78 @@ void ChromeHost::BuildSizeCard(DxUi::Panel& root)
     _sizeCard = root.AddChild<DxUi::CardPanel>();
     _sizeCard->SetCornerRadius(8.0f);
     _sizeCard->SetVisible(false);
-    const auto action = [this](SizeAction what, double value)
+    DxUi::Panel& card = *_sizeCard;
+    const auto label = [&](UINT textId, DxUi::FontRole role)
     {
-        if (!_syncingSize && _onSize)
-        {
-            _onSize(what, value);
-        }
-    };
-    const auto label = [this](UINT textId, DxUi::FontRole role)
-    {
-        DxUi::Label* control = _sizeCard->AddChild<DxUi::Label>(LoadStringResource(nullptr, textId));
+        DxUi::Label* control = card.AddChild<DxUi::Label>(LoadStringResource(nullptr, textId));
         control->SetFontRole(role);
         return control;
     };
-    const auto stepper = [this, action](UINT labelId, double minimum, double maximum, int decimals, SizeAction what)
+    // A typed number counts once it is committed (Enter, a step button, the focus leaving): a value in the making
+    // would move the locked other axis through every keystroke.
+    const auto committed = [this](SizeAction what)
     {
-        DxUi::NumericStepper* control = _sizeCard->AddChild<DxUi::NumericStepper>();
-        control->SetLabel(LoadStringResource(nullptr, labelId), 72.0f);
-        control->SetAccessibleName(LoadStringResource(nullptr, labelId));
-        control->SetMinimum(minimum);
-        control->SetMaximum(maximum);
-        control->SetStep(1.0);
-        control->SetLargeStep(10.0);
-        control->SetDecimals(static_cast<uint8_t>(decimals));
-        control->SetOnChange(
-            [action, what](DxUi::NumericStepperChange change)
-            {
-                // A typed number counts once it is committed (Enter, a step button, the focus leaving): a value
-                // in the making would move the locked other axis through every keystroke.
-                if (change.phase == DxUi::NumericStepperChangePhase::Commit)
-                {
-                    action(what, change.value);
-                }
-            });
-        return control;
-    };
-    const auto combo = [this, action](UINT nameId, std::initializer_list<UINT> items, SizeAction what)
-    {
-        DxUi::ComboBox* control = _sizeCard->AddChild<DxUi::ComboBox>();
-        control->SetAccessibleName(LoadStringResource(nullptr, nameId));
-        std::vector<DxUi::ComboBox::Item> entries;
-        std::size_t index = 0;
-        for (const UINT id : items)
+        return [this, what](DxUi::NumericStepperChange change)
         {
-            entries.push_back(DxUi::ComboBox::Item{std::to_wstring(index++), LoadStringResource(nullptr, id)});
-        }
-        control->SetItems(std::move(entries));
-        control->SetSelectedIndex(0);
-        control->SetOnSelectionChanged([action, what](size_t selected)
-                                       { action(what, static_cast<double>(selected)); });
-        return control;
+            if (change.phase == DxUi::NumericStepperChangePhase::Commit)
+            {
+                Report(what, change.value);
+            }
+        };
     };
-    const auto checkbox = [this, action](UINT labelId, SizeAction what)
+    const auto field = [&](UINT labelId, double minimum, double maximum, std::uint8_t decimals, SizeAction what)
     {
-        DxUi::Checkbox* control = _sizeCard->AddChild<DxUi::Checkbox>(LoadStringResource(nullptr, labelId));
-        control->SetOnToggled([action, what](bool value) { action(what, value ? 1.0 : 0.0); });
-        return control;
-    };
-    const auto button = [this](UINT labelId, std::function<void()> onClick)
-    {
-        DxUi::Button* control = _sizeCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, labelId));
-        control->SetOnClick(std::move(onClick));
-        return control;
+        return MakeStepper(
+            card,
+            {.labelId = labelId, .labelWidth = 72.0f, .minimum = minimum, .maximum = maximum, .decimals = decimals},
+            committed(what));
     };
     _sizeTitle = label(IDS_SIZE_CANVAS_TITLE, DxUi::FontRole::BodyStrong);
     _sizeCurrent = label(IDS_SIZE_CURRENT, DxUi::FontRole::Body);
     _sizeBytes = label(IDS_SIZE_BYTES, DxUi::FontRole::Small);
-    _sizeUnit = combo(IDS_SIZE_UNITS, {kUnitIds[0], kUnitIds[1], kUnitIds[2], kUnitIds[3]}, SizeAction::SetUnit);
-    _sizeWidth = stepper(IDS_SIZE_WIDTH, -1.0e6, 1.0e6, 0, SizeAction::SetWidth);
-    _sizeHeight = stepper(IDS_SIZE_HEIGHT, -1.0e6, 1.0e6, 0, SizeAction::SetHeight);
-    _sizeRelative = checkbox(IDS_SIZE_RELATIVE, SizeAction::SetRelative);
-    _sizeLocked = checkbox(IDS_SIZE_LOCK_ORIGINAL, SizeAction::SetLocked);
+    // The list reports its position; without resampling it starts at Inches (SetSizeCard), so the unit is offset.
+    _sizeUnit = MakeCombo(card, NumberedItems(kUnitIds), {.nameId = IDS_SIZE_UNITS}, [this](size_t selected)
+                          { Report(SizeAction::SetUnit, static_cast<double>(selected + _sizeUnitFirst)); });
+    _sizeWidth = field(IDS_SIZE_WIDTH, -1.0e6, 1.0e6, 0, SizeAction::SetWidth);
+    _sizeHeight = field(IDS_SIZE_HEIGHT, -1.0e6, 1.0e6, 0, SizeAction::SetHeight);
+    _sizeRelative = MakeCheck(card, {.labelId = IDS_SIZE_RELATIVE}, SizeAction::SetRelative);
+    _sizeLocked = MakeCheck(card, {.labelId = IDS_SIZE_LOCK_ORIGINAL}, SizeAction::SetLocked);
     _sizeResult = label(IDS_SIZE_NEW, DxUi::FontRole::Small);
     _sizeResult->SetMultiline(true);
     _sizeAnchorLabel = label(IDS_SIZE_ANCHOR, DxUi::FontRole::Body);
     for (std::size_t index = 0; index < _sizeAnchors.size(); ++index)
     {
-        DxUi::Button* control = _sizeCard->AddChild<DxUi::Button>(std::wstring{});
+        DxUi::Button* control = card.AddChild<DxUi::Button>(std::wstring{});
         const std::wstring name = LoadStringResource(nullptr, kAnchorNameIds[index]);
         control->SetAccessibleName(name);
         control->SetTooltipText(name);
-        control->SetOnClick([action, index] { action(SizeAction::SetAnchor, static_cast<double>(index)); });
+        control->SetOnClick([this, index] { Report(SizeAction::SetAnchor, static_cast<double>(index)); });
         _sizeAnchors[index] = control;
     }
     _sizeAnchorName = label(IDS_SIZE_ANCHOR_CENTER, DxUi::FontRole::BodyStrong);
     _sizeAnchorHint = label(IDS_SIZE_ANCHOR_HINT, DxUi::FontRole::Small);
     _sizeAnchorHint->SetMultiline(true);
-    _sizeExtension = combo(IDS_SIZE_EXTENSION,
-                           {IDS_SIZE_EXT_TRANSPARENT, IDS_SIZE_EXT_FOREGROUND, IDS_SIZE_EXT_BACKGROUND,
-                            IDS_SIZE_EXT_BLACK, IDS_SIZE_EXT_WHITE, IDS_SIZE_EXT_CUSTOM},
-                           SizeAction::SetExtension);
-    _sizeExtensionSwatch = _sizeCard->AddChild<DxUi::ColorSwatch>(0xFFFFFFFFu);
+    _sizeExtension =
+        MakeCombo(card,
+                  NumberedItems({IDS_SIZE_EXT_TRANSPARENT, IDS_SIZE_EXT_FOREGROUND, IDS_SIZE_EXT_BACKGROUND,
+                                 IDS_SIZE_EXT_BLACK, IDS_SIZE_EXT_WHITE, IDS_SIZE_EXT_CUSTOM}),
+                  {.nameId = IDS_SIZE_EXTENSION}, SizeAction::SetExtension);
+    _sizeExtensionSwatch = card.AddChild<DxUi::ColorSwatch>(0xFFFFFFFFu);
     _sizeExtensionSwatch->SetAccessibleName(LoadStringResource(nullptr, IDS_SIZE_EXTENSION_COLOR));
-    _sizeExtensionSwatch->SetOnClick([action] { action(SizeAction::SetExtension, 5.0); });
-    _sizeResolution = stepper(IDS_SIZE_RESOLUTION, 1.0, 9600.0, 2, SizeAction::SetResolution);
+    _sizeExtensionSwatch->SetOnClick([this] { Report(SizeAction::SetExtension, 5.0); });
+    _sizeResolution = field(IDS_SIZE_RESOLUTION, 1.0, 9600.0, 2, SizeAction::SetResolution);
     _sizePpi = label(IDS_SIZE_PPI, DxUi::FontRole::Small);
-    _sizeResample = checkbox(IDS_SIZE_RESAMPLE, SizeAction::SetResample);
-    _sizeSampling = combo(IDS_SIZE_SAMPLING,
-                          {IDS_TRANSFORM_SAMPLING_NEAREST, IDS_TRANSFORM_SAMPLING_SMOOTH, IDS_TRANSFORM_SAMPLING_HIGH},
-                          SizeAction::SetSampling);
+    _sizeResample = MakeCheck(card, {.labelId = IDS_SIZE_RESAMPLE}, SizeAction::SetResample);
+    _sizeSampling = MakeCombo(
+        card,
+        NumberedItems({IDS_TRANSFORM_SAMPLING_NEAREST, IDS_TRANSFORM_SAMPLING_SMOOTH, IDS_TRANSFORM_SAMPLING_HIGH}),
+        {.nameId = IDS_SIZE_SAMPLING}, SizeAction::SetSampling);
     _sizeNote = label(IDS_SIZE_RESAMPLE_NOTE, DxUi::FontRole::Small);
     _sizeNote->SetMultiline(true);
-    _sizeOpen = button(IDS_SIZE_OPEN_PROJECT, [action] { action(SizeAction::OpenProject, 0.0); });
-    _sizeImport = button(IDS_SIZE_IMPORT_IMAGE, [action] { action(SizeAction::ImportImage, 0.0); });
-    _sizeCancel = button(IDS_TRANSFORM_CANCEL, [action] { action(SizeAction::Cancel, 0.0); });
-    _sizeApply = button(IDS_ADJUST_OK, [action] { action(SizeAction::Apply, 0.0); });
-    _sizeApply->SetPrimary(true);
+    _sizeOpen = MakeButton(card, {.labelId = IDS_SIZE_OPEN_PROJECT}, SizeAction::OpenProject);
+    _sizeImport = MakeButton(card, {.labelId = IDS_SIZE_IMPORT_IMAGE}, SizeAction::ImportImage);
+    _sizeCancel = MakeButton(card, {.labelId = IDS_TRANSFORM_CANCEL}, SizeAction::Cancel);
+    _sizeApply = MakeButton(card, {.labelId = IDS_ADJUST_OK, .primary = true}, SizeAction::Apply);
     for (const std::unique_ptr<DxUi::Control>& child : _sizeCard->GetChildren())
     {
         child->SetVisible(false);
@@ -297,7 +254,7 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
     {
         return;
     }
-    _syncingSize = true;
+    const auto hold = HoldReports();
     const bool wasOpen = _sizeCard->IsVisible();
     _sizeState = state;
     const bool open = state.kind != SizeCardKind::None;
@@ -326,28 +283,13 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
         ShowControl(_sizeUnit, !newCanvas);
         if (!newCanvas)
         {
-            // Without resampling only the print units make sense.
-            std::vector<DxUi::ComboBox::Item> entries;
+            // Without resampling only the print units make sense. The combo reports the list position it was
+            // clicked at, not the unit value: without resampling the list starts at Inches (first == 2), so position
+            // 0 means unit 2; its handler adds the offset the list was built with.
             const std::size_t first = image && !state.resample ? 2u : 0u;
-            for (std::size_t index = first; index < kUnitIds.size(); ++index)
-            {
-                entries.push_back(
-                    DxUi::ComboBox::Item{std::to_wstring(index), LoadStringResource(nullptr, kUnitIds[index])});
-            }
-            _sizeUnit->SetItems(std::move(entries));
+            _sizeUnitFirst = first;
+            _sizeUnit->SetItems(NumberedItems(std::span(kUnitIds).subspan(first), first));
             _sizeUnit->SetSelectedIndex(static_cast<size_t>(std::max(0, state.unit - static_cast<int>(first))));
-            // The combo reports the list position it was clicked at, not the unit value: without resampling the
-            // list starts at Inches (first == 2), so position 0 means unit 2, not unit 0. Re-map position -> unit
-            // with the same offset the list was just built with (SetOnSelectionChanged only fires from a real
-            // pick; a sync-driven SetSelectedIndex above is swallowed by _syncingSize like every other control here).
-            _sizeUnit->SetOnSelectionChanged(
-                [this, first](size_t selected)
-                {
-                    if (!_syncingSize && _onSize)
-                    {
-                        _onSize(SizeAction::SetUnit, static_cast<double>(selected + first));
-                    }
-                });
         }
         const int decimals = newCanvas || state.unit == 0 ? 0 : (state.unit == 1 ? 2 : 3);
         const std::wstring suffix = newCanvas ? LoadStringResource(nullptr, IDS_UNIT_PIXELS) : UnitSuffix(state.unit);
@@ -425,33 +367,19 @@ void ChromeHost::SetSizeCard(const SizeCardState& state) noexcept
                                                         : canvas  ? IDS_ADJUST_OK
                                                                   : IDS_SIZE_RESIZE));
         _sizeApply->SetEnabled(state.valid);
-        _view.Controls().SetDefaultButton(_sizeApply);
-        _view.Controls().SetCancelButton(_sizeCancel);
+        if (!wasOpen)
+        {
+            // Enter and Escape its controls leave are its OK and Cancel; it takes no keyboard when it opens.
+            PushCard(ModalCard::Size, _sizeCard, nullptr);
+        }
     }
     else if (wasOpen)
     {
-        _view.Controls().SetDefaultButton(nullptr);
-        _view.Controls().SetCancelButton(nullptr);
-        if (_pickerForSize && _pickerCard)
+        if (ColorPickerOpen() && _pickerTarget == PickerTarget::SizeExtension)
         {
-            _pickerForSize = false;
-            _pickerCard->SetVisible(false);
+            ClosePickerCard();
         }
+        PopCard(ModalCard::Size);
     }
-    _syncingSize = false;
-    _view.MarkDirty();
-}
-
-void ChromeHost::OpenSizeColorPicker(uint32_t argb) noexcept
-{
-    if (!_picker || !_pickerCard)
-    {
-        return;
-    }
-    _pickerForSize = true;
-    _picker->SetColor(argb | 0xFF000000u);
-    ArrangePicker();
-    _pickerCard->SetVisible(true);
-    _view.Controls().SetFocusControl(_picker);
     _view.MarkDirty();
 }

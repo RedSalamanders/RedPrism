@@ -247,8 +247,9 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
         {
             _adjustColorOriginal = settings.gradientMap;
             const bool highlights = action == AdjustAction::OpenHighlights;
-            _chrome->OpenAdjustColorPicker(
-                ArgbOf(highlights ? settings.gradientMap.highlights : settings.gradientMap.shadows), highlights);
+            _chrome->OpenColorPicker(
+                highlights ? PickerTarget::GradientHighlights : PickerTarget::GradientShadows,
+                ArgbOf(highlights ? settings.gradientMap.highlights : settings.gradientMap.shadows));
         }
         return;
     case AdjustAction::SetPreview:

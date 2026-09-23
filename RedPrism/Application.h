@@ -4,6 +4,7 @@
 #include "CanvasRenderer.h"
 #include "CanvasSize.h"
 #include "CanvasViewport.h"
+#include "ChromeEvents.h"
 #include "CommandBindings.h"
 #include "Crop.h"
 #include "Document.h"
@@ -27,22 +28,14 @@
 #pragma warning(pop)
 
 class ChromeHost;
-enum class TransformAction : std::uint8_t;
-enum class SelectionAction : std::uint8_t;
-enum class BrushAction : std::uint8_t;
-enum class GradientAction : std::uint8_t;
-enum class ShapeAction : std::uint8_t;
-enum class AdjustAction : std::uint8_t;
-enum class CropAction : std::uint8_t;
-enum class SizeAction : std::uint8_t;
 enum class SizeCardKind : std::uint8_t;
-enum class ChromeEditPhase : std::uint8_t;
 namespace DxUi
 {
 struct PointerEvent;
 }
 
-class Application final
+// The chrome's events (ChromeEvents) land on the handlers below, marked `override`.
+class Application final : public ChromeEvents
 {
   public:
     Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
@@ -102,10 +95,17 @@ class Application final
     [[nodiscard]] int ExitCode(int quitCode) const noexcept;
     int RunRenderingSelfTest() noexcept;
     void OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    void OnCommand(int command) noexcept;
+    void OnCommand(int command) noexcept override;
     void OnTool(EditorTool tool) noexcept;
+    // The chrome's layers panel, color picker and layout events (next to InitializeChrome).
+    void OnLayerSelected(Guid id) noexcept override;
+    void OnLayerExpanded(Guid id, bool expanded) noexcept override;
+    void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
+                          DxUi::TreeDropPlace place) noexcept override;
+    void OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint32_t argb) noexcept override;
+    void OnChromeLayout() noexcept override;
     // Move tool (C8, Specs/Document/Document_Tools.md): header actions, pointer drags, cursor and the demo document.
-    void OnTransformAction(TransformAction action, double value) noexcept;
+    void OnTransformAction(TransformAction action, double value) noexcept override;
     void ChangeTransform(const std::function<void(LayerTransform&)>& update) noexcept;
     void BeginTransformDrag(Vec2 view, UINT modifiers) noexcept;
     void ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept;
@@ -115,7 +115,7 @@ class Application final
     void ApplyDemo() noexcept;
     // Selection tools (C9, Specs/Document/Document_Tools.md): header actions, pointer rules, keys and the wand's
     // composite sample. Outline and draft changes touch chrome only; the canvas never re-composites for them.
-    void OnSelectionAction(SelectionAction action, double value) noexcept;
+    void OnSelectionAction(SelectionAction action, double value) noexcept override;
     void SelectionPress(Vec2 view, UINT modifiers, POINT client) noexcept;
     [[nodiscard]] bool SelectionPointerMove(Vec2 view, UINT modifiers) noexcept;
     void SelectionRelease(Vec2 view) noexcept;
@@ -145,9 +145,9 @@ class Application final
     [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
     void ApplyColorEdit() noexcept;
     void CancelColorEdit() noexcept;
-    void OnAdjustAction(AdjustAction action, double value) noexcept;
-    void OnCurveChanged(std::vector<CurvePoint> points) noexcept;
-    void OnBandChanged(int index, double degrees) noexcept;
+    void OnAdjustAction(AdjustAction action, double value) noexcept override;
+    void OnCurveChanged(std::vector<CurvePoint> points) noexcept override;
+    void OnBandChanged(int index, double degrees) noexcept override;
     void OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept;
     void SyncAdjustPanel() noexcept;
     // ApplicationSize.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): the New Canvas, Canvas Size and
@@ -156,14 +156,14 @@ class Application final
     void OpenSizeCard(SizeCardKind kind) noexcept;
     void CancelSizeCard() noexcept;
     void ApplySizeCard() noexcept;
-    void OnSizeAction(SizeAction action, double value) noexcept;
+    void OnSizeAction(SizeAction action, double value) noexcept override;
     void OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept;
     void SyncSizeCard() noexcept;
     int RunSizeSelfTest() noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
-    void OnBrushAction(BrushAction action, double value) noexcept;
+    void OnBrushAction(BrushAction action, double value) noexcept override;
     void BeginBrushStroke(Vec2 view, UINT modifiers) noexcept;
     void ContinueBrushStroke(Vec2 view) noexcept;
     void FinishBrushStroke() noexcept;
@@ -186,7 +186,7 @@ class Application final
     void FinishWarpStroke() noexcept;
     void CancelWarpStroke() noexcept;
     void PushWarpTiles() noexcept;
-    void OnGradientAction(GradientAction action, double value) noexcept;
+    void OnGradientAction(GradientAction action, double value) noexcept override;
     void BeginGradientDrag(Vec2 view) noexcept;
     void DragGradient(Vec2 view, UINT modifiers) noexcept;
     void EndGradientDrag() noexcept;
@@ -194,7 +194,7 @@ class Application final
     void CancelGradient() noexcept;
     void SyncGradientPreview() noexcept;
     void PushGradientTiles() noexcept;
-    void OnShapeAction(ShapeAction action, double value) noexcept;
+    void OnShapeAction(ShapeAction action, double value) noexcept override;
     // ApplicationCrop.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Crop tool"): the frame's drags, the header's
     // actions, Enter / Escape, the cursor and the self-test.
     void BeginCropDrag(Vec2 view) noexcept;
@@ -202,20 +202,20 @@ class Application final
     void EndCropDrag() noexcept;
     void ApplyCrop() noexcept;
     void CancelCropFrame() noexcept;
-    void OnCropAction(CropAction action, double value) noexcept;
+    void OnCropAction(CropAction action, double value) noexcept override;
     void SyncCropChrome() noexcept;
     [[nodiscard]] LPCWSTR CropCursor(Vec2 view) const noexcept;
     int RunCropSelfTest() noexcept;
     // ApplicationLayerEdits.cpp (C16): the Rename Layer card and Merge Down through the composition.
     void RenameActiveLayer() noexcept;
-    void OnLayerInvoked(Guid id) noexcept;
-    void OnRename(std::optional<std::wstring> name) noexcept;
+    void OnLayerInvoked(Guid id) noexcept override;
+    void OnRename(std::optional<std::wstring> name) noexcept override;
     // The card closes without renaming: its layer or the document went away, or an interaction settled.
     void CloseRenameCard() noexcept;
     void MergeLayersCommand() noexcept;
     // The layers panel's opacity stepper: a typed edit previews on the layer it started on and records one entry
     // when it commits, or when anything else (a command, a tool, a canvas press, another layer, a save) closes it.
-    void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept;
+    void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept override;
     void CloseOpacityEdit() noexcept;
     [[nodiscard]] ImageLayer* OpacityEditLayer() noexcept;
     int RunLayerEditsSelfTest() noexcept;

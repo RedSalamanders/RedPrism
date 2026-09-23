@@ -20,23 +20,13 @@ constexpr float kMarginDip = 8.0f;
 constexpr float kButtonDip = 30.0f;
 } // namespace
 
-void ChromeHost::SetRenameHandler(std::function<void(std::optional<std::wstring>)> handler)
-{
-    _onRename = std::move(handler);
-}
-
-void ChromeHost::SetLayerInvokeHandler(std::function<void(Guid)> handler)
-{
-    _onLayerInvoke = std::move(handler);
-}
-
 void ChromeHost::LayerTreeModel::OnTreeItemInvoked(uint64_t itemId)
 {
-    if (itemId == 0 || itemId > rows.size() || onInvoke == nullptr || !(*onInvoke))
+    if (itemId == 0 || itemId > rows.size())
     {
         return;
     }
-    (*onInvoke)(rows[itemId - 1].id);
+    events.OnLayerInvoked(rows[itemId - 1].id);
 }
 
 bool ChromeHost::RenameCardOpen() const noexcept
@@ -55,11 +45,9 @@ void ChromeHost::BuildRenameCard(DxUi::Panel& root)
     _renameField->SetAccessibleName(LoadStringResource(nullptr, IDS_RENAME_NAME));
     _renameField->SetPlaceholder(LoadStringResource(nullptr, IDS_RENAME_NAME));
     _renameField->SetOnSubmitted([this] { CloseRenameCard(true); });
-    _renameCancel = _renameCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_TRANSFORM_CANCEL));
-    _renameCancel->SetOnClick([this] { CloseRenameCard(false); });
-    _renameOk = _renameCard->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_ADJUST_OK));
-    _renameOk->SetPrimary(true);
-    _renameOk->SetOnClick([this] { CloseRenameCard(true); });
+    _renameCancel = MakeButton(*_renameCard, {.labelId = IDS_TRANSFORM_CANCEL}, [this] { CloseRenameCard(false); });
+    _renameOk =
+        MakeButton(*_renameCard, {.labelId = IDS_ADJUST_OK, .primary = true}, [this] { CloseRenameCard(true); });
 }
 
 void ChromeHost::ArrangeRenameCard(float right, float top) noexcept
@@ -94,11 +82,7 @@ void ChromeHost::OpenRenameCard(const std::wstring& name) noexcept
     _renameCard->SetVisible(true);
     // Laid out before it takes the focus: a control without bounds cannot hold it.
     Arrange();
-    _canvasFocused = false;
-    _accessibilityPlacementDirty = true;
-    _view.Controls().SetFocusControl(_renameField);
-    _view.Controls().SetDefaultButton(_renameOk);
-    _view.Controls().SetCancelButton(_renameCancel);
+    PushCard(ModalCard::Rename, _renameCard, _renameField);
     _view.MarkDirty();
 }
 
@@ -109,16 +93,9 @@ void ChromeHost::CloseRenameCard(bool commit) noexcept
         return;
     }
     const std::wstring name(_renameField->GetText());
+    // The keyboard goes back where it was: the layers panel after a double-click on a row, the canvas after F2.
+    PopCard(ModalCard::Rename);
     _renameCard->SetVisible(false);
-    _view.Controls().SetDefaultButton(nullptr);
-    _view.Controls().SetCancelButton(nullptr);
-    if (_view.Controls().GetFocusControl() == _renameField)
-    {
-        _view.Controls().SetFocusControl(_layers);
-    }
     _view.MarkDirty();
-    if (_onRename)
-    {
-        _onRename(commit ? std::optional<std::wstring>(name) : std::nullopt);
-    }
+    _events.OnRename(commit ? std::optional<std::wstring>(name) : std::nullopt);
 }

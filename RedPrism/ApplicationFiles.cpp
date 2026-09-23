@@ -1092,7 +1092,7 @@ int Application::RunSessionSelfTest() noexcept
     {
         bool aliveInside = false;
         bool deferredInside = false;
-        _chrome->SetCommandHandler(
+        _chrome->SetCommandProbeForTest(
             [this, &aliveInside, &deferredInside](int)
             {
                 (void)SendMessageW(_window.get(), WM_CLOSE, 0, 0);
@@ -1109,7 +1109,7 @@ int Application::RunSessionSelfTest() noexcept
         const bool reposted = _window && PeekMessageW(&message, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE) != FALSE;
         if (_chrome)
         {
-            _chrome->SetCommandHandler([this](int command) { OnCommand(command); });
+            _chrome->SetCommandProbeForTest({});
         }
         if (!aliveInside || !deferredInside || !reposted || !_window || !_chrome || _closeDeferred)
         {

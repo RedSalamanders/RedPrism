@@ -460,7 +460,7 @@ int Application::RunProductHardeningSelfTest() noexcept
         }
     }
     OnTool(EditorTool::Move);
-    _chrome->OpenColorPicker(false);
+    _chrome->OpenColorPicker(PickerTarget::Foreground, _session.ForegroundColor());
     (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     const D2D1_RECT_F card = _chrome->ColorPickerBoundsDip();
     const float cardX = (card.left + card.right) / 2.0f * scale;

@@ -129,6 +129,7 @@
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
     <ClInclude Include="AdjustControls.h" />
+    <ClInclude Include="ChromeEvents.h" />
     <ClInclude Include="ChromeHost.h" />
     <ClInclude Include="LucideToolButton.h" />
     <ClInclude Include="PaletteControl.h" />
