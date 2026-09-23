@@ -1073,6 +1073,8 @@ struct HierarchyEntry
     bool visible = true;
     bool isGroup = false;
     bool collapsed = false;
+    bool hasMask = false;    // the layers panel's Mask badge (RF-907)
+    bool maskEnabled = true; // false for a disabled mask
 };
 
 // What a mask shows beyond its pixels once placed apart from its layer: 1 (reveal) or 0 (hide), whichever most
@@ -1383,6 +1385,8 @@ class DocumentSession
     // Whole-pixel offsets from the drag's start; the outline is not re-clipped, so it can leave and come back.
     void MoveSelection(double dx, double dy);
     void EndSelectionMove();
+    // Escape or Undo during the move: the outline goes back where the move began and its entry closes unrecorded.
+    void CancelSelectionMove();
     [[nodiscard]] bool IsMovingSelection() const noexcept
     {
         return _selectionMoveOrigin.has_value();

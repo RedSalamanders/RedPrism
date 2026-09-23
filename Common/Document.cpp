@@ -1137,7 +1137,8 @@ std::vector<HierarchyEntry> HierarchyEntries(const std::vector<ImageLayer>& laye
             const ImageLayer& layer = layers[index];
             const bool effective = visible && layer.visible;
             const bool isCollapsed = layer.isGroup && collapsed.find(layer.id) != collapsed.end();
-            result.push_back(HierarchyEntry{layer.id, layer.name, depth, effective, layer.isGroup, isCollapsed});
+            result.push_back(HierarchyEntry{layer.id, layer.name, depth, effective, layer.isGroup, isCollapsed,
+                                            layer.mask.has_value(), !layer.mask.has_value() || layer.mask->enabled});
             if (layer.isGroup && !isCollapsed)
             {
                 self(self, layer.id, depth + 1, effective);
@@ -1351,6 +1352,12 @@ bool DocumentSession::CancelPendingEdit()
     if (_shapeDraft.has_value())
     {
         CancelShape();
+        return true;
+    }
+    // An outline being moved holds its entry open, so history could not move anyway: it goes back where it began.
+    if (_selectionMoveOrigin.has_value())
+    {
+        CancelSelectionMove();
         return true;
     }
     // A crop frame is not an edit in progress (the Crop tool always shows one): Undo and Redo drop it and still move

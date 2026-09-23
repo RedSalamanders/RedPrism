@@ -531,4 +531,15 @@ BEGIN
     IDS_SHUTDOWN_UNSAVED            "{0} has unsaved changes."
     IDS_ERROR_CANVAS_DRAW           "The canvas could not be drawn (error 0x{0:08X}). The document is unchanged: save it to keep your work."
     IDS_ERROR_SELECTION_DETAILED    "That outline is too detailed to load as a selection."
+
+    // WP9b review fixes (RF-907): the Layer menu's mask commands (captions follow the active layer's mask) and the
+    // layers panel's Mask badge.
+    IDS_CMD_TARGET_MASK             "&Target Layer Mask"
+    IDS_CMD_TARGET_PIXELS           "&Target Layer Pixels"
+    IDS_CMD_UNLINK_MASK             "Unl&ink Layer Mask"
+    IDS_CMD_LINK_MASK               "L&ink Layer Mask"
+    IDS_CMD_DISABLE_MASK            "Di&sable Layer Mask"
+    IDS_CMD_ENABLE_MASK             "Enable Layer Ma&sk"
+    IDS_LAYER_MASK_BADGE            "Mask"
+    IDS_LAYER_MASK_OFF_BADGE        "Mask off"
 END

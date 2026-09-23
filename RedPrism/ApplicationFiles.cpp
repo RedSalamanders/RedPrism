@@ -266,7 +266,7 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return true;
     }
-    if (_brushDragging || _warpDragging || _session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr ||
+    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr ||
         _session.PendingGradient() != nullptr)
     {
         return true;
@@ -292,16 +292,11 @@ bool Application::HasUnsavedWork() const noexcept
 
 void Application::SettleForWrite() noexcept
 {
+    // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo. A
+    // live stroke or warp, a pending gradient and a pending transform record their entries (EditEnd::Write).
     CloseOpacityEdit();
-    _transformDrag.reset();
-    _duplicateOnDrag = false;
-    _session.CommitTransform();
+    EndCanvasEdits(EditEnd::Write);
     _session.ClearSnapGuides();
-    FinishBrushStroke();
-    FinishWarpStroke();
-    CommitGradient();
-    // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo.
-    ApplyColorEdit();
     DocumentChanged();
 }
 
@@ -630,61 +625,14 @@ bool Application::HonorsPointerLoss() const noexcept
 
 void Application::EndPointerInteractions() noexcept
 {
-    // Legacy resignFirstResponder: every drag ends. A stroke or a warp keeps what it painted, as a release would; a
-    // transform drag goes back to where it started (a drag-only edit drops, an Alt-drag's duplicate with it); marquee
-    // and freehand outlines drop while a polygonal one stays; an outline move keeps its place; lifted pixels and a
-    // shape draft drop; crop, gradient and eyedropper drags stop where they are; Space no longer pans.
+    // Legacy resignFirstResponder: every drag ends (EndPointerDrag). A stroke or a warp keeps what it painted, as a
+    // release would; a transform drag goes back to where it started (a drag-only edit drops, an Alt-drag's duplicate
+    // with it); marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place;
+    // lifted pixels and a shape draft drop; crop, gradient and eyedropper drags stop where they are; Space no longer
+    // pans.
     _spacePan = false;
-    _canvasDrag = false;
-    FinishBrushStroke();
-    FinishWarpStroke();
-    bool restored = false;
-    if (_transformDrag.has_value())
-    {
-        const TransformDrag drag = _transformDrag.value();
-        _transformDrag.reset();
-        const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
-        if (edit.has_value() && !edit->persistent)
-        {
-            _session.CancelTransform();
-        }
-        else if (edit.has_value() && edit->corners.has_value() && drag.originalCorners.has_value())
-        {
-            _session.PreviewCorners(drag.originalCorners.value());
-        }
-        else if (edit.has_value())
-        {
-            _session.PreviewTransform(drag.original);
-        }
-        restored = true;
-    }
-    _duplicateOnDrag = false;
+    EndPointerDrag(PointerEnd::Lost);
     _session.ClearSnapGuides();
-    if (_selectionDragStart.has_value() || _lassoDragging || _pixelDragStart.has_value() ||
-        _session.IsMovingSelection() || _session.PendingLasso().has_value())
-    {
-        EndSelectionInteraction(true);
-    }
-    if (_gradientHandle.has_value())
-    {
-        EndGradientDrag();
-    }
-    if (_cropDrag.has_value())
-    {
-        EndCropDrag();
-    }
-    if (_shapeDragging || _session.PendingShape().has_value())
-    {
-        _shapeDragging = false;
-        _session.CancelShape();
-        restored = true;
-    }
-    EndColorSampling();
-    if (_hueTargetStart.has_value())
-    {
-        _hueTargetStart.reset();
-        _session.EndHueTargeting();
-    }
     if (_brushHover.has_value())
     {
         _brushHover.reset();
@@ -706,10 +654,6 @@ void Application::EndPointerInteractions() noexcept
         _releasingCapture = true;
         (void)ReleaseCapture();
         _releasingCapture = false;
-    }
-    if (restored)
-    {
-        DocumentChanged();
     }
 }
 
@@ -1333,11 +1277,10 @@ int Application::RunSessionSelfTest() noexcept
         _session.brushSettings = BrushSettings{20, 1, 1, 0, 0, 1, false};
         pointer(WM_LBUTTONDOWN, 0, 320.0, 250.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 380.0, 250.0);
-        const bool stroking = _brushDragging;
+        const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         (void)SendMessageW(_window.get(), WM_CAPTURECHANGED, 0, elsewhere);
-        const bool committed = !_brushDragging && _session.PendingBrush() == nullptr &&
-                               _session.history.UndoCount() == before + 1 &&
+        const bool committed = _session.PendingBrush() == nullptr && _session.history.UndoCount() == before + 1 &&
                                _session.history.UndoName() == L"Brush Stroke";
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 450.0, 250.0);
         pointer(WM_LBUTTONUP, 0, 450.0, 250.0);
@@ -1353,15 +1296,40 @@ int Application::RunSessionSelfTest() noexcept
     {
         pointer(WM_LBUTTONDOWN, 0, 320.0, 300.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 360.0, 300.0);
-        const bool stroking = _brushDragging;
+        const bool stroking = _session.PendingBrush() != nullptr;
         const int before = _session.history.UndoCount();
         _releasingCapture = true;
         (void)ReleaseCapture();
         _releasingCapture = false;
         (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
-        if (!stroking || _brushDragging || _session.history.UndoCount() != before + 1)
+        if (!stroking || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
             SelfTestFailure(L"Leaving the window did not end a stroke that no longer held the capture.\n");
+            return 5;
+        }
+    }
+    // A drag the canvas took keeps the pointer over the chrome until its release (RF-904): a stroke dragged onto the
+    // layers panel follows the pointer there instead of the panel's hover, and its release there commits it.
+    {
+        SyncChrome();
+        const D2D1_RECT_F row = _chrome->LayerRowBoundsDip(0);
+        const POINT over{static_cast<LONG>(std::lround((row.left + row.right) / 2.0f * scale)),
+                         static_cast<LONG>(std::lround((row.top + row.bottom) / 2.0f * scale))};
+        const Vec2 underPointer = _viewport.DocumentFromView(
+            Vec2{static_cast<double>(over.x) - hole.left, static_cast<double>(over.y) - hole.top}, DocumentSize());
+        pointer(WM_LBUTTONDOWN, 0, 320.0, 350.0);
+        const int before = _session.history.UndoCount();
+        OnPointer(WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(over.x, over.y));
+        const bool followed = _session.PendingBrush() != nullptr && _brushHover.has_value() &&
+                              std::fabs(_brushHover->x - underPointer.x) < 1e-6 &&
+                              std::fabs(_brushHover->y - underPointer.y) < 1e-6;
+        OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(over.x, over.y));
+        if (row.bottom <= row.top || !followed || _session.PendingBrush() != nullptr ||
+            _session.history.UndoCount() != before + 1 || _session.history.UndoName() != L"Brush Stroke")
+        {
+            SelfTestFailure(std::format(L"A stroke dragged over the layers panel did not keep the pointer "
+                                        L"(followed {}, entries {} for {}).\n",
+                                        followed, _session.history.UndoCount(), before + 1));
             return 5;
         }
     }
@@ -1374,13 +1342,14 @@ int Application::RunSessionSelfTest() noexcept
         const int before = _session.history.UndoCount();
         pointer(WM_LBUTTONDOWN, 0, center.x, center.y);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, center.x + 40.0, center.y + 25.0);
-        const bool dragging = _transformDrag.has_value() && _session.PendingTransformEdit().has_value() &&
+        const bool dragging = std::holds_alternative<MoveToolDrag>(_drag) &&
+                              _session.PendingTransformEdit().has_value() &&
                               _session.PendingTransformEdit()->draft.origin != start.origin;
         (void)SendMessageW(_window.get(), WM_CAPTURECHANGED, 0, elsewhere);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, center.x + 80.0, center.y + 50.0);
         pointer(WM_LBUTTONUP, 0, center.x + 80.0, center.y + 50.0);
         layer = _session.ActiveLayer();
-        if (layer == nullptr || !dragging || _transformDrag.has_value() ||
+        if (layer == nullptr || !dragging || std::holds_alternative<MoveToolDrag>(_drag) ||
             _session.PendingTransformEdit().has_value() || !(layer->transform == start) ||
             _session.history.UndoCount() != before)
         {
@@ -1444,7 +1413,8 @@ int Application::RunSessionSelfTest() noexcept
         altKeys[VK_LMENU] |= 0x80;
         KeyboardState::Write(altKeys);
         pointer(WM_LBUTTONDOWN, 0, middle.x, middle.y);
-        const bool armed = _duplicateOnDrag;
+        const MoveToolDrag* altPress = std::get_if<MoveToolDrag>(&_drag);
+        const bool armed = altPress != nullptr && altPress->duplicateOnMove;
         KeyboardState::Write(keys);
         OnCommand(ChromeHost::kCommandUndo);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, middle.x + 30.0, middle.y + 20.0);

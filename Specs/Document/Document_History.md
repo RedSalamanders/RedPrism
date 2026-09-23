@@ -28,9 +28,12 @@ Undo/redo are ignored while `depth != 0`. Undo restores the entry’s before sna
 id + revision). Redo restores after.
 
 A pending edit that is not a history entry yet (gradient, transform, brush, warp, pixel move, shape draft) is
-dropped by the first Undo and by the first Redo, and history does not move on that call. A crop frame is not an
-edit in progress (the Crop tool always shows one, the whole canvas by default): Undo and Redo drop it and still move
-history, as legacy `restore()` cancels the crop; with nothing to undo the frame stays. An open color panel also
+dropped by the first Undo and by the first Redo, and history does not move on that call; an outline being moved
+(its entry is open until the drag ends) goes back where the move began the same way. The host consults its edits
+in one order for Escape, Enter, Undo and a settle ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md) Canvas
+interactions). A crop frame is not an edit in progress (the Crop tool always shows one, the whole canvas by default):
+Undo and Redo drop it and still move history, as legacy `restore()` cancels the crop; with nothing to undo the frame
+stays. An open color panel also
 consumes the key: history stays put until OK or Cancel. The host drops any composition stroke in the
 same command. The save prompt (`ConfirmDiscardChanges`) settles nothing before it asks: a pending edit that Save
 would record (a live stroke or warp, a pending gradient, a changed transform, a typed opacity) counts as unsaved

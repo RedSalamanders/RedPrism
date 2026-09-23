@@ -259,7 +259,7 @@ void Application::ApplyColorEdit() noexcept
     {
         return;
     }
-    _hueTargetStart.reset();
+    DropDrag<HueTargetDrag>();
     _session.CommitColorEdit();
     DocumentChanged();
 }
@@ -270,7 +270,7 @@ void Application::CancelColorEdit() noexcept
     {
         return;
     }
-    _hueTargetStart.reset();
+    DropDrag<HueTargetDrag>();
     _session.CancelColorEdit();
     DocumentChanged();
 }
@@ -385,7 +385,7 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
         return;
     case AdjustAction::SetTargeting:
         _session.SetHueTargeting(value != 0.0);
-        _hueTargetStart.reset();
+        DropDrag<HueTargetDrag>();
         SyncChrome();
         return;
     // Curves and the filters.
@@ -575,33 +575,17 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
         }
         return true;
     }
-    if (edit->targeting)
+    if (edit->targeting && event.action == DxUi::PointerAction::Down && inHole)
     {
-        // Targeted adjustment: the press picks the range under the pointer, the drag changes its saturation
-        // (its hue with Ctrl), measured from where it started.
-        if (event.action == DxUi::PointerAction::Down && inHole)
+        // Targeted adjustment: the press picks the range under the pointer; the drag (Application::DragPointer)
+        // changes its saturation, or its hue with Ctrl, measured from where it started.
+        const std::optional<Raster> composite = WandComposite();
+        if (composite.has_value() && _session.BeginHueTargeting(composite.value(), pixel))
         {
-            const std::optional<Raster> composite = WandComposite();
-            if (composite.has_value() && _session.BeginHueTargeting(composite.value(), pixel))
-            {
-                _hueTargetStart = view.x;
-                DocumentChanged();
-            }
-            return true;
-        }
-        if (event.action == DxUi::PointerAction::Move && _hueTargetStart.has_value())
-        {
-            _session.DragHueTargeting(view.x - _hueTargetStart.value(), (event.modifiers & MK_CONTROL) != 0);
+            _drag = HueTargetDrag{view.x};
             DocumentChanged();
-            return true;
         }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
-            _hueTargetStart.has_value())
-        {
-            _hueTargetStart.reset();
-            _session.EndHueTargeting();
-            return true;
-        }
+        return true;
     }
     return false;
 }

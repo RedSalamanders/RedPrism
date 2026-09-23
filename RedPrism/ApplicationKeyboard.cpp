@@ -289,116 +289,18 @@ bool Application::HandleKey(const KeyPress& press) noexcept
 bool Application::HandleEditGesture(const KeyPress& press) noexcept
 {
     const UINT key = press.virtualKey;
-    const bool enter = key == VK_RETURN;
-    const bool escape = key == VK_ESCAPE;
-    if (SizeCardOpen() && (enter || escape))
+    if (key == VK_RETURN || key == VK_ESCAPE)
     {
-        // Enter is the size card's OK, Escape its Cancel.
-        if (escape)
-        {
-            CancelSizeCard();
-        }
-        else
-        {
-            ApplySizeCard();
-        }
-        return true;
+        // Enter applies and Escape cancels the first edit under way that takes the key, in the one order Undo and a
+        // settle use (RF-904): the size card's and the panel's OK and Cancel first, then the canvas's edits.
+        return EndFirstCanvasEdit(key == VK_RETURN ? EditEnd::Enter : EditEnd::Escape);
     }
-    if (_session.HasColorEdit() && (enter || escape))
+    if ((key == VK_BACK || key == VK_DELETE) && _session.PendingLasso().has_value())
     {
-        // Enter is the panel's OK, Escape its Cancel.
-        if (escape)
-        {
-            CancelColorEdit();
-        }
-        else
-        {
-            ApplyColorEdit();
-        }
-        return true;
-    }
-    if (escape && _pixelDragStart.has_value())
-    {
-        CancelPixelDrag();
-        return true;
-    }
-    if (escape && (_warpDragging || _session.PendingWarp() != nullptr))
-    {
-        CancelWarpStroke();
-        return true;
-    }
-    if (_tool == EditorTool::Crop && (enter || escape))
-    {
-        // Enter applies the crop frame, Escape drops it (the whole canvas frames again).
-        if (escape)
-        {
-            CancelCropFrame();
-        }
-        else
-        {
-            ApplyCrop();
-        }
-        return true;
-    }
-    if (escape && _session.PendingShape().has_value())
-    {
-        _shapeDragging = false;
-        _session.CancelShape();
-        SyncToolOverlays();
-        _frameInvalidated = true;
-        return true;
-    }
-    if (_session.PendingGradient() != nullptr && (enter || escape))
-    {
-        // Escape drops the pending gradient, Enter applies it.
-        if (escape)
-        {
-            CancelGradient();
-        }
-        else
-        {
-            CommitGradient();
-        }
-        return true;
-    }
-    if (escape && (_brushDragging || _session.PendingBrush() != nullptr))
-    {
-        CancelBrushStroke();
-        return true;
-    }
-    if (_session.PendingLasso().has_value() && (escape || enter || key == VK_BACK || key == VK_DELETE))
-    {
-        // Escape drops the outline, Enter closes it, Backspace or Delete removes the last polygonal corner.
-        if (escape)
-        {
-            _session.CancelLasso();
-        }
-        else if (enter)
-        {
-            _session.FinishLasso();
-        }
-        else
-        {
-            _session.RemoveLastLassoPoint();
-        }
-        _lassoDragging = false;
-        _marqueeDragPixel.reset();
+        // Backspace or Delete removes the last polygonal corner.
+        _session.RemoveLastLassoPoint();
+        DropDrag<DraftDrag>();
         SelectionChanged();
-        return true;
-    }
-    if (escape && (_transformDrag.has_value() || _session.PendingTransformEdit().has_value()))
-    {
-        _transformDrag.reset();
-        _duplicateOnDrag = false;
-        _session.CancelTransform();
-        DocumentChanged();
-        return true;
-    }
-    if (enter && _session.PendingTransformEdit().has_value())
-    {
-        _transformDrag.reset();
-        _session.CommitTransform();
-        DocumentChanged();
         return true;
     }
     return false;

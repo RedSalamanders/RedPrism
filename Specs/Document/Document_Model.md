@@ -102,8 +102,9 @@ and live-mask graph. Mask records may exist without pixels while a project loads
 validates); the Gray8 format rule applies once a mask has storage, and the decoder enforces it on the way in.
 
 `HierarchyEntries` lists rows depth-first with inherited visibility; a collapsed group (in the caller's collapsed
-set) lists itself with `collapsed = true` and hides its subtree. `RenderLayerIds` is the visible, non-group subset in
-bottom-to-top order.
+set) lists itself with `collapsed = true` and hides its subtree. A row carries its layer's mask state for the layers
+panel's badge (`hasMask`, and `maskEnabled`, true without a mask; RF-907). `RenderLayerIds` is the visible, non-group
+subset in bottom-to-top order.
 
 ## Session edits
 
@@ -151,12 +152,12 @@ bottom-to-top order.
 
 `Tests/DocumentTests` MUST cover cycles, missing parents, raster-as-parent, group+image, group opacity/blend, v1
 groups, v4/v6 masks, adjustment-on-group, clipping cycles, canvas/name limits, mask placement helpers, collapsed
-rows, clip release on delete, the legacy `LiveMaskTests` shared clipping stack (`clip.stack-*`: releasing the top
-layer leaves the one below clipped, releasing the lower one releases both, a layer dragged below its base stops
-clipping), the active-layer rules (`active.*`), the document pixel budget (`docbudget.*`: a paste, a duplicate, a
-blur's grown grid, the floating merge, masks, a merge and a distortion refused past 100 M while an edit that fits
-goes through), the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill, `Replacing`
-splits and fills, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
+rows and their mask state, clip release on delete, the legacy `LiveMaskTests` shared clipping stack (`clip.stack-*`:
+releasing the top layer leaves the one below clipped, releasing the lower one releases both, a layer dragged below
+its base stops clipping), the active-layer rules (`active.*`), the document pixel budget (`docbudget.*`: a paste, a
+duplicate, a blur's grown grid, the floating merge, masks, a merge and a distortion refused past 100 M while an edit
+that fits goes through), the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill,
+`Replacing` splits and fills, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
 
 ```powershell
 .\test.ps1 -Platform x64 -Configuration Debug

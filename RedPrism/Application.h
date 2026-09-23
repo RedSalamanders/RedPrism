@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 #include <windows.h>
 
@@ -110,10 +111,35 @@ class Application final : public ChromeEvents
     [[nodiscard]] int ExitCode(int quitCode) const noexcept;
     int RunRenderingSelfTest() noexcept;
     void OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    // The pointer's one interaction (RF-904, `_drag` below): a press on the canvas with nothing in flight begins the
+    // one its tool (or Space) picks; the moves and the release go to the interaction in flight whatever the tool or
+    // Space say by then; the pointer leaving the window without a capture, or lost to a dialog, a menu or another
+    // app (Specs/UI/UI_Windowing.md "Pointer loss"), ends it without a release.
+    enum class PointerEnd : std::uint8_t
+    {
+        Left, // the pointer left the window and no capture holds it: a drag ends as its release would
+        Lost, // capture, focus or activation went elsewhere: a Move-tool drag goes back and a shape draft drops
+    };
+    void PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept;
+    [[nodiscard]] bool DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexcept;
+    void HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
+    void EndPointerDrag(PointerEnd end) noexcept;
+    [[nodiscard]] bool PointerBusy() const noexcept;
+    // A key, a command or a header button ended what a `Drag` drags: the drag ends with it.
+    template <class Drag> void DropDrag() noexcept
+    {
+        if (std::holds_alternative<Drag>(_drag))
+        {
+            _drag = PointerDrag{};
+        }
+    }
     void OnCommand(int command) noexcept override;
     void OnTool(EditorTool tool) noexcept;
     // The chrome's layers panel, color picker and layout events (next to InitializeChrome).
     void OnLayerSelected(Guid id) noexcept override;
+    // RF-907: the layers panel's Mask badge and the Layer menu target a layer's mask or its pixels (legacy
+    // selectLayerTarget); `toggleMask` (a Shift press on the badge) also turns the mask off or on.
+    void TargetLayer(Guid id, bool mask, bool toggleMask) noexcept;
     void OnLayerExpanded(Guid id, bool expanded) noexcept override;
     void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                           DxUi::TreeDropPlace place) noexcept override;
@@ -147,8 +173,6 @@ class Application final : public ChromeEvents
     void DragPixels(Vec2 pixel, bool constrain) noexcept;
     void FinishPixelDrag() noexcept;
     void CancelPixelDrag() noexcept;
-    void SyncPixelMovePreview() noexcept;
-    void PushPixelMoveTiles() noexcept;
     void MirrorClipboard() noexcept;
     void PasteFromClipboard() noexcept;
     // Color adjustments and filters (C12, ApplicationAdjust.cpp): the Image and Filter menus, the adjustment panel's
@@ -186,7 +210,11 @@ class Application final : public ChromeEvents
     void ContinueBrushStroke(Vec2 view) noexcept;
     void FinishBrushStroke() noexcept;
     void CancelBrushStroke() noexcept;
-    void PushStrokeTiles() noexcept;
+    // The composition's stroke preview shows the one raster edit under way (RF-904): a stroke and a warp begin their
+    // own; SyncStrokePreview shows a pending gradient or lifted pixels, and is the one place a preview ends once no
+    // raster edit is under way; PushPreviewTiles uploads what the edit under way changed since the last push.
+    void SyncStrokePreview() noexcept;
+    void PushPreviewTiles() noexcept;
     // Ends the composition's stroke preview; its working texture becomes `commit`'s only when the commit landed on
     // the preview's own layer and target (RF-407).
     void EndStrokePreview(const std::optional<BrushCommitInfo>& commit) noexcept;
@@ -202,16 +230,14 @@ class Application final : public ChromeEvents
     void ContinueWarpStroke(Vec2 view) noexcept;
     void FinishWarpStroke() noexcept;
     void CancelWarpStroke() noexcept;
-    void PushWarpTiles() noexcept;
     void OnGradientAction(GradientAction action, double value) noexcept override;
     void BeginGradientDrag(Vec2 view) noexcept;
     void DragGradient(Vec2 view, UINT modifiers) noexcept;
     void EndGradientDrag() noexcept;
     void CommitGradient() noexcept;
     void CancelGradient() noexcept;
-    void SyncGradientPreview() noexcept;
-    void PushGradientTiles() noexcept;
     void OnShapeAction(ShapeAction action, double value) noexcept override;
+    void CancelShapeDraft() noexcept;
     // ApplicationCrop.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Crop tool"): the frame's drags, the header's
     // actions, Enter / Escape, the cursor and the self-test.
     void BeginCropDrag(Vec2 view) noexcept;
@@ -306,6 +332,43 @@ class Application final : public ChromeEvents
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
     void SettleInteractions(bool applyPanels) noexcept;
+    // The edits under way, in the one order Escape, Enter, Undo and a settle consult them (RF-904): the size card and
+    // an open panel first (a card comes before the canvas), then the canvas's drags, then what stays pending between
+    // drags. Outside the cards at most one of them is under way at a time.
+    enum class CanvasEdit : std::uint8_t
+    {
+        SizeCard,
+        Panel,
+        PixelMove,
+        Warp,
+        Brush,
+        Shape,
+        OutlineMove,
+        Lasso,
+        Gradient,
+        Transform,
+        Crop,
+    };
+    // What ends an edit under way: Escape cancels it and Enter applies it; Undo or Redo drops it and history stays put
+    // (an open panel keeps history where it is until OK or Cancel, while a lasso outline and the crop frame go and
+    // history moves); a tool switch settles it with a panel applying, a document on its way out with a panel
+    // cancelling; a write (Decision D2) records what Save would and leaves the rest.
+    enum class EditEnd : std::uint8_t
+    {
+        Escape,
+        Enter,
+        Undo,
+        ToolSwitch,
+        DocumentGoes,
+        Write,
+    };
+    [[nodiscard]] bool EditUnderWay(CanvasEdit edit) const noexcept;
+    // Ends `edit` when it is under way; true when Escape, Enter or Undo stops there.
+    bool EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept;
+    // Escape, Enter or Undo go to the first edit under way that takes them; true when one did.
+    bool EndFirstCanvasEdit(EditEnd end) noexcept;
+    // A settle or a write ends every edit under way, in order.
+    void EndCanvasEdits(EditEnd end) noexcept;
     void ShowUnavailable(UINT captionId) noexcept;
     int RunFilesSelfTest() noexcept;
     int RunSessionSelfTest() noexcept;
@@ -344,14 +407,12 @@ class Application final : public ChromeEvents
     std::wstring _documentPath;
     uint32_t _screenshotDpi = 0;
     EditorTool _tool = EditorTool::Move;
-    POINT _lastPointer{};
     bool _spacePan = false;
     bool _acceleratorShift = false;
     CommandBindings _bindings;       // the effective binding table: catalog defaults and the settings' replacements
     bool _suppressCharacter = false; // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
     bool _lastKeyHandled = false;    // the last key down went to a command or a gesture (read by the self-test driver)
-    bool _canvasDrag = false;
-    bool _releasingCapture = false; // a button-up releases the capture: not a capture loss
+    bool _releasingCapture = false;  // a button-up releases the capture: not a capture loss
     // The typed opacity edit: the layer it started on, that layer's opacity before the first preview (what history
     // holds) and the value previewed. Previews change the document outside history; one entry records the edit.
     struct OpacityEdit
@@ -371,44 +432,66 @@ class Application final : public ChromeEvents
     bool _endSessionPending = false;  // a session end was refused and its prompt has not answered yet
     bool _endSessionPromptDeferred = false;
     bool _layoutDirty = false;
-    bool _duplicateOnDrag = false;
-    std::optional<TransformDrag> _transformDrag;
-    std::optional<CropDrag> _cropDrag;
+    // The pointer's one interaction in flight (RF-904). A brush stroke, a warp and a shape draft are the session's own
+    // pending edits (PendingBrush, PendingWarp, PendingShape) and keep no state here.
+    struct PanDrag
+    {
+        Vec2 last{}; // the Hand, or Space held at the press: the view point the canvas was dragged to last
+    };
+    struct ZoomDrag
+    {
+        Vec2 anchor{}; // the Zoom tool's press (view pixels), the zoom then, and whether the drag passed the click slop
+        double zoom = 1;
+        bool moved = false;
+    };
+    struct MoveToolDrag
+    {
+        TransformDrag drag;
+        bool duplicateOnMove = false; // an Alt-drag duplicates the layer once the pointer moves
+    };
+    struct OutlineDrag
+    {
+        Vec2 start{};  // document point where the selection outline was grabbed
+        Vec2 offset{}; // the whole-pixel offset it has been dragged by
+    };
+    struct DraftDrag
+    {
+        std::optional<Vec2> marqueePixel; // the Marquee's last point, redrawn when Shift changes without a move
+        bool constrainArmed = true;       // Shift squares the box, except a Shift held at the press until let go
+    };
+    struct PixelDrag
+    {
+        Vec2 start{}; // document point where a Ctrl-drag lifted the selected pixels
+    };
+    struct GradientDrag
+    {
+        int handle = 1; // 0 the start, 1 the end of the pending line
+    };
+    struct ColorSampling
+    {
+        uint32_t original = 0xFF000000u; // the color before the press (the sample ring's lower half)
+        std::optional<Raster> composite; // the canvas read at the press
+        std::optional<Vec2> point;       // the document point sampled last
+    };
+    struct HueTargetDrag
+    {
+        double startX = 0; // view x where a targeted Hue/Saturation drag began
+    };
+    using PointerDrag = std::variant<std::monostate, PanDrag, ZoomDrag, MoveToolDrag, CropDrag, OutlineDrag, DraftDrag,
+                                     PixelDrag, GradientDrag, ColorSampling, HueTargetDrag>;
+    PointerDrag _drag;
     std::optional<TransformOverlayGeometry> _overlayGeometry;
-    std::optional<Vec2> _selectionDragStart;
-    Vec2 _selectionMoveDelta{};
-    std::optional<Vec2> _marqueeDragPixel;
-    bool _marqueeConstrainArmed = true;
-    bool _lassoDragging = false;
-    std::optional<Vec2> _pixelDragStart;      // document point where a Ctrl-drag lifted the selected pixels
-    std::optional<double> _hueTargetStart;    // view x where a targeted Hue/Saturation drag began
     GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
     DWORD _clipboardSequence = 0; // the system clipboard's sequence number right after the last copy was offered to it
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;
-    bool _brushDragging = false;
     std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
     std::wstring _bench;
-    bool _warpDragging = false;
-    std::optional<int> _gradientHandle; // 0 start, 1 end, while a pending line's end is dragged
-    bool _shapeDragging = false;
-    bool _samplingColor = false;
-    uint32_t _samplingOriginal = 0xFF000000u;
-    std::optional<Raster> _sampleComposite;
-    std::optional<Vec2> _samplePoint; // document point under the eyedropper while sampling
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
     double _overlayBacking = 0.0;
     bool _marchingAnts = false; // a non-empty selection outline shows (SyncChrome); the frame loop steps its dash
-    // The Zoom tool's press: where, the zoom then, and whether the drag has gone past the click slop.
-    struct ZoomDrag
-    {
-        POINT start{};
-        double zoom = 1;
-        bool moved = false;
-    };
-    std::optional<ZoomDrag> _zoomDrag;
     // The gradient or pixel-move raster the composition's stroke preview was begun for (never dereferenced: a new
     // raster, or an expired one, restarts the preview).
     std::weak_ptr<const BrushStroke> _previewSource;

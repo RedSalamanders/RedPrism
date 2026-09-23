@@ -143,15 +143,31 @@ void AppendSeparator(HMENU menu) noexcept
 }
 } // namespace
 
-void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows)
+void ChromeHost::LayerTreeModel::SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive,
+                                         bool newMaskTargeted)
 {
     rows = std::move(newRows);
+    active = newActive;
+    maskTargeted = newMaskTargeted;
+    if (maskBadge.empty())
+    {
+        maskBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE);
+        maskOffBadge = LoadStringResource(nullptr, IDS_LAYER_MASK_OFF_BADGE);
+    }
     displayText.resize(rows.size());
+    badgeText.resize(rows.size());
+    badgeTone.resize(rows.size());
     for (std::size_t index = 0; index < rows.size(); ++index)
     {
         const HierarchyEntry& row = rows[index];
         const std::wstring name = row.name.empty() ? row.id.ToString() : row.name;
         displayText[index] = row.visible ? name : FormatStringResource(nullptr, IDS_LAYER_HIDDEN_SUFFIX, name);
+        // The mask a row shows, as the legacy mask thumbnail did: the target in the accent, a disabled one crossed out.
+        const bool targeted = row.hasMask && maskTargeted && active == std::optional<Guid>(row.id);
+        badgeText[index] = !row.hasMask ? nullptr : row.maskEnabled ? &maskBadge : &maskOffBadge;
+        badgeTone[index] = targeted           ? DxUi::AdornmentTone::Accent
+                           : !row.maskEnabled ? DxUi::AdornmentTone::Error
+                                              : DxUi::AdornmentTone::Info;
     }
 }
 
@@ -175,12 +191,19 @@ void ChromeHost::LayerTreeModel::GetVisibleItem(size_t visibleIndex, DxUi::TreeI
     outItem.parentId.reset();
     outItem.text = displayText[visibleIndex];
     outItem.iconText = row.isGroup ? std::wstring(1, useFluentIcons ? L'\xE8B7' : L'\u25A1') : std::wstring{};
-    outItem.badgeText.clear();
+    if (badgeText[visibleIndex] != nullptr)
+    {
+        outItem.badgeText = *badgeText[visibleIndex];
+    }
+    else
+    {
+        outItem.badgeText.clear();
+    }
     outItem.tooltipText.clear();
     outItem.depth = static_cast<uint32_t>(row.depth);
     outItem.hasChildren = row.isGroup;
     outItem.expanded = row.isGroup && !row.collapsed;
-    outItem.badgeTone = DxUi::AdornmentTone::Accent;
+    outItem.badgeTone = badgeTone[visibleIndex];
 }
 
 void ChromeHost::LayerTreeModel::OnTreeReorder(const DxUi::TreeDrop& drop)
@@ -653,6 +676,9 @@ void ChromeHost::BuildMenus() noexcept
         AppendSeparator(layer);
         AppendCommand(layer, kCommandAddMask, IDS_CMD_ADD_MASK);
         AppendCommand(layer, kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK);
+        AppendCommand(layer, kCommandTargetLayerMask, IDS_CMD_TARGET_MASK);
+        AppendCommand(layer, kCommandToggleMaskLink, IDS_CMD_UNLINK_MASK);
+        AppendCommand(layer, kCommandToggleLayerMask, IDS_CMD_DISABLE_MASK);
         AppendSeparator(layer);
         AppendCommand(layer, kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL);
         AppendCommand(layer, kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL);
@@ -1428,6 +1454,72 @@ D2D1_RECT_F ChromeHost::LayerRowBoundsDip(std::size_t index) const noexcept
     }
     const std::optional<D2D1_RECT_F> row = _layers->GetVisibleItemHitRect(index);
     return row.value_or(D2D1::RectF());
+}
+
+D2D1_RECT_F ChromeHost::LayerMaskBadgeBoundsDip(std::size_t index) const noexcept
+{
+    if (!_attached || _layers == nullptr || index >= _treeModel.rows.size())
+    {
+        return D2D1::RectF();
+    }
+    const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), index);
+    return metrics.hasBadge ? metrics.badgeRect : D2D1::RectF();
+}
+
+std::optional<ChromeHost::LayerTargetPress> ChromeHost::LayerTargetAt(float xPixels, float yPixels) const
+{
+    if (!_attached || _layers == nullptr || !_layers->IsVisible())
+    {
+        return std::nullopt;
+    }
+    const D2D1_POINT_2F point = PixelToDip(D2D1::Point2F(xPixels, yPixels));
+    const auto inside = [&point](const D2D1_RECT_F& bounds) noexcept
+    { return point.x >= bounds.left && point.x < bounds.right && point.y >= bounds.top && point.y < bounds.bottom; };
+    // A floating card over the panel takes the press itself.
+    for (std::size_t index = 0; index < _cardCount; ++index)
+    {
+        if (_cards[index].panel != nullptr && inside(_cards[index].panel->GetBounds()))
+        {
+            return std::nullopt;
+        }
+    }
+    const std::optional<std::size_t> row = _layers->FindVisibleItemAtPoint(point);
+    if (!row.has_value() || row.value() >= _treeModel.rows.size() || _treeModel.badgeText[row.value()] == nullptr)
+    {
+        return std::nullopt;
+    }
+    const Guid id = _treeModel.rows[row.value()].id;
+    const DxUi::TreeItemLayoutMetrics metrics = _layers->GetItemLayoutMetrics(_view.Controls(), row.value());
+    if (metrics.hasBadge && inside(metrics.badgeRect))
+    {
+        return LayerTargetPress{id, true};
+    }
+    if (_treeModel.maskTargeted && _treeModel.active == std::optional<Guid>(id))
+    {
+        return LayerTargetPress{id, false};
+    }
+    return std::nullopt;
+}
+
+DxUi::TreeItemData ChromeHost::LayerRowItemForTest(std::size_t index) const
+{
+    DxUi::TreeItemData item;
+    _treeModel.GetVisibleItem(index, item);
+    return item;
+}
+
+bool ChromeHost::MenuItemGrayedForTest(int command) const noexcept
+{
+    for (const unique_hmenu& menu : _menus)
+    {
+        const UINT state =
+            menu ? GetMenuState(menu.get(), static_cast<UINT>(command), MF_BYCOMMAND) : static_cast<UINT>(-1);
+        if (state != static_cast<UINT>(-1))
+        {
+            return (state & (MF_GRAYED | MF_DISABLED)) != 0;
+        }
+    }
+    return false;
 }
 
 int ChromeHost::HitKindForTest(float xPixels, float yPixels) noexcept
@@ -2332,7 +2424,8 @@ void ChromeHost::ShowPaletteWell(PickerTarget target, uint32_t argb) noexcept
 
 void ChromeHost::OpenColorPicker(PickerTarget target, uint32_t argb) noexcept
 {
-    if (!_picker || !_pickerCard)
+    // A targeted mask paints black or white, never a picked color (legacy openColorPicker, RF-1113).
+    if (!_picker || !_pickerCard || (_maskPaintWhite.has_value() && IsPaletteTarget(target)))
     {
         return;
     }
@@ -2373,10 +2466,25 @@ bool ChromeHost::RequestLayerOpacity(double percent) noexcept
     return _opacity != nullptr && _opacity->RequestValue(_view.Controls(), percent);
 }
 
-void ChromeHost::SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept
+void ChromeHost::SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb,
+                            std::optional<bool> maskPaintWhite) noexcept
 {
     _foregroundArgb = foregroundArgb | 0xFF000000u;
     _backgroundArgb = backgroundArgb | 0xFF000000u;
+    _maskPaintWhite = maskPaintWhite;
+    if (maskPaintWhite.has_value())
+    {
+        // RF-1113 (legacy ColorPalette.swift paletteColor): a targeted mask's wells are black and white, the
+        // foreground the color it paints; a picker open on a well closes unchanged (legacy closeColorPicker(commit:
+        // false) once isMaskSelected).
+        if (ColorPickerOpen() && IsPaletteTarget(_pickerTarget))
+        {
+            CloseColorPicker(false);
+        }
+        ShowPaletteWell(PickerTarget::Foreground, maskPaintWhite.value() ? 0xFFFFFFFFu : 0xFF000000u);
+        ShowPaletteWell(PickerTarget::Background, maskPaintWhite.value() ? 0xFF000000u : 0xFFFFFFFFu);
+        return;
+    }
     // A well the open picker edits keeps showing the working color.
     const bool open = ColorPickerOpen();
     if (!(open && _pickerTarget == PickerTarget::Foreground))
@@ -2387,6 +2495,16 @@ void ChromeHost::SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) no
     {
         ShowPaletteWell(PickerTarget::Background, _backgroundArgb);
     }
+}
+
+uint32_t ChromeHost::ForegroundWellForTest() const noexcept
+{
+    return _railPalette != nullptr ? _railPalette->ForegroundSwatch() : 0u;
+}
+
+uint32_t ChromeHost::BackgroundWellForTest() const noexcept
+{
+    return _railPalette != nullptr ? _railPalette->BackgroundSwatch() : 0u;
 }
 
 void ChromeHost::SetActiveLayerOpacity(std::optional<double> opacity) noexcept
@@ -2594,6 +2712,17 @@ void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bo
            merge == 1 ? IDS_CMD_MERGE_GROUP : (merge == 2 ? IDS_CMD_MERGE_LAYERS : IDS_CMD_MERGE_DOWN));
 }
 
+void ChromeHost::SetMaskCommands(bool present, bool targeted, bool linked, bool enabled)
+{
+    HMENU layer = _menus[static_cast<std::size_t>(MenuIndex::Layer)].get();
+    const UINT state = present ? MF_ENABLED : MF_GRAYED;
+    const auto caption = [&](int command, UINT stringId)
+    { SetMenuCaption(layer, command, CommandMenuCaption(stringId, command), state); };
+    caption(kCommandTargetLayerMask, targeted ? IDS_CMD_TARGET_PIXELS : IDS_CMD_TARGET_MASK);
+    caption(kCommandToggleMaskLink, linked ? IDS_CMD_UNLINK_MASK : IDS_CMD_LINK_MASK);
+    caption(kCommandToggleLayerMask, enabled ? IDS_CMD_DISABLE_MASK : IDS_CMD_ENABLE_MASK);
+}
+
 void ChromeHost::SyncToolVisuals() noexcept
 {
     // Never during a press: a pressed-look write reaching the tree cancels a press held across a frame. Between
@@ -2665,10 +2794,10 @@ void ChromeHost::SetTool(EditorTool tool) noexcept
     }
 }
 
-void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active)
+void ChromeHost::SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted)
 {
-    _treeModel.SetRows(std::move(rows)); // RF-506: also rebuilds each row's display text once, not per paint
-    _treeModel.active = active;
+    // RF-506: also rebuilds each row's display text and Mask badge once, not per paint.
+    _treeModel.SetRows(std::move(rows), active, maskTargeted);
     if (_layers)
     {
         _layers->NotifyDataChanged();

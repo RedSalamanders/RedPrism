@@ -333,7 +333,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 463> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 471> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -807,7 +807,15 @@ void TestStringTable() noexcept
                                          IDS_KEY_LIST,
                                          IDS_SHUTDOWN_UNSAVED,
                                          IDS_ERROR_CANVAS_DRAW,
-                                         IDS_ERROR_SELECTION_DETAILED};
+                                         IDS_ERROR_SELECTION_DETAILED,
+                                         IDS_CMD_TARGET_MASK,
+                                         IDS_CMD_TARGET_PIXELS,
+                                         IDS_CMD_UNLINK_MASK,
+                                         IDS_CMD_LINK_MASK,
+                                         IDS_CMD_DISABLE_MASK,
+                                         IDS_CMD_ENABLE_MASK,
+                                         IDS_LAYER_MASK_BADGE,
+                                         IDS_LAYER_MASK_OFF_BADGE};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -857,7 +865,7 @@ void TestStringTable() noexcept
         UINT captionId;
         int command;
     };
-    constexpr std::array<CaptionVariant, 8> kVariants{{
+    constexpr std::array<CaptionVariant, 11> kVariants{{
         {IDS_CMD_UNDO_NAMED, CommandIds::kCommandUndo},
         {IDS_CMD_REDO_NAMED, CommandIds::kCommandRedo},
         {IDS_CMD_INVERT_MASK, CommandIds::kCommandInvert},
@@ -866,13 +874,17 @@ void TestStringTable() noexcept
         {IDS_CMD_CLIP_RELEASE, CommandIds::kCommandClipToggle},
         {IDS_CMD_MERGE_GROUP, CommandIds::kCommandMergeDown},
         {IDS_CMD_MERGE_LAYERS, CommandIds::kCommandMergeDown},
+        {IDS_CMD_TARGET_PIXELS, CommandIds::kCommandTargetLayerMask},
+        {IDS_CMD_LINK_MASK, CommandIds::kCommandToggleMaskLink},
+        {IDS_CMD_ENABLE_MASK, CommandIds::kCommandToggleLayerMask},
     }};
     for (const CaptionVariant& variant : kVariants)
     {
+        // A command without a default chord (the mask commands) has no column in any of its captions.
         const std::wstring caption = LoadStringResource(exe.get(), variant.captionId);
         const std::size_t tab = caption.find(L'\t');
-        Expect(tab != std::wstring::npos &&
-                   caption.substr(tab + 1) == CanonicalChordText(PrimaryDefaultChord(variant.command)),
+        const std::wstring column = tab == std::wstring::npos ? std::wstring{} : caption.substr(tab + 1);
+        Expect(!caption.empty() && column == CanonicalChordText(PrimaryDefaultChord(variant.command)),
                "strings.variant-caption-column-is-the-default-chord");
     }
 }

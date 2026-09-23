@@ -63,6 +63,9 @@ struct CommandIds
     static constexpr int kCommandMoveLayerDown = 320;
     static constexpr int kCommandClipToggle = 321;
     static constexpr int kCommandMergeDown = 322;
+    static constexpr int kCommandTargetLayerMask = 323;
+    static constexpr int kCommandToggleMaskLink = 324;
+    static constexpr int kCommandToggleLayerMask = 325;
     static constexpr int kCommandZoomFit = 400;
     static constexpr int kCommandZoomActual = 401;
     static constexpr int kCommandZoomIn = 402;
@@ -261,6 +264,9 @@ constexpr CommandCondition kNone = CommandCondition::None;
         {C::kCommandMergeDown, IDS_CMD_MERGE_DOWN, L"cmd/layer/mergeDown", kApp},
         {C::kCommandAddMask, IDS_CMD_ADD_MASK, L"cmd/layer/addMask", kApp},
         {C::kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK, L"cmd/layer/addBlackMask", kApp},
+        {C::kCommandTargetLayerMask, IDS_CMD_TARGET_MASK, L"cmd/layer/targetMask", kApp},
+        {C::kCommandToggleMaskLink, IDS_CMD_UNLINK_MASK, L"cmd/layer/toggleMaskLink", kApp},
+        {C::kCommandToggleLayerMask, IDS_CMD_DISABLE_MASK, L"cmd/layer/toggleMask", kApp},
         {C::kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL, L"cmd/layer/flipHorizontal", kApp},
         {C::kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL, L"cmd/layer/flipVertical", kApp},
         {C::kCommandSelectAll, IDS_CMD_SELECT_ALL, L"cmd/select/all", kApp},

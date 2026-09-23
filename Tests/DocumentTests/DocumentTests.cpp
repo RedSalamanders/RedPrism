@@ -455,6 +455,15 @@ void TestCollapsedRows()
     rows = session.LayerRows();
     Expect(rows.size() == 1 && rows[0].collapsed && rows[0].isGroup, "rows.collapsed-flag");
     Expect(!HierarchyEntries(session.Document().value().layers)[0].collapsed, "rows.default-not-collapsed");
+    // RF-907: a row carries its layer's mask for the layers panel's badge, and whether the mask is on.
+    rows = session.LayerRows();
+    const bool bare = rows.size() == 1 && !rows[0].hasMask && rows[0].maskEnabled;
+    session.CollapsedGroupIDs().clear();
+    session.SelectLayer(session.LayerRows()[1].id);
+    session.AddLayerMask(true);
+    session.ToggleLayerMask(session.ActiveLayerID().value());
+    rows = session.LayerRows();
+    Expect(bare && rows.size() == 2 && !rows[0].hasMask && rows[1].hasMask && !rows[1].maskEnabled, "rows.mask-state");
 }
 
 void TestDeleteClearsClipping()
@@ -1519,6 +1528,27 @@ void TestSelectionMove()
     Expect(twice.BeginSelectionMove() && !twice.BeginSelectionMove() && twice.IsMovingSelection(), "move.once");
     twice.EndSelectionMove();
     Expect(!twice.IsMovingSelection(), "move.ended");
+    // RF-904: Escape (CancelSelectionMove) and Undo during a move put the outline back where the move began and close
+    // its entry unrecorded, keeping the redo it had; the next Undo moves history again.
+    DocumentSession cancel = SelectionSession();
+    Lasso(cancel, Square(10, 10, 20));
+    Lasso(cancel, Square(40, 40, 10), SelectionMode::Add);
+    cancel.Undo();
+    const int kept = cancel.history.UndoCount();
+    Expect(cancel.BeginSelectionMove(), "move.cancel-begins");
+    cancel.MoveSelection(15, 5);
+    cancel.CancelSelectionMove();
+    Expect(!cancel.IsMovingSelection() && NearBounds(cancel.Selection(), 10, 10, 20, 20) &&
+               cancel.history.UndoCount() == kept && cancel.history.CanUndo() && !cancel.history.RedoName().empty(),
+           "move.cancel-puts-it-back");
+    Expect(cancel.BeginSelectionMove(), "move.undo-begins");
+    cancel.MoveSelection(15, 5);
+    cancel.Undo();
+    Expect(!cancel.IsMovingSelection() && NearBounds(cancel.Selection(), 10, 10, 20, 20) &&
+               cancel.history.UndoCount() == kept && !cancel.history.RedoName().empty(),
+           "move.undo-drops-the-move");
+    cancel.Undo();
+    Expect(cancel.history.UndoCount() == kept - 1, "move.next-undo-moves-history");
 }
 
 void TestSelectionModify()

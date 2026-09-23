@@ -452,9 +452,25 @@ class ChromeHost final : public CommandIds
     // `clipped`: the active layer clips to a base, so the Layer menu offers Release Clipping Mask.
     // `merge`: what Ctrl+E would do (0 Merge Down, 1 Merge Group, 2 Merge Layers), for the Layer menu's caption.
     void SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped, int merge);
+    // The Layer menu's mask commands follow the active layer's mask (RF-907): Target Layer Mask / Target Layer Pixels,
+    // Unlink / Link Layer Mask, Disable / Enable Layer Mask; without a mask they are grayed.
+    void SetMaskCommands(bool present, bool targeted, bool linked, bool enabled);
     void SetTool(EditorTool tool) noexcept;
-    void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active);
-    void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb) noexcept;
+    // `maskTargeted`: the active layer's mask is the target, so its row's Mask badge shows in the accent (RF-907).
+    void SetLayers(std::vector<HierarchyEntry> rows, const std::optional<Guid>& active, bool maskTargeted);
+    // The layer a press at a point of the layers panel targets (RF-907, legacy NativeLayerList's thumbnails): the
+    // row's mask when the point is on its Mask badge, else the row's pixels when that row's mask is the target; nullopt
+    // anywhere else, a floating card over the panel included.
+    struct LayerTargetPress
+    {
+        Guid id;
+        bool mask = false;
+    };
+    [[nodiscard]] std::optional<LayerTargetPress> LayerTargetAt(float xPixels, float yPixels) const;
+    // `maskPaintWhite` is engaged while a layer's mask is the target (RF-1113, legacy ColorPalette.swift): the wells
+    // show the mask palette instead of the colors (the foreground white when it paints white, the background the
+    // other), a well opens no picker, and a picker open on a well closes unchanged.
+    void SetPalette(uint32_t foregroundArgb, uint32_t backgroundArgb, std::optional<bool> maskPaintWhite) noexcept;
     // nullopt disables the stepper (no active raster layer). Ignored while the user is typing into it.
     void SetActiveLayerOpacity(std::optional<double> opacity) noexcept;
     // Persisted layers width; clamped by the splitter on the next Prepare.
@@ -554,6 +570,9 @@ class ChromeHost final : public CommandIds
     {
         return _backgroundArgb;
     }
+    // What the rail's wells show: the colors, or the mask palette while a mask is the target (RF-1113 self-test).
+    [[nodiscard]] uint32_t ForegroundWellForTest() const noexcept;
+    [[nodiscard]] uint32_t BackgroundWellForTest() const noexcept;
     // Rail button bounds in DIP (index order of EditorTool); tests and the harness use it to prove layout.
     [[nodiscard]] D2D1_RECT_F ToolButtonBoundsDip(EditorTool tool) const noexcept;
     [[nodiscard]] int VisibleToolButtonCount() const noexcept;
@@ -567,6 +586,10 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F PaletteHotBoundsDip(bool reset) const noexcept;
     [[nodiscard]] D2D1_RECT_F ColorPickerBoundsDip() const noexcept;
     [[nodiscard]] D2D1_RECT_F LayerRowBoundsDip(std::size_t index) const noexcept;
+    // A row's Mask badge in DIP (empty without one) and the row as the tree paints it (RF-907 self-test).
+    [[nodiscard]] D2D1_RECT_F LayerMaskBadgeBoundsDip(std::size_t index) const noexcept;
+    [[nodiscard]] DxUi::TreeItemData LayerRowItemForTest(std::size_t index) const;
+    [[nodiscard]] bool MenuItemGrayedForTest(int command) const noexcept;
     // 0 none, 1 layers tree, 2 splitter, 3 shortcuts, 4 notice, 5 adjust, 6 picker, 7 overlay, 8 other.
     [[nodiscard]] int HitKindForTest(float xPixels, float yPixels) noexcept;
     // The open filter panel's option row (radius, curve, ramp, hint) is visible inside the card.
@@ -639,12 +662,19 @@ class ChromeHost final : public CommandIds
         // GetVisibleItem's per-paint call is an assignment into the caller's reused buffer, never a
         // FormatStringResource call.
         std::vector<std::wstring> displayText;
+        // Each row's Mask badge (RF-907): empty without a mask, else `Mask` or `Mask off`, in the accent while that
+        // mask is the target; the strings load once.
+        std::vector<const std::wstring*> badgeText;
+        std::vector<DxUi::AdornmentTone> badgeTone;
+        std::wstring maskBadge;
+        std::wstring maskOffBadge;
         std::optional<Guid> active;
+        bool maskTargeted = false;
         std::wstring hiddenPattern;
         bool useFluentIcons = true;
-        // Stores the hierarchy and rebuilds displayText once; SetLayers calls this instead of assigning rows
-        // directly so a settled layers panel does not re-format every row's name on every repaint.
-        void SetRows(std::vector<HierarchyEntry> newRows);
+        // Stores the hierarchy and rebuilds displayText and the badges once; SetLayers calls this instead of assigning
+        // rows directly so a settled layers panel does not re-format every row's name on every repaint.
+        void SetRows(std::vector<HierarchyEntry> newRows, const std::optional<Guid>& newActive, bool newMaskTargeted);
         [[nodiscard]] size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
         void OnTreeSelectionChanged(uint64_t itemId) override;
@@ -1122,6 +1152,7 @@ class ChromeHost final : public CommandIds
     float _preferredLayersWidthDip = kLayersDefaultDip;
     uint32_t _foregroundArgb = 0xFF000000u;
     uint32_t _backgroundArgb = 0xFFFFFFFFu;
+    std::optional<bool> _maskPaintWhite; // engaged while a layer's mask is the target: the wells show black and white
     EditorTool _tool = EditorTool::Move;
     PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
     bool _canvasFocused = true;

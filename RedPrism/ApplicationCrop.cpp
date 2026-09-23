@@ -50,24 +50,25 @@ void Application::BeginCropDrag(Vec2 view) noexcept
     {
         drag.mode = CropDrag::Mode::Move;
     }
-    _cropDrag = drag;
+    _drag = drag;
     SyncChrome();
     _frameInvalidated = true;
 }
 
 void Application::ContinueCropDrag(Vec2 view) noexcept
 {
-    if (!_cropDrag.has_value() || !_session.Document().has_value())
+    const CropDrag* drag = std::get_if<CropDrag>(&_drag);
+    if (drag == nullptr || !_session.Document().has_value())
     {
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     const bool symmetric = KeyboardState::Held(VK_MENU);
     const std::optional<double> ratio = _session.CropRatio();
-    CropRect rect = _cropDrag->Updated(pixel, ratio, symmetric);
+    CropRect rect = drag->Updated(pixel, ratio, symmetric);
     const SnapTargets targets = _session.CropSnapTargets();
     const CropSnap snap{targets.xs, targets.ys, _viewport.DipToDocument(TransformSnap::kDistanceDip)};
-    rect = snap.Apply(rect, _cropDrag.value(), pixel, ratio, symmetric);
+    rect = snap.Apply(rect, *drag, pixel, ratio, symmetric);
     if (CropGeometry::Valid(rect))
     {
         _session.SetCropFrame(rect);
@@ -78,14 +79,14 @@ void Application::ContinueCropDrag(Vec2 view) noexcept
 
 void Application::EndCropDrag() noexcept
 {
-    _cropDrag.reset();
+    DropDrag<CropDrag>();
     SyncChrome();
     _frameInvalidated = true;
 }
 
 void Application::ApplyCrop() noexcept
 {
-    _cropDrag.reset();
+    DropDrag<CropDrag>();
     if (_session.CommitCrop())
     {
         _viewport.followsFit = true;
@@ -98,7 +99,7 @@ void Application::ApplyCrop() noexcept
 
 void Application::CancelCropFrame() noexcept
 {
-    _cropDrag.reset();
+    DropDrag<CropDrag>();
     _session.CancelCrop();
     SyncChrome();
     _frameInvalidated = true;
@@ -176,15 +177,16 @@ void Application::SyncCropChrome() noexcept
 LPCWSTR Application::CropCursor(Vec2 view) const noexcept
 {
     std::optional<TransformHit> hit;
-    if (_cropDrag.has_value())
+    const CropDrag* drag = std::get_if<CropDrag>(&_drag);
+    if (drag != nullptr)
     {
-        if (_cropDrag->mode == CropDrag::Mode::Move)
+        if (drag->mode == CropDrag::Mode::Move)
         {
             return IDC_SIZEALL;
         }
-        if (_cropDrag->mode == CropDrag::Mode::Resize)
+        if (drag->mode == CropDrag::Mode::Resize)
         {
-            hit = TransformHit{TransformDrag::Mode::Resize, _cropDrag->handle};
+            hit = TransformHit{TransformDrag::Mode::Resize, drag->handle};
         }
     }
     else if (_overlayGeometry.has_value())
@@ -196,7 +198,7 @@ LPCWSTR Application::CropCursor(Vec2 view) const noexcept
         const int direction = _overlayGeometry.has_value() ? _overlayGeometry->ResizeCursorDirection(hit->handle) : 0;
         return direction == 0 ? IDC_SIZEWE : direction == 1 ? IDC_SIZENWSE : direction == 2 ? IDC_SIZENS : IDC_SIZENESW;
     }
-    if (!_cropDrag.has_value())
+    if (drag == nullptr)
     {
         const std::optional<CropRect> frame = _session.VisibleCropRect();
         if (frame.has_value() && Contains(frame.value(), _viewport.DocumentFromView(view, DocumentSize())))
@@ -240,7 +242,7 @@ int Application::RunCropSelfTest() noexcept
     OnPointer(WM_MOUSEMOVE, MK_LBUTTON, pointerAt(Vec2{(handle.x + target.x) / 2, (handle.y + target.y) / 2}));
     OnPointer(WM_MOUSEMOVE, MK_LBUTTON, pointerAt(target));
     OnPointer(WM_LBUTTONUP, 0, pointerAt(target));
-    if (_session.CropFrame() != CropRect{0, 0, 640, 400} || _cropDrag.has_value())
+    if (_session.CropFrame() != CropRect{0, 0, 640, 400} || std::holds_alternative<CropDrag>(_drag))
     {
         const std::optional<CropRect> frame = _session.CropFrame();
         SelfTestFailure(std::format(L"Dragging the crop frame's corner did not resize it to 640 × 400 "
@@ -280,18 +282,27 @@ int Application::RunCropSelfTest() noexcept
                                     frame ? frame->width : -1.0, frame ? frame->height : -1.0));
         return 5;
     }
-    // The header's ratio re-shapes the frame about its center; Cancel drops it; Undo restores the canvas.
+    // The header's ratio re-shapes the frame about its center; Cancel drops it.
     OnCropAction(CropAction::SetRatio, 2.0);
     const bool squared = _session.CropFrame() == CropRect{0, -120, 640, 640};
     OnCropAction(CropAction::Cancel, 0.0);
     OnCropAction(CropAction::SetRatio, 0.0);
-    _session.Undo();
-    DocumentChanged();
+    // The tool's own whole-canvas frame, chosen afresh, does not take the first Ctrl+Z (RF-214, and RF-904's one
+    // pending-edit slot): Undo restores the canvas the Crop entry cut, and the tool frames that whole canvas.
     OnTool(EditorTool::Move);
-    if (!squared || document() == nullptr || document()->width != 1280 || document()->height != 800 ||
-        _session.CropFrame().has_value())
+    OnTool(EditorTool::Crop);
+    const bool reframed = _session.CropFrame() == CropRect{0, 0, 640, 400};
+    _chrome->SetCanvasFocused(true);
+    const bool undone = HandleAccelerator('Z', MK_CONTROL) && document() != nullptr && document()->width == 1280 &&
+                        document()->height == 800 && _session.VisibleCropRect() == CropRect{0, 0, 1280, 800} &&
+                        _tool == EditorTool::Crop;
+    OnTool(EditorTool::Move);
+    if (!squared || !reframed || !undone || document() == nullptr || document()->width != 1280 ||
+        document()->height != 800 || _session.CropFrame().has_value())
     {
-        SelfTestFailure(L"The crop ratio, Cancel, Undo or leaving the tool did not behave.\n");
+        SelfTestFailure(std::format(L"The crop ratio, Cancel, the first Ctrl+Z with the Crop tool or leaving "
+                                    L"the tool did not behave (squared {}, reframed {}, undone {}).\n",
+                                    squared, reframed, undone));
         return 5;
     }
     return 0;

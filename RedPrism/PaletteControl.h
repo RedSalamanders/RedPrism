@@ -33,6 +33,10 @@ class PaletteZone final : public DxUi::Button
     PaletteZone(Kind kind, std::function<void()> onClick);
 
     void SetSwatch(std::uint32_t argb) noexcept;
+    [[nodiscard]] std::uint32_t Swatch() const noexcept
+    {
+        return _argb;
+    }
     void SetOnClick(std::function<void()> onClick);
 
     void Paint(DxUi::ControlHost& host) const override;
@@ -62,6 +66,15 @@ class PaletteControl final : public DxUi::Panel
                      std::function<void()> onSwap, std::function<void()> onReset);
     void SetForeground(std::uint32_t argb) noexcept;
     void SetBackground(std::uint32_t argb) noexcept;
+    // The colors the wells show (RF-1113 self-test).
+    [[nodiscard]] std::uint32_t ForegroundSwatch() const noexcept
+    {
+        return _foreground != nullptr ? _foreground->Swatch() : 0u;
+    }
+    [[nodiscard]] std::uint32_t BackgroundSwatch() const noexcept
+    {
+        return _background != nullptr ? _background->Swatch() : 0u;
+    }
 
     [[nodiscard]] DxUi::Control* ForegroundZone() const noexcept;
     [[nodiscard]] DxUi::Control* BackgroundZone() const noexcept;

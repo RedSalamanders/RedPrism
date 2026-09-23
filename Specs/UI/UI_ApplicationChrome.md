@@ -121,6 +121,27 @@ to be up. The self-test clicks rail buttons through the pointer path: plainly, w
 tooltip, and held across frames after a tool switch, after a click on another rail button and with the opacity
 stepper focused.
 
+## Canvas interactions
+
+One pointer interaction runs at a time (`Application::_drag`; a brush stroke, a warp and a shape draft are the
+session's own pending edits). A press on the canvas with nothing in flight begins the one its tool picks (with Space
+held or the Hand, a pan); its moves and its release go to it until it ends, whatever the tool or Space say by then and
+over the chrome too, as the view that took the press keeps the legacy canvas's drag; another button pressed while one
+is in flight does nothing. The pointer leaving the window with no capture holding it ends a drag as its release would;
+a pointer loss ends it as [`UI_Windowing.md`](UI_Windowing.md) "Pointer loss" says.
+
+The edits under way have one order that Escape, Enter, Undo and a settle consult (`Application::CanvasEdit`): the size
+card and an open panel first (Modal cards), then lifted pixels, a warp, a stroke, a shape draft, an outline move, a
+lasso or marquee outline, a pending gradient, a pending transform and the Crop tool's frame. Escape cancels the first
+one under way (an outline move goes back where its drag began), and Enter applies the first that has an OK (lifted
+pixels, a warp, a stroke, a shape draft and an outline move have none). The first Undo or Redo drops the first one
+under way with its drag and preview and leaves history where it is; an open panel keeps history where it is until OK
+or Cancel; a lasso or marquee outline and the crop frame go and history still moves; the size card is not a document
+edit and history moves under it. A tool switch or a document on its way out ends every one: a stroke, a warp, a
+gradient and a transform record their entries, a panel applies (a tool switch) or cancels (a document on its way out),
+an outline move keeps its place, and lifted pixels, a shape draft, an outline in progress, the crop frame and the size
+card drop. Save, Save As and Export record what Save would (Decision D2, Files) and leave the rest.
+
 ## Move tool
 
 With the Move tool the header is the transform inspector and the canvas shows the active layer's box through
@@ -184,8 +205,9 @@ or ellipse) is a white line over a dark one. Outline and draft changes re-compos
 
 Pointer rules in the hole (`Application::SelectionPress` / `SelectionPointerMove` / `SelectionRelease`): the
 modifiers at the press pick the mode (Shift adds, Alt subtracts). In New mode a press inside a non-empty selection
-moves its outline (Shift keeps the move on the axis it has gone further along; one `Move Selection` entry), and a
-press released without moving deselects (with the wand, it selects afresh from that pixel). A Ctrl press inside the
+moves its outline (Shift keeps the move on the axis it has gone further along; one `Move Selection` entry; Escape
+or Undo during the drag puts it back where it began and ends the drag, with no entry), and a press released without
+moving deselects (with the wand, it selects afresh from that pixel). A Ctrl press inside the
 selection lifts its pixels instead (Alt duplicates): the drag shows them through the stroke preview with the outline
 following (Shift keeps one axis), release commits one `Move Pixels` / `Duplicate Pixels` entry drawn from the adopted
 texture, and Escape or capture loss drops it (`BeginPixelDrag` / `DragPixels` / `FinishPixelDrag`). Otherwise the Marquee
@@ -235,8 +257,9 @@ inside the frame, a crosshair outside. Enter or Apply Crop resizes the canvas to
 (`CommitCrop`: the content moves by the frame's origin and is never resampled; a frame equal to the canvas records
 nothing); Escape or Cancel drops the frame and the whole canvas frames again. The self-test frames the canvas by
 choosing the tool, drags the bottom-right handle to 640 × 400 through the pointer path, crops with Enter, moves
-the frame by a drag inside it, drops it with Escape, squares it through the header's ratio, cancels, undoes and
-leaves the tool.
+the frame by a drag inside it, drops it with Escape, squares it through the header's ratio, cancels, chooses the tool
+again and undoes the crop with Ctrl+Z (the tool's own whole-canvas frame takes no Undo; the restored canvas frames
+whole), and leaves the tool.
 
 ## Brush tools
 
@@ -363,7 +386,7 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG…, Export JPEG…; Close Project (Ctrl+W); Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
 | Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size…, Image Size…; Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one); Flip Layer Horizontal, Flip Layer Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one), Target Layer Mask / Target Layer Pixels, Unlink / Link Layer Mask, Disable / Enable Layer Mask (the active layer's mask: the captions follow it, grayed without one; no default chords, as legacy had none); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
@@ -391,9 +414,10 @@ defaults and the settings' replacements: [`Core_Settings.md`](../Core/Core_Setti
 keys do and what the chrome shows. A key down goes, in order (`RedPrism/ApplicationKeyboard.cpp`):
 
 1. Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
-2. With the canvas focused, the gestures of an edit under way, which are not commands: Enter and Escape of the size
-   card, an open panel, the Crop frame, a pending gradient or transform; Escape of a pixel drag, a warp, a shape
-   draft or a stroke; Enter, Escape, Backspace and Delete of a lasso outline in progress.
+2. With the canvas focused, the gestures of an edit under way, which are not commands, in the order of Canvas
+   interactions: Enter and Escape of the size card, an open panel, the Crop frame, a pending gradient or transform;
+   Escape of a pixel drag, a warp, a shape draft or a stroke; Enter, Escape, Backspace and Delete of a lasso outline
+   in progress.
 3. The table: the first binding whose chord matches and whose scope and condition hold runs its command.
 4. With the canvas focused, the canvas's own keys: the opacity digits, and Space, which pans while held.
 5. The chrome (DxUi), unless the canvas has the focus: a key the canvas did not use goes nowhere, never to the chrome
@@ -440,7 +464,8 @@ that produces it); a position key, a named key (arrows, Delete, F2, Backspace, E
 `GetKeyNameTextW` with the key's set-1 scan code (extended for the navigation keys, so Delete is not the numpad's
 `Num Del`), which names numpad `+` and `-` apart from the number row. The menus' accelerator column
 (`ChromeHost::CommandMenuCaption`, also for the captions that follow the target: Undo and Redo with the history
-name, Invert Mask, Transform Selection, Delete Layer Mask, Release Clipping Mask, Merge Group and Merge Layers), the
+name, Invert Mask, Transform Selection, Delete Layer Mask, Release Clipping Mask, Merge Group, Merge Layers, Target
+Layer Pixels, Link Layer Mask and Enable Layer Mask), the
 Command List, the rail's tool tooltips, the palette hot zones' tooltips and the brush header's tooltips follow the
 table and `WM_INPUTLANGCHANGE`; a translated caption keeps its own name, its column is rebuilt.
 
@@ -537,6 +562,28 @@ to it, as one entry; a failed composite reports `IDS_ERROR_FLATTEN`, a result pa
 merges a blue layer down onto a red one into one 14 × 14 layer, and merges a layer under a pending gradient into
 one that holds the gradient.
 
+Mask target (RF-907, legacy `NativeLayerList.swift` and `LayerMask.swift`): a row whose layer has a mask shows a
+`Mask` badge (`IDS_LAYER_MASK_BADGE`; `Mask off` in the error tone for a disabled mask, `IDS_LAYER_MASK_OFF_BADGE`),
+drawn in the accent while that mask is the target (`HierarchyEntry::hasMask`, `maskEnabled`). The badge is the legacy
+mask thumbnail: a press on it targets that layer's mask (`DocumentSession::SelectLayerTarget(id, true)`), Shift also
+turns the mask off or on (`ToggleLayerMask`, one `Disable Layer Mask` / `Enable Layer Mask` entry), and the press goes
+no further (no row drag, no rename on a double-click). A press elsewhere on the row whose mask is the target targets
+that layer's pixels and then selects the row as usual (legacy `clickedLayer`); selecting another row targets its
+pixels, as it always did. The Layer menu's Target Layer Mask / Target Layer Pixels, Unlink / Link Layer Mask
+(`ToggleMaskLink`, one `Unlink Layer Mask` / `Link Layer Mask` entry) and Disable / Enable Layer Mask act on the
+active layer's mask; their captions follow it and they gray out without one. They have no default chords (the legacy
+menu had none); the Command List and the settings' chords reach them (`cmd/layer/targetMask`,
+`cmd/layer/toggleMaskLink`, `cmd/layer/toggleMask`). A target switch records a typed opacity first and applies a
+pending transform (legacy `clickedLayer` commits it) and a pending gradient (Decision D3); a switch, the link and the
+mask's on/off do nothing while a stroke or warp is in progress (legacy `canEditLayers`). The pinned DxUi `Tree` draws
+text rows with one badge — no thumbnails or per-row buttons, and its embedded pointer events carry no button, so no
+row context menu — so the badge is the one mask zone and the Layer menu stands in for the legacy link button and
+context menu; the host tests the press against the badge rectangle (`Tree::GetItemLayoutMetrics`) before the tree sees
+it (`ChromeHost::LayerTargetAt`), skipping a floating card over the panel. The self-test grays the commands without a
+mask, targets the pixels after selecting a masked layer, goes to the mask and back through the menu (captions and
+badge tone), unlinks and disables it, turns it back on with a Shift-press on the badge and targets it with a plain
+press after a press on the row's name went back to the pixels.
+
 The 32 DIP title row holds the `Layers` label and a `DxUi::NumericStepper` (0–100 %, step 1, Shift 10, unit `%`,
 accessible name `Layer opacity`) bound to the active raster layer's opacity. Typing previews live on the layer the
 edit started on; Enter, focus loss, the buttons, Up/Down and `RequestValue` commit; Escape restores the start value.
@@ -566,7 +613,15 @@ Pointer input inside the card belongs to chrome even though it lies in the hole;
 the canvas and leaves the picker open. Captions come from the STRINGTABLE (`IDS_PICKER_*`, `IDS_PALETTE_*`).
 With a layer's mask targeted, the swap and reset (the keys and the rail's hot zones alike) act on the mask palette
 instead (legacy `ColorPalette.swift`): swap flips the brush header's Paint between Black - Hide and White -
-Reveal, reset returns it to Black, and the RGB colors stay; a pending mask gradient re-renders with it.
+Reveal, reset returns it to Black, and the RGB colors stay; a pending mask gradient re-renders with it. The rail's
+wells show that palette meanwhile (RF-1113, legacy `paletteColor`): the foreground black or white as Paint says, the
+background the other. No picker opens on the palette then (legacy `openColorPicker`): a well, the brush header's
+color, the Gradient header's end swatches and the Shape header's fill do nothing, and a picker open on a well closes
+unchanged once a mask becomes the target (`ChromeHost::SetPalette` with the mask palette). The legacy wells' Black ·
+Hide / White · Reveal popover is not ported: the brush header's Paint, X and D make the same choice. The self-test
+sets red and green colors, targets a mask and requires black and white wells (swapped by X, reset by D), no picker
+from a well click through the pointer path, the colors back on the pixels, and a background picker closed without a
+change when the mask is targeted again.
 
 The C3 fallback (app-owned split rectangles, a ColorSwatch-launched dialog from existing controls, TextField
 numeric nudge) is retired: RedPrism consumes the library controls and does not implement a second toolkit.
@@ -699,7 +754,8 @@ and resets with X and D, commits 50 % through the opacity stepper as one `Layer 
 0 DxUi and 0 canvas surface bytes when hidden. With a painted layer it also drags the layer with the Move
 tool (one `Transform Layer` entry), previews a typed rotation through Free Transform until Apply, cancels with
 Escape, nudges with Shift+Right and flips the canvas and the layer. With the selection tools it drags a Marquee
-rectangle, adds one with Shift, switches the shape with M, moves the outline, deselects with a click, selects a
+rectangle, adds one with Shift, switches the shape with M, moves the outline (and puts a drag back with Escape and
+with Ctrl+Z), deselects with a click, selects a
 painted layer's pixels exactly with the wand, drives Ctrl+Shift+I, Ctrl+A and Ctrl+D, closes a polygonal lasso with
 Enter, expands from the header and cancels an outline with Escape. `--screenshot ... --demo transform` writes
 `docs/screenshots/transform-96.png`: two painted layers, the rotated one's box and the transform header;
@@ -718,13 +774,15 @@ a commit), the Rename card's own layer, Cancel at the save prompt over a panel, 
 draft and a pending transform, a clean document with a live stroke, Save under an adjustment layer's panel, a folder
 project saved in place, an image batch whose first file fails, Canvas Size over a pending gradient, a copy the system
 clipboard refused (the user's clipboard is set aside, cleared and restored around every clipboard step, and each
-mirror is read back), capture loss mid-stroke and mid-drag, a splitter drag cancelled, a leave without a capture,
+mirror is read back), capture loss mid-stroke and mid-drag, a splitter drag cancelled, a leave without a capture, a
+stroke dragged over the layers panel keeping the pointer,
 Space panning across a focus loss, Alt-press then Undo then a drag, a close inside a chrome callback and the session
 end. The review's integration checks add a reopened project that keeps no mask target, a drop centered on its
 point, Load Selection and budget refusals that say why, Copy, Copy Merged and Merge applying a pending gradient, a
-gradient pending on another layer, the mask palette's Paint, X and D, and the adjustment panel's live controls (a
-typed decimal, the Gradient Map picker's lifetime, the spectrum's handle strip, the drawn editors in the UI
-Automation tree); [`Testing_Validation.md`](../Testing/Testing_Validation.md) lists them.
+gradient pending on another layer, the mask palette's Paint, X and D (and its black and white wells, which open no
+picker), and the adjustment panel's live controls (a typed decimal, the Gradient Map picker's lifetime, the
+spectrum's handle strip, the drawn editors in the UI Automation tree);
+[`Testing_Validation.md`](../Testing/Testing_Validation.md) lists them.
 The self-test's keys all go through the window procedure (`Application::HandleAccelerator` sends the key down —
 a system key with Alt —, the character `TranslateMessage` would post and the key up, with a real scan code and the
 modifiers in the thread's key state, after a frame). Its keyboard steps (`RunKeyboardSelfTest`) replace X with Q

@@ -481,6 +481,15 @@
 #define IDS_ERROR_SELECTION_DETAILED 666
 // Rendering, viewport and frame loop (review fixes WP4, ids 680-687).
 #define IDS_ERROR_CANVAS_DRAW 680
+// WP9b review fixes (RF-907): the Layer menu's mask target, link and switch commands and the layers panel's Mask badge.
+#define IDS_CMD_TARGET_MASK 780
+#define IDS_CMD_TARGET_PIXELS 781
+#define IDS_CMD_UNLINK_MASK 782
+#define IDS_CMD_LINK_MASK 783
+#define IDS_CMD_DISABLE_MASK 784
+#define IDS_CMD_ENABLE_MASK 785
+#define IDS_LAYER_MASK_BADGE 786
+#define IDS_LAYER_MASK_OFF_BADGE 787
 #define IDR_LUCIDE_MOVE 700
 #define IDR_LUCIDE_SQUARE_DASHED 701
 #define IDR_LUCIDE_LASSO 702

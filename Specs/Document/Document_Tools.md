@@ -168,7 +168,8 @@ needs a document and no pending transform (commands settle the transform first).
 - `CanMoveSelection(point)`: a non-empty selection contains the point and no draft is in progress.
   `BeginSelectionMove` opens one `Move Selection` entry; `MoveSelection(dx, dy)` places the original loops at the
   rounded offset from the drag start without re-clipping (the outline can leave the canvas and come back intact);
-  `EndSelectionMove` closes the entry; `NudgeSelection` is one entry per press.
+  `EndSelectionMove` closes the entry; `CancelSelectionMove` (Escape) puts the outline back where the move began and
+  closes the entry unrecorded; `NudgeSelection` is one entry per press.
 - `CanModifySelection`: a non-empty selection and no draft. `ExpandSelection(amount)` offsets outward and clips to
   the canvas (`Expand Selection`); `ContractSelection(amount)` offsets inward, away from the canvas edges too, and
   can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.
@@ -181,7 +182,9 @@ needs a document and no pending transform (commands settle the transform first).
   folder, a blank layer or an image with no opaque pixel. Both refuse an outline past 8 000 000 pixel edges (the
   wand's limit) or one that cannot be allocated: false with `failure` TooDetailed or Memory and the selection
   unchanged, so the host can say so instead of silently loading nothing (`failure` stays None for nothing to trace).
-- Undo and Redo drop a draft in progress. `FlipCanvas` mirrors the loops with the layers.
+- Undo and Redo drop a draft in progress; during an outline move they put the outline back as `CancelSelectionMove`
+  does and history does not move (RF-904 of the 2026-09-23 review: the move holds its entry open, so history could
+  not move before either). `FlipCanvas` mirrors the loops with the layers.
 
 ## Magic Wand
 
@@ -542,7 +545,8 @@ Selection: `DocumentTests` `geometry.*` (Clipper2 booleans, holes, offsets, elli
 `selection.*`, `move.*`, `modify.*`, `load.*`, `marquee.*` (the legacy `SelectionTests` cases), `loadrefused.*` (a
 2100 × 2100 checkerboard mask or layer refused as TooDetailed, nothing to trace not a refusal) and `wand.*`,
 `wandsession.*` (the legacy `MagicWandTests` cases plus the layer sampler). The WARP self-test drives a Marquee
-drag, a Shift add, the M key, an outline move, a deselecting click, a wand click with exact bounds, Ctrl+Shift+I,
+drag, a Shift add, the M key, an outline move (put back by Escape and by Ctrl+Z mid-drag), a deselecting click, a
+wand click with exact bounds, Ctrl+Shift+I,
 Ctrl+A, Ctrl+D, a polygonal lasso closed with Enter, Expand from the header and Escape through `Application`.
 
 Brush: `DocumentTests` `sparse.*`, `kernel.*`, `brush.*`, the brush `mask.*` cases, `opacity.*`, `accumulate.*`,

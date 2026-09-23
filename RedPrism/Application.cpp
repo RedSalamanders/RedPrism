@@ -978,9 +978,9 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, center.x + 40.0, center.y + 24.0);
         pointer(WM_LBUTTONUP, center.x + 40.0, center.y + 24.0);
         layer = _session.ActiveLayer();
-        if (_transformDrag.has_value() || layer == nullptr || layer->transform.origin.x <= before.origin.x ||
-            layer->transform.origin.y <= before.origin.y || _session.PendingTransformEdit().has_value() ||
-            _session.history.UndoName() != L"Transform Layer")
+        if (std::holds_alternative<MoveToolDrag>(_drag) || layer == nullptr ||
+            layer->transform.origin.x <= before.origin.x || layer->transform.origin.y <= before.origin.y ||
+            _session.PendingTransformEdit().has_value() || _session.history.UndoName() != L"Transform Layer")
         {
             SelfTestFailure(L"Dragging with the Move tool did not move the layer as one history entry.\n");
             return 5;
@@ -1086,6 +1086,34 @@ int Application::RunSelfTest() noexcept
         {
             SelfTestFailure(L"Dragging inside the selection did not move its outline as one entry.\n");
             return 5;
+        }
+        // Escape during an outline drag puts the outline back and ends the drag, and so does Ctrl+Z, history staying
+        // where it was either way (RF-904): the release that follows neither moves nor deselects.
+        {
+            const std::optional<SelectionBounds> placed = bounds();
+            const int entries = _session.history.UndoCount();
+            const auto dragThen = [&](UINT key, UINT modifiers)
+            {
+                pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
+                pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 90.0);
+                const bool dragged = _session.IsMovingSelection() && bounds() != placed;
+                const bool taken = HandleAccelerator(key, modifiers);
+                const bool restored = !_session.IsMovingSelection() && bounds() == placed &&
+                                      _session.history.UndoCount() == entries && _session.history.CanUndo();
+                pointer(WM_MOUSEMOVE, MK_LBUTTON, 150.0, 100.0);
+                pointer(WM_LBUTTONUP, 0, 150.0, 100.0);
+                return dragged && taken && restored && bounds() == placed && _session.history.UndoCount() == entries;
+            };
+            const bool escaped = dragThen(VK_ESCAPE, 0);
+            const bool undone = dragThen('Z', MK_CONTROL);
+            if (!escaped || !undone)
+            {
+                SelfTestFailure(std::format(L"Escape or Ctrl+Z during an outline drag did not put the outline back "
+                                            L"(Escape {}, Ctrl+Z {}).\n",
+                                            escaped, undone)
+                                    .c_str());
+                return 5;
+            }
         }
         pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 70.0);
@@ -1196,7 +1224,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 200.0, 600.0);
-        if (!_brushDragging || _session.PendingBrush() == nullptr || !_composition.HasStroke())
+        if (_session.PendingBrush() == nullptr || !_composition.HasStroke())
         {
             SelfTestFailure(L"Pressing with the Brush did not start a stroke with a live preview.\n");
             return 5;
@@ -1210,7 +1238,7 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONUP, 0, 400.0, 600.0);
         const ImageLayer* painted = _session.ActiveLayer();
-        if (_brushDragging || _session.PendingBrush() != nullptr || _composition.HasStroke() || painted == nullptr ||
+        if (_session.PendingBrush() != nullptr || _composition.HasStroke() || painted == nullptr ||
             !painted->asset.has_value() || !painted->asset->image.IsSparse() ||
             painted->asset->image.IsMaterialized() || _session.history.UndoName() != L"Brush Stroke")
         {
@@ -1245,8 +1273,7 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
         if (_session.PendingBrush() == nullptr || !HandleAccelerator(VK_ESCAPE, 0) ||
-            _session.PendingBrush() != nullptr || _composition.HasStroke() || _brushDragging ||
-            _session.history.UndoName() != L"Erase")
+            _session.PendingBrush() != nullptr || _composition.HasStroke() || _session.history.UndoName() != L"Erase")
         {
             SelfTestFailure(L"Escape did not drop the stroke in progress.\n");
             return 5;
@@ -1259,7 +1286,7 @@ int Application::RunSelfTest() noexcept
         }
         const int undoBeforeStroke = _session.history.UndoCount();
         if (!HandleAccelerator('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
-            _brushDragging || _session.history.UndoCount() != undoBeforeStroke)
+            _session.history.UndoCount() != undoBeforeStroke)
         {
             SelfTestFailure(L"Ctrl+Z did not drop the stroke without moving history.\n");
             return 5;
@@ -1278,7 +1305,7 @@ int Application::RunSelfTest() noexcept
         const int beforePrompt = _session.history.UndoCount();
         const bool stayed = !ConfirmDiscardChanges();
         _forcedDiscard.reset();
-        const bool strokeLive = _brushDragging && _session.PendingBrush() != nullptr;
+        const bool strokeLive = _session.PendingBrush() != nullptr;
         pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
         if (!stayed || !strokeLive || _session.history.UndoCount() != beforePrompt + 1 ||
             _session.history.UndoName() != L"Brush Stroke")
@@ -1343,7 +1370,7 @@ int Application::RunSelfTest() noexcept
         _session.brushSettings = BrushSettings{12, 1, 0, 0, 0, 1, false};
         pointer(WM_LBUTTONDOWN, 0, 200.0, 200.0);
         pointer(WM_LBUTTONUP, 0, 200.0, 200.0);
-        if (_session.history.UndoName() != L"Brush Stroke" || _brushDragging)
+        if (_session.history.UndoName() != L"Brush Stroke" || _session.PendingBrush() != nullptr)
         {
             SelfTestFailure(L"Clone Stamp stamped without a source.\n");
             return 5;
@@ -1386,15 +1413,15 @@ int Application::RunSelfTest() noexcept
         _session.brushSettings = BrushSettings{10, 0.5, 0, 0, 0, 0.8, false};
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 100.0);
-        if (!_warpDragging || _session.PendingWarp() == nullptr || !_composition.HasStroke())
+        if (_session.PendingWarp() == nullptr || !_composition.HasStroke())
         {
             SelfTestFailure(L"Smudge did not start a warp with a live preview.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 130.0, 100.0);
         std::array<int, 4> smudged{};
-        if (_warpDragging || _session.history.UndoName() != L"Smudge" || !pixelAt(115, 100, smudged) ||
-            smudged[2] <= smudged[0])
+        if (_session.PendingWarp() != nullptr || _session.history.UndoName() != L"Smudge" ||
+            !pixelAt(115, 100, smudged) || smudged[2] <= smudged[0])
         {
             SelfTestFailure(L"Smudge did not drag the red mark along.\n");
             return 5;
@@ -1479,6 +1506,62 @@ int Application::RunSelfTest() noexcept
                 return 5;
             }
         }
+        // The rail's wells show that mask palette (RF-1113, legacy ColorPalette.swift paletteColor and
+        // openColorPicker): black and white per Paint, swapped by X, whatever the colors are; a well click opens no
+        // picker, and a picker open on a well closes unchanged once the mask becomes the target.
+        {
+            constexpr std::uint32_t kRed = 0xFFCC3322u;
+            constexpr std::uint32_t kGreen = 0xFF22AA44u;
+            constexpr std::uint32_t kBlack = 0xFF000000u;
+            constexpr std::uint32_t kWhite = 0xFFFFFFFFu;
+            const Guid maskedLayer = _session.ActiveLayerID().value_or(Guid{});
+            const std::uint32_t foregroundBefore = _session.ForegroundColor();
+            const std::uint32_t backgroundBefore = _session.BackgroundColor();
+            _session.SetForegroundColor(kRed);
+            _session.SetBackgroundColor(kGreen);
+            _session.maskPaintWhite = false;
+            SyncChrome();
+            const auto wells = [&](std::uint32_t foreground, std::uint32_t background)
+            {
+                return _chrome->ForegroundWellForTest() == foreground && _chrome->BackgroundWellForTest() == background;
+            };
+            const bool blackWhite = _session.IsMaskSelected() && wells(kBlack, kWhite);
+            const bool swapped = HandleAccelerator('X', 0) && wells(kWhite, kBlack);
+            const bool reset = HandleAccelerator('D', 0) && wells(kBlack, kWhite);
+            const float wellScale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+            const auto clickWell = [&](bool background)
+            {
+                const D2D1_RECT_F well = _chrome->PaletteWellBoundsDip(background);
+                const LPARAM at =
+                    MAKELPARAM(static_cast<int>(std::lround((well.left + well.right) * 0.5f * wellScale)),
+                               static_cast<int>(std::lround((well.top + well.bottom) * 0.5f * wellScale)));
+                OnPointer(WM_MOUSEMOVE, 0, at);
+                OnPointer(WM_LBUTTONDOWN, MK_LBUTTON, at);
+                OnPointer(WM_LBUTTONUP, 0, at);
+            };
+            clickWell(false);
+            const bool refused = !_chrome->ColorPickerOpen();
+            TargetLayer(maskedLayer, false, false);
+            const bool colors = !_session.IsMaskSelected() && wells(kRed, kGreen);
+            clickWell(true);
+            const bool opened = _chrome->ColorPickerOpen();
+            TargetLayer(maskedLayer, true, false);
+            const bool closed = _session.IsMaskSelected() && !_chrome->ColorPickerOpen() &&
+                                _session.BackgroundColor() == kGreen && wells(kBlack, kWhite);
+            TargetLayer(maskedLayer, false, false);
+            _session.SetForegroundColor(foregroundBefore);
+            _session.SetBackgroundColor(backgroundBefore);
+            SyncChrome();
+            if (!blackWhite || !swapped || !reset || !refused || !colors || !opened || !closed)
+            {
+                SelfTestFailure(
+                    std::format(L"The rail's wells did not show the mask palette (black and white {}, X {}, "
+                                L"D {}, picker refused {}, colors back {}, picker opened {}, closed {}).\n",
+                                blackWhite, swapped, reset, refused, colors, opened, closed)
+                        .c_str());
+                return 5;
+            }
+        }
         // Shape: a drag adds a filled layer, Shift-U switches the kind, Escape drops a draft.
         OnTool(EditorTool::Shape);
         _session.SetForegroundColor(0xFF3366CCu);
@@ -1521,13 +1604,13 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Eyedropper);
         _session.SetForegroundColor(0xFF000000u);
         pointer(WM_LBUTTONDOWN, 0, 40.0, 35.0);
-        if (!_samplingColor || _session.ForegroundColor() != 0xFF3366CCu)
+        if (!std::holds_alternative<ColorSampling>(_drag) || _session.ForegroundColor() != 0xFF3366CCu)
         {
             SelfTestFailure(L"The Eyedropper did not sample the shape's color.\n");
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 40.0, 35.0);
-        if (_samplingColor)
+        if (std::holds_alternative<ColorSampling>(_drag))
         {
             SelfTestFailure(L"Releasing the Eyedropper did not end sampling.\n");
             return 5;
@@ -1667,7 +1750,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON | MK_CONTROL, 140.0, 40.0);
         std::optional<SelectionBounds> box = bounds();
         std::optional<SelectionBounds> displayed = shown();
-        if (!_pixelDragStart.has_value() || _session.PendingPixelMove() == nullptr)
+        if (!std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() == nullptr)
         {
             SelfTestFailure(L"Ctrl-dragging inside the selection did not lift the selected pixels.\n");
             return 5;
@@ -1694,9 +1777,9 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONUP, MK_CONTROL, 140.0, 40.0);
         box = bounds();
-        if (_pixelDragStart.has_value() || _session.PendingPixelMove() != nullptr || _composition.HasStroke() ||
-            _session.history.UndoName() != L"Move Pixels" || !box.has_value() || !closeTo(box->minX, 120.0) ||
-            !pixelAt(140, 40, pixel) || pixel[1] < 250)
+        if (std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() != nullptr ||
+            _composition.HasStroke() || _session.history.UndoName() != L"Move Pixels" || !box.has_value() ||
+            !closeTo(box->minX, 120.0) || !pixelAt(140, 40, pixel) || pixel[1] < 250)
         {
             SelfTestFailure(L"Releasing the Ctrl-drag did not commit one Move Pixels entry.\n");
             return 5;
@@ -2160,6 +2243,25 @@ void Application::OnLayerSelected(Guid id) noexcept
     _frameInvalidated = true;
 }
 
+void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
+{
+    // A stroke or warp in progress keeps its target (legacy selectLayerTarget waits for it).
+    if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr)
+    {
+        return;
+    }
+    // As a command does: a typed opacity records its entry and a pending transform applies (legacy clickedLayer);
+    // the session applies a pending gradient on a target switch (Decision D3).
+    CloseOpacityEdit();
+    (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
+    _session.SelectLayerTarget(id, mask);
+    if (toggleMask && _session.IsMaskSelected())
+    {
+        _session.ToggleLayerMask(id);
+    }
+    DocumentChanged();
+}
+
 void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 {
     if (expanded)
@@ -2295,7 +2397,13 @@ void Application::SyncChrome() noexcept
     }
     const bool dirty = _session.history.IsModified();
     _chrome->SetDocumentTitle(FileTitle(_documentPath), dirty);
-    _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID());
+    // The active layer's mask: its row's badge shows the target, and the Layer menu's mask commands follow it (RF-907).
+    const ImageLayer* maskOwner = _session.ActiveLayer();
+    const bool hasMask = maskOwner != nullptr && maskOwner->mask.has_value();
+    const bool maskTargeted = hasMask && _session.IsMaskSelected();
+    _chrome->SetLayers(_session.LayerRows(), _session.ActiveLayerID(), maskTargeted);
+    _chrome->SetMaskCommands(hasMask, maskTargeted, hasMask && maskOwner->mask->linked,
+                             !hasMask || maskOwner->mask->enabled);
     _chrome->SetUndoRedoNames(_session.history.UndoName(), _session.history.RedoName(), _session.history.CanUndo(),
                               _session.history.CanRedo());
     _chrome->SetEditTargets(
@@ -2321,7 +2429,9 @@ void Application::SyncChrome() noexcept
         toolChord.empty() ? std::move(toolName) : FormatStringResource(nullptr, IDS_STATUS_TOOL, toolName, toolChord);
     _chrome->SetStatus(std::move(zoom), std::move(size), std::move(tool));
     _chrome->SetTool(_tool);
-    _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor());
+    // A targeted mask's wells show the mask palette per the Paint choice (RF-1113, legacy paletteColor).
+    _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor(),
+                        maskTargeted ? std::optional<bool>(_session.maskPaintWhite) : std::nullopt);
     const ImageLayer* activeLayer = _session.ActiveLayer();
     _chrome->SetActiveLayerOpacity(
         activeLayer != nullptr && !activeLayer->isGroup ? std::optional<double>(activeLayer->opacity) : std::nullopt);
@@ -2559,7 +2669,7 @@ void Application::SyncChrome() noexcept
     _chrome->SetShapeInspector(shape);
     SyncCropChrome();
     SyncToolOverlays();
-    SyncGradientPreview();
+    SyncStrokePreview();
 }
 
 void Application::BindCompositionDevice() noexcept
@@ -2589,7 +2699,6 @@ void Application::BindCompositionDevice() noexcept
 void Application::DropBrushEngine() noexcept
 {
     _session.CancelBrush();
-    _brushDragging = false;
     _brushEngine.Release();
     _session.SetBrushEngine(nullptr);
 }
@@ -2738,7 +2847,6 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             // A drag holds the pointer: leaving the window does not end it; losing the capture does.
             return;
         }
-        _canvasDrag = false;
     }
     else if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN)
     {
@@ -2770,13 +2878,34 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     event.xPixels = static_cast<float>(point.x);
     event.yPixels = static_cast<float>(point.y);
-    if (_chrome->DispatchPointer(event))
+    if (event.action == DxUi::PointerAction::Down && !PointerBusy())
+    {
+        // RF-907 (legacy NativeLayerList's thumbnails): a press on a layer row's Mask badge targets that mask, Shift
+        // turning it off or on, and takes the press; a press elsewhere on the row whose mask is the target targets
+        // the layer's pixels and goes on to the tree, which selects the row as usual.
+        if (const std::optional<ChromeHost::LayerTargetPress> target =
+                _chrome->LayerTargetAt(event.xPixels, event.yPixels);
+            target.has_value())
+        {
+            TargetLayer(target->id, target->mask, target->mask && (event.modifiers & MK_SHIFT) != 0);
+            if (target->mask)
+            {
+                _frameInvalidated = true;
+                return;
+            }
+        }
+    }
+    // An interaction the canvas took keeps the pointer's moves and release until it ends, over the chrome too (the
+    // view that took the press keeps the drag, as the legacy canvas did); anything else lands on the chrome first.
+    const bool canvasDrag =
+        PointerBusy() && (event.action == DxUi::PointerAction::Move || event.action == DxUi::PointerAction::Up);
+    if (!canvasDrag && _chrome->DispatchPointer(event))
     {
         _frameInvalidated = true;
         // DxUi takes every leave for its hover; the canvas still hears it (the tip circle and a drag end there).
         if (event.action != DxUi::PointerAction::Leave)
         {
-            if (_brushHover.has_value() && !_brushDragging)
+            if (_brushHover.has_value() && _session.PendingBrush() == nullptr)
             {
                 // The pointer is over the chrome: the tip circle leaves the canvas.
                 _brushHover.reset();
@@ -2789,295 +2918,388 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     const CanvasHole hole = _chrome->HolePixels();
     const bool inHole = event.xPixels >= hole.left && event.yPixels >= hole.top &&
                         event.xPixels < hole.left + hole.width && event.yPixels < hole.top + hole.height;
-    if (event.action == DxUi::PointerAction::Down && inHole)
-    {
-        // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
-        CloseOpacityEdit();
-    }
-    const Vec2 documentSize = DocumentSize();
     const Vec2 view{event.xPixels - hole.left, event.yPixels - hole.top};
-    const bool panMode = _spacePan || _tool == EditorTool::Hand;
-    if (event.action == DxUi::PointerAction::Wheel && inHole)
+    switch (event.action)
     {
-        // 1.1 per notch, a fraction of it per partial delta: a precision touchpad's many small deltas (or a pinch)
-        // zoom as far as the notches they add up to, and a zero delta does nothing (RF-404).
-        const double factor = CanvasViewport::WheelZoomFactor(static_cast<double>(event.wheelDelta));
-        if (factor != 1.0)
+    case DxUi::PointerAction::Wheel:
+        if (inHole)
         {
-            _viewport.SetZoom(_viewport.zoom * factor, view, documentSize);
-            SyncChrome();
-            _frameInvalidated = true;
-        }
-        return;
-    }
-    if (!panMode && AdjustPointer(event, view, inHole))
-    {
-        return;
-    }
-    if ((SamplesColor() || _samplingColor) && !panMode)
-    {
-        // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
-        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
-        {
-            _canvasDrag = false;
-            _samplingColor = true;
-            _samplingOriginal = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
-            _sampleComposite = WandComposite();
-            SampleColorAt(view);
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && _samplingColor)
-        {
-            SampleColorAt(view);
-            return;
-        }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) && _samplingColor)
-        {
-            EndColorSampling();
-            return;
-        }
-    }
-    if (EditorToolIsBrush(_tool) && !panMode)
-    {
-        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
-        {
-            _canvasDrag = false;
-            if (_tool == EditorTool::Clone && KeyboardState::Held(VK_MENU))
+            // 1.1 per notch, a fraction of it per partial delta: a precision touchpad's many small deltas (or a
+            // pinch) zoom as far as the notches they add up to, and a zero delta does nothing (RF-404).
+            const double factor = CanvasViewport::WheelZoomFactor(static_cast<double>(event.wheelDelta));
+            if (factor != 1.0)
             {
-                // Alt-click with Clone Stamp sets where it copies from.
-                _session.SetCloneSource(_viewport.DocumentFromView(view, documentSize));
-                SyncChrome();
-                return;
-            }
-            if (WarpsWithSmear())
-            {
-                BeginWarpStroke(view);
-            }
-            else
-            {
-                BeginBrushStroke(view, event.modifiers);
-            }
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move)
-        {
-            if (_warpDragging)
-            {
-                ContinueWarpStroke(view);
-                return;
-            }
-            if (_brushDragging)
-            {
-                ContinueBrushStroke(view);
-                return;
-            }
-            _brushHover = inHole ? std::optional<Vec2>(_viewport.DocumentFromView(view, documentSize)) : std::nullopt;
-            SyncBrushCursor();
-            if (_tool == EditorTool::Clone)
-            {
-                SyncToolOverlays();
-            }
-        }
-        if (event.action == DxUi::PointerAction::Up && (_brushDragging || _warpDragging))
-        {
-            if (_warpDragging)
-            {
-                ContinueWarpStroke(view);
-                FinishWarpStroke();
-            }
-            else
-            {
-                ContinueBrushStroke(view);
-                FinishBrushStroke();
-            }
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Leave)
-        {
-            _brushHover.reset();
-            FinishWarpStroke();
-            if (_brushDragging)
-            {
-                FinishBrushStroke();
-            }
-            SyncBrushCursor();
-        }
-    }
-    if (_tool == EditorTool::Gradient && !panMode)
-    {
-        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
-        {
-            _canvasDrag = false;
-            BeginGradientDrag(view);
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && _gradientHandle.has_value())
-        {
-            DragGradient(view, event.modifiers);
-            return;
-        }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
-            _gradientHandle.has_value())
-        {
-            EndGradientDrag();
-            return;
-        }
-    }
-    if (_tool == EditorTool::Crop && !panMode)
-    {
-        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
-        {
-            _canvasDrag = false;
-            BeginCropDrag(view);
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && _cropDrag.has_value())
-        {
-            ContinueCropDrag(view);
-            return;
-        }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
-            _cropDrag.has_value())
-        {
-            if (event.action == DxUi::PointerAction::Up)
-            {
-                ContinueCropDrag(view);
-            }
-            EndCropDrag();
-            return;
-        }
-    }
-    if (_tool == EditorTool::Shape && !panMode)
-    {
-        const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
-        const bool square = (event.modifiers & MK_SHIFT) != 0;
-        // Unlike the Marquee, Alt has no other job here, so it draws from the center as in Photoshop.
-        const bool fromCenter = KeyboardState::Held(VK_MENU);
-        if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
-        {
-            _canvasDrag = false;
-            _session.BeginShape(pixel);
-            _shapeDragging = _session.PendingShape().has_value();
-            SyncToolOverlays();
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && _shapeDragging)
-        {
-            _session.DragShape(pixel, square, fromCenter);
-            SyncToolOverlays();
-            return;
-        }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) && _shapeDragging)
-        {
-            if (event.action == DxUi::PointerAction::Up)
-            {
-                _session.DragShape(pixel, square, fromCenter);
-            }
-            _shapeDragging = false;
-            _session.FinishShape();
-            DocumentChanged();
-            return;
-        }
-    }
-    if (EditorToolIsSelection(_tool) && !panMode)
-    {
-        if (event.action == DxUi::PointerAction::Down && inHole)
-        {
-            _canvasDrag = false;
-            SelectionPress(view, event.modifiers, point);
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && SelectionPointerMove(view, event.modifiers))
-        {
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Up &&
-            (_selectionDragStart.has_value() || _lassoDragging || _pixelDragStart.has_value()))
-        {
-            SelectionRelease(view);
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Leave)
-        {
-            EndSelectionInteraction(true);
-        }
-    }
-    if (_tool == EditorTool::Move && !panMode)
-    {
-        if (event.action == DxUi::PointerAction::Down && inHole)
-        {
-            _canvasDrag = false;
-            BeginTransformDrag(view, event.modifiers);
-            _frameInvalidated = true;
-            return;
-        }
-        if (event.action == DxUi::PointerAction::Move && _transformDrag.has_value())
-        {
-            ContinueTransformDrag(view, event.modifiers);
-            return;
-        }
-        if ((event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave) &&
-            _transformDrag.has_value())
-        {
-            EndTransformDrag();
-            return;
-        }
-    }
-    if (event.action == DxUi::PointerAction::Down && inHole)
-    {
-        _canvasDrag = true;
-        _lastPointer = point;
-        _zoomDrag.reset();
-        if (_tool == EditorTool::Zoom && !panMode)
-        {
-            _zoomDrag = ZoomDrag{point, _viewport.zoom, false};
-        }
-        _frameInvalidated = true;
-        return;
-    }
-    if (event.action == DxUi::PointerAction::Move && _canvasDrag)
-    {
-        const Vec2 delta{static_cast<double>(point.x - _lastPointer.x), static_cast<double>(point.y - _lastPointer.y)};
-        if (panMode)
-        {
-            _viewport.Translate(delta);
-            SyncChrome();
-            _frameInvalidated = true;
-        }
-        else if (_tool == EditorTool::Zoom && _zoomDrag.has_value())
-        {
-            // Right zooms in, left out: doubling for every 100 DIPs from the press, around the press (legacy
-            // EditorCanvas), however many moves the pointer reports on the way (RF-404).
-            const double dragDip = static_cast<double>(point.x - _zoomDrag->start.x) / _viewport.DipToView(1.0);
-            if (std::fabs(dragDip) >= 3.0)
-            {
-                _zoomDrag->moved = true;
-            }
-            if (_zoomDrag->moved)
-            {
-                const Vec2 anchor{static_cast<double>(_zoomDrag->start.x) - hole.left,
-                                  static_cast<double>(_zoomDrag->start.y) - hole.top};
-                _viewport.SetZoom(_zoomDrag->zoom * CanvasViewport::DragZoomFactor(dragDip), anchor, documentSize);
+                _viewport.SetZoom(_viewport.zoom * factor, view, DocumentSize());
                 SyncChrome();
                 _frameInvalidated = true;
             }
         }
-        _lastPointer = point;
+        return;
+    case DxUi::PointerAction::Down:
+        if (inHole)
+        {
+            // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
+            CloseOpacityEdit();
+            if (!PointerBusy())
+            {
+                PressCanvas(event, message, view, point);
+            }
+        }
+        return;
+    case DxUi::PointerAction::Leave:
+        // No capture holds the pointer: a drag ends where it is, as its release would; the tip circle goes.
+        EndPointerDrag(PointerEnd::Left);
+        if (_brushHover.has_value())
+        {
+            _brushHover.reset();
+            SyncBrushCursor();
+        }
+        return;
+    default:
+        if (!DragPointer(event, view) && event.action == DxUi::PointerAction::Move)
+        {
+            HoverCanvas(event, view, inHole);
+        }
         return;
     }
-    if (event.action == DxUi::PointerAction::Up)
+}
+
+bool Application::PointerBusy() const noexcept
+{
+    return !std::holds_alternative<std::monostate>(_drag) || _session.PendingBrush() != nullptr ||
+           _session.PendingWarp() != nullptr || _session.PendingShape().has_value();
+}
+
+void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec2 view, POINT client) noexcept
+{
+    if (_spacePan || _tool == EditorTool::Hand)
     {
-        if (_zoomDrag.has_value() && !_zoomDrag->moved && _tool == EditorTool::Zoom && !panMode)
+        _drag = PanDrag{view};
+        _frameInvalidated = true;
+        return;
+    }
+    // An open panel's armed eyedropper or targeted adjustment takes the press first.
+    if (AdjustPointer(event, view, true))
+    {
+        return;
+    }
+    const bool left = message == WM_LBUTTONDOWN;
+    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+    if (left && SamplesColor())
+    {
+        // The Eyedropper (or Alt with the Brush, Spot Healing or Gradient) reads the canvas while pressed.
+        ColorSampling sampling;
+        sampling.original = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
+        sampling.composite = WandComposite();
+        _drag = std::move(sampling);
+        SampleColorAt(view);
+        return;
+    }
+    if (left && EditorToolIsBrush(_tool))
+    {
+        if (_tool == EditorTool::Clone && KeyboardState::Held(VK_MENU))
         {
-            // A click zooms in twice around the press; with Alt it zooms out (legacy).
-            const Vec2 anchor{static_cast<double>(_zoomDrag->start.x) - hole.left,
-                              static_cast<double>(_zoomDrag->start.y) - hole.top};
-            _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), anchor, documentSize);
+            // Alt-click with Clone Stamp sets where it copies from.
+            _session.SetCloneSource(pixel);
+            SyncChrome();
+        }
+        else if (WarpsWithSmear())
+        {
+            BeginWarpStroke(view);
+        }
+        else
+        {
+            BeginBrushStroke(view, event.modifiers);
+        }
+        return;
+    }
+    if (left && _tool == EditorTool::Gradient)
+    {
+        BeginGradientDrag(view);
+        return;
+    }
+    if (left && _tool == EditorTool::Crop)
+    {
+        BeginCropDrag(view);
+        return;
+    }
+    if (left && _tool == EditorTool::Shape)
+    {
+        _session.BeginShape(pixel);
+        SyncToolOverlays();
+        return;
+    }
+    if (EditorToolIsSelection(_tool))
+    {
+        SelectionPress(view, event.modifiers, client);
+        return;
+    }
+    if (_tool == EditorTool::Move)
+    {
+        BeginTransformDrag(view, event.modifiers);
+    }
+    else if (_tool == EditorTool::Zoom)
+    {
+        _drag = ZoomDrag{view, _viewport.zoom, false};
+    }
+    _frameInvalidated = true;
+}
+
+bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexcept
+{
+    const bool release = event.action == DxUi::PointerAction::Up;
+    if (!release && event.action != DxUi::PointerAction::Move)
+    {
+        return false;
+    }
+    // The session's own drags: a warp, a stroke, a shape draft.
+    if (_session.PendingWarp() != nullptr)
+    {
+        ContinueWarpStroke(view);
+        if (release)
+        {
+            FinishWarpStroke();
+        }
+        return true;
+    }
+    if (_session.PendingBrush() != nullptr)
+    {
+        ContinueBrushStroke(view);
+        if (release)
+        {
+            FinishBrushStroke();
+        }
+        return true;
+    }
+    if (_session.PendingShape().has_value())
+    {
+        // Shift squares; Alt, which has no other job here, draws from the center as in Photoshop.
+        _session.DragShape(_viewport.DocumentFromView(view, DocumentSize()), (event.modifiers & MK_SHIFT) != 0,
+                           KeyboardState::Held(VK_MENU));
+        if (release)
+        {
+            _session.FinishShape();
+            DocumentChanged();
+        }
+        else
+        {
+            SyncToolOverlays();
+        }
+        return true;
+    }
+    if (PanDrag* pan = std::get_if<PanDrag>(&_drag))
+    {
+        const Vec2 delta{view.x - pan->last.x, view.y - pan->last.y};
+        pan->last = view;
+        if (release)
+        {
+            _drag = PointerDrag{};
+            return true;
+        }
+        _viewport.Translate(delta);
+        SyncChrome();
+        _frameInvalidated = true;
+        return true;
+    }
+    if (ZoomDrag* zoom = std::get_if<ZoomDrag>(&_drag))
+    {
+        // Right zooms in, left out: doubling for every 100 DIPs from the press, around the press (legacy EditorCanvas),
+        // however many moves the pointer reports on the way (RF-404). A click zooms in twice around the press, or out
+        // with Alt.
+        const ZoomDrag drag = *zoom;
+        if (release)
+        {
+            _drag = PointerDrag{};
+            if (!drag.moved)
+            {
+                _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), drag.anchor,
+                                  DocumentSize());
+                SyncChrome();
+                _frameInvalidated = true;
+            }
+            return true;
+        }
+        const double dragDip = (view.x - drag.anchor.x) / _viewport.DipToView(1.0);
+        zoom->moved = drag.moved || std::fabs(dragDip) >= 3.0;
+        if (zoom->moved)
+        {
+            _viewport.SetZoom(drag.zoom * CanvasViewport::DragZoomFactor(dragDip), drag.anchor, DocumentSize());
             SyncChrome();
             _frameInvalidated = true;
         }
-        _zoomDrag.reset();
-        _canvasDrag = false;
+        return true;
+    }
+    if (std::holds_alternative<MoveToolDrag>(_drag))
+    {
+        if (release)
+        {
+            EndTransformDrag();
+        }
+        else
+        {
+            ContinueTransformDrag(view, event.modifiers);
+        }
+        return true;
+    }
+    if (std::holds_alternative<CropDrag>(_drag))
+    {
+        ContinueCropDrag(view);
+        if (release)
+        {
+            EndCropDrag();
+        }
+        return true;
+    }
+    if (std::holds_alternative<GradientDrag>(_drag))
+    {
+        if (release)
+        {
+            EndGradientDrag();
+        }
+        else
+        {
+            DragGradient(view, event.modifiers);
+        }
+        return true;
+    }
+    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
+        std::holds_alternative<PixelDrag>(_drag))
+    {
+        if (release)
+        {
+            SelectionRelease(view);
+        }
+        else
+        {
+            (void)SelectionPointerMove(view, event.modifiers);
+        }
+        return true;
+    }
+    if (std::holds_alternative<ColorSampling>(_drag))
+    {
+        if (release)
+        {
+            EndColorSampling();
+        }
+        else
+        {
+            SampleColorAt(view);
+        }
+        return true;
+    }
+    if (const HueTargetDrag* hue = std::get_if<HueTargetDrag>(&_drag))
+    {
+        // A targeted Hue/Saturation drag changes the picked color's saturation, or its hue with Ctrl, measured from
+        // where it started.
+        if (release)
+        {
+            _drag = PointerDrag{};
+            _session.EndHueTargeting();
+        }
+        else
+        {
+            _session.DragHueTargeting(view.x - hue->startX, (event.modifiers & MK_CONTROL) != 0);
+            DocumentChanged();
+        }
+        return true;
+    }
+    return false;
+}
+
+void Application::HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept
+{
+    // An open panel's armed eyedropper keeps the pointer; Space and the Hand only pan.
+    if (_spacePan || _tool == EditorTool::Hand || AdjustPointer(event, view, inHole))
+    {
+        return;
+    }
+    if (EditorToolIsBrush(_tool))
+    {
+        // The tip circle follows the pointer over the canvas, and Clone Stamp's source crosshair with it.
+        _brushHover = inHole ? std::optional<Vec2>(_viewport.DocumentFromView(view, DocumentSize())) : std::nullopt;
+        SyncBrushCursor();
+        if (_tool == EditorTool::Clone)
+        {
+            SyncToolOverlays();
+        }
+    }
+    else if (EditorToolIsSelection(_tool))
+    {
+        // The header shows the mode a press would use; a polygonal outline's rubber band follows the pointer.
+        (void)SelectionPointerMove(view, event.modifiers);
+    }
+}
+
+void Application::EndPointerDrag(PointerEnd end) noexcept
+{
+    const bool lost = end == PointerEnd::Lost;
+    // A warp and a stroke keep what they painted either way (Decision D10); a shape draft adds its layer as a release
+    // would, and drops when the pointer was lost.
+    FinishWarpStroke();
+    FinishBrushStroke();
+    if (_session.PendingShape().has_value())
+    {
+        if (lost)
+        {
+            CancelShapeDraft();
+        }
+        else
+        {
+            _session.FinishShape();
+            DocumentChanged();
+        }
+    }
+    if (const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag); move != nullptr && lost)
+    {
+        // The box goes back to where the drag started: a drag-only edit drops, an Alt-drag's duplicate with it.
+        const TransformDrag drag = move->drag;
+        _drag = PointerDrag{};
+        const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
+        if (edit.has_value() && !edit->persistent)
+        {
+            _session.CancelTransform();
+        }
+        else if (edit.has_value() && edit->corners.has_value() && drag.originalCorners.has_value())
+        {
+            _session.PreviewCorners(drag.originalCorners.value());
+        }
+        else if (edit.has_value())
+        {
+            _session.PreviewTransform(drag.original);
+        }
+        DocumentChanged();
+    }
+    else if (std::holds_alternative<MoveToolDrag>(_drag))
+    {
+        EndTransformDrag();
+    }
+    else if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
+             std::holds_alternative<PixelDrag>(_drag) || _session.PendingLasso().has_value())
+    {
+        // Marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place; lifted
+        // pixels drop.
+        EndSelectionInteraction(true);
+    }
+    else if (std::holds_alternative<GradientDrag>(_drag))
+    {
+        EndGradientDrag();
+    }
+    else if (std::holds_alternative<CropDrag>(_drag))
+    {
+        EndCropDrag();
+    }
+    else if (std::holds_alternative<ColorSampling>(_drag))
+    {
+        EndColorSampling();
+    }
+    else if (std::holds_alternative<HueTargetDrag>(_drag))
+    {
+        _drag = PointerDrag{};
+        _session.EndHueTargeting();
+    }
+    else
+    {
+        _drag = PointerDrag{}; // a pan or a zoom drag
     }
 }
 
@@ -3135,11 +3357,11 @@ void Application::OnCommand(int command) noexcept
 {
     // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
     CloseOpacityEdit();
-    // Commands that change layers or files settle a pending transform first; view, history and About do not.
+    // Commands that change layers or files settle a pending transform first, as Enter would; view, history and About
+    // do not.
     if (!SkipsTransformSettle(command))
     {
-        _transformDrag.reset();
-        _session.CommitTransform();
+        (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     }
     if (const EditorTool selected = ChromeHost::ToolForSelectCommand(command); selected != EditorTool::Count)
     {
@@ -3216,27 +3438,19 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandUndo:
     case ChromeHost::kCommandRedo:
-        // The session drops the pending edit. The composition stroke has to go with it, or the preview stays up; a
-        // transform drag goes too, or the next move would duplicate the layer again after an Alt-press.
-        _brushDragging = false;
-        _warpDragging = false;
-        _shapeDragging = false;
-        _gradientHandle.reset();
-        _pixelDragStart.reset();
-        _cropDrag.reset();
-        _transformDrag.reset();
-        _duplicateOnDrag = false;
-        if (_composition.HasStroke())
+        // The first Undo or Redo goes to the edit under way, in the order Escape uses (RF-904): it drops with its drag
+        // (a transform drag too, so moving on after an Alt-press duplicates nothing) and its preview, and history
+        // stays put; otherwise history moves.
+        if (!EndFirstCanvasEdit(EditEnd::Undo))
         {
-            _composition.EndStroke(nullptr, 0, 0);
-        }
-        if (command == ChromeHost::kCommandUndo)
-        {
-            _session.Undo();
-        }
-        else
-        {
-            _session.Redo();
+            if (command == ChromeHost::kCommandUndo)
+            {
+                _session.Undo();
+            }
+            else
+            {
+                _session.Redo();
+            }
         }
         DocumentChanged();
         break;
@@ -3405,7 +3619,7 @@ void Application::OnCommand(int command) noexcept
         SyncChrome();
         break;
     case ChromeHost::kCommandToggleShapeKind:
-        _shapeDragging = false;
+        // The session drops a draft with the switch.
         _session.ToggleShapeKind();
         SyncChrome();
         break;
@@ -3483,12 +3697,8 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandInvert:
         _session.InvertPixels();
-        if (_composition.HasStroke() && _session.PendingGradient() == nullptr && _session.PendingBrush() == nullptr &&
-            _session.PendingWarp() == nullptr && _session.PendingPixelMove() == nullptr)
-        {
-            // A pending gradient applied under the invert; its preview never showed the inverted pixels.
-            _composition.EndStroke(nullptr, 0, 0);
-        }
+        // The invert's own commit: a pending gradient applied under it, and that preview never showed the inverted
+        // pixels, so it ends without adopting its texture (SyncStrokePreview).
         static_cast<void>(_session.TakeLastBrushCommit());
         DocumentChanged();
         break;
@@ -3528,6 +3738,34 @@ void Application::OnCommand(int command) noexcept
         EndSelectionInteraction(false);
         _session.AddMask(command == ChromeHost::kCommandAddMask);
         DocumentChanged();
+        break;
+    case ChromeHost::kCommandTargetLayerMask:
+        // The active layer's mask, or its pixels when the mask is the target (RF-907).
+        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value())
+        {
+            TargetLayer(active->id, !_session.IsMaskSelected(), false);
+        }
+        break;
+    case ChromeHost::kCommandToggleMaskLink:
+    case ChromeHost::kCommandToggleLayerMask:
+        // Not under a stroke or warp in progress (legacy canEditLayers), whose layer and mask they change.
+        if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value() &&
+                                                               _session.PendingBrush() == nullptr &&
+                                                               _session.PendingWarp() == nullptr)
+        {
+            // The link and the switch change what the layer shows: a pending gradient applies first (Decision D3).
+            const Guid id = active->id;
+            CommitGradient();
+            if (command == ChromeHost::kCommandToggleMaskLink)
+            {
+                _session.ToggleMaskLink(id);
+            }
+            else
+            {
+                _session.ToggleLayerMask(id);
+            }
+            DocumentChanged();
+        }
         break;
     case ChromeHost::kCommandSelectAll:
         EndSelectionInteraction(false);
@@ -3571,37 +3809,226 @@ void Application::SettleInteractions(bool applyPanels) noexcept
 {
     CloseOpacityEdit();
     CloseRenameCard();
-    _transformDrag.reset();
-    _duplicateOnDrag = false;
-    _session.CommitTransform();
+    EndCanvasEdits(applyPanels ? EditEnd::ToolSwitch : EditEnd::DocumentGoes);
     _session.ClearSnapGuides();
-    EndSelectionInteraction(false);
-    FinishBrushStroke();
-    FinishWarpStroke();
-    CommitGradient();
-    if (applyPanels)
+    // What is left in flight views or samples the canvas (a pan, a zoom drag, the eyedropper): it ends where it is.
+    EndPointerDrag(PointerEnd::Left);
+}
+
+bool Application::EditUnderWay(CanvasEdit edit) const noexcept
+{
+    switch (edit)
     {
-        ApplyColorEdit();
+    case CanvasEdit::SizeCard:
+        return SizeCardOpen();
+    case CanvasEdit::Panel:
+        return _session.HasColorEdit();
+    case CanvasEdit::PixelMove:
+        return _session.PendingPixelMove() != nullptr || std::holds_alternative<PixelDrag>(_drag);
+    case CanvasEdit::Warp:
+        return _session.PendingWarp() != nullptr;
+    case CanvasEdit::Brush:
+        return _session.PendingBrush() != nullptr;
+    case CanvasEdit::Shape:
+        return _session.PendingShape().has_value();
+    case CanvasEdit::OutlineMove:
+        return _session.IsMovingSelection();
+    case CanvasEdit::Lasso:
+        return _session.PendingLasso().has_value();
+    case CanvasEdit::Gradient:
+        return _session.PendingGradient() != nullptr;
+    case CanvasEdit::Transform:
+        return _session.PendingTransformEdit().has_value() || std::holds_alternative<MoveToolDrag>(_drag);
+    case CanvasEdit::Crop:
+        // The Crop tool always shows a frame: the whole canvas when none is pending.
+        return _tool == EditorTool::Crop || _session.CropFrame().has_value() || std::holds_alternative<CropDrag>(_drag);
     }
-    if (_session.HasColorEdit() && (!applyPanels || _session.PendingColorEdit()->previewFailed))
+    return false;
+}
+
+bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
+{
+    if (!EditUnderWay(edit))
     {
-        // A fill with nothing to copy from cannot apply; a tool switch drops it rather than trapping the panel, and
-        // a document on its way out drops any open panel.
-        CancelColorEdit();
+        return false;
     }
-    if (_session.PendingShape().has_value())
+    const bool drops = end == EditEnd::Escape || end == EditEnd::Undo;
+    switch (edit)
     {
-        _shapeDragging = false;
-        _session.CancelShape();
-    }
-    EndColorSampling();
-    if (_pixelDragStart.has_value())
-    {
+    case CanvasEdit::SizeCard:
+        // A card, not a document edit: history moves under it and a write leaves it open.
+        if (end == EditEnd::Undo || end == EditEnd::Write)
+        {
+            return false;
+        }
+        if (end == EditEnd::Enter)
+        {
+            ApplySizeCard();
+        }
+        else
+        {
+            CancelSizeCard();
+        }
+        return true;
+    case CanvasEdit::Panel:
+        if (end == EditEnd::Undo)
+        {
+            return true; // the panel owns the document: history waits for OK or Cancel
+        }
+        if (end == EditEnd::Enter || end == EditEnd::ToolSwitch || end == EditEnd::Write)
+        {
+            ApplyColorEdit();
+        }
+        if (end == EditEnd::Escape || end == EditEnd::DocumentGoes ||
+            (end == EditEnd::ToolSwitch && _session.HasColorEdit()))
+        {
+            // A fill with nothing to copy from cannot apply: a tool switch drops it rather than trapping the panel.
+            CancelColorEdit();
+        }
+        return true;
+    case CanvasEdit::PixelMove:
+        // Lifted pixels record nothing before their release: whatever else ends them drops them.
+        if (end == EditEnd::Enter || end == EditEnd::Write)
+        {
+            return false;
+        }
         CancelPixelDrag();
+        return true;
+    case CanvasEdit::Warp:
+        if (end == EditEnd::Enter)
+        {
+            return false;
+        }
+        if (drops)
+        {
+            CancelWarpStroke();
+        }
+        else
+        {
+            FinishWarpStroke();
+        }
+        return true;
+    case CanvasEdit::Brush:
+        if (end == EditEnd::Enter)
+        {
+            return false;
+        }
+        if (drops)
+        {
+            CancelBrushStroke();
+        }
+        else
+        {
+            FinishBrushStroke();
+        }
+        return true;
+    case CanvasEdit::Shape:
+        if (end == EditEnd::Enter || end == EditEnd::Write)
+        {
+            return false;
+        }
+        CancelShapeDraft();
+        return true;
+    case CanvasEdit::OutlineMove:
+        // Escape and Undo put the outline back where the drag began, ending the drag, and history stays where it was;
+        // a settle ends the move where the outline is.
+        if (end == EditEnd::Enter || end == EditEnd::Write)
+        {
+            return false;
+        }
+        if (drops)
+        {
+            DropDrag<OutlineDrag>();
+            _session.CancelSelectionMove();
+            SelectionChanged();
+        }
+        else
+        {
+            EndSelectionInteraction(false);
+        }
+        return true;
+    case CanvasEdit::Lasso:
+        if (end == EditEnd::Write)
+        {
+            return false;
+        }
+        if (end == EditEnd::Enter)
+        {
+            _session.FinishLasso();
+        }
+        else
+        {
+            _session.CancelLasso();
+        }
+        DropDrag<DraftDrag>();
+        SelectionChanged();
+        return end != EditEnd::Undo; // Undo drops the outline and history still moves, as the session's Undo does
+    case CanvasEdit::Gradient:
+        if (drops)
+        {
+            CancelGradient();
+        }
+        else
+        {
+            CommitGradient();
+        }
+        return true;
+    case CanvasEdit::Transform:
+        DropDrag<MoveToolDrag>();
+        if (drops)
+        {
+            _session.CancelTransform();
+        }
+        else
+        {
+            _session.CommitTransform();
+        }
+        DocumentChanged();
+        return true;
+    case CanvasEdit::Crop:
+        if (end == EditEnd::Write)
+        {
+            return false;
+        }
+        if (end == EditEnd::Undo)
+        {
+            // Not an edit in progress: the session's Undo drops the frame and still moves history, as legacy restore()
+            // cancels the crop (with nothing to undo the frame stays).
+            DropDrag<CropDrag>();
+            return false;
+        }
+        if (end == EditEnd::Enter)
+        {
+            ApplyCrop();
+        }
+        else
+        {
+            CancelCropFrame();
+        }
+        return true;
     }
-    CancelSizeCard();
-    _cropDrag.reset();
-    _session.CancelCrop();
+    return false;
+}
+
+bool Application::EndFirstCanvasEdit(EditEnd end) noexcept
+{
+    // In their declaration order (Application.h): the cards, the canvas's drags, then the pending edits.
+    for (int edit = static_cast<int>(CanvasEdit::SizeCard); edit <= static_cast<int>(CanvasEdit::Crop); ++edit)
+    {
+        if (EndCanvasEdit(static_cast<CanvasEdit>(edit), end))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Application::EndCanvasEdits(EditEnd end) noexcept
+{
+    for (int edit = static_cast<int>(CanvasEdit::SizeCard); edit <= static_cast<int>(CanvasEdit::Crop); ++edit)
+    {
+        (void)EndCanvasEdit(static_cast<CanvasEdit>(edit), end);
+    }
 }
 
 void Application::OnTool(EditorTool tool) noexcept
@@ -4286,14 +4713,9 @@ void Application::OnTransformAction(TransformAction action, double value) noexce
     switch (action)
     {
     case TransformAction::Apply:
-        _transformDrag.reset();
-        _session.CommitTransform();
-        DocumentChanged();
-        return;
     case TransformAction::Cancel:
-        _transformDrag.reset();
-        _session.CancelTransform();
-        DocumentChanged();
+        // The header's Apply and Cancel are Enter and Escape of the pending transform.
+        (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
         return;
     case TransformAction::AutoSelect:
         _session.transformAutoSelect = value != 0.0;
@@ -4488,8 +4910,6 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
             _session.SelectLayer(target->first);
         }
     }
-    // Alt-dragging the body duplicates the layer once the pointer moves.
-    _duplicateOnDrag = mode == TransformDrag::Mode::Move && alt;
     if (!_session.PendingTransformEdit().has_value())
     {
         _session.BeginTransform(false);
@@ -4509,26 +4929,29 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
     {
         return;
     }
-    _transformDrag = TransformDrag{mode, handle, edit->draft, pixel, edit->corners};
+    // Alt-dragging the body duplicates the layer once the pointer moves.
+    _drag = MoveToolDrag{TransformDrag{mode, handle, edit->draft, pixel, edit->corners},
+                         mode == TransformDrag::Mode::Move && alt};
     SyncChrome();
 }
 
 void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
 {
-    if (!_transformDrag.has_value() || !_session.Document().has_value())
+    MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
+    if (move == nullptr || !_session.Document().has_value())
     {
         return;
     }
+    const TransformDrag drag = move->drag;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool control = (modifiers & MK_CONTROL) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
-    if (_duplicateOnDrag)
+    if (std::exchange(move->duplicateOnMove, false))
     {
-        _duplicateOnDrag = false;
         _session.BeginDuplicateTransform();
     }
-    const std::optional<std::array<Vec2, 4>> corners = _transformDrag->Corners(pixel, shift);
+    const std::optional<std::array<Vec2, 4>> corners = drag.Corners(pixel, shift);
     if (corners.has_value())
     {
         _session.PreviewCorners(corners.value());
@@ -4537,8 +4960,8 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     {
         // Dragging, scaling and rotating land on whole pixels and degrees; typed values stay exact. Moving snaps
         // to the canvas and the other layers unless Ctrl is held; resizing and rotating are left alone.
-        LayerTransform draft = _transformDrag->Updated(pixel, _session.locksTransformRatio, shift, alt).Rounded();
-        if (_transformDrag->mode == TransformDrag::Mode::Move && !control)
+        LayerTransform draft = drag.Updated(pixel, _session.locksTransformRatio, shift, alt).Rounded();
+        if (drag.mode == TransformDrag::Mode::Move && !control)
         {
             std::unordered_set<Guid> moving;
             const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
@@ -4565,8 +4988,7 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
 
 void Application::EndTransformDrag() noexcept
 {
-    _duplicateOnDrag = false;
-    _transformDrag.reset();
+    DropDrag<MoveToolDrag>();
     _session.ClearSnapGuides();
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     if (edit.has_value() && !edit->persistent)
@@ -4589,7 +5011,8 @@ bool Application::ApplyCanvasCursor() noexcept
     }
     const CanvasHole hole = _chrome->HolePixels();
     const bool inHole = _chrome->IsCanvasPoint(static_cast<float>(point.x), static_cast<float>(point.y));
-    if (!inHole && !_transformDrag.has_value())
+    const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
+    if (!inHole && move == nullptr)
     {
         return false;
     }
@@ -4603,7 +5026,8 @@ bool Application::ApplyCanvasCursor() noexcept
     {
         cursor = IDC_CROSS;
     }
-    else if (_samplingColor || SamplesColor() || _tool == EditorTool::Gradient || _tool == EditorTool::Shape)
+    else if (std::holds_alternative<ColorSampling>(_drag) || SamplesColor() || _tool == EditorTool::Gradient ||
+             _tool == EditorTool::Shape)
     {
         cursor = IDC_CROSS;
     }
@@ -4628,7 +5052,7 @@ bool Application::ApplyCanvasCursor() noexcept
         const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
         cursor = IDC_CROSS;
         const bool control = KeyboardState::Held(VK_CONTROL);
-        if (_selectionDragStart.has_value() || _pixelDragStart.has_value() ||
+        if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<PixelDrag>(_drag) ||
             ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) &&
              _session.CanMoveSelection(pixel)))
         {
@@ -4642,9 +5066,9 @@ bool Application::ApplyCanvasCursor() noexcept
     else if (_tool == EditorTool::Move)
     {
         std::optional<TransformHit> hit;
-        if (_transformDrag.has_value())
+        if (move != nullptr)
         {
-            hit = TransformHit{_transformDrag->mode, _transformDrag->handle};
+            hit = TransformHit{move->drag.mode, move->drag.handle};
         }
         else if (_overlayGeometry.has_value())
         {
@@ -4753,9 +5177,6 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
-    // A Shift held at the press means Add; for the Marquee it squares only once pressed afresh.
-    _marqueeConstrainArmed = !shift;
-    _marqueeDragPixel.reset();
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value() && draft->kind == LassoKind::Polygonal && !draft->points.empty())
     {
@@ -4785,8 +5206,7 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     // In New mode, dragging inside the selection moves its outline instead of drawing.
     if (mode == SelectionMode::New && _session.CanMoveSelection(pixel) && _session.BeginSelectionMove())
     {
-        _selectionDragStart = pixel;
-        _selectionMoveDelta = {};
+        _drag = OutlineDrag{pixel, Vec2{}};
         SelectionChanged();
         return;
     }
@@ -4803,7 +5223,11 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     {
         _session.BeginLasso(pixel, mode);
     }
-    _lassoDragging = _session.PendingLasso().has_value();
+    if (_session.PendingLasso().has_value())
+    {
+        // A Shift held at the press means Add; for the Marquee it squares only once pressed afresh.
+        _drag = DraftDrag{std::nullopt, !shift};
+    }
     SelectionChanged();
 }
 
@@ -4816,18 +5240,18 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
     // Keys may have changed while the pointer was elsewhere; the header shows the mode a press would use.
-    bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
+    const bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    if (_pixelDragStart.has_value())
+    if (std::holds_alternative<PixelDrag>(_drag))
     {
         DragPixels(pixel, shift);
         return true;
     }
-    if (_selectionDragStart.has_value())
+    if (OutlineDrag* outline = std::get_if<OutlineDrag>(&_drag))
     {
         // Shift keeps the move on one axis: whichever way the drag has gone further.
-        double dx = pixel.x - _selectionDragStart->x;
-        double dy = pixel.y - _selectionDragStart->y;
+        double dx = pixel.x - outline->start.x;
+        double dy = pixel.y - outline->start.y;
         if (shift)
         {
             if (std::fabs(dx) >= std::fabs(dy))
@@ -4839,7 +5263,7 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
                 dx = 0.0;
             }
         }
-        _selectionMoveDelta = Vec2{std::round(dx), std::round(dy)};
+        outline->offset = Vec2{std::round(dx), std::round(dy)};
         _session.MoveSelection(dx, dy);
         SelectionChanged();
         return true;
@@ -4847,10 +5271,11 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
     if (draft.has_value())
     {
+        DraftDrag* drawing = std::get_if<DraftDrag>(&_drag);
         switch (draft->kind)
         {
         case LassoKind::Freehand:
-            if (_lassoDragging)
+            if (drawing != nullptr)
             {
                 _session.ExtendLasso(pixel);
             }
@@ -4860,16 +5285,16 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
             break;
         case LassoKind::Rectangle:
         case LassoKind::Ellipse:
-            if (_lassoDragging)
+            if (drawing != nullptr)
             {
                 // Shift squares the box, except a Shift already held when the drag began (it chose Add) until it
                 // has been let go and pressed again.
                 if (!shift)
                 {
-                    _marqueeConstrainArmed = true;
+                    drawing->constrainArmed = true;
                 }
-                _marqueeDragPixel = pixel;
-                _session.DragMarquee(pixel, _marqueeConstrainArmed && shift, false);
+                drawing->marqueePixel = pixel;
+                _session.DragMarquee(pixel, drawing->constrainArmed && shift, false);
             }
             break;
         }
@@ -4886,21 +5311,21 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
 void Application::SelectionRelease(Vec2 view) noexcept
 {
     static_cast<void>(view);
-    if (_pixelDragStart.has_value())
+    if (std::holds_alternative<PixelDrag>(_drag))
     {
         FinishPixelDrag();
         return;
     }
-    if (_selectionDragStart.has_value())
+    if (const OutlineDrag* outline = std::get_if<OutlineDrag>(&_drag))
     {
-        const Vec2 start = _selectionDragStart.value();
-        const bool moved = _selectionMoveDelta.x != 0.0 || _selectionMoveDelta.y != 0.0;
-        _selectionDragStart.reset();
+        const OutlineDrag ended = *outline;
+        const bool moved = ended.offset.x != 0.0 || ended.offset.y != 0.0;
+        _drag = PointerDrag{};
         _session.EndSelectionMove();
         if (!moved && _tool == EditorTool::Wand)
         {
             // The wand's click inside the selection selects afresh from that pixel.
-            RunMagicWand(start, SelectionMode::New);
+            RunMagicWand(ended.start, SelectionMode::New);
             return;
         }
         if (!moved)
@@ -4916,8 +5341,7 @@ void Application::SelectionRelease(Vec2 view) noexcept
     {
         _session.FinishLasso();
     }
-    _lassoDragging = false;
-    _marqueeDragPixel.reset();
+    DropDrag<DraftDrag>();
     SelectionChanged();
 }
 
@@ -4933,13 +5357,15 @@ void Application::EndSelectionInteraction(bool keepDraft) noexcept
     {
         _session.EndSelectionMove();
     }
-    if (_pixelDragStart.has_value())
+    if (_session.PendingPixelMove() != nullptr)
     {
         CancelPixelDrag();
     }
-    _selectionDragStart.reset();
-    _lassoDragging = false;
-    _marqueeDragPixel.reset();
+    if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
+        std::holds_alternative<PixelDrag>(_drag))
+    {
+        _drag = PointerDrag{};
+    }
     SelectionChanged();
 }
 
@@ -4953,13 +5379,13 @@ void Application::UpdateSelectionModifiers() noexcept
     const bool alt = KeyboardState::Held(VK_MENU);
     bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
     // A Marquee drag reshapes as Shift goes down or up, without waiting for the pointer to move.
-    if (_marqueeDragPixel.has_value() && _lassoDragging)
+    if (DraftDrag* drawing = std::get_if<DraftDrag>(&_drag); drawing != nullptr && drawing->marqueePixel.has_value())
     {
         if (!shift)
         {
-            _marqueeConstrainArmed = true;
+            drawing->constrainArmed = true;
         }
-        _session.DragMarquee(_marqueeDragPixel.value(), _marqueeConstrainArmed && shift, false);
+        _session.DragMarquee(drawing->marqueePixel.value(), drawing->constrainArmed && shift, false);
         changed = true;
     }
     if (changed)
@@ -5069,9 +5495,40 @@ void Application::OnBrushAction(BrushAction action, double value) noexcept
     _frameInvalidated = true;
 }
 
+namespace
+{
+// The stroke preview a raster edit shows through: its grid, placement and the pixels it started from.
+[[nodiscard]] CanvasRenderer::StrokePreview PreviewFor(const BrushStroke& stroke)
+{
+    CanvasRenderer::StrokePreview preview;
+    preview.layerID = stroke.LayerID();
+    preview.mask = stroke.IsMask();
+    preview.width = stroke.Width();
+    preview.height = stroke.Height();
+    preview.transform = stroke.PaintTransform();
+    preview.fill = stroke.FillValue();
+    const Raster& source = stroke.SourceImage();
+    if (source.HasStorage() && source.Width() == stroke.SourceRect().width &&
+        source.Height() == stroke.SourceRect().height)
+    {
+        preview.source = source;
+        preview.sourceX = stroke.SourceRect().x;
+        preview.sourceY = stroke.SourceRect().y;
+    }
+    else if (source.HasStorage())
+    {
+        // A uniform mask stretched over the grid is its one value everywhere.
+        std::uint8_t uniform = preview.fill;
+        source.ReadRegion(0, 0, 1, 1, &uniform, source.Channels(), preview.fill);
+        preview.fill = uniform;
+    }
+    return preview;
+}
+} // namespace
+
 void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
 {
-    if (!_session.Document().has_value() || _brushDragging)
+    if (!_session.Document().has_value() || _session.PendingBrush() != nullptr)
     {
         return;
     }
@@ -5121,33 +5578,10 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         }
         return;
     }
-    CanvasRenderer::StrokePreview preview;
-    preview.layerID = stroke->LayerID();
-    preview.mask = stroke->IsMask();
-    preview.width = stroke->Width();
-    preview.height = stroke->Height();
-    preview.transform = stroke->PaintTransform();
-    preview.fill = stroke->FillValue();
-    const Raster& source = stroke->SourceImage();
-    if (source.HasStorage() && source.Width() == stroke->SourceRect().width &&
-        source.Height() == stroke->SourceRect().height)
-    {
-        preview.source = source;
-        preview.sourceX = stroke->SourceRect().x;
-        preview.sourceY = stroke->SourceRect().y;
-    }
-    else if (source.HasStorage())
-    {
-        // A uniform mask stretched over the grid is its one value everywhere.
-        std::uint8_t uniform = preview.fill;
-        source.ReadRegion(0, 0, 1, 1, &uniform, source.Channels(), preview.fill);
-        preview.fill = uniform;
-    }
-    (void)_composition.BeginStroke(preview);
+    (void)_composition.BeginStroke(PreviewFor(*stroke));
     _previewSource.reset();
-    _brushDragging = true;
     _brushHover = pixel;
-    PushStrokeTiles();
+    PushPreviewTiles();
     SyncBrushCursor();
     if (kind == BrushKind::Clone)
     {
@@ -5156,27 +5590,51 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     }
 }
 
-void Application::PushStrokeTiles() noexcept
+void Application::PushPreviewTiles() noexcept
 {
-    BrushStroke* stroke = _session.MutableBrush();
-    if (stroke == nullptr || !_composition.HasStroke())
+    if (!_composition.HasStroke())
     {
         _frameInvalidated = true;
         return;
     }
     std::vector<RasterTile> tiles;
-    if (_composition.StrokeTextureMissing())
+    if (WarpStroke* warp = _session.MutableWarp(); warp != nullptr)
     {
-        // The working texture is (re)built from every touched tile.
-        tiles = stroke->Patches();
-        static_cast<void>(stroke->TakeChanged());
+        // The warp's document-size working copy reports the tiles its dabs changed.
+        tiles = warp->TakeChangedTiles();
     }
     else
     {
-        for (const std::size_t index : stroke->TakeChanged())
+        // A stroke, a pending gradient or lifted pixels: the tiles of the raster edit that changed since the last
+        // push, or every touched tile when the working texture is (re)built.
+        GradientEdit* gradient = _session.MutableGradient();
+        PixelMove* move = _session.MutablePixelMove();
+        BrushStroke* raster = _session.MutableBrush();
+        if (raster == nullptr && gradient != nullptr && gradient->raster)
         {
-            const BrushStroke::Tile& tile = stroke->Tiles()[index];
-            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
+            raster = gradient->raster.get();
+        }
+        if (raster == nullptr && move != nullptr && move->raster)
+        {
+            raster = move->raster.get();
+        }
+        if (raster == nullptr)
+        {
+            _frameInvalidated = true;
+            return;
+        }
+        if (_composition.StrokeTextureMissing())
+        {
+            tiles = raster->Patches();
+            static_cast<void>(raster->TakeChanged());
+        }
+        else
+        {
+            for (const std::size_t index : raster->TakeChanged())
+            {
+                const BrushStroke::Tile& tile = raster->Tiles()[index];
+                tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
+            }
         }
     }
     if (!tiles.empty())
@@ -5188,7 +5646,7 @@ void Application::PushStrokeTiles() noexcept
 
 void Application::ContinueBrushStroke(Vec2 view) noexcept
 {
-    if (!_brushDragging)
+    if (_session.PendingBrush() == nullptr)
     {
         return;
     }
@@ -5197,14 +5655,14 @@ void Application::ContinueBrushStroke(Vec2 view) noexcept
     _session.ContinueBrush(pixel);
     if (_session.PendingBrush() == nullptr)
     {
-        // The stroke ran out of pixel budget or the engine failed: it is gone.
-        _brushDragging = false;
-        _composition.EndStroke(nullptr, 0, 0);
-        ShowError(IDS_ERROR_BRUSH_BUDGET);
+        // The stroke ran out of pixel budget or the engine failed: it is gone, and its preview with it, adopting
+        // nothing.
+        static_cast<void>(_session.TakeLastBrushCommit());
         DocumentChanged();
+        ShowError(IDS_ERROR_BRUSH_BUDGET);
         return;
     }
-    PushStrokeTiles();
+    PushPreviewTiles();
     SyncBrushCursor();
     if (_tool == EditorTool::Clone)
     {
@@ -5214,22 +5672,21 @@ void Application::ContinueBrushStroke(Vec2 view) noexcept
 
 void Application::FinishBrushStroke() noexcept
 {
-    if (!_brushDragging)
+    BrushStroke* pending = _session.MutableBrush();
+    if (pending == nullptr)
     {
         return;
     }
-    _brushDragging = false;
     // Spot Healing rewrites the tiles after the last preview update, so its result uploads on its own instead of
     // adopting the working texture, which still shows the wash.
-    BrushStroke* pending = _session.MutableBrush();
-    const bool healing = pending != nullptr && pending->Settings().healing;
-    if (pending != nullptr && !healing)
+    const bool healing = pending->Settings().healing;
+    if (!healing)
     {
         // Mouse-up settles the provisional tail into the final curve segment: those tiles reach the working texture
         // before it is adopted, so the canvas and an export show the curve the raster holds (RF-405). The session's
         // own flush then finds nothing left to settle.
         (void)pending->Flush();
-        PushStrokeTiles();
+        PushPreviewTiles();
     }
     _session.FinishBrush();
     const std::optional<BrushCommitInfo> commit = _session.TakeLastBrushCommit();
@@ -5273,15 +5730,56 @@ void Application::EndStrokePreview(const std::optional<BrushCommitInfo>& commit)
     _previewSource.reset();
 }
 
+void Application::SyncStrokePreview() noexcept
+{
+    // A pending gradient or lifted pixels show their raster; a new one (a new line, another layer or target) ends
+    // the preview of the one before, adopting its texture only for its own commit, and begins afresh (RF-407).
+    BrushStroke* raster = nullptr;
+    std::shared_ptr<const BrushStroke> source;
+    if (GradientEdit* gradient = _session.MutableGradient(); gradient != nullptr && gradient->raster)
+    {
+        raster = gradient->raster.get();
+        source = gradient->raster;
+    }
+    else if (PixelMove* move = _session.MutablePixelMove(); move != nullptr && move->raster)
+    {
+        raster = move->raster.get();
+        source = move->raster;
+    }
+    if (raster != nullptr)
+    {
+        if (_composition.HasStroke() && _previewSource.lock() != source)
+        {
+            EndStrokePreview(_session.TakeLastBrushCommit());
+        }
+        if (!_composition.HasStroke())
+        {
+            BindCompositionDevice();
+            (void)_composition.BeginStroke(PreviewFor(*raster));
+            _previewSource = source;
+        }
+        PushPreviewTiles();
+        return;
+    }
+    // The one teardown: with no raster edit under way (a stroke or warp dropped or committed, a gradient applied,
+    // cancelled or undone, pixels put down) the preview ends, adopting its texture only for the commit the session
+    // just made on its own layer and target.
+    if (_composition.HasStroke() && _session.PendingBrush() == nullptr && _session.PendingWarp() == nullptr)
+    {
+        EndStrokePreview(_session.TakeLastBrushCommit());
+        _frameInvalidated = true;
+    }
+}
+
 void Application::CancelBrushStroke() noexcept
 {
-    if (!_brushDragging && _session.PendingBrush() == nullptr)
+    if (_session.PendingBrush() == nullptr)
     {
         return;
     }
-    _brushDragging = false;
+    // The preview ends with the stroke and adopts nothing (SyncStrokePreview).
     _session.CancelBrush();
-    _composition.EndStroke(nullptr, 0, 0);
+    static_cast<void>(_session.TakeLastBrushCommit());
     DocumentChanged();
 }
 
@@ -5453,34 +5951,6 @@ namespace
     const double angle = std::round(std::atan2(dy, dx) / step) * step;
     return Vec2{anchor.x + std::cos(angle) * length, anchor.y + std::sin(angle) * length};
 }
-
-// The stroke preview a raster edit shows through: its grid, placement and the pixels it started from.
-[[nodiscard]] CanvasRenderer::StrokePreview PreviewFor(const BrushStroke& stroke)
-{
-    CanvasRenderer::StrokePreview preview;
-    preview.layerID = stroke.LayerID();
-    preview.mask = stroke.IsMask();
-    preview.width = stroke.Width();
-    preview.height = stroke.Height();
-    preview.transform = stroke.PaintTransform();
-    preview.fill = stroke.FillValue();
-    const Raster& source = stroke.SourceImage();
-    if (source.HasStorage() && source.Width() == stroke.SourceRect().width &&
-        source.Height() == stroke.SourceRect().height)
-    {
-        preview.source = source;
-        preview.sourceX = stroke.SourceRect().x;
-        preview.sourceY = stroke.SourceRect().y;
-    }
-    else if (source.HasStorage())
-    {
-        // A uniform mask stretched over the grid is its one value everywhere.
-        std::uint8_t uniform = preview.fill;
-        source.ReadRegion(0, 0, 1, 1, &uniform, source.Channels(), preview.fill);
-        preview.fill = uniform;
-    }
-    return preview;
-}
 } // namespace
 
 BrushKind Application::BrushKindFor() const noexcept
@@ -5507,7 +5977,7 @@ bool Application::WarpsWithSmear() const noexcept
 
 void Application::BeginWarpStroke(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value() || _warpDragging || _brushDragging)
+    if (!_session.Document().has_value() || _session.PendingWarp() != nullptr || _session.PendingBrush() != nullptr)
     {
         return;
     }
@@ -5543,64 +6013,45 @@ void Application::BeginWarpStroke(Vec2 view) noexcept
     preview.fill = 0;
     (void)_composition.BeginStroke(preview);
     _previewSource.reset();
-    _warpDragging = true;
     _brushHover = pixel;
-    PushWarpTiles();
+    PushPreviewTiles();
     SyncBrushCursor();
-}
-
-void Application::PushWarpTiles() noexcept
-{
-    WarpStroke* warp = _session.MutableWarp();
-    if (warp == nullptr || !_composition.HasStroke())
-    {
-        _frameInvalidated = true;
-        return;
-    }
-    const std::vector<RasterTile> tiles = warp->TakeChangedTiles();
-    if (!tiles.empty())
-    {
-        (void)_composition.UpdateStrokeTiles(tiles);
-    }
-    _frameInvalidated = true;
 }
 
 void Application::ContinueWarpStroke(Vec2 view) noexcept
 {
-    if (!_warpDragging)
+    if (_session.PendingWarp() == nullptr)
     {
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     _brushHover = pixel;
     _session.ContinueWarp(pixel);
-    PushWarpTiles();
+    PushPreviewTiles();
     SyncBrushCursor();
 }
 
 void Application::FinishWarpStroke() noexcept
 {
-    if (!_warpDragging)
+    if (_session.PendingWarp() == nullptr)
     {
         return;
     }
-    _warpDragging = false;
     _session.FinishWarp();
-    // The working copy sat on the document grid, not the layer's: the committed raster uploads on its own.
+    // The working copy sat on the document grid, not the layer's: the committed raster uploads on its own and the
+    // preview ends without adopting it (SyncStrokePreview).
     static_cast<void>(_session.TakeLastBrushCommit());
-    _composition.EndStroke(nullptr, 0, 0);
     DocumentChanged();
 }
 
 void Application::CancelWarpStroke() noexcept
 {
-    if (!_warpDragging && _session.PendingWarp() == nullptr)
+    if (_session.PendingWarp() == nullptr)
     {
         return;
     }
-    _warpDragging = false;
     _session.CancelWarp();
-    _composition.EndStroke(nullptr, 0, 0);
+    static_cast<void>(_session.TakeLastBrushCommit());
     DocumentChanged();
 }
 
@@ -5658,12 +6109,12 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
         const Vec2 end = _viewport.ViewFromDocument(pending->end, DocumentSize());
         if (std::hypot(view.x - end.x, view.y - end.y) <= reach)
         {
-            _gradientHandle = 1;
+            _drag = GradientDrag{1};
             return;
         }
         if (std::hypot(view.x - start.x, view.y - start.y) <= reach)
         {
-            _gradientHandle = 0;
+            _drag = GradientDrag{0};
             return;
         }
     }
@@ -5671,24 +6122,26 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
     {
         return;
     }
-    _gradientHandle = 1;
-    SyncGradientPreview();
+    _drag = GradientDrag{1};
+    SyncStrokePreview();
     SyncToolOverlays();
 }
 
 void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
 {
     const GradientEdit* pending = _session.PendingGradient();
-    if (!_gradientHandle.has_value() || pending == nullptr)
+    const GradientDrag* drag = std::get_if<GradientDrag>(&_drag);
+    if (drag == nullptr || pending == nullptr)
     {
         return;
     }
+    const int handle = drag->handle;
     Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if ((modifiers & MK_SHIFT) != 0)
     {
-        pixel = Snapped(pixel, _gradientHandle.value() == 0 ? pending->end : pending->start);
+        pixel = Snapped(pixel, handle == 0 ? pending->end : pending->start);
     }
-    if (_gradientHandle.value() == 0)
+    if (handle == 0)
     {
         _session.MoveGradient(pixel, std::nullopt);
     }
@@ -5696,13 +6149,13 @@ void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
     {
         _session.MoveGradient(std::nullopt, pixel);
     }
-    SyncGradientPreview();
+    SyncStrokePreview();
     SyncToolOverlays();
 }
 
 void Application::EndGradientDrag() noexcept
 {
-    _gradientHandle.reset();
+    DropDrag<GradientDrag>();
     _session.EndGradientDrag();
     SyncChrome();
     _frameInvalidated = true;
@@ -5714,7 +6167,8 @@ void Application::CommitGradient() noexcept
     {
         return;
     }
-    _gradientHandle.reset();
+    DropDrag<GradientDrag>();
+    // The preview ends with the commit, its texture adopted for the gradient's own layer and target.
     _session.CommitGradient();
     DocumentChanged();
 }
@@ -5725,68 +6179,10 @@ void Application::CancelGradient() noexcept
     {
         return;
     }
-    _gradientHandle.reset();
+    DropDrag<GradientDrag>();
     _session.CancelGradient();
+    static_cast<void>(_session.TakeLastBrushCommit()); // a dropped line adopts nothing
     DocumentChanged();
-}
-
-void Application::SyncGradientPreview() noexcept
-{
-    // The pending raster shows through the stroke preview; once it is gone the preview ends, adopting a commit the
-    // session made (Apply, Enter, or a tool, layer or target switch).
-    GradientEdit* pending = _session.MutableGradient();
-    if (pending != nullptr && pending->raster)
-    {
-        // The preview shows one raster: a new gradient (on another layer, on the mask instead of the image, or a new
-        // line) ends the previous preview, adopting its texture only for its own commit, and begins afresh (RF-407).
-        if (_composition.HasStroke() && _previewSource.lock() != pending->raster)
-        {
-            EndStrokePreview(_session.TakeLastBrushCommit());
-        }
-        if (!_composition.HasStroke())
-        {
-            BindCompositionDevice();
-            (void)_composition.BeginStroke(PreviewFor(*pending->raster));
-            _previewSource = pending->raster;
-        }
-        PushGradientTiles();
-        return;
-    }
-    if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
-        _session.PendingWarp() == nullptr && _session.PendingPixelMove() == nullptr)
-    {
-        EndStrokePreview(_session.TakeLastBrushCommit());
-        _frameInvalidated = true;
-    }
-}
-
-void Application::PushGradientTiles() noexcept
-{
-    GradientEdit* pending = _session.MutableGradient();
-    if (pending == nullptr || !pending->raster || !_composition.HasStroke())
-    {
-        return;
-    }
-    BrushStroke& raster = *pending->raster;
-    std::vector<RasterTile> tiles;
-    if (_composition.StrokeTextureMissing())
-    {
-        tiles = raster.Patches();
-        static_cast<void>(raster.TakeChanged());
-    }
-    else
-    {
-        for (const std::size_t index : raster.TakeChanged())
-        {
-            const BrushStroke::Tile& tile = raster.Tiles()[index];
-            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
-        }
-    }
-    if (!tiles.empty())
-    {
-        (void)_composition.UpdateStrokeTiles(tiles);
-        _frameInvalidated = true;
-    }
 }
 
 // ── Rendering, viewport and frame loop self-test (review fixes WP4) ──────────
@@ -6118,7 +6514,7 @@ int Application::RunRenderingSelfTest() noexcept
         return 5;
     }
     // The first gradient goes without the host hearing of it: its preview is stale when the next one starts.
-    _gradientHandle.reset();
+    _drag = PointerDrag{};
     _session.CancelGradient();
     _session.SelectLayer(second);
     BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
@@ -6476,8 +6872,7 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
     switch (action)
     {
     case ShapeAction::SetKind:
-        _shapeDragging = false;
-        _session.CancelShape();
+        CancelShapeDraft();
         _session.shapeKind = value >= 0.5 ? ShapeKind::Ellipse : ShapeKind::Rectangle;
         break;
     case ShapeAction::SetRadius:
@@ -6497,6 +6892,18 @@ void Application::OnShapeAction(ShapeAction action, double value) noexcept
     _frameInvalidated = true;
 }
 
+void Application::CancelShapeDraft() noexcept
+{
+    // Escape, a pointer loss, a settle, Undo and the header's kind all drop a draft the one way (RF-904).
+    if (!_session.PendingShape().has_value())
+    {
+        return;
+    }
+    _session.CancelShape();
+    SyncToolOverlays();
+    _frameInvalidated = true;
+}
+
 bool Application::SamplesColor() const noexcept
 {
     if (_tool == EditorTool::Eyedropper)
@@ -6506,20 +6913,21 @@ bool Application::SamplesColor() const noexcept
     // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
     const bool alt = KeyboardState::Held(VK_MENU);
     return alt && (_tool == EditorTool::Brush || _tool == EditorTool::Heal || _tool == EditorTool::Gradient) &&
-           !_brushDragging && !_gradientHandle.has_value();
+           _session.PendingBrush() == nullptr && !std::holds_alternative<GradientDrag>(_drag);
 }
 
 void Application::SampleColorAt(Vec2 view) noexcept
 {
-    if (!_session.Document().has_value())
+    ColorSampling* sampling = std::get_if<ColorSampling>(&_drag);
+    if (!_session.Document().has_value() || sampling == nullptr)
     {
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    _samplePoint = pixel;
-    if (_sampleComposite.has_value())
+    sampling->point = pixel;
+    if (sampling->composite.has_value())
     {
-        const std::optional<uint32_t> color = DocumentSession::SampleCompositeColor(_sampleComposite.value(), pixel);
+        const std::optional<uint32_t> color = DocumentSession::SampleCompositeColor(sampling->composite.value(), pixel);
         if (color.has_value())
         {
             if (_chrome && _chrome->ColorPickerOpen())
@@ -6538,13 +6946,11 @@ void Application::SampleColorAt(Vec2 view) noexcept
 
 void Application::EndColorSampling() noexcept
 {
-    if (!_samplingColor)
+    if (!std::holds_alternative<ColorSampling>(_drag))
     {
         return;
     }
-    _samplingColor = false;
-    _sampleComposite.reset();
-    _samplePoint.reset();
+    _drag = PointerDrag{};
     SyncChrome();
     _frameInvalidated = true;
 }
@@ -6584,11 +6990,12 @@ void Application::SyncToolOverlays() noexcept
     }
     _chrome->SetShapeDraft(draft);
     std::optional<CanvasOverlay::SampleRing> ring;
-    if (hasDocument && _samplingColor && _samplePoint.has_value() && _session.showsSampleRing)
+    if (const ColorSampling* sampling = std::get_if<ColorSampling>(&_drag);
+        hasDocument && sampling != nullptr && sampling->point.has_value() && _session.showsSampleRing)
     {
         CanvasOverlay::SampleRing sample;
-        sample.center = viewPoint(_samplePoint.value());
-        sample.originalArgb = _samplingOriginal;
+        sample.center = viewPoint(sampling->point.value());
+        sample.originalArgb = sampling->original;
         sample.sampledArgb = _chrome->ColorPickerOpen() ? _chrome->PickerColor() : _session.ForegroundColor();
         ring = sample;
     }
@@ -6609,25 +7016,27 @@ void Application::SyncToolOverlays() noexcept
 
 void Application::BeginPixelDrag(Vec2 pixel, bool duplicate) noexcept
 {
-    _transformDrag.reset();
     static_cast<void>(_session.TakeLastBrushCommit());
     if (!_session.BeginPixelMove(duplicate))
     {
         return;
     }
-    _pixelDragStart = pixel;
-    SyncPixelMovePreview();
+    // The lifted pixels show through the stroke preview while they drag (SyncStrokePreview); the commit adopts its
+    // texture like a stroke, a cancel drops it.
+    _drag = PixelDrag{pixel};
+    SyncStrokePreview();
     SelectionChanged();
 }
 
 void Application::DragPixels(Vec2 pixel, bool constrain) noexcept
 {
-    if (!_pixelDragStart.has_value())
+    const PixelDrag* drag = std::get_if<PixelDrag>(&_drag);
+    if (drag == nullptr)
     {
         return;
     }
-    double dx = pixel.x - _pixelDragStart->x;
-    double dy = pixel.y - _pixelDragStart->y;
+    double dx = pixel.x - drag->start.x;
+    double dy = pixel.y - drag->start.y;
     if (constrain)
     {
         // Shift keeps the move on one axis: whichever way the drag has gone further.
@@ -6644,83 +7053,25 @@ void Application::DragPixels(Vec2 pixel, bool constrain) noexcept
     if (_session.PendingPixelMove() == nullptr)
     {
         // The move ran out of pixel budget: the drag ends with nothing to show.
-        _pixelDragStart.reset();
+        _drag = PointerDrag{};
     }
-    SyncPixelMovePreview();
+    SyncStrokePreview();
     SelectionChanged();
 }
 
 void Application::FinishPixelDrag() noexcept
 {
-    _pixelDragStart.reset();
+    DropDrag<PixelDrag>();
     _session.FinishPixelMove();
-    SyncPixelMovePreview();
     DocumentChanged();
 }
 
 void Application::CancelPixelDrag() noexcept
 {
-    _pixelDragStart.reset();
+    DropDrag<PixelDrag>();
     _session.CancelPixelMove();
-    SyncPixelMovePreview();
+    static_cast<void>(_session.TakeLastBrushCommit()); // dropped pixels adopt nothing
     DocumentChanged();
-}
-
-void Application::SyncPixelMovePreview() noexcept
-{
-    // The lifted pixels show through the stroke preview while they drag; the commit adopts the texture like a
-    // stroke, a cancel drops it.
-    PixelMove* pending = _session.MutablePixelMove();
-    if (pending != nullptr && pending->raster)
-    {
-        if (_composition.HasStroke() && _previewSource.lock() != pending->raster)
-        {
-            EndStrokePreview(_session.TakeLastBrushCommit());
-        }
-        if (!_composition.HasStroke())
-        {
-            BindCompositionDevice();
-            (void)_composition.BeginStroke(PreviewFor(*pending->raster));
-            _previewSource = pending->raster;
-        }
-        PushPixelMoveTiles();
-        return;
-    }
-    if (_composition.HasStroke() && !_brushDragging && !_warpDragging && _session.PendingBrush() == nullptr &&
-        _session.PendingWarp() == nullptr && _session.PendingGradient() == nullptr)
-    {
-        EndStrokePreview(_session.TakeLastBrushCommit());
-        _frameInvalidated = true;
-    }
-}
-
-void Application::PushPixelMoveTiles() noexcept
-{
-    PixelMove* pending = _session.MutablePixelMove();
-    if (pending == nullptr || !pending->raster || !_composition.HasStroke())
-    {
-        return;
-    }
-    BrushStroke& raster = *pending->raster;
-    std::vector<RasterTile> tiles;
-    if (_composition.StrokeTextureMissing())
-    {
-        tiles = raster.Patches();
-        static_cast<void>(raster.TakeChanged());
-    }
-    else
-    {
-        for (const std::size_t index : raster.TakeChanged())
-        {
-            const BrushStroke::Tile& tile = raster.Tiles()[index];
-            tiles.push_back(RasterTile{tile.rect.x, tile.rect.y, tile.image});
-        }
-    }
-    if (!tiles.empty())
-    {
-        (void)_composition.UpdateStrokeTiles(tiles);
-        _frameInvalidated = true;
-    }
 }
 
 void Application::MirrorClipboard() noexcept

@@ -174,12 +174,7 @@ void Application::MergeLayersCommand() noexcept
     // The merge composes what the canvas shows: a pending transform applies and a pending gradient commits first,
     // each as its own entry (Decision D3), before the plan is made and its layers composed. The session would commit
     // the gradient only inside MergeLayers, after the composite was read without it.
-    if (_session.PendingTransformEdit().has_value())
-    {
-        _transformDrag.reset();
-        _session.CommitTransform();
-        DocumentChanged();
-    }
+    (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     CommitGradient();
     const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
     if (!plan.has_value() || !_session.Document().has_value())
@@ -528,6 +523,113 @@ int Application::RunLayerEditsSelfTest() noexcept
             SelfTestFailure(std::format(L"Merge Down under a pending gradient did not merge it (pending "
                                         L"{}, entries '{}' over '{}', merged start {} {} {} {}).\n",
                                         pending, mergeEntry, gradientEntry, start[0], start[1], start[2], start[3]));
+            return 5;
+        }
+    }
+    // A layer's mask stays reachable once another layer was chosen (RF-907, legacy NativeLayerList): the Layer menu's
+    // Target Layer Mask switches the target and back and is grayed without a mask; Unlink and Disable Layer Mask
+    // record their entries and retitle; the row's Mask badge shows the target in the accent and a disabled mask as
+    // `Mask off`; a press on another row's badge chooses that layer and targets its mask (Shift turning the mask on
+    // again), and a press on the row's name targets its pixels.
+    {
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+        const Guid masked = insert(L"Masked", 40, 20, Vec2{0, 0}, 0xFFFF0000u);
+        OnCommand(ChromeHost::kCommandAddMask);
+        const Guid other = insert(L"Other", 40, 20, Vec2{0, 40}, 0xFF0000FFu);
+        DocumentChanged();
+        settle();
+        const auto maskOf = [&]() -> const LayerMask*
+        {
+            for (const ImageLayer& layer : _session.Document().value().layers)
+            {
+                if (layer.id == masked && layer.mask.has_value())
+                {
+                    return &layer.mask.value();
+                }
+            }
+            return nullptr;
+        };
+        const auto captionIs = [&](int command, UINT stringId)
+        {
+            return PlainCommandName(_chrome->MenuItemCaption(command)) ==
+                   PlainCommandName(LoadStringResource(nullptr, stringId));
+        };
+        const auto rowOf = [&](const Guid& id)
+        {
+            const std::vector<HierarchyEntry> rows = _session.LayerRows();
+            std::size_t index = 0;
+            while (index < rows.size() && rows[index].id != id)
+            {
+                ++index;
+            }
+            return index;
+        };
+        const bool grayed = _chrome->MenuItemGrayedForTest(ChromeHost::kCommandTargetLayerMask) &&
+                            _chrome->MenuItemGrayedForTest(ChromeHost::kCommandToggleMaskLink) &&
+                            _chrome->MenuItemGrayedForTest(ChromeHost::kCommandToggleLayerMask);
+        OnLayerSelected(masked);
+        const bool pixelsFirst = !_session.IsMaskSelected() &&
+                                 !_chrome->MenuItemGrayedForTest(ChromeHost::kCommandTargetLayerMask) &&
+                                 captionIs(ChromeHost::kCommandTargetLayerMask, IDS_CMD_TARGET_MASK);
+        OnCommand(ChromeHost::kCommandTargetLayerMask);
+        settle();
+        const DxUi::TreeItemData targetedRow = _chrome->LayerRowItemForTest(rowOf(masked));
+        const bool targeted = _session.IsMaskSelected() && _session.ActiveLayerID() == std::optional<Guid>(masked) &&
+                              captionIs(ChromeHost::kCommandTargetLayerMask, IDS_CMD_TARGET_PIXELS) &&
+                              targetedRow.badgeText == LoadStringResource(nullptr, IDS_LAYER_MASK_BADGE) &&
+                              targetedRow.badgeTone == DxUi::AdornmentTone::Accent;
+        OnCommand(ChromeHost::kCommandTargetLayerMask);
+        const bool back = !_session.IsMaskSelected() &&
+                          _chrome->LayerRowItemForTest(rowOf(masked)).badgeTone == DxUi::AdornmentTone::Info;
+        OnCommand(ChromeHost::kCommandToggleMaskLink);
+        const bool unlinked = maskOf() != nullptr && !maskOf()->linked &&
+                              _session.history.UndoName() == L"Unlink Layer Mask" &&
+                              captionIs(ChromeHost::kCommandToggleMaskLink, IDS_CMD_LINK_MASK);
+        OnCommand(ChromeHost::kCommandToggleLayerMask);
+        settle();
+        const DxUi::TreeItemData offRow = _chrome->LayerRowItemForTest(rowOf(masked));
+        const bool disabled = maskOf() != nullptr && !maskOf()->enabled &&
+                              _session.history.UndoName() == L"Disable Layer Mask" &&
+                              captionIs(ChromeHost::kCommandToggleLayerMask, IDS_CMD_ENABLE_MASK) &&
+                              offRow.badgeText == LoadStringResource(nullptr, IDS_LAYER_MASK_OFF_BADGE) &&
+                              offRow.badgeTone == DxUi::AdornmentTone::Error;
+        // The badge takes a press of its own: Shift turns the mask on again; the row's name then targets the pixels.
+        const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+        const auto press = [&](float xDip, float yDip, WPARAM keys)
+        {
+            const LPARAM at =
+                MAKELPARAM(static_cast<int>(std::lround(xDip * scale)), static_cast<int>(std::lround(yDip * scale)));
+            OnPointer(WM_MOUSEMOVE, keys, at);
+            OnPointer(WM_LBUTTONDOWN, MK_LBUTTON | keys, at);
+            OnPointer(WM_LBUTTONUP, keys, at);
+            settle();
+        };
+        OnLayerSelected(other);
+        settle();
+        const D2D1_RECT_F badge = _chrome->LayerMaskBadgeBoundsDip(rowOf(masked));
+        press((badge.left + badge.right) / 2.0f, (badge.top + badge.bottom) / 2.0f, MK_SHIFT);
+        const bool shiftBadge = _session.ActiveLayerID() == std::optional<Guid>(masked) && _session.IsMaskSelected() &&
+                                maskOf() != nullptr && maskOf()->enabled &&
+                                _session.history.UndoName() == L"Enable Layer Mask" && !_chrome->RenameCardOpen();
+        const D2D1_RECT_F row = _chrome->LayerRowBoundsDip(rowOf(masked));
+        press(row.left + 24.0f, (row.top + row.bottom) / 2.0f, 0);
+        const bool name = _session.ActiveLayerID() == std::optional<Guid>(masked) && !_session.IsMaskSelected() &&
+                          !_chrome->RenameCardOpen();
+        OnLayerSelected(other);
+        settle();
+        press((badge.left + badge.right) / 2.0f, (badge.top + badge.bottom) / 2.0f, 0);
+        const bool plainBadge = _session.ActiveLayerID() == std::optional<Guid>(masked) && _session.IsMaskSelected() &&
+                                maskOf() != nullptr && maskOf()->enabled;
+        if (!grayed || !pixelsFirst || !targeted || !back || !unlinked || !disabled || badge.right <= badge.left ||
+            !shiftBadge || !name || !plainBadge)
+        {
+            SelfTestFailure(std::format(
+                L"A layer's mask could not be targeted again (grayed {}, pixels first {}, targeted {}, back {}, "
+                L"unlinked {}, disabled {}, badge {} {}, Shift on badge {}, name {}, badge {}).\n",
+                grayed, pixelsFirst, targeted, back, unlinked, disabled, badge.left, badge.right, shiftBadge, name,
+                plainBadge));
             return 5;
         }
     }

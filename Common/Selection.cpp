@@ -1183,6 +1183,21 @@ void DocumentSession::EndSelectionMove()
     EndEdit();
 }
 
+void DocumentSession::CancelSelectionMove()
+{
+    if (!_selectionMoveOrigin.has_value())
+    {
+        return;
+    }
+    // The document equals the one the entry began with, so closing it records nothing and keeps the redo.
+    if (_document.has_value())
+    {
+        _document->selection = _selectionMoveOrigin;
+        ++_editRevision;
+    }
+    EndSelectionMove();
+}
+
 void DocumentSession::NudgeSelection(double dx, double dy)
 {
     if (!BeginSelectionMove())
