@@ -7,6 +7,7 @@
 #include "FileDialogs.h"
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
+#include "KeyboardState.h"
 #include "LucideToolButton.h"
 #include "ProjectStore.h"
 #include "Resources.h"
@@ -71,11 +72,11 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 [[nodiscard]] UINT KeyModifiers() noexcept
 {
     UINT modifiers = 0;
-    if (GetKeyState(VK_SHIFT) < 0)
+    if (KeyboardState::Held(VK_SHIFT))
     {
         modifiers |= MK_SHIFT;
     }
-    if (GetKeyState(VK_CONTROL) < 0)
+    if (KeyboardState::Held(VK_CONTROL))
     {
         modifiers |= MK_CONTROL;
     }
@@ -470,6 +471,9 @@ int Application::RunSelfTest() noexcept
 {
     // A self-test never waits on a message box: errors it provokes must report through its own checks.
     _quietUi = true;
+    // Nor does it read the user's keyboard: its drivers hold the keys each step names (KeyboardState.h, RF-1110).
+    KeyboardState::UseSynthetic(true);
+    const auto realKeyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     HRESULT result = RegisterWindowClass();
@@ -694,10 +698,23 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Device recovery did not rebind the composition and the brush engine.\n");
             return 5;
         }
+        // The rail's icon documents belonged to the old device: the chrome released them with it (RF-1110).
+        if (const int stale = LucideCachedDocumentCount(); stale != 0)
+        {
+            SelfTestFailure(std::format(L"Device recovery kept {} icon documents of the old device.\n", stale).c_str());
+            return 5;
+        }
         result = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
         if (FAILED(result) || _composition.CanvasSurfaceBytes() == 0)
         {
             SelfTestFailure(L"The frame after device recovery did not present.\n");
+            return 5;
+        }
+        if (LucideIconsPrepared() != static_cast<int>(kEditorToolCount))
+        {
+            SelfTestFailure(std::format(L"The rail prepared {} of {} icons on the new device.\n", LucideIconsPrepared(),
+                                        kEditorToolCount)
+                                .c_str());
             return 5;
         }
     }
@@ -1589,12 +1606,15 @@ int Application::RunSelfTest() noexcept
         }
         const auto restoreClipboard =
             wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
-        // The system clipboard holds exactly the session's clip: same size, same first pixel.
+        // The system clipboard holds exactly the session's clip: same size, same first pixel. Other applications'
+        // clipboard listeners read every change for a moment, so the read waits them out (SystemClipboard.h).
         const auto mirrorsClip = [&]() -> bool
         {
             const std::optional<PixelClipboard>& clip = _session.Clipboard();
             Raster mirrored;
-            if (!clip.has_value() || !SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, mirrored) ||
+            if (!clip.has_value() ||
+                !SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, mirrored,
+                                            SystemClipboard::kHarnessAttempts) ||
                 mirrored.Width() != clip->image.Width() || mirrored.Height() != clip->image.Height())
             {
                 return false;
@@ -1620,6 +1640,8 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const std::size_t layersBefore = _session.Document()->layers.size();
+        // A user's copy waits only briefly for the clipboard: let the listeners of the last change finish first.
+        (void)SystemClipboard::WaitUntilFree(_window.get());
         if (!HandleAccelerator('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
             !pixelAt(40, 40, pixel) || pixel[2] > 250 || !mirrorsClip())
         {
@@ -1762,6 +1784,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         OnCommand(ChromeHost::kCommandSelectAll);
+        (void)SystemClipboard::WaitUntilFree(_window.get());
         if (!HandleAccelerator('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
             _session.Clipboard()->image.Width() != _session.Document()->width ||
             _session.Clipboard()->image.Height() != _session.Document()->height || !mirrorsClip())
@@ -1982,6 +2005,13 @@ int Application::RunSelfTest() noexcept
     }
 
     CloseMainWindow();
+    // No Direct2D object of the chrome may outlive it: a cached icon document left for the static destructors at
+    // exit releases the factory's last reference inside d2d1 and faults there (RF-1110).
+    if (const int kept = LucideCachedDocumentCount(); kept != 0)
+    {
+        SelfTestFailure(std::format(L"{} icon documents outlived the chrome.\n", kept).c_str());
+        return 5;
+    }
     return 0;
 }
 
@@ -2815,7 +2845,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
         {
             _canvasDrag = false;
-            if (_tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0)
+            if (_tool == EditorTool::Clone && KeyboardState::Held(VK_MENU))
             {
                 // Alt-click with Clone Stamp sets where it copies from.
                 _session.SetCloneSource(_viewport.DocumentFromView(view, documentSize));
@@ -2925,7 +2955,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
         const bool square = (event.modifiers & MK_SHIFT) != 0;
         // Unlike the Marquee, Alt has no other job here, so it draws from the center as in Photoshop.
-        const bool fromCenter = GetKeyState(VK_MENU) < 0;
+        const bool fromCenter = KeyboardState::Held(VK_MENU);
         if (event.action == DxUi::PointerAction::Down && inHole && message == WM_LBUTTONDOWN)
         {
             _canvasDrag = false;
@@ -3045,7 +3075,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
             // A click zooms in twice around the press; with Alt it zooms out (legacy).
             const Vec2 anchor{static_cast<double>(_zoomDrag->start.x) - hole.left,
                               static_cast<double>(_zoomDrag->start.y) - hole.top};
-            _viewport.SetZoom(_viewport.zoom * (GetKeyState(VK_MENU) < 0 ? 0.5 : 2.0), anchor, documentSize);
+            _viewport.SetZoom(_viewport.zoom * (KeyboardState::Held(VK_MENU) ? 0.5 : 2.0), anchor, documentSize);
             SyncChrome();
             _frameInvalidated = true;
         }
@@ -3620,7 +3650,9 @@ void Application::NewDocument() noexcept
 
 void Application::OpenDocument() noexcept
 {
-    if (!_window)
+    // A quiet run never waits on a dialog: a stray Open, Save As or Export in the self-test fails its step instead
+    // of blocking the run behind a file dialog on the user's desktop (RF-1110).
+    if (_quietUi || !_window)
     {
         return;
     }
@@ -3667,7 +3699,7 @@ bool Application::SaveDocument(bool saveAs) noexcept
     std::wstring path = _documentPath;
     if (saveAs || path.empty())
     {
-        if (!_window)
+        if (_quietUi || !_window)
         {
             return false;
         }
@@ -3708,7 +3740,7 @@ bool Application::SaveDocument(bool saveAs) noexcept
 
 void Application::ExportFlattened(bool jpeg) noexcept
 {
-    if (!_session.Document().has_value() || !_window)
+    if (!_session.Document().has_value() || _quietUi || !_window)
     {
         return;
     }
@@ -4442,7 +4474,7 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     const bool control = (modifiers & MK_CONTROL) != 0;
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool alt = KeyboardState::Held(VK_MENU);
     std::optional<TransformHit> hit;
     if (_overlayGeometry.has_value())
     {
@@ -4501,7 +4533,7 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     const bool shift = (modifiers & MK_SHIFT) != 0;
     const bool control = (modifiers & MK_CONTROL) != 0;
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool alt = KeyboardState::Held(VK_MENU);
     if (_duplicateOnDrag)
     {
         _duplicateOnDrag = false;
@@ -4589,7 +4621,7 @@ bool Application::ApplyCanvasCursor() noexcept
     else if (EditorToolIsBrush(_tool))
     {
         // Alt with Clone Stamp is waiting for the click that sets the source: a crosshair, not the tip ring.
-        if (_tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0)
+        if (_tool == EditorTool::Clone && KeyboardState::Held(VK_MENU))
         {
             SetCursor(LoadCursorW(nullptr, IDC_CROSS));
             return true;
@@ -4602,11 +4634,11 @@ bool Application::ApplyCanvasCursor() noexcept
     {
         // A crosshair draws; over the selection in New mode (and while moving it) the four-way arrow moves the
         // outline. The add/subtract badges of the legacy cursors wait on custom cursors.
-        const bool shift = GetKeyState(VK_SHIFT) < 0;
-        const bool alt = GetKeyState(VK_MENU) < 0;
+        const bool shift = KeyboardState::Held(VK_SHIFT);
+        const bool alt = KeyboardState::Held(VK_MENU);
         const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
         cursor = IDC_CROSS;
-        const bool control = GetKeyState(VK_CONTROL) < 0;
+        const bool control = KeyboardState::Held(VK_CONTROL);
         if (_selectionDragStart.has_value() || _pixelDragStart.has_value() ||
             ((control || _session.LassoCursorMode(shift, alt) == SelectionMode::New) &&
              _session.CanMoveSelection(pixel)))
@@ -4629,7 +4661,7 @@ bool Application::ApplyCanvasCursor() noexcept
         {
             hit = _overlayGeometry->Hit(view);
         }
-        const bool control = GetKeyState(VK_CONTROL) < 0;
+        const bool control = KeyboardState::Held(VK_CONTROL);
         if (hit.has_value())
         {
             const bool distorting = hit->mode == TransformDrag::Mode::Distort ||
@@ -4731,7 +4763,7 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
     const Vec2 documentSize = DocumentSize();
     const Vec2 pixel = _viewport.DocumentFromView(view, documentSize);
     const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool alt = KeyboardState::Held(VK_MENU);
     // A Shift held at the press means Add; for the Marquee it squares only once pressed afresh.
     _marqueeConstrainArmed = !shift;
     _marqueeDragPixel.reset();
@@ -4754,7 +4786,7 @@ void Application::SelectionPress(Vec2 view, UINT modifiers, POINT client) noexce
         return;
     }
     // Ctrl-drag inside the selection cuts and moves its pixels (Photoshop's temporary Move tool); Alt duplicates.
-    const bool control = (modifiers & MK_CONTROL) != 0 || GetKeyState(VK_CONTROL) < 0;
+    const bool control = (modifiers & MK_CONTROL) != 0 || KeyboardState::Held(VK_CONTROL);
     if (control && _session.CanMoveSelection(pixel))
     {
         BeginPixelDrag(pixel, alt);
@@ -4793,7 +4825,7 @@ bool Application::SelectionPointerMove(Vec2 view, UINT modifiers) noexcept
         return false;
     }
     const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool alt = KeyboardState::Held(VK_MENU);
     // Keys may have changed while the pointer was elsewhere; the header shows the mode a press would use.
     bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
@@ -4928,8 +4960,8 @@ void Application::UpdateSelectionModifiers() noexcept
     {
         return;
     }
-    const bool shift = GetKeyState(VK_SHIFT) < 0;
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool shift = KeyboardState::Held(VK_SHIFT);
+    const bool alt = KeyboardState::Held(VK_MENU);
     bool changed = _session.UpdateHeldSelectionKeys(shift, alt);
     // A Marquee drag reshapes as Shift goes down or up, without waiting for the pointer to move.
     if (_marqueeDragPixel.has_value() && _lassoDragging)
@@ -5286,7 +5318,7 @@ void Application::SyncBrushCursor() noexcept
         return;
     }
     std::optional<CanvasOverlay::BrushCursor> cursor;
-    const bool pickingCloneSource = _tool == EditorTool::Clone && GetKeyState(VK_MENU) < 0;
+    const bool pickingCloneSource = _tool == EditorTool::Clone && KeyboardState::Held(VK_MENU);
     if (EditorToolIsBrush(_tool) && _brushHover.has_value() && _session.Document().has_value() && !pickingCloneSource)
     {
         const Vec2 view = _viewport.ViewFromDocument(_brushHover.value(), DocumentSize());
@@ -6476,7 +6508,7 @@ bool Application::SamplesColor() const noexcept
         return true;
     }
     // Alt turns the Brush, Spot Healing and Gradient into the eyedropper between strokes.
-    const bool alt = GetKeyState(VK_MENU) < 0;
+    const bool alt = KeyboardState::Held(VK_MENU);
     return alt && (_tool == EditorTool::Brush || _tool == EditorTool::Heal || _tool == EditorTool::Gradient) &&
            !_brushDragging && !_gradientHandle.has_value();
 }

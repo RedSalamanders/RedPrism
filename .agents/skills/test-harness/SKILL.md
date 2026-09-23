@@ -37,6 +37,10 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
   `Raster::IsMaterialized()` after commit, thumbnail, display and the next stroke.
 - Never sleep, poll, or rely on wall-clock timing in a test; the screenshot delay lives in the application, not in
   tests.
+- The self-test runs on a keyboard of its own (`RedPrism/KeyboardState.h`): input code reads modifiers with
+  `KeyboardState::Held` / `Read`, never `GetKeyState` / `GetKeyboardState`, and self-test drivers hold keys with
+  `KeyboardState::Write` (`HandleAccelerator` does). Windows writes every physical key transition into each thread's
+  key state at once, the hidden self-test window's included, so a direct read lets the user's typing fail a step.
 - ASan Debug runs the same executables; parser and tile code must pass there before a phase closes.
 
 ## Adding a gate to `test.ps1`

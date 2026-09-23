@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "KeyboardState.h"
 #include "Resources.h"
 #include "Selection.h"
 
@@ -37,7 +38,7 @@ constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 [[nodiscard]] bool KeyTypesCharacter(UINT virtualKey, UINT scanCode) noexcept
 {
     std::array<BYTE, 256> state{};
-    if (!GetKeyboardState(state.data()))
+    if (!KeyboardState::Read(state))
     {
         return false;
     }
@@ -67,9 +68,9 @@ constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
     const UINT scanCode = (static_cast<UINT>(lParam) >> 16) & 0xFFu;
     const bool extended = (static_cast<UINT>(lParam) & (1u << 24)) != 0;
     press.position = KeyPositionFromScanCode(scanCode, extended);
-    press.ctrl = GetKeyState(VK_CONTROL) < 0;
-    press.alt = GetKeyState(VK_MENU) < 0;
-    press.shift = GetKeyState(VK_SHIFT) < 0;
+    press.ctrl = KeyboardState::Held(VK_CONTROL);
+    press.alt = KeyboardState::Held(VK_MENU);
+    press.shift = KeyboardState::Held(VK_SHIFT);
     press.repeat = (lParam & kKeyRepeatFlag) != 0;
     if (press.ctrl && press.alt)
     {
@@ -80,7 +81,7 @@ constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 
 [[nodiscard]] UINT HeldModifiers() noexcept
 {
-    return (GetKeyState(VK_SHIFT) < 0 ? MK_SHIFT : 0u) | (GetKeyState(VK_CONTROL) < 0 ? MK_CONTROL : 0u);
+    return (KeyboardState::Held(VK_SHIFT) ? MK_SHIFT : 0u) | (KeyboardState::Held(VK_CONTROL) ? MK_CONTROL : 0u);
 }
 
 // The modifiers a chrome control reads for a key. AltGr text carries no Ctrl, so a text field types AltGr+Z (Polish
@@ -489,7 +490,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         extended = (mapped & 0xFF00u) != 0 || IsExtendedNavigationKey(static_cast<std::uint16_t>(virtualKey));
     }
     std::array<BYTE, 256> saved{};
-    const bool restore = GetKeyboardState(saved.data()) != FALSE;
+    const bool restore = KeyboardState::Read(saved);
     std::array<BYTE, 256> state = saved;
     const auto hold = [&state](UINT which, bool down) noexcept
     { state[which & 0xFFu] = down ? static_cast<BYTE>(0x80) : static_cast<BYTE>(0x00); };
@@ -503,7 +504,7 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
     hold(VK_LSHIFT, shift);
     hold(VK_RSHIFT, false);
     hold(key, true);
-    (void)SetKeyboardState(state.data());
+    KeyboardState::Write(state);
     // As Windows sends them: a system key with Alt (not with Ctrl too) or F10.
     const bool system = (alt && !ctrl) || key == VK_F10;
     const LPARAM down = 1 | (static_cast<LPARAM>(scanCode) << 16) | (extended ? static_cast<LPARAM>(1) << 24 : 0) |
@@ -520,11 +521,11 @@ bool Application::HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat
         (void)SendMessageW(window, system ? WM_SYSCHAR : WM_CHAR, characters[static_cast<std::size_t>(index)], down);
     }
     hold(key, false);
-    (void)SetKeyboardState(state.data());
+    KeyboardState::Write(state);
     (void)SendMessageW(window, system ? WM_SYSKEYUP : WM_KEYUP, key, down | kKeyUpFlags);
     if (restore)
     {
-        (void)SetKeyboardState(saved.data());
+        KeyboardState::Write(saved);
     }
     UpdateSelectionModifiers();
     return handled;

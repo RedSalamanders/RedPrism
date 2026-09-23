@@ -25,11 +25,11 @@ namespace
     return format;
 }
 
-// Opens the clipboard for the call's lifetime; a busy clipboard (another app holds it) is retried briefly.
+// Opens the clipboard for the call's lifetime; a busy clipboard (another app holds it) is retried, 10 ms apart.
 class ClipboardScope
 {
   public:
-    explicit ClipboardScope(HWND owner, int attempts = 5) noexcept
+    explicit ClipboardScope(HWND owner, int attempts) noexcept
     {
         for (int attempt = 0; attempt < attempts && !_open; ++attempt)
         {
@@ -317,7 +317,7 @@ enum class SynthesisGroup : std::uint8_t
 
 namespace SystemClipboard
 {
-bool WriteImage(HWND owner, const Raster& image) noexcept
+bool WriteImage(HWND owner, const Raster& image, int attempts) noexcept
 {
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
@@ -330,7 +330,7 @@ bool WriteImage(HWND owner, const Raster& image) noexcept
     }
     std::vector<std::uint8_t> dib;
     const bool hasDib = MakeDibV5(image, dib);
-    const ClipboardScope scope(owner);
+    const ClipboardScope scope(owner, attempts);
     if (!scope.IsOpen() || !EmptyClipboard())
     {
         return false;
@@ -346,9 +346,9 @@ bool HasImage() noexcept
            IsClipboardFormatAvailable(CF_DIB) != FALSE;
 }
 
-bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image) noexcept
+bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image, int attempts) noexcept
 {
-    const ClipboardScope scope(owner);
+    const ClipboardScope scope(owner, attempts);
     if (!scope.IsOpen())
     {
         return false;
@@ -389,11 +389,17 @@ DWORD SequenceNumber() noexcept
     return GetClipboardSequenceNumber();
 }
 
+bool WaitUntilFree(HWND owner, int attempts) noexcept
+{
+    const ClipboardScope scope(owner, attempts);
+    return scope.IsOpen();
+}
+
 bool SaveContents(HWND owner, SavedContents& contents) noexcept
 {
     contents.formats.clear();
-    // Longer than a copy waits: a clipboard manager reads the clipboard right after every change.
-    const ClipboardScope scope(owner, 50);
+    // Longer than a copy waits: clipboard listeners read the clipboard right after every change.
+    const ClipboardScope scope(owner, kHarnessAttempts);
     if (!scope.IsOpen())
     {
         return false;
@@ -444,7 +450,7 @@ bool SaveContents(HWND owner, SavedContents& contents) noexcept
 
 bool RestoreContents(HWND owner, const SavedContents& contents) noexcept
 {
-    const ClipboardScope scope(owner, 50);
+    const ClipboardScope scope(owner, kHarnessAttempts);
     if (!scope.IsOpen() || !EmptyClipboard())
     {
         return false;
@@ -459,7 +465,7 @@ bool RestoreContents(HWND owner, const SavedContents& contents) noexcept
 
 bool Clear(HWND owner) noexcept
 {
-    const ClipboardScope scope(owner, 50);
+    const ClipboardScope scope(owner, kHarnessAttempts);
     return scope.IsOpen() && EmptyClipboard() != FALSE;
 }
 } // namespace SystemClipboard

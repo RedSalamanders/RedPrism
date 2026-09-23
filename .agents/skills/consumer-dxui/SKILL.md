@@ -63,6 +63,10 @@ the pin. Do not float onto sibling `main`.
 ## Host boundary
 
 - The application owns the D3D11 device, swap chain, and Present. `EmbeddedHost` borrows the device.
+- Direct2D objects the host caches for its own drawing (the rail's Lucide SVG documents) are released in
+  `ChromeHost::ReplaceDevice` and `ChromeHost::Detach`, while DxUi's `GraphicsDevice` still holds the factory. Never
+  leave a Direct2D object in static storage for the exit-time destructors: d2d1 frees a factory inside the `Release`
+  that drops its last reference and then leaves the factory's lock (RF-1110, access violations in `d2d1.dll` at exit).
 - Keep DxUi C++ inside `RedPrism.exe`. Never pass DxUi types, STL, WIL, or exceptions across a plugin ABI.
 - Product theme adapters stay in RedPrism (`ThemePalette.h`). Splitter, ColorPicker, and NumericStepper ship in the
   pinned library (DxUi `Specs/Plans/Done/EditorConsumerControls_2026-09-20.md`); consume them through `ChromeHost`

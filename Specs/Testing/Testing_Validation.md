@@ -28,6 +28,17 @@ instead of the report being printed while the run still exits 0. `HostTests.exe 
 trips one so `Tests/BuildProcessTests/CrtReportHookTests.ps1` can prove the hook works, the way `--asan-probe` proves
 AddressSanitizer.
 
+The self-test reads a keyboard of its own (`RedPrism/KeyboardState.h`): its drivers hold exactly the modifiers a
+step names, and the input code reads Shift, Ctrl and Alt from that keyboard, never from the thread's key state.
+Windows writes every physical key transition into each thread's key state at once, the hidden self-test window's
+thread included, so without it a Shift or Ctrl the user types in another application while a gate runs changes a
+step at random (RF-1110); with the thread's key state, a Ctrl the user held turned a typed S into Save and left
+the run waiting on a Save As dialog. A quiet run never opens a file dialog: Open, Import Images, Save As and the
+exports return as cancelled. The self-test's clipboard steps borrow the machine's clipboard, which other
+applications' clipboard listeners open for tens of milliseconds after every change: the test's own reads, writes and
+the set-aside wait them out (`SystemClipboard::kHarnessAttempts`, about 3 s), and it waits for a free clipboard
+before a copy whose mirror it checks, while the product's copy and paste keep their short wait.
+
 ## Gates
 
 | Gate | Pass condition |

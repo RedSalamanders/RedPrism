@@ -2,6 +2,7 @@
 
 #include "ChromeHost.h"
 #include "Crop.h"
+#include "KeyboardState.h"
 #include "Resources.h"
 #include "TransformEdit.h"
 #include "resource.h"
@@ -86,7 +87,7 @@ void Application::ContinueCropDrag(Vec2 view) noexcept
         return;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const bool symmetric = GetKeyState(VK_MENU) < 0;
+    const bool symmetric = KeyboardState::Held(VK_MENU);
     const std::optional<double> ratio = _session.CropRatio();
     CropRect rect = _cropDrag->Updated(pixel, ratio, symmetric);
     const SnapTargets targets = _session.CropSnapTargets();

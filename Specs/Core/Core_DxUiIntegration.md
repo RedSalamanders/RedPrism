@@ -41,6 +41,15 @@ replaced binaries. The sidecar is product evidence, not a separate release syste
 The application owns the HWND, D3D11 device, swap chain, and Present. `DxUi::GraphicsDevice::Create` borrows that
 device. `EmbeddedHost` owns no HWND, swap chain, worker, or periodic timer.
 
+Direct2D objects the host keeps for its own drawing live only while the chrome is attached to the device they were
+made on. The rail's Lucide SVG documents (`LucideToolButton`, `DrawLucideSvg`) are the one process-wide cache:
+`ChromeHost` releases it (`ReleaseLucideIcons`) before it replaces its device and before it detaches, while DxUi's
+`GraphicsDevice` still holds the Direct2D factory. No Direct2D object may be left for the static destructors at
+process exit. d2d1 destroys a factory from inside the `Release` that drops a resource's last reference to it and
+then leaves that factory's lock, which is freed memory by then; a document released by a static destructor after
+the chrome let go of the factory crashed the process at exit with an access violation in `d2d1.dll` (RF-1110). The
+self-test proves the cache is empty after a device replacement and after the chrome detaches.
+
 `ChromeHost` attaches one EmbeddedHost, applies `MakeRedPrismThemePalette()` (local adapter, not a DxUi type), and
 builds the editor shell described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md): MenuBar, TabControl,
 Toolbar rail of icon-only Buttons, tool header Label, layers Tree, StatusStrip. Pointer, key, and character messages

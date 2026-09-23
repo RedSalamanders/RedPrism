@@ -4,6 +4,7 @@
 #include "ChromeHost.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
+#include "KeyboardState.h"
 #include "ProjectStore.h"
 #include "Resources.h"
 #include "Selection.h"
@@ -120,7 +121,7 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
 {
     auto* hold = static_cast<ClipboardHold*>(context);
     // A clipboard manager may read the clipboard for a moment after each change: wait for it, boundedly.
-    for (int attempt = 0; attempt < 100 && !hold->held; ++attempt)
+    for (int attempt = 0; attempt < SystemClipboard::kHarnessAttempts && !hold->held; ++attempt)
     {
         hold->held = OpenClipboard(nullptr) != FALSE;
         if (!hold->held)
@@ -457,7 +458,8 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
 
 void Application::ImportImages() noexcept
 {
-    if (!_window)
+    // A quiet run never waits on a file dialog (Application::OpenDocument).
+    if (_quietUi || !_window)
     {
         return;
     }
@@ -1135,7 +1137,9 @@ int Application::RunClipboardSelfTest() noexcept
     _session.ApplySelection(SelectionGeometry::Rect(10, 10, 20, 10), SelectionMode::New, L"Select");
     OnCommand(ChromeHost::kCommandCopy);
     const Raster foreign = SolidRaster(3, 3, 0, 255, 0);
-    if (!SystemClipboard::WriteImage(_window.get(), foreign))
+    // Other applications' clipboard listeners are still reading the copy: the test's own writes and reads wait them
+    // out (SystemClipboard.h); the product's copy and paste keep their short wait.
+    if (!SystemClipboard::WriteImage(_window.get(), foreign, SystemClipboard::kHarnessAttempts))
     {
         ReportFilesSelfTestFailure(L"The clipboard self-test could not write the other app's image.\n");
         return 5;
@@ -1163,8 +1167,9 @@ int Application::RunClipboardSelfTest() noexcept
     hold.release.SetEvent();
     (void)WaitForSingleObject(holder.get(), 15000);
     Raster still;
-    const bool writeFailed = SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still) && still.Width() == 3 &&
-                             _session.Clipboard().has_value() && _session.Clipboard()->image.Width() == 30;
+    const bool writeFailed =
+        SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still, SystemClipboard::kHarnessAttempts) &&
+        still.Width() == 3 && _session.Clipboard().has_value() && _session.Clipboard()->image.Width() == 30;
     // Paste takes the session's copy, newer than the other app's image the system clipboard still holds.
     OnCommand(ChromeHost::kCommandPaste);
     const ImageLayer* pasted = _session.ActiveLayer();
@@ -1406,14 +1411,14 @@ int Application::RunSessionSelfTest() noexcept
         const Vec2 middle = layer != nullptr ? layer->transform.Center() : Vec2{};
         const std::size_t layersBefore = _session.Document().value().layers.size();
         std::array<BYTE, 256> keys{};
-        const bool haveKeys = GetKeyboardState(keys.data()) != FALSE;
+        const bool haveKeys = KeyboardState::Read(keys);
         std::array<BYTE, 256> altKeys = keys;
         altKeys[VK_MENU] |= 0x80;
         altKeys[VK_LMENU] |= 0x80;
-        (void)SetKeyboardState(altKeys.data());
+        KeyboardState::Write(altKeys);
         pointer(WM_LBUTTONDOWN, 0, middle.x, middle.y);
         const bool armed = _duplicateOnDrag;
-        (void)SetKeyboardState(keys.data());
+        KeyboardState::Write(keys);
         OnCommand(ChromeHost::kCommandUndo);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, middle.x + 30.0, middle.y + 20.0);
         pointer(WM_LBUTTONUP, 0, middle.x + 30.0, middle.y + 20.0);

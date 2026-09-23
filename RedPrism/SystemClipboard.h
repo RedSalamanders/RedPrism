@@ -14,13 +14,24 @@
 // host whether the system clipboard changed since that copy.
 namespace SystemClipboard
 {
+// Attempts at opening a clipboard another application holds, 10 ms apart. Clipboard listeners (clipboard history,
+// sync and download managers) open it for tens of milliseconds right after every change, one after another. A
+// user's copy or paste waits briefly so the UI thread does not stall; the self-test, which asserts on what it wrote
+// and borrows the user's clipboard, waits them all out (RF-1110: five listeners here, up to 47 ms each).
+inline constexpr int kInteractiveAttempts = 5;
+inline constexpr int kHarnessAttempts = 300;
+
 // Writes `image` (premultiplied BGRA) as PNG and CF_DIBV5; false when the clipboard could not be opened or filled.
-[[nodiscard]] bool WriteImage(HWND owner, const Raster& image) noexcept;
+[[nodiscard]] bool WriteImage(HWND owner, const Raster& image, int attempts = kInteractiveAttempts) noexcept;
 // True when the clipboard holds a PNG or a DIB.
 [[nodiscard]] bool HasImage() noexcept;
 // Decodes the clipboard's PNG or DIB into a premultiplied BGRA raster within `pixelBudget`; false when there is no
 // image, it is too large, or it cannot be read.
-[[nodiscard]] bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image) noexcept;
+[[nodiscard]] bool ReadImage(HWND owner, std::int64_t pixelBudget, Raster& image,
+                             int attempts = kInteractiveAttempts) noexcept;
+// Opens and closes the clipboard (changing nothing, so no listener wakes): true once no other application holds it.
+// The self-test calls it before a command whose clipboard write or read it asserts on.
+[[nodiscard]] bool WaitUntilFree(HWND owner, int attempts = kHarnessAttempts) noexcept;
 // The system's clipboard sequence number (changes on every write by any app).
 [[nodiscard]] DWORD SequenceNumber() noexcept;
 
@@ -32,7 +43,8 @@ struct SavedContents
 {
     std::vector<std::pair<UINT, std::vector<std::uint8_t>>> formats;
 };
-// False when the clipboard could not be opened or a copy could not be allocated.
+// False when the clipboard could not be opened or a copy could not be allocated. These three are the self-test's and
+// wait as long as it does (kHarnessAttempts).
 [[nodiscard]] bool SaveContents(HWND owner, SavedContents& contents) noexcept;
 // Replaces the clipboard with `contents` (empty contents leave it empty).
 [[nodiscard]] bool RestoreContents(HWND owner, const SavedContents& contents) noexcept;

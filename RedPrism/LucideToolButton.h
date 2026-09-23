@@ -33,6 +33,15 @@ class LucideToolButton final : public DxUi::Button
 // Strokes one pinned SVG into bounds, in color. Used by the palette hot zones as well as the rail.
 bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_F& bounds, const D2D1_COLOR_F& color);
 
+// Both caches hold Direct2D objects of the chrome's device: they live only while the chrome is attached to it.
+// ChromeHost releases them before it replaces its device and before it detaches, while DxUi's graphics device
+// still holds the Direct2D factory. Nothing may leave them for the static destructors at exit: d2d1 releases the
+// factory from inside the Release that drops a resource's last reference to it, then leaves that factory's lock,
+// which is freed memory by then (RF-1110; the access violations in d2d1.dll at process exit).
+void ReleaseLucideIcons() noexcept;
+// SVG documents currently held by both caches: zero after ReleaseLucideIcons.
+[[nodiscard]] int LucideCachedDocumentCount() noexcept;
+
 // An icon-only button that strokes one pinned SVG, for chrome that is not itself a tool (the rail's More button).
 class LucideIconButton final : public DxUi::Button
 {

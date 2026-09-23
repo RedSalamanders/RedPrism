@@ -56,6 +56,19 @@ struct DocumentCache
 
 DocumentCache g_caches[kEditorToolCount];
 
+// DrawLucideSvg's small shared cache (the palette hot zones and the More button), four documents by resource id.
+struct SharedSlot
+{
+    int resourceId = 0;
+    // A strong reference, not a raw pointer: see DocumentCache's comment above.
+    wil::com_ptr_nothrow<ID2D1DeviceContext> context;
+    std::uint32_t rgb = 0;
+    float size = 0.0f;
+    wil::com_ptr_nothrow<ID2D1SvgDocument> document;
+};
+
+SharedSlot g_sharedSlots[4];
+
 [[nodiscard]] int IconResourceId(EditorTool tool) noexcept
 {
     for (const IconResource& icon : kIcons)
@@ -153,6 +166,43 @@ int LucideSvgCreateCount() noexcept
     return g_createCount;
 }
 
+void ReleaseLucideIcons() noexcept
+{
+    // Each document goes before the context it was made for.
+    for (DocumentCache& cache : g_caches)
+    {
+        cache.document.reset();
+        cache.context.reset();
+        cache.rgb = 0;
+        cache.size = 0.0f;
+    }
+    for (SharedSlot& slot : g_sharedSlots)
+    {
+        slot.document.reset();
+        slot.context.reset();
+        slot.resourceId = 0;
+        slot.rgb = 0;
+        slot.size = 0.0f;
+    }
+    // Nothing is prepared any more; the next rail paint warms every tool again on the device it draws with.
+    g_preparedMask = 0;
+    g_allToolsWarmed = false;
+}
+
+int LucideCachedDocumentCount() noexcept
+{
+    int count = 0;
+    for (const DocumentCache& cache : g_caches)
+    {
+        count += cache.document ? 1 : 0;
+    }
+    for (const SharedSlot& slot : g_sharedSlots)
+    {
+        count += slot.document ? 1 : 0;
+    }
+    return count;
+}
+
 bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_F& bounds, const D2D1_COLOR_F& color)
 {
     if (context == nullptr || resourceId == 0)
@@ -170,18 +220,8 @@ bool DrawLucideSvg(ID2D1DeviceContext* context, int resourceId, const D2D1_RECT_
         return false;
     }
     const std::uint32_t rgb = RgbOf(color);
-    struct Slot
-    {
-        int resourceId = 0;
-        // A strong reference, not a raw pointer: see DocumentCache's comment above.
-        wil::com_ptr_nothrow<ID2D1DeviceContext> context;
-        std::uint32_t rgb = 0;
-        float size = 0.0f;
-        wil::com_ptr_nothrow<ID2D1SvgDocument> document;
-    };
-    static Slot slots[4];
-    Slot* slot = &slots[0];
-    for (Slot& candidate : slots)
+    SharedSlot* slot = &g_sharedSlots[0];
+    for (SharedSlot& candidate : g_sharedSlots)
     {
         if (candidate.resourceId == resourceId)
         {

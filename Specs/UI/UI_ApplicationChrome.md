@@ -79,7 +79,10 @@ document cannot be created, drawn with DxUi `FontRole::Icon` when that font is i
 stand-in otherwise. A tooltip is `"<name> (<chord>)"` with the tool's effective chord (a settings replacement shows
 there; without a chord the tooltip is the name) and the accessible name is the tool. `HostTests` proves every
 Fluent fallback glyph exists in the installed icon font and that keys, glyphs and names are unique. The self-test
-creates all fifteen documents and requires every visible tool button to draw its icon. A tool that does not fit
+creates all fifteen documents and requires every visible tool button to draw its icon. The documents belong to the
+chrome's device: a device replacement releases them with the old device and the rail makes all fifteen again on
+the new one, and none survives the chrome ([`Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md) "Host
+boundary"). A tool that does not fit
 the rail is created but not drawn until More opens it. The self-test opens More when the rail overflows, chooses
 the first hidden tool from the card, and returns to Move.
 

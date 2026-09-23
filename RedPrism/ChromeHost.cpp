@@ -324,6 +324,9 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
     {
         return E_UNEXPECTED;
     }
+    // The rail's cached icon documents belong to the old device: release them while its Direct2D factory is still
+    // held (by _graphics and the view), never after (LucideToolButton.h, RF-1110).
+    ReleaseLucideIcons();
     HRESULT result = BindDevice(device);
     if (FAILED(result))
     {
@@ -342,6 +345,9 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 void ChromeHost::Detach() noexcept
 {
     DetachAccessibility();
+    // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
+    // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
+    ReleaseLucideIcons();
     _view.Detach();
     _menu = nullptr;
     _tabs = nullptr;
