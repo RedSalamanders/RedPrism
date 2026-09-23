@@ -536,12 +536,15 @@ The decisions D1–D11 are in the table above and in the owning specs.
 - ARM64 runtime claims still need a native ARM64 host.
 
 **State.**
-- The main checkout's branch, index and HEAD are untouched (`main` at `0035f1b`). The whole result is uncommitted
-  in its working tree: 140 paths outside `Specs/Plans/WIP`, of which 19 are new and one (`Common/DocumentHistory.h`)
-  is deleted. The 121 tracked files come to +17 648 / −8 179 lines against `0035f1b`, the earlier shortcut slice
-  included.
-- `rf/integration` (`ae4517b`) holds the same content, merged package by package. Each package's history is on its
-  `rf/wp*` branch, with worktrees under `.build/worktrees/`. They can be removed once nobody needs that history.
+- At closeout the result was applied to the main checkout's working tree: 140 paths outside `Specs/Plans/WIP`, of
+  which 19 are new and one (`Common/DocumentHistory.h`) is deleted. The 121 tracked files come to +17 648 / −8 179
+  lines against `0035f1b`, the earlier shortcut slice included.
+- At the user's request ("commit all"), `main` then took it as grouped commits, one per package in merge order,
+  each with the tree of its gated `rf/integration` state. The UiNeverBlocks plan draft and the shortcut slice come
+  first, then this record. Nothing is pushed.
+- `rf/integration` (`ae4517b`) holds the same content, merged package by package. Each package's per-item history
+  is on its `rf/wp*` branch, with worktrees under `.build/worktrees/`. They can be removed once nobody needs that
+  history.
 
 **Follow-ups, not required by any finding:**
 - Transform drags still rebuild the layer rows and the merge plan on each move.
