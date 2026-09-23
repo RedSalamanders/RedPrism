@@ -22,6 +22,10 @@ rejected for v1) in [`SmartOps_2026-09-20.md`](../Done/SmartOps_2026-09-20.md) C
 unimplemented-function notice, images opened as a layer or a new project, the size cards, the Crop tool, rename and
 merge) in [`Completeness_2026-09-21.md`](../Done/Completeness_2026-09-21.md). Session undo/redo, cut, save-before-replace, exploded-project reparse checks, hostile zip tests, the guide, device recovery, and marching ants are in
 [`PortProgress_2026-09-21.md`](../Done/PortProgress_2026-09-21.md). Tree multi-select and drag-reorder stay on the DxUi HOLD plan `TreeReorder_2026-09-21.md`. Brush measured follow-ups stay in `Specs/TestRuns/Brush_2026-09-21.md`.
+The 2026-09-23 whole-codebase review and its fixes are in [`ReviewFixes_2026-09-23.md`](../Done/ReviewFixes_2026-09-23.md).
+It covers the data-loss PNG fix, the keyboard binding table, the exit-time crash and self-test flakes, one
+color-edit session, the chrome card stack, the pointer state, mask targeting and the chrome-sync performance. Its
+deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-22.md`.
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
