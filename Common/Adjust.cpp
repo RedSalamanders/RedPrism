@@ -9,6 +9,7 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <utility>
 
 namespace
 {
@@ -293,45 +294,40 @@ void SampleBilinear(const std::uint8_t* bgra, int width, int height, int stride,
         }
     }
 }
+
+// The Image menu's color adjustments and the adjustment layer kinds they edit.
+constexpr std::array<std::pair<FilterKind, AdjustmentKind>, 6> kImageAdjustments{{
+    {FilterKind::HueSaturation, AdjustmentKind::Hsv},
+    {FilterKind::Levels, AdjustmentKind::Levels},
+    {FilterKind::Curves, AdjustmentKind::Curves},
+    {FilterKind::Exposure, AdjustmentKind::Exposure},
+    {FilterKind::GradientMap, AdjustmentKind::GradientMap},
+    {FilterKind::Grain, AdjustmentKind::Grain},
+}};
 } // namespace
 
-std::optional<FilterKind> AdjustmentFilterKind(AdjustmentKind kind) noexcept
+std::optional<AdjustmentKind> FilterAdjustmentKind(FilterKind kind) noexcept
 {
-    switch (kind)
+    for (const auto& [filter, adjustment] : kImageAdjustments)
     {
-    case AdjustmentKind::Curves:
-        return FilterKind::Curves;
-    case AdjustmentKind::Exposure:
-        return FilterKind::Exposure;
-    case AdjustmentKind::GradientMap:
-        return FilterKind::GradientMap;
-    case AdjustmentKind::Grain:
-        return FilterKind::Grain;
-    case AdjustmentKind::Hsv:
-    case AdjustmentKind::Levels:
-        break;
+        if (filter == kind)
+        {
+            return adjustment;
+        }
     }
     return std::nullopt;
 }
 
-const wchar_t* AdjustmentTitle(AdjustmentKind kind) noexcept
+FilterKind AdjustmentFilterKind(AdjustmentKind kind) noexcept
 {
-    switch (kind)
+    for (const auto& [filter, adjustment] : kImageAdjustments)
     {
-    case AdjustmentKind::Hsv:
-        return L"Hue/Saturation";
-    case AdjustmentKind::Levels:
-        return L"Levels";
-    case AdjustmentKind::Curves:
-        return L"Curves";
-    case AdjustmentKind::Exposure:
-        return L"Exposure";
-    case AdjustmentKind::GradientMap:
-        return L"Gradient Map";
-    case AdjustmentKind::Grain:
-        return L"Grain";
+        if (adjustment == kind)
+        {
+            return filter;
+        }
     }
-    return L"";
+    return FilterKind::Curves;
 }
 
 const wchar_t* FilterKindName(FilterKind kind) noexcept
@@ -356,6 +352,10 @@ const wchar_t* FilterKindName(FilterKind kind) noexcept
         return L"Gradient Map";
     case FilterKind::Grain:
         return L"Grain";
+    case FilterKind::Levels:
+        return L"Levels";
+    case FilterKind::HueSaturation:
+        return L"Hue/Saturation";
     }
     return L"";
 }
@@ -1430,6 +1430,44 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
     return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
 }
 
+FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment)
+{
+    FilterSettings settings;
+    settings.curves = adjustment.curves;
+    settings.exposure = adjustment.Exposure();
+    settings.gradientMap = adjustment.GradientMap();
+    settings.grain = adjustment.Grain();
+    settings.levels = adjustment.levels;
+    settings.hsv = adjustment.ResolvedHsv();
+    return settings;
+}
+
+LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterSettings& settings)
+{
+    switch (adjustment.kind)
+    {
+    case AdjustmentKind::Hsv:
+        adjustment.hsvSettings = settings.hsv;
+        break;
+    case AdjustmentKind::Levels:
+        adjustment.levels = settings.levels;
+        break;
+    case AdjustmentKind::Curves:
+        adjustment.curves = settings.curves;
+        break;
+    case AdjustmentKind::Exposure:
+        adjustment.exposureSettings = settings.exposure;
+        break;
+    case AdjustmentKind::GradientMap:
+        adjustment.gradientMapSettings = settings.gradientMap;
+        break;
+    case AdjustmentKind::Grain:
+        adjustment.grainSettings = settings.grain;
+        break;
+    }
+    return adjustment;
+}
+
 LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept
 {
     LevelsHistogram bins{};
@@ -1544,49 +1582,27 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
     {
         return {};
     }
-    const FilterSettings settings = given.Normalized();
+    FilterSettings settings = given.Normalized();
+    if (const std::optional<AdjustmentKind> adjustment = FilterAdjustmentKind(kind); adjustment.has_value())
+    {
+        // Grain sits in layer pixels; the job's seed gives each application its own pattern.
+        settings.grain.seed = seed;
+        LayerAdjustment record;
+        record.kind = adjustment.value();
+        return ApplyAdjustment(AdjustmentWithSettings(std::move(record), settings), image, 0.0, 0.0, 1.0 / scale);
+    }
     const int width = image.Width();
     const int height = image.Height();
     std::vector<std::uint8_t> bytes;
     switch (kind)
     {
     case FilterKind::Curves:
-        if (!settings.curves.IsValid() || !CopyPixels(image, bytes))
-        {
-            return {};
-        }
-        ApplyTables(bytes.data(), width, height, width * 4, CurvesTables(settings.curves));
-        break;
     case FilterKind::Exposure:
-        if (!CopyPixels(image, bytes))
-        {
-            return {};
-        }
-        ApplyTables(bytes.data(), width, height, width * 4, ExposureTables(settings.exposure));
-        break;
     case FilterKind::GradientMap:
-        if (!CopyPixels(image, bytes))
-        {
-            return {};
-        }
-        ApplyGradientMap(bytes.data(), width, height, width * 4, GradientMapTable(settings.gradientMap));
-        break;
     case FilterKind::Grain:
-    {
-        // Grain sits in layer pixels; the job's seed gives each application its own pattern.
-        GrainSettings grain = settings.grain;
-        grain.seed = seed;
-        if (!(grain.amount > 0))
-        {
-            return image;
-        }
-        if (!CopyPixels(image, bytes))
-        {
-            return {};
-        }
-        ApplyGrain(bytes.data(), width, height, width * 4, grain, 0.0, 0.0, 1.0 / scale);
-        break;
-    }
+    case FilterKind::Levels:
+    case FilterKind::HueSaturation:
+        return {}; // returned above
     case FilterKind::GaussianBlur:
         return GaussianBlurred(image, settings.radius * scale);
     case FilterKind::MotionBlur:

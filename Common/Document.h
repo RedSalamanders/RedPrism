@@ -948,8 +948,9 @@ struct PixelClipboard
 
 // ── Color adjustments and filters (C12) ───────────────────────────────────
 
-// Filters from the Filter and Image menus. Each runs on the active image layer, inside the selection if there is
-// one, with a live preview and one undo step on OK. Remove Background and Content-Aware Fill are C13.
+// Every panel that changes a layer's pixels: the Filter menu's filters and the Image menu's color adjustments
+// (Curves onward, each also an adjustment layer kind). Each runs on the active image layer, inside the selection if
+// there is one, with a live preview and one undo step on OK. Remove Background (C13) is not in v1.
 enum class FilterKind : std::uint8_t
 {
     GaussianBlur,
@@ -961,9 +962,11 @@ enum class FilterKind : std::uint8_t
     Exposure,
     GradientMap,
     Grain,
+    Levels,
+    HueSaturation,
 };
 
-// Every filter's settings; each filter reads only its own.
+// Every kind's settings; each kind reads only its own.
 struct FilterSettings
 {
     double radius = 1;          // Gaussian Blur: the blur's standard deviation in layer pixels, 0.1–250
@@ -977,6 +980,8 @@ struct FilterSettings
     ExposureSettings exposure{};
     GradientMapSettings gradientMap{};
     GrainSettings grain{};
+    LevelsSettings levels{};
+    HueSaturationSettings hsv{};
     [[nodiscard]] bool operator==(const FilterSettings&) const noexcept = default;
     [[nodiscard]] FilterSettings Normalized() const noexcept;
 };
@@ -1014,9 +1019,11 @@ struct HueTargetDrag
     double saturation = 0;
 };
 
-// One open filter: the layer's pixels it started from, the grid grown for a blur to spread into, the copy the
-// preview renders from and what the canvas shows meanwhile (`previewRaster`; empty shows the layer's own pixels).
-struct FilterEdit
+// The one open color or filter panel, whatever its kind: the layer's pixels it started from and where they sit, the
+// selection it is limited to, the grid grown for a blur or a fill to spread into, the copy the preview renders from
+// and what the canvas shows meanwhile (`previewRaster`; empty shows the layer's own pixels). An adjustment layer's
+// panel holds the composite beneath the layer as `original`, for the histogram and sampling only.
+struct ColorEdit
 {
     FilterKind kind = FilterKind::GaussianBlur;
     Guid layerID;
@@ -1026,18 +1033,26 @@ struct FilterEdit
     FilterSettings settings;
     bool preview = true;
     std::uint32_t seed = 0; // Add Noise's and Grain's pattern, fixed while the panel is open
-    Raster grownImage;      // the pixels padded out for a blur (empty when not grown)
+    Raster grownImage;      // the pixels padded out for a blur or a fill (empty when not grown)
     LayerTransform grownTransform;
     double grownMargin = 0;
     int grownOffsetX = 0; // where the original grid sits in the grown one
     int grownOffsetY = 0;
-    Raster previewSource;    // the source no larger than the preview limit
+    Raster previewSource;    // the source no larger than the kind's preview limit
     double previewScale = 1; // pixels in previewSource per source pixel
     Raster previewRaster;
     LayerTransform previewTransform;
     // An automatic filter that found nothing to work from (Content-Aware Fill without opaque surroundings): the
     // panel says so and OK waits.
     bool previewFailed = false;
+    // Levels: the histogram of the original (alpha and selection weighted) and the armed eyedropper.
+    LevelsHistogram histogram{};
+    bool histogramReady = false;
+    std::optional<LevelsSample> levelsSample;
+    // Hue/Saturation: the armed eyedropper and the targeted adjustment with its drag.
+    std::optional<HueSampleMode> hueSample;
+    bool targeting = false;
+    std::optional<HueTargetDrag> targetDrag;
     [[nodiscard]] const Raster& Source() const noexcept
     {
         return grownImage.HasStorage() ? grownImage : original;
@@ -1046,38 +1061,6 @@ struct FilterEdit
     {
         return grownImage.HasStorage() ? grownTransform : transform;
     }
-};
-
-// One open Levels dialog: the histogram of the original (alpha and selection weighted) and the preview.
-struct LevelsEdit
-{
-    Guid layerID;
-    Raster original;
-    LayerTransform transform;
-    std::optional<DocumentSelection> selection;
-    LevelsSettings settings;
-    bool preview = true;
-    std::optional<LevelsSample> sampleMode;
-    LevelsHistogram histogram{};
-    bool histogramReady = false;
-    Raster previewSource;
-    Raster previewRaster;
-};
-
-// One open Hue/Saturation dialog, with its eyedroppers and the targeted-adjustment drag.
-struct HueSaturationEdit
-{
-    Guid layerID;
-    Raster original;
-    LayerTransform transform;
-    std::optional<DocumentSelection> selection;
-    HueSaturationSettings settings;
-    bool preview = true;
-    Raster previewSource;
-    Raster previewRaster;
-    std::optional<HueSampleMode> sampleMode;
-    bool targeting = false;
-    std::optional<HueTargetDrag> targetDrag;
 };
 
 // What the last brush commit installed: the raster and the grid rectangle it covers (for the host's live preview).
@@ -1623,31 +1606,31 @@ class DocumentSession
     [[nodiscard]] bool CanContentAwareFill() const noexcept;
     [[nodiscard]] bool HasColorEdit() const noexcept
     {
-        return _filter.has_value() || _levels.has_value() || _hueSaturation.has_value();
+        return _colorEdit.has_value();
+    }
+    [[nodiscard]] bool HasColorEdit(FilterKind kind) const noexcept
+    {
+        return _colorEdit.has_value() && _colorEdit->kind == kind;
+    }
+    [[nodiscard]] const std::optional<ColorEdit>& PendingColorEdit() const noexcept
+    {
+        return _colorEdit;
     }
     FilterSettings filterSettings; // the last applied settings, the next panel's starting point
-    void BeginFilter(FilterKind kind);
-    void UpdateFilter(const FilterSettings& settings, bool preview);
-    void CommitFilter();
-    void CancelFilter();
-    [[nodiscard]] const std::optional<FilterEdit>& PendingFilter() const noexcept
-    {
-        return _filter;
-    }
-    void BeginLevels();
+    // One pipeline for every kind: Begin settles pending work and opens the panel on the active layer, Update
+    // previews, Commit renders at full size and records one entry (an edit that changes nothing, or a layer that
+    // changed under the panel, closes without one), Cancel drops the panel.
+    void BeginColorEdit(FilterKind kind);
+    void UpdateColorEdit(const FilterSettings& settings, bool preview);
+    // The open Levels or Hue/Saturation panel's own settings (nothing while another kind is open).
     void UpdateLevels(const LevelsSettings& settings, bool preview);
+    void UpdateHueSaturation(const HueSaturationSettings& settings, bool preview);
+    void CommitColorEdit();
+    void CancelColorEdit();
     void AutoLevels(LevelsAuto mode);
     void SetLevelsSampleMode(std::optional<LevelsSample> mode) noexcept;
     // The eyedroppers read the original layer under a document point; transparent pixels are ignored.
     void SampleLevels(Vec2 point);
-    void CommitLevels();
-    void CancelLevels();
-    [[nodiscard]] const std::optional<LevelsEdit>& PendingLevels() const noexcept
-    {
-        return _levels;
-    }
-    void BeginHueSaturation();
-    void UpdateHueSaturation(const HueSaturationSettings& settings, bool preview);
     void SetHueSampleMode(std::optional<HueSampleMode> mode) noexcept;
     void SetHueTargeting(bool targeting) noexcept;
     // The hue under a document point of the visible composite; near-neutral pixels have no meaningful hue.
@@ -1658,12 +1641,6 @@ class DocumentSession
     bool BeginHueTargeting(const Raster& composite, Vec2 point);
     void DragHueTargeting(double viewDelta, bool adjustsHue);
     void EndHueTargeting() noexcept;
-    void CommitHueSaturation();
-    void CancelHueSaturation();
-    [[nodiscard]] const std::optional<HueSaturationEdit>& PendingHueSaturation() const noexcept
-    {
-        return _hueSaturation;
-    }
     // Adjustment layers: a new one above the active layer (`New <Kind> Adjustment`; a Gradient Map runs from the
     // foreground to the background color, each Grain gets its own pattern) opens for editing; `UpdateAdjustment`
     // changes a record live; editing wraps the kind's panel in one `Edit <Kind> Adjustment` entry over the
@@ -1864,9 +1841,7 @@ class DocumentSession
     std::optional<ShapeDraft> _shapeDraft;
     std::shared_ptr<PixelMove> _pixelMove;
     std::optional<PixelClipboard> _clipboard;
-    std::optional<FilterEdit> _filter;
-    std::optional<LevelsEdit> _levels;
-    std::optional<HueSaturationEdit> _hueSaturation;
+    std::optional<ColorEdit> _colorEdit;
     bool _budgetRefused = false;
     std::optional<Guid> _adjustmentEditingID;
     std::optional<LayerAdjustment> _adjustmentOriginal;
@@ -1877,19 +1852,13 @@ class DocumentSession
         LayerTransform transform;
     };
     [[nodiscard]] PreviewLayer PreviewedLayer() const noexcept;
-    [[nodiscard]] std::optional<LayerAdjustment> EditedAdjustment() const noexcept;
+    // The open panel when it is of `kind`.
+    [[nodiscard]] ColorEdit* OpenColorEdit(FilterKind kind) noexcept;
+    [[nodiscard]] std::optional<LayerAdjustment> EditedAdjustment() const;
     bool GrowFilterForBlur();
     // Pads the filter's grid out to cover `extent` (layer pixels), keeping what is already grown.
     bool GrowFilterGrid(int left, int top, int right, int bottom);
     void PrepareFilterPreview();
-    void RenderFilterPreview();
-    void RenderLevelsPreview();
-    void RenderHuePreview();
-    // Replaces a layer's pixels as one entry, unless the layer changed under the edit.
-    bool ReplaceLayerPixels(const Guid& id, const Raster& originalImage, const Raster& image,
-                            const LayerTransform& transform, std::optional<LayerMask> mask, const std::wstring& name);
-    [[nodiscard]] static Raster SelectionCoverageOn(const DocumentSelection& selection, const LayerTransform& placement,
-                                                    int width, int height);
     [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask) const;
     void MergeFloating(const TransformEdit& edit, const FloatingTransform& floating);
     void CancelFloating(const FloatingTransform& floating);

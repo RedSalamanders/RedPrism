@@ -4228,9 +4228,9 @@ DocumentSession RedAndBlue()
 
 void ApplyHue(DocumentSession& session, const HueSaturationSettings& settings)
 {
-    session.BeginHueSaturation();
+    session.BeginColorEdit(FilterKind::HueSaturation);
     session.UpdateHueSaturation(settings, true);
-    session.CommitHueSaturation();
+    session.CommitColorEdit();
 }
 
 void TestLevels()
@@ -4251,14 +4251,14 @@ void TestLevels()
         Expect(Adjust::ApplyAdjustment(Adjustment(AdjustmentKind::Levels), source) == source,
                "levels.identity-is-the-same-raster");
         const int count = session.history.UndoCount();
-        session.BeginLevels();
+        session.BeginColorEdit(FilterKind::Levels);
         LevelsSettings settings;
         settings.channel = LevelsChannel::Blue;
         session.UpdateLevels(settings, true);
-        Expect(session.PendingLevels().has_value() && !session.CanPaint(), "levels.other-edits-wait");
-        session.CommitLevels();
+        Expect(session.HasColorEdit(FilterKind::Levels) && !session.CanPaint(), "levels.other-edits-wait");
+        session.CommitColorEdit();
         Expect(session.Document().value() == before && session.history.UndoCount() == count &&
-                   !session.PendingLevels().has_value(),
+                   !session.HasColorEdit(FilterKind::Levels),
                "levels.identity-and-channel-are-no-ops");
     }
     // Legacy inputClippingGammaOutputInversionAndAlpha.
@@ -4339,13 +4339,13 @@ void TestLevels()
         SelectRect(session, 0, 0, 2, 1, false);
         const CanvasDocument before = session.Document().value();
         const int count = session.history.UndoCount();
-        session.BeginLevels();
-        Expect(session.PendingLevels().has_value() && session.PendingLevels()->histogramReady,
+        session.BeginColorEdit(FilterKind::Levels);
+        Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady,
                "levels.histogram-ready");
         LevelsSettings settings;
         Adjust::SetLevelsCurrent(settings, LevelRange{0, 1, 255, 255, 0});
         session.UpdateLevels(settings, true);
-        const std::vector<std::uint8_t> preview = Bytes(session.PendingLevels()->previewRaster);
+        const std::vector<std::uint8_t> preview = Bytes(session.PendingColorEdit()->previewRaster);
         Expect(preview.size() == 24 && preview[0] == 255 && preview[8] == 128 && session.Document().value() == before,
                "levels.preview-inside-selection");
         const CanvasDocument* shown = session.DisplayDocument();
@@ -4353,14 +4353,14 @@ void TestLevels()
                    Bytes(shown->layers.back().asset->image) == preview,
                "levels.display-shows-preview");
         session.UpdateLevels(settings, false);
-        Expect(!session.PendingLevels()->previewRaster.HasStorage() &&
+        Expect(!session.PendingColorEdit()->previewRaster.HasStorage() &&
                    session.DisplayDocument() == &session.Document().value(),
                "levels.preview-off");
-        session.CancelLevels();
+        session.CancelColorEdit();
         Expect(session.Document().value() == before && session.history.UndoCount() == count, "levels.cancel");
-        session.BeginLevels();
+        session.BeginColorEdit(FilterKind::Levels);
         session.UpdateLevels(settings, false);
-        session.CommitLevels();
+        session.CommitColorEdit();
         Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Levels",
                "levels.commit-entry");
         const Raster committed = session.ActiveLayer()->asset->image;
@@ -4429,17 +4429,17 @@ void TestLevels()
     // Legacy eyedropperSamplesOriginalAndRejectsTransparentPixels.
     {
         DocumentSession session = rampSession();
-        session.BeginLevels();
+        session.BeginColorEdit(FilterKind::Levels);
         session.SetLevelsSampleMode(LevelsSample::Gray);
         session.SampleLevels(Vec2{2.5, 0.5});
-        const LevelsSettings first = session.PendingLevels()->settings;
+        const LevelsSettings first = session.PendingColorEdit()->settings.levels;
         session.SampleLevels(Vec2{2.5, 0.5});
-        Expect(session.PendingLevels()->settings == first, "levels.sample-repeat");
+        Expect(session.PendingColorEdit()->settings.levels == first, "levels.sample-repeat");
         session.SampleLevels(Vec2{5.5, 0.5});
-        Expect(session.PendingLevels()->settings == first, "levels.sample-rejects-transparent");
+        Expect(session.PendingColorEdit()->settings.levels == first, "levels.sample-rejects-transparent");
         session.SampleLevels(Vec2{-1, 0.5});
-        Expect(session.PendingLevels()->settings == first, "levels.sample-rejects-outside");
-        session.CancelLevels();
+        Expect(session.PendingColorEdit()->settings.levels == first, "levels.sample-rejects-outside");
+        session.CancelColorEdit();
     }
 }
 
@@ -4450,12 +4450,12 @@ void TestHueSaturation()
         DocumentSession session = HueSession();
         const CanvasDocument before = session.Document().value();
         const int count = session.history.UndoCount();
-        session.BeginHueSaturation();
-        Expect(session.PendingHueSaturation().has_value() && !session.CanPaint(), "hsv.other-edits-wait");
+        session.BeginColorEdit(FilterKind::HueSaturation);
+        Expect(session.HasColorEdit(FilterKind::HueSaturation) && !session.CanPaint(), "hsv.other-edits-wait");
         session.UpdateHueSaturation(HueSaturationSettings{}, true);
-        session.CommitHueSaturation();
+        session.CommitColorEdit();
         Expect(session.Document().value() == before && session.history.UndoCount() == count &&
-                   !session.PendingHueSaturation().has_value() && session.CanPaint(),
+                   !session.HasColorEdit(FilterKind::HueSaturation) && session.CanPaint(),
                "hsv.defaults-are-a-no-op");
     }
     // Legacy hueRotatesSaturationAndLightnessFollowPhotoshopRanges.
@@ -4504,21 +4504,21 @@ void TestHueSaturation()
         DocumentSession session = HueSession();
         const CanvasDocument before = session.Document().value();
         const int count = session.history.UndoCount();
-        session.BeginHueSaturation();
+        session.BeginColorEdit(FilterKind::HueSaturation);
         session.UpdateHueSaturation(Adjust::HsvSettings(120), true);
-        Expect(Near4(StraightOf(session.PendingHueSaturation()->previewRaster, 5, 5), {0, 255, 0, 255}) &&
+        Expect(Near4(StraightOf(session.PendingColorEdit()->previewRaster, 5, 5), {0, 255, 0, 255}) &&
                    session.Document().value() == before && session.history.UndoCount() == count,
                "hsv.preview-live");
         session.UpdateHueSaturation(Adjust::HsvSettings(240), true);
-        Expect(Near4(StraightOf(session.PendingHueSaturation()->previewRaster, 5, 5), {0, 0, 255, 255}),
+        Expect(Near4(StraightOf(session.PendingColorEdit()->previewRaster, 5, 5), {0, 0, 255, 255}),
                "hsv.preview-never-accumulates");
         session.UpdateHueSaturation(Adjust::HsvSettings(240), false);
-        Expect(!session.PendingHueSaturation()->previewRaster.HasStorage(), "hsv.preview-off");
-        session.CancelHueSaturation();
-        Expect(session.Document().value() == before && !session.PendingHueSaturation().has_value(), "hsv.cancel");
-        session.BeginHueSaturation();
+        Expect(!session.PendingColorEdit()->previewRaster.HasStorage(), "hsv.preview-off");
+        session.CancelColorEdit();
+        Expect(session.Document().value() == before && !session.HasColorEdit(FilterKind::HueSaturation), "hsv.cancel");
+        session.BeginColorEdit(FilterKind::HueSaturation);
         session.UpdateHueSaturation(Adjust::HsvSettings(120), true);
-        session.CommitHueSaturation();
+        session.CommitColorEdit();
         Expect(session.ActiveLayer()->asset->image.Width() == before.layers.back().asset->image.Width() &&
                    Near4(ActiveStraight(session, 5, 5), {0, 255, 0, 255}),
                "hsv.commit-full-size");
@@ -4588,67 +4588,67 @@ void TestHueSaturation()
     {
         DocumentSession session = RedAndBlue();
         const Raster composite = session.ActiveLayer()->asset->image;
-        session.BeginHueSaturation();
+        session.BeginColorEdit(FilterKind::HueSaturation);
         session.UpdateHueSaturation(Adjust::HsvSettings(10, 0, 0, false, ColorRange::Greens), false);
         session.SetHueSampleMode(HueSampleMode::Replace);
         session.SampleHueRange(composite, Vec2{5, 5});
-        HueBand band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        HueBand band = Adjust::BandOf(session.PendingColorEdit()->settings.hsv);
         Expect(Adjust::BandWeight(band, 0) == 1 && Adjust::BandWeight(band, 120) == 0, "hsv.eyedropper-recenters");
         session.SetHueSampleMode(HueSampleMode::Add);
         session.SampleHueRange(composite, Vec2{30, 5});
-        band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        band = Adjust::BandOf(session.PendingColorEdit()->settings.hsv);
         Expect(Adjust::BandWeight(band, 240) == 1 && Adjust::BandWeight(band, 0) == 1, "hsv.eyedropper-widens");
         session.SetHueSampleMode(HueSampleMode::Remove);
         session.SampleHueRange(composite, Vec2{30, 5});
-        band = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        band = Adjust::BandOf(session.PendingColorEdit()->settings.hsv);
         Expect(Adjust::BandWeight(band, 240) == 0, "hsv.eyedropper-narrows");
-        session.CancelHueSaturation();
-        Expect(!session.PendingHueSaturation().has_value(), "hsv.eyedropper-cancel");
+        session.CancelColorEdit();
+        Expect(!session.HasColorEdit(FilterKind::HueSaturation), "hsv.eyedropper-cancel");
     }
     // Legacy targetedAdjustmentPicksTheRangeUnderTheCursor.
     {
         DocumentSession session = RedAndBlue();
         const Raster composite = session.ActiveLayer()->asset->image;
-        session.BeginHueSaturation();
+        session.BeginColorEdit(FilterKind::HueSaturation);
         session.SetHueTargeting(true);
         Expect(session.BeginHueTargeting(composite, Vec2{30, 5}) &&
-                   session.PendingHueSaturation()->settings.range == ColorRange::Blues,
+                   session.PendingColorEdit()->settings.hsv.range == ColorRange::Blues,
                "hsv.targeting-picks-blues");
         session.DragHueTargeting(60, false);
-        Expect(session.PendingHueSaturation()
-                       ->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
+        Expect(session.PendingColorEdit()
+                       ->settings.hsv.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
                        .saturation == 30,
                "hsv.targeting-drag");
         session.DragHueTargeting(20, false);
-        Expect(session.PendingHueSaturation()
-                       ->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
+        Expect(session.PendingColorEdit()
+                       ->settings.hsv.adjustments[static_cast<std::size_t>(ColorRange::Blues)]
                        .saturation == 10,
                "hsv.targeting-never-accumulates");
         session.DragHueTargeting(-40, true);
-        Expect(session.PendingHueSaturation()->settings.adjustments[static_cast<std::size_t>(ColorRange::Blues)].hue ==
+        Expect(session.PendingColorEdit()->settings.hsv.adjustments[static_cast<std::size_t>(ColorRange::Blues)].hue ==
                    -20,
                "hsv.targeting-hue");
         session.EndHueTargeting();
-        session.CancelHueSaturation();
-        Expect(!session.PendingHueSaturation().has_value(), "hsv.targeting-cancel");
+        session.CancelColorEdit();
+        Expect(!session.HasColorEdit(FilterKind::HueSaturation), "hsv.targeting-cancel");
     }
     // Legacy samplingNeedsAColorRangeAndAColorfulPixel.
     {
         DocumentSession session = RedAndBlue();
         const Raster composite = session.ActiveLayer()->asset->image;
-        session.BeginHueSaturation();
-        const HueBand untouched = Adjust::BandOf(session.PendingHueSaturation()->settings);
+        session.BeginColorEdit(FilterKind::HueSaturation);
+        const HueBand untouched = Adjust::BandOf(session.PendingColorEdit()->settings.hsv);
         session.SetHueSampleMode(HueSampleMode::Replace);
         session.SampleHueRange(composite, Vec2{5, 5});
-        Expect(Adjust::BandOf(session.PendingHueSaturation()->settings) == untouched, "hsv.sampling-needs-a-range");
+        Expect(Adjust::BandOf(session.PendingColorEdit()->settings.hsv) == untouched, "hsv.sampling-needs-a-range");
         DocumentSession gray = HueSession();
         const Raster grayComposite = gray.ActiveLayer()->asset->image;
-        gray.BeginHueSaturation();
+        gray.BeginColorEdit(FilterKind::HueSaturation);
         gray.UpdateHueSaturation(Adjust::HsvSettings(0, 0, 0, false, ColorRange::Reds), false);
-        const HueBand before = Adjust::BandOf(gray.PendingHueSaturation()->settings);
+        const HueBand before = Adjust::BandOf(gray.PendingColorEdit()->settings.hsv);
         gray.SetHueSampleMode(HueSampleMode::Replace);
         gray.SampleHueRange(grayComposite, Vec2{30, 5});
-        Expect(Adjust::BandOf(gray.PendingHueSaturation()->settings) == before, "hsv.sampling-needs-a-colorful-pixel");
+        Expect(Adjust::BandOf(gray.PendingColorEdit()->settings.hsv) == before, "hsv.sampling-needs-a-colorful-pixel");
     }
 }
 
@@ -4769,8 +4769,8 @@ void TestImageAdjustments()
                    session.history.UndoName() == L"New Gradient Map Adjustment" &&
                    !session.ActiveLayer()->asset.has_value(),
                "adjust.new-gradient-map-from-palette");
-        Expect(session.BeginAdjustmentEditing(id, base) && session.PendingFilter().has_value() &&
-                   session.PendingFilter()->kind == FilterKind::GradientMap,
+        Expect(session.BeginAdjustmentEditing(id, base) && session.HasColorEdit() &&
+                   session.PendingColorEdit()->kind == FilterKind::GradientMap,
                "adjust.gradient-map-edits-in-the-filter-panel");
         session.FinishAdjustmentEditing(false);
         const std::array<int, 4> middle = StraightOf(Adjust::ApplyAdjustment(adjustment.value(), base), 10, 10);
@@ -4786,21 +4786,30 @@ void TestImageAdjustments()
         }
         Expect(grains == 2 && session.ActiveLayer()->adjustment->Grain().seed != first,
                "adjust.grain-layers-get-their-own-pattern");
-        Expect(AdjustmentFilterKind(AdjustmentKind::Exposure) == FilterKind::Exposure &&
-                   !AdjustmentFilterKind(AdjustmentKind::Levels).has_value(),
+        // Every adjustment layer kind edits in the panel of its Image menu command, and back.
+        bool paired = true;
+        for (const AdjustmentKind kind : {AdjustmentKind::Hsv, AdjustmentKind::Levels, AdjustmentKind::Curves,
+                                          AdjustmentKind::Exposure, AdjustmentKind::GradientMap, AdjustmentKind::Grain})
+        {
+            paired = paired && FilterAdjustmentKind(AdjustmentFilterKind(kind)) == kind;
+        }
+        Expect(paired && AdjustmentFilterKind(AdjustmentKind::Exposure) == FilterKind::Exposure &&
+                   AdjustmentFilterKind(AdjustmentKind::Levels) == FilterKind::Levels &&
+                   AdjustmentFilterKind(AdjustmentKind::Hsv) == FilterKind::HueSaturation &&
+                   !FilterAdjustmentKind(FilterKind::GaussianBlur).has_value(),
                "adjust.filter-kinds");
     }
     // Legacy imageMenuExposureChangesTheLayerInOneStep.
     {
         DocumentSession session = PixelEditSession(8, 8);
         InsertPixels(session, SolidStraight(8, 8, 128.0 / 255, 128.0 / 255, 128.0 / 255), L"Gray");
-        session.BeginFilter(FilterKind::Exposure);
-        Expect(session.PendingFilter().has_value(), "adjust.exposure-panel-opens");
-        FilterSettings settings = session.PendingFilter()->settings;
+        session.BeginColorEdit(FilterKind::Exposure);
+        Expect(session.HasColorEdit(), "adjust.exposure-panel-opens");
+        FilterSettings settings = session.PendingColorEdit()->settings;
         settings.exposure.exposure = 1;
-        session.UpdateFilter(settings, true);
+        session.UpdateColorEdit(settings, true);
         const int count = session.history.UndoCount();
-        session.CommitFilter();
+        session.CommitColorEdit();
         Expect(session.history.UndoCount() == count + 1 && session.history.UndoName() == L"Exposure" &&
                    std::abs(ActiveStraight(session, 0, 0)[0] - 176) <= 2,
                "adjust.exposure-one-step");
@@ -4823,16 +4832,17 @@ void TestFilters()
                                                                    : std::array<std::uint8_t, 4>{0, 0, 0, 0};
                                                  }),
                                      L"Half");
-        session.BeginFilter(FilterKind::GaussianBlur);
-        Expect(session.PendingFilter().has_value() && !session.CanPaint(), "filter.blur-opens");
+        session.BeginColorEdit(FilterKind::GaussianBlur);
+        Expect(session.HasColorEdit() && !session.CanPaint(), "filter.blur-opens");
         FilterSettings settings;
         settings.radius = 3;
-        session.UpdateFilter(settings, true);
-        Expect(session.PendingFilter()->grownImage.HasStorage() && session.PendingFilter()->previewRaster.HasStorage(),
+        session.UpdateColorEdit(settings, true);
+        Expect(session.PendingColorEdit()->grownImage.HasStorage() &&
+                   session.PendingColorEdit()->previewRaster.HasStorage(),
                "filter.blur-grows-and-previews");
         const int count = session.history.UndoCount();
-        session.CommitFilter();
-        Expect(!session.PendingFilter().has_value() && session.history.UndoCount() == count + 1 &&
+        session.CommitColorEdit();
+        Expect(!session.HasColorEdit() && session.history.UndoCount() == count + 1 &&
                    session.history.UndoName() == L"Gaussian Blur" && session.filterSettings.radius == 3,
                "filter.blur-one-step");
         const ImageLayer* layer = Find(session.Document(), id);
@@ -4984,11 +4994,11 @@ void TestAdjustmentLayers()
                "adjustlayer.curves-identity");
         DocumentSession session = PixelEditSession(2, 2);
         InsertPixels(session, asset, L"Fixture");
-        session.BeginFilter(FilterKind::Curves);
+        session.BeginColorEdit(FilterKind::Curves);
         FilterSettings settings;
         settings.curves.channels[0] = {CurvePoint{0, 255}, CurvePoint{255, 255}};
-        session.UpdateFilter(settings, true);
-        session.CommitFilter();
+        session.UpdateColorEdit(settings, true);
+        session.CommitColorEdit();
         Expect(Bytes(session.ActiveLayer()->asset->image) ==
                    std::vector<std::uint8_t>{255, 255, 255, 255, 128, 128, 128, 128, 32, 32, 32, 32, 0, 0, 0, 0},
                "adjustlayer.curves-command-preserves-alpha");
@@ -5013,34 +5023,34 @@ void TestAdjustmentLayers()
         {
         case AdjustmentKind::Levels:
         {
-            Expect(session.PendingLevels().has_value() && session.PendingLevels()->histogramReady &&
-                       session.PendingLevels()->histogram[0][255] == 4,
+            Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady &&
+                       session.PendingColorEdit()->histogram[0][255] == 4,
                    "adjustlayer.levels-histogram");
-            LevelsSettings settings = session.PendingLevels()->settings;
+            LevelsSettings settings = session.PendingColorEdit()->settings.levels;
             settings.ranges[0].outputWhite = 0;
             session.UpdateLevels(settings, true);
             Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
             session.UpdateLevels(settings, false);
             Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
-            session.CommitLevels();
+            session.CommitColorEdit();
             break;
         }
         case AdjustmentKind::Curves:
         {
-            FilterSettings settings = session.PendingFilter()->settings;
+            FilterSettings settings = session.PendingColorEdit()->settings;
             settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
-            session.UpdateFilter(settings, true);
+            session.UpdateColorEdit(settings, true);
             Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
-            session.CommitFilter();
+            session.CommitColorEdit();
             break;
         }
         case AdjustmentKind::Exposure:
         case AdjustmentKind::GradientMap:
         case AdjustmentKind::Grain:
         {
-            Expect(session.PendingFilter().has_value() && session.PendingFilter()->kind == AdjustmentFilterKind(kind),
+            Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == AdjustmentFilterKind(kind),
                    "adjustlayer.filter-kind");
-            FilterSettings settings = session.PendingFilter()->settings;
+            FilterSettings settings = session.PendingColorEdit()->settings;
             if (kind == AdjustmentKind::Exposure)
             {
                 settings.exposure.exposure = 1;
@@ -5053,24 +5063,24 @@ void TestAdjustmentLayers()
             {
                 settings.grain.amount = 70;
             }
-            session.UpdateFilter(settings, true);
+            session.UpdateColorEdit(settings, true);
             const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
             Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
                        live.Grain() == settings.grain,
                    "adjustlayer.filter-live");
-            session.CommitFilter();
+            session.CommitColorEdit();
             break;
         }
         case AdjustmentKind::Hsv:
         {
-            HueSaturationSettings settings = session.PendingHueSaturation()->settings;
+            HueSaturationSettings settings = session.PendingColorEdit()->settings.hsv;
             settings.range = ColorRange::Reds;
             Adjust::RangeOf(settings).hue = 80;
             Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
             settings.invertRange = true;
             session.UpdateHueSaturation(settings, true);
             Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
-            session.CommitHueSaturation();
+            session.CommitColorEdit();
             break;
         }
         }
@@ -5083,27 +5093,27 @@ void TestAdjustmentLayers()
         switch (kind)
         {
         case AdjustmentKind::Levels:
-            Expect(session.PendingLevels()->settings == saved.levels, "adjustlayer.reopened-levels");
+            Expect(session.PendingColorEdit()->settings.levels == saved.levels, "adjustlayer.reopened-levels");
             session.UpdateLevels(LevelsSettings{}, true);
-            session.CancelLevels();
+            session.CancelColorEdit();
             break;
         case AdjustmentKind::Curves:
         case AdjustmentKind::Exposure:
         case AdjustmentKind::GradientMap:
         case AdjustmentKind::Grain:
         {
-            const FilterSettings reopened = session.PendingFilter()->settings;
+            const FilterSettings reopened = session.PendingColorEdit()->settings;
             Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
                        reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
                    "adjustlayer.reopened-filter");
-            session.UpdateFilter(FilterSettings{}, true);
-            session.CancelFilter();
+            session.UpdateColorEdit(FilterSettings{}, true);
+            session.CancelColorEdit();
             break;
         }
         case AdjustmentKind::Hsv:
-            Expect(session.PendingHueSaturation()->settings == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
+            Expect(session.PendingColorEdit()->settings.hsv == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
             session.UpdateHueSaturation(HueSaturationSettings{}, true);
-            session.CancelHueSaturation();
+            session.CancelColorEdit();
             break;
         }
         Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
@@ -5185,11 +5195,11 @@ void TestSmartEdits()
                                  }),
                      L"Stripes");
         SelectRect(session, 32, 26, 12, 10, false);
-        session.BeginFilter(FilterKind::ContentAwareFill);
-        Expect(session.PendingFilter().has_value() && session.PendingFilter()->kind == FilterKind::ContentAwareFill &&
-                   !session.PendingFilter()->previewFailed,
+        session.BeginColorEdit(FilterKind::ContentAwareFill);
+        Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
+                   !session.PendingColorEdit()->previewFailed,
                "smart.fill-opens");
-        session.CommitFilter();
+        session.CommitColorEdit();
         int matching = 0;
         for (int y = 26; y < 36; ++y)
         {
@@ -5199,8 +5209,7 @@ void TestSmartEdits()
                 matching += std::abs(ActivePixel(session, x, y)[0] - expected) <= 1 ? 1 : 0;
             }
         }
-        Expect(!session.PendingFilter().has_value() && session.history.UndoName() == L"Content-Aware Fill" &&
-                   matching >= 114,
+        Expect(!session.HasColorEdit() && session.history.UndoName() == L"Content-Aware Fill" && matching >= 114,
                "smart.fill-continues-texture");
     }
     // Legacy fillReconstructsBackgroundInsideSelectionAndUndoes.
@@ -5209,10 +5218,9 @@ void TestSmartEdits()
         const Raster original = session.ActiveLayer()->asset->image;
         const int count = session.history.UndoCount();
         Expect(session.CanContentAwareFill(), "smart.can-fill");
-        session.BeginFilter(FilterKind::ContentAwareFill);
-        session.CommitFilter();
-        Expect(!session.PendingFilter().has_value() && session.history.UndoCount() == count + 1,
-               "smart.fill-one-entry");
+        session.BeginColorEdit(FilterKind::ContentAwareFill);
+        session.CommitColorEdit();
+        Expect(!session.HasColorEdit() && session.history.UndoCount() == count + 1, "smart.fill-one-entry");
         bool flat = true;
         for (int y = 0; y < 48; ++y)
         {
@@ -5231,17 +5239,15 @@ void TestSmartEdits()
     {
         DocumentSession session = SmartFixture();
         const Raster original = session.ActiveLayer()->asset->image;
-        session.BeginFilter(FilterKind::ContentAwareFill);
-        session.CancelFilter();
-        Expect(session.ActiveLayer()->asset->image == original && !session.PendingFilter().has_value(), "smart.cancel");
+        session.BeginColorEdit(FilterKind::ContentAwareFill);
+        session.CancelColorEdit();
+        Expect(session.ActiveLayer()->asset->image == original && !session.HasColorEdit(), "smart.cancel");
         session.SelectAll();
-        session.BeginFilter(FilterKind::ContentAwareFill);
-        Expect(session.PendingFilter().has_value() && session.PendingFilter()->previewFailed,
-               "smart.no-source-reports");
-        session.CommitFilter();
-        Expect(session.PendingFilter().has_value() && session.ActiveLayer()->asset->image == original,
-               "smart.no-source-refuses");
-        session.CancelFilter();
+        session.BeginColorEdit(FilterKind::ContentAwareFill);
+        Expect(session.HasColorEdit() && session.PendingColorEdit()->previewFailed, "smart.no-source-reports");
+        session.CommitColorEdit();
+        Expect(session.HasColorEdit() && session.ActiveLayer()->asset->image == original, "smart.no-source-refuses");
+        session.CancelColorEdit();
         session.Deselect();
         Expect(!session.CanContentAwareFill(), "smart.needs-a-selection");
     }
@@ -5250,13 +5256,13 @@ void TestSmartEdits()
         DocumentSession session = PixelEditSession(64, 48);
         InsertPixels(session, SolidStraight(40, 30, 0.2, 0.6, 0.8), L"Small");
         SelectRect(session, 30, 20, 20, 16, false);
-        session.BeginFilter(FilterKind::ContentAwareFill);
-        Expect(session.PendingFilter().has_value() && session.PendingFilter()->grownImage.HasStorage() &&
-                   session.PendingFilter()->grownImage.Width() == 50 &&
-                   session.PendingFilter()->grownImage.Height() == 36,
+        session.BeginColorEdit(FilterKind::ContentAwareFill);
+        Expect(session.HasColorEdit() && session.PendingColorEdit()->grownImage.HasStorage() &&
+                   session.PendingColorEdit()->grownImage.Width() == 50 &&
+                   session.PendingColorEdit()->grownImage.Height() == 36,
                "smart.grows-to-the-selection");
-        session.CommitFilter();
-        Expect(!session.PendingFilter().has_value() && session.ActiveLayer()->asset->image.Width() == 50 &&
+        session.CommitColorEdit();
+        Expect(!session.HasColorEdit() && session.ActiveLayer()->asset->image.Width() == 50 &&
                    ActivePixel(session, 45, 30)[3] == 255,
                "smart.fills-past-the-edge");
     }
@@ -6015,13 +6021,13 @@ void TestPendingEdits()
         Expect(!session.Clipboard().has_value() && ActivePixel(session, 5, 5) == red,
                "pending.cut-hidden-keeps-pixels");
         session.ToggleVisibility(session.ActiveLayerID().value());
-        session.BeginLevels();
-        Expect(session.PendingLevels().has_value(), "pending.levels-open");
+        session.BeginColorEdit(FilterKind::Levels);
+        Expect(session.HasColorEdit(FilterKind::Levels), "pending.levels-open");
         session.CutSelection();
-        Expect(!session.Clipboard().has_value() && session.PendingLevels().has_value() &&
+        Expect(!session.Clipboard().has_value() && session.HasColorEdit(FilterKind::Levels) &&
                    ActivePixel(session, 5, 5) == red,
                "pending.cut-during-levels-keeps-pixels");
-        session.CancelLevels();
+        session.CancelColorEdit();
     }
     // A paintable cut clears and publishes one clipboard.
     {
@@ -6254,8 +6260,8 @@ void TestTransformWaitsForPanels()
     DocumentSession session = PixelEditSession();
     InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
     const LayerTransform before = session.ActiveLayer()->transform;
-    session.BeginLevels();
-    Expect(session.PendingLevels().has_value() && !session.CanTransform(), "panelowns.levels-blocks-transform");
+    session.BeginColorEdit(FilterKind::Levels);
+    Expect(session.HasColorEdit(FilterKind::Levels) && !session.CanTransform(), "panelowns.levels-blocks-transform");
     session.BeginTransform(false);
     session.NudgeLayer(10, 0);
     session.TransformCommand();
@@ -6266,23 +6272,170 @@ void TestTransformWaitsForPanels()
     LevelsSettings levels;
     levels.ranges[0].black = 50;
     session.UpdateLevels(levels, true);
-    session.CommitLevels();
+    session.CommitColorEdit();
     Expect(session.history.UndoName() == L"Levels" && session.ActiveLayer()->transform == before &&
                ActivePixel(session, 5, 5)[2] < 200,
            "panelowns.levels-applies");
-    session.BeginHueSaturation();
+    session.BeginColorEdit(FilterKind::HueSaturation);
     session.NudgeLayer(0, 7);
     session.FlipCanvas(false);
     HueSaturationSettings hue;
     hue.adjustments[static_cast<std::size_t>(ColorRange::Master)].hue = 120;
     session.UpdateHueSaturation(hue, true);
-    session.CommitHueSaturation();
+    session.CommitColorEdit();
     Expect(session.history.UndoName() == L"Hue/Saturation" && session.ActiveLayer()->transform == before,
            "panelowns.hue-applies-in-place");
-    session.BeginFilter(FilterKind::AddNoise);
-    Expect(session.PendingFilter().has_value() && !session.CanTransform(), "panelowns.filter-blocks-transform");
-    session.CancelFilter();
+    session.BeginColorEdit(FilterKind::AddNoise);
+    Expect(session.HasColorEdit() && !session.CanTransform(), "panelowns.filter-blocks-transform");
+    session.CancelColorEdit();
     Expect(session.CanTransform(), "panelowns.transform-after-cancel");
+}
+
+void TestOneColorEditSession()
+{
+    // RF-801: Levels, Hue/Saturation, the Image menu's adjustments and the filters are one panel session with one
+    // rule. Opening any panel drops a lasso draft, and OK installs only while the layer still holds the pixels and the
+    // placement the panel opened on; otherwise the panel closes without an entry (Hue/Saturation used to keep the
+    // draft and apply wherever the layer had gone).
+    FilterSettings changes;
+    changes.levels.ranges[0].black = 50;
+    Adjust::RangeOf(changes.hsv).hue = 120;
+    changes.curves.channels[0] = {CurvePoint{0, 255}, CurvePoint{255, 255}};
+    changes.exposure.exposure = 1;
+    for (const FilterKind kind : {FilterKind::Levels, FilterKind::HueSaturation, FilterKind::Curves,
+                                  FilterKind::Exposure, FilterKind::AddNoise})
+    {
+        DocumentSession session = PixelEditSession();
+        const Guid id = InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
+        session.BeginLasso(Vec2{5, 5}, SelectionMode::New);
+        session.ExtendLasso(Vec2{30, 5});
+        const bool drafted = session.PendingLasso().has_value();
+        session.BeginColorEdit(kind);
+        Expect(drafted && session.HasColorEdit(kind) && !session.PendingLasso().has_value(),
+               "coloredit.opening-drops-the-lasso-draft");
+        session.UpdateColorEdit(changes, true);
+        const bool previewed = session.PendingColorEdit()->previewRaster.HasStorage();
+        // The layer moves under the open panel (a resize the host did not settle first).
+        CanvasDocument moved = session.Document().value();
+        for (ImageLayer& layer : moved.layers)
+        {
+            if (layer.id == id)
+            {
+                layer.transform.origin.x += 10;
+            }
+        }
+        session.ApplyDocumentSize(moved, L"Canvas Size");
+        const Raster original = session.ActiveLayer()->asset->image;
+        const int count = session.history.UndoCount();
+        session.CommitColorEdit();
+        Expect(previewed && !session.HasColorEdit() && session.history.UndoCount() == count &&
+                   session.history.UndoName() == L"Canvas Size" && session.ActiveLayer()->asset->image == original,
+               "coloredit.moved-layer-closes-without-an-entry");
+        // Back on the placement it opened on, the same edit applies as one entry named after the kind.
+        session.Undo();
+        session.BeginColorEdit(kind);
+        session.UpdateColorEdit(changes, true);
+        session.CommitColorEdit();
+        Expect(!session.HasColorEdit() && session.history.UndoCount() == count &&
+                   session.history.UndoName() == FilterKindName(kind) &&
+                   !(session.ActiveLayer()->asset->image == original),
+               "coloredit.in-place-edit-applies");
+    }
+    // An edit that changes nothing previews the layer's own pixels, whatever the kind: no distortion, the default
+    // exposure, no grain, identity Levels and Hue/Saturation.
+    {
+        DocumentSession session = PixelEditSession();
+        InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
+        FilterSettings neutral;
+        neutral.grain.amount = 0;
+        bool unchanged = true;
+        for (const FilterKind kind : {FilterKind::LensCorrection, FilterKind::Exposure, FilterKind::Grain,
+                                      FilterKind::Levels, FilterKind::HueSaturation})
+        {
+            session.BeginColorEdit(kind);
+            session.UpdateColorEdit(neutral, true);
+            unchanged = unchanged && session.HasColorEdit(kind) &&
+                        !session.PendingColorEdit()->previewRaster.HasStorage() &&
+                        session.DisplayDocument() == &session.Document().value();
+            session.CancelColorEdit();
+        }
+        FilterSettings bent = neutral;
+        bent.distortion = 50;
+        session.BeginColorEdit(FilterKind::LensCorrection);
+        session.UpdateColorEdit(bent, true);
+        Expect(unchanged && session.PendingColorEdit()->previewRaster.HasStorage(),
+               "coloredit.no-change-previews-the-layer");
+        session.CancelColorEdit();
+    }
+    // Levels and Hue/Saturation open at identity even after the last applied settings kept theirs.
+    {
+        DocumentSession session = PixelEditSession();
+        InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
+        session.BeginColorEdit(FilterKind::Levels);
+        session.UpdateColorEdit(changes, true);
+        session.CommitColorEdit();
+        session.BeginColorEdit(FilterKind::HueSaturation);
+        session.UpdateColorEdit(changes, true);
+        session.CommitColorEdit();
+        const bool kept =
+            session.history.UndoName() == L"Hue/Saturation" && session.filterSettings.levels == changes.levels;
+        session.BeginColorEdit(FilterKind::Levels);
+        const bool levels = Adjust::LevelsIsIdentity(session.PendingColorEdit()->settings.levels);
+        session.CancelColorEdit();
+        session.BeginColorEdit(FilterKind::HueSaturation);
+        const bool hue = Adjust::HsvIsIdentity(session.PendingColorEdit()->settings.hsv);
+        session.CancelColorEdit();
+        Expect(kept && levels && hue, "coloredit.levels-and-hue-open-at-identity");
+    }
+    // Only Add Noise and Grain draw a pattern seed when they open: after Levels, Hue/Saturation or a blur the next
+    // Grain layer gets the seed it would have had, after Add Noise the next one along.
+    {
+        const auto nextGrainSeed = [](std::initializer_list<FilterKind> opened)
+        {
+            DocumentSession session = PixelEditSession();
+            InsertPixels(session, SolidRaster(40, 20, 0, 0, 200, 255), L"Red");
+            for (const FilterKind kind : opened)
+            {
+                session.BeginColorEdit(kind);
+                session.CancelColorEdit();
+            }
+            session.AddAdjustment(AdjustmentKind::Grain);
+            return session.ActiveLayer()->adjustment->Grain().seed;
+        };
+        const std::uint32_t untouched = nextGrainSeed({});
+        Expect(nextGrainSeed({FilterKind::Levels, FilterKind::HueSaturation, FilterKind::GaussianBlur}) == untouched &&
+                   nextGrainSeed({FilterKind::AddNoise}) != untouched,
+               "coloredit.only-noise-and-grain-draw-a-seed");
+    }
+    // The Image menu's kinds run their adjustment layer's kernel; Grain sits in layer pixels at the job's seed.
+    {
+        const Raster swatch =
+            BytesRaster(8, 8,
+                        [](int x, int y) -> std::array<std::uint8_t, 4>
+                        {
+                            return {static_cast<std::uint8_t>(x * 30), static_cast<std::uint8_t>(y * 30),
+                                    static_cast<std::uint8_t>(200 - x * 20), 255};
+                        });
+        FilterSettings settings = changes;
+        settings.gradientMap = GradientMapSettings{AdjustmentColor{1, 0, 0}, AdjustmentColor{0, 0, 1}, true};
+        settings.grain = GrainSettings{60, 2, 40, 7};
+        bool same = true;
+        for (const FilterKind kind : {FilterKind::Levels, FilterKind::HueSaturation, FilterKind::Curves,
+                                      FilterKind::Exposure, FilterKind::GradientMap})
+        {
+            LayerAdjustment record = Adjustment(FilterAdjustmentKind(kind).value_or(AdjustmentKind::Hsv));
+            const std::vector<std::uint8_t> expected =
+                Bytes(Adjust::ApplyAdjustment(Adjust::AdjustmentWithSettings(record, settings), swatch));
+            same = same && !expected.empty() && Bytes(Adjust::RunFilter(kind, swatch, settings, 1, 0)) == expected &&
+                   expected != Bytes(swatch);
+        }
+        LayerAdjustment grain = Adjustment(AdjustmentKind::Grain);
+        grain.grainSettings = GrainSettings{60, 2, 40, 9};
+        const std::vector<std::uint8_t> grained = Bytes(Adjust::RunFilter(FilterKind::Grain, swatch, settings, 0.5, 9));
+        Expect(same && grained == Bytes(Adjust::ApplyAdjustment(grain, swatch, 0, 0, 2)) &&
+                   grained != Bytes(Adjust::RunFilter(FilterKind::Grain, swatch, settings, 0.5, 7)),
+               "coloredit.image-kinds-run-the-layer-kernel");
+    }
 }
 
 void TestDisplayCopyFollowsEdits()
@@ -6517,11 +6670,11 @@ void TestDocumentPixelBudget()
                    session.TakeBudgetRefusal() && ValidateDocument(session.Document().value()) == DocumentStatus::Ok,
                "docbudget.duplicate-refused");
         session.filterSettings.radius = 10;
-        session.BeginFilter(FilterKind::GaussianBlur);
-        Expect(!session.PendingFilter().has_value() && session.TakeBudgetRefusal(), "docbudget.blur-grid-refused");
-        session.BeginFilter(FilterKind::AddNoise);
-        Expect(session.PendingFilter().has_value() && !session.TakeBudgetRefusal(), "docbudget.noise-needs-no-room");
-        session.CancelFilter();
+        session.BeginColorEdit(FilterKind::GaussianBlur);
+        Expect(!session.HasColorEdit() && session.TakeBudgetRefusal(), "docbudget.blur-grid-refused");
+        session.BeginColorEdit(FilterKind::AddNoise);
+        Expect(session.HasColorEdit() && !session.TakeBudgetRefusal(), "docbudget.noise-needs-no-room");
+        session.CancelColorEdit();
         // A floating selection moved past the layer's edge would grow it: the merge is refused and the document
         // restored.
         SelectRect(session, 40, 40, 20, 20, false);
@@ -6875,6 +7028,7 @@ int wmain()
     TestGradientAppliesFirst();
     TestCutWithFullHistory();
     TestTransformWaitsForPanels();
+    TestOneColorEditSession();
     TestDisplayCopyFollowsEdits();
     TestSelectionLoadRefusals();
     TestCropWholePixels();

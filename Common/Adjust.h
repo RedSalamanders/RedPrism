@@ -11,16 +11,17 @@
 // legacy kernels number for number on premultiplied BGRA (the legacy RGBA byte order swapped), the settings math
 // the panels and the adjustment layers share, and the CPU reference the composition's GPU passes are checked against.
 
+// The adjustment layer kind a color adjustment of the Image menu edits; nullopt for the Filter menu's filters.
+[[nodiscard]] std::optional<AdjustmentKind> FilterAdjustmentKind(FilterKind kind) noexcept;
 // Color adjustments: in the Image menu (and editable as adjustment layers), not under Filter.
-[[nodiscard]] constexpr bool FilterIsImageAdjustment(FilterKind kind) noexcept
+[[nodiscard]] inline bool FilterIsImageAdjustment(FilterKind kind) noexcept
 {
-    return kind == FilterKind::Curves || kind == FilterKind::Exposure || kind == FilterKind::GradientMap ||
-           kind == FilterKind::Grain;
+    return FilterAdjustmentKind(kind).has_value();
 }
-// The filter panel that edits an adjustment layer of this kind; Levels and Hue/Saturation have panels of their own.
-[[nodiscard]] std::optional<FilterKind> AdjustmentFilterKind(AdjustmentKind kind) noexcept;
-[[nodiscard]] const wchar_t* AdjustmentTitle(AdjustmentKind kind) noexcept; // the legacy raw value ("Levels")
-[[nodiscard]] const wchar_t* FilterKindName(FilterKind kind) noexcept;      // ("Gaussian Blur")
+// The panel that edits an adjustment layer of this kind.
+[[nodiscard]] FilterKind AdjustmentFilterKind(AdjustmentKind kind) noexcept;
+// The legacy raw value ("Gaussian Blur", "Levels"): the panel's title and its entry's name.
+[[nodiscard]] const wchar_t* FilterKindName(FilterKind kind) noexcept;
 
 namespace Adjust
 {
@@ -145,12 +146,17 @@ void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std:
 // return `image` itself.
 [[nodiscard]] Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, double originX = 0,
                                      double originY = 0, double unitsPerPixel = 1);
+// A panel's settings for an adjustment record (every kind's own from the record), and the record with its kind's
+// settings taken from a panel.
+[[nodiscard]] FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment);
+[[nodiscard]] LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterSettings& settings);
 // The alpha-weighted histogram of an image, within `coverage` (Gray8 on the same grid) when given; an explicitly
 // empty coverage counts nothing.
 [[nodiscard]] LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept;
-// A filter on a raster: `scale` is pixels in `image` per original layer pixel (a downscaled preview blurs
+// Any kind on a raster: `scale` is pixels in `image` per original layer pixel (a downscaled preview blurs
 // proportionally less); `seed` is Add Noise's and Grain's pattern; `coverage` (Gray8 on the same grid) is the
-// selection Content-Aware Fill fills, which needs it. Empty on failure, or when a fill found nothing to copy from.
+// selection Content-Aware Fill fills, which needs it. The Image menu's kinds run their adjustment layer's kernel
+// (`ApplyAdjustment`), Grain in layer pixels. Empty on failure, or when a fill found nothing to copy from.
 [[nodiscard]] Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& settings, double scale,
                                std::uint32_t seed, const Raster* coverage = nullptr);
 // Content-Aware Fill (the legacy content_fill): selected pixels (`mask` nonzero) are synthesized from the

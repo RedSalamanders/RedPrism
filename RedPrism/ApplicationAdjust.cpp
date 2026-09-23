@@ -48,48 +48,48 @@ namespace
         return std::nullopt;
     }
 }
-} // namespace
 
-bool Application::BeginColorEdit(int command) noexcept
+// The panel an Image or Filter menu command opens.
+[[nodiscard]] std::optional<FilterKind> ColorEditKindForCommand(int command) noexcept
 {
     switch (command)
     {
     case ChromeHost::kCommandLevels:
-        _session.BeginLevels();
-        break;
+        return FilterKind::Levels;
     case ChromeHost::kCommandHueSaturation:
-        _session.BeginHueSaturation();
-        break;
+        return FilterKind::HueSaturation;
     case ChromeHost::kCommandCurves:
-        _session.BeginFilter(FilterKind::Curves);
-        break;
+        return FilterKind::Curves;
     case ChromeHost::kCommandExposure:
-        _session.BeginFilter(FilterKind::Exposure);
-        break;
+        return FilterKind::Exposure;
     case ChromeHost::kCommandGradientMap:
-        _session.BeginFilter(FilterKind::GradientMap);
-        break;
+        return FilterKind::GradientMap;
     case ChromeHost::kCommandGrain:
-        _session.BeginFilter(FilterKind::Grain);
-        break;
+        return FilterKind::Grain;
     case ChromeHost::kCommandGaussianBlur:
-        _session.BeginFilter(FilterKind::GaussianBlur);
-        break;
+        return FilterKind::GaussianBlur;
     case ChromeHost::kCommandMotionBlur:
-        _session.BeginFilter(FilterKind::MotionBlur);
-        break;
+        return FilterKind::MotionBlur;
     case ChromeHost::kCommandAddNoise:
-        _session.BeginFilter(FilterKind::AddNoise);
-        break;
+        return FilterKind::AddNoise;
     case ChromeHost::kCommandLensCorrection:
-        _session.BeginFilter(FilterKind::LensCorrection);
-        break;
+        return FilterKind::LensCorrection;
     case ChromeHost::kCommandContentAwareFill:
-        _session.BeginFilter(FilterKind::ContentAwareFill);
-        break;
+        return FilterKind::ContentAwareFill;
     default:
+        return std::nullopt;
+    }
+}
+} // namespace
+
+bool Application::BeginColorEdit(int command) noexcept
+{
+    const std::optional<FilterKind> kind = ColorEditKindForCommand(command);
+    if (!kind.has_value())
+    {
         return false;
     }
+    _session.BeginColorEdit(kind.value());
     if (!_session.HasColorEdit())
     {
         UINT captionId = 0;
@@ -204,18 +204,7 @@ void Application::ApplyColorEdit() noexcept
         return;
     }
     _hueTargetStart.reset();
-    if (_session.PendingLevels().has_value())
-    {
-        _session.CommitLevels();
-    }
-    else if (_session.PendingHueSaturation().has_value())
-    {
-        _session.CommitHueSaturation();
-    }
-    else
-    {
-        _session.CommitFilter();
-    }
+    _session.CommitColorEdit();
     DocumentChanged();
 }
 
@@ -226,27 +215,24 @@ void Application::CancelColorEdit() noexcept
         return;
     }
     _hueTargetStart.reset();
-    if (_session.PendingLevels().has_value())
-    {
-        _session.CancelLevels();
-    }
-    else if (_session.PendingHueSaturation().has_value())
-    {
-        _session.CancelHueSaturation();
-    }
-    else
-    {
-        _session.CancelFilter();
-    }
+    _session.CancelColorEdit();
     DocumentChanged();
 }
 
 void Application::OnAdjustAction(AdjustAction action, double value) noexcept
 {
-    if (!std::isfinite(value))
+    const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+    if (!std::isfinite(value) || !edit.has_value())
     {
         return;
     }
+    // Every panel's controls report here; each changes its own kind's settings.
+    const bool levels = edit->kind == FilterKind::Levels;
+    FilterSettings settings = edit->settings;
+    bool preview = edit->preview;
+    LevelRange range = Adjust::LevelsCurrent(settings.levels);
+    HueSaturationSettings& hsv = settings.hsv;
+    std::vector<CurvePoint>& points = settings.curves.channels[static_cast<std::size_t>(settings.curves.channel)];
     switch (action)
     {
     case AdjustAction::Cancel:
@@ -257,236 +243,198 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
         return;
     case AdjustAction::OpenShadows:
     case AdjustAction::OpenHighlights:
-        if (_session.PendingFilter().has_value() && _session.PendingFilter()->kind == FilterKind::GradientMap &&
-            _chrome)
+        if (edit->kind == FilterKind::GradientMap && _chrome)
         {
-            const GradientMapSettings& map = _session.PendingFilter()->settings.gradientMap;
-            _adjustColorOriginal = map;
+            _adjustColorOriginal = settings.gradientMap;
             const bool highlights = action == AdjustAction::OpenHighlights;
-            _chrome->OpenAdjustColorPicker(ArgbOf(highlights ? map.highlights : map.shadows), highlights);
+            _chrome->OpenAdjustColorPicker(
+                ArgbOf(highlights ? settings.gradientMap.highlights : settings.gradientMap.shadows), highlights);
         }
         return;
-    default:
+    case AdjustAction::SetPreview:
+        preview = value != 0.0;
         break;
-    }
-    if (const std::optional<LevelsEdit>& levels = _session.PendingLevels(); levels.has_value())
-    {
-        LevelsSettings settings = levels->settings;
-        bool preview = levels->preview;
-        LevelRange range = Adjust::LevelsCurrent(settings);
-        switch (action)
+    case AdjustAction::SetChannel:
+        (levels ? settings.levels.channel : settings.curves.channel) =
+            static_cast<LevelsChannel>(std::clamp(static_cast<int>(value), 0, 3));
+        break;
+    case AdjustAction::Reset:
+        if (levels)
         {
-        case AdjustAction::SetPreview:
-            preview = value != 0.0;
-            break;
-        case AdjustAction::SetChannel:
-            settings.channel = static_cast<LevelsChannel>(std::clamp(static_cast<int>(value), 0, 3));
-            break;
-        case AdjustAction::SetInputBlack:
-            range.black = std::min(range.white - 1, std::max(0.0, value));
-            break;
-        case AdjustAction::SetInputGamma:
-            range.gamma = std::clamp(value, 0.1, 9.99);
-            break;
-        case AdjustAction::SetInputWhite:
-            range.white = std::max(range.black + 1, std::min(255.0, value));
-            break;
-        case AdjustAction::SetOutputBlack:
-            range.outputBlack = std::clamp(value, 0.0, 255.0);
-            break;
-        case AdjustAction::SetOutputWhite:
-            range.outputWhite = std::clamp(value, 0.0, 255.0);
-            break;
-        case AdjustAction::SetLevelsSample:
-            _session.SetLevelsSampleMode(value <= 0.0 ? std::nullopt
-                                                      : std::optional<LevelsSample>(static_cast<LevelsSample>(
-                                                            std::clamp(static_cast<int>(value) - 1, 0, 2))));
-            SyncChrome();
-            return;
-        case AdjustAction::AutoLevels:
-            _session.AutoLevels(static_cast<LevelsAuto>(std::clamp(static_cast<int>(value), 0, 2)));
-            DocumentChanged();
-            return;
-        case AdjustAction::Reset:
-            settings = LevelsSettings{};
+            settings.levels = LevelsSettings{};
             range = LevelRange{};
             _session.SetLevelsSampleMode(std::nullopt);
-            break;
-        default:
-            return;
         }
-        Adjust::SetLevelsCurrent(settings, range);
-        _session.UpdateLevels(settings, preview);
-        DocumentChanged();
-        return;
-    }
-    if (const std::optional<HueSaturationEdit>& hsv = _session.PendingHueSaturation(); hsv.has_value())
-    {
-        HueSaturationSettings settings = hsv->settings;
-        bool preview = hsv->preview;
-        switch (action)
+        else if (edit->kind == FilterKind::HueSaturation)
         {
-        case AdjustAction::SetPreview:
-            preview = value != 0.0;
-            break;
-        case AdjustAction::SetRange:
-            settings.range = static_cast<ColorRange>(std::clamp(static_cast<int>(value), 0, 6));
-            break;
-        case AdjustAction::SetHue:
-            Adjust::RangeOf(settings).hue =
-                std::clamp(value, settings.colorize ? 0.0 : -180.0, settings.colorize ? 360.0 : 180.0);
-            break;
-        case AdjustAction::SetSaturation:
-            Adjust::RangeOf(settings).saturation = std::clamp(value, settings.colorize ? 0.0 : -100.0, 100.0);
-            break;
-        case AdjustAction::SetLightness:
-            Adjust::RangeOf(settings).lightness = std::clamp(value, -100.0, 100.0);
-            break;
-        case AdjustAction::SetColorize:
-            // Photoshop starts colorizing at hue 0, saturation 25.
-            settings = value != 0.0 ? Adjust::ColorizeStart() : HueSaturationSettings{};
-            break;
-        case AdjustAction::SetInvertRange:
-            settings.invertRange = value != 0.0;
-            break;
-        case AdjustAction::SetHueSample:
-            _session.SetHueSampleMode(value <= 0.0 ? std::nullopt
-                                                   : std::optional<HueSampleMode>(static_cast<HueSampleMode>(
-                                                         std::clamp(static_cast<int>(value) - 1, 0, 2))));
-            SyncChrome();
-            return;
-        case AdjustAction::SetTargeting:
-            _session.SetHueTargeting(value != 0.0);
-            _hueTargetStart.reset();
-            SyncChrome();
-            return;
-        case AdjustAction::Reset:
-            settings = settings.colorize ? Adjust::ColorizeStart() : HueSaturationSettings{};
-            break;
-        default:
-            return;
+            hsv = hsv.colorize ? Adjust::ColorizeStart() : HueSaturationSettings{};
         }
-        _session.UpdateHueSaturation(settings, preview);
-        DocumentChanged();
-        return;
-    }
-    if (const std::optional<FilterEdit>& filter = _session.PendingFilter(); filter.has_value())
-    {
-        FilterSettings settings = filter->settings;
-        bool preview = filter->preview;
-        std::vector<CurvePoint>& points = settings.curves.channels[static_cast<std::size_t>(settings.curves.channel)];
-        switch (action)
+        else
         {
-        case AdjustAction::SetPreview:
-            preview = value != 0.0;
-            break;
-        case AdjustAction::SetChannel:
-            settings.curves.channel = static_cast<LevelsChannel>(std::clamp(static_cast<int>(value), 0, 3));
-            break;
-        case AdjustAction::RemovePoint:
-        {
-            const std::size_t index = static_cast<std::size_t>(std::max(0.0, value));
-            if (index == 0 || index + 1 >= points.size())
-            {
-                return;
-            }
-            points.erase(points.begin() + static_cast<std::ptrdiff_t>(index));
-            break;
-        }
-        case AdjustAction::Reset:
             points = {CurvePoint{0, 0}, CurvePoint{255, 255}};
-            break;
-        case AdjustAction::SetRadius:
-            settings.radius = value;
-            break;
-        case AdjustAction::SetAngle:
-            settings.angle = value;
-            break;
-        case AdjustAction::SetDistance:
-            settings.distance = value;
-            break;
-        case AdjustAction::SetAmount:
-            settings.amount = value;
-            break;
-        case AdjustAction::SetGaussian:
-            settings.gaussian = value != 0.0;
-            break;
-        case AdjustAction::SetMonochromatic:
-            settings.monochromatic = value != 0.0;
-            break;
-        case AdjustAction::SetDistortion:
-            settings.distortion = value;
-            break;
-        case AdjustAction::SetExposure:
-            settings.exposure.exposure = value;
-            break;
-        case AdjustAction::SetOffset:
-            settings.exposure.offset = value;
-            break;
-        case AdjustAction::SetGamma:
-            settings.exposure.gamma = value;
-            break;
-        case AdjustAction::SetGrainAmount:
-            settings.grain.amount = value;
-            break;
-        case AdjustAction::SetGrainSize:
-            settings.grain.size = value;
-            break;
-        case AdjustAction::SetGrainRoughness:
-            settings.grain.roughness = value;
-            break;
-        case AdjustAction::SetReversed:
-            settings.gradientMap.reversed = value != 0.0;
-            break;
-        default:
+        }
+        break;
+    // Levels.
+    case AdjustAction::SetInputBlack:
+        range.black = std::min(range.white - 1, std::max(0.0, value));
+        break;
+    case AdjustAction::SetInputGamma:
+        range.gamma = std::clamp(value, 0.1, 9.99);
+        break;
+    case AdjustAction::SetInputWhite:
+        range.white = std::max(range.black + 1, std::min(255.0, value));
+        break;
+    case AdjustAction::SetOutputBlack:
+        range.outputBlack = std::clamp(value, 0.0, 255.0);
+        break;
+    case AdjustAction::SetOutputWhite:
+        range.outputWhite = std::clamp(value, 0.0, 255.0);
+        break;
+    case AdjustAction::SetLevelsSample:
+        _session.SetLevelsSampleMode(value <= 0.0 ? std::nullopt
+                                                  : std::optional<LevelsSample>(static_cast<LevelsSample>(
+                                                        std::clamp(static_cast<int>(value) - 1, 0, 2))));
+        SyncChrome();
+        return;
+    case AdjustAction::AutoLevels:
+        _session.AutoLevels(static_cast<LevelsAuto>(std::clamp(static_cast<int>(value), 0, 2)));
+        DocumentChanged();
+        return;
+    // Hue/Saturation.
+    case AdjustAction::SetRange:
+        hsv.range = static_cast<ColorRange>(std::clamp(static_cast<int>(value), 0, 6));
+        break;
+    case AdjustAction::SetHue:
+        Adjust::RangeOf(hsv).hue = std::clamp(value, hsv.colorize ? 0.0 : -180.0, hsv.colorize ? 360.0 : 180.0);
+        break;
+    case AdjustAction::SetSaturation:
+        Adjust::RangeOf(hsv).saturation = std::clamp(value, hsv.colorize ? 0.0 : -100.0, 100.0);
+        break;
+    case AdjustAction::SetLightness:
+        Adjust::RangeOf(hsv).lightness = std::clamp(value, -100.0, 100.0);
+        break;
+    case AdjustAction::SetColorize:
+        // Photoshop starts colorizing at hue 0, saturation 25.
+        hsv = value != 0.0 ? Adjust::ColorizeStart() : HueSaturationSettings{};
+        break;
+    case AdjustAction::SetInvertRange:
+        hsv.invertRange = value != 0.0;
+        break;
+    case AdjustAction::SetHueSample:
+        _session.SetHueSampleMode(value <= 0.0 ? std::nullopt
+                                               : std::optional<HueSampleMode>(static_cast<HueSampleMode>(
+                                                     std::clamp(static_cast<int>(value) - 1, 0, 2))));
+        SyncChrome();
+        return;
+    case AdjustAction::SetTargeting:
+        _session.SetHueTargeting(value != 0.0);
+        _hueTargetStart.reset();
+        SyncChrome();
+        return;
+    // Curves and the filters.
+    case AdjustAction::RemovePoint:
+    {
+        const std::size_t index = static_cast<std::size_t>(std::max(0.0, value));
+        if (index == 0 || index + 1 >= points.size())
+        {
             return;
         }
-        _session.UpdateFilter(settings, preview);
-        DocumentChanged();
+        points.erase(points.begin() + static_cast<std::ptrdiff_t>(index));
+        break;
     }
+    case AdjustAction::SetRadius:
+        settings.radius = value;
+        break;
+    case AdjustAction::SetAngle:
+        settings.angle = value;
+        break;
+    case AdjustAction::SetDistance:
+        settings.distance = value;
+        break;
+    case AdjustAction::SetAmount:
+        settings.amount = value;
+        break;
+    case AdjustAction::SetGaussian:
+        settings.gaussian = value != 0.0;
+        break;
+    case AdjustAction::SetMonochromatic:
+        settings.monochromatic = value != 0.0;
+        break;
+    case AdjustAction::SetDistortion:
+        settings.distortion = value;
+        break;
+    case AdjustAction::SetExposure:
+        settings.exposure.exposure = value;
+        break;
+    case AdjustAction::SetOffset:
+        settings.exposure.offset = value;
+        break;
+    case AdjustAction::SetGamma:
+        settings.exposure.gamma = value;
+        break;
+    case AdjustAction::SetGrainAmount:
+        settings.grain.amount = value;
+        break;
+    case AdjustAction::SetGrainSize:
+        settings.grain.size = value;
+        break;
+    case AdjustAction::SetGrainRoughness:
+        settings.grain.roughness = value;
+        break;
+    case AdjustAction::SetReversed:
+        settings.gradientMap.reversed = value != 0.0;
+        break;
+    }
+    // A range edit lands on the channel it was made on; choosing another channel only switches to it (legacy).
+    if (levels && action != AdjustAction::SetChannel)
+    {
+        Adjust::SetLevelsCurrent(settings.levels, range);
+    }
+    _session.UpdateColorEdit(settings, preview);
+    DocumentChanged();
 }
 
 void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
 {
-    const std::optional<FilterEdit>& filter = _session.PendingFilter();
-    if (!filter.has_value() || filter->kind != FilterKind::Curves)
+    const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+    if (!edit.has_value() || edit->kind != FilterKind::Curves)
     {
         return;
     }
-    FilterSettings settings = filter->settings;
+    FilterSettings settings = edit->settings;
     settings.curves.channels[static_cast<std::size_t>(settings.curves.channel)] = std::move(points);
     if (!settings.curves.IsValid())
     {
         return;
     }
-    _session.UpdateFilter(settings, filter->preview);
+    _session.UpdateColorEdit(settings, edit->preview);
     DocumentChanged();
 }
 
 void Application::OnBandChanged(int index, double degrees) noexcept
 {
-    const std::optional<HueSaturationEdit>& hsv = _session.PendingHueSaturation();
-    if (!hsv.has_value() || !std::isfinite(degrees))
+    const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+    if (!edit.has_value() || edit->kind != FilterKind::HueSaturation || !std::isfinite(degrees))
     {
         return;
     }
-    HueSaturationSettings settings = hsv->settings;
-    if (!Adjust::BandSetHandle(Adjust::BandOf(settings), index, degrees))
+    FilterSettings settings = edit->settings;
+    if (!Adjust::BandSetHandle(Adjust::BandOf(settings.hsv), index, degrees))
     {
         return;
     }
-    _session.UpdateHueSaturation(settings, hsv->preview);
+    _session.UpdateColorEdit(settings, edit->preview);
     DocumentChanged();
 }
 
 void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept
 {
-    const std::optional<FilterEdit>& filter = _session.PendingFilter();
-    if (!filter.has_value() || filter->kind != FilterKind::GradientMap)
+    const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+    if (!edit.has_value() || edit->kind != FilterKind::GradientMap)
     {
         return;
     }
-    FilterSettings settings = filter->settings;
+    FilterSettings settings = edit->settings;
     if (phase == ChromeEditPhase::Cancel)
     {
         // Cancel restores the end the picker was opened on; OK keeps it; the palette is left alone.
@@ -500,7 +448,7 @@ void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highl
     {
         settings.gradientMap.shadows = ColorFromArgb(argb);
     }
-    _session.UpdateFilter(settings, filter->preview);
+    _session.UpdateColorEdit(settings, edit->preview);
     DocumentChanged();
 }
 
@@ -511,58 +459,42 @@ void Application::SyncAdjustPanel() noexcept
         return;
     }
     AdjustInspectorState state;
-    const bool editsAdjustment =
-        _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
-    const auto title = [&](const wchar_t* name)
+    state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
+    if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value())
     {
-        return editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, std::wstring(name))
-                               : std::wstring(name);
-    };
-    if (const std::optional<LevelsEdit>& levels = _session.PendingLevels(); levels.has_value())
-    {
-        state.panel = AdjustPanelKind::Levels;
-        state.title = title(L"Levels");
-        state.levels = levels->settings;
-        state.histogram = levels->histogram;
-        state.histogramReady = levels->histogramReady;
-        state.levelsSample = levels->sampleMode.has_value() ? static_cast<int>(levels->sampleMode.value()) + 1 : 0;
-        state.preview = levels->preview;
-        state.limitedToSelection = levels->selection.has_value();
+        // Levels and Hue/Saturation have editors of their own; every other kind shows its filter controls.
+        state.panel = edit->kind == FilterKind::Levels          ? AdjustPanelKind::Levels
+                      : edit->kind == FilterKind::HueSaturation ? AdjustPanelKind::HueSaturation
+                                                                : AdjustPanelKind::Filter;
+        const std::wstring name = FilterKindName(edit->kind);
+        state.title = state.editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, name) : name;
+        state.filter = edit->kind;
+        state.settings = edit->settings;
+        state.levels = edit->settings.levels;
+        state.histogram = edit->histogram;
+        state.histogramReady = edit->histogramReady;
+        state.levelsSample = edit->levelsSample.has_value() ? static_cast<int>(edit->levelsSample.value()) + 1 : 0;
+        state.hsv = edit->settings.hsv;
+        state.hueSample = edit->hueSample.has_value() ? static_cast<int>(edit->hueSample.value()) + 1 : 0;
+        state.targeting = edit->targeting;
+        state.preview = edit->preview;
+        state.limitedToSelection = edit->selection.has_value();
+        state.previewFailed = edit->previewFailed;
     }
-    else if (const std::optional<HueSaturationEdit>& hsv = _session.PendingHueSaturation(); hsv.has_value())
-    {
-        state.panel = AdjustPanelKind::HueSaturation;
-        state.title = title(L"Hue/Saturation");
-        state.hsv = hsv->settings;
-        state.hueSample = hsv->sampleMode.has_value() ? static_cast<int>(hsv->sampleMode.value()) + 1 : 0;
-        state.targeting = hsv->targeting;
-        state.preview = hsv->preview;
-        state.limitedToSelection = hsv->selection.has_value();
-    }
-    else if (const std::optional<FilterEdit>& filter = _session.PendingFilter(); filter.has_value())
-    {
-        state.panel = AdjustPanelKind::Filter;
-        state.filter = filter->kind;
-        state.title = title(FilterKindName(filter->kind));
-        state.settings = filter->settings;
-        state.preview = filter->preview;
-        state.limitedToSelection = filter->selection.has_value();
-        state.previewFailed = filter->previewFailed;
-    }
-    state.editsAdjustment = editsAdjustment;
     _chrome->SetAdjustInspector(state);
 }
 
 bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept
 {
-    if (!_session.HasColorEdit())
+    const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+    if (!edit.has_value())
     {
         return false;
     }
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    if (const std::optional<LevelsEdit>& levels = _session.PendingLevels(); levels.has_value())
+    if (edit->kind == FilterKind::Levels)
     {
-        if (!levels->sampleMode.has_value())
+        if (!edit->levelsSample.has_value())
         {
             return false;
         }
@@ -573,12 +505,11 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
         }
         return true;
     }
-    const std::optional<HueSaturationEdit>& hsv = _session.PendingHueSaturation();
-    if (!hsv.has_value())
+    if (edit->kind != FilterKind::HueSaturation)
     {
         return false;
     }
-    if (hsv->sampleMode.has_value())
+    if (edit->hueSample.has_value())
     {
         if (event.action == DxUi::PointerAction::Down && inHole)
         {
@@ -591,7 +522,7 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
         }
         return true;
     }
-    if (hsv->targeting)
+    if (edit->targeting)
     {
         // Targeted adjustment: the press picks the range under the pointer, the drag changes its saturation
         // (its hue with Ctrl), measured from where it started.

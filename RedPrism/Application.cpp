@@ -1726,7 +1726,8 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
         _chrome->SetCanvasFocused(true);
         std::array<int, 4> pixel{};
-        if (!HandleAccelerator('L', MK_CONTROL) || !_session.PendingLevels().has_value() || !_chrome->AdjustPanelOpen())
+        if (!HandleAccelerator('L', MK_CONTROL) || !_session.HasColorEdit(FilterKind::Levels) ||
+            !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Ctrl+L did not open the Levels panel.\n");
             return 5;
@@ -1737,16 +1738,28 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The Levels preview did not show through the canvas.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingLevels().has_value() || _chrome->AdjustPanelOpen() ||
-            !pixelAt(50, 50, pixel) || pixel[0] < 120)
+        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit(FilterKind::Levels) ||
+            _chrome->AdjustPanelOpen() || !pixelAt(50, 50, pixel) || pixel[0] < 120)
         {
             SelfTestFailure(L"Escape did not cancel the Levels edit.\n");
+            return 5;
+        }
+        // RF-809: choosing the Red channel only switches to it; the input black set on RGB stays on RGB.
+        static_cast<void>(HandleAccelerator('L', MK_CONTROL));
+        OnAdjustAction(AdjustAction::SetInputBlack, 40.0);
+        OnAdjustAction(AdjustAction::SetChannel, 1.0);
+        if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
+            !edit.has_value() || edit->settings.levels.channel != LevelsChannel::Red ||
+            edit->settings.levels.ranges[0].black != 40.0 || !(edit->settings.levels.ranges[1] == LevelRange{}) ||
+            !HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit())
+        {
+            SelfTestFailure(L"Choosing the Red channel in Levels copied the RGB range onto it.\n");
             return 5;
         }
         const int levelsCount = _session.history.UndoCount();
         static_cast<void>(HandleAccelerator('L', MK_CONTROL));
         OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingLevels().has_value() ||
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::Levels) ||
             _session.history.UndoCount() != levelsCount + 1 || _session.history.UndoName() != L"Levels" ||
             !pixelAt(50, 50, pixel) || pixel[0] < 250)
         {
@@ -1754,15 +1767,14 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         OnCommand(ChromeHost::kCommandGaussianBlur);
-        if (!_session.PendingFilter().has_value() || _session.PendingFilter()->kind != FilterKind::GaussianBlur ||
-            !_chrome->AdjustPanelOpen())
+        if (!_session.HasColorEdit(FilterKind::GaussianBlur) || !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"The Filter menu did not open Gaussian Blur.\n");
             return 5;
         }
         OnAdjustAction(AdjustAction::SetRadius, 2.0);
         OnAdjustAction(AdjustAction::Apply, 0.0);
-        if (_session.PendingFilter().has_value() || _session.history.UndoName() != L"Gaussian Blur")
+        if (_session.HasColorEdit() || _session.history.UndoName() != L"Gaussian Blur")
         {
             SelfTestFailure(L"Applying Gaussian Blur did not record one entry.\n");
             return 5;
@@ -1775,13 +1787,13 @@ int Application::RunSelfTest() noexcept
         OnCommand(ChromeHost::kCommandFillForeground);
         const int fillCount = _session.history.UndoCount();
         if (!pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || !HandleAccelerator(VK_DELETE, MK_SHIFT) ||
-            !_session.PendingFilter().has_value() || _session.PendingFilter()->kind != FilterKind::ContentAwareFill ||
-            _session.PendingFilter()->previewFailed || !_chrome->AdjustPanelOpen())
+            !_session.HasColorEdit(FilterKind::ContentAwareFill) || _session.PendingColorEdit()->previewFailed ||
+            !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Shift+Delete did not open Content-Aware Fill on the selection.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingFilter().has_value() ||
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit() ||
             _session.history.UndoCount() != fillCount + 1 || _session.history.UndoName() != L"Content-Aware Fill" ||
             !pixelAt(50, 50, pixel) || pixel[0] < 240 || pixel[1] < 240 || pixel[2] < 240)
         {
@@ -1789,10 +1801,10 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         OnCommand(ChromeHost::kCommandSelectAll);
-        if (!HandleAccelerator(VK_DELETE, MK_SHIFT) || !_session.PendingFilter().has_value() ||
-            !_session.PendingFilter()->previewFailed || !HandleAccelerator(VK_RETURN, 0) ||
-            !_session.PendingFilter().has_value() || !HandleAccelerator(VK_ESCAPE, 0) ||
-            _session.PendingFilter().has_value() || _chrome->AdjustPanelOpen())
+        if (!HandleAccelerator(VK_DELETE, MK_SHIFT) || !_session.HasColorEdit() ||
+            !_session.PendingColorEdit()->previewFailed || !HandleAccelerator(VK_RETURN, 0) ||
+            !_session.HasColorEdit() || !HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit() ||
+            _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(
                 L"Content-Aware Fill with nothing to copy from did not refuse Enter and close on Escape.\n");
@@ -1803,7 +1815,7 @@ int Application::RunSelfTest() noexcept
         const std::size_t layersBefore = _session.Document()->layers.size();
         OnCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
         if (_session.Document()->layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
-            !_session.ActiveLayer()->adjustment.has_value() || !_session.PendingHueSaturation().has_value() ||
+            !_session.ActiveLayer()->adjustment.has_value() || !_session.HasColorEdit(FilterKind::HueSaturation) ||
             !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"New Hue/Saturation Adjustment did not add a layer and open its panel.\n");
@@ -1815,7 +1827,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The adjustment layer did not rotate the red beneath it live.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingHueSaturation().has_value() ||
+        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::HueSaturation) ||
             _session.history.UndoName() != L"Edit Hue/Saturation Adjustment" ||
             std::fabs(Adjust::RangeOf(_session.ActiveLayer()->adjustment->ResolvedHsv()).hue - 120.0) > 0.01 ||
             !pixelAt(50, 50, pixel) || pixel[1] < 200)
@@ -3441,8 +3453,7 @@ void Application::SettleInteractions(bool applyPanels) noexcept
     {
         ApplyColorEdit();
     }
-    if (_session.HasColorEdit() &&
-        (!applyPanels || (_session.PendingFilter().has_value() && _session.PendingFilter()->previewFailed)))
+    if (_session.HasColorEdit() && (!applyPanels || _session.PendingColorEdit()->previewFailed))
     {
         // A fill with nothing to copy from cannot apply; a tool switch drops it rather than trapping the panel, and
         // a document on its way out drops any open panel.
@@ -4050,9 +4061,9 @@ void Application::ApplyDemo() noexcept
         OnTool(EditorTool::Move);
         _session.AddAdjustment(AdjustmentKind::Levels);
         OpenAdjustmentEditor();
-        if (_session.PendingLevels().has_value())
+        if (_session.HasColorEdit(FilterKind::Levels))
         {
-            LevelsSettings settings = _session.PendingLevels()->settings;
+            LevelsSettings settings = _session.PendingColorEdit()->settings.levels;
             Adjust::SetLevelsCurrent(settings, LevelRange{20, 1.2, 230, 0, 255});
             _session.UpdateLevels(settings, true);
             DocumentChanged();

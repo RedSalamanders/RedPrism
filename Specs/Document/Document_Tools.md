@@ -376,56 +376,70 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
   not its mask) with pixels and no explicitly empty selection. While a panel is open (`HasColorEdit`) painting,
   transforms, nudges, flips, Undo and Redo wait; a new panel, a tool switch or another layer's panel applies the
   open one first (the host).
-- **Filters** (`FilterEdit`, `FilterSettings` normalized: radius 0.1–250, angle −90–90, distance 1–2000, amount
-  0.1–400, distortion −100–100, the curves, exposure, gradient map and grain settings). `BeginFilter(kind)` commits a
-  pending transform, applies a pending gradient, drops a lasso draft and starts from the last applied settings
-  (`filterSettings`; a Gradient Map from the foreground to the background color); a blur pads the layer out by
-  its reach (3 × radius + 2, or half the streak + 2, growing again when raised) so it spreads instead of stopping
-  at the border. `UpdateFilter(settings, preview)` renders the preview at once from a copy no larger than 4096 px
-  on the longest side for the table kinds, 2048 for blurs and the lens, full size for noise and grain (a smaller
-  copy would coarsen them), blended through the selection coverage on that grid; `DisplayDocument` shows it in
-  place of the layer (a mask on the layer's grid keeps its place over a grown grid). `CommitFilter` renders at
-  full size, trims a blur back to its pixels (`TrimmedToAlpha`) carrying a mask onto the new grid with its edge
-  tone beyond, and records the kind's name, unless the layer changed under the edit; an identity edit (lens 0,
-  default exposure, grain 0) closes without an entry. `CancelFilter` drops it. `Adjust::RunFilter` is the kernel
-  switch; Gaussian Blur is `ImageFilters::GaussianBlur` (sigma = radius), Motion Blur an even streak of the
-  distance along the angle (counterclockwise from horizontal on screen) sampled up to 96 times, Add Noise the
-  legacy hash noise (uniform ±amount % of half the range, Gaussian at two thirds, monochromatic one value per
-  pixel) with a seed fixed while the panel is open, Lens Correction the radial warp (k = distortion / 100 × 0.35).
-- **Levels** (`LevelsEdit`): `BeginLevels` builds the alpha- and selection-weighted histogram of the original
-  (`Adjust::Histogram`; RGB is the mean of the channels); `UpdateLevels` previews the tables (identity shows the
-  layer's own pixels); `AutoLevels` (Contrast: one shared interval from the 0.1 % clipped ends; Color: per
-  channel; Neutral: per channel with the gamma that centers the mean); the eyedroppers `SetLevelsSampleMode` /
-  `SampleLevels(point)` read the original layer's straight color under a document point (transparent pixels are
-  ignored) and calibrate black, gray or white; `CommitLevels` records `Levels` (identity closes without one).
-  `LevelRange` normalizes to black 0–254, white black + 1…255, gamma 0.1–9.99, outputs 0–255; `LevelsApply` runs
-  the channel range then the RGB range.
-- **Hue/Saturation** (`HueSaturationEdit`, `HueSaturationSettings`: Master and six ranges with their bands,
-  `colorize`, `invertRange`): `UpdateHueSaturation` previews through the cube; the eyedroppers
-  (`SetHueSampleMode`, `SampleHueRange(composite, point)`) re-center, widen or narrow the selected range's band on
-  the hue of the visible composite (near-neutral pixels have none; Master and Colorize refuse); the targeted
-  adjustment (`SetHueTargeting`, `BeginHueTargeting` picks the range claiming the sampled hue most,
-  `DragHueTargeting(viewDelta, adjustsHue)` changes its saturation, or hue with Ctrl, by half a unit per view
-  point measured from the start; `EndHueTargeting`); Colorize starts at hue 0, saturation 25; `CommitHueSaturation`
-  records `Hue/Saturation` (identity changes nothing). Band math: `BandWeight` ramps through the shoulders and
-  wraps, `BandCentered`, `BandInclude`, `BandExclude`, `BandSetHandle` (a crossing move is refused).
+- **One panel session** (`ColorEdit`, `PendingColorEdit`, `HasColorEdit(kind)`) runs every kind (`FilterKind`: the
+  Filter menu's filters and the Image menu's Curves, Exposure, Gradient Map, Grain, Levels and Hue/Saturation) with
+  one settings record (`FilterSettings`; each kind reads its own) and one rule for all of them.
+  `BeginColorEdit(kind)` commits a pending transform, applies a pending gradient and drops a lasso draft, then reads
+  the layer's pixels, placement and selection and starts from the last applied settings (`filterSettings`; Levels
+  and Hue/Saturation at identity, a Gradient Map from the foreground to the background color); Add Noise and Grain
+  draw a pattern seed of their own (the session's heal seed, which no other kind advances).
+  `UpdateColorEdit(settings, preview)` (`UpdateLevels` and `UpdateHueSaturation` change their kind's part) renders
+  the preview at once from a copy no larger than 4096 px on the longest side for the table kinds (Levels,
+  Hue/Saturation, Curves, Exposure, Gradient Map), 2048 for blurs and the lens, full size for noise, grain and the
+  fill (a smaller copy would coarsen them), blended through the selection coverage on that grid; `DisplayDocument`
+  shows it in place of the layer (a mask on the layer's grid keeps its place over a grown grid). An edit that
+  changes nothing (identity Levels or Hue/Saturation, lens 0, the default exposure, grain 0) previews the layer's
+  own pixels and closes without an entry on OK; a Curves panel on its identity curve still records its entry, as in
+  the legacy. `CommitColorEdit` renders at full size and records the kind's name (`FilterKindName`) only while the
+  layer still holds the pixels and the placement the panel opened on; otherwise the panel closes without an entry.
+  `CancelColorEdit` drops it. RF-801 of the 2026-09-23 review: legacy `beginHueSaturation` keeps a lasso draft and
+  `commitHueSaturation` checks only the pixels, applying wherever the layer has gone; every kind follows the legacy
+  Levels and filter rule instead (nothing transforms while a panel is open, so the placement check guards changes
+  the host did not settle first, such as a resize).
+- **Filters** (`FilterSettings` normalized: radius 0.1–250, angle −90–90, distance 1–2000, amount 0.1–400,
+  distortion −100–100, the curves, exposure, gradient map and grain settings): a blur pads the layer out by its
+  reach (3 × radius + 2, or half the streak + 2, growing again when raised) so it spreads instead of stopping at the
+  border, and OK trims it back to its pixels (`TrimmedToAlpha`), carrying a mask onto the new grid with its edge
+  tone beyond. `Adjust::RunFilter` is the kernel for every kind: the Image menu's kinds run their adjustment layer's
+  kernel (`ApplyAdjustment`; Grain in layer pixels at the panel's seed); Gaussian Blur is
+  `ImageFilters::GaussianBlur` (sigma = radius), Motion Blur an even streak of the distance along the angle
+  (counterclockwise from horizontal on screen) sampled up to 96 times, Add Noise the legacy hash noise (uniform
+  ±amount % of half the range, Gaussian at two thirds, monochromatic one value per pixel) with a seed fixed while
+  the panel is open, Lens Correction the radial warp (k = distortion / 100 × 0.35).
+- **Levels**: opening builds the alpha- and selection-weighted histogram of the original (`ColorEdit::histogram`,
+  `Adjust::Histogram`; RGB is the mean of the channels); `UpdateLevels` previews the tables; `AutoLevels`
+  (Contrast: one shared interval from the 0.1 % clipped ends; Color: per channel; Neutral: per channel with the
+  gamma that centers the mean); the eyedroppers `SetLevelsSampleMode` / `SampleLevels(point)` read the original
+  layer's straight color under a document point (transparent pixels are ignored) and calibrate black, gray or
+  white; OK records `Levels`. `LevelRange` normalizes to black 0–254, white black + 1…255, gamma 0.1–9.99, outputs
+  0–255; `LevelsApply` runs the channel range then the RGB range.
+- **Hue/Saturation** (`HueSaturationSettings`: Master and six ranges with their bands, `colorize`, `invertRange`):
+  `UpdateHueSaturation` previews through the cube; the eyedroppers (`SetHueSampleMode`,
+  `SampleHueRange(composite, point)`) re-center, widen or narrow the selected range's band on the hue of the
+  visible composite (near-neutral pixels have none; Master and Colorize refuse); the targeted adjustment
+  (`SetHueTargeting`, `BeginHueTargeting` picks the range claiming the sampled hue most,
+  `DragHueTargeting(viewDelta, adjustsHue)` changes its saturation, or hue with Ctrl, by half a unit per view point
+  measured from the start; `EndHueTargeting`); Colorize starts at hue 0, saturation 25; OK records
+  `Hue/Saturation`. Band math: `BandWeight` ramps through the shoulders and wraps, `BandCentered`, `BandInclude`,
+  `BandExclude`, `BandSetHandle` (a crossing move is refused).
 - **Adjustment layers**: `AddAdjustment(kind)` inserts a canvas-size layer above the active one with the kind's
   defaults (a Gradient Map from the palette, a Grain seed of its own), one `New <Kind> Adjustment` entry, and marks
   it for editing (`AdjustmentEditingID`); `UpdateAdjustment(id, value)` changes a valid record live (no entry).
-  `BeginAdjustmentEditing(id, below)` opens the kind's panel over the composite beneath the layer (the host renders
-  it with the layer and everything above hidden) inside one `Edit <Kind> Adjustment` entry: the panel's changes
-  update the record (`PreviewAdjustmentEditing`; Preview off shows the original), OK keeps the settings and
-  Cancel restores them (`FinishAdjustmentEditing`). The source is only for the histogram and sampling and never
-  replaces pixels.
+  `BeginAdjustmentEditing(id, below)` opens the kind's panel (`AdjustmentFilterKind`; `FilterAdjustmentKind` maps
+  back) over the composite beneath the layer (the host renders it with the layer and everything above hidden),
+  starting from the record's settings (`Adjust::AdjustmentSettings`), inside one `Edit <Kind> Adjustment` entry:
+  the panel's changes update the record (`PreviewAdjustmentEditing`, `Adjust::AdjustmentWithSettings`; Preview off
+  shows the original), OK keeps the settings and Cancel restores them (`FinishAdjustmentEditing`). The source is
+  only for the histogram and sampling and never replaces pixels.
 - `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
   wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
 
 ## Content-aware fill (C13)
 
 The legacy `ContentFill.swift` and `Rendering/ContentFill.c`: Edit › Content-Aware Fill… (Shift+Delete) synthesizes
-the selected pixels of the active image layer from its unselected opaque pixels through the filter panel session
+the selected pixels of the active image layer from its unselected opaque pixels through the panel session
 above (`FilterKind::ContentAwareFill`, no settings; Remove Background is not in v1, see the C13 plan's decision).
-`CanContentAwareFill` is `CanAdjustColors` with a selection that has area. `BeginFilter(ContentAwareFill)` grows
+`CanContentAwareFill` is `CanAdjustColors` with a selection that has area. `BeginColorEdit(ContentAwareFill)` grows
 the layer's grid to the selection's canvas bounds (`GrowFilterGrid`, whole layer pixels, the grown transform kept
 centered as for a blur, which now grows through the same helper) so a selection reaching past the layer's edge
 fills new pixels; the preview renders at full size (a smaller copy would change the synthesis) and shows through
@@ -438,7 +452,7 @@ propagated from its neighbours' choices and 24 random donors from the linear con
 all four channels, refines the best by random jitters of 64, 32 … 1, copies that donor's four bytes, becomes
 known and queues its selected neighbours; a selected area touching only transparency restarts from the first
 remaining target with random donors. The result blends through the selection coverage. No donor (nothing
-unselected and opaque) sets `FilterEdit::previewFailed`: the panel says so, `CommitFilter` refuses and keeps the
+unselected and opaque) sets `ColorEdit::previewFailed`: the panel says so, `CommitColorEdit` refuses and keeps the
 edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK records `Content-Aware Fill`.
 
 ## Canvas size, image size and crop (C16)
@@ -577,17 +591,23 @@ transparent and outside rejections), `hsv.*` (`HueSaturationTests`: an exact no-
 ranges, colorize, the selection, the live preview that never accumulates, band weights and handles, independent
 ranges, invert, the sliders and the after bar, the eyedroppers, the targeted drag, sampling refusals), `adjust.*`
 (`ImageAdjustmentTests`: exposure in linear light, the gradient map and its reverse, grain fixed in document space,
-validity, new layers from the palette with their own grain seed, the Image menu's Exposure as one entry), `filter.*`
+validity, new layers from the palette with their own grain seed, every adjustment kind paired with its Image menu
+panel, the Image menu's Exposure as one entry), `filter.*`
 (`FilterTests`: a Gaussian blur growing the layer and softening its edges as one entry, motion blur along its
 angle, noise on color but never alpha, lens correction opening only the pincushion corners), `adjustlayer.*`
 (`AdjustmentLayerTests`: settings surviving undo, redo and duplicate, the identity curve and the Image command
 keeping alpha, every kind's editor keeping pixels dynamic and supporting cancel, the blend-mode step), `blend.*`
-(the HSL formulas) and `panelowns.*` (Levels, Hue/Saturation and a filter open: a Move drag, a nudge, Free
-Transform and both flips change nothing and OK applies in place). `CompositionTests` `adjust.*` and
-`blend.hsl-golden` prove the live layers and the blends on the GPU
+(the HSL formulas), `panelowns.*` (Levels, Hue/Saturation and a filter open: a Move drag, a nudge, Free
+Transform and both flips change nothing and OK applies in place) and `coloredit.*` (one session, one rule: opening
+Levels, Hue/Saturation, Curves, Exposure or Add Noise drops a lasso draft, and OK after the layer moved under the
+panel closes without an entry while the same edit in place records one; an edit that changes nothing previews the
+layer's own pixels; Levels and Hue/Saturation open at identity; only Add Noise and Grain advance the heal seed; the
+Image menu's kinds run their adjustment layer's kernel, Grain in layer pixels at the panel's seed). `CompositionTests`
+`adjust.*` and `blend.hsl-golden` prove the live layers and the blends on the GPU
 ([`Rendering_Composition.md`](../Rendering/Rendering_Composition.md)). The WARP self-test drives Ctrl+L with a
-preview, Escape and Enter, the Filter menu's Gaussian Blur, a Hue/Saturation adjustment layer edited live and kept
-with Enter, and Shift+= through `Application`.
+preview, Escape and Enter, a channel switch that leaves the RGB range on RGB and the new channel at identity
+(RF-809: choosing a channel only switches to it, as in the legacy), the Filter menu's Gaussian Blur, a
+Hue/Saturation adjustment layer edited live and kept with Enter, and Shift+= through `Application`.
 
 Content-aware fill: `DocumentTests` `smart.*` ports the legacy `SmartEditTests` (four-pixel stripes continue
 through a filled block, at least 114 of its 120 pixels within 1 of the stripe value; a flat background with a red

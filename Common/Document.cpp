@@ -1994,9 +1994,7 @@ void DocumentSession::ClearDocument()
     _gradient.reset();
     _shapeDraft.reset();
     _pixelMove.reset();
-    _filter.reset();
-    _levels.reset();
-    _hueSaturation.reset();
+    _colorEdit.reset();
     _adjustmentEditingID.reset();
     _adjustmentOriginal.reset();
     history.Reset();

@@ -885,9 +885,9 @@ int Application::RunFilesSelfTest() noexcept
         const Guid red = insertRed(40, 30);
         _forcedDiscard = false;
         OnCommand(ChromeHost::kCommandLevels);
-        const bool panelOpen = _session.PendingLevels().has_value();
+        const bool panelOpen = _session.HasColorEdit(FilterKind::Levels);
         OnCommand(ChromeHost::kCommandNew);
-        const bool panelKept = _session.PendingLevels().has_value() && layerCount() == 2;
+        const bool panelKept = _session.HasColorEdit(FilterKind::Levels) && layerCount() == 2;
         CancelColorEdit();
         OnCommand(ChromeHost::kCommandCanvasSize);
         OnCommand(ChromeHost::kCommandCloseProject);
