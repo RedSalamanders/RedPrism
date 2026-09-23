@@ -41,7 +41,6 @@ void ChromeHost::ArrangeCropHeader(float left, float top, float right, float bot
 
 void ChromeHost::SetCropInspector(const CropInspectorState& state) noexcept
 {
-    _cropInspector = state;
     if (!_cropHeader)
     {
         return;
@@ -67,11 +66,7 @@ void ChromeHost::SetCropShade(std::optional<D2D1_RECT_F> framePixels) noexcept
     }
     if (framePixels.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        framePixels->left *= toDip;
-        framePixels->top *= toDip;
-        framePixels->right *= toDip;
-        framePixels->bottom *= toDip;
+        framePixels = PixelToDip(*framePixels);
     }
     _overlay->SetCropShade(framePixels);
 }

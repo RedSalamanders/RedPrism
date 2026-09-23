@@ -47,11 +47,6 @@ bool ChromeHost::AdjustPanelOpen() const noexcept
     return _adjustCard != nullptr && _adjustCard->IsVisible();
 }
 
-D2D1_RECT_F ChromeHost::AdjustPanelBoundsDip() const noexcept
-{
-    return AdjustPanelOpen() ? _adjustCard->GetBounds() : D2D1::RectF();
-}
-
 bool ChromeHost::FocusAdjustRadiusForTest() noexcept
 {
     DxUi::NumericStepper* stepper = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].stepper;
@@ -80,12 +75,13 @@ D2D1_RECT_F ChromeHost::SpectrumBoundsDipForTest() const noexcept
 
 bool ChromeHost::FilterOptionsVisible() const noexcept
 {
-    if (!AdjustPanelOpen() || _adjustInspector.panel != AdjustPanelKind::Filter || _adjustCard == nullptr)
+    if (!AdjustPanelOpen() || !_adjustInspector.filter.has_value() || _adjustInspector.filter == FilterKind::Levels ||
+        _adjustInspector.filter == FilterKind::HueSaturation || _adjustCard == nullptr)
     {
         return false;
     }
     DxUi::Control* option = nullptr;
-    switch (_adjustInspector.filter)
+    switch (*_adjustInspector.filter)
     {
     case FilterKind::GaussianBlur:
         option = _adjustRows[static_cast<std::size_t>(AdjustRowId::Radius)].slider;
@@ -377,52 +373,53 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
         y += height + kRowGapDip;
     };
     place(_adjustTitle, 24.0f);
-    switch (state.panel)
+    // Levels and Hue/Saturation draw their own editors; every other kind shares the generic filter layout below.
+    if (state.filter.has_value())
     {
-    case AdjustPanelKind::Levels:
-    {
-        place(_adjustChannel, kRowDip);
-        place(_levelsInput, kHistogramDip + LevelsBar::kHandleRowDip);
-        const float third = (innerRight - innerLeft - 12.0f) / 3.0f;
-        PlaceControl(_levelsBlack, D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
-        PlaceControl(_levelsGamma, D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
-        PlaceControl(_levelsWhite, D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
-        y += kRowDip + kRowGapDip;
-        place(_levelsOutput, kOutputRampDip + LevelsBar::kHandleRowDip);
-        const float half = (innerRight - innerLeft - 6.0f) / 2.0f;
-        PlaceControl(_levelsOutBlack, D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
-        PlaceControl(_levelsOutWhite, D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
-        y += kRowDip + kRowGapDip;
-        placeButtons(_levelsSample, kRowDip);
-        placeButtons(_levelsAuto, kRowDip);
-        break;
-    }
-    case AdjustPanelKind::HueSaturation:
-    {
-        const bool spectrum = state.hsv.range != ColorRange::Master && !state.hsv.colorize;
-        PlaceControl(_hueRange, D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
-        float x = innerRight;
-        for (DxUi::Button* control : {_hueTargeting, _hueSample[2], _hueSample[1], _hueSample[0]})
+        switch (*state.filter)
         {
-            const float buttonWidth = 50.0f;
-            PlaceControl(control, D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
-            x -= buttonWidth + 4.0f;
+        case FilterKind::Levels:
+        {
+            place(_adjustChannel, kRowDip);
+            place(_levelsInput, kHistogramDip + LevelsBar::kHandleRowDip);
+            const float third = (innerRight - innerLeft - 12.0f) / 3.0f;
+            PlaceControl(_levelsBlack, D2D1::RectF(innerLeft, y, innerLeft + third, y + kRowDip));
+            PlaceControl(_levelsGamma,
+                         D2D1::RectF(innerLeft + third + 6.0f, y, innerLeft + 2 * third + 6.0f, y + kRowDip));
+            PlaceControl(_levelsWhite, D2D1::RectF(innerRight - third, y, innerRight, y + kRowDip));
+            y += kRowDip + kRowGapDip;
+            place(_levelsOutput, kOutputRampDip + LevelsBar::kHandleRowDip);
+            const float half = (innerRight - innerLeft - 6.0f) / 2.0f;
+            PlaceControl(_levelsOutBlack, D2D1::RectF(innerLeft, y, innerLeft + half, y + kRowDip));
+            PlaceControl(_levelsOutWhite, D2D1::RectF(innerRight - half, y, innerRight, y + kRowDip));
+            y += kRowDip + kRowGapDip;
+            placeButtons(_levelsSample, kRowDip);
+            placeButtons(_levelsAuto, kRowDip);
+            break;
         }
-        y += kRowDip + kRowGapDip;
-        placeRow(AdjustRowId::Hue);
-        placeRow(AdjustRowId::Saturation);
-        placeRow(AdjustRowId::Lightness);
-        if (spectrum)
+        case FilterKind::HueSaturation:
         {
-            place(_spectrum, kSpectrumDip);
-            place(_hueInvert, 24.0f);
+            const bool spectrum = state.hsv.range != ColorRange::Master && !state.hsv.colorize;
+            PlaceControl(_hueRange, D2D1::RectF(innerLeft, y, innerLeft + 150.0f, y + kRowDip));
+            float x = innerRight;
+            for (DxUi::Button* control : {_hueTargeting, _hueSample[2], _hueSample[1], _hueSample[0]})
+            {
+                const float buttonWidth = 50.0f;
+                PlaceControl(control, D2D1::RectF(x - buttonWidth, y, x, y + kRowDip));
+                x -= buttonWidth + 4.0f;
+            }
+            y += kRowDip + kRowGapDip;
+            placeRow(AdjustRowId::Hue);
+            placeRow(AdjustRowId::Saturation);
+            placeRow(AdjustRowId::Lightness);
+            if (spectrum)
+            {
+                place(_spectrum, kSpectrumDip);
+                place(_hueInvert, 24.0f);
+            }
+            place(_hueColorize, 24.0f);
+            break;
         }
-        place(_hueColorize, 24.0f);
-        break;
-    }
-    case AdjustPanelKind::Filter:
-        switch (state.filter)
-        {
         case FilterKind::Curves:
             place(_adjustChannel, kRowDip);
             place(_curveEditor, kCurveDip);
@@ -474,9 +471,6 @@ void ChromeHost::ArrangeAdjustPanel(float right, float top, float bottom) noexce
             }
             break;
         }
-        break;
-    case AdjustPanelKind::None:
-        break;
     }
     place(_adjustPreview, 24.0f);
     if (state.limitedToSelection && !state.editsAdjustment)
@@ -500,7 +494,7 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
     const auto hold = HoldReports();
     const bool wasOpen = _adjustCard->IsVisible();
     _adjustInspector = state;
-    const bool open = state.panel != AdjustPanelKind::None;
+    const bool open = state.filter.has_value();
     _adjustCard->SetVisible(open);
     if (open)
     {
@@ -525,10 +519,9 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
                 }
             }
         };
-        const bool levels = state.panel == AdjustPanelKind::Levels;
-        const bool hsv = state.panel == AdjustPanelKind::HueSaturation;
-        const bool filter = state.panel == AdjustPanelKind::Filter;
-        const auto kind = [&](FilterKind which) { return filter && state.filter == which; };
+        const bool levels = state.filter == FilterKind::Levels;
+        const bool hsv = state.filter == FilterKind::HueSaturation;
+        const auto kind = [&](FilterKind which) { return state.filter == which; };
         ShowControl(_adjustChannel, levels || kind(FilterKind::Curves));
         if (levels)
         {

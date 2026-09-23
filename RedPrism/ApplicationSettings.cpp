@@ -35,31 +35,6 @@ constexpr std::array<float, 4> kLightClearColor{0.898f, 0.898f, 0.910f, 1.0f};
     return {GetRValue(color) / 255.0f, GetGValue(color) / 255.0f, GetBValue(color) / 255.0f, 1.0f};
 }
 
-// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
-void ReportSelfTestFailure(const std::wstring& message) noexcept
-{
-    OutputDebugStringW(message.c_str());
-    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
-    if (error == nullptr || error == INVALID_HANDLE_VALUE)
-    {
-        return;
-    }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
-                                         nullptr, nullptr);
-    if (size <= 0)
-    {
-        return;
-    }
-    std::string utf8(static_cast<std::size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
-    {
-        return;
-    }
-    DWORD written = 0;
-    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-}
-
 // Counts the UIA elements under `fragment` (depth first, at most `budget` visits) that carry a Name.
 void CountNamedElements(IRawElementProviderFragment* fragment, int& named, int& budget) noexcept
 {
@@ -292,7 +267,7 @@ int Application::RunProductHardeningSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportSelfTestFailure(L"The product-hardening self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The product-hardening self-test needs the chrome and the window.\n");
         return 5;
     }
     // Chrome geometry: the File menu's flyout anchors under its item on screen, and a floating card is chrome, not
@@ -301,7 +276,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     POINT origin{};
     if (!GetClientRect(_window.get(), &client) || !ClientToScreen(_window.get(), &origin))
     {
-        ReportSelfTestFailure(L"The window's client rectangle is unavailable.\n");
+        SelfTestFailure(L"The window's client rectangle is unavailable.\n");
         return 5;
     }
     const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
@@ -313,7 +288,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     if (anchor.x < origin.x || anchor.x >= origin.x + client.right || anchor.y <= menuMiddle ||
         anchor.y > menuBottom + 1)
     {
-        ReportSelfTestFailure(std::format(
+        SelfTestFailure(std::format(
             L"The File menu anchor ({}, {}) is not under its item (client origin {}, {}; menu bottom {}).\n", anchor.x,
             anchor.y, origin.x, origin.y, menuBottom));
         return 5;
@@ -323,7 +298,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     const float holeY = hole.top + hole.height / 2.0f;
     if (!_chrome->IsCanvasPoint(holeX, holeY) || _chrome->IsCanvasPoint(hole.left / 2.0f, holeY))
     {
-        ReportSelfTestFailure(L"The canvas hit test does not tell the hole from the rail.\n");
+        SelfTestFailure(L"The canvas hit test does not tell the hole from the rail.\n");
         return 5;
     }
     // A rail click through the pointer path activates the tool: the Toolbar button's click reaches OnTool.
@@ -342,9 +317,9 @@ int Application::RunProductHardeningSelfTest() noexcept
     {
         _chrome->DetachAccessibility();
         const bool withoutAccessibility = clickRail(EditorTool::Marquee);
-        ReportSelfTestFailure(std::format(L"Clicking the Marquee rail button did not activate the tool (tool {}; "
-                                          L"without accessibility attached: {}).\n",
-                                          static_cast<int>(_tool), withoutAccessibility ? L"works" : L"fails"));
+        SelfTestFailure(std::format(L"Clicking the Marquee rail button did not activate the tool (tool {}; "
+                                    L"without accessibility attached: {}).\n",
+                                    static_cast<int>(_tool), withoutAccessibility ? L"works" : L"fails"));
         return 5;
     }
     // The padding to the left of the glyph is part of the button: a press there activates the same tool.
@@ -358,7 +333,7 @@ int Application::RunProductHardeningSelfTest() noexcept
         OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x, y));
         if (_tool != EditorTool::Marquee || _chrome->Tool() != EditorTool::Marquee)
         {
-            ReportSelfTestFailure(L"The left edge of the rail did not activate the Marquee.\n");
+            SelfTestFailure(L"The left edge of the rail did not activate the Marquee.\n");
             return 5;
         }
     }
@@ -373,14 +348,14 @@ int Application::RunProductHardeningSelfTest() noexcept
     (void)SetFocus(previousFocus);
     if (!windowFocused)
     {
-        ReportSelfTestFailure(L"note: the hidden self-test window could not take the keyboard focus; the focused rail "
-                              L"click was not exercised.\n");
+        SelfTestFailure(L"note: the hidden self-test window could not take the keyboard focus; the focused rail "
+                        L"click was not exercised.\n");
     }
     if (windowFocused && !focusedClick)
     {
-        ReportSelfTestFailure(std::format(L"Clicking the Lasso rail button with the window focused did not activate "
-                                          L"the tool (tool {}).\n",
-                                          static_cast<int>(_tool)));
+        SelfTestFailure(std::format(L"Clicking the Lasso rail button with the window focused did not activate "
+                                    L"the tool (tool {}).\n",
+                                    static_cast<int>(_tool)));
         return 5;
     }
     // A user holds a rail button for a moment, so frames render between the press and the release: the real loop's
@@ -413,9 +388,9 @@ int Application::RunProductHardeningSelfTest() noexcept
     settle();
     if (!heldClick(EditorTool::Brush))
     {
-        ReportSelfTestFailure(std::format(L"Clicking the Brush rail button after a tool switch, with frames between "
-                                          L"press and release, did not activate the tool (tool {}).\n",
-                                          static_cast<int>(_tool)));
+        SelfTestFailure(std::format(L"Clicking the Brush rail button after a tool switch, with frames between "
+                                    L"press and release, did not activate the tool (tool {}).\n",
+                                    static_cast<int>(_tool)));
         return 5;
     }
     OnTool(EditorTool::Move);
@@ -425,9 +400,9 @@ int Application::RunProductHardeningSelfTest() noexcept
     settle();
     if (!lassoClicked || !heldClick(EditorTool::Wand))
     {
-        ReportSelfTestFailure(std::format(L"Clicking a rail button after another rail click, with frames between "
-                                          L"press and release, did not activate the tool (tool {}).\n",
-                                          static_cast<int>(_tool)));
+        SelfTestFailure(std::format(L"Clicking a rail button after another rail click, with frames between "
+                                    L"press and release, did not activate the tool (tool {}).\n",
+                                    static_cast<int>(_tool)));
         return 5;
     }
     OnTool(EditorTool::Move);
@@ -436,8 +411,8 @@ int Application::RunProductHardeningSelfTest() noexcept
     settle();
     if (!heldClick(EditorTool::Brush))
     {
-        ReportSelfTestFailure(L"Clicking the Brush rail button after the opacity stepper had the focus did not "
-                              L"activate the tool.\n");
+        SelfTestFailure(L"Clicking the Brush rail button after the opacity stepper had the focus did not "
+                        L"activate the tool.\n");
         return 5;
     }
     // A user hovers before clicking, so the button's tooltip is showing at the moment of the click.
@@ -453,9 +428,9 @@ int Application::RunProductHardeningSelfTest() noexcept
         OnPointer(WM_LBUTTONUP, 0, MAKELPARAM(x + 1, y));
         if (_tool != EditorTool::Wand)
         {
-            ReportSelfTestFailure(std::format(L"Clicking the Wand rail button under its tooltip did not activate the "
-                                              L"tool (tool {}; tooltip shown: {}).\n",
-                                              static_cast<int>(_tool), tooltip ? L"yes" : L"no"));
+            SelfTestFailure(std::format(L"Clicking the Wand rail button under its tooltip did not activate the "
+                                        L"tool (tool {}; tooltip shown: {}).\n",
+                                        static_cast<int>(_tool), tooltip ? L"yes" : L"no"));
             return 5;
         }
     }
@@ -470,7 +445,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     _chrome->CloseColorPicker(false);
     if (!cardIsChrome)
     {
-        ReportSelfTestFailure(L"The open color picker card counts as canvas.\n");
+        SelfTestFailure(L"The open color picker card counts as canvas.\n");
         return 5;
     }
 
@@ -484,7 +459,7 @@ int Application::RunProductHardeningSelfTest() noexcept
             text += L" [" + name + L"]";
         }
         text += L"\n";
-        ReportSelfTestFailure(text);
+        SelfTestFailure(text);
         return 5;
     }
     IRawElementProviderFragmentRoot* root = _chrome->AccessibilityRoot();
@@ -493,7 +468,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     if (root == nullptr || FAILED(root->QueryInterface(IID_PPV_ARGS(rootFragment.put()))) || !rootFragment ||
         FAILED(rootFragment->Navigate(NavigateDirection_FirstChild, chrome.put())) || !chrome)
     {
-        ReportSelfTestFailure(std::format(
+        SelfTestFailure(std::format(
             L"The window's UIA root does not expose the DxUi chrome as its child (attach status 0x{:08X}).\n",
             static_cast<unsigned long>(_chrome->AccessibilityStatus())));
         return 5;
@@ -501,7 +476,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     wil::com_ptr_nothrow<IRawElementProviderFragment> parent;
     if (FAILED(chrome->Navigate(NavigateDirection_Parent, parent.put())) || !parent)
     {
-        ReportSelfTestFailure(L"The chrome's UIA fragment does not name the window root as its parent.\n");
+        SelfTestFailure(L"The chrome's UIA fragment does not name the window root as its parent.\n");
         return 5;
     }
     int named = 0;
@@ -509,13 +484,13 @@ int Application::RunProductHardeningSelfTest() noexcept
     CountNamedElements(chrome.get(), named, budget);
     if (named < 8)
     {
-        ReportSelfTestFailure(L"The chrome's UIA tree carries too few named elements.\n");
+        SelfTestFailure(L"The chrome's UIA tree carries too few named elements.\n");
         return 5;
     }
     wil::com_ptr_nothrow<IRawElementProviderFragment> hit;
     if (FAILED(root->ElementProviderFromPoint(origin.x + 8.0, origin.y + 8.0, hit.put())) || !hit)
     {
-        ReportSelfTestFailure(L"ElementProviderFromPoint found no chrome element under the menu bar.\n");
+        SelfTestFailure(L"ElementProviderFromPoint found no chrome element under the menu bar.\n");
         return 5;
     }
 
@@ -529,13 +504,13 @@ int Application::RunProductHardeningSelfTest() noexcept
     initial.theme = ThemePreference::Dark;
     if (!SettingsStore::Save(path, initial))
     {
-        ReportSelfTestFailure(L"The self-test could not write its settings file.\n");
+        SelfTestFailure(L"The self-test could not write its settings file.\n");
         return 5;
     }
     UseSettings(path, initial);
     if (!_settingsWatch || !_chrome->ThemeIsDark() || !_session.showsSampleRing)
     {
-        ReportSelfTestFailure(L"The settings watch did not start from the self-test file.\n");
+        SelfTestFailure(L"The settings watch did not start from the self-test file.\n");
         return 5;
     }
     const auto waitForChange = [this]() noexcept
@@ -546,25 +521,25 @@ int Application::RunProductHardeningSelfTest() noexcept
     edited.layersPanelWidth = 300;
     if (!SettingsStore::Save(path, edited) || !waitForChange())
     {
-        ReportSelfTestFailure(L"Editing the settings file did not signal the directory watch.\n");
+        SelfTestFailure(L"Editing the settings file did not signal the directory watch.\n");
         return 5;
     }
     OnSettingsDirectoryChanged(true);
     if (_chrome->ThemeIsDark() || _session.showsSampleRing || _settings.layersPanelWidth != 300 ||
         _renderer.ClearColor() != kLightClearColor)
     {
-        ReportSelfTestFailure(L"A valid edit of the settings file did not apply live.\n");
+        SelfTestFailure(L"A valid edit of the settings file did not apply live.\n");
         return 5;
     }
     (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
     if (std::abs(_chrome->LayersWidthDip() - 300.0f) > 0.5f)
     {
-        ReportSelfTestFailure(L"The layers panel width did not follow the settings file.\n");
+        SelfTestFailure(L"The layers panel width did not follow the settings file.\n");
         return 5;
     }
     if (!SettingsStore::WriteFileAtomic(path, "{ broken") || !waitForChange())
     {
-        ReportSelfTestFailure(L"Breaking the settings file did not signal the directory watch.\n");
+        SelfTestFailure(L"Breaking the settings file did not signal the directory watch.\n");
         return 5;
     }
     OnSettingsDirectoryChanged(true);
@@ -572,18 +547,18 @@ int Application::RunProductHardeningSelfTest() noexcept
     if (_chrome->ThemeIsDark() || _session.showsSampleRing || !SettingsStore::ReadFileBytes(path, bytes) ||
         bytes != "{ broken")
     {
-        ReportSelfTestFailure(L"An invalid settings file changed the live settings or was rewritten.\n");
+        SelfTestFailure(L"An invalid settings file changed the live settings or was rewritten.\n");
         return 5;
     }
     if (!SettingsStore::Save(path, initial) || !waitForChange())
     {
-        ReportSelfTestFailure(L"Restoring the settings file did not signal the directory watch.\n");
+        SelfTestFailure(L"Restoring the settings file did not signal the directory watch.\n");
         return 5;
     }
     OnSettingsDirectoryChanged(true);
     if (!_chrome->ThemeIsDark() || !_session.showsSampleRing || _renderer.ClearColor() != kDarkClearColor)
     {
-        ReportSelfTestFailure(L"Restoring the settings file did not apply live.\n");
+        SelfTestFailure(L"Restoring the settings file did not apply live.\n");
         return 5;
     }
     // High contrast: the system palette applies through the same path and RefreshTheme follows the OS state.
@@ -592,7 +567,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     RefreshTheme();
     if (!highContrastApplied || _chrome->ThemeIsHighContrast() != RedPrism::SystemHighContrast())
     {
-        ReportSelfTestFailure(L"The high-contrast palette did not apply, or RefreshTheme ignored the system state.\n");
+        SelfTestFailure(L"The high-contrast palette did not apply, or RefreshTheme ignored the system state.\n");
         return 5;
     }
     SaveSettings();
@@ -600,7 +575,7 @@ int Application::RunProductHardeningSelfTest() noexcept
     if (!saved.has_value() || !saved->window.valid || saved->theme != ThemePreference::Dark ||
         saved->window.width < AppSettings::kWindowMinWidth)
     {
-        ReportSelfTestFailure(L"Saving the settings did not record the window placement.\n");
+        SelfTestFailure(L"Saving the settings did not record the window placement.\n");
         return 5;
     }
     // Deleting the watched directory must not leave a watch that stays signaled: the message wait would wake at
@@ -610,9 +585,9 @@ int Application::RunProductHardeningSelfTest() noexcept
     OnSettingsDirectoryChanged(true);
     if (!deletionSignaled || _settingsWatch || !_chrome->ThemeIsDark())
     {
-        ReportSelfTestFailure(std::format(L"Deleting the settings directory left the watch armed (signaled {}, "
-                                          L"watch {}).\n",
-                                          deletionSignaled, static_cast<bool>(_settingsWatch)));
+        SelfTestFailure(std::format(L"Deleting the settings directory left the watch armed (signaled {}, "
+                                    L"watch {}).\n",
+                                    deletionSignaled, static_cast<bool>(_settingsWatch)));
         return 5;
     }
     StopSettingsWatch();

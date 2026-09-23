@@ -245,22 +245,12 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
             layer.visible = false;
         }
     }
-    BindCompositionDevice();
-    // A full-resolution readback of `copy` (tiled past the texture limit, never the display proxy or a preview).
-    std::optional<Raster> result;
-    std::vector<std::uint8_t> bgra;
-    UINT width = 0;
-    UINT height = 0;
-    if (SUCCEEDED(_composition.ComposeReadback(copy, bgra, width, height)) && width > 0 && height > 0)
+    const std::optional<Raster> raster = ComposeDocumentReadback(copy);
+    if (raster.has_value() && raster->HasStorage())
     {
-        const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
-                                           bgra.data(), bgra.size());
-        if (raster.HasStorage())
-        {
-            result = raster;
-        }
+        return raster;
     }
-    return result;
+    return std::nullopt;
 }
 
 void Application::ApplyColorEdit() noexcept
@@ -529,10 +519,6 @@ void Application::SyncAdjustPanel() noexcept
     state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
     if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value())
     {
-        // Levels and Hue/Saturation have editors of their own; every other kind shows its filter controls.
-        state.panel = edit->kind == FilterKind::Levels          ? AdjustPanelKind::Levels
-                      : edit->kind == FilterKind::HueSaturation ? AdjustPanelKind::HueSaturation
-                                                                : AdjustPanelKind::Filter;
         const std::wstring name = FilterKindName(edit->kind);
         state.title = state.editsAdjustment ? FormatStringResource(nullptr, IDS_ADJUST_EDIT_TITLE, name) : name;
         state.filter = edit->kind;
@@ -619,8 +605,6 @@ bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool
     }
     return false;
 }
-
-void SelfTestFailure(const wchar_t* message) noexcept; // Application.cpp
 
 int Application::RunAdjustSelfTest() noexcept
 {

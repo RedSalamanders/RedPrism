@@ -482,27 +482,31 @@ StatusStrip shows zoom percent, document size, and the current tool with its eff
 (`ChromeHost::CommandChordText`). The tab title is the file name (or Untitled) with a dirty mark when history is
 modified.
 
-## Unimplemented functions
+## Notices
 
-The shell exposes the documented command surface through menus and the tool rail. A function that has no implementation yet MUST, when invoked, show
-the localized notice `IDS_NOT_IMPLEMENTED` ("{0} is not implemented yet.", the function named by its own caption
-without its mnemonic, accelerator column or ellipsis) through `Application::ShowNotImplemented`, and change nothing
-else: no document, history, selection, tool or viewport change, no side effect before or after the notice. The
-notice is a card over the canvas (`ChromeHost::ShowNotice`), not a message box, shown from the message loop after
-the command or click that raised it returns (never from inside a DxUi dispatch). OK or Escape dismisses it. Quiet
-runs (`--self-test`, `--screenshot`, `--bench`) count it instead of showing it. A color or filter command that
-cannot run on the active layer shows the same card with `IDS_CMD_UNAVAILABLE` ("{0} cannot be used on this layer.")
-and does not open an empty panel. An edit the document's 100 M pixel budget refuses (Decision D7 of the 2026-09-23
+The shell exposes the documented command surface through menus and the tool rail. No exposed function awaits an implementation since C16 closed
+([`Completeness_2026-09-21.md`](../Plans/Done/Completeness_2026-09-21.md)); a function surfaced ahead of its
+implementation would show a notice card here (a stub still changes nothing: no document, history, selection, tool
+or viewport change, no side effect before or after the notice) and join a table here until it lands.
+
+A color or filter command that cannot run on the active layer shows a card over the canvas
+(`ChromeHost::ShowNotice`, not a message box) with `IDS_CMD_UNAVAILABLE` ("{0} cannot be used on this layer.") and
+does not open an empty panel. An edit the document's 100 M pixel budget refuses (Decision D7 of the 2026-09-23
 review, [`Document_Model.md`](../Document/Document_Model.md): a paste, Layer via Copy, a duplicate, a mask, the
 floating selection's merge, a filter whose grid grows, a merge, a distortion, a shape) shows the card with
-`IDS_ERROR_TOO_LARGE` once, from the message loop as the not-implemented notice is: `SyncChrome`, which every
-document change runs, reads `DocumentSession::TakeBudgetRefusal`, so whichever path ran the edit reports it, and
-quiet runs count it; a refused filter or merge names the budget instead of `IDS_CMD_UNAVAILABLE` or
-`IDS_ERROR_FLATTEN`. A stub leaves with its implementation, and the not-implemented notice never appears for an
-implemented function. No exposed function awaits an implementation since C16 closed
-([`Completeness_2026-09-21.md`](../Plans/Done/Completeness_2026-09-21.md)); a function surfaced ahead of its
-implementation joins a table here until it lands. The self-test raises the notice under quiet UI and checks that
-the count rises by one while the document and the history stay as they were.
+`IDS_ERROR_TOO_LARGE` once: `SyncChrome`, which every document change runs, reads
+`DocumentSession::TakeBudgetRefusal`, so whichever path ran the edit reports it; a refused filter or merge names the
+budget instead of `IDS_CMD_UNAVAILABLE` or `IDS_ERROR_FLATTEN`. The budget notice posts itself
+(`Application::kNoticeMessage`) so it never lands inside a DxUi dispatch (a header's Apply, a menu command, a layer
+row) or a modal loop, and shows from the message loop once the command or click that raised it returns; the
+unavailable notice shows directly, since nothing calls it from inside a dispatch. OK or Escape dismisses either
+card.
+
+Every prompt and notice (these two, `Application::ShowError`'s message box, the save and image-open prompts, and
+Help > About) goes through one small interface, `Prompts` (`RedPrism/Prompts.h`): `RealPrompts()` shows the real UI;
+quiet runs (`--self-test`, `--screenshot`, `--bench`) install `QuietPrompts()`, which never shows anything and
+answers asked questions with a forced or default value instead. Application counts what each call meant for the
+self-test itself (`_errorsShown`, `_budgetNotices`, and so on), unconditionally, whichever `Prompts` is installed.
 
 ## Layers panel
 
@@ -595,6 +599,15 @@ tree from the window root (at least eight named elements), resolves a point unde
 palette's four zones and, with their panels open, the curve editor, both levels bars and the hue spectrum as named
 Buttons in that tree. Detaching the chrome retires the provider (`UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)`,
 `UiaDisconnectProvider`).
+
+Known DxUi limitation (RF-1114): the menu bar and the tab strip carry an accessible name and RedPrism delegates the
+whole tree to DxUi correctly, but neither publishes a UIA fragment. The pinned library's
+`GetControlTypeId` (`src/Controls/DxUi.Accessibility.cpp`) is an exhaustive `dynamic_cast` chain over `Checkbox`,
+`Toggle`/`Button`, `TextField`, `ComboBox`, `Slider`, `ProgressBar`, `ThroughputGraph`, `Tree`, `Grid` and
+`ColorSwatch` with no case for `MenuBar` or `TabControl`; unlike `Panel` and `PageHost`, `MenuBar` (`include/DxUi/DxUi.h`)
+does not override `GetLogicalChildCount` / `GetLogicalChild`, so its items have no accessibility walk to join even if
+the bar itself did. A screen reader reaches both only by client coordinates, not by name or role. Not fixable from
+RedPrism; a fix belongs in DxUi.
 
 ## Size cards
 

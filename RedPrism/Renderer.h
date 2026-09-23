@@ -105,7 +105,6 @@ class Renderer final
     [[nodiscard]] UINT Height() const noexcept;
     HRESULT ProbeOcclusion() noexcept;
     HRESULT EnsureDeviceForWindowMonitor() noexcept;
-    [[nodiscard]] DeviceIdentity DeviceInfo() const noexcept;
     [[nodiscard]] HANDLE FrameLatencyWaitableObject() const noexcept;
     [[nodiscard]] bool IsSuspended() const noexcept;
     [[nodiscard]] bool IsOccluded() const noexcept;

@@ -383,7 +383,6 @@ BEGIN
     IDS_A11Y_HUE_SPECTRUM           "Hue spectrum"
     IDS_A11Y_GRADIENT_RAMP          "Gradient map ramp"
     IDS_A11Y_SAMPLING               "Resampling"
-    IDS_NOT_IMPLEMENTED             "{0} is not implemented yet."
     IDS_CMD_NEW_CANVAS              "New &Canvas..."
     IDS_CMD_IMPORT_IMAGES           "&Import Images..."
     IDS_CMD_CLOSE_PROJECT           "Close P&roject\tCtrl+W"

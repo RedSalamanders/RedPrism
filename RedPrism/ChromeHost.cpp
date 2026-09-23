@@ -348,21 +348,42 @@ void ChromeHost::Detach() noexcept
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
     // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
     ReleaseLucideIcons();
+    // DxUi::ControlHost::Detach (reached through _view.Detach(), EmbeddedHost::Detach -> _host.Detach()) frees the
+    // whole control tree (_root.reset()): every raw pointer this class holds into it would dangle from here on,
+    // not read as null, so a null-only check (no `_attached` guard, as most of ChromeHost's own accessors use)
+    // would read freed memory. Attach() rebuilds the tree from scratch, reassigning all of them before anything
+    // reads one again.
+    ResetControlPointers();
     _view.Detach();
+    for (unique_hmenu& menu : _menus)
+    {
+        menu.reset();
+    }
+    _graphics.reset();
+    _requestContext = nullptr;
+    _requestFrame = nullptr;
+    _cardCount = 0;
+    _attached = false;
+}
+
+void ChromeHost::ResetControlPointers() noexcept
+{
+    _cards = {};
     _menu = nullptr;
     _tabs = nullptr;
     _rail = nullptr;
+    _moreTools = nullptr;
+    _moreCard = nullptr;
+    _overflowButtons.fill(nullptr);
     _header = nullptr;
     _layers = nullptr;
     _status = nullptr;
     _layersTitle = nullptr;
     _splitter = nullptr;
     _railPalette = nullptr;
-    _moreTools = nullptr;
-    _moreCard = nullptr;
-    _overflowButtons.fill(nullptr);
     _opacity = nullptr;
     _pickerCard = nullptr;
+    _picker = nullptr;
     _noticeCard = nullptr;
     _noticeLabel = nullptr;
     _noticeClose = nullptr;
@@ -371,22 +392,9 @@ void ChromeHost::Detach() noexcept
     _shortcutsSearch = nullptr;
     _shortcutsTree = nullptr;
     _shortcutsClose = nullptr;
-    _adjustCard = nullptr;
-    _sizeCard = nullptr;
-    _renameCard = nullptr;
-    _renameField = nullptr;
-    _cardCount = 0;
-    _sizeAnchors.fill(nullptr);
-    _curveEditor = nullptr;
-    _levelsInput = nullptr;
-    _levelsOutput = nullptr;
-    _spectrum = nullptr;
-    _gradientRamp = nullptr;
-    _adjustRows = {};
-    _picker = nullptr;
+    _menuReturnFocus = nullptr;
     _overlay = nullptr;
     _transformHeader = nullptr;
-    _cropHeader = nullptr;
     _transformTitle = nullptr;
     _autoSelect = nullptr;
     _showControls = nullptr;
@@ -402,17 +410,130 @@ void ChromeHost::Detach() noexcept
     _flipVertical = nullptr;
     _transformCancel = nullptr;
     _transformApply = nullptr;
+    _selectionHeader = nullptr;
+    _selectionTitle = nullptr;
+    _marqueeShape = nullptr;
+    _lassoShape = nullptr;
+    _selectionMode = nullptr;
+    _wandTolerance = nullptr;
+    _wandSampleSize = nullptr;
+    _wandSample = nullptr;
+    _wandContiguous = nullptr;
+    _selectionAntialias = nullptr;
+    _expandButton = nullptr;
+    _expandAmount = nullptr;
+    _contractButton = nullptr;
+    _contractAmount = nullptr;
+    _selectionEmpty = nullptr;
+    _deselectButton = nullptr;
+    _brushHeader = nullptr;
+    _brushTitle = nullptr;
+    _brushMode = nullptr;
+    _brushSize = nullptr;
+    _brushHardness = nullptr;
+    _brushOpacity = nullptr;
+    _brushMaskPaint = nullptr;
+    _brushColorLabel = nullptr;
+    _brushColor = nullptr;
+    _brushMaskNote = nullptr;
+    _brushHealMode = nullptr;
+    _brushCloneAligned = nullptr;
+    _brushCloneSample = nullptr;
+    _brushSmearMode = nullptr;
+    _brushSourceNote = nullptr;
+    _gradientHeader = nullptr;
+    _gradientTitle = nullptr;
+    _gradientShape = nullptr;
+    _gradientStart = nullptr;
+    _gradientEnd = nullptr;
+    _gradientStyle = nullptr;
+    _gradientReverse = nullptr;
+    _gradientOpacity = nullptr;
+    _gradientMaskNote = nullptr;
+    _gradientCancel = nullptr;
+    _gradientApply = nullptr;
+    _shapeHeader = nullptr;
+    _cropHeader = nullptr;
+    _cropTitle = nullptr;
+    _cropRatioLabel = nullptr;
+    _cropRatio = nullptr;
+    _cropSize = nullptr;
+    _cropCancel = nullptr;
+    _cropApply = nullptr;
+    _shapeTitle = nullptr;
+    _shapeKind = nullptr;
+    _shapeRadius = nullptr;
+    _shapeFillLabel = nullptr;
+    _shapeFill = nullptr;
     _toolButtons.fill(nullptr);
-    for (unique_hmenu& menu : _menus)
-    {
-        menu.reset();
-    }
-    _graphics.reset();
-    _requestContext = nullptr;
-    _requestFrame = nullptr;
-    _width = 0;
-    _height = 0;
-    _attached = false;
+    _renameCard = nullptr;
+    _renameTitle = nullptr;
+    _renameField = nullptr;
+    _renameCancel = nullptr;
+    _renameOk = nullptr;
+    _adjustCard = nullptr;
+    _adjustTitle = nullptr;
+    _adjustChannel = nullptr;
+    _curveEditor = nullptr;
+    _curveCaption = nullptr;
+    _curveRemove = nullptr;
+    _curveReset = nullptr;
+    _levelsInput = nullptr;
+    _levelsOutput = nullptr;
+    _levelsBlack = nullptr;
+    _levelsGamma = nullptr;
+    _levelsWhite = nullptr;
+    _levelsOutBlack = nullptr;
+    _levelsOutWhite = nullptr;
+    _levelsSample.fill(nullptr);
+    _levelsAuto.fill(nullptr);
+    _hueRange = nullptr;
+    _hueSample.fill(nullptr);
+    _hueTargeting = nullptr;
+    _spectrum = nullptr;
+    _hueInvert = nullptr;
+    _hueColorize = nullptr;
+    _gradientRamp = nullptr;
+    _mapShadows = nullptr;
+    _mapShadowsLabel = nullptr;
+    _mapHighlights = nullptr;
+    _mapHighlightsLabel = nullptr;
+    _mapReverse = nullptr;
+    _noiseDistribution = nullptr;
+    _noiseMono = nullptr;
+    _lensHint = nullptr;
+    _adjustRows = {};
+    _adjustPreview = nullptr;
+    _fillHint = nullptr;
+    _fillNoSource = nullptr;
+    _adjustNote = nullptr;
+    _adjustCancel = nullptr;
+    _adjustApply = nullptr;
+    _sizeCard = nullptr;
+    _sizeTitle = nullptr;
+    _sizeCurrent = nullptr;
+    _sizeBytes = nullptr;
+    _sizeUnit = nullptr;
+    _sizeWidth = nullptr;
+    _sizeHeight = nullptr;
+    _sizeRelative = nullptr;
+    _sizeLocked = nullptr;
+    _sizeResult = nullptr;
+    _sizeAnchorLabel = nullptr;
+    _sizeAnchors.fill(nullptr);
+    _sizeAnchorName = nullptr;
+    _sizeAnchorHint = nullptr;
+    _sizeExtension = nullptr;
+    _sizeExtensionSwatch = nullptr;
+    _sizeResolution = nullptr;
+    _sizePpi = nullptr;
+    _sizeResample = nullptr;
+    _sizeSampling = nullptr;
+    _sizeNote = nullptr;
+    _sizeOpen = nullptr;
+    _sizeImport = nullptr;
+    _sizeCancel = nullptr;
+    _sizeApply = nullptr;
 }
 
 void ChromeHost::SetVisible(bool visible) noexcept
@@ -2882,7 +3003,6 @@ void ChromeHost::SyncStepper(DxUi::NumericStepper* stepper, double value, bool e
 
 void ChromeHost::SetTransformInspector(const TransformInspectorState& state) noexcept
 {
-    _inspector = state;
     if (!_transformHeader)
     {
         return;
@@ -2916,18 +3036,17 @@ void ChromeHost::SetTransformOverlay(const std::optional<TransformOverlayGeometr
     {
         return;
     }
-    const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
     std::optional<CanvasOverlay::Geometry> converted;
     if (geometry.has_value())
     {
         CanvasOverlay::Geometry result;
         for (std::size_t index = 0; index < 8; ++index)
         {
-            result.handles[index] = D2D1::Point2F(static_cast<float>(geometry->handles[index].x) * toDip,
-                                                  static_cast<float>(geometry->handles[index].y) * toDip);
+            result.handles[index] = PixelToDip(D2D1::Point2F(static_cast<float>(geometry->handles[index].x),
+                                                             static_cast<float>(geometry->handles[index].y)));
         }
-        result.rotation = D2D1::Point2F(static_cast<float>(geometry->rotationHandle.x) * toDip,
-                                        static_cast<float>(geometry->rotationHandle.y) * toDip);
+        result.rotation = PixelToDip(D2D1::Point2F(static_cast<float>(geometry->rotationHandle.x),
+                                                   static_cast<float>(geometry->rotationHandle.y)));
         result.showsRotation = geometry->showsRotation;
         converted = result;
     }
@@ -2935,11 +3054,11 @@ void ChromeHost::SetTransformOverlay(const std::optional<TransformOverlayGeometr
     std::vector<float> ys;
     for (const float x : guideXs)
     {
-        xs.push_back(x * toDip);
+        xs.push_back(PixelToDip(x));
     }
     for (const float y : guideYs)
     {
-        ys.push_back(y * toDip);
+        ys.push_back(PixelToDip(y));
     }
     _overlay->SetGeometry(converted);
     _overlay->SetGuides(std::move(xs), std::move(ys));
@@ -3077,13 +3196,11 @@ void ChromeHost::SetSelectionOutline(std::vector<std::vector<D2D1_POINT_2F>> loo
     {
         return;
     }
-    const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
     for (std::vector<D2D1_POINT_2F>& loop : loops)
     {
         for (D2D1_POINT_2F& point : loop)
         {
-            point.x *= toDip;
-            point.y *= toDip;
+            point = PixelToDip(point);
         }
     }
     _overlay->SetSelectionOutline(std::move(loops));
@@ -3110,16 +3227,13 @@ void ChromeHost::SetLassoDraft(std::optional<CanvasOverlay::Draft> draft) noexce
     }
     if (draft.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
         for (D2D1_POINT_2F& point : draft->points)
         {
-            point.x *= toDip;
-            point.y *= toDip;
+            point = PixelToDip(point);
         }
         if (draft->cursor.has_value())
         {
-            draft->cursor->x *= toDip;
-            draft->cursor->y *= toDip;
+            draft->cursor = PixelToDip(*draft->cursor);
         }
     }
     _overlay->SetDraft(std::move(draft));
@@ -3254,10 +3368,8 @@ void ChromeHost::SetBrushCursor(std::optional<CanvasOverlay::BrushCursor> cursor
     }
     if (cursor.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        cursor->center.x *= toDip;
-        cursor->center.y *= toDip;
-        cursor->radius *= toDip;
+        cursor->center = PixelToDip(cursor->center);
+        cursor->radius = PixelToDip(cursor->radius);
     }
     _overlay->SetBrushCursor(cursor);
 }
@@ -3405,11 +3517,8 @@ void ChromeHost::SetGradientLine(std::optional<std::pair<D2D1_POINT_2F, D2D1_POI
     }
     if (line.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        line->first.x *= toDip;
-        line->first.y *= toDip;
-        line->second.x *= toDip;
-        line->second.y *= toDip;
+        line->first = PixelToDip(line->first);
+        line->second = PixelToDip(line->second);
     }
     _overlay->SetGradientLine(line);
 }
@@ -3422,12 +3531,8 @@ void ChromeHost::SetShapeDraft(std::optional<CanvasOverlay::ShapeDraftOverlay> d
     }
     if (draft.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        draft->rect.left *= toDip;
-        draft->rect.top *= toDip;
-        draft->rect.right *= toDip;
-        draft->rect.bottom *= toDip;
-        draft->cornerRadius *= toDip;
+        draft->rect = PixelToDip(draft->rect);
+        draft->cornerRadius = PixelToDip(draft->cornerRadius);
     }
     _overlay->SetShapeDraft(draft);
 }
@@ -3440,9 +3545,7 @@ void ChromeHost::SetSampleRing(std::optional<CanvasOverlay::SampleRing> ring) no
     }
     if (ring.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        ring->center.x *= toDip;
-        ring->center.y *= toDip;
+        ring->center = PixelToDip(ring->center);
     }
     _overlay->SetSampleRing(ring);
 }
@@ -3455,9 +3558,7 @@ void ChromeHost::SetCloneSourceMark(std::optional<D2D1_POINT_2F> point) noexcept
     }
     if (point.has_value())
     {
-        const float toDip = _dpi > 0.0f ? 96.0f / _dpi : 1.0f;
-        point->x *= toDip;
-        point->y *= toDip;
+        point = PixelToDip(*point);
     }
     _overlay->SetCloneSource(point);
 }

@@ -282,11 +282,6 @@ HRESULT Renderer::EnsureDeviceForWindowMonitor() noexcept
     return CreateDeviceResources();
 }
 
-Renderer::DeviceIdentity Renderer::DeviceInfo() const noexcept
-{
-    return _deviceInfo;
-}
-
 HANDLE Renderer::FrameLatencyWaitableObject() const noexcept
 {
     return _frameLatencyWaitable.get();

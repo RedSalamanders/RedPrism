@@ -39,8 +39,6 @@ class GpuBrushCoverage final : public BrushCoverageEngine
     {
         return false;
     }
-    // Bytes of tile storage the current stroke holds on the GPU.
-    [[nodiscard]] std::uint64_t TileBytes() const noexcept;
     [[nodiscard]] std::size_t TileCount() const noexcept
     {
         return _tiles.size();
@@ -77,5 +75,4 @@ class GpuBrushCoverage final : public BrushCoverageEngine
     wil::com_ptr_nothrow<ID3D11ShaderResourceView> _segmentsView;
     std::size_t _segmentCapacity = 0;
     std::unordered_map<std::uint64_t, TileBuffers> _tiles;
-    std::vector<std::uint32_t> _readback;
 };

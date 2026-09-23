@@ -86,18 +86,6 @@ class CanvasOverlay final : public DxUi::Control
     {
         return _cloneSource;
     }
-    [[nodiscard]] bool HasGeometry() const noexcept
-    {
-        return _geometry.has_value();
-    }
-    [[nodiscard]] bool HasSelectionOutline() const noexcept
-    {
-        return !_outline.empty();
-    }
-    [[nodiscard]] bool HasDraft() const noexcept
-    {
-        return _draft.has_value();
-    }
 
     void Paint(DxUi::ControlHost& host) const override;
     [[nodiscard]] D2D1_RECT_F GetHitBounds() const noexcept override;

@@ -18,31 +18,6 @@
 
 namespace
 {
-// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
-void ReportCropSelfTestFailure(const std::wstring& message) noexcept
-{
-    OutputDebugStringW(message.c_str());
-    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
-    if (error == nullptr || error == INVALID_HANDLE_VALUE)
-    {
-        return;
-    }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
-                                         nullptr, nullptr);
-    if (size <= 0)
-    {
-        return;
-    }
-    std::string utf8(static_cast<std::size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
-    {
-        return;
-    }
-    DWORD written = 0;
-    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-}
-
 [[nodiscard]] bool Contains(const CropRect& rect, Vec2 point) noexcept
 {
     return point.x >= rect.MinX() && point.x <= rect.MaxX() && point.y >= rect.MinY() && point.y <= rect.MaxY();
@@ -236,7 +211,7 @@ int Application::RunCropSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportCropSelfTestFailure(L"The crop self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The crop self-test needs the chrome and the window.\n");
         return 5;
     }
     const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
@@ -248,7 +223,7 @@ int Application::RunCropSelfTest() noexcept
     if (_tool != EditorTool::Crop || _chrome->Tool() != EditorTool::Crop ||
         _session.CropFrame() != CropRect{0, 0, 1280, 800} || !_overlayGeometry.has_value())
     {
-        ReportCropSelfTestFailure(L"Choosing the Crop tool did not frame the whole canvas.\n");
+        SelfTestFailure(L"Choosing the Crop tool did not frame the whole canvas.\n");
         return 5;
     }
     // Dragging the bottom-right handle to the document's (640, 400) resizes the frame through the pointer path.
@@ -268,10 +243,10 @@ int Application::RunCropSelfTest() noexcept
     if (_session.CropFrame() != CropRect{0, 0, 640, 400} || _cropDrag.has_value())
     {
         const std::optional<CropRect> frame = _session.CropFrame();
-        ReportCropSelfTestFailure(std::format(L"Dragging the crop frame's corner did not resize it to 640 × 400 "
-                                              L"({}, {}, {} × {}).\n",
-                                              frame ? frame->x : -1.0, frame ? frame->y : -1.0,
-                                              frame ? frame->width : -1.0, frame ? frame->height : -1.0));
+        SelfTestFailure(std::format(L"Dragging the crop frame's corner did not resize it to 640 × 400 "
+                                    L"({}, {}, {} × {}).\n",
+                                    frame ? frame->x : -1.0, frame ? frame->y : -1.0, frame ? frame->width : -1.0,
+                                    frame ? frame->height : -1.0));
         return 5;
     }
     // Enter crops: the canvas takes the frame, the layer keeps its pixels and moves with the frame's origin.
@@ -280,9 +255,9 @@ int Application::RunCropSelfTest() noexcept
         document()->height != 400 || _session.history.UndoName() != L"Crop" || _session.CropFrame().has_value() ||
         _session.VisibleCropRect() != CropRect{0, 0, 640, 400})
     {
-        ReportCropSelfTestFailure(std::format(L"Enter did not crop the canvas to the frame ({} × {}, undo '{}').\n",
-                                              document() ? document()->width : 0, document() ? document()->height : 0,
-                                              _session.history.UndoName()));
+        SelfTestFailure(std::format(L"Enter did not crop the canvas to the frame ({} × {}, undo '{}').\n",
+                                    document() ? document()->width : 0, document() ? document()->height : 0,
+                                    _session.history.UndoName()));
         return 5;
     }
     // A frame dragged inside the canvas moves as a whole; Escape drops it and the whole canvas frames again.
@@ -299,10 +274,10 @@ int Application::RunCropSelfTest() noexcept
         _session.VisibleCropRect() != CropRect{0, 0, 640, 400} || document()->width != 640)
     {
         const std::optional<CropRect> frame = _session.CropFrame();
-        ReportCropSelfTestFailure(std::format(L"Moving the frame and Escape did not behave (moved {}, frame {} {} "
-                                              L"{} × {}).\n",
-                                              movedFrame, frame ? frame->x : -1.0, frame ? frame->y : -1.0,
-                                              frame ? frame->width : -1.0, frame ? frame->height : -1.0));
+        SelfTestFailure(std::format(L"Moving the frame and Escape did not behave (moved {}, frame {} {} "
+                                    L"{} × {}).\n",
+                                    movedFrame, frame ? frame->x : -1.0, frame ? frame->y : -1.0,
+                                    frame ? frame->width : -1.0, frame ? frame->height : -1.0));
         return 5;
     }
     // The header's ratio re-shapes the frame about its center; Cancel drops it; Undo restores the canvas.
@@ -316,7 +291,7 @@ int Application::RunCropSelfTest() noexcept
     if (!squared || document() == nullptr || document()->width != 1280 || document()->height != 800 ||
         _session.CropFrame().has_value())
     {
-        ReportCropSelfTestFailure(L"The crop ratio, Cancel, Undo or leaving the tool did not behave.\n");
+        SelfTestFailure(L"The crop ratio, Cancel, Undo or leaving the tool did not behave.\n");
         return 5;
     }
     return 0;

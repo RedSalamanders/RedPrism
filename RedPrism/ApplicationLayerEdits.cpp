@@ -18,51 +18,6 @@
 // The Layer menu's rename and merge (C16, Specs/UI/UI_ApplicationChrome.md "Layers panel"): the Rename Layer card
 // and Ctrl+E, which composites the planned layers through the canvas composition and installs the result.
 
-namespace
-{
-// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
-void ReportLayerEditsSelfTestFailure(const std::wstring& message) noexcept
-{
-    OutputDebugStringW(message.c_str());
-    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
-    if (error == nullptr || error == INVALID_HANDLE_VALUE)
-    {
-        return;
-    }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
-                                         nullptr, nullptr);
-    if (size <= 0)
-    {
-        return;
-    }
-    std::string utf8(static_cast<std::size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
-    {
-        return;
-    }
-    DWORD written = 0;
-    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-}
-
-// A solid premultiplied BGRA raster for the self-test.
-[[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb)
-{
-    const std::uint8_t alpha = static_cast<std::uint8_t>(argb >> 24);
-    const auto premultiply = [alpha](std::uint32_t channel)
-    { return static_cast<std::uint8_t>((channel & 0xFFu) * alpha / 255u); };
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
-    for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
-    {
-        bytes[index] = premultiply(argb);
-        bytes[index + 1] = premultiply(argb >> 8);
-        bytes[index + 2] = premultiply(argb >> 16);
-        bytes[index + 3] = alpha;
-    }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-}
-} // namespace
-
 void Application::RenameActiveLayer() noexcept
 {
     const ImageLayer* active = _session.ActiveLayer();
@@ -253,22 +208,13 @@ void Application::MergeLayersCommand() noexcept
         }
         flat.layers.push_back(std::move(copy));
     }
-    BindCompositionDevice();
-    // A full-resolution readback of `flat` (tiled past the texture limit, never the display proxy or a preview); the
-    // next frame composes the real document again.
-    std::vector<std::uint8_t> bgra;
-    UINT width = 0;
-    UINT height = 0;
-    const bool composed =
-        SUCCEEDED(_composition.ComposeReadback(flat, bgra, width, height)) && width != 0 && height != 0;
-    if (!composed)
+    const std::optional<Raster> composite = ComposeDocumentReadback(flat);
+    if (!composite.has_value())
     {
         ShowError(IDS_ERROR_FLATTEN);
         return;
     }
-    const Raster composite = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
-                                          bgra.data(), bgra.size());
-    if (!composite.HasStorage() || !_session.MergeLayers(plan.value(), composite))
+    if (!composite->HasStorage() || !_session.MergeLayers(plan.value(), composite.value()))
     {
         // A merge whose pixels would not fit the document's budget (Decision D7) says that, not that it failed.
         if (_session.TakeBudgetRefusal())
@@ -288,7 +234,7 @@ int Application::RunLayerEditsSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportLayerEditsSelfTestFailure(L"The layer edits self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The layer edits self-test needs the chrome and the window.\n");
         return 5;
     }
     _forcedDiscard = true;
@@ -306,7 +252,7 @@ int Application::RunLayerEditsSelfTest() noexcept
     settle();
     if (!_chrome->RenameCardOpen())
     {
-        ReportLayerEditsSelfTestFailure(L"Rename Layer did not open its card.\n");
+        SelfTestFailure(L"Rename Layer did not open its card.\n");
         return 5;
     }
     bool typed = true;
@@ -321,10 +267,10 @@ int Application::RunLayerEditsSelfTest() noexcept
     if (_chrome->RenameCardOpen() || renamed == nullptr || renamed->name != L"Hero" ||
         _session.history.UndoName() != L"Rename Layer")
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"Typing a name and Enter did not rename the layer (open {}, "
-                                                    L"typed {}, entered {}, name '{}', undo '{}').\n",
-                                                    _chrome->RenameCardOpen(), typed, entered,
-                                                    renamed ? renamed->name : L"", _session.history.UndoName()));
+        SelfTestFailure(std::format(L"Typing a name and Enter did not rename the layer (open {}, "
+                                    L"typed {}, entered {}, name '{}', undo '{}').\n",
+                                    _chrome->RenameCardOpen(), typed, entered, renamed ? renamed->name : L"",
+                                    _session.history.UndoName()));
         return 5;
     }
     // Escape leaves the name alone.
@@ -336,29 +282,20 @@ int Application::RunLayerEditsSelfTest() noexcept
     settle();
     if (_chrome->RenameCardOpen() || _session.ActiveLayer() == nullptr || _session.ActiveLayer()->name != L"Hero")
     {
-        ReportLayerEditsSelfTestFailure(L"Escape did not leave the layer's name alone.\n");
+        SelfTestFailure(L"Escape did not leave the layer's name alone.\n");
         return 5;
     }
     // Merge Down: a blue layer above a red one becomes one layer named after the lower one, covering both.
+    // A painted layer added on top (InsertPaintedLayer), without the DocumentChanged the caller does once per pair.
     const auto insert = [&](const wchar_t* name, int width, int height, Vec2 origin, std::uint32_t argb)
-    {
-        ImageLayer layer = ImageLayer::Blank(name, Vec2{static_cast<double>(width), static_cast<double>(height)});
-        const Raster raster = SolidRaster(width, height, argb);
-        layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
-        layer.transform.origin = origin;
-        _session.BeginEdit(L"Import Image");
-        _session.Document().value().layers.push_back(layer);
-        _session.EndEdit();
-        _session.SelectLayer(layer.id);
-        return layer.id;
-    };
+    { return InsertPaintedLayer(_session, name, width, height, origin, 0.0, argb); };
     insert(L"Red", 6, 3, Vec2{0, 0}, 0xFFFF0000u);
     insert(L"Blue", 4, 4, Vec2{10, 10}, 0xFF0000FFu);
     DocumentChanged();
     const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
     if (!plan.has_value() || plan->action != L"Merge Down" || plan->name != L"Red")
     {
-        ReportLayerEditsSelfTestFailure(L"The merge plan for the top layer is not Merge Down onto Red.\n");
+        SelfTestFailure(L"The merge plan for the top layer is not Merge Down onto Red.\n");
         return 5;
     }
     OnCommand(ChromeHost::kCommandMergeDown);
@@ -378,18 +315,18 @@ int Application::RunLayerEditsSelfTest() noexcept
         pixels->Height() != 14 || merged->transform.origin != Vec2{0, 0} || pixelAt(0, 0, 2) != 255 ||
         pixelAt(0, 0, 3) != 255 || pixelAt(13, 13, 0) != 255 || pixelAt(13, 13, 3) != 255 || pixelAt(8, 8, 3) != 0)
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"Merge Down did not composite the two layers into one ({} layers, "
-                                                    L"name '{}', undo '{}', {} × {}).\n",
-                                                    _session.Document().value().layers.size(),
-                                                    merged ? merged->name : L"", _session.history.UndoName(),
-                                                    pixels ? pixels->Width() : 0, pixels ? pixels->Height() : 0));
+        SelfTestFailure(std::format(L"Merge Down did not composite the two layers into one ({} layers, "
+                                    L"name '{}', undo '{}', {} × {}).\n",
+                                    _session.Document().value().layers.size(), merged ? merged->name : L"",
+                                    _session.history.UndoName(), pixels ? pixels->Width() : 0,
+                                    pixels ? pixels->Height() : 0));
         return 5;
     }
     _session.Undo();
     DocumentChanged();
     if (_session.Document().value().layers.size() != 3)
     {
-        ReportLayerEditsSelfTestFailure(L"Undo did not restore the merged layers.\n");
+        SelfTestFailure(L"Undo did not restore the merged layers.\n");
         return 5;
     }
     const auto layerNamed = [&](const wchar_t* name) -> Guid
@@ -433,9 +370,9 @@ int Application::RunLayerEditsSelfTest() noexcept
     if (_chrome->RenameCardOpen() || nameOf(redId) != L"Kept" || nameOf(blueId) != L"Blue" ||
         _session.history.UndoName() != L"Rename Layer")
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"The Rename card did not rename the layer it opened for (opened "
-                                                    L"on Red, committed with Blue active: '{}', '{}').\n",
-                                                    nameOf(redId), nameOf(blueId)));
+        SelfTestFailure(std::format(L"The Rename card did not rename the layer it opened for (opened "
+                                    L"on Red, committed with Blue active: '{}', '{}').\n",
+                                    nameOf(redId), nameOf(blueId)));
         return 5;
     }
     // It closes once its layer is gone, and when the document is replaced.
@@ -455,17 +392,16 @@ int Application::RunLayerEditsSelfTest() noexcept
     settle();
     if (!openedOnNewLayer || !closedWithLayer || !openedAgain || _chrome->RenameCardOpen())
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"The Rename card outlived its layer or its document (opened {}, "
-                                                    L"closed by Undo {}, reopened {}, open after New {}).\n",
-                                                    openedOnNewLayer, closedWithLayer, openedAgain,
-                                                    _chrome->RenameCardOpen()));
+        SelfTestFailure(std::format(L"The Rename card outlived its layer or its document (opened {}, "
+                                    L"closed by Undo {}, reopened {}, open after New {}).\n",
+                                    openedOnNewLayer, closedWithLayer, openedAgain, _chrome->RenameCardOpen()));
         return 5;
     }
     // The opacity stepper's typed edit: no path leaves history open or bakes a preview into another entry.
     const std::optional<Guid> activeId = _session.ActiveLayerID();
     if (!activeId.has_value())
     {
-        ReportLayerEditsSelfTestFailure(L"The new document has no active layer for the opacity checks.\n");
+        SelfTestFailure(L"The new document has no active layer for the opacity checks.\n");
         return 5;
     }
     const Guid target = activeId.value();
@@ -489,10 +425,10 @@ int Application::RunLayerEditsSelfTest() noexcept
     if (!previewed || !_session.history.CanUndo() || _session.history.UndoName() != L"New Blank Layer" ||
         _session.history.UndoCount() != entries + 1 || opacityOf(target) != 1.0)
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"A typed opacity that ended at its start value left history open "
-                                                    L"(can undo {}, undo '{}', {} entries, expected {}).\n",
-                                                    _session.history.CanUndo(), _session.history.UndoName(),
-                                                    _session.history.UndoCount(), entries + 1));
+        SelfTestFailure(std::format(L"A typed opacity that ended at its start value left history open "
+                                    L"(can undo {}, undo '{}', {} entries, expected {}).\n",
+                                    _session.history.CanUndo(), _session.history.UndoName(),
+                                    _session.history.UndoCount(), entries + 1));
         return 5;
     }
     OnCommand(ChromeHost::kCommandUndo);
@@ -511,9 +447,9 @@ int Application::RunLayerEditsSelfTest() noexcept
     OnCommand(ChromeHost::kCommandUndo);
     if (!folderLast || !opacityBelow || opacityOf(target) != 1.0)
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"A command during a typed opacity did not record the opacity as "
-                                                    L"its own entry (folder last {}, opacity below {}, opacity {}).\n",
-                                                    folderLast, opacityBelow, opacityOf(target)));
+        SelfTestFailure(std::format(L"A command during a typed opacity did not record the opacity as "
+                                    L"its own entry (folder last {}, opacity below {}, opacity {}).\n",
+                                    folderLast, opacityBelow, opacityOf(target)));
         return 5;
     }
     // A new document closes the edit with the old history; the field's late commit changes nothing in the new one.
@@ -526,10 +462,10 @@ int Application::RunLayerEditsSelfTest() noexcept
     if (fresh == nullptr || fresh->opacity != 1.0 || _session.history.IsModified() ||
         _session.history.UndoName() != L"New Canvas")
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"A typed opacity carried over into the new document (opacity {}, "
-                                                    L"modified {}, undo '{}').\n",
-                                                    fresh != nullptr ? fresh->opacity : -1.0,
-                                                    _session.history.IsModified(), _session.history.UndoName()));
+        SelfTestFailure(std::format(L"A typed opacity carried over into the new document (opacity {}, "
+                                    L"modified {}, undo '{}').\n",
+                                    fresh != nullptr ? fresh->opacity : -1.0, _session.history.IsModified(),
+                                    _session.history.UndoName()));
         return 5;
     }
     // Escape restores the start value without an entry; a commit records one entry from before the first preview.
@@ -547,9 +483,9 @@ int Application::RunLayerEditsSelfTest() noexcept
     OnCommand(ChromeHost::kCommandUndo);
     if (!cancelled || !committed || opacityOf(freshId) != 1.0)
     {
-        ReportLayerEditsSelfTestFailure(std::format(L"The opacity stepper's Escape or commit did not record as one "
-                                                    L"entry (cancelled {}, committed {}, opacity {}).\n",
-                                                    cancelled, committed, opacityOf(freshId)));
+        SelfTestFailure(std::format(L"The opacity stepper's Escape or commit did not record as one "
+                                    L"entry (cancelled {}, committed {}, opacity {}).\n",
+                                    cancelled, committed, opacityOf(freshId)));
         return 5;
     }
     // Merge composes what the canvas shows (RF-1104): a gradient pending on the upper layer commits first as its own
@@ -589,10 +525,9 @@ int Application::RunLayerEditsSelfTest() noexcept
         if (!pending || mergeEntry != L"Merge Down" || gradientEntry != L"Gradient" || start[0] > 40 || start[2] > 40 ||
             start[3] != 255)
         {
-            ReportLayerEditsSelfTestFailure(
-                std::format(L"Merge Down under a pending gradient did not merge it (pending "
-                            L"{}, entries '{}' over '{}', merged start {} {} {} {}).\n",
-                            pending, mergeEntry, gradientEntry, start[0], start[1], start[2], start[3]));
+            SelfTestFailure(std::format(L"Merge Down under a pending gradient did not merge it (pending "
+                                        L"{}, entries '{}' over '{}', merged start {} {} {} {}).\n",
+                                        pending, mergeEntry, gradientEntry, start[0], start[1], start[2], start[3]));
             return 5;
         }
     }

@@ -85,9 +85,7 @@ HRESULT CalculateWindowSizeForDpi(DWORD windowStyle, DWORD extendedStyle, UINT d
 
 } // namespace
 
-namespace
-{
-// A solid premultiplied BGRA raster for the demo document and the self-test.
+// A solid premultiplied BGRA raster for the demo document and the self-tests across Application*.cpp (Application.h).
 [[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb)
 {
     const std::uint8_t alpha = static_cast<std::uint8_t>(argb >> 24);
@@ -123,7 +121,6 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
     session.SelectLayer(layer.id);
     return layer.id;
 }
-} // namespace
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
                          const wchar_t* demo, const wchar_t* bench) noexcept
@@ -141,6 +138,7 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
     {
         _screenshotPath = screenshotPath;
         _quietUi = true;
+        _prompts = &QuietPrompts();
         // A run that closes before its capture has failed it (exit 9), whatever else happened.
         _screenshotResult = E_PENDING;
     }
@@ -413,10 +411,8 @@ void Application::ReportCanvasFailure(HRESULT failure) noexcept
     _canvasFailureShown = true;
     ++_canvasFailureNotices;
     OutputDebugStringW(L"The canvas could not be drawn; the chrome still presents.\n");
-    if (!_quietUi && _chrome)
-    {
-        _chrome->ShowNotice(FormatStringResource(nullptr, IDS_ERROR_CANVAS_DRAW, static_cast<std::uint32_t>(failure)));
-    }
+    _prompts->ShowNotice(_chrome.get(),
+                         FormatStringResource(nullptr, IDS_ERROR_CANVAS_DRAW, static_cast<std::uint32_t>(failure)));
 }
 
 void Application::OnFrameLoopFailure(HRESULT failure) noexcept
@@ -471,6 +467,7 @@ int Application::RunSelfTest() noexcept
 {
     // A self-test never waits on a message box: errors it provokes must report through its own checks.
     _quietUi = true;
+    _prompts = &QuietPrompts();
     // Nor does it read the user's keyboard: its drivers hold the keys each step names (KeyboardState.h, RF-1110).
     KeyboardState::UseSynthetic(true);
     const auto realKeyboard = wil::scope_exit([]() noexcept { KeyboardState::UseSynthetic(false); });
@@ -3304,16 +3301,14 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandAbout:
-        if (!_quietUi && _window)
-        {
-            // REDPRISM_VERSION_BUILD is a ResourceCompile-only define (Specs/Build/Build_Toolchain.md), so the
-            // compile-time REDPRISM_VERSION_STRING_W is always "0.1.0.0"; read this module's own VS_VERSIONINFO
-            // resource instead, falling back to the compile-time string if that ever fails (RF-704).
-            const std::wstring text = FormatStringResource(
-                nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
-            const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
-            MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
-        }
+    {
+        // REDPRISM_VERSION_BUILD is a ResourceCompile-only define (Specs/Build/Build_Toolchain.md), so the
+        // compile-time REDPRISM_VERSION_STRING_W is always "0.1.0.0"; read this module's own VS_VERSIONINFO
+        // resource instead, falling back to the compile-time string if that ever fails (RF-704).
+        const std::wstring text = FormatStringResource(
+            nullptr, IDS_ABOUT_TEXT, RedPrism::FormatRunningModuleVersion(L"" REDPRISM_VERSION_STRING_W));
+        _prompts->ShowInfo(_window.get(), text, LoadStringResource(nullptr, IDS_APP_TITLE));
+    }
         break;
     case ChromeHost::kCommandSwapPalette:
         if (_chrome != nullptr && _chrome->ColorPickerOpen())
@@ -3668,26 +3663,16 @@ void Application::ShowError(UINT stringId) noexcept
 {
     ++_errorsShown;
     _lastErrorId = stringId;
-    if (_quietUi || !_window)
-    {
-        return;
-    }
-    const std::wstring text = LoadStringResource(nullptr, stringId);
-    const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
-    MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
+    _prompts->ShowError(_window.get(), stringId);
 }
 
 void Application::ReportBudgetRefusal() noexcept
 {
-    // The notice card, not a message box, shown from the message loop as the not-implemented notice is: the refused
-    // edit may have run inside a DxUi dispatch (a header's Apply, a menu command, a layer row), where neither a
-    // modal loop nor the card's focus change may land. Quiet runs count it instead.
+    // The notice card, not a message box, posted so it never lands inside a DxUi dispatch (a header's Apply, a menu
+    // command, a layer row) the refused edit may have run inside, where neither a modal loop nor the card's focus
+    // change may land. Quiet runs count it instead.
     ++_budgetNotices;
-    if (_quietUi || !_window)
-    {
-        return;
-    }
-    (void)PostMessageW(_window.get(), kNoticeMessage, static_cast<WPARAM>(IDS_ERROR_TOO_LARGE), 0);
+    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_TOO_LARGE);
 }
 
 bool Application::SaveDocument(bool saveAs) noexcept
@@ -3738,25 +3723,32 @@ bool Application::SaveDocument(bool saveAs) noexcept
     return true;
 }
 
+std::optional<Raster> Application::ComposeDocumentReadback(const CanvasDocument& document) noexcept
+{
+    BindCompositionDevice();
+    std::vector<std::uint8_t> bgra;
+    UINT width = 0;
+    UINT height = 0;
+    if (FAILED(_composition.ComposeReadback(document, bgra, width, height)) || width == 0 || height == 0)
+    {
+        return std::nullopt;
+    }
+    return Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888, bgra.data(),
+                        bgra.size());
+}
+
 void Application::ExportFlattened(bool jpeg) noexcept
 {
     if (!_session.Document().has_value() || _quietUi || !_window)
     {
         return;
     }
-    // The committed document at full resolution, never the canvas's preview composite (RF-402).
-    BindCompositionDevice();
-    std::vector<std::uint8_t> bgra;
-    UINT width = 0;
-    UINT height = 0;
-    if (FAILED(_composition.ComposeReadback(_session.Document().value(), bgra, width, height)) || width == 0 ||
-        height == 0)
+    const std::optional<Raster> raster = ComposeDocumentReadback(_session.Document().value());
+    if (!raster.has_value())
     {
         ShowError(IDS_ERROR_FLATTEN);
         return;
     }
-    const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
-                                       bgra.data(), bgra.size());
     const FilterStrings strings = LoadFilterStrings();
     std::wstring path;
     if (jpeg)
@@ -3767,7 +3759,8 @@ void Application::ExportFlattened(bool jpeg) noexcept
         {
             return;
         }
-        if (ExportDocumentJpeg(raster, JpegExportOptions{_settings.jpegQuality, _session.Document().value().resolution},
+        if (ExportDocumentJpeg(raster.value(),
+                               JpegExportOptions{_settings.jpegQuality, _session.Document().value().resolution},
                                path.c_str()) != ProjectIoStatus::Ok)
         {
             ShowError(IDS_ERROR_EXPORT_JPEG);
@@ -3780,7 +3773,7 @@ void Application::ExportFlattened(bool jpeg) noexcept
     {
         return;
     }
-    if (ExportDocumentPng(raster, _session.Document().value().resolution, path.c_str()) != ProjectIoStatus::Ok)
+    if (ExportDocumentPng(raster.value(), _session.Document().value().resolution, path.c_str()) != ProjectIoStatus::Ok)
     {
         ShowError(IDS_ERROR_EXPORT_PNG);
     }
@@ -4055,13 +4048,9 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         CloseMainWindow();
         return 0;
-    case kNotImplementedMessage:
-        ShowNotImplementedNotice(static_cast<UINT>(wParam));
-        return 0;
     case kNoticeMessage:
-        if (!_quietUi && _chrome)
+        if (_prompts->ShowNotice(_chrome.get(), LoadStringResource(nullptr, static_cast<UINT>(wParam))))
         {
-            _chrome->ShowNotice(LoadStringResource(nullptr, static_cast<UINT>(wParam)));
             _frameInvalidated = true;
         }
         return 0;
@@ -5013,18 +5002,8 @@ std::optional<Raster> Application::WandComposite() noexcept
     {
         return std::nullopt;
     }
-    BindCompositionDevice();
-    std::vector<std::uint8_t> bgra;
-    UINT width = 0;
-    UINT height = 0;
-    if (FAILED(_composition.ComposeReadback(_session.Document().value(), bgra, width, height)) || width == 0 ||
-        height == 0)
-    {
-        return std::nullopt;
-    }
-    const Raster raster = Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888,
-                                       bgra.data(), bgra.size());
-    if (!raster.HasStorage())
+    const std::optional<Raster> raster = ComposeDocumentReadback(_session.Document().value());
+    if (!raster.has_value() || !raster->HasStorage())
     {
         return std::nullopt;
     }
@@ -5032,11 +5011,6 @@ std::optional<Raster> Application::WandComposite() noexcept
 }
 
 // ── Brush and Eraser ──────────────────────────────────────────────────────
-
-bool Application::BrushErases() const noexcept
-{
-    return _tool == EditorTool::Eraser || (_tool == EditorTool::Brush && _session.brushMode == BrushToolMode::Erase);
-}
 
 void Application::OnBrushAction(BrushAction action, double value) noexcept
 {
@@ -5367,6 +5341,7 @@ int Application::RunBenchmark() noexcept
         return 2;
     }
     _quietUi = true;
+    _prompts = &QuietPrompts();
     _screenshotDpi = 0;
     _renderer.SetLayoutDpi(0);
     if (FAILED(RegisterWindowClass()) || FAILED(CreateMainWindow(false)))
@@ -5951,6 +5926,27 @@ int Application::RunRenderingSelfTest() noexcept
                 static_cast<int>(_renderer.FailedStage()), generation, _renderer.DeviceGeneration(),
                 _composition.Device() == _renderer.Device(), _brushEngine.Ready(), _composition.CanvasSurfaceBytes());
             SelfTestFailure(message.c_str());
+            return 5;
+        }
+    }
+    // ChromeHost::Detach nulls every control pointer DxUi's own Detach frees (the tree is gone once _view.Detach()
+    // returns): a card-open query must read that as closed, not read freed memory (RF-905 follow-up; ASan catches
+    // the unfixed read as heap-use-after-free).
+    {
+        _chrome->Detach();
+        const bool allClosedWhileDetached = !_chrome->NoticeOpen() && !_chrome->ShortcutsOpen() &&
+                                            !_chrome->MoreToolsOpen() && !_chrome->ColorPickerOpen() &&
+                                            !_chrome->AdjustPanelOpen() && !_chrome->RenameCardOpen() &&
+                                            !_chrome->SizeCardOpen();
+        const HRESULT reattached = _chrome->Attach(_renderer.Device(), this, &Application::RequestFrameThunk);
+        SyncChrome();
+        _frameInvalidated = true;
+        if (!allClosedWhileDetached || FAILED(reattached))
+        {
+            SelfTestFailure(std::format(L"A detached chrome did not read every card as closed, or did not "
+                                        L"reattach (closed {}, reattached {:#010x}).\n",
+                                        allClosedWhileDetached, static_cast<std::uint32_t>(reattached))
+                                .c_str());
             return 5;
         }
     }

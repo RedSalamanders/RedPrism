@@ -194,14 +194,6 @@ struct CropInspectorState
 
 // The adjustment panel (C12, Specs/UI/UI_ApplicationChrome.md): which editor it shows and every value the session
 // holds for it, mirrored through SetAdjustInspector; its controls report changes as actions with one value.
-enum class AdjustPanelKind : std::uint8_t
-{
-    None,
-    Filter,
-    Levels,
-    HueSaturation,
-};
-
 enum class AdjustAction : std::uint8_t
 {
     SetPreview,
@@ -245,9 +237,10 @@ enum class AdjustAction : std::uint8_t
 
 struct AdjustInspectorState
 {
-    AdjustPanelKind panel = AdjustPanelKind::None;
     std::wstring title;
-    FilterKind filter = FilterKind::GaussianBlur;
+    // nullopt: the panel is closed. Otherwise Levels and HueSaturation draw their own editors; every other kind
+    // shares the generic filter layout (ChromeHostAdjust.cpp).
+    std::optional<FilterKind> filter;
     FilterSettings settings;
     LevelsSettings levels;
     LevelsHistogram histogram{};
@@ -434,7 +427,6 @@ class ChromeHost final : public CommandIds
     // points and the spectrum's band handles.
     void SetAdjustInspector(const AdjustInspectorState& state) noexcept;
     [[nodiscard]] bool AdjustPanelOpen() const noexcept;
-    [[nodiscard]] D2D1_RECT_F AdjustPanelBoundsDip() const noexcept;
     // The size cards (C16): the mirrored draft; the controls report size actions.
     void SetSizeCard(const SizeCardState& state) noexcept;
     [[nodiscard]] bool SizeCardOpen() const noexcept;
@@ -852,6 +844,21 @@ class ChromeHost final : public CommandIds
     // run every frame, including between a press and its release.
     static void PlaceControl(DxUi::Control* control, const D2D1_RECT_F& bounds) noexcept;
     static void ShowControl(DxUi::Control* control, bool visible) noexcept;
+    // Canvas-hole pixels to DIP at the current layout DPI, for the overlay geometry the setters below hand to
+    // CanvasOverlay (96/_dpi, or 1 before the first layout knows a DPI).
+    [[nodiscard]] float PixelToDip(float pixels) const noexcept
+    {
+        return _dpi > 0.0f ? pixels * 96.0f / _dpi : pixels;
+    }
+    [[nodiscard]] D2D1_POINT_2F PixelToDip(D2D1_POINT_2F pixels) const noexcept
+    {
+        return D2D1::Point2F(PixelToDip(pixels.x), PixelToDip(pixels.y));
+    }
+    [[nodiscard]] D2D1_RECT_F PixelToDip(const D2D1_RECT_F& pixels) const noexcept
+    {
+        return D2D1::RectF(PixelToDip(pixels.left), PixelToDip(pixels.top), PixelToDip(pixels.right),
+                           PixelToDip(pixels.bottom));
+    }
     // A pressed look only when it changes: a button's transition restarted every sync cancels presses held across
     // frames.
     static void SetPressedVisualIfChanged(DxUi::Button* button, bool& current, bool pressed) noexcept;
@@ -869,6 +876,11 @@ class ChromeHost final : public CommandIds
     bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
     bool _syncing = false;        // a header or card sync is writing its controls (HoldReports)
+    // Detach() calls this: DxUi::ControlHost::Detach frees the whole control tree (_root.reset(), reached through
+    // _view.Detach() below), so every raw pointer into it below would dangle without this. Several accessors
+    // (NoticeOpen, ShortcutsOpen, MoreToolsOpen, ColorPickerOpen, AdjustPanelOpen, FilterOptionsVisible,
+    // RenameCardOpen, SizeCardOpen, and the header setters) check only for null, never `_attached`.
+    void ResetControlPointers() noexcept;
     std::array<OpenCard, static_cast<std::size_t>(ModalCard::Count)> _cards{}; // one entry per open card
     std::size_t _cardCount = 0;
     std::array<unique_hmenu, static_cast<std::size_t>(MenuIndex::Count)> _menus;
@@ -925,7 +937,6 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _flipVertical = nullptr;
     DxUi::Button* _transformCancel = nullptr;
     DxUi::Button* _transformApply = nullptr;
-    TransformInspectorState _inspector;
     DxUi::Panel* _selectionHeader = nullptr;
     DxUi::Label* _selectionTitle = nullptr;
     DxUi::ComboBox* _marqueeShape = nullptr;
@@ -981,7 +992,6 @@ class ChromeHost final : public CommandIds
     DxUi::Label* _cropSize = nullptr;
     DxUi::Button* _cropCancel = nullptr;
     DxUi::Button* _cropApply = nullptr;
-    CropInspectorState _cropInspector;
     DxUi::Label* _shapeTitle = nullptr;
     DxUi::ComboBox* _shapeKind = nullptr;
     DxUi::NumericStepper* _shapeRadius = nullptr;

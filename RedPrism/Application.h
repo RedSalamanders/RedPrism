@@ -9,6 +9,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "Prompts.h"
 #include "Renderer.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
@@ -33,6 +34,20 @@ namespace DxUi
 {
 struct PointerEvent;
 }
+
+// Application*.cpp self-test diagnostics (Application.cpp): prints to the debugger and, when the parent redirected
+// it, to stderr.
+void SelfTestFailure(const wchar_t* message) noexcept;
+inline void SelfTestFailure(const std::wstring& message) noexcept
+{
+    SelfTestFailure(message.c_str());
+}
+
+// A solid premultiplied BGRA raster, and a painted layer added on top as one Import Image history entry then made
+// active (Application.cpp): shared by the self-tests that need a real pixel layer to act on.
+[[nodiscard]] Raster SolidRaster(int width, int height, std::uint32_t argb);
+Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width, int height, Vec2 origin,
+                        double rotation, std::uint32_t argb);
 
 // The chrome's events (ChromeEvents) land on the handlers below, marked `override`.
 class Application final : public ChromeEvents
@@ -177,7 +192,6 @@ class Application final : public ChromeEvents
     void EndStrokePreview(const std::optional<BrushCommitInfo>& commit) noexcept;
     void SyncBrushCursor() noexcept;
     void DropBrushEngine() noexcept;
-    [[nodiscard]] bool BrushErases() const noexcept;
     // Retouch tools (C11): Spot Healing, Clone Stamp and Blur go through the brush pipeline with a kind; Liquify
     // and Smudge through the warp pipeline (a document-size working copy shown through the stroke preview); the
     // Gradient's pending raster shows through the preview until Apply; the Shape's draft and the Eyedropper's ring
@@ -258,9 +272,8 @@ class Application final : public ChromeEvents
         NewProject,
         Cancel,
     };
-    static constexpr UINT kNotImplementedMessage = WM_APP + 7; // Renderer owns WM_APP + 1
-    static constexpr UINT kEndSessionMessage = WM_APP + 8;     // the save prompt a refused session end posts
-    static constexpr UINT kNoticeMessage = WM_APP + 9;         // a notice card to show (wParam: its string id)
+    static constexpr UINT kEndSessionMessage = WM_APP + 8; // the save prompt a refused session end posts
+    static constexpr UINT kNoticeMessage = WM_APP + 9;     // a notice card to show (wParam: its string id)
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
     [[nodiscard]] bool ConfirmDiscardChanges() noexcept;
     // Modified history, or a pending edit that Save would record (a live stroke or warp, a pending gradient, a
@@ -293,8 +306,6 @@ class Application final : public ChromeEvents
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
     void SettleInteractions(bool applyPanels) noexcept;
-    void ShowNotImplemented(UINT captionId) noexcept;
-    void ShowNotImplementedNotice(UINT captionId) noexcept;
     void ShowUnavailable(UINT captionId) noexcept;
     int RunFilesSelfTest() noexcept;
     int RunSessionSelfTest() noexcept;
@@ -309,6 +320,11 @@ class Application final : public ChromeEvents
     // the edit.
     void ReportBudgetRefusal() noexcept;
     [[nodiscard]] Vec2 DocumentSize() const noexcept;
+    // The document (or a caller-built variant of it) flattened at full resolution, never the canvas's preview
+    // composite (RF-402): binds the composition device, reads back through CanvasRenderer::ComposeReadback and
+    // wraps the bytes in a Raster. nullopt only when the compose itself failed; the caller still checks
+    // Raster::HasStorage() when an empty allocation matters to it.
+    [[nodiscard]] std::optional<Raster> ComposeDocumentReadback(const CanvasDocument& document) noexcept;
     LRESULT HandleMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnSize(UINT width, UINT height) noexcept;
     LRESULT OnDpiChanged(HWND window, const RECT* suggestedBounds) noexcept;
@@ -398,7 +414,9 @@ class Application final : public ChromeEvents
     std::weak_ptr<const BrushStroke> _previewSource;
     std::wstring _demo;
     bool _quietUi = false;
-    int _notImplementedCount = 0;                    // notices raised; quiet runs count instead of showing them
+    // Real UI by default; the self-test, screenshot and benchmark modes point this at QuietPrompts() wherever they
+    // set `_quietUi = true`. Both are stateless singletons (Prompts.h), so this never owns anything.
+    const Prompts* _prompts = &RealPrompts();
     int _errorsShown = 0;                            // ShowError calls; quiet runs count instead of showing them
     UINT _lastErrorId = 0;                           // the string the last ShowError named
     int _budgetNotices = 0;                          // budget refusals reported (ReportBudgetRefusal)

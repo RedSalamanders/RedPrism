@@ -26,30 +26,6 @@ namespace
     return CanvasExtensionColor{((argb >> 16) & 0xFFu) / 255.0, ((argb >> 8) & 0xFFu) / 255.0, (argb & 0xFFu) / 255.0};
 }
 
-// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
-void ReportSizeSelfTestFailure(const std::wstring& message) noexcept
-{
-    OutputDebugStringW(message.c_str());
-    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
-    if (error == nullptr || error == INVALID_HANDLE_VALUE)
-    {
-        return;
-    }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
-                                         nullptr, nullptr);
-    if (size <= 0)
-    {
-        return;
-    }
-    std::string utf8(static_cast<std::size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
-    {
-        return;
-    }
-    DWORD written = 0;
-    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-}
 } // namespace
 
 bool Application::SizeCardOpen() const noexcept
@@ -416,7 +392,7 @@ int Application::RunSizeSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportSizeSelfTestFailure(L"The size self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The size self-test needs the chrome and the window.\n");
         return 5;
     }
     const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
@@ -445,7 +421,7 @@ int Application::RunSizeSelfTest() noexcept
     OnCommand(ChromeHost::kCommandCanvasSize);
     if (!SizeCardOpen() || !_chrome->SizeCardOpen())
     {
-        ReportSizeSelfTestFailure(L"Canvas Size did not open its card.\n");
+        SelfTestFailure(L"Canvas Size did not open its card.\n");
         return 5;
     }
     OnSizeAction(SizeAction::SetUnit, 1.0);
@@ -458,10 +434,10 @@ int Application::RunSizeSelfTest() noexcept
         document()->height != 400 || _session.history.UndoName() != L"Canvas Size" || document()->layers.size() != 2 ||
         _session.ActiveLayerID() != red || _session.ActiveLayer()->transform.origin != Vec2{0, 0})
     {
-        ReportSizeSelfTestFailure(std::format(L"Canvas Size did not shrink the canvas to 640 × 400 around the "
-                                              L"top-left anchor ({} × {}, undo '{}', {} layers).\n",
-                                              document() ? document()->width : 0, document() ? document()->height : 0,
-                                              _session.history.UndoName(), document() ? document()->layers.size() : 0));
+        SelfTestFailure(std::format(L"Canvas Size did not shrink the canvas to 640 × 400 around the "
+                                    L"top-left anchor ({} × {}, undo '{}', {} layers).\n",
+                                    document() ? document()->width : 0, document() ? document()->height : 0,
+                                    _session.history.UndoName(), document() ? document()->layers.size() : 0));
         return 5;
     }
     // Growing with a white extension adds the bottom layer with the old canvas cut out.
@@ -478,8 +454,8 @@ int Application::RunSizeSelfTest() noexcept
         extension->asset->image.Width() != 650 || _session.ActiveLayerID() != red ||
         _session.ActiveLayer()->transform.origin != Vec2{10, 10})
     {
-        ReportSizeSelfTestFailure(L"Growing the canvas with a white extension did not add the extension layer and "
-                                  L"move the content by the bottom-right anchor.\n");
+        SelfTestFailure(L"Growing the canvas with a white extension did not add the extension layer and "
+                        L"move the content by the bottom-right anchor.\n");
         return 5;
     }
     // Escape drops a pending edit.
@@ -488,7 +464,7 @@ int Application::RunSizeSelfTest() noexcept
     _chrome->SetCanvasFocused(true);
     if (!HandleAccelerator(VK_ESCAPE, 0) || SizeCardOpen() || document() == nullptr || document()->width != 650)
     {
-        ReportSizeSelfTestFailure(L"Escape did not cancel the Canvas Size card.\n");
+        SelfTestFailure(L"Escape did not cancel the Canvas Size card.\n");
         return 5;
     }
     // Image Size: 325 × 205 at 300 ppi with nearest sampling; the red layer's pixels scale with the canvas.
@@ -514,10 +490,10 @@ int Application::RunSizeSelfTest() noexcept
         scaled->transform.origin != Vec2{5, 5} || scaled->asset->image.Data() == nullptr ||
         scaled->asset->image.Data()[2] != 255 || scaled->asset->image.Data()[3] != 255)
     {
-        ReportSizeSelfTestFailure(std::format(L"Image Size did not resample the document to 325 × 205 at 300 ppi "
-                                              L"({} × {} at {}, undo '{}').\n",
-                                              document() ? document()->width : 0, document() ? document()->height : 0,
-                                              document() ? document()->resolution : 0.0, _session.history.UndoName()));
+        SelfTestFailure(std::format(L"Image Size did not resample the document to 325 × 205 at 300 ppi "
+                                    L"({} × {} at {}, undo '{}').\n",
+                                    document() ? document()->width : 0, document() ? document()->height : 0,
+                                    document() ? document()->resolution : 0.0, _session.history.UndoName()));
         return 5;
     }
     _session.Undo();
@@ -527,7 +503,7 @@ int Application::RunSizeSelfTest() noexcept
     if (document() == nullptr || document()->width != 1280 || document()->height != 800 ||
         document()->layers.size() != 2)
     {
-        ReportSizeSelfTestFailure(L"Undo did not restore the document through the three size entries.\n");
+        SelfTestFailure(L"Undo did not restore the document through the three size entries.\n");
         return 5;
     }
     // Without resampling Image Size lists Inches and Centimeters only, and a pick reports the unit, not its place in
@@ -547,9 +523,9 @@ int Application::RunSizeSelfTest() noexcept
         _chrome->SetCanvasFocused(true);
         if (!inches || !focused || !picked || unit != CanvasUnit::Centimeters)
         {
-            ReportSizeSelfTestFailure(std::format(L"Image Size's unit pick without resampling did not store the unit "
-                                                  L"picked (inches first {}, focused {}, picked {}, unit {}).\n",
-                                                  inches, focused, picked, static_cast<int>(unit)));
+            SelfTestFailure(std::format(L"Image Size's unit pick without resampling did not store the unit "
+                                        L"picked (inches first {}, focused {}, picked {}, unit {}).\n",
+                                        inches, focused, picked, static_cast<int>(unit)));
             return 5;
         }
     }
@@ -561,7 +537,7 @@ int Application::RunSizeSelfTest() noexcept
     if (SizeCardOpen() || document() == nullptr || document()->width != 300 || document()->height != 200 ||
         document()->layers.size() != 1 || _session.history.IsModified())
     {
-        ReportSizeSelfTestFailure(L"New Canvas did not create a 300 × 200 document with one blank layer.\n");
+        SelfTestFailure(L"New Canvas did not create a 300 × 200 document with one blank layer.\n");
         return 5;
     }
     // A pending gradient commits before Canvas Size resizes: the resized canvas keeps it, one entry below.
@@ -573,7 +549,7 @@ int Application::RunSizeSelfTest() noexcept
     const std::optional<Guid> plate = _session.ActiveLayerID();
     if (!plate.has_value() || !_session.BeginGradient(Vec2{10, 100}))
     {
-        ReportSizeSelfTestFailure(L"The blank layer did not take a gradient.\n");
+        SelfTestFailure(L"The blank layer did not take a gradient.\n");
         return 5;
     }
     _session.MoveGradient(std::nullopt, Vec2{290, 100});
@@ -607,9 +583,9 @@ int Application::RunSizeSelfTest() noexcept
     OnTool(EditorTool::Move);
     if (!pending || !resized || !painted || !gradientBelow)
     {
-        ReportSizeSelfTestFailure(std::format(L"Canvas Size over a pending gradient did not keep it (pending {}, "
-                                              L"resized {}, painted {}, gradient entry {}).\n",
-                                              pending, resized, painted, gradientBelow));
+        SelfTestFailure(std::format(L"Canvas Size over a pending gradient did not keep it (pending {}, "
+                                    L"resized {}, painted {}, gradient entry {}).\n",
+                                    pending, resized, painted, gradientBelow));
         return 5;
     }
     return 0;

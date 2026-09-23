@@ -68,17 +68,6 @@ void GpuBrushCoverage::EndStroke() noexcept
     _tiles.clear();
 }
 
-std::uint64_t GpuBrushCoverage::TileBytes() const noexcept
-{
-    std::uint64_t bytes = 0;
-    for (const auto& [key, tile] : _tiles)
-    {
-        const std::uint64_t pixels = static_cast<std::uint64_t>(tile.width) * static_cast<std::uint64_t>(tile.height);
-        bytes += pixels * (sizeof(float) + 2u * sizeof(std::uint32_t));
-    }
-    return bytes;
-}
-
 HRESULT GpuBrushCoverage::EnsureSegments(std::size_t count) noexcept
 {
     const std::size_t needed = std::max(kMinimumSegmentCapacity, count);

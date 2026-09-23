@@ -6,6 +6,7 @@
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
 #include "ProjectStore.h"
+#include "Prompts.h"
 #include "Resources.h"
 #include "Selection.h"
 #include "SystemClipboard.h"
@@ -84,30 +85,96 @@ constexpr int kTaskButtonSecond = 101;
     }
 }
 
-// Self-test diagnostics go to the debugger and, when the parent redirected it, to stderr (as Application.cpp does).
-void ReportFilesSelfTestFailure(const std::wstring& message) noexcept
+// The production Prompts implementation: every call shows real UI.
+class RealPromptsImpl final : public Prompts
 {
-    OutputDebugStringW(message.c_str());
-    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
-    if (error == nullptr || error == INVALID_HANDLE_VALUE)
+  public:
+    bool ShowNotice(ChromeHost* chrome, std::wstring text) const noexcept override
     {
-        return;
+        if (chrome == nullptr)
+        {
+            return false;
+        }
+        chrome->ShowNotice(std::move(text));
+        return true;
     }
-    const int size = WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), nullptr, 0,
-                                         nullptr, nullptr);
-    if (size <= 0)
+
+    void PostNotice(HWND window, UINT message, UINT stringId) const noexcept override
     {
-        return;
+        if (window != nullptr)
+        {
+            (void)PostMessageW(window, message, static_cast<WPARAM>(stringId), 0);
+        }
     }
-    std::string utf8(static_cast<std::size_t>(size), '\0');
-    if (WideCharToMultiByte(CP_UTF8, 0, message.c_str(), static_cast<int>(message.size()), utf8.data(), size, nullptr,
-                            nullptr) != size)
+
+    void ShowError(HWND window, UINT stringId) const noexcept override
     {
-        return;
+        if (window == nullptr)
+        {
+            return;
+        }
+        MessageBoxW(window, LoadStringResource(nullptr, stringId).c_str(),
+                    LoadStringResource(nullptr, IDS_APP_TITLE).c_str(), MB_OK | MB_ICONERROR);
     }
-    DWORD written = 0;
-    (void)WriteFile(error, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr);
-}
+
+    void ShowFormattedError(HWND window, const std::wstring& text) const noexcept override
+    {
+        if (window == nullptr)
+        {
+            return;
+        }
+        MessageBoxW(window, text.c_str(), LoadStringResource(nullptr, IDS_APP_TITLE).c_str(), MB_OK | MB_ICONERROR);
+    }
+
+    void ShowInfo(HWND window, const std::wstring& text, const std::wstring& caption) const noexcept override
+    {
+        if (window == nullptr)
+        {
+            return;
+        }
+        MessageBoxW(window, text.c_str(), caption.c_str(), MB_OK | MB_ICONINFORMATION);
+    }
+
+    [[nodiscard]] Answer AskThreeWay(HWND window, const std::wstring& title, const std::wstring& text,
+                                     const std::wstring& first, const std::wstring& second, bool warning,
+                                     Answer forced) const noexcept override
+    {
+        if (window == nullptr)
+        {
+            return forced;
+        }
+        switch (::AskThreeWay(window, title, text, first, second, warning))
+        {
+        case kTaskButtonFirst:
+            return Answer::First;
+        case kTaskButtonSecond:
+            return Answer::Second;
+        default:
+            return Answer::Cancel;
+        }
+    }
+};
+
+// The quiet implementation (--self-test, --screenshot, --bench): never shows anything, always answers `forced`.
+// Application itself still counts what each call meant (ShowError's `_errorsShown` and so on), unconditionally, as
+// it always has; this class only ever suppresses the UI.
+class QuietPromptsImpl final : public Prompts
+{
+  public:
+    bool ShowNotice(ChromeHost*, std::wstring) const noexcept override
+    {
+        return false;
+    }
+    void PostNotice(HWND, UINT, UINT) const noexcept override {}
+    void ShowError(HWND, UINT) const noexcept override {}
+    void ShowFormattedError(HWND, const std::wstring&) const noexcept override {}
+    void ShowInfo(HWND, const std::wstring&, const std::wstring&) const noexcept override {}
+    [[nodiscard]] Answer AskThreeWay(HWND, const std::wstring&, const std::wstring&, const std::wstring&,
+                                     const std::wstring&, bool, Answer forced) const noexcept override
+    {
+        return forced;
+    }
+};
 
 // Another thread holding the clipboard open, as another app does while it reads or writes: a copy's write fails.
 struct ClipboardHold
@@ -138,53 +205,24 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
     return 0;
 }
 
-// A solid opaque premultiplied BGRA raster for the self-tests.
-[[nodiscard]] Raster SolidRaster(int width, int height, std::uint8_t blue, std::uint8_t green, std::uint8_t red)
-{
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u, 0);
-    for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
-    {
-        bytes[index] = blue;
-        bytes[index + 1] = green;
-        bytes[index + 2] = red;
-        bytes[index + 3] = 255;
-    }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-}
 } // namespace
 
-void Application::ShowNotImplemented(UINT captionId) noexcept
+const Prompts& RealPrompts() noexcept
 {
-    ++_notImplementedCount;
-    if (_quietUi || !_window)
-    {
-        return;
-    }
-    // Shown from the message loop: the command or click that raised it may still be inside a DxUi dispatch.
-    PostMessageW(_window.get(), kNotImplementedMessage, static_cast<WPARAM>(captionId), 0);
+    static const RealPromptsImpl instance;
+    return instance;
 }
 
-void Application::ShowNotImplementedNotice(UINT captionId) noexcept
+const Prompts& QuietPrompts() noexcept
 {
-    if (_quietUi || !_window)
-    {
-        return;
-    }
-    const std::wstring text = FormatStringResource(nullptr, IDS_NOT_IMPLEMENTED, CaptionName(captionId));
-    if (_chrome)
-    {
-        _chrome->ShowNotice(text);
-    }
+    static const QuietPromptsImpl instance;
+    return instance;
 }
 
 void Application::ShowUnavailable(UINT captionId) noexcept
 {
-    if (_quietUi || !_chrome)
-    {
-        return;
-    }
     const std::wstring text = FormatStringResource(nullptr, IDS_CMD_UNAVAILABLE, CaptionName(captionId));
-    _chrome->ShowNotice(text);
+    _prompts->ShowNotice(_chrome.get(), text);
 }
 
 Application::ImageOpenChoice Application::PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept
@@ -193,20 +231,22 @@ Application::ImageOpenChoice Application::PromptImageOpen(const std::wstring& fi
     {
         return ImageOpenChoice::NewProject;
     }
-    if (_quietUi || !_window)
-    {
-        return _forcedImageOpen.value_or(ImageOpenChoice::AddLayer);
-    }
     const std::wstring title = count > 1 ? FormatStringResource(nullptr, IDS_OPEN_IMAGES_TITLE, count)
                                          : FormatStringResource(nullptr, IDS_OPEN_IMAGE_TITLE, firstName);
-    const int answer = AskThreeWay(_window.get(), title, LoadStringResource(nullptr, IDS_OPEN_IMAGE_TEXT),
-                                   LoadStringResource(nullptr, IDS_OPEN_IMAGE_ADD_LAYER),
-                                   LoadStringResource(nullptr, IDS_OPEN_IMAGE_NEW_PROJECT), false);
-    if (answer == kTaskButtonFirst)
+    const Prompts::Answer forced = _forcedImageOpen == ImageOpenChoice::NewProject ? Prompts::Answer::Second
+                                   : _forcedImageOpen == ImageOpenChoice::Cancel   ? Prompts::Answer::Cancel
+                                                                                   : Prompts::Answer::First;
+    switch (_prompts->AskThreeWay(_window.get(), title, LoadStringResource(nullptr, IDS_OPEN_IMAGE_TEXT),
+                                  LoadStringResource(nullptr, IDS_OPEN_IMAGE_ADD_LAYER),
+                                  LoadStringResource(nullptr, IDS_OPEN_IMAGE_NEW_PROJECT), false, forced))
     {
+    case Prompts::Answer::First:
         return ImageOpenChoice::AddLayer;
+    case Prompts::Answer::Second:
+        return ImageOpenChoice::NewProject;
+    default:
+        return ImageOpenChoice::Cancel;
     }
-    return answer == kTaskButtonSecond ? ImageOpenChoice::NewProject : ImageOpenChoice::Cancel;
 }
 
 bool Application::HasUnsavedWork() const noexcept
@@ -275,19 +315,19 @@ bool Application::ConfirmDiscardChanges() noexcept
     {
         return true;
     }
-    if (_quietUi || !_window)
-    {
-        return _forcedDiscard.value_or(true);
-    }
     const std::wstring title = FormatStringResource(nullptr, IDS_CONFIRM_SAVE_TITLE, FileTitle(_documentPath));
-    const int answer = AskThreeWay(_window.get(), title, LoadStringResource(nullptr, IDS_CONFIRM_SAVE_TEXT),
-                                   LoadStringResource(nullptr, IDS_CONFIRM_SAVE_SAVE),
-                                   LoadStringResource(nullptr, IDS_CONFIRM_SAVE_DISCARD), true);
-    if (answer == kTaskButtonFirst)
+    switch (_prompts->AskThreeWay(_window.get(), title, LoadStringResource(nullptr, IDS_CONFIRM_SAVE_TEXT),
+                                  LoadStringResource(nullptr, IDS_CONFIRM_SAVE_SAVE),
+                                  LoadStringResource(nullptr, IDS_CONFIRM_SAVE_DISCARD), true,
+                                  _forcedDiscard.value_or(true) ? Prompts::Answer::Second : Prompts::Answer::Cancel))
     {
+    case Prompts::Answer::First:
         return SaveDocument(false);
+    case Prompts::Answer::Second:
+        return true;
+    default:
+        return false;
     }
-    return answer == kTaskButtonSecond;
 }
 
 void Application::OpenPath(const wchar_t* path) noexcept
@@ -343,12 +383,14 @@ bool Application::OpenProjectPath(const wchar_t* path) noexcept
     const ProjectLoadResult loaded = LoadProject(path);
     if (loaded.status != ProjectIoStatus::Ok || !loaded.document.width)
     {
-        if (loaded.status == ProjectIoStatus::UnsupportedVersion && !_quietUi && _window)
+        if (loaded.status == ProjectIoStatus::UnsupportedVersion)
         {
-            const std::wstring text =
-                FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, loaded.formatVersion);
-            const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
-            MessageBoxW(_window.get(), text.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
+            // Formatted with the file's own version, unlike ShowError's plain string, but still counted as the
+            // same error id so a quiet run's record reads the same either way.
+            ++_errorsShown;
+            _lastErrorId = IDS_ERROR_UNSUPPORTED_VERSION;
+            _prompts->ShowFormattedError(
+                _window.get(), FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, loaded.formatVersion));
         }
         else
         {
@@ -675,7 +717,7 @@ int Application::RunFilesSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportFilesSelfTestFailure(L"The files self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The files self-test needs the chrome and the window.\n");
         return 5;
     }
     const auto layerCount = [&]() noexcept
@@ -688,7 +730,7 @@ int Application::RunFilesSelfTest() noexcept
     wchar_t temp[MAX_PATH]{};
     if (GetTempPathW(MAX_PATH, temp) == 0)
     {
-        ReportFilesSelfTestFailure(L"The temporary directory is unavailable.\n");
+        SelfTestFailure(L"The temporary directory is unavailable.\n");
         return 5;
     }
     const std::wstring scratch =
@@ -704,7 +746,7 @@ int Application::RunFilesSelfTest() noexcept
         const Raster raster = Raster::Make(6, 3, RasterFormat::Bgra8888, bytes.data(), bytes.size());
         if (EncodePngFile(raster, 72.0, fixture.c_str()) != ImageCodecStatus::Ok)
         {
-            ReportFilesSelfTestFailure(L"The self-test could not write its PNG fixture.\n");
+            SelfTestFailure(L"The self-test could not write its PNG fixture.\n");
             return 5;
         }
     }
@@ -723,9 +765,9 @@ int Application::RunFilesSelfTest() noexcept
         imported->asset.value().image.Width() != 6)
     {
         cleanup();
-        ReportFilesSelfTestFailure(std::format(L"Opening an image as a layer did not add it ({} layers, width {}, "
-                                               L"undo '{}').\n",
-                                               layerCount(), documentWidth(), _session.history.UndoName()));
+        SelfTestFailure(std::format(L"Opening an image as a layer did not add it ({} layers, width {}, "
+                                    L"undo '{}').\n",
+                                    layerCount(), documentWidth(), _session.history.UndoName()));
         return 5;
     }
     // New Project: an unmodified, untitled document of the image's size with nothing to undo.
@@ -736,11 +778,11 @@ int Application::RunFilesSelfTest() noexcept
         layerCount() != 1 || _session.history.IsModified() || _session.history.CanUndo() || !_documentPath.empty())
     {
         cleanup();
-        ReportFilesSelfTestFailure(std::format(L"Opening an image as a new project did not replace the document "
-                                               L"({} × {}, {} layers, modified {}).\n",
-                                               documentWidth(),
-                                               _session.Document().has_value() ? _session.Document().value().height : 0,
-                                               layerCount(), _session.history.IsModified()));
+        SelfTestFailure(std::format(L"Opening an image as a new project did not replace the document "
+                                    L"({} × {}, {} layers, modified {}).\n",
+                                    documentWidth(),
+                                    _session.Document().has_value() ? _session.Document().value().height : 0,
+                                    layerCount(), _session.history.IsModified()));
         return 5;
     }
     // The save prompt: a modified document survives New under Cancel and is replaced under Don't Save.
@@ -754,9 +796,9 @@ int Application::RunFilesSelfTest() noexcept
     if (!survived || documentWidth() != 1280 || layerCount() != 1 || _session.history.IsModified())
     {
         cleanup();
-        ReportFilesSelfTestFailure(std::format(L"The save prompt's answers were not honored (survived {}, width {}, "
-                                               L"{} layers).\n",
-                                               survived, documentWidth(), layerCount()));
+        SelfTestFailure(std::format(L"The save prompt's answers were not honored (survived {}, width {}, "
+                                    L"{} layers).\n",
+                                    survived, documentWidth(), layerCount()));
         return 5;
     }
     // Close Project empties the shell, a frame still renders, and New brings a document back.
@@ -769,9 +811,9 @@ int Application::RunFilesSelfTest() noexcept
     if (!closed || FAILED(emptyFrame) || !_session.Document().has_value() || layerCount() != 1)
     {
         cleanup();
-        ReportFilesSelfTestFailure(std::format(L"Close Project did not empty the shell (closed {}, frame {:#x}, "
-                                               L"{} layers after New).\n",
-                                               closed, static_cast<unsigned long>(emptyFrame), layerCount()));
+        SelfTestFailure(std::format(L"Close Project did not empty the shell (closed {}, frame {:#x}, "
+                                    L"{} layers after New).\n",
+                                    closed, static_cast<unsigned long>(emptyFrame), layerCount()));
         return 5;
     }
     // Import Images: two files as one Import Images entry.
@@ -779,9 +821,9 @@ int Application::RunFilesSelfTest() noexcept
         _session.history.UndoName() != L"Import Images")
     {
         cleanup();
-        ReportFilesSelfTestFailure(std::format(L"Import Images did not add two layers as one entry ({} layers, "
-                                               L"undo '{}').\n",
-                                               layerCount(), _session.history.UndoName()));
+        SelfTestFailure(std::format(L"Import Images did not add two layers as one entry ({} layers, "
+                                    L"undo '{}').\n",
+                                    layerCount(), _session.history.UndoName()));
         return 5;
     }
     // Move Layer Down / Up swap the active layer with its sibling as Reorder Layers entries.
@@ -803,8 +845,7 @@ int Application::RunFilesSelfTest() noexcept
     OnCommand(ChromeHost::kCommandMoveLayerUp);
     if (!movedDown || indexOf(top) != 2 || _session.ActiveLayerID() != top)
     {
-        ReportFilesSelfTestFailure(
-            std::format(L"Move Layer Down / Up did not swap siblings (index {}).\n", indexOf(top)));
+        SelfTestFailure(std::format(L"Move Layer Down / Up did not swap siblings (index {}).\n", indexOf(top)));
         return 5;
     }
     // Group Selected Layers wraps the active layer in a folder; undo restores.
@@ -821,7 +862,7 @@ int Application::RunFilesSelfTest() noexcept
     if (folder == nullptr || !folder->isGroup || wrapped == nullptr || wrapped->parentID != folder->id ||
         _session.history.UndoName() != L"Group Layers")
     {
-        ReportFilesSelfTestFailure(L"Group Selected Layers did not wrap the active layer in a folder.\n");
+        SelfTestFailure(L"Group Selected Layers did not wrap the active layer in a folder.\n");
         return 5;
     }
     _session.Undo();
@@ -837,20 +878,19 @@ int Application::RunFilesSelfTest() noexcept
     if (!clipped || _session.ActiveLayer() == nullptr || _session.ActiveLayer()->maskSourceID.has_value() ||
         _session.history.UndoName() != L"Release Clipping Mask")
     {
-        ReportFilesSelfTestFailure(L"Ctrl+Alt+G did not clip the layer to the one below and release it.\n");
+        SelfTestFailure(L"Ctrl+Alt+G did not clip the layer to the one below and release it.\n");
         return 5;
     }
-    // No exposed function awaits an implementation any more (Specs/UI/UI_ApplicationChrome.md lists none); the
-    // notice path itself stays honest: raising it under quiet UI counts and changes nothing.
+    // No exposed function awaits an implementation any more (Specs/UI/UI_ApplicationChrome.md lists none). A budget
+    // refusal raises the same posted-notice card path (RF-905): quiet UI counts it and changes nothing.
     {
-        const int notices = _notImplementedCount;
+        const int notices = _budgetNotices;
         const std::optional<CanvasDocument> before = _session.Document();
         const int undoCount = _session.history.UndoCount();
-        ShowNotImplemented(IDS_CMD_MERGE_DOWN);
-        if (_notImplementedCount != notices + 1 || _session.Document() != before ||
-            _session.history.UndoCount() != undoCount)
+        ReportBudgetRefusal();
+        if (_budgetNotices != notices + 1 || _session.Document() != before || _session.history.UndoCount() != undoCount)
         {
-            ReportFilesSelfTestFailure(L"The not-implemented notice changed the document or was not counted.\n");
+            SelfTestFailure(L"The posted notice changed the document or was not counted.\n");
             return 5;
         }
     }
@@ -864,29 +904,19 @@ int Application::RunFilesSelfTest() noexcept
         _forcedDiscard.reset();
         if (complete || documentWidth() != 6 || layerCount() != 2 || _session.history.UndoName() != L"Import Image")
         {
-            ReportFilesSelfTestFailure(std::format(L"A new project from a batch whose first image fails did not open "
-                                                   L"the next one ({} layers, width {}).\n",
-                                                   layerCount(), documentWidth()));
+            SelfTestFailure(std::format(L"A new project from a batch whose first image fails did not open "
+                                        L"the next one ({} layers, width {}).\n",
+                                        layerCount(), documentWidth()));
             return 5;
         }
     }
+    // An opaque red layer named "Red", added and made active (as InsertPaintedLayer, plus the DocumentChanged the
+    // self-test needs after each one).
     const auto insertRed = [&](int width, int height) -> Guid
     {
-        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u, 0);
-        for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
-        {
-            bytes[index + 2] = 255;
-            bytes[index + 3] = 255;
-        }
-        const Raster raster = Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-        ImageLayer layer = ImageLayer::Blank(L"Red", Vec2{static_cast<double>(width), static_cast<double>(height)});
-        layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
-        _session.BeginEdit(L"Import Image");
-        _session.Document().value().layers.push_back(layer);
-        _session.EndEdit();
-        _session.SelectLayer(layer.id);
+        const Guid id = InsertPaintedLayer(_session, L"Red", width, height, Vec2{0, 0}, 0.0, 0xFFFF0000u);
         DocumentChanged();
-        return layer.id;
+        return id;
     };
     // The save prompt settles nothing before its answer: under Cancel an open panel, the size card, the crop frame,
     // a shape draft and a pending transform stay as they were.
@@ -925,11 +955,10 @@ int Application::RunFilesSelfTest() noexcept
         _forcedDiscard.reset();
         if (!panelOpen || !panelKept || !cardKept || !frameKept || !draftKept || !transformKept)
         {
-            ReportFilesSelfTestFailure(std::format(L"Cancel at the save prompt did not keep everything as it was "
-                                                   L"(panel {} {}, size card {}, crop frame {}, shape draft {}, "
-                                                   L"transform {}).\n",
-                                                   panelOpen, panelKept, cardKept, frameKept, draftKept,
-                                                   transformKept));
+            SelfTestFailure(std::format(L"Cancel at the save prompt did not keep everything as it was "
+                                        L"(panel {} {}, size card {}, crop frame {}, shape draft {}, "
+                                        L"transform {}).\n",
+                                        panelOpen, panelKept, cardKept, frameKept, draftKept, transformKept));
             return 5;
         }
     }
@@ -970,9 +999,9 @@ int Application::RunFilesSelfTest() noexcept
         if (!adjustment.has_value() || !applied || fileWhite != 128.0 || documentWhite != 128.0 ||
             _session.history.IsModified())
         {
-            ReportFilesSelfTestFailure(std::format(L"Save during an adjustment layer's panel did not apply it first "
-                                                   L"(applied {}, file white {}, document white {}, modified {}).\n",
-                                                   applied, fileWhite, documentWhite, _session.history.IsModified()));
+            SelfTestFailure(std::format(L"Save during an adjustment layer's panel did not apply it first "
+                                        L"(applied {}, file white {}, document white {}, modified {}).\n",
+                                        applied, fileWhite, documentWhite, _session.history.IsModified()));
             return 5;
         }
     }
@@ -998,9 +1027,9 @@ int Application::RunFilesSelfTest() noexcept
         _documentPath.clear();
         if (!written || !opened || !savedInPlace || !stillFolder || !complete || _session.history.IsModified())
         {
-            ReportFilesSelfTestFailure(std::format(L"Saving a project opened from a folder did not save it in place "
-                                                   L"(written {}, opened {}, saved {}, folder {}, reloaded {}).\n",
-                                                   written, opened, savedInPlace, stillFolder, complete));
+            SelfTestFailure(std::format(L"Saving a project opened from a folder did not save it in place "
+                                        L"(written {}, opened {}, saved {}, folder {}, reloaded {}).\n",
+                                        written, opened, savedInPlace, stillFolder, complete));
             return 5;
         }
     }
@@ -1032,10 +1061,10 @@ int Application::RunFilesSelfTest() noexcept
         OnTool(EditorTool::Move);
         if (!targeted || !written || !opened || !imageTargeted || painted != L"Brush Stroke")
         {
-            ReportFilesSelfTestFailure(std::format(L"Reopening a project kept the mask target of the document it "
-                                                   L"replaced (targeted {}, written {}, opened {}, image targeted {}, "
-                                                   L"stroke '{}').\n",
-                                                   targeted, written, opened, imageTargeted, painted));
+            SelfTestFailure(std::format(L"Reopening a project kept the mask target of the document it "
+                                        L"replaced (targeted {}, written {}, opened {}, image targeted {}, "
+                                        L"stroke '{}').\n",
+                                        targeted, written, opened, imageTargeted, painted));
             return 5;
         }
     }
@@ -1091,7 +1120,7 @@ int Application::RunFilesSelfTest() noexcept
                                   std::floor(_session.Document().value().height / 2.0 - 1.5)};
         if (atPoint != expectedPoint || atMiddle != expectedMiddle)
         {
-            ReportFilesSelfTestFailure(std::format(
+            SelfTestFailure(std::format(
                 L"A dropped image did not center on the drop point, or on the canvas off it (at the point {},{} for "
                 L"{},{}; off the canvas {},{} for {},{}).\n",
                 atPoint.has_value() ? atPoint->x : -1.0, atPoint.has_value() ? atPoint->y : -1.0, expectedPoint.x,
@@ -1108,14 +1137,14 @@ int Application::RunClipboardSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportFilesSelfTestFailure(L"The clipboard self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The clipboard self-test needs the chrome and the window.\n");
         return 5;
     }
     // The user's clipboard is set aside and comes back on every way out.
     SystemClipboard::SavedContents userClipboard;
     if (!SystemClipboard::SaveContents(_window.get(), userClipboard) || !SystemClipboard::Clear(_window.get()))
     {
-        ReportFilesSelfTestFailure(L"The clipboard self-test could not set the user's clipboard aside.\n");
+        SelfTestFailure(L"The clipboard self-test could not set the user's clipboard aside.\n");
         return 5;
     }
     const auto restoreClipboard =
@@ -1124,7 +1153,7 @@ int Application::RunClipboardSelfTest() noexcept
     OnCommand(ChromeHost::kCommandNew);
     _forcedDiscard.reset();
     {
-        const Raster raster = SolidRaster(100, 100, 0, 0, 255);
+        const Raster raster = SolidRaster(100, 100, 0xFFFF0000u);
         ImageLayer layer = ImageLayer::Blank(L"Sheet", Vec2{100, 100});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
@@ -1136,12 +1165,12 @@ int Application::RunClipboardSelfTest() noexcept
     // A copy that reaches the system clipboard, then another app's image there.
     _session.ApplySelection(SelectionGeometry::Rect(10, 10, 20, 10), SelectionMode::New, L"Select");
     OnCommand(ChromeHost::kCommandCopy);
-    const Raster foreign = SolidRaster(3, 3, 0, 255, 0);
+    const Raster foreign = SolidRaster(3, 3, 0xFF00FF00u);
     // Other applications' clipboard listeners are still reading the copy: the test's own writes and reads wait them
     // out (SystemClipboard.h); the product's copy and paste keep their short wait.
     if (!SystemClipboard::WriteImage(_window.get(), foreign, SystemClipboard::kHarnessAttempts))
     {
-        ReportFilesSelfTestFailure(L"The clipboard self-test could not write the other app's image.\n");
+        SelfTestFailure(L"The clipboard self-test could not write the other app's image.\n");
         return 5;
     }
     // A newer copy that cannot reach the system clipboard: another thread holds it open.
@@ -1149,7 +1178,7 @@ int Application::RunClipboardSelfTest() noexcept
     ClipboardHold hold;
     if (FAILED(hold.opened.create()) || FAILED(hold.release.create()))
     {
-        ReportFilesSelfTestFailure(L"The clipboard self-test could not create its events.\n");
+        SelfTestFailure(L"The clipboard self-test could not create its events.\n");
         return 5;
     }
     wil::unique_handle holder(CreateThread(nullptr, 0, HoldClipboard, &hold, 0, nullptr));
@@ -1160,7 +1189,7 @@ int Application::RunClipboardSelfTest() noexcept
         {
             (void)WaitForSingleObject(holder.get(), 15000);
         }
-        ReportFilesSelfTestFailure(L"The clipboard self-test could not hold the clipboard open.\n");
+        SelfTestFailure(L"The clipboard self-test could not hold the clipboard open.\n");
         return 5;
     }
     OnCommand(ChromeHost::kCommandCopy);
@@ -1177,11 +1206,10 @@ int Application::RunClipboardSelfTest() noexcept
                           pasted->asset->image.Height() == 15 && _session.history.UndoName() == L"Paste";
     if (!writeFailed || !internal)
     {
-        ReportFilesSelfTestFailure(
-            std::format(L"Paste after a copy that could not reach the system clipboard took an "
-                        L"older image (write failed {}, pasted {} × {}).\n",
-                        writeFailed, pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
-                        pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
+        SelfTestFailure(std::format(L"Paste after a copy that could not reach the system clipboard took an "
+                                    L"older image (write failed {}, pasted {} × {}).\n",
+                                    writeFailed, pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
+                                    pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
         return 5;
     }
     // Copy and Copy Merged take the pixels the canvas shows (RF-1104, Decision D3): a pending gradient commits first
@@ -1221,10 +1249,10 @@ int Application::RunClipboardSelfTest() noexcept
         OnTool(EditorTool::Move);
         if (!copyPending || !copyApplied || !mergedPending || !mergedApplied)
         {
-            ReportFilesSelfTestFailure(std::format(L"Copy or Copy Merged under a pending gradient did not apply it "
-                                                   L"first (copy {} {}, merged {} {}, merged start {} {} {} {}).\n",
-                                                   copyPending, copyApplied, mergedPending, mergedApplied, start[0],
-                                                   start[1], start[2], start[3]));
+            SelfTestFailure(std::format(L"Copy or Copy Merged under a pending gradient did not apply it "
+                                        L"first (copy {} {}, merged {} {}, merged start {} {} {} {}).\n",
+                                        copyPending, copyApplied, mergedPending, mergedApplied, start[0], start[1],
+                                        start[2], start[3]));
             return 5;
         }
     }
@@ -1236,7 +1264,7 @@ int Application::RunSessionSelfTest() noexcept
 {
     if (!_chrome || !_window)
     {
-        ReportFilesSelfTestFailure(L"The session self-test needs the chrome and the window.\n");
+        SelfTestFailure(L"The session self-test needs the chrome and the window.\n");
         return 5;
     }
     const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
@@ -1267,9 +1295,9 @@ int Application::RunSessionSelfTest() noexcept
         }
         if (!aliveInside || !deferredInside || !reposted || !_window || !_chrome || _closeDeferred)
         {
-            ReportFilesSelfTestFailure(std::format(L"A close inside a chrome callback did not wait for the dispatch to "
-                                                   L"unwind (alive {}, deferred {}, posted after {}).\n",
-                                                   aliveInside, deferredInside, reposted));
+            SelfTestFailure(std::format(L"A close inside a chrome callback did not wait for the dispatch to "
+                                        L"unwind (alive {}, deferred {}, posted after {}).\n",
+                                        aliveInside, deferredInside, reposted));
             return 5;
         }
     }
@@ -1278,7 +1306,7 @@ int Application::RunSessionSelfTest() noexcept
     OnCommand(ChromeHost::kCommandNew);
     _forcedDiscard.reset();
     {
-        const Raster raster = SolidRaster(200, 150, 0xB0, 0x6F, 0x2F);
+        const Raster raster = SolidRaster(200, 150, 0xFF2F6FB0u);
         ImageLayer layer = ImageLayer::Blank(L"Painted", Vec2{200, 150});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{300, 200};
@@ -1315,10 +1343,9 @@ int Application::RunSessionSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 450.0, 250.0);
         if (!stroking || !committed || _session.PendingBrush() != nullptr || _session.history.UndoCount() != before + 1)
         {
-            ReportFilesSelfTestFailure(
-                std::format(L"Losing the capture mid-stroke did not end the stroke (stroking {}, "
-                            L"committed {}, entries {} for {}).\n",
-                            stroking, committed, _session.history.UndoCount(), before + 1));
+            SelfTestFailure(std::format(L"Losing the capture mid-stroke did not end the stroke (stroking {}, "
+                                        L"committed {}, entries {} for {}).\n",
+                                        stroking, committed, _session.history.UndoCount(), before + 1));
             return 5;
         }
     }
@@ -1334,7 +1361,7 @@ int Application::RunSessionSelfTest() noexcept
         (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
         if (!stroking || _brushDragging || _session.history.UndoCount() != before + 1)
         {
-            ReportFilesSelfTestFailure(L"Leaving the window did not end a stroke that no longer held the capture.\n");
+            SelfTestFailure(L"Leaving the window did not end a stroke that no longer held the capture.\n");
             return 5;
         }
     }
@@ -1357,7 +1384,7 @@ int Application::RunSessionSelfTest() noexcept
             _session.PendingTransformEdit().has_value() || !(layer->transform == start) ||
             _session.history.UndoCount() != before)
         {
-            ReportFilesSelfTestFailure(L"Losing the capture mid-drag did not put the layer back where it started.\n");
+            SelfTestFailure(L"Losing the capture mid-drag did not put the layer back where it started.\n");
             return 5;
         }
     }
@@ -1384,9 +1411,9 @@ int Application::RunSessionSelfTest() noexcept
         SyncChrome();
         if (!pressed || !moved || !restored)
         {
-            ReportFilesSelfTestFailure(std::format(L"Losing the capture did not cancel the splitter drag (pressed {}, "
-                                                   L"moved {}, restored {}, hit {} at {:.1f},{:.1f}).\n",
-                                                   pressed, moved, restored, hit, press.xPixels, press.yPixels));
+            SelfTestFailure(std::format(L"Losing the capture did not cancel the splitter drag (pressed {}, "
+                                        L"moved {}, restored {}, hit {} at {:.1f},{:.1f}).\n",
+                                        pressed, moved, restored, hit, press.xPixels, press.yPixels));
             return 5;
         }
     }
@@ -1400,7 +1427,7 @@ int Application::RunSessionSelfTest() noexcept
         if (!focusEnds || _spacePan)
         {
             _spacePan = false;
-            ReportFilesSelfTestFailure(L"Space panning outlived the focus or the app's activation.\n");
+            SelfTestFailure(L"Space panning outlived the focus or the app's activation.\n");
             return 5;
         }
     }
@@ -1425,9 +1452,9 @@ int Application::RunSessionSelfTest() noexcept
         if (!haveKeys || !armed || _session.Document().value().layers.size() != layersBefore ||
             _session.history.UndoName() == L"Duplicate Layer")
         {
-            ReportFilesSelfTestFailure(std::format(L"A drag after Alt-press and Undo still duplicated the layer (armed "
-                                                   L"{}, {} layers for {}).\n",
-                                                   armed, _session.Document().value().layers.size(), layersBefore));
+            SelfTestFailure(std::format(L"A drag after Alt-press and Undo still duplicated the layer (armed "
+                                        L"{}, {} layers for {}).\n",
+                                        armed, _session.Document().value().layers.size(), layersBefore));
             return 5;
         }
     }
@@ -1481,7 +1508,7 @@ int Application::RunSessionSelfTest() noexcept
         if (refused != FALSE || !reasonShown || !promptQueued || !keptOpen || critical == FALSE ||
             refusedAgain != FALSE || !promptAgain || !closePosted || !settingsSaved)
         {
-            ReportFilesSelfTestFailure(std::format(
+            SelfTestFailure(std::format(
                 L"The session end did not ask for the unsaved document (refused {}, reason {} '{}', prompt {}, kept "
                 L"open {}, critical allowed {}, refused again {}, prompt again {}, close posted {}, settings "
                 L"saved {}).\n",
