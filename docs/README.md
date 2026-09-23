@@ -24,18 +24,23 @@ executable is unsigned in this version, so SmartScreen may ask once.
 ## Shell
 
 One window: menu bar, document tab, tool rail with the foreground/background wells, canvas, layers splitter,
-layers panel with the opacity stepper, status strip. New / Open / Save use the common file dialog. Drop a `.prism`
+layers panel with the opacity stepper, status strip. New / Open / Save use the common file dialog; Save, Save As
+and Export apply whatever is still open first — a typed value, a live stroke, a pending gradient or transform, an
+adjustment panel — so the file always matches what the canvas shows. Drop a `.prism`
 package, an exploded project folder, or images onto the window. An image opened or dropped asks whether it becomes
 a layer of the current project or a new project of its own size; a modified project asks to save before it is
-replaced or closed. The menus list every function of the Mac app; one that is not implemented yet says so when
-invoked instead of doing nothing.
+replaced or closed. The menus list every function of the Mac app, and Help › Command List finds and runs any of
+them by name and shows its current shortcut; a function not implemented yet says so when invoked instead of doing
+nothing.
 
 - **Tool rail**: fifteen tools with Photoshop-style keys (V move, M marquee, L lasso, W wand, C crop, B brush,
   E eraser, J heal, S clone, R smear, G gradient, U shape, I eyedropper, H hand, Z zoom). Keys apply
   when the canvas has focus; Escape returns focus to chrome. Hover a button for its name and key.
 - **Palette**: the two wells at the bottom of the rail are the foreground (front) and background (behind) colors.
   Click one to open the color picker (saturation/value field, hue strip, R/G/B, hex); OK or Enter commits, Cancel or
-  Escape restores. X swaps the wells, D resets them to black over white.
+  Escape restores. X swaps the wells, D resets them to black over white. With a layer's mask targeted, the wells
+  show black and white for the mask's paint instead, clicking one opens no picker, and X and D swap or reset which
+  one paints (Black - Hide or White - Reveal).
 - **Layers**: drag the 6 DIP splitter (or use Left/Right, Shift, Home/End while it has focus) to size the panel
   between 160 and 480 DIP; the canvas keeps at least 200 DIP. The title row's stepper edits the active layer's
   opacity (type, Up/Down, buttons) as one undo step.
@@ -51,16 +56,23 @@ invoked instead of doing nothing.
 - **Sizes**: File › New Canvas… asks for a size (an image on the clipboard suggests its own), Image › Canvas Size…
   grows or shrinks the canvas around an anchor in pixels, percent, inches or centimeters (relative or absolute,
   ratio locked or free) with a transparent or colored extension, and Image › Image Size… resamples every layer
-  (nearest, smooth or high quality) or changes only the resolution; each is one undo step.
+  (nearest, smooth or high quality) or changes only the resolution; each is one undo step. Every document keeps to
+  a 100-megapixel budget: an edit that would cross it (a paste, a duplicate, a new mask, a filter, a merge, a
+  distortion, a shape) is declined with a notice instead of failing quietly.
 - **Canvas**: wheel zooms around the cursor, Space or the Hand tool pans, View menu fits (Ctrl+0), shows actual
-  pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). A pixel grid appears from 800 % zoom.
+  pixels (Ctrl+1) or zooms in/out (Ctrl+= / Ctrl+-). Zoom percentages count device pixels per document pixel, so
+  Actual Pixels is always a crisp 1:1 on any display; document pixels render hard-edged from 200 % zoom and a
+  pixel grid appears from 800 %.
 - **Layers**: click a row to select it, click a folder's expander to collapse it. Layer menu adds a layer
   (Ctrl+Shift+N) or folder (Ctrl+G), wraps the active layer in a folder (Group Selected Layers), copies the
   selection or the layer to a new layer (Ctrl+J), renames it (F2, or double-click its row), deletes the active
   layer or its targeted mask (Delete, without a selection), toggles its visibility, moves it up or down among its
   siblings (Ctrl+] / Ctrl+[) or out of its folder (Ctrl+Shift+G), clips it to the layer below or releases the clip
   (Ctrl+Alt+G), merges it down onto the layer beneath (or a folder into one layer; Ctrl+E), or adds a mask (white,
-  or black; from the selection when there is one).
+  or black; from the selection when there is one). A row with a mask shows a `Mask` badge (`Mask off` when
+  disabled); click it to target that layer's mask, or click elsewhere on the row to target its pixels again, and
+  Shift-click it to turn the mask on or off. The Layer menu's Target Layer Mask / Target Layer Pixels, Link /
+  Unlink Layer Mask and Enable / Disable Layer Mask do the same for the active layer (no default shortcuts).
 - **Edit**: Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z or Ctrl+Y) name the step they revert. Cut, Copy, Copy Merged and
   Paste (Ctrl+X, Ctrl+C, Ctrl+Shift+C, Ctrl+V) move pixels between layers and other apps (a paste lands in place as a
   new layer); Fill with the foreground (Alt+Backspace) or background (Ctrl+Backspace) color, Clear Selection Pixels
@@ -68,14 +80,16 @@ invoked instead of doing nothing.
 - **Selection**: the Marquee (M, rectangle or ellipse), Lasso (L, freehand or polygonal) and Magic Wand (W) draw
   outlines; Shift adds, Alt subtracts, dragging inside a selection moves it, the header expands or contracts it, and
   the Select menu selects all (Ctrl+A), deselects (Ctrl+D), inverts (Ctrl+Shift+I) or loads a layer's pixels or a
-  mask as the selection. Ctrl-drag inside a selection moves its pixels (Alt duplicates), Ctrl+arrows nudge them,
+  mask as the selection (and says so instead of silently loading nothing when the outline would be too detailed to
+  trace). Ctrl-drag inside a selection moves its pixels (Alt duplicates), Ctrl+arrows nudge them,
   Ctrl+T transforms them on a floating layer that merges back, Layer via Copy (Ctrl+J) copies them to a layer, and
   Add Mask or Add Black Mask on the Layer menu turns the selection into a mask.
 - **Brush and Eraser**: B paints with the foreground color, E erases (the Brush's header also has an Erase mode).
   The header sets the size, hardness and opacity; `[` and `]` step the size, Shift-`[` and Shift-`]` the hardness,
-  digits the opacity. Shift-click draws a straight line from the last stroke. With a layer mask selected the brush
-  paints it black (hide) or white (reveal). Strokes show as you draw and commit on release as one undo step that
-  shares every untouched tile with the previous state.
+  digits set the opacity (holding one sets it once, not repeatedly). Shift-click draws a straight line from the
+  last stroke. With a layer mask selected the brush paints it black (hide) or white (reveal). Strokes show as you
+  draw and commit — on release, or if the window loses focus or the pointer's capture before you let go — as one
+  undo step that shares every untouched tile with the previous state.
 - **Retouch**: Spot Healing (J) blends a blemish into its surroundings (Content-Aware, Create Texture or Proximity
   Match); Clone Stamp (S) copies from an Alt-clicked source, aligned or not, from this layer or all layers; Smear
   (R) liquifies, blurs or smudges; Gradient (G) drags a linear or radial fill that previews until Enter or Apply;
@@ -89,9 +103,9 @@ invoked instead of doing nothing.
   Photoshop. Edit › Content-Aware Fill (Shift+Delete) fills a selection from the surrounding pixels of the layer,
   growing the layer when the selection reaches past its edge; the panel says when nothing opaque surrounds it.
 - **Settings, reports, access**: a JSON settings file under `%LocalAppData%\RedPrism` applies live as you edit
-  it (theme, sample ring, panel width, JPEG quality) and remembers the window; a crash leaves a local minidump
-  and the next start says where (nothing is uploaded); the chrome follows Windows high contrast and exposes every
-  control to UI Automation with a name; a `Languages\<tag>` satellite table translates the chrome.
+  it (theme, sample ring, panel width, JPEG quality, keyboard shortcuts) and remembers the window; a crash leaves a
+  local minidump and the next start says where (nothing is uploaded); the chrome follows Windows high contrast and
+  exposes every control to UI Automation with a name; a `Languages\<tag>` satellite table translates the chrome.
 
 Empty-document harness captures:
 
