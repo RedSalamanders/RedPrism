@@ -3,7 +3,6 @@
 #include "Utf8.h"
 
 #include <algorithm>
-#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdlib>
@@ -34,20 +33,47 @@ struct FreeDeleter
 };
 
 constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
+// Editors save UTF-8 with a byte order mark; the document is the same.
+constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
+
+// An integral JSON number in int range: an integer, or a real with no fraction (10.0), as ProjectStore reads ints.
+[[nodiscard]] std::optional<int> IntegralValue(yyjson_val* value) noexcept
+{
+    if (value == nullptr)
+    {
+        return std::nullopt;
+    }
+    if (yyjson_is_int(value))
+    {
+        if (yyjson_is_uint(value))
+        {
+            const std::uint64_t number = yyjson_get_uint(value);
+            return number <= static_cast<std::uint64_t>(INT_MAX) ? std::optional<int>(static_cast<int>(number))
+                                                                 : std::nullopt;
+        }
+        const std::int64_t number = yyjson_get_sint(value);
+        return number >= INT_MIN && number <= INT_MAX ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
+    }
+    if (yyjson_is_real(value))
+    {
+        const double number = yyjson_get_real(value);
+        if (std::isfinite(number) && number == std::floor(number) && number >= static_cast<double>(INT_MIN) &&
+            number <= static_cast<double>(INT_MAX))
+        {
+            return static_cast<int>(number);
+        }
+    }
+    return std::nullopt;
+}
 
 [[nodiscard]] std::optional<int> SchemaOf(yyjson_val* root) noexcept
 {
-    yyjson_val* schema = yyjson_obj_get(root, "schema");
-    if (schema == nullptr || !yyjson_is_int(schema))
+    const std::optional<int> schema = IntegralValue(yyjson_obj_get(root, "schema"));
+    if (!schema.has_value() || schema.value() < 1)
     {
         return std::nullopt;
     }
-    const std::int64_t value = yyjson_get_sint(schema);
-    if (value < 1 || value > INT_MAX)
-    {
-        return std::nullopt;
-    }
-    return static_cast<int>(value);
+    return schema;
 }
 
 [[nodiscard]] bool ReadNumber(yyjson_val* object, const char* key, double& out) noexcept
@@ -63,17 +89,12 @@ constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
 
 [[nodiscard]] bool ReadInt(yyjson_val* object, const char* key, int& out) noexcept
 {
-    yyjson_val* value = yyjson_obj_get(object, key);
-    if (value == nullptr || !yyjson_is_int(value))
+    const std::optional<int> number = IntegralValue(yyjson_obj_get(object, key));
+    if (!number.has_value())
     {
         return false;
     }
-    const std::int64_t number = yyjson_get_sint(value);
-    if (number < INT_MIN || number > INT_MAX)
-    {
-        return false;
-    }
-    out = static_cast<int>(number);
+    out = number.value();
     return true;
 }
 
@@ -117,122 +138,119 @@ constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
     return true;
 }
 
-// RedSalamander's stable vk spelling: a letter or digit, F1–F24, a named key, or VK_XX.
-[[nodiscard]] std::string VkStableName(UINT virtualKey)
+// One `shortcuts` entry: an object with a `commandId` starting with `cmd/`, optional boolean `ctrl`, `alt` and
+// `shift`, and exactly one of `vk` (Common/KeyChord.h spellings, any case) or `keyPosition`. nullopt otherwise.
+[[nodiscard]] std::optional<ShortcutBinding> ParseShortcut(yyjson_val* entry)
 {
-    const UINT key = virtualKey & 0xFFu;
-    if (key >= VK_F1 && key <= VK_F24)
+    if (entry == nullptr || !yyjson_is_obj(entry))
     {
-        return std::format("F{}", key - VK_F1 + 1);
+        return std::nullopt;
     }
-    if ((key >= static_cast<UINT>('0') && key <= static_cast<UINT>('9')) ||
-        (key >= static_cast<UINT>('A') && key <= static_cast<UINT>('Z')))
+    const std::optional<std::string_view> commandId = ReadString(entry, "commandId");
+    if (!commandId.has_value() || commandId->size() < 5 || !commandId->starts_with("cmd/"))
     {
-        return std::string(1, static_cast<char>(key));
+        return std::nullopt;
     }
-    switch (key)
+    ShortcutBinding binding;
+    const auto readFlag = [entry](const char* name, bool& out) noexcept
     {
-    case VK_BACK:
-        return "Backspace";
-    case VK_TAB:
-        return "Tab";
-    case VK_RETURN:
-        return "Enter";
-    case VK_SPACE:
-        return "Space";
-    case VK_PRIOR:
-        return "PageUp";
-    case VK_NEXT:
-        return "PageDown";
-    case VK_END:
-        return "End";
-    case VK_HOME:
-        return "Home";
-    case VK_LEFT:
-        return "Left";
-    case VK_UP:
-        return "Up";
-    case VK_RIGHT:
-        return "Right";
-    case VK_DOWN:
-        return "Down";
-    case VK_INSERT:
-        return "Insert";
-    case VK_DELETE:
-        return "Delete";
-    case VK_ESCAPE:
-        return "Escape";
-    case VK_ADD:
-        return "NumpadPlus";
-    case VK_SUBTRACT:
-        return "NumpadMinus";
-    default:
-        return std::format("VK_{:02X}", key);
+        yyjson_val* value = yyjson_obj_get(entry, name);
+        if (value == nullptr)
+        {
+            return true;
+        }
+        if (!yyjson_is_bool(value))
+        {
+            return false;
+        }
+        out = yyjson_get_bool(value);
+        return true;
+    };
+    if (!readFlag("ctrl", binding.chord.ctrl) || !readFlag("alt", binding.chord.alt) ||
+        !readFlag("shift", binding.chord.shift))
+    {
+        return std::nullopt;
     }
+    const bool hasVk = yyjson_obj_get(entry, "vk") != nullptr;
+    const bool hasPosition = yyjson_obj_get(entry, "keyPosition") != nullptr;
+    if (hasVk == hasPosition)
+    {
+        return std::nullopt;
+    }
+    if (hasVk)
+    {
+        const std::optional<std::string_view> vk = ReadString(entry, "vk");
+        if (!vk.has_value() || !ParseStableKeyName(vk.value(), binding.chord.virtualKey))
+        {
+            return std::nullopt;
+        }
+    }
+    else
+    {
+        const std::optional<std::string_view> position = ReadString(entry, "keyPosition");
+        binding.chord.position = position.has_value() ? ParseKeyPositionName(position.value()) : KeyPosition::None;
+        if (binding.chord.position == KeyPosition::None)
+        {
+            return std::nullopt;
+        }
+    }
+    binding.commandId = Utf8ToWide(commandId.value());
+    return binding;
 }
 
-[[nodiscard]] bool TryParseVk(std::string_view text, UINT& out) noexcept
+// The entries of a `shortcuts` array that parse, in file order.
+[[nodiscard]] std::vector<ShortcutBinding> ParseShortcuts(yyjson_val* array)
 {
-    if (text.empty())
+    std::vector<ShortcutBinding> bindings;
+    if (array == nullptr || !yyjson_is_arr(array))
     {
-        return false;
+        return bindings;
     }
-    if (text.size() == 1)
+    const std::size_t count = yyjson_arr_size(array);
+    bindings.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
     {
-        char character = text[0];
-        if (character >= 'a' && character <= 'z')
+        if (std::optional<ShortcutBinding> binding = ParseShortcut(yyjson_arr_get(array, index)); binding.has_value())
         {
-            character = static_cast<char>(character - 'a' + 'A');
-        }
-        if ((character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z'))
-        {
-            out = static_cast<UINT>(static_cast<unsigned char>(character));
-            return true;
-        }
-        return false;
-    }
-    if ((text[0] == 'F' || text[0] == 'f') && text.size() >= 2 && text.size() <= 3)
-    {
-        unsigned number = 0;
-        const char* const end = text.data() + text.size();
-        const auto parsed = std::from_chars(text.data() + 1, end, number);
-        if (parsed.ec == std::errc{} && parsed.ptr == end && number >= 1 && number <= 24)
-        {
-            out = VK_F1 + (number - 1);
-            return true;
+            bindings.push_back(std::move(binding.value()));
         }
     }
-    if (text.size() == 5 && (text[0] == 'V' || text[0] == 'v') && (text[1] == 'K' || text[1] == 'k') && text[2] == '_')
+    return bindings;
+}
+
+// A fresh `shortcuts` entry for `binding`; nullptr when the document cannot allocate it.
+[[nodiscard]] yyjson_mut_val* ShortcutEntry(yyjson_mut_doc* doc, const ShortcutBinding& binding)
+{
+    yyjson_mut_val* entry = yyjson_mut_obj(doc);
+    if (entry == nullptr)
     {
-        unsigned key = 0;
-        const auto parsed = std::from_chars(text.data() + 3, text.data() + 5, key, 16);
-        if (parsed.ec == std::errc{} && parsed.ptr == text.data() + 5 && key <= 0xFFu)
-        {
-            out = key;
-            return true;
-        }
+        return nullptr;
     }
-    struct Named
+    const std::string commandId = WideToUtf8(binding.commandId);
+    bool ok = yyjson_mut_obj_add_strcpy(doc, entry, "commandId", commandId.c_str());
+    if (binding.chord.ctrl)
     {
-        std::string_view name;
-        UINT key;
-    };
-    constexpr Named kNamed[] = {
-        {"Backspace", VK_BACK}, {"Tab", VK_TAB},     {"Enter", VK_RETURN},  {"Return", VK_RETURN},
-        {"Space", VK_SPACE},    {"PageUp", VK_PRIOR}, {"PageDown", VK_NEXT}, {"End", VK_END},
-        {"Home", VK_HOME},      {"Left", VK_LEFT},   {"Up", VK_UP},         {"Right", VK_RIGHT},
-        {"Down", VK_DOWN},      {"Insert", VK_INSERT}, {"Delete", VK_DELETE}, {"Escape", VK_ESCAPE},
-        {"NumpadPlus", VK_ADD}, {"NumpadMinus", VK_SUBTRACT},
-    };
-    for (const Named& named : kNamed)
-    {
-        if (text == named.name)
-        {
-            out = named.key;
-            return true;
-        }
+        ok = yyjson_mut_obj_add_bool(doc, entry, "ctrl", true) && ok;
     }
-    return false;
+    if (binding.chord.alt)
+    {
+        ok = yyjson_mut_obj_add_bool(doc, entry, "alt", true) && ok;
+    }
+    if (binding.chord.shift)
+    {
+        ok = yyjson_mut_obj_add_bool(doc, entry, "shift", true) && ok;
+    }
+    if (binding.chord.position != KeyPosition::None)
+    {
+        const std::string position{KeyPositionName(binding.chord.position)};
+        ok = yyjson_mut_obj_add_strcpy(doc, entry, "keyPosition", position.c_str()) && ok;
+    }
+    else
+    {
+        const std::string vk = StableKeyName(binding.chord.virtualKey);
+        ok = yyjson_mut_obj_add_strcpy(doc, entry, "vk", vk.c_str()) && ok;
+    }
+    return ok ? entry : nullptr;
 }
 
 [[nodiscard]] const char* ThemeName(ThemePreference theme) noexcept
@@ -314,10 +332,8 @@ std::wstring BackupPathFor(const std::wstring& path)
 {
     SYSTEMTIME time{};
     GetLocalTime(&time);
-    wchar_t suffix[64];
-    (void)swprintf_s(suffix, L".invalid-%04u%02u%02u-%02u%02u%02u-%03u", time.wYear, time.wMonth, time.wDay, time.wHour,
-                     time.wMinute, time.wSecond, time.wMilliseconds);
-    return path + suffix;
+    return path + std::format(L".invalid-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}", time.wYear, time.wMonth, time.wDay,
+                              time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 }
 
 std::optional<AppSettings> Parse(std::string_view json)
@@ -326,7 +342,7 @@ std::optional<AppSettings> Parse(std::string_view json)
     {
         return std::nullopt;
     }
-    const unique_yyjson_doc doc{yyjson_read(json.data(), json.size(), 0)};
+    const unique_yyjson_doc doc{yyjson_read(json.data(), json.size(), kReadFlags)};
     if (!doc)
     {
         return std::nullopt;
@@ -363,110 +379,32 @@ std::optional<AppSettings> Parse(std::string_view json)
     if (yyjson_val* window = yyjson_obj_get(root, "window"); window != nullptr && yyjson_is_obj(window))
     {
         WindowPlacementSetting placement;
+        // Every value fits ±32767 (compared directly: std::abs of INT_MIN has no int result).
+        const auto fits = [](int value) noexcept { return value >= -32767 && value <= 32767; };
         placement.valid = ReadInt(window, "x", placement.x) && ReadInt(window, "y", placement.y) &&
                           ReadInt(window, "width", placement.width) && ReadInt(window, "height", placement.height) &&
                           placement.width >= AppSettings::kWindowMinWidth &&
-                          placement.height >= AppSettings::kWindowMinHeight && std::abs(placement.x) <= 32767 &&
-                          std::abs(placement.y) <= 32767 && placement.width <= 32767 && placement.height <= 32767;
+                          placement.height >= AppSettings::kWindowMinHeight && fits(placement.x) && fits(placement.y) &&
+                          fits(placement.width) && fits(placement.height);
         if (placement.valid)
         {
             (void)ReadBool(window, "maximized", placement.maximized);
             settings.window = placement;
         }
     }
-    if (yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts"); shortcuts != nullptr && yyjson_is_arr(shortcuts))
-    {
-        const std::size_t count = yyjson_arr_size(shortcuts);
-        settings.shortcuts.reserve(count);
-        for (std::size_t index = 0; index < count; ++index)
-        {
-            yyjson_val* binding = yyjson_arr_get(shortcuts, index);
-            if (binding == nullptr || !yyjson_is_obj(binding))
-            {
-                continue;
-            }
-            ShortcutBinding chord;
-            const std::optional<std::string_view> commandId = ReadString(binding, "commandId");
-            if (!commandId.has_value() || commandId->size() < 5 || !commandId->starts_with("cmd/"))
-            {
-                continue;
-            }
-            const auto readFlag = [&](const char* name, bool& out)
-            {
-                yyjson_val* value = yyjson_obj_get(binding, name);
-                if (value == nullptr)
-                {
-                    return true;
-                }
-                if (!yyjson_is_bool(value))
-                {
-                    return false;
-                }
-                out = yyjson_get_bool(value);
-                return true;
-            };
-            if (!readFlag("ctrl", chord.ctrl) || !readFlag("alt", chord.alt) || !readFlag("shift", chord.shift))
-            {
-                continue;
-            }
-            const bool hasVk = yyjson_obj_get(binding, "vk") != nullptr;
-            const bool hasPosition = yyjson_obj_get(binding, "keyPosition") != nullptr;
-            if (hasVk == hasPosition)
-            {
-                continue;
-            }
-            if (hasVk)
-            {
-                const std::optional<std::string_view> vk = ReadString(binding, "vk");
-                UINT key = 0;
-                if (!vk.has_value() || !TryParseVk(vk.value(), key))
-                {
-                    continue;
-                }
-                chord.virtualKey = static_cast<std::uint16_t>(key);
-            }
-            else
-            {
-                const std::optional<std::string_view> position = ReadString(binding, "keyPosition");
-                if (!position.has_value())
-                {
-                    continue;
-                }
-                if (*position == "numberRowMinus")
-                {
-                    chord.keyPosition = 1;
-                }
-                else if (*position == "numberRowPlus")
-                {
-                    chord.keyPosition = 2;
-                }
-                else if (*position == "bracketLeft")
-                {
-                    chord.keyPosition = 3;
-                }
-                else if (*position == "bracketRight")
-                {
-                    chord.keyPosition = 4;
-                }
-                else
-                {
-                    continue;
-                }
-            }
-            chord.commandId = Utf8ToWide(commandId.value());
-            settings.shortcuts.push_back(std::move(chord));
-        }
-    }
+    settings.shortcuts = ParseShortcuts(yyjson_obj_get(root, "shortcuts"));
     return settings;
 }
 
 std::string Serialize(const AppSettings& settings, std::string_view existingJson)
 {
     unique_yyjson_mut_doc doc;
+    unique_yyjson_doc existing;
+    yyjson_val* existingShortcuts = nullptr;
     int schema = AppSettings::kSchema;
     if (!existingJson.empty())
     {
-        const unique_yyjson_doc existing{yyjson_read(existingJson.data(), existingJson.size(), 0)};
+        existing.reset(yyjson_read(existingJson.data(), existingJson.size(), kReadFlags));
         yyjson_val* existingRoot = existing ? yyjson_doc_get_root(existing.get()) : nullptr;
         if (existingRoot != nullptr && yyjson_is_obj(existingRoot))
         {
@@ -474,6 +412,7 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
             {
                 doc.reset(yyjson_doc_mut_copy(existing.get(), nullptr));
                 schema = std::max(schema, existingSchema.value());
+                existingShortcuts = yyjson_obj_get(existingRoot, "shortcuts");
             }
         }
     }
@@ -522,52 +461,62 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     {
         (void)yyjson_mut_obj_remove_str(root, "window");
     }
-    if (settings.shortcuts.empty())
-    {
-        (void)yyjson_mut_obj_remove_str(root, "shortcuts");
-    }
-    else
+    // `shortcuts`: left exactly as the file has it when its entries already say the settings' bindings. Otherwise
+    // the entries this version cannot read stay (verbatim, first), then one entry per binding in order, reusing an
+    // existing entry that reads the same so the fields inside it this version does not know survive.
+    if (ParseShortcuts(existingShortcuts) != settings.shortcuts)
     {
         yyjson_mut_val* shortcuts = yyjson_mut_arr(doc.get());
         ok = shortcuts != nullptr && ok;
+        std::vector<yyjson_val*> reusable;
+        std::vector<ShortcutBinding> reusableBindings;
+        if (shortcuts != nullptr && existingShortcuts != nullptr && yyjson_is_arr(existingShortcuts))
+        {
+            const std::size_t count = yyjson_arr_size(existingShortcuts);
+            for (std::size_t index = 0; index < count; ++index)
+            {
+                yyjson_val* entry = yyjson_arr_get(existingShortcuts, index);
+                if (std::optional<ShortcutBinding> binding = ParseShortcut(entry); binding.has_value())
+                {
+                    reusable.push_back(entry);
+                    reusableBindings.push_back(std::move(binding.value()));
+                }
+                else
+                {
+                    ok = yyjson_mut_arr_add_val(shortcuts, yyjson_val_mut_copy(doc.get(), entry)) && ok;
+                }
+            }
+        }
         for (const ShortcutBinding& binding : settings.shortcuts)
         {
-            yyjson_mut_val* chord = yyjson_mut_obj(doc.get());
-            if (chord == nullptr || shortcuts == nullptr)
+            if (shortcuts == nullptr)
             {
-                ok = false;
                 break;
             }
-            const std::string commandId = WideToUtf8(binding.commandId);
-            ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "commandId", commandId.c_str()) && ok;
-            if (binding.ctrl)
+            yyjson_mut_val* entry = nullptr;
+            for (std::size_t index = 0; index < reusable.size(); ++index)
             {
-                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "ctrl", true) && ok;
+                if (reusable[index] != nullptr && reusableBindings[index] == binding)
+                {
+                    entry = yyjson_val_mut_copy(doc.get(), reusable[index]);
+                    reusable[index] = nullptr;
+                    break;
+                }
             }
-            if (binding.alt)
+            if (entry == nullptr)
             {
-                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "alt", true) && ok;
+                entry = ShortcutEntry(doc.get(), binding);
             }
-            if (binding.shift)
-            {
-                ok = yyjson_mut_obj_add_bool(doc.get(), chord, "shift", true) && ok;
-            }
-            if (binding.keyPosition != 0)
-            {
-                const char* position = binding.keyPosition == 1   ? "numberRowMinus"
-                                       : binding.keyPosition == 2 ? "numberRowPlus"
-                                       : binding.keyPosition == 3 ? "bracketLeft"
-                                                                  : "bracketRight";
-                ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "keyPosition", position) && ok;
-            }
-            else
-            {
-                const std::string vk = VkStableName(binding.virtualKey);
-                ok = yyjson_mut_obj_add_strcpy(doc.get(), chord, "vk", vk.c_str()) && ok;
-            }
-            ok = yyjson_mut_arr_add_val(shortcuts, chord) && ok;
+            ok = yyjson_mut_arr_add_val(shortcuts, entry) && ok;
         }
-        ok = put("shortcuts", shortcuts) && ok;
+        if (shortcuts != nullptr && yyjson_mut_arr_size(shortcuts) == 0)
+        {
+            (void)yyjson_mut_obj_remove_str(root, "shortcuts");
+        }
+        else
+        {
+            ok = put("shortcuts", shortcuts) && ok;
+        }
     }
     if (!ok)
     {
@@ -582,86 +531,6 @@ std::string Serialize(const AppSettings& settings, std::string_view existingJson
     std::string result(text.get(), length);
     result += '\n';
     return result;
-}
-
-std::wstring ShortcutCatalogText(const ShortcutBinding& binding)
-{
-    std::wstring text;
-    if (binding.ctrl)
-    {
-        text += L"Ctrl+";
-    }
-    if (binding.alt)
-    {
-        text += L"Alt+";
-    }
-    if (binding.shift)
-    {
-        text += L"Shift+";
-    }
-    if (binding.keyPosition == 0 && binding.virtualKey != 0 &&
-        ((binding.virtualKey >= 'A' && binding.virtualKey <= 'Z') ||
-         (binding.virtualKey >= '0' && binding.virtualKey <= '9')))
-    {
-        text.push_back(static_cast<wchar_t>(binding.virtualKey));
-    }
-    else if (binding.keyPosition == 2)
-    {
-        text += binding.shift && !binding.ctrl ? L"=" : L"+";
-    }
-    else if (binding.keyPosition == 1)
-    {
-        text += L"-";
-    }
-    else if (binding.keyPosition == 3)
-    {
-        text += L"[";
-    }
-    else if (binding.keyPosition == 4)
-    {
-        text += L"]";
-    }
-    else if (binding.virtualKey == VK_LEFT)
-    {
-        text += L"Left";
-    }
-    else if (binding.virtualKey == VK_RIGHT)
-    {
-        text += L"Right";
-    }
-    else if (binding.virtualKey == VK_UP)
-    {
-        text += L"Up";
-    }
-    else if (binding.virtualKey == VK_DOWN)
-    {
-        text += L"Down";
-    }
-    else if (binding.virtualKey == VK_DELETE)
-    {
-        text += L"Delete";
-    }
-    else if (binding.virtualKey == VK_BACK)
-    {
-        text += L"Backspace";
-    }
-    else if (binding.virtualKey == VK_F2)
-    {
-        text += L"F2";
-    }
-    else if (binding.virtualKey == VK_F4)
-    {
-        text += L"F4";
-    }
-    else if (binding.virtualKey == VK_ADD)
-    {
-        text += L"+";
-    }
-    else if (binding.virtualKey == VK_SUBTRACT)
-    {
-        text += L"-";
-    }
-    return text;
 }
 
 SettingsLoadResult LoadCold(const std::wstring& path)
@@ -790,12 +659,13 @@ bool WriteFileAtomic(const std::wstring& path, std::string_view bytes)
     }
     const std::wstring temporary = path + L".tmp-" + std::to_wstring(GetCurrentProcessId());
     {
-        const wil::unique_hfile file{
+        wil::unique_hfile file{
             CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)};
         if (!file)
         {
             return false;
         }
+        bool complete = true;
         std::size_t offset = 0;
         while (offset < bytes.size())
         {
@@ -803,12 +673,20 @@ bool WriteFileAtomic(const std::wstring& path, std::string_view bytes)
             const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - offset, 1u << 20));
             if (!WriteFile(file.get(), bytes.data() + offset, chunk, &written, nullptr) || written == 0)
             {
-                (void)DeleteFileW(temporary.c_str());
-                return false;
+                complete = false;
+                break;
             }
             offset += written;
         }
-        (void)FlushFileBuffers(file.get());
+        complete = complete && FlushFileBuffers(file.get()) != FALSE;
+        // Closed before any delete: the temporary was opened without sharing, so DeleteFileW on the open file
+        // fails and would leave it behind.
+        file.reset();
+        if (!complete)
+        {
+            (void)DeleteFileW(temporary.c_str());
+            return false;
+        }
     }
     if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {

@@ -7,7 +7,7 @@
 #include <cstdint>
 
 // The tool rail, top to bottom, in legacy order (ContentView tool rail plus Eraser as its own button).
-// Names live in the STRINGTABLE (EditorToolNameId); keys are the Photoshop-style shortcuts.
+// Names live in the STRINGTABLE (EditorToolNameId); the default keys are the Photoshop-style letters (EditorToolKey).
 enum class EditorTool : std::uint8_t
 {
     Move = 0,
@@ -187,6 +187,8 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
     return L'\xE7C2';
 }
 
+// A tool's default key: the catalog's default chord for its select command (RedPrism/CommandCatalog.h). What the
+// key is now (a settings replacement may move it) is the effective table's chord (ChromeHost::CommandChordText).
 [[nodiscard]] constexpr wchar_t EditorToolKey(EditorTool tool) noexcept
 {
     switch (tool)
@@ -225,17 +227,4 @@ inline constexpr std::size_t kEditorToolCount = static_cast<std::size_t>(EditorT
         return L'Z';
     }
     return L'V';
-}
-
-// The tool whose shortcut is `virtualKey`, or Count when the key is not a tool key.
-[[nodiscard]] constexpr EditorTool EditorToolFromKey(wchar_t virtualKey) noexcept
-{
-    for (std::size_t index = 0; index < kEditorToolCount; ++index)
-    {
-        if (EditorToolKey(EditorToolAt(index)) == virtualKey)
-        {
-            return EditorToolAt(index);
-        }
-    }
-    return EditorTool::Count;
 }

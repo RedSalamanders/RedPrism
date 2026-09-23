@@ -13,13 +13,16 @@ namespace Localization
 {
 inline constexpr wchar_t kSatelliteFolder[] = L"Languages";
 inline constexpr wchar_t kSatelliteName[] = L"RedPrism.resources.dll";
+// The language of the table embedded in RedPrism.exe.
+inline constexpr std::wstring_view kEmbeddedLanguage = L"en";
 
 // The user's Windows display languages, most preferred first ("fr-FR", "en-US", …); the user locale when the
 // list is unavailable.
 [[nodiscard]] std::vector<std::wstring> SystemUiLanguages();
 
 // The satellite paths to try in order: the preferred tag (the `language` setting) then its primary subtag, then
-// each system language and its primary subtag, without repeats. Empty tags are skipped.
+// each system language and its primary subtag, without repeats. Empty tags are skipped. An English tag ends the
+// list after its own family: the embedded table already answers in English, so no later language may replace it.
 [[nodiscard]] std::vector<std::wstring> SatelliteCandidates(std::wstring_view executableDirectory,
                                                             std::wstring_view preferredTag,
                                                             const std::vector<std::wstring>& systemLanguages);

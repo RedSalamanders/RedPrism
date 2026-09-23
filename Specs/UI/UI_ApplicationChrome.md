@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-23
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -27,8 +27,10 @@ built from the same `.rc` with the same ids (`Common/Localization.*`). An ordina
 setting's tag then its primary subtag, then each Windows display language and its primary subtag
 (`SatelliteCandidates`), loads the first that exists as a data file and hands it to `SetStringResourceSatellite`;
 `LoadStringResource(nullptr, id)` reads the satellite first and falls back to the embedded English for an id it
-lacks. No translation ships in v1; the harness switches stay English. `HostTests` `locale.*` proves the candidate
-order and the override.
+lacks. The embedded table is English, so an English tag ends the candidates after its own family: `language: "en"`
+keeps English over a satellite for the Windows display language, and an English display language ahead of another
+one keeps it too (a regional English table such as `en-GB` may still load). No translation ships in v1; the harness
+switches stay English. `HostTests` `locale.*` proves the candidate order, the English stop and the override.
 
 ## Shell layout (DIP)
 
@@ -74,7 +76,8 @@ which is too heavy at this size). The bandage is the Lucide icon rotated 45°. S
 and Shape are authored pictures (`RedPrism/Icons/gradient.svg`, a currentColor fade, and `shape.svg`, a square
 overlapping a circle), not Lucide files. Segoe Fluent Icons (`EditorToolGlyph`) are the fallback when that
 document cannot be created, drawn with DxUi `FontRole::Icon` when that font is installed and with a Unicode
-stand-in otherwise. A tooltip is `"<name> (<key>)"` and the accessible name is the tool. `HostTests` proves every
+stand-in otherwise. A tooltip is `"<name> (<chord>)"` with the tool's effective chord (a settings replacement shows
+there; without a chord the tooltip is the name) and the accessible name is the tool. `HostTests` proves every
 Fluent fallback glyph exists in the installed icon font and that keys, glyphs and names are unique. The self-test
 creates all fifteen documents and requires every visible tool button to draw its icon. A tool that does not fit
 the rail is created but not drawn until More opens it. The self-test opens More when the rail overflows, chooses
@@ -98,9 +101,9 @@ the first hidden tool from the card, and returns to Move.
 | Hand | H | hand | U+EB8A |
 | Zoom | Z | search | U+E8A3 |
 
-Tool keys apply when the canvas has focus; Space pans while held. X and D are palette commands
-(`kCommandSwapPalette`, `kCommandResetPalette`), not anonymous keys: the canvas key and the rail hot zone both
-call `Application::OnCommand`.
+Tool keys apply when the canvas has focus, with or without Shift (as the legacy canvas read the letter); Space pans
+while held with the canvas focused. X and D are palette commands (`kCommandSwapPalette`, `kCommandResetPalette`),
+not anonymous keys: the canvas key and the rail hot zone both call `Application::OnCommand`.
 
 The rail buttons are icon-only DxUi buttons (a DxUi toggle paints as a switch, glyph or not); the active tool's
 button carries the pressed look as its latch, and `SyncToolVisuals` writes a latch only between presses — while a
@@ -147,8 +150,9 @@ color. The step leaves two 14 DIP dark notches, and each notch is the icon and i
 the notch at the black square's top-right and swaps the two colors (the same exchange as X). `rotate-ccw` fills the
 notch under the black square and left of the white one, and restores black over white (the same reset as D).
 Neither notch covers a swatch, so the glyph stays on the rail and a click there does not open the picker. Hover and
-press fill that notch; the glyph stays on top. Both have tooltips and accessible names (`IDS_PALETTE_SWAP`,
-`IDS_PALETTE_RESET`).
+press fill that notch; the glyph stays on top. Both have accessible names (`IDS_PALETTE_SWAP`, `IDS_PALETTE_RESET`)
+and tooltips that add the command's effective chord (`"<name> (<chord>)"`, `IDS_TOOL_TOOLTIP`); the brush
+header's mode, size and hardness tooltips add the chords of the tool, size and hardness commands the same way.
 
 ## Selection tools
 
@@ -245,7 +249,8 @@ layer, a disabled mask or an empty selection.
 Keys with the canvas focused: B chooses the Brush and E the Eraser; `[` and `]` step the size by a fifth (at least
 one pixel); Shift-`[` and Shift-`]` step the hardness by quarters; 1–9 set the opacity to 10–90 % and 0 to 100 %,
 two digits within 0.6 s make a two-digit percent (with the Move tool a digit sets the active layer's opacity the
-same way); Escape cancels a stroke in progress. The stroke contract lives in
+same way, one `Layer Opacity` entry per key that changes it: legacy `LayerAppearanceTests.
+moveToolNumberKeysSetSelectedLayersOpacityAsOneUndo`); Escape cancels a stroke in progress. The stroke contract lives in
 [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md), the session API in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
@@ -346,25 +351,79 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | Help | Command List, About RedPrism (version from `Common/Version.h`). Help is the right-justified item on the menu bar |
 
 Every finished user action is a command, with no exception for an action whose only control is local. A canvas key,
-a menu item, and a rail hot zone are the same kind of action. Each one MUST have one stable integer id declared on
-`ChromeHost` (`kCommand…`). Settings name that command with a stable text id (`cmd/file/new`,
-`cmd/edit/swapPalette`); the integer does not change when the chord does. `ChromeHost::CommandShortcuts` is the default chord for every id, including a command that has no menu row,
-and the caption's tab column is that chord. The Command List lists those rows. A key, menu item, or
-control runs the action only by calling `Application::OnCommand` with that id. The key or the control does not call
-the session operation itself. Swap foreground and background is `kCommandSwapPalette` (default X). Restore black
-over white is `kCommandResetPalette` (default D). A letter chord (`Ctrl+S`, `V`, `X`) is the virtual key of that
-letter, so it follows the key that the active layout labels with that letter. It is not a fixed column on a US
-keyboard. The chords whose legend is not a letter are a physical key instead, set-1 scan code, the same rule
-RedSalamander uses for zoom. The Command List and the menu accelerator column show a position key by the name the active layout
-gives that scan code (`GetKeyNameTextW`). A letter or digit stays the character, because that chord follows the
-key that produces it. Named keys (arrows, Delete, F2, Backspace) use the layout's name for that key. The catalog
-chord stays the canonical label the self-test compares to the STRINGTABLE. A layout change retitles the displayed
-key and does not move the binding. Numpad `+` and `-` stay `VK_ADD` and `VK_SUBTRACT`, separate from the number row.
+a menu item, and a rail hot zone are the same kind of action. Each one MUST have one stable integer id in the
+command catalog (`RedPrism/CommandCatalog.h`: `CommandIds`, which `ChromeHost` derives from, so the ids read as
+`ChromeHost::kCommand…`). Settings name that command with a stable text id (`cmd/file/new`,
+`cmd/edit/swapPalette`) held on the same catalog row; the integer does not change when the chord does. The row also
+holds the command's caption, where its keys apply (its scope and condition, below), whether Shift may be added to
+its chord and whether auto-repeat runs it again; the catalog's default chords (`DefaultChords`) list every command's
+chords, a first one and its aliases, including commands without a menu row. The caption's tab column is the first
+default chord's canonical label (`CanonicalChordText`), which `HostTests` compares to the STRINGTABLE. The Command
+List lists the catalog's rows. A key, menu item, or control runs the action only by calling `Application::OnCommand`
+with that id. The key or the control does not call the session operation itself. Swap foreground and background is
+`kCommandSwapPalette` (default X). Restore black over white is `kCommandResetPalette` (default D). A letter chord
+(`Ctrl+S`, `V`, `X`) is the virtual key of that letter, so it follows the key that the active layout labels with that
+letter. It is not a fixed column on a US keyboard. The chords whose legend is not a letter are a physical key
+instead, set-1 scan code, the same rule RedSalamander uses for zoom. A layout change retitles the displayed key and
+does not move the binding. Numpad `+` and `-` stay `VK_ADD` and `VK_SUBTRACT`, separate from the number row.
+
+One effective binding table (`RedPrism/CommandBindings.h`, built by `Application::ApplySettings` from the catalog
+defaults and the settings' replacements: [`Core_Settings.md`](../Core/Core_Settings.md) "Command chords") is what the
+keys do and what the chrome shows. A key down goes, in order (`RedPrism/ApplicationKeyboard.cpp`):
+
+1. Escape closes the floating card on top, wherever the focus is: More tools, the notice, the Command List.
+2. With the canvas focused, the gestures of an edit under way, which are not commands: Enter and Escape of the size
+   card, an open panel, the Crop frame, a pending gradient or transform; Escape of a pixel drag, a warp, a shape
+   draft or a stroke; Enter, Escape, Backspace and Delete of a lasso outline in progress.
+3. The table: the first binding whose chord matches and whose scope and condition hold runs its command.
+4. With the canvas focused, the canvas's own keys: the opacity digits, and Space, which pans while held.
+5. The chrome (DxUi), unless the canvas has the focus: a key the canvas did not use goes nowhere, never to the chrome
+   control that held the focus before the canvas took it; Escape and Tab move the keyboard to the chrome.
+
+A key a command or a gesture took types no character (its `WM_CHAR` / `WM_SYSCHAR` is dropped). Matching:
+
+- Exact modifiers: a chord matches with its own Ctrl, Alt and Shift only. A command marked for it also takes its
+  chord with Shift added: the tool letters, X and D (the legacy canvas read the letter, Shift or not), the M and L
+  switches, and the nudges, which step by ten with Shift. An exact chord wins over one with Shift added (Shift+U
+  switches the shape kind on the Shape tool; elsewhere it chooses the Shape tool).
+- AltGr arrives as Ctrl+Alt. When the layout types a character for the key with those modifiers (€ on AltGr+E, @ on
+  AZERTY AltGr+0, Polish ż on AltGr+Z), the key is text and matches no chord; a chrome text field then sees it
+  without Ctrl, so AltGr+Z does not undo in the field. Ctrl+Alt never matches a Ctrl-only chord.
+- Scope. Canvas commands (tools, palette keys, nudges of the layer and the outline, brush keys, blend modes, the
+  Delete key, Alt+Backspace) need the canvas focused. App commands (the menu chords, F2, Ctrl-arrows) run from the
+  canvas and from chrome that is not a text input. Decision D4: while a chrome text input has the focus (the Rename
+  card, the Command List search, a stepper being typed in), the field keeps every key; only a global command (the
+  File menu: New, Open, Save, Save As, Close Project, the exports, Exit) runs, and only for a chord with Ctrl, Alt or a
+  function key.
+- Conditions share chords: the arrows nudge the outline with a selection tool and a selection, the layer with the
+  Move tool; Ctrl-arrows move the selected pixels in any tool while no outline is drawn; `[` `]` need a brush tool;
+  M and L switch the Marquee's shape and the Lasso's kind on that tool (they come before choosing the tool).
+- Auto-repeat runs a command again, except the M, L and Shift+U switches: holding the key switches once. A
+  replacement keeps its command's scope, condition, Shift and repeat rules.
+- Decision D5: Alt+F4 (close) and Alt+Space (the system menu) stay the window manager's whatever the settings say;
+  Exit shows Alt+F4 and never dispatches it. F10 and a tapped Alt give the keyboard to the menu bar (below).
+
+The chrome shows each command's effective chord: its replacement, else its first default (no aliases). Decision
+D9: the modifier names are STRINGTABLE entries (`IDS_KEY_CTRL`, `IDS_KEY_ALT`, `IDS_KEY_SHIFT`, joined by
+`IDS_KEY_JOIN`), the key names the active layout's: a letter or digit is the character (its chord follows the key
+that produces it); a position key, a named key (arrows, Delete, F2, Backspace, Enter, Space…) and a numpad key use
+`GetKeyNameTextW` with the key's set-1 scan code (extended for the navigation keys, so Delete is not the numpad's
+`Num Del`), which names numpad `+` and `-` apart from the number row. The menus' accelerator column
+(`ChromeHost::CommandMenuCaption`, also for the captions that follow the target: Undo and Redo with the history
+name, Invert Mask, Transform Selection, Delete Layer Mask, Release Clipping Mask, Merge Group and Merge Layers), the
+Command List, the rail's tool tooltips, the palette hot zones' tooltips and the brush header's tooltips follow the
+table and `WM_INPUTLANGCHANGE`; a translated caption keeps its own name, its column is rebuilt.
+
+The menu bar takes the keyboard from a tapped Alt or F10 (`WM_SYSCOMMAND` `SC_KEYMENU`, never the system-menu loop
+of a window without an `HMENU`): its first item highlights; Left and Right move, Enter, Space or Down open, a letter
+opens the menu with that mnemonic, Escape (or Alt, or F10) leaves, and the focus returns where it was, also before
+a command chosen from a menu opened this way runs. Alt+letter opens that menu from anywhere; an Alt chord a command
+took opens nothing and an Alt+key nothing took does nothing (no beep).
 
 | Command | Shown chord | Identity |
 | --- | --- | --- |
-| Zoom In | Ctrl++ | number row, scan `0x0D`, the key immediately left of Backspace (US `=` / `+`); also numpad `+` |
-| Zoom Out | Ctrl+- | number row, scan `0x0C`, the key immediately right of `0` (US `-` / `_`); also numpad `-` |
+| Zoom In | Ctrl++ | number row, scan `0x0D`, the key immediately left of Backspace (US `=` / `+`); also Ctrl+Shift with that key and numpad `+` |
+| Zoom Out | Ctrl+- | number row, scan `0x0C`, the key immediately right of `0` (US `-` / `_`); also Ctrl+Shift with that key and numpad `-` |
 | Next Blend Mode | Shift+= | the same number-row plus key, scan `0x0D` |
 | Previous Blend Mode | Shift+- | the same number-row minus key, scan `0x0C` |
 | Larger / Smaller Brush | `]` / `[` | scans `0x1B` and `0x1A` (US `]` and `[`) |
@@ -379,12 +438,19 @@ the previous or next blend mode, and the Delete key (`kCommandDeleteKey`) are co
 Shift on a nudge command steps by ten. Holding Space to pan, typing into an open edit, and Escape or Enter that
 confirms or cancels an edit already under way are gestures of that edit, not separate commands.
 
-Help › Command List lists every command in `ChromeHost::CommandShortcuts`, menu rows and local commands alike.
-A search field filters that list by the command name. The shortcut column is the layout name of the effective chord.
-Double-click or Enter on a row closes the list and runs that command.
-The self-test checks each STRINGTABLE tab column against that catalog. StatusStrip shows zoom percent, document size,
-and the current tool with its key. The tab title is the file name
-(or Untitled) with a dirty mark when history is modified.
+Help › Command List lists every command of the catalog, menu rows and local commands alike, by its plain name
+(`PlainCommandName`: the caption without its mnemonic, accelerator column or ellipsis). It opens fresh (no query, no
+selection) with the keyboard in a search field that filters the list by the command name; the shortcut column is
+the effective chord as the chrome shows it. A row's id is its command id, so a selection survives filtering only
+while its command is listed and never moves to another command's row. In the search field, Up and Down move the
+selection and Enter runs the selected row, or the first listed row when none is selected (nothing when the list is
+empty); on the list, Enter, Space or a double-click runs its row. Running a row closes the list first. Enter runs a
+row only while the list's search field or list has the keyboard: in a card underneath (the Rename card's field) it
+belongs to that card. Escape or OK closes the list; the card underneath gets its default and cancel buttons back
+and, when the list held the keyboard, the focus: the Rename card's field, the color picker, or else the canvas.
+StatusStrip shows zoom percent, document size, and the current tool with its effective chord
+(`ChromeHost::CommandChordText`). The tab title is the file name (or Untitled) with a dirty mark when history is
+modified.
 
 ## Unimplemented functions
 
@@ -547,4 +613,19 @@ stamp away with Spot Healing, drags it with Smudge through a live warp, blurs it
 with Enter after a digit set its opacity, adds a Rectangle layer with the Shape tool, switches the kind with Shift-U,
 drops a draft with Escape and samples the shape's color with the Eyedropper. `--demo retouch` writes
 `docs/screenshots/retouch-96.png`: a radial gradient, a rounded rectangle and an ellipse under the Shape header.
-`HostTests` covers tool tables, glyphs and the string table.
+The self-test's keys all go through the window procedure (`Application::HandleAccelerator` sends the key down —
+a system key with Alt —, the character `TranslateMessage` would post and the key up, with a real scan code and the
+modifiers in the thread's key state, after a frame). Its keyboard steps (`RunKeyboardSelfTest`) replace X with Q
+(Shift+Q too), let the later of two entries for one command win and show it in the palette tooltip, prove a zoom
+replacement leaves no default or alias live, move the Delete key's command to Q (Delete does nothing, Q clears, Delete
+Layer loses and regains the layout's Delete label), keep a replaced Marquee switch to once per press, type into the
+Command List's search field without running Q, Ctrl+A, Ctrl+Backspace, Ctrl+Z or Delete, run no Ctrl chord from
+Ctrl+Alt, filter the list to Sample Ring and run it with Enter (a typed space is text, not a pan), keep a selection
+from moving to another command's row and run the first match without one, run a selected row with Enter on the
+list, rename through the Rename card with Enter while a Delete Layer row is selected in the open list, give the
+keyboard back to the Rename card when the list closes, pan with Space only while it is held, give the menu bar the
+keyboard from a tapped Alt, F10 and `SC_KEYMENU` without a system-menu loop (a timer ends one if it starts), open the
+File menu with Alt+F but not when Alt+F is a command, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the
+legacy golden does, and show the layout's key names, the STRINGTABLE modifiers and replacements in the Command
+List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string table (every
+command caption's column is its first default chord), the key names, the catalog and the binding table.

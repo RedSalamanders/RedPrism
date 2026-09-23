@@ -1,6 +1,7 @@
 #include "AdapterSelection.h"
 #include "AddressSanitizerProbe.h"
 #include "CanvasViewport.h"
+#include "CommandBindings.h"
 #include "CommandLine.h"
 #include "CrashDumps.h"
 #include "Document.h"
@@ -227,14 +228,19 @@ void TestEditorTools() noexcept
         keys.insert(EditorToolKey(tool));
         glyphs.insert(EditorToolGlyph(tool));
         names.insert(EditorToolNameId(tool));
-        Expect(EditorToolFromKey(EditorToolKey(tool)) == tool, "tools.key-round-trip");
+        // A tool's key is the default chord of its select command, and that command selects the tool.
+        Expect(PrimaryDefaultChord(CommandIds::SelectToolCommand(tool)) ==
+                       Key(static_cast<std::uint16_t>(EditorToolKey(tool))) &&
+                   CommandIds::ToolForSelectCommand(CommandIds::SelectToolCommand(tool)) == tool,
+               "tools.key-is-the-select-command-default");
         Expect(EditorToolIndex(tool) == index, "tools.index-round-trip");
     }
     Expect(keys.size() == kEditorToolCount, "tools.unique-keys");
     Expect(glyphs.size() == kEditorToolCount, "tools.unique-glyphs");
     Expect(names.size() == kEditorToolCount, "tools.unique-names");
-    Expect(EditorToolFromKey(L'Q') == EditorTool::Count && EditorToolFromKey(L'V') == EditorTool::Move,
-           "tools.unknown-key");
+    Expect(CommandIds::ToolForSelectCommand(CommandIds::kCommandSelectToolBase - 1) == EditorTool::Count &&
+               CommandIds::ToolForSelectCommand(CommandIds::SelectToolCommand(EditorTool::Count)) == EditorTool::Count,
+           "tools.select-command-range");
     Expect(EditorToolAt(999) == EditorTool::Move, "tools.index-clamp");
 }
 
@@ -325,7 +331,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 456> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 461> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -792,7 +798,12 @@ void TestStringTable() noexcept
                                          IDS_CMD_TOGGLE_SHAPE,
                                          IDS_UNIT_INCHES,
                                          IDS_UNIT_CENTIMETERS,
-                                         IDS_A11Y_PALETTE_NAME};
+                                         IDS_A11Y_PALETTE_NAME,
+                                         IDS_KEY_CTRL,
+                                         IDS_KEY_ALT,
+                                         IDS_KEY_SHIFT,
+                                         IDS_KEY_JOIN,
+                                         IDS_KEY_LIST};
     for (const UINT id : kIds)
     {
         const std::wstring text = LoadStringResource(exe.get(), id);
@@ -810,12 +821,321 @@ void TestStringTable() noexcept
     Expect(FormatStringResource(exe.get(), IDS_A11Y_PALETTE_NAME, std::wstring(L"Foreground"), std::wstring(L"Background")) ==
                L"Foreground, Background",
            "strings.format-palette-name");
-    Expect(StripAcceleratorColumn(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save As...",
-           "strings.strip-accelerator-column");
+    Expect(PlainCommandName(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save As" &&
+               CaptionWithoutChord(LoadStringResource(exe.get(), IDS_CMD_SAVE_AS)) == L"Save &As..." &&
+               PlainCommandName(L"Rock && Ro&ll… \tCtrl+R") == L"Rock & Roll" && PlainCommandName(L"E&xit") == L"Exit",
+           "strings.plain-command-name");
+    Expect(FormatStringResource(exe.get(), IDS_KEY_JOIN, LoadStringResource(exe.get(), IDS_KEY_CTRL),
+                                std::wstring(L"S")) == L"Ctrl+S" &&
+               FormatStringResource(exe.get(), IDS_KEY_LIST, std::wstring(L"["), std::wstring(L"]")) == L"[, ]",
+           "strings.chord-joiners");
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
         Expect(!LoadStringResource(exe.get(), EditorToolNameId(EditorToolAt(index))).empty(), "strings.tool-names");
     }
+    // Every command's caption keeps its first default chord as the canonical accelerator column (the chrome shows
+    // the effective chord with the layout's key names instead), and so do the captions that follow the target.
+    for (const CommandCatalogEntry& entry : CommandCatalog())
+    {
+        const std::wstring caption = LoadStringResource(exe.get(), entry.captionId);
+        const std::size_t tab = caption.find(L'\t');
+        const std::wstring column = tab == std::wstring::npos ? std::wstring{} : caption.substr(tab + 1);
+        const std::wstring expected = CanonicalChordText(PrimaryDefaultChord(entry.command));
+        if (column != expected)
+        {
+            std::printf("     command %d column '%ls', default '%ls'\n", entry.command, column.c_str(),
+                        expected.c_str());
+        }
+        Expect(column == expected, "strings.accelerator-column-is-the-default-chord");
+    }
+    struct CaptionVariant
+    {
+        UINT captionId;
+        int command;
+    };
+    constexpr std::array<CaptionVariant, 8> kVariants{{
+        {IDS_CMD_UNDO_NAMED, CommandIds::kCommandUndo},
+        {IDS_CMD_REDO_NAMED, CommandIds::kCommandRedo},
+        {IDS_CMD_INVERT_MASK, CommandIds::kCommandInvert},
+        {IDS_CMD_TRANSFORM_SELECTION, CommandIds::kCommandFreeTransform},
+        {IDS_CMD_DELETE_LAYER_MASK, CommandIds::kCommandDeleteLayer},
+        {IDS_CMD_CLIP_RELEASE, CommandIds::kCommandClipToggle},
+        {IDS_CMD_MERGE_GROUP, CommandIds::kCommandMergeDown},
+        {IDS_CMD_MERGE_LAYERS, CommandIds::kCommandMergeDown},
+    }};
+    for (const CaptionVariant& variant : kVariants)
+    {
+        const std::wstring caption = LoadStringResource(exe.get(), variant.captionId);
+        const std::size_t tab = caption.find(L'\t');
+        Expect(tab != std::wstring::npos &&
+                   caption.substr(tab + 1) == CanonicalChordText(PrimaryDefaultChord(variant.command)),
+               "strings.variant-caption-column-is-the-default-chord");
+    }
+}
+
+// ── Keyboard chords and the command catalog (RF-303, Specs/Core/Core_Settings.md "Command chords") ──
+
+void TestKeyChords()
+{
+    std::uint16_t key = 0;
+    bool named = true;
+    for (const KeyChordNames::NamedKey& entry : KeyChordNames::kNamedKeys)
+    {
+        std::uint16_t parsed = 0;
+        named = named && ParseStableKeyName(entry.name, parsed) && parsed == entry.virtualKey &&
+                ParseStableKeyName(StableKeyName(entry.virtualKey), parsed) && parsed == entry.virtualKey;
+    }
+    Expect(named, "chords.named-keys-round-trip");
+    Expect(ParseStableKeyName("delete", key) && key == VK_DELETE && ParseStableKeyName("DELETE", key) &&
+               key == VK_DELETE && ParseStableKeyName("numpadplus", key) && key == VK_ADD &&
+               ParseStableKeyName("f5", key) && key == VK_F5 && ParseStableKeyName("vk_e7", key) && key == 0xE7 &&
+               ParseStableKeyName("q", key) && key == 'Q',
+           "chords.vk-names-ignore-case");
+    Expect(!ParseStableKeyName("F0", key) && !ParseStableKeyName("F25", key) && !ParseStableKeyName("VK_G1", key) &&
+               !ParseStableKeyName("", key) && !ParseStableKeyName("Hyper", key) && !ParseStableKeyName("!", key),
+           "chords.vk-names-reject");
+    Expect(StableKeyName(VK_F24) == "F24" && StableKeyName('7') == "7" && StableKeyName(0xE7) == "VK_E7" &&
+               StableKeyName(VK_RETURN) == "Enter",
+           "chords.stable-names");
+    Expect(ParseKeyPositionName("numberRowPlus") == KeyPosition::NumberRowPlus &&
+               ParseKeyPositionName("BRACKETLEFT") == KeyPosition::BracketLeft &&
+               ParseKeyPositionName("") == KeyPosition::None && ParseKeyPositionName("minus") == KeyPosition::None &&
+               KeyPositionName(KeyPosition::BracketRight) == "bracketRight",
+           "chords.position-names");
+    Expect(KeyPositionFromScanCode(0x0C, false) == KeyPosition::NumberRowMinus &&
+               KeyPositionFromScanCode(0x0D, false) == KeyPosition::NumberRowPlus &&
+               KeyPositionFromScanCode(0x1A, false) == KeyPosition::BracketLeft &&
+               KeyPositionFromScanCode(0x1B, false) == KeyPosition::BracketRight &&
+               KeyPositionFromScanCode(0x1B, true) == KeyPosition::None &&
+               KeyPositionFromScanCode(0x1C, false) == KeyPosition::None &&
+               KeyPositionScanCode(KeyPosition::NumberRowPlus) == 0x0D,
+           "chords.positions-from-scan-codes");
+    Expect(CanonicalChordText(Ctrl(Shift(Key('S')))) == L"Ctrl+Shift+S" &&
+               CanonicalChordText(Ctrl(At(KeyPosition::NumberRowPlus))) == L"Ctrl++" &&
+               CanonicalChordText(Shift(At(KeyPosition::NumberRowPlus))) == L"Shift+=" &&
+               CanonicalChordText(Alt(Key(VK_F4))) == L"Alt+F4" &&
+               CanonicalChordText(Ctrl(Alt(Key('G')))) == L"Ctrl+Alt+G" &&
+               CanonicalChordText(At(KeyPosition::BracketLeft)) == L"[" &&
+               CanonicalChordText(Key(VK_ADD)) == L"NumpadPlus" && CanonicalChordText(KeyChord{}).empty(),
+           "chords.canonical-text");
+    Expect(IsModifierVirtualKey(VK_SHIFT) && IsModifierVirtualKey(VK_RMENU) && IsModifierVirtualKey(VK_LWIN) &&
+               !IsModifierVirtualKey('A') && !IsModifierVirtualKey(VK_F10),
+           "chords.modifier-keys");
+    Expect(IsExtendedNavigationKey(VK_DELETE) && IsExtendedNavigationKey(VK_LEFT) && IsExtendedNavigationKey(VK_HOME) &&
+               IsExtendedNavigationKey(VK_INSERT) && !IsExtendedNavigationKey(VK_ADD) &&
+               !IsExtendedNavigationKey(VK_BACK) && !IsExtendedNavigationKey('A'),
+           "chords.navigation-keys-are-extended");
+}
+
+void TestCommandCatalog()
+{
+    std::set<int> commands;
+    std::set<std::wstring> textIds;
+    std::set<unsigned> captions;
+    bool roundTrip = true;
+    for (const CommandCatalogEntry& entry : CommandCatalog())
+    {
+        commands.insert(entry.command);
+        textIds.insert(entry.textId);
+        captions.insert(entry.captionId);
+        roundTrip = roundTrip && std::wstring_view{entry.textId}.starts_with(L"cmd/") &&
+                    CommandForTextId(entry.textId) == entry.command && FindCommand(entry.command) == &entry;
+    }
+    const std::size_t count = CommandCatalog().size();
+    Expect(commands.size() == count && textIds.size() == count && captions.size() == count,
+           "commands.unique-ids-text-ids-and-captions");
+    Expect(roundTrip && CommandForTextId(L"cmd/future/command") == 0 && FindCommand(99999) == nullptr,
+           "commands.text-id-round-trip");
+    bool known = true;
+    bool reserved = true;
+    for (const DefaultChord& chord : DefaultChords())
+    {
+        known = known && FindCommand(chord.command) != nullptr && !chord.chord.IsEmpty();
+        reserved = reserved && (IsReservedChord(chord.chord) == (chord.kind == DefaultChordKind::System));
+    }
+    Expect(known, "commands.defaults-name-catalog-commands");
+    Expect(reserved, "commands.only-system-defaults-are-window-manager-chords");
+    Expect(PrimaryDefaultChord(CommandIds::kCommandRedo) == Ctrl(Shift(Key('Z'))) &&
+               PrimaryDefaultChord(CommandIds::kCommandZoomIn) == Ctrl(At(KeyPosition::NumberRowPlus)) &&
+               PrimaryDefaultChord(CommandIds::kCommandExportPng).IsEmpty(),
+           "commands.primary-defaults");
+}
+
+void TestCommandBindings()
+{
+    using C = CommandIds;
+    const auto press = [](KeyChord chord)
+    {
+        KeyPress key;
+        key.virtualKey = chord.virtualKey;
+        key.position = chord.position;
+        key.ctrl = chord.ctrl;
+        key.alt = chord.alt;
+        key.shift = chord.shift;
+        return key;
+    };
+    const auto state = [](KeyFocus focus, EditorTool tool = EditorTool::Move, bool selection = false,
+                          bool lasso = false) { return KeyState{focus, tool, selection, lasso}; };
+    const KeyState canvas = state(KeyFocus::Canvas);
+    const KeyState chrome = state(KeyFocus::Chrome);
+    const KeyState text = state(KeyFocus::TextInput);
+    const auto runs = [](const CommandBindings& table, const KeyPress& key, const KeyState& at)
+    {
+        const KeyMatch match = table.Match(key, at);
+        return match.result == KeyMatchResult::Command ? match.command : 0;
+    };
+    const auto build = [](std::initializer_list<ShortcutBinding> replacements)
+    {
+        CommandBindings table;
+        const std::vector<ShortcutBinding> list(replacements);
+        table.Build(list);
+        return table;
+    };
+
+    // Defaults, aliases included.
+    const CommandBindings defaults;
+    Expect(runs(defaults, press(Ctrl(Key('Z'))), chrome) == C::kCommandUndo &&
+               runs(defaults, press(Ctrl(Shift(Key('Z')))), chrome) == C::kCommandRedo &&
+               runs(defaults, press(Ctrl(Key('Y'))), chrome) == C::kCommandRedo &&
+               runs(defaults, press(Ctrl(At(KeyPosition::NumberRowPlus))), canvas) == C::kCommandZoomIn &&
+               runs(defaults, press(Ctrl(Shift(At(KeyPosition::NumberRowPlus)))), canvas) == C::kCommandZoomIn &&
+               runs(defaults, press(Ctrl(Key(VK_ADD))), canvas) == C::kCommandZoomIn &&
+               runs(defaults, press(Ctrl(Key(VK_SUBTRACT))), canvas) == C::kCommandZoomOut &&
+               defaults.ChordFor(C::kCommandRedo) == Ctrl(Shift(Key('Z'))),
+           "bindings.defaults-and-aliases");
+    // A replacement takes every default chord of its command, aliases included.
+    const CommandBindings redoOnK = build({{L"cmd/edit/redo", Key('K')}});
+    const CommandBindings zoomOnK = build({{L"cmd/view/zoomIn", Ctrl(Key('K'))}});
+    Expect(runs(redoOnK, press(Ctrl(Key('Y'))), chrome) == 0 &&
+               runs(redoOnK, press(Ctrl(Shift(Key('Z')))), chrome) == 0 &&
+               runs(redoOnK, press(Key('K')), canvas) == C::kCommandRedo &&
+               redoOnK.ChordFor(C::kCommandRedo) == Key('K') &&
+               runs(zoomOnK, press(Ctrl(At(KeyPosition::NumberRowPlus))), canvas) == 0 &&
+               runs(zoomOnK, press(Ctrl(Shift(At(KeyPosition::NumberRowPlus)))), canvas) == 0 &&
+               runs(zoomOnK, press(Ctrl(Key(VK_ADD))), canvas) == 0 &&
+               runs(zoomOnK, press(Ctrl(Key('K'))), canvas) == C::kCommandZoomIn,
+           "bindings.replacement-removes-every-default");
+    // The later of two entries for one command wins; a later entry takes a chord from another command.
+    const CommandBindings twice = build({{L"cmd/edit/swapPalette", Key('Q')}, {L"cmd/edit/swapPalette", Key('K')}});
+    const CommandBindings taken = build({{L"cmd/edit/swapPalette", Key('Q')}, {L"cmd/edit/resetPalette", Key('Q')}});
+    Expect(runs(twice, press(Key('Q')), canvas) == 0 &&
+               runs(twice, press(Key('K')), canvas) == C::kCommandSwapPalette &&
+               twice.ChordFor(C::kCommandSwapPalette) == Key('K') &&
+               runs(taken, press(Key('Q')), canvas) == C::kCommandResetPalette &&
+               !taken.ChordFor(C::kCommandSwapPalette).has_value() && runs(taken, press(Key('X')), canvas) == 0,
+           "bindings.later-entry-wins");
+    // A replacement's chord is taken from other commands' defaults.
+    const CommandBindings swapOnB = build({{L"cmd/edit/swapPalette", Key('B')}});
+    Expect(runs(swapOnB, press(Key('B')), canvas) == C::kCommandSwapPalette &&
+               !swapOnB.ChordFor(C::SelectToolCommand(EditorTool::Brush)).has_value(),
+           "bindings.replacement-shadows-defaults");
+    // Delete Layer's Delete is a label while the Delete key's command dispatches Delete.
+    const CommandBindings deleteOnQ = build({{L"cmd/edit/delete", Key('Q')}});
+    const CommandBindings layerOnCtrlDelete = build({{L"cmd/layer/delete", Ctrl(Key(VK_DELETE))}});
+    Expect(defaults.ChordFor(C::kCommandDeleteLayer) == Key(VK_DELETE) &&
+               runs(defaults, press(Key(VK_DELETE)), canvas) == C::kCommandDeleteKey &&
+               !deleteOnQ.ChordFor(C::kCommandDeleteLayer).has_value() &&
+               runs(deleteOnQ, press(Key(VK_DELETE)), canvas) == 0 &&
+               runs(deleteOnQ, press(Key('Q')), canvas) == C::kCommandDeleteKey &&
+               runs(layerOnCtrlDelete, press(Key(VK_DELETE)), canvas) == C::kCommandDeleteKey &&
+               runs(layerOnCtrlDelete, press(Ctrl(Key(VK_DELETE))), chrome) == C::kCommandDeleteLayer &&
+               layerOnCtrlDelete.ChordFor(C::kCommandDeleteLayer) == Ctrl(Key(VK_DELETE)),
+           "bindings.shared-label-follows-the-dispatching-command");
+    // Decision D5: window-manager chords are never taken; an entry naming one, a modifier key or an unknown command
+    // is ignored. Exit shows Alt+F4 and never dispatches it.
+    const CommandBindings ignored = build({{L"cmd/file/save", Alt(Key(VK_F4))},
+                                           {L"cmd/edit/swapPalette", Key(VK_F10)},
+                                           {L"cmd/edit/resetPalette", Alt(Key(VK_SPACE))},
+                                           {L"cmd/edit/undo", Key(VK_SHIFT)},
+                                           {L"cmd/future/command", Key('Q')},
+                                           {L"cmd/tool/brush", KeyChord{}}});
+    const CommandBindings exitOnCtrlQ = build({{L"cmd/file/exit", Ctrl(Key('Q'))}});
+    Expect(ignored.ChordFor(C::kCommandSave) == Ctrl(Key('S')) &&
+               ignored.ChordFor(C::kCommandSwapPalette) == Key('X') &&
+               ignored.ChordFor(C::kCommandResetPalette) == Key('D') &&
+               ignored.ChordFor(C::kCommandUndo) == Ctrl(Key('Z')) &&
+               ignored.ChordFor(C::SelectToolCommand(EditorTool::Brush)) == Key('B') &&
+               runs(ignored, press(Key('Q')), canvas) == 0 && runs(defaults, press(Alt(Key(VK_F4))), chrome) == 0 &&
+               defaults.ChordFor(C::kCommandExit) == Alt(Key(VK_F4)) &&
+               runs(exitOnCtrlQ, press(Ctrl(Key('Q'))), chrome) == C::kCommandExit &&
+               runs(exitOnCtrlQ, press(Alt(Key(VK_F4))), chrome) == 0,
+           "bindings.window-manager-chords-and-unusable-entries");
+    // Exact modifiers: a Ctrl chord does not run with Shift or Alt added.
+    Expect(runs(defaults, press(Ctrl(Key('X'))), chrome) == C::kCommandCut &&
+               runs(defaults, press(Ctrl(Shift(Key('X')))), chrome) == 0 &&
+               runs(defaults, press(Ctrl(Alt(Key('X')))), chrome) == 0 &&
+               runs(defaults, press(Ctrl(Alt(Key('E')))), chrome) == 0,
+           "bindings.exact-modifiers");
+    // AltGr (Ctrl+Alt) text is typing: Ctrl+Alt+G is the clip toggle only where the layout types nothing for it.
+    KeyPress altGr = press(Ctrl(Alt(Key('G'))));
+    const int clip = runs(defaults, altGr, chrome);
+    altGr.typesCharacter = true;
+    Expect(clip == C::kCommandClipToggle && runs(defaults, altGr, chrome) == 0, "bindings.altgr-text-is-not-a-chord");
+    // A command that allows Shift takes its chord with Shift added (a nudge steps by ten, a tool key ignores it);
+    // an exact Shift chord comes first.
+    Expect(runs(defaults, press(Shift(Key('B'))), canvas) == C::SelectToolCommand(EditorTool::Brush) &&
+               runs(defaults, press(Shift(Key(VK_LEFT))), canvas) == C::kCommandNudgeLayerLeft &&
+               runs(defaults, press(Shift(Key('U'))), state(KeyFocus::Canvas, EditorTool::Brush)) ==
+                   C::SelectToolCommand(EditorTool::Shape) &&
+               runs(defaults, press(Shift(Key('U'))), state(KeyFocus::Canvas, EditorTool::Shape)) ==
+                   C::kCommandToggleShapeKind &&
+               runs(defaults, press(Shift(Key(VK_DELETE))), canvas) == C::kCommandContentAwareFill &&
+               runs(defaults, press(Shift(Ctrl(Key('Z')))), chrome) == C::kCommandRedo,
+           "bindings.shift-allowed-and-exact-first");
+    // Repeat: a held M switches the Marquee's shape once; a replacement keeps that rule.
+    KeyPress held = press(Key('M'));
+    held.repeat = true;
+    const KeyState marquee = state(KeyFocus::Canvas, EditorTool::Marquee);
+    const CommandBindings toggleOnQ = build({{L"cmd/tool/toggleMarquee", Key('Q')}});
+    KeyPress heldQ = press(Key('Q'));
+    heldQ.repeat = true;
+    Expect(runs(defaults, press(Key('M')), marquee) == C::kCommandToggleMarqueeKind &&
+               defaults.Match(held, marquee).result == KeyMatchResult::HeldKey &&
+               runs(defaults, press(Key('M')), canvas) == C::SelectToolCommand(EditorTool::Marquee) &&
+               runs(defaults, held, canvas) == C::SelectToolCommand(EditorTool::Marquee) &&
+               runs(toggleOnQ, press(Key('Q')), marquee) == C::kCommandToggleMarqueeKind &&
+               toggleOnQ.Match(heldQ, marquee).result == KeyMatchResult::HeldKey &&
+               runs(toggleOnQ, press(Key('M')), marquee) == C::SelectToolCommand(EditorTool::Marquee),
+           "bindings.repeat-policy");
+    // Decision D4: a text input keeps its keys; only a global command's chord with Ctrl, Alt or a function key runs.
+    const CommandBindings saveOnQ = build({{L"cmd/file/save", Key('Q')}});
+    const CommandBindings saveOnF5 = build({{L"cmd/file/save", Key(VK_F5)}});
+    Expect(runs(defaults, press(Ctrl(Key('Z'))), text) == 0 && runs(defaults, press(Ctrl(Key('A'))), text) == 0 &&
+               runs(defaults, press(Ctrl(Key(VK_BACK))), text) == 0 &&
+               runs(defaults, press(Ctrl(Key('S'))), text) == C::kCommandSave &&
+               runs(defaults, press(Ctrl(Key('N'))), text) == C::kCommandNew &&
+               runs(defaults, press(Key(VK_F2)), text) == 0 && runs(saveOnQ, press(Key('Q')), text) == 0 &&
+               runs(saveOnQ, press(Key('Q')), chrome) == C::kCommandSave &&
+               runs(saveOnF5, press(Key(VK_F5)), text) == C::kCommandSave,
+           "bindings.text-input-keeps-its-keys");
+    // Canvas commands need the canvas; App commands run from the chrome too.
+    Expect(runs(defaults, press(Key('X')), chrome) == 0 &&
+               runs(defaults, press(Key('X')), canvas) == C::kCommandSwapPalette &&
+               runs(defaults, press(Key(VK_F2)), chrome) == C::kCommandRenameLayer &&
+               runs(defaults, press(Ctrl(Key(VK_BACK))), chrome) == C::kCommandFillBackground,
+           "bindings.scopes");
+    // Conditions share chords: the arrows, Ctrl-arrows, brackets and Alt+Backspace.
+    Expect(runs(defaults, press(Key(VK_LEFT)), state(KeyFocus::Canvas, EditorTool::Marquee, true)) ==
+                   C::kCommandNudgeSelectionLeft &&
+               runs(defaults, press(Key(VK_LEFT)), state(KeyFocus::Canvas, EditorTool::Marquee, false)) == 0 &&
+               runs(defaults, press(Key(VK_LEFT)), state(KeyFocus::Canvas, EditorTool::Marquee, true, true)) == 0 &&
+               runs(defaults, press(Key(VK_LEFT)), state(KeyFocus::Canvas, EditorTool::Brush, true)) == 0 &&
+               runs(defaults, press(Ctrl(Key(VK_LEFT))), state(KeyFocus::Chrome, EditorTool::Brush, true)) ==
+                   C::kCommandNudgePixelsLeft &&
+               runs(defaults, press(Ctrl(Key(VK_LEFT))), state(KeyFocus::Canvas, EditorTool::Brush, true, true)) == 0 &&
+               runs(defaults, press(At(KeyPosition::BracketLeft)), state(KeyFocus::Canvas, EditorTool::Eraser)) ==
+                   C::kCommandBrushSmaller &&
+               runs(defaults, press(At(KeyPosition::BracketLeft)), canvas) == 0 &&
+               runs(defaults, press(Ctrl(At(KeyPosition::BracketLeft))), chrome) == C::kCommandMoveLayerDown &&
+               runs(defaults, press(Alt(Key(VK_BACK))), canvas) == C::kCommandFillForeground &&
+               runs(defaults, press(Alt(Key(VK_BACK))), state(KeyFocus::Canvas, EditorTool::Lasso, true, true)) == 0,
+           "bindings.conditions");
+    // A position chord follows the scan code, whatever virtual key the layout gives that key.
+    KeyPress plusKey = press(Ctrl(At(KeyPosition::NumberRowPlus)));
+    plusKey.virtualKey = VK_OEM_PLUS;
+    KeyPress elsewhere = press(Ctrl(Key(VK_OEM_PLUS)));
+    Expect(runs(defaults, plusKey, canvas) == C::kCommandZoomIn && runs(defaults, elsewhere, canvas) == 0,
+           "bindings.position-keys-follow-the-scan-code");
 }
 } // namespace
 
@@ -930,16 +1250,26 @@ void TestCrashDumps()
 
 void TestLocalization()
 {
-    const std::vector<std::wstring> system{L"en-US", L"fr-FR", L"fr-FR"};
+    const std::vector<std::wstring> system{L"fr-FR", L"fr-FR", L"it-IT"};
     const std::vector<std::wstring> candidates = Localization::SatelliteCandidates(L"C:\\App\\", L"de-AT", system);
     const std::vector<std::wstring> expected{
         L"C:\\App\\Languages\\de-AT\\RedPrism.resources.dll", L"C:\\App\\Languages\\de\\RedPrism.resources.dll",
-        L"C:\\App\\Languages\\en-US\\RedPrism.resources.dll", L"C:\\App\\Languages\\en\\RedPrism.resources.dll",
-        L"C:\\App\\Languages\\fr-FR\\RedPrism.resources.dll", L"C:\\App\\Languages\\fr\\RedPrism.resources.dll"};
+        L"C:\\App\\Languages\\fr-FR\\RedPrism.resources.dll", L"C:\\App\\Languages\\fr\\RedPrism.resources.dll",
+        L"C:\\App\\Languages\\it-IT\\RedPrism.resources.dll", L"C:\\App\\Languages\\it\\RedPrism.resources.dll"};
     Expect(candidates == expected, "locale.candidates-in-order");
     Expect(Localization::SatelliteCandidates(L"C:\\App", L"", {}).empty() &&
                Localization::SatelliteCandidates(L"C:\\App", L"fr", {L"fr"}).size() == 1,
            "locale.candidates-dedupe");
+    // The embedded table is English: `language: "en"` keeps English over a satellite for the display language, and
+    // an English display language ahead of another one keeps it too (a regional English table may still load).
+    const std::vector<std::wstring> english{L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
+    const std::vector<std::wstring> britishFirst{L"C:\\App\\Languages\\en-GB\\RedPrism.resources.dll",
+                                                 L"C:\\App\\Languages\\en\\RedPrism.resources.dll"};
+    Expect(Localization::SatelliteCandidates(L"C:\\App", L"en", {L"fr-FR"}) == english &&
+               Localization::SatelliteCandidates(L"C:\\App", L"EN", {L"fr-FR"}).size() == 1 &&
+               Localization::SatelliteCandidates(L"C:\\App", L"", {L"en-GB", L"fr-FR"}) == britishFirst &&
+               Localization::SatelliteCandidates(L"C:\\App", L"de", {L"en-US", L"fr-FR"}).size() == 3,
+           "locale.english-ends-the-candidates");
     Expect(Localization::LoadSatelliteModule({L"C:\\App\\Languages\\zz\\RedPrism.resources.dll"}) == nullptr,
            "locale.missing-satellite");
     Expect(!Localization::SystemUiLanguages().empty() && !Localization::ExecutableDirectory().empty(),
@@ -1015,6 +1345,9 @@ int wmain(int argc, wchar_t** argv)
     TestFrameScheduler();
     TestCommandLine();
     TestEditorTools();
+    TestKeyChords();
+    TestCommandCatalog();
+    TestCommandBindings();
     TestTransformOverlayGeometry();
     TestRailGlyphsExistInFluentFont();
     TestStringTable();

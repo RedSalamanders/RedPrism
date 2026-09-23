@@ -58,22 +58,35 @@ template <typename... Args> [[nodiscard]] std::wstring FormatStringResource(HMOD
     }
 }
 
-// Menu captions keep a "\t" accelerator column; the caption without it names the command elsewhere.
-[[nodiscard]] inline std::wstring StripAcceleratorColumn(std::wstring caption)
+// A menu caption without its "\t" accelerator column: what the menu row shows before the chord ("&Save As...").
+[[nodiscard]] inline std::wstring_view CaptionWithoutChord(std::wstring_view caption) noexcept
 {
-    const std::size_t tab = caption.find(L'\t');
-    if (tab != std::wstring::npos)
+    return caption.substr(0, caption.find(L'\t'));
+}
+
+// A menu caption as a plain command name (the Command List, notices): no accelerator column, no mnemonic marker
+// ("&&" stays one "&"), no trailing ellipsis ("..." or "…") or space. "Save &As...\tCtrl+Shift+S" is "Save As".
+[[nodiscard]] inline std::wstring PlainCommandName(std::wstring_view caption)
+{
+    caption = CaptionWithoutChord(caption);
+    std::wstring name;
+    name.reserve(caption.size());
+    for (std::size_t index = 0; index < caption.size(); ++index)
     {
-        caption.resize(tab);
-    }
-    std::wstring result;
-    result.reserve(caption.size());
-    for (const wchar_t ch : caption)
-    {
-        if (ch != L'&')
+        if (caption[index] == L'&')
         {
-            result.push_back(ch);
+            if (index + 1 < caption.size() && caption[index + 1] == L'&')
+            {
+                name.push_back(L'&');
+                ++index;
+            }
+            continue;
         }
+        name.push_back(caption[index]);
     }
-    return result;
+    while (!name.empty() && (name.back() == L'.' || name.back() == L'…' || name.back() == L' '))
+    {
+        name.pop_back();
+    }
+    return name;
 }

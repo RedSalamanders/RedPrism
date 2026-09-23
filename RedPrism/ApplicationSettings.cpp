@@ -112,21 +112,14 @@ void Application::ApplySettings(const AppSettings& settings) noexcept
 {
     _settings = settings;
     _session.showsSampleRing = settings.sampleRing;
+    // One effective binding table (RedPrism/CommandBindings.h): the key path dispatches from it and the chrome
+    // (menus, Command List, tooltips) shows its chords.
+    _bindings.Build(settings.shortcuts);
     if (_chrome)
     {
         _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, settings.sampleRing);
         _chrome->SetLayersWidth(static_cast<float>(settings.layersPanelWidth));
-        std::vector<std::pair<int, std::wstring>> chords;
-        chords.reserve(settings.shortcuts.size());
-        for (const ShortcutBinding& binding : settings.shortcuts)
-        {
-            const int command = ChromeHost::CommandForTextId(binding.commandId);
-            if (command != 0)
-            {
-                chords.emplace_back(command, SettingsStore::ShortcutCatalogText(binding));
-            }
-        }
-        _chrome->SetShortcutOverrides(std::move(chords));
+        _chrome->SetCommandBindings(&_bindings);
     }
     RefreshTheme();
     _layoutDirty = true;
@@ -205,9 +198,21 @@ void Application::NoteSettingsFileState() noexcept
 
 void Application::OnSettingsDirectoryChanged(bool immediate) noexcept
 {
-    if (_settingsWatch)
+    // A watch on a directory that was deleted or renamed away stays signaled (or cannot be re-armed), and the
+    // message wait would wake at once, forever. Watch the directory afresh; when it is gone, stop watching.
+    if (_settingsWatch && (!FindNextChangeNotification(_settingsWatch.get()) ||
+                           GetFileAttributesW(DirectoryOf(_settingsPath).c_str()) == INVALID_FILE_ATTRIBUTES))
     {
-        (void)FindNextChangeNotification(_settingsWatch.get());
+        const FILETIME seenWrite = _settingsSeenWrite;
+        const std::uint64_t seenSize = _settingsSeenSize;
+        _settingsWatch.reset();
+        if (!StartSettingsWatch())
+        {
+            OutputDebugStringW(L"The settings directory is gone; live reload stops until the next start.\n");
+        }
+        // The change that signaled is still to be read.
+        _settingsSeenWrite = seenWrite;
+        _settingsSeenSize = seenSize;
     }
     if (immediate || !_window)
     {
@@ -596,6 +601,18 @@ int Application::RunProductHardeningSelfTest() noexcept
         saved->window.width < AppSettings::kWindowMinWidth)
     {
         ReportSelfTestFailure(L"Saving the settings did not record the window placement.\n");
+        return 5;
+    }
+    // Deleting the watched directory must not leave a watch that stays signaled: the message wait would wake at
+    // once, forever. The watch goes (there is no directory left to watch) and the last-good settings stay.
+    std::filesystem::remove_all(scratch, error);
+    const bool deletionSignaled = waitForChange();
+    OnSettingsDirectoryChanged(true);
+    if (!deletionSignaled || _settingsWatch || !_chrome->ThemeIsDark())
+    {
+        ReportSelfTestFailure(std::format(L"Deleting the settings directory left the watch armed (signaled {}, "
+                                          L"watch {}).\n",
+                                          deletionSignaled, static_cast<bool>(_settingsWatch)));
         return 5;
     }
     StopSettingsWatch();

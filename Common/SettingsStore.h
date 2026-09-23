@@ -1,5 +1,7 @@
 #pragma once
 
+#include "KeyChord.h"
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -28,17 +30,13 @@ struct WindowPlacementSetting
     [[nodiscard]] bool operator==(const WindowPlacementSetting&) const noexcept = default;
 };
 
-// One replacement chord, in RedSalamander's shape: a textual commandId (`cmd/...`) plus ctrl, alt, and shift,
-// and exactly one of a virtual key or a physical key position (1 number-row minus, 2 number-row plus, 3 bracket
-// left, 4 bracket right).
+// One replacement chord, in RedSalamander's shape: a textual commandId (`cmd/...`) plus ctrl, alt and shift, and
+// exactly one of a virtual key (`vk`) or a physical key position (`keyPosition`). The store keeps what the file
+// says; which entries the application can use is the binding table's rule (RedPrism/CommandBindings.h).
 struct ShortcutBinding
 {
     std::wstring commandId;
-    bool ctrl = false;
-    bool alt = false;
-    bool shift = false;
-    std::uint16_t virtualKey = 0;
-    std::uint8_t keyPosition = 0;
+    KeyChord chord;
     [[nodiscard]] bool operator==(const ShortcutBinding&) const noexcept = default;
 };
 
@@ -90,14 +88,14 @@ namespace SettingsStore
 // <path>.invalid-<yyyyMMdd-HHmmss>
 [[nodiscard]] std::wstring BackupPathFor(const std::wstring& path);
 
-// A settings document: an object with an integral `schema` of at least 1. Known fields are validated one by one
-// (an unusable value takes its default); unknown ones are ignored. nullopt for anything else.
+// A settings document: an object with an integral `schema` of at least 1 (a UTF-8 byte order mark is allowed).
+// Known fields are validated one by one (an unusable value takes its default); unknown ones are ignored. nullopt
+// for anything else.
 [[nodiscard]] std::optional<AppSettings> Parse(std::string_view json);
 // The document for `settings`, pretty-printed UTF-8. When `existingJson` is a settings document its other fields
-// and a newer schema are kept.
+// and a newer schema are kept, and so are the `shortcuts` entries this version cannot read and the fields it does
+// not know inside the entries it keeps.
 [[nodiscard]] std::string Serialize(const AppSettings& settings, std::string_view existingJson = {});
-// The catalog label a replacement chord displays as (`Ctrl++`, `Shift+=`, `Q`). Empty when the command is cleared.
-[[nodiscard]] std::wstring ShortcutCatalogText(const ShortcutBinding& binding);
 
 // Startup: a missing file writes the template, an invalid one is backed up and replaced by the template.
 [[nodiscard]] SettingsLoadResult LoadCold(const std::wstring& path);

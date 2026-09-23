@@ -1268,16 +1268,68 @@ void TestSettingsStore()
         R"({"commandId":"cmd/edit/undo","vk":"Z","keyPosition":"bracketLeft"},{"command":1}]})");
     Expect(chords.has_value() && chords->shortcuts.size() == 3 &&
                chords->shortcuts[0].commandId == L"cmd/edit/swapPalette" &&
-               chords->shortcuts[0].virtualKey == static_cast<std::uint16_t>('Q') && !chords->shortcuts[0].ctrl &&
-               chords->shortcuts[1].commandId == L"cmd/view/zoomIn" && chords->shortcuts[1].keyPosition == 2 &&
-               chords->shortcuts[1].ctrl && chords->shortcuts[2].commandId == L"cmd/edit/delete" &&
-               chords->shortcuts[2].virtualKey == VK_DELETE && chords->shortcuts[2].shift,
+               chords->shortcuts[0].chord.virtualKey == static_cast<std::uint16_t>('Q') &&
+               !chords->shortcuts[0].chord.ctrl && chords->shortcuts[1].commandId == L"cmd/view/zoomIn" &&
+               chords->shortcuts[1].chord.position == KeyPosition::NumberRowPlus && chords->shortcuts[1].chord.ctrl &&
+               chords->shortcuts[2].commandId == L"cmd/edit/delete" &&
+               chords->shortcuts[2].chord.virtualKey == VK_DELETE && chords->shortcuts[2].chord.shift,
            "settings.parse-shortcuts");
     const std::string chordText = SettingsStore::Serialize(chords.value());
     const std::optional<AppSettings> chordBack = SettingsStore::Parse(chordText);
     Expect(chordBack.has_value() && chordBack->shortcuts == chords->shortcuts &&
                chordText.find("\"shortcuts\"") != std::string::npos,
            "settings.shortcuts-round-trip");
+    // Named keys and positions read in any case, as letters and F-keys do.
+    const std::optional<AppSettings> cased = SettingsStore::Parse(
+        R"({"schema":1,"shortcuts":[{"commandId":"cmd/edit/delete","vk":"delete"},)"
+        R"({"commandId":"cmd/view/zoomIn","vk":"NUMPADPLUS","ctrl":true},)"
+        R"({"commandId":"cmd/brush/smaller","keyPosition":"BracketLeft"},{"commandId":"cmd/file/save","vk":"f5"}]})");
+    Expect(cased.has_value() && cased->shortcuts.size() == 4 && cased->shortcuts[0].chord.virtualKey == VK_DELETE &&
+               cased->shortcuts[1].chord.virtualKey == VK_ADD &&
+               cased->shortcuts[2].chord.position == KeyPosition::BracketLeft &&
+               cased->shortcuts[3].chord.virtualKey == VK_F5,
+           "settings.shortcut-names-ignore-case");
+    // A save keeps the `shortcuts` entries this version cannot read, and the unknown fields of those it can, both
+    // when the bindings are unchanged and when they change.
+    const std::string withUnknown =
+        R"({"schema":1,"shortcuts":[{"commandId":"cmd/edit/swapPalette","vk":"Q","note":"mine"},)"
+        R"({"commandId":"cmd/edit/undo","vk":"Hyper"},{"commandId":"cmd/view/zoomIn","vk":"K","ctrl":true}]})";
+    const std::optional<AppSettings> unknownParsed = SettingsStore::Parse(withUnknown);
+    const std::string keptText =
+        unknownParsed.has_value() ? SettingsStore::Serialize(unknownParsed.value(), withUnknown) : std::string{};
+    AppSettings fewer = unknownParsed.value_or(AppSettings{});
+    if (!fewer.shortcuts.empty())
+    {
+        fewer.shortcuts.pop_back();
+    }
+    fewer.shortcuts.push_back(ShortcutBinding{L"cmd/tool/brush", Key('K')});
+    const std::string changedText = SettingsStore::Serialize(fewer, withUnknown);
+    const std::optional<AppSettings> changedBack = SettingsStore::Parse(changedText);
+    Expect(unknownParsed.has_value() && unknownParsed->shortcuts.size() == 2 &&
+               keptText.find("\"note\": \"mine\"") != std::string::npos &&
+               keptText.find("\"Hyper\"") != std::string::npos &&
+               changedText.find("\"note\": \"mine\"") != std::string::npos &&
+               changedText.find("\"Hyper\"") != std::string::npos &&
+               changedText.find("cmd/view/zoomIn") == std::string::npos && changedBack.has_value() &&
+               changedBack->shortcuts == fewer.shortcuts,
+           "settings.save-keeps-unread-shortcut-entries");
+    // A UTF-8 byte order mark is still a settings document, at a cold start too.
+    const std::string bom = "\xEF\xBB\xBF{\"schema\":1,\"theme\":\"light\",\"extra\":7}";
+    const std::optional<AppSettings> bomParsed = SettingsStore::Parse(bom);
+    Expect(bomParsed.has_value() && bomParsed->theme == ThemePreference::Light &&
+               SettingsStore::Serialize(AppSettings{}, bom).find("\"extra\": 7") != std::string::npos,
+           "settings.parse-accepts-a-byte-order-mark");
+    // Integral reals read as ints (as ProjectStore reads them); INT_MIN is outside ±32767, not a crash.
+    const std::optional<AppSettings> reals = SettingsStore::Parse(
+        R"({"schema":1.0,"window":{"x":10.0,"y":-20,"width":800.0,"height":600,"maximized":false}})");
+    const std::optional<AppSettings> extreme =
+        SettingsStore::Parse(R"({"schema":1,"window":{"x":-2147483648,"y":0,"width":800,"height":600}})");
+    const std::optional<AppSettings> fraction =
+        SettingsStore::Parse(R"({"schema":1,"window":{"x":10.5,"y":0,"width":800,"height":600}})");
+    Expect(reals.has_value() && reals->window == WindowPlacementSetting{true, 10, -20, 800, 600, false} &&
+               extreme.has_value() && !extreme->window.valid && fraction.has_value() && !fraction->window.valid &&
+               !SettingsStore::Parse(R"({"schema":1.5})").has_value(),
+           "settings.integral-reals-and-ranges");
     const std::optional<AppSettings> odd = SettingsStore::Parse(
         R"({"schema":3,"theme":"neon","language":"not a tag!","layersPanelWidth":5,"sampleRing":"yes",)"
         R"("jpegQuality":7,"window":{"x":0,"y":0,"width":10,"height":10}})");
@@ -1321,6 +1373,11 @@ void TestSettingsStore()
     Expect(missing.status == SettingsLoadStatus::Missing && missing.templateWritten &&
                missing.settings == AppSettings{} && SettingsStore::Parse(FileText(path)) == AppSettings{},
            "settings.cold-missing-writes-template");
+    const bool bomWritten = SettingsStore::WriteFileAtomic(path, bom);
+    const SettingsLoadResult bomCold = SettingsStore::LoadCold(path);
+    Expect(bomWritten && bomCold.status == SettingsLoadStatus::Loaded && bomCold.backupPath.empty() &&
+               bomCold.settings.theme == ThemePreference::Light && FileText(path) == bom,
+           "settings.cold-byte-order-mark-is-loaded");
     const bool brokenWritten = SettingsStore::WriteFileAtomic(path, "{ nope");
     const SettingsLoadResult invalid = SettingsStore::LoadCold(path);
     Expect(brokenWritten && invalid.status == SettingsLoadStatus::Invalid && !invalid.backupPath.empty() &&

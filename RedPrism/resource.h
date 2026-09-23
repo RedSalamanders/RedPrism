@@ -424,6 +424,12 @@
 #define IDS_CMD_KEYBOARD_SHORTCUTS 578
 #define IDS_SHORTCUTS_TITLE 579
 #define IDS_SHORTCUTS_SEARCH 623
+// Chords as the chrome shows them (Decision D9): the modifier names and the joiners; key names come from the layout.
+#define IDS_KEY_CTRL 624
+#define IDS_KEY_ALT 625
+#define IDS_KEY_SHIFT 626
+#define IDS_KEY_JOIN 627
+#define IDS_KEY_LIST 628
 #define IDS_CMD_UNAVAILABLE 580
 #define IDS_PALETTE_SWAP 581
 #define IDS_PALETTE_RESET 582

@@ -14,8 +14,11 @@ Read `Specs/UI/UI_ApplicationChrome.md` (Strings) before adding chrome text.
   Placeholders are positional `std::format` specs (`{0}`, `{1:08X}`) so translators can reorder arguments. Bare `{}`
   and printf specs (`%s`) are forbidden; `HostTests` fails on them.
 - Introduce placeholders in argument order (`{0}` then `{1}`) and pass arguments in that order.
-- Menu captions keep a `\t` accelerator column (`"&Save\tCtrl+S"`); `StripAcceleratorColumn` yields the plain name.
-- Tool names come from `EditorToolNameId(tool)`; tooltips use `IDS_TOOL_TOOLTIP` with the name and key.
+- Menu captions may keep a `\t` column in the table, but menus show the effective chord: `CaptionWithoutChord`
+  drops the column and `PlainCommandName` yields the plain name (both in `Common/Resources.h`). Chord text is built
+  from `IDS_KEY_*` modifier names and the keyboard layout's key names, never from literals.
+- Tool names come from `EditorToolNameId(tool)`; tooltips use `IDS_TOOL_TOOLTIP` with the name and the effective
+  chord (no key is baked into a string).
 - Never `MessageBoxW(..., L"literal", ...)` or `SetWindowTextW(..., L"literal")` in product code. Diagnostics that
   only reach `OutputDebugStringW` stay literal and English.
 - Document data that the model persists or compares (default `Layer N` / `Folder N` names, blend mode names on

@@ -27,207 +27,41 @@ namespace
     return std::wstring(name, static_cast<std::size_t>(length));
 }
 
-[[nodiscard]] std::wstring KeyNameFromVirtualKey(UINT virtualKey)
+// The name the active keyboard layout gives a key: a letter or digit is that character (a letter chord follows the
+// key the layout labels with it); a position key and a named key use GetKeyNameTextW with the set-1 scan code
+// (extended for the navigation keys, so Delete is not "Num Del"), which also tells numpad plus and minus from the
+// number row. The canonical English name stands in when the layout has none.
+[[nodiscard]] std::wstring LayoutKeyName(const KeyChord& chord)
 {
-    const bool extended = virtualKey == VK_LEFT || virtualKey == VK_RIGHT || virtualKey == VK_UP ||
-                          virtualKey == VK_DOWN || virtualKey == VK_INSERT || virtualKey == VK_DELETE ||
-                          virtualKey == VK_HOME || virtualKey == VK_END || virtualKey == VK_PRIOR ||
-                          virtualKey == VK_NEXT;
-    const UINT scanCode = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC);
-    if (scanCode == 0)
+    if (chord.position != KeyPosition::None)
     {
-        return {};
+        std::wstring name = KeyNameFromScan(KeyPositionScanCode(chord.position), false);
+        return name.empty() ? CanonicalChordText(At(chord.position)) : name;
     }
-    return KeyNameFromScan(scanCode, extended);
+    const UINT key = chord.virtualKey;
+    if ((key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z'))
+    {
+        return std::wstring(1, static_cast<wchar_t>(key));
+    }
+    const UINT scanCode = MapVirtualKeyW(key, MAPVK_VK_TO_VSC_EX);
+    if ((scanCode & 0xFFu) != 0)
+    {
+        const bool extended = (scanCode & 0xFF00u) != 0 || IsExtendedNavigationKey(chord.virtualKey);
+        std::wstring name = KeyNameFromScan(scanCode & 0xFFu, extended);
+        if (!name.empty())
+        {
+            return name;
+        }
+    }
+    const std::string stable = StableKeyName(chord.virtualKey);
+    return std::wstring(stable.begin(), stable.end());
 }
 
-[[nodiscard]] std::wstring LayoutKeyToken(std::wstring_view token)
+// A menu row with its STRINGTABLE name; ChromeHost::RefreshMenuChords then adds the effective chord.
+void AppendCommand(HMENU menu, int command, UINT stringId)
 {
-    const auto named = [](std::wstring resolved, std::wstring_view fallback)
-    { return resolved.empty() ? std::wstring{fallback} : resolved; };
-    if (token.size() == 1)
-    {
-        const wchar_t character = token[0];
-        // A letter or digit follows the key that produces that character. Its label is the character.
-        if ((character >= L'A' && character <= L'Z') || (character >= L'0' && character <= L'9'))
-        {
-            return std::wstring{token};
-        }
-        if (character == L'+' || character == L'=')
-        {
-            return named(KeyNameFromScan(0x0D, false), token);
-        }
-        if (character == L'-')
-        {
-            return named(KeyNameFromScan(0x0C, false), token);
-        }
-        if (character == L'[')
-        {
-            return named(KeyNameFromScan(0x1A, false), token);
-        }
-        if (character == L']')
-        {
-            return named(KeyNameFromScan(0x1B, false), token);
-        }
-    }
-    if (token == L"Left")
-    {
-        return named(KeyNameFromVirtualKey(VK_LEFT), token);
-    }
-    if (token == L"Right")
-    {
-        return named(KeyNameFromVirtualKey(VK_RIGHT), token);
-    }
-    if (token == L"Up")
-    {
-        return named(KeyNameFromVirtualKey(VK_UP), token);
-    }
-    if (token == L"Down")
-    {
-        return named(KeyNameFromVirtualKey(VK_DOWN), token);
-    }
-    if (token == L"Delete")
-    {
-        return named(KeyNameFromVirtualKey(VK_DELETE), token);
-    }
-    if (token == L"Backspace")
-    {
-        return named(KeyNameFromVirtualKey(VK_BACK), token);
-    }
-    if (token == L"F2")
-    {
-        return named(KeyNameFromVirtualKey(VK_F2), token);
-    }
-    if (token == L"F4")
-    {
-        return named(KeyNameFromVirtualKey(VK_F4), token);
-    }
-    return std::wstring{token};
-}
-
-// The catalog chord is the canonical label. The badge and the menu column show the key the active layout
-// actually names. Position keys (number-row plus and minus, the bracket keys) use their scan code.
-[[nodiscard]] std::wstring LayoutChord(std::wstring_view chord)
-{
-    const auto named = [](std::wstring resolved, std::wstring_view fallback)
-    { return resolved.empty() ? std::wstring{fallback} : resolved; };
-    if (chord.size() >= 2 && chord.ends_with(L"++"))
-    {
-        return std::wstring{chord.substr(0, chord.size() - 1)} + named(KeyNameFromScan(0x0D, false), L"+");
-    }
-    if (chord == L"Shift+=")
-    {
-        return L"Shift+" + named(KeyNameFromScan(0x0D, false), L"=");
-    }
-    if (chord == L"Ctrl+-" || chord == L"Shift+-")
-    {
-        const wchar_t* prefix = chord == L"Ctrl+-" ? L"Ctrl+" : L"Shift+";
-        return std::wstring{prefix} + named(KeyNameFromScan(0x0C, false), L"-");
-    }
-    std::wstring text;
-    std::size_t start = 0;
-    while (start <= chord.size())
-    {
-        const std::size_t plus = chord.find(L'+', start);
-        const std::wstring_view part =
-            chord.substr(start, plus == std::wstring_view::npos ? std::wstring_view::npos : plus - start);
-        if (!text.empty())
-        {
-            text.push_back(L'+');
-        }
-        if (part == L"Ctrl" || part == L"Shift" || part == L"Alt")
-        {
-            text.append(part);
-        }
-        else
-        {
-            text += LayoutKeyToken(part);
-        }
-        if (plus == std::wstring_view::npos)
-        {
-            break;
-        }
-        start = plus + 1;
-    }
-    return text;
-}
-
-[[nodiscard]] std::wstring CommandCaption(UINT stringId)
-{
-    std::wstring caption = LoadStringResource(nullptr, stringId);
-    const std::size_t tab = caption.find(L'\t');
-    if (tab != std::wstring::npos)
-    {
-        caption = caption.substr(0, tab + 1) + LayoutChord(std::wstring_view{caption}.substr(tab + 1));
-    }
-    return caption;
-}
-
-void AppendCommand(HMENU menu, int command, UINT stringId) noexcept
-{
-    const std::wstring caption = CommandCaption(stringId);
+    const std::wstring caption{CaptionWithoutChord(LoadStringResource(nullptr, stringId))};
     (void)AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(command), caption.c_str());
-}
-
-void RewriteMenuChords(HMENU menu, const ChromeHost& host)
-{
-    if (menu == nullptr)
-    {
-        return;
-    }
-    const int count = GetMenuItemCount(menu);
-    for (int index = 0; index < count; ++index)
-    {
-        if (HMENU child = GetSubMenu(menu, index))
-        {
-            RewriteMenuChords(child, host);
-        }
-        const UINT command = GetMenuItemID(menu, index);
-        if (command == static_cast<UINT>(-1))
-        {
-            continue;
-        }
-        const std::span<const ChromeHost::CommandShortcutDefault> rows = ChromeHost::CommandShortcuts();
-        const ChromeHost::CommandShortcutDefault* match = nullptr;
-        for (const ChromeHost::CommandShortcutDefault& row : rows)
-        {
-            if (row.command == static_cast<int>(command) && row.chord != nullptr)
-            {
-                match = &row;
-                break;
-            }
-        }
-        if (match == nullptr)
-        {
-            continue;
-        }
-        std::wstring caption = LoadStringResource(nullptr, match->captionId);
-        const std::size_t tab = caption.find(L'\t');
-        if (tab != std::wstring::npos)
-        {
-            caption.resize(tab);
-        }
-        const std::wstring chord = host.CatalogChord(match->command, match->chord);
-        if (!chord.empty())
-        {
-            caption.push_back(L'\t');
-            caption += LayoutChord(chord);
-        }
-        const UINT state = GetMenuState(menu, command, MF_BYCOMMAND);
-        UINT flags = MF_BYCOMMAND | MF_STRING;
-        if (state != static_cast<UINT>(-1))
-        {
-            if ((state & (MF_GRAYED | MF_DISABLED)) != 0)
-            {
-                flags |= MF_GRAYED;
-            }
-            if ((state & MF_CHECKED) != 0)
-            {
-                flags |= MF_CHECKED;
-            }
-        }
-        (void)ModifyMenuW(menu, command, flags, static_cast<UINT_PTR>(command), caption.c_str());
-    }
 }
 
 [[nodiscard]] std::wstring MenuCaptionFrom(HMENU menu, int command)
@@ -345,22 +179,35 @@ std::size_t ChromeHost::ShortcutListModel::GetVisibleItemCount() const noexcept
 
 void ChromeHost::ShortcutListModel::GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const
 {
+    outItem = {};
     if (visibleIndex >= rows.size())
     {
         return;
     }
-    outItem.id = visibleIndex + 1;
+    outItem.id = static_cast<uint64_t>(rows[visibleIndex].command);
     outItem.text = rows[visibleIndex].name;
     outItem.badgeText = rows[visibleIndex].chord;
 }
 
+std::optional<std::size_t> ChromeHost::ShortcutListModel::FindVisibleItemById(uint64_t itemId) const noexcept
+{
+    for (std::size_t index = 0; index < rows.size(); ++index)
+    {
+        if (static_cast<uint64_t>(rows[index].command) == itemId)
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
 void ChromeHost::ShortcutListModel::OnTreeItemInvoked(uint64_t itemId)
 {
-    if (itemId == 0 || itemId > rows.size() || !onInvoke)
+    if (!onInvoke || !FindVisibleItemById(itemId).has_value())
     {
         return;
     }
-    onInvoke(rows[itemId - 1].command);
+    onInvoke(static_cast<int>(itemId));
 }
 
 void ChromeHost::LayerTreeModel::OnTreeSelectionChanged(uint64_t itemId)
@@ -602,10 +449,15 @@ void ChromeHost::SetBrushHandler(std::function<void(BrushAction, double)> handle
 
 void ChromeHost::BuildMenus() noexcept
 {
+    // A new tree: nothing points into the previous one.
+    _menuKeyboard = false;
+    _menuReturnFocus = nullptr;
+    _recordedMenu.reset();
     for (unique_hmenu& menu : _menus)
     {
         menu.reset(CreatePopupMenu());
     }
+    // Rows carry their names here; RefreshDisplayedChords adds each effective chord through CommandMenuCaption.
     if (HMENU file = _menus[static_cast<std::size_t>(MenuIndex::File)].get())
     {
         AppendCommand(file, kCommandNew, IDS_CMD_NEW);
@@ -726,7 +578,7 @@ void ChromeHost::BuildMenus() noexcept
     }
 }
 
-void ChromeHost::OpenMenu(size_t index, POINT screen, bool) noexcept
+void ChromeHost::OpenMenu(size_t index, POINT screen, bool keyboard) noexcept
 {
     if (index >= _menus.size() || !_owner)
     {
@@ -737,8 +589,24 @@ void ChromeHost::OpenMenu(size_t index, POINT screen, bool) noexcept
     {
         return;
     }
+    if (_menusRecordOnly)
+    {
+        // Quiet runs: a native flyout runs a modal loop nothing would close.
+        _recordedMenu = index;
+        if (keyboard)
+        {
+            LeaveMenuKeyboard();
+        }
+        return;
+    }
     const std::optional<int> command =
         DxUi::ShowNativeHMenuContextMenu(_owner, MenuAnchorScreen(index, screen), menu, _palette);
+    if (keyboard)
+    {
+        // A menu opened from the keyboard hands the focus back before its command runs (a command that opens a card
+        // then takes it from there).
+        LeaveMenuKeyboard();
+    }
     if (command.has_value() && _onCommand)
     {
         _onCommand(command.value());
@@ -781,8 +649,7 @@ HRESULT ChromeHost::Build() noexcept
         {
             const EditorTool tool = EditorToolAt(index);
             const std::wstring name = LoadStringResource(nullptr, EditorToolNameId(tool));
-            const std::wstring tooltip =
-                FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, name, std::wstring(1, EditorToolKey(tool)));
+            const std::wstring tooltip = WithChordHint(name, {SelectToolCommand(tool)});
             // An icon button whose pressed look, held as a latch, marks the active tool (DxUi paints a Toggle as a
             // switch, glyph or not). The latch is written only between presses: SyncToolVisuals defers while a
             // press is in flight, because a pressed-look write reaching the tree cancels a press held across a
@@ -816,8 +683,7 @@ HRESULT ChromeHost::Build() noexcept
         {
             const EditorTool tool = EditorToolAt(index);
             const std::wstring name = LoadStringResource(nullptr, EditorToolNameId(tool));
-            const std::wstring tooltip =
-                FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, name, std::wstring(1, EditorToolKey(tool)));
+            const std::wstring tooltip = WithChordHint(name, {SelectToolCommand(tool)});
             DxUi::Button* overflow = _moreCard->AddChild<LucideToolButton>(tooltip, tool, fluentIcons);
             overflow->SetAccessibleName(name);
             overflow->SetVisible(false);
@@ -944,6 +810,17 @@ HRESULT ChromeHost::Build() noexcept
                 _shortcutModel.query = text;
                 ApplyShortcutFilter();
             });
+        // Enter in the field runs the selected (or first) row; Up and Down move the selection from the field.
+        _shortcutsSearch->SetOnSubmitted([this] { RunShortcutFromSearch(); });
+        _shortcutsSearch->SetOnPreviewKeyDown(
+            [this](DxUi::ControlHost&, UINT virtualKey, UINT modifiers)
+            {
+                if ((modifiers & (MK_CONTROL | MK_SHIFT)) != 0 || (virtualKey != VK_DOWN && virtualKey != VK_UP))
+                {
+                    return false;
+                }
+                return StepShortcutSelection(virtualKey == VK_DOWN ? 1 : -1);
+            });
         _shortcutsTree = _shortcutsCard->AddChild<DxUi::Tree>();
         _shortcutsTree->SetAccessibleName(LoadStringResource(nullptr, IDS_SHORTCUTS_TITLE));
         _shortcutsTree->SetModel(&_shortcutModel);
@@ -953,6 +830,7 @@ HRESULT ChromeHost::Build() noexcept
         _shortcutsClose->SetPrimary(true);
         _shortcutsClose->SetOnClick([this] { CloseShortcuts(); });
         _view.Controls().SetRoot(std::move(root));
+        RefreshDisplayedChords();
         SyncToolVisuals();
         Arrange();
         return S_OK;
@@ -1571,22 +1449,199 @@ void ChromeHost::ApplyShortcutFilter() noexcept
     }
 }
 
-std::wstring ChromeHost::CatalogChord(int command, const wchar_t* fallback) const
+const CommandBindings& ChromeHost::Bindings() const noexcept
 {
-    for (const std::pair<int, std::wstring>& item : _shortcutOverrides)
-    {
-        if (item.first == command)
-        {
-            return item.second;
-        }
-    }
-    return fallback != nullptr ? fallback : std::wstring{};
+    return _bindings != nullptr ? *_bindings : CommandBindings::Defaults();
 }
 
-void ChromeHost::SetShortcutOverrides(std::vector<std::pair<int, std::wstring>> chords) noexcept
+void ChromeHost::SetCommandBindings(const CommandBindings* bindings) noexcept
 {
-    _shortcutOverrides = std::move(chords);
+    _bindings = bindings;
     RefreshDisplayedChords();
+}
+
+std::wstring ChromeHost::ChordDisplayText(const KeyChord& chord)
+{
+    if (chord.IsEmpty())
+    {
+        return {};
+    }
+    // Decision D9: modifier names from the STRINGTABLE (a translated table spells them its way), key names from
+    // the active keyboard layout; Ctrl, Alt, Shift in that order.
+    std::wstring text = LayoutKeyName(chord);
+    const auto prefix = [&text](UINT modifierId)
+    { text = FormatStringResource(nullptr, IDS_KEY_JOIN, LoadStringResource(nullptr, modifierId), text); };
+    if (chord.shift)
+    {
+        prefix(IDS_KEY_SHIFT);
+    }
+    if (chord.alt)
+    {
+        prefix(IDS_KEY_ALT);
+    }
+    if (chord.ctrl)
+    {
+        prefix(IDS_KEY_CTRL);
+    }
+    return text;
+}
+
+std::wstring ChromeHost::CommandChordText(int command) const
+{
+    const std::span<const CommandCatalogEntry> catalog = CommandCatalog();
+    if (_chordTexts.size() == catalog.size())
+    {
+        for (std::size_t index = 0; index < catalog.size(); ++index)
+        {
+            if (catalog[index].command == command)
+            {
+                return _chordTexts[index];
+            }
+        }
+        return {};
+    }
+    const std::optional<KeyChord> chord = Bindings().ChordFor(command);
+    return chord.has_value() ? ChordDisplayText(chord.value()) : std::wstring{};
+}
+
+std::wstring ChromeHost::WithChordHint(std::wstring text, std::initializer_list<int> commands) const
+{
+    std::wstring chords;
+    for (const int command : commands)
+    {
+        const std::wstring chord = CommandChordText(command);
+        if (!chord.empty())
+        {
+            chords = chords.empty() ? chord : FormatStringResource(nullptr, IDS_KEY_LIST, chords, chord);
+        }
+    }
+    return chords.empty() ? text : FormatStringResource(nullptr, IDS_TOOL_TOOLTIP, text, chords);
+}
+
+std::wstring ChromeHost::CommandMenuCaption(UINT stringId, int command) const
+{
+    return CommandMenuCaption(LoadStringResource(nullptr, stringId), command);
+}
+
+std::wstring ChromeHost::CommandMenuCaption(std::wstring caption, int command) const
+{
+    caption.resize(CaptionWithoutChord(caption).size());
+    const std::wstring chord = CommandChordText(command);
+    if (!chord.empty())
+    {
+        caption.push_back(L'\t');
+        caption += chord;
+    }
+    return caption;
+}
+
+void ChromeHost::SetMenuCaption(HMENU menu, int command, const std::wstring& caption, UINT stateFlags) noexcept
+{
+    if (menu == nullptr)
+    {
+        return;
+    }
+    const UINT state = GetMenuState(menu, static_cast<UINT>(command), MF_BYCOMMAND);
+    if (state == static_cast<UINT>(-1))
+    {
+        return;
+    }
+    wchar_t current[512]{};
+    const int length =
+        GetMenuStringW(menu, static_cast<UINT>(command), current, static_cast<int>(std::size(current)), MF_BYCOMMAND);
+    const bool sameText = length >= 0 && std::wstring_view(current, static_cast<std::size_t>(length)) == caption;
+    const bool sameGray = ((state & (MF_GRAYED | MF_DISABLED)) != 0) == ((stateFlags & MF_GRAYED) != 0);
+    const bool sameCheck = ((state & MF_CHECKED) != 0) == ((stateFlags & MF_CHECKED) != 0);
+    if (sameText && sameGray && sameCheck)
+    {
+        return;
+    }
+    (void)ModifyMenuW(menu, static_cast<UINT>(command), MF_BYCOMMAND | MF_STRING | stateFlags,
+                      static_cast<UINT_PTR>(command), caption.c_str());
+}
+
+void ChromeHost::RefreshMenuChords() noexcept
+{
+    const auto walk = [this](const auto& self, HMENU menu) -> void
+    {
+        const int count = menu != nullptr ? GetMenuItemCount(menu) : 0;
+        for (int index = 0; index < count; ++index)
+        {
+            if (HMENU child = GetSubMenu(menu, index))
+            {
+                self(self, child);
+                continue;
+            }
+            const UINT command = GetMenuItemID(menu, index);
+            if (command == static_cast<UINT>(-1) || command == 0)
+            {
+                continue;
+            }
+            wchar_t text[512]{};
+            const int length = GetMenuStringW(menu, command, text, static_cast<int>(std::size(text)), MF_BYCOMMAND);
+            if (length <= 0)
+            {
+                continue;
+            }
+            const UINT state = GetMenuState(menu, command, MF_BYCOMMAND);
+            const UINT flags = ((state & (MF_GRAYED | MF_DISABLED)) != 0 ? MF_GRAYED : 0u) |
+                               ((state & MF_CHECKED) != 0 ? MF_CHECKED : 0u);
+            SetMenuCaption(
+                menu, static_cast<int>(command),
+                CommandMenuCaption(std::wstring(text, static_cast<std::size_t>(length)), static_cast<int>(command)),
+                flags);
+        }
+    };
+    for (const unique_hmenu& menu : _menus)
+    {
+        walk(walk, menu.get());
+    }
+}
+
+void ChromeHost::RefreshShortcutHints() noexcept
+{
+    for (std::size_t index = 0; index < kEditorToolCount; ++index)
+    {
+        const EditorTool tool = EditorToolAt(index);
+        const std::wstring tooltip =
+            WithChordHint(LoadStringResource(nullptr, EditorToolNameId(tool)), {SelectToolCommand(tool)});
+        if (_toolButtons[index] != nullptr)
+        {
+            _toolButtons[index]->SetTooltipText(tooltip);
+        }
+        if (_overflowButtons[index] != nullptr)
+        {
+            _overflowButtons[index]->SetTooltipText(tooltip);
+        }
+    }
+    if (_railPalette != nullptr)
+    {
+        if (DxUi::Control* swap = _railPalette->SwapZone(); swap != nullptr)
+        {
+            swap->SetTooltipText(WithChordHint(LoadStringResource(nullptr, IDS_PALETTE_SWAP), {kCommandSwapPalette}));
+        }
+        if (DxUi::Control* reset = _railPalette->ResetZone(); reset != nullptr)
+        {
+            reset->SetTooltipText(
+                WithChordHint(LoadStringResource(nullptr, IDS_PALETTE_RESET), {kCommandResetPalette}));
+        }
+    }
+    if (_brushMode != nullptr)
+    {
+        _brushMode->SetTooltipText(
+            WithChordHint(LoadStringResource(nullptr, IDS_BRUSH_MODE_TIP),
+                          {SelectToolCommand(EditorTool::Brush), SelectToolCommand(EditorTool::Eraser)}));
+    }
+    if (_brushSize != nullptr)
+    {
+        _brushSize->SetTooltipText(WithChordHint(LoadStringResource(nullptr, IDS_BRUSH_SIZE_TIP),
+                                                 {kCommandBrushSmaller, kCommandBrushLarger}));
+    }
+    if (_brushHardness != nullptr)
+    {
+        _brushHardness->SetTooltipText(WithChordHint(LoadStringResource(nullptr, IDS_BRUSH_HARDNESS_TIP),
+                                                     {kCommandBrushSofter, kCommandBrushHarder}));
+    }
 }
 
 void ChromeHost::LaunchShortcut(int command) noexcept
@@ -1599,28 +1654,56 @@ void ChromeHost::LaunchShortcut(int command) noexcept
     _onCommand(command);
 }
 
-bool ChromeHost::ActivateSelectedShortcut() noexcept
+void ChromeHost::RunShortcutFromSearch() noexcept
 {
-    if (!ShortcutsOpen() || _shortcutsTree == nullptr)
+    if (!ShortcutsOpen() || _shortcutModel.rows.empty())
+    {
+        return;
+    }
+    int command = _shortcutModel.rows.front().command;
+    if (_shortcutsTree != nullptr)
+    {
+        if (const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId();
+            selected.has_value() && _shortcutModel.FindVisibleItemById(selected.value()).has_value())
+        {
+            command = static_cast<int>(selected.value());
+        }
+    }
+    LaunchShortcut(command);
+}
+
+bool ChromeHost::StepShortcutSelection(int delta) noexcept
+{
+    if (!ShortcutsOpen() || _shortcutsTree == nullptr || _shortcutModel.rows.empty())
     {
         return false;
     }
-    const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId();
-    if (!selected.has_value() || selected.value() == 0 || selected.value() > _shortcutModel.rows.size())
+    std::optional<std::size_t> current;
+    if (const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId(); selected.has_value())
     {
-        return false;
+        current = _shortcutModel.FindVisibleItemById(selected.value());
     }
-    LaunchShortcut(_shortcutModel.rows[selected.value() - 1].command);
+    std::size_t next = 0;
+    if (current.has_value())
+    {
+        next = delta < 0 ? (current.value() == 0 ? 0 : current.value() - 1)
+                         : std::min(current.value() + 1, _shortcutModel.rows.size() - 1);
+    }
+    (void)_shortcutsTree->RequestSelectVisibleItem(next);
+    _view.MarkDirty();
     return true;
 }
 
-bool ChromeHost::RunShortcutRowForTest(std::size_t visibleIndex) noexcept
+void ChromeHost::BuildShortcutRows() noexcept
 {
-    if (!ShortcutsOpen() || _shortcutsTree == nullptr || !_shortcutsTree->RequestSelectVisibleItem(visibleIndex))
+    _shortcutModel.all.clear();
+    for (const CommandCatalogEntry& entry : CommandCatalog())
     {
-        return false;
+        _shortcutModel.all.push_back(
+            ShortcutListModel::Row{PlainCommandName(LoadStringResource(nullptr, entry.captionId)),
+                                   CommandChordText(entry.command), entry.command});
     }
-    return ActivateSelectedShortcut();
+    ApplyShortcutFilter();
 }
 
 void ChromeHost::OpenShortcuts() noexcept
@@ -1630,40 +1713,14 @@ void ChromeHost::OpenShortcuts() noexcept
         return;
     }
     CloseNotice();
-    _shortcutModel.all.clear();
-    for (const CommandShortcutDefault& row : CommandShortcuts())
+    // A fresh list: no query, no selection.
+    _shortcutModel.query.clear();
+    if (_shortcutsSearch != nullptr)
     {
-        std::wstring name = LoadStringResource(nullptr, row.captionId);
-        const std::size_t tab = name.find(L'\t');
-        if (tab != std::wstring::npos)
-        {
-            name.resize(tab);
-        }
-        std::wstring clean;
-        clean.reserve(name.size());
-        for (std::size_t index = 0; index < name.size(); ++index)
-        {
-            const wchar_t ch = name[index];
-            if (ch == L'&')
-            {
-                if (index + 1 < name.size() && name[index + 1] == L'&')
-                {
-                    clean.push_back(L'&');
-                    ++index;
-                }
-                continue;
-            }
-            clean.push_back(ch);
-        }
-        while (!clean.empty() && (clean.back() == L'.' || clean.back() == L' '))
-        {
-            clean.pop_back();
-        }
-        const std::wstring chord = CatalogChord(row.command, row.chord);
-        _shortcutModel.all.push_back(
-            ShortcutListModel::Row{std::move(clean), LayoutChord(chord), row.command});
+        _shortcutsSearch->SetText(std::wstring{});
     }
-    ApplyShortcutFilter();
+    _shortcutsTree->SetSelectedItemId(std::nullopt);
+    BuildShortcutRows();
     _shortcutsCard->SetVisible(true);
     if (_shortcutsTitle != nullptr)
     {
@@ -1676,28 +1733,37 @@ void ChromeHost::OpenShortcuts() noexcept
         _view.Controls().SetCancelButton(_shortcutsClose);
         _view.Controls().SetDefaultButton(nullptr);
     }
+    // Laid out before the search field takes the focus.
+    ArrangeShortcuts();
     if (_shortcutsSearch != nullptr)
     {
         _shortcutsSearch->SetVisible(true);
         _view.Controls().SetFocusControl(_shortcutsSearch);
     }
-    ArrangeShortcuts();
     _canvasFocused = false;
+    _accessibilityPlacementDirty = true;
     _view.MarkDirty();
 }
 
 void ChromeHost::RefreshDisplayedChords() noexcept
 {
-    for (const unique_hmenu& menu : _menus)
+    const std::span<const CommandCatalogEntry> catalog = CommandCatalog();
+    _chordTexts.clear();
+    _chordTexts.reserve(catalog.size());
+    for (const CommandCatalogEntry& entry : catalog)
     {
-        if (menu)
-        {
-            RewriteMenuChords(menu.get(), *this);
-        }
+        const std::optional<KeyChord> chord = Bindings().ChordFor(entry.command);
+        _chordTexts.push_back(chord.has_value() ? ChordDisplayText(chord.value()) : std::wstring{});
     }
+    RefreshMenuChords();
+    RefreshShortcutHints();
     if (ShortcutsOpen())
     {
-        OpenShortcuts();
+        BuildShortcutRows();
+    }
+    if (_attached)
+    {
+        _view.MarkDirty();
     }
 }
 
@@ -1733,11 +1799,51 @@ void ChromeHost::CloseShortcuts() noexcept
     {
         return;
     }
+    DxUi::ControlHost& controls = _view.Controls();
+    DxUi::Control* const focus = controls.GetFocusControl();
+    const bool listHadFocus =
+        focus == nullptr || focus == _shortcutsSearch || focus == _shortcutsTree || focus == _shortcutsClose;
     _shortcutsCard->SetVisible(false);
-    if (!AdjustPanelOpen() && !NoticeOpen())
+    // The card underneath gets its default and cancel buttons back and, when the list held the keyboard, the
+    // focus: the Rename card's field, the color picker, or else the canvas.
+    if (RenameCardOpen())
     {
-        _view.Controls().SetCancelButton(nullptr);
-        _view.Controls().SetDefaultButton(nullptr);
+        controls.SetDefaultButton(_renameOk);
+        controls.SetCancelButton(_renameCancel);
+    }
+    else if (SizeCardOpen())
+    {
+        controls.SetDefaultButton(_sizeApply);
+        controls.SetCancelButton(_sizeCancel);
+    }
+    else if (AdjustPanelOpen())
+    {
+        controls.SetDefaultButton(_adjustApply);
+        controls.SetCancelButton(_adjustCancel);
+    }
+    else if (!NoticeOpen())
+    {
+        controls.SetCancelButton(nullptr);
+        controls.SetDefaultButton(nullptr);
+    }
+    if (listHadFocus)
+    {
+        if (RenameCardOpen() && _renameField != nullptr)
+        {
+            controls.SetFocusControl(_renameField);
+            _canvasFocused = false;
+        }
+        else if (ColorPickerOpen() && _picker != nullptr)
+        {
+            controls.SetFocusControl(_picker);
+            _canvasFocused = false;
+        }
+        else
+        {
+            controls.SetFocusControl(nullptr);
+            _canvasFocused = true;
+        }
+        _accessibilityPlacementDirty = true;
     }
     _view.MarkDirty();
 }
@@ -1747,380 +1853,171 @@ bool ChromeHost::ShortcutsOpen() const noexcept
     return _shortcutsCard != nullptr && _shortcutsCard->IsVisible();
 }
 
-std::span<const ChromeHost::CommandShortcutDefault> ChromeHost::CommandShortcuts() noexcept
+bool ChromeHost::TextInputFocused() const noexcept
 {
-    static constexpr CommandShortcutDefault kDefaults[] = {
-        {kCommandNew, IDS_CMD_NEW, L"Ctrl+N"},
-        {kCommandNewCanvas, IDS_CMD_NEW_CANVAS, L""},
-        {kCommandOpen, IDS_CMD_OPEN, L"Ctrl+O"},
-        {kCommandImportImages, IDS_CMD_IMPORT_IMAGES, L""},
-        {kCommandSave, IDS_CMD_SAVE, L"Ctrl+S"},
-        {kCommandSaveAs, IDS_CMD_SAVE_AS, L"Ctrl+Shift+S"},
-        {kCommandExportPng, IDS_CMD_EXPORT_PNG, L""},
-        {kCommandExportJpeg, IDS_CMD_EXPORT_JPEG, L""},
-        {kCommandCloseProject, IDS_CMD_CLOSE_PROJECT, L"Ctrl+W"},
-        {kCommandExit, IDS_CMD_EXIT, L"Alt+F4"},
-        {kCommandUndo, IDS_CMD_UNDO, L"Ctrl+Z"},
-        {kCommandRedo, IDS_CMD_REDO, L"Ctrl+Shift+Z"},
-        {kCommandCut, IDS_CMD_CUT, L"Ctrl+X"},
-        {kCommandCopy, IDS_CMD_COPY, L"Ctrl+C"},
-        {kCommandCopyMerged, IDS_CMD_COPY_MERGED, L"Ctrl+Shift+C"},
-        {kCommandPaste, IDS_CMD_PASTE, L"Ctrl+V"},
-        {kCommandFillForeground, IDS_CMD_FILL_FOREGROUND, L"Alt+Backspace"},
-        {kCommandFillBackground, IDS_CMD_FILL_BACKGROUND, L"Ctrl+Backspace"},
-        {kCommandSwapPalette, IDS_CMD_SWAP_PALETTE, L"X"},
-        {kCommandResetPalette, IDS_CMD_RESET_PALETTE, L"D"},
-        {kCommandClearPixels, IDS_CMD_CLEAR_PIXELS, L""},
-        {kCommandContentAwareFill, IDS_CMD_CONTENT_AWARE_FILL, L"Shift+Delete"},
-        {kCommandInvert, IDS_CMD_INVERT, L"Ctrl+I"},
-        {kCommandFreeTransform, IDS_CMD_FREE_TRANSFORM, L"Ctrl+T"},
-        {kCommandCurves, IDS_CMD_CURVES, L"Ctrl+M"},
-        {kCommandLevels, IDS_CMD_LEVELS, L"Ctrl+L"},
-        {kCommandHueSaturation, IDS_CMD_HUE_SATURATION, L"Ctrl+U"},
-        {kCommandExposure, IDS_CMD_EXPOSURE, L""},
-        {kCommandGradientMap, IDS_CMD_GRADIENT_MAP, L""},
-        {kCommandGrain, IDS_CMD_GRAIN, L""},
-        {kCommandCanvasSize, IDS_CMD_CANVAS_SIZE, L""},
-        {kCommandImageSize, IDS_CMD_IMAGE_SIZE, L""},
-        {kCommandFlipCanvasHorizontal, IDS_CMD_FLIP_CANVAS_HORIZONTAL, L""},
-        {kCommandFlipCanvasVertical, IDS_CMD_FLIP_CANVAS_VERTICAL, L""},
-        {kCommandNewLayer, IDS_CMD_NEW_LAYER, L"Ctrl+Shift+N"},
-        {kCommandNewFolder, IDS_CMD_NEW_FOLDER, L"Ctrl+G"},
-        {kCommandLayerViaCopy, IDS_CMD_LAYER_VIA_COPY, L"Ctrl+J"},
-        {kCommandNewLevelsAdjustment, IDS_CMD_ADJUST_LEVELS, L""},
-        {kCommandNewCurvesAdjustment, IDS_CMD_ADJUST_CURVES, L""},
-        {kCommandNewHueSaturationAdjustment, IDS_CMD_ADJUST_HSV, L""},
-        {kCommandNewExposureAdjustment, IDS_CMD_ADJUST_EXPOSURE, L""},
-        {kCommandNewGradientMapAdjustment, IDS_CMD_ADJUST_GRADIENT_MAP, L""},
-        {kCommandNewGrainAdjustment, IDS_CMD_ADJUST_GRAIN, L""},
-        {kCommandEditAdjustment, IDS_CMD_EDIT_ADJUSTMENT, L""},
-        {kCommandGroupLayers, IDS_CMD_GROUP_LAYERS, L""},
-        {kCommandMoveOutOfGroup, IDS_CMD_MOVE_OUT_OF_GROUP, L"Ctrl+Shift+G"},
-        {kCommandRenameLayer, IDS_CMD_RENAME_LAYER, L"F2"},
-        {kCommandDeleteLayer, IDS_CMD_DELETE_LAYER, L"Delete"},
-        {kCommandToggleLayerVisibility, IDS_CMD_TOGGLE_LAYER_VISIBILITY, L""},
-        {kCommandMoveLayerUp, IDS_CMD_MOVE_LAYER_UP, L"Ctrl+]"},
-        {kCommandMoveLayerDown, IDS_CMD_MOVE_LAYER_DOWN, L"Ctrl+["},
-        {kCommandClipToggle, IDS_CMD_CLIP_CREATE, L"Ctrl+Alt+G"},
-        {kCommandMergeDown, IDS_CMD_MERGE_DOWN, L"Ctrl+E"},
-        {kCommandAddMask, IDS_CMD_ADD_MASK, L""},
-        {kCommandAddBlackMask, IDS_CMD_ADD_BLACK_MASK, L""},
-        {kCommandFlipLayerHorizontal, IDS_CMD_FLIP_LAYER_HORIZONTAL, L""},
-        {kCommandFlipLayerVertical, IDS_CMD_FLIP_LAYER_VERTICAL, L""},
-        {kCommandSelectAll, IDS_CMD_SELECT_ALL, L"Ctrl+A"},
-        {kCommandDeselect, IDS_CMD_DESELECT, L"Ctrl+D"},
-        {kCommandInverse, IDS_CMD_INVERSE, L"Ctrl+Shift+I"},
-        {kCommandLoadLayerSelection, IDS_CMD_LOAD_LAYER_SELECTION, L""},
-        {kCommandLoadMaskSelection, IDS_CMD_LOAD_MASK_SELECTION, L""},
-        {kCommandGaussianBlur, IDS_CMD_GAUSSIAN_BLUR, L""},
-        {kCommandMotionBlur, IDS_CMD_MOTION_BLUR, L""},
-        {kCommandAddNoise, IDS_CMD_ADD_NOISE, L""},
-        {kCommandLensCorrection, IDS_CMD_LENS_CORRECTION, L""},
-        {kCommandZoomFit, IDS_CMD_ZOOM_FIT, L"Ctrl+0"},
-        {kCommandZoomActual, IDS_CMD_ZOOM_ACTUAL, L"Ctrl+1"},
-        {kCommandZoomIn, IDS_CMD_ZOOM_IN, L"Ctrl++"},
-        {kCommandZoomOut, IDS_CMD_ZOOM_OUT, L"Ctrl+-"},
-        {kCommandSampleRing, IDS_CMD_SAMPLE_RING, L""},
-        {kCommandKeyboardShortcuts, IDS_CMD_KEYBOARD_SHORTCUTS, L""},
-        {kCommandAbout, IDS_CMD_ABOUT, L""},
-        {SelectToolCommand(EditorTool::Move), IDS_CMD_TOOL_MOVE, L"V"},
-        {SelectToolCommand(EditorTool::Marquee), IDS_CMD_TOOL_MARQUEE, L"M"},
-        {SelectToolCommand(EditorTool::Lasso), IDS_CMD_TOOL_LASSO, L"L"},
-        {SelectToolCommand(EditorTool::Wand), IDS_CMD_TOOL_WAND, L"W"},
-        {SelectToolCommand(EditorTool::Crop), IDS_CMD_TOOL_CROP, L"C"},
-        {SelectToolCommand(EditorTool::Brush), IDS_CMD_TOOL_BRUSH, L"B"},
-        {SelectToolCommand(EditorTool::Eraser), IDS_CMD_TOOL_ERASER, L"E"},
-        {SelectToolCommand(EditorTool::Heal), IDS_CMD_TOOL_HEAL, L"J"},
-        {SelectToolCommand(EditorTool::Clone), IDS_CMD_TOOL_CLONE, L"S"},
-        {SelectToolCommand(EditorTool::Smear), IDS_CMD_TOOL_SMEAR, L"R"},
-        {SelectToolCommand(EditorTool::Gradient), IDS_CMD_TOOL_GRADIENT, L"G"},
-        {SelectToolCommand(EditorTool::Shape), IDS_CMD_TOOL_SHAPE, L"U"},
-        {SelectToolCommand(EditorTool::Eyedropper), IDS_CMD_TOOL_EYEDROPPER, L"I"},
-        {SelectToolCommand(EditorTool::Hand), IDS_CMD_TOOL_HAND, L"H"},
-        {SelectToolCommand(EditorTool::Zoom), IDS_CMD_TOOL_ZOOM, L"Z"},
-        {kCommandNudgeSelectionLeft, IDS_CMD_NUDGE_SELECTION_LEFT, L"Left"},
-        {kCommandNudgeSelectionRight, IDS_CMD_NUDGE_SELECTION_RIGHT, L"Right"},
-        {kCommandNudgeSelectionUp, IDS_CMD_NUDGE_SELECTION_UP, L"Up"},
-        {kCommandNudgeSelectionDown, IDS_CMD_NUDGE_SELECTION_DOWN, L"Down"},
-        {kCommandNudgeLayerLeft, IDS_CMD_NUDGE_LAYER_LEFT, L"Left"},
-        {kCommandNudgeLayerRight, IDS_CMD_NUDGE_LAYER_RIGHT, L"Right"},
-        {kCommandNudgeLayerUp, IDS_CMD_NUDGE_LAYER_UP, L"Up"},
-        {kCommandNudgeLayerDown, IDS_CMD_NUDGE_LAYER_DOWN, L"Down"},
-        {kCommandNudgePixelsLeft, IDS_CMD_NUDGE_PIXELS_LEFT, L"Ctrl+Left"},
-        {kCommandNudgePixelsRight, IDS_CMD_NUDGE_PIXELS_RIGHT, L"Ctrl+Right"},
-        {kCommandNudgePixelsUp, IDS_CMD_NUDGE_PIXELS_UP, L"Ctrl+Up"},
-        {kCommandNudgePixelsDown, IDS_CMD_NUDGE_PIXELS_DOWN, L"Ctrl+Down"},
-        {kCommandBrushSmaller, IDS_CMD_BRUSH_SMALLER, L"["},
-        {kCommandBrushLarger, IDS_CMD_BRUSH_LARGER, L"]"},
-        {kCommandBrushSofter, IDS_CMD_BRUSH_SOFTER, L"Shift+["},
-        {kCommandBrushHarder, IDS_CMD_BRUSH_HARDER, L"Shift+]"},
-        {kCommandBlendPrevious, IDS_CMD_BLEND_PREVIOUS, L"Shift+-"},
-        {kCommandBlendNext, IDS_CMD_BLEND_NEXT, L"Shift+="},
-        {kCommandDeleteKey, IDS_CMD_DELETE_KEY, L"Delete"},
-        {kCommandToggleMarqueeKind, IDS_CMD_TOGGLE_MARQUEE, L"M"},
-        {kCommandToggleLassoKind, IDS_CMD_TOGGLE_LASSO, L"L"},
-        {kCommandToggleShapeKind, IDS_CMD_TOGGLE_SHAPE, L"Shift+U"},
-    };
-    return kDefaults;
+    return _attached && !_canvasFocused && _view.Controls().HasActiveTextInput();
 }
 
-const wchar_t* ChromeHost::TextIdForCommand(int command) noexcept
+bool ChromeHost::MenuKeyboardActive() const noexcept
 {
-    struct TextId
-    {
-        int command;
-        const wchar_t* id;
-    };
-    static constexpr TextId kIds[] = {
-        {kCommandNew, L"cmd/file/new"},
-        {kCommandOpen, L"cmd/file/open"},
-        {kCommandSave, L"cmd/file/save"},
-        {kCommandSaveAs, L"cmd/file/saveAs"},
-        {kCommandExportPng, L"cmd/file/exportPng"},
-        {kCommandExportJpeg, L"cmd/file/exportJpeg"},
-        {kCommandExit, L"cmd/file/exit"},
-        {kCommandNewCanvas, L"cmd/file/newCanvas"},
-        {kCommandImportImages, L"cmd/file/importImages"},
-        {kCommandCloseProject, L"cmd/file/closeProject"},
-        {kCommandUndo, L"cmd/edit/undo"},
-        {kCommandRedo, L"cmd/edit/redo"},
-        {kCommandFreeTransform, L"cmd/edit/freeTransform"},
-        {kCommandCut, L"cmd/edit/cut"},
-        {kCommandCopy, L"cmd/edit/copy"},
-        {kCommandCopyMerged, L"cmd/edit/copyMerged"},
-        {kCommandPaste, L"cmd/edit/paste"},
-        {kCommandFillForeground, L"cmd/edit/fillForeground"},
-        {kCommandFillBackground, L"cmd/edit/fillBackground"},
-        {kCommandClearPixels, L"cmd/edit/clearPixels"},
-        {kCommandInvert, L"cmd/edit/invert"},
-        {kCommandContentAwareFill, L"cmd/edit/contentAwareFill"},
-        {kCommandSwapPalette, L"cmd/edit/swapPalette"},
-        {kCommandResetPalette, L"cmd/edit/resetPalette"},
-        {kCommandDeleteKey, L"cmd/edit/delete"},
-        {kCommandNewLayer, L"cmd/layer/new"},
-        {kCommandNewFolder, L"cmd/layer/newFolder"},
-        {kCommandDeleteLayer, L"cmd/layer/delete"},
-        {kCommandToggleLayerVisibility, L"cmd/layer/toggleVisibility"},
-        {kCommandMoveOutOfGroup, L"cmd/layer/moveOutOfGroup"},
-        {kCommandFlipLayerHorizontal, L"cmd/layer/flipHorizontal"},
-        {kCommandFlipLayerVertical, L"cmd/layer/flipVertical"},
-        {kCommandLayerViaCopy, L"cmd/layer/viaCopy"},
-        {kCommandAddMask, L"cmd/layer/addMask"},
-        {kCommandAddBlackMask, L"cmd/layer/addBlackMask"},
-        {kCommandNewLevelsAdjustment, L"cmd/layer/newLevels"},
-        {kCommandNewCurvesAdjustment, L"cmd/layer/newCurves"},
-        {kCommandNewHueSaturationAdjustment, L"cmd/layer/newHueSaturation"},
-        {kCommandNewExposureAdjustment, L"cmd/layer/newExposure"},
-        {kCommandNewGradientMapAdjustment, L"cmd/layer/newGradientMap"},
-        {kCommandNewGrainAdjustment, L"cmd/layer/newGrain"},
-        {kCommandEditAdjustment, L"cmd/layer/editAdjustment"},
-        {kCommandGroupLayers, L"cmd/layer/group"},
-        {kCommandRenameLayer, L"cmd/layer/rename"},
-        {kCommandMoveLayerUp, L"cmd/layer/moveUp"},
-        {kCommandMoveLayerDown, L"cmd/layer/moveDown"},
-        {kCommandClipToggle, L"cmd/layer/clip"},
-        {kCommandMergeDown, L"cmd/layer/mergeDown"},
-        {kCommandZoomFit, L"cmd/view/zoomFit"},
-        {kCommandZoomActual, L"cmd/view/zoomActual"},
-        {kCommandZoomIn, L"cmd/view/zoomIn"},
-        {kCommandZoomOut, L"cmd/view/zoomOut"},
-        {kCommandSampleRing, L"cmd/view/sampleRing"},
-        {kCommandKeyboardShortcuts, L"cmd/help/keyboardShortcuts"},
-        {kCommandAbout, L"cmd/help/about"},
-        {kCommandFlipCanvasHorizontal, L"cmd/image/flipHorizontal"},
-        {kCommandFlipCanvasVertical, L"cmd/image/flipVertical"},
-        {kCommandCurves, L"cmd/image/curves"},
-        {kCommandLevels, L"cmd/image/levels"},
-        {kCommandHueSaturation, L"cmd/image/hueSaturation"},
-        {kCommandExposure, L"cmd/image/exposure"},
-        {kCommandGradientMap, L"cmd/image/gradientMap"},
-        {kCommandGrain, L"cmd/image/grain"},
-        {kCommandCanvasSize, L"cmd/image/canvasSize"},
-        {kCommandImageSize, L"cmd/image/imageSize"},
-        {kCommandSelectAll, L"cmd/select/all"},
-        {kCommandDeselect, L"cmd/select/deselect"},
-        {kCommandInverse, L"cmd/select/inverse"},
-        {kCommandLoadLayerSelection, L"cmd/select/loadLayer"},
-        {kCommandLoadMaskSelection, L"cmd/select/loadMask"},
-        {kCommandGaussianBlur, L"cmd/filter/gaussianBlur"},
-        {kCommandMotionBlur, L"cmd/filter/motionBlur"},
-        {kCommandAddNoise, L"cmd/filter/addNoise"},
-        {kCommandLensCorrection, L"cmd/filter/lensCorrection"},
-        {SelectToolCommand(EditorTool::Move), L"cmd/tool/move"},
-        {SelectToolCommand(EditorTool::Marquee), L"cmd/tool/marquee"},
-        {SelectToolCommand(EditorTool::Lasso), L"cmd/tool/lasso"},
-        {SelectToolCommand(EditorTool::Wand), L"cmd/tool/wand"},
-        {SelectToolCommand(EditorTool::Crop), L"cmd/tool/crop"},
-        {SelectToolCommand(EditorTool::Brush), L"cmd/tool/brush"},
-        {SelectToolCommand(EditorTool::Eraser), L"cmd/tool/eraser"},
-        {SelectToolCommand(EditorTool::Heal), L"cmd/tool/heal"},
-        {SelectToolCommand(EditorTool::Clone), L"cmd/tool/clone"},
-        {SelectToolCommand(EditorTool::Smear), L"cmd/tool/smear"},
-        {SelectToolCommand(EditorTool::Gradient), L"cmd/tool/gradient"},
-        {SelectToolCommand(EditorTool::Shape), L"cmd/tool/shape"},
-        {SelectToolCommand(EditorTool::Eyedropper), L"cmd/tool/eyedropper"},
-        {SelectToolCommand(EditorTool::Hand), L"cmd/tool/hand"},
-        {SelectToolCommand(EditorTool::Zoom), L"cmd/tool/zoom"},
-        {kCommandNudgeSelectionLeft, L"cmd/nudge/selectionLeft"},
-        {kCommandNudgeSelectionRight, L"cmd/nudge/selectionRight"},
-        {kCommandNudgeSelectionUp, L"cmd/nudge/selectionUp"},
-        {kCommandNudgeSelectionDown, L"cmd/nudge/selectionDown"},
-        {kCommandNudgeLayerLeft, L"cmd/nudge/layerLeft"},
-        {kCommandNudgeLayerRight, L"cmd/nudge/layerRight"},
-        {kCommandNudgeLayerUp, L"cmd/nudge/layerUp"},
-        {kCommandNudgeLayerDown, L"cmd/nudge/layerDown"},
-        {kCommandNudgePixelsLeft, L"cmd/nudge/pixelsLeft"},
-        {kCommandNudgePixelsRight, L"cmd/nudge/pixelsRight"},
-        {kCommandNudgePixelsUp, L"cmd/nudge/pixelsUp"},
-        {kCommandNudgePixelsDown, L"cmd/nudge/pixelsDown"},
-        {kCommandBrushSmaller, L"cmd/brush/smaller"},
-        {kCommandBrushLarger, L"cmd/brush/larger"},
-        {kCommandBrushSofter, L"cmd/brush/softer"},
-        {kCommandBrushHarder, L"cmd/brush/harder"},
-        {kCommandBlendPrevious, L"cmd/blend/previous"},
-        {kCommandBlendNext, L"cmd/blend/next"},
-        {kCommandToggleMarqueeKind, L"cmd/tool/toggleMarquee"},
-        {kCommandToggleLassoKind, L"cmd/tool/toggleLasso"},
-        {kCommandToggleShapeKind, L"cmd/tool/toggleShape"},
-    };
-    for (const TextId& row : kIds)
-    {
-        if (row.command == command)
-        {
-            return row.id;
-        }
-    }
-    return nullptr;
+    return _menuKeyboard && _attached && _menu != nullptr && _view.Controls().GetFocusControl() == _menu;
 }
 
-int ChromeHost::CommandForTextId(std::wstring_view id) noexcept
+void ChromeHost::ToggleMenuKeyboard() noexcept
 {
-    struct TextId
+    if (MenuKeyboardActive())
     {
-        int command;
-        const wchar_t* id;
-    };
-    // The same table as TextIdForCommand. Duplicated so each lookup stays a straight scan.
-    static constexpr TextId kIds[] = {
-        {kCommandNew, L"cmd/file/new"},
-        {kCommandOpen, L"cmd/file/open"},
-        {kCommandSave, L"cmd/file/save"},
-        {kCommandSaveAs, L"cmd/file/saveAs"},
-        {kCommandExportPng, L"cmd/file/exportPng"},
-        {kCommandExportJpeg, L"cmd/file/exportJpeg"},
-        {kCommandExit, L"cmd/file/exit"},
-        {kCommandNewCanvas, L"cmd/file/newCanvas"},
-        {kCommandImportImages, L"cmd/file/importImages"},
-        {kCommandCloseProject, L"cmd/file/closeProject"},
-        {kCommandUndo, L"cmd/edit/undo"},
-        {kCommandRedo, L"cmd/edit/redo"},
-        {kCommandFreeTransform, L"cmd/edit/freeTransform"},
-        {kCommandCut, L"cmd/edit/cut"},
-        {kCommandCopy, L"cmd/edit/copy"},
-        {kCommandCopyMerged, L"cmd/edit/copyMerged"},
-        {kCommandPaste, L"cmd/edit/paste"},
-        {kCommandFillForeground, L"cmd/edit/fillForeground"},
-        {kCommandFillBackground, L"cmd/edit/fillBackground"},
-        {kCommandClearPixels, L"cmd/edit/clearPixels"},
-        {kCommandInvert, L"cmd/edit/invert"},
-        {kCommandContentAwareFill, L"cmd/edit/contentAwareFill"},
-        {kCommandSwapPalette, L"cmd/edit/swapPalette"},
-        {kCommandResetPalette, L"cmd/edit/resetPalette"},
-        {kCommandDeleteKey, L"cmd/edit/delete"},
-        {kCommandNewLayer, L"cmd/layer/new"},
-        {kCommandNewFolder, L"cmd/layer/newFolder"},
-        {kCommandDeleteLayer, L"cmd/layer/delete"},
-        {kCommandToggleLayerVisibility, L"cmd/layer/toggleVisibility"},
-        {kCommandMoveOutOfGroup, L"cmd/layer/moveOutOfGroup"},
-        {kCommandFlipLayerHorizontal, L"cmd/layer/flipHorizontal"},
-        {kCommandFlipLayerVertical, L"cmd/layer/flipVertical"},
-        {kCommandLayerViaCopy, L"cmd/layer/viaCopy"},
-        {kCommandAddMask, L"cmd/layer/addMask"},
-        {kCommandAddBlackMask, L"cmd/layer/addBlackMask"},
-        {kCommandNewLevelsAdjustment, L"cmd/layer/newLevels"},
-        {kCommandNewCurvesAdjustment, L"cmd/layer/newCurves"},
-        {kCommandNewHueSaturationAdjustment, L"cmd/layer/newHueSaturation"},
-        {kCommandNewExposureAdjustment, L"cmd/layer/newExposure"},
-        {kCommandNewGradientMapAdjustment, L"cmd/layer/newGradientMap"},
-        {kCommandNewGrainAdjustment, L"cmd/layer/newGrain"},
-        {kCommandEditAdjustment, L"cmd/layer/editAdjustment"},
-        {kCommandGroupLayers, L"cmd/layer/group"},
-        {kCommandRenameLayer, L"cmd/layer/rename"},
-        {kCommandMoveLayerUp, L"cmd/layer/moveUp"},
-        {kCommandMoveLayerDown, L"cmd/layer/moveDown"},
-        {kCommandClipToggle, L"cmd/layer/clip"},
-        {kCommandMergeDown, L"cmd/layer/mergeDown"},
-        {kCommandZoomFit, L"cmd/view/zoomFit"},
-        {kCommandZoomActual, L"cmd/view/zoomActual"},
-        {kCommandZoomIn, L"cmd/view/zoomIn"},
-        {kCommandZoomOut, L"cmd/view/zoomOut"},
-        {kCommandSampleRing, L"cmd/view/sampleRing"},
-        {kCommandKeyboardShortcuts, L"cmd/help/keyboardShortcuts"},
-        {kCommandAbout, L"cmd/help/about"},
-        {kCommandFlipCanvasHorizontal, L"cmd/image/flipHorizontal"},
-        {kCommandFlipCanvasVertical, L"cmd/image/flipVertical"},
-        {kCommandCurves, L"cmd/image/curves"},
-        {kCommandLevels, L"cmd/image/levels"},
-        {kCommandHueSaturation, L"cmd/image/hueSaturation"},
-        {kCommandExposure, L"cmd/image/exposure"},
-        {kCommandGradientMap, L"cmd/image/gradientMap"},
-        {kCommandGrain, L"cmd/image/grain"},
-        {kCommandCanvasSize, L"cmd/image/canvasSize"},
-        {kCommandImageSize, L"cmd/image/imageSize"},
-        {kCommandSelectAll, L"cmd/select/all"},
-        {kCommandDeselect, L"cmd/select/deselect"},
-        {kCommandInverse, L"cmd/select/inverse"},
-        {kCommandLoadLayerSelection, L"cmd/select/loadLayer"},
-        {kCommandLoadMaskSelection, L"cmd/select/loadMask"},
-        {kCommandGaussianBlur, L"cmd/filter/gaussianBlur"},
-        {kCommandMotionBlur, L"cmd/filter/motionBlur"},
-        {kCommandAddNoise, L"cmd/filter/addNoise"},
-        {kCommandLensCorrection, L"cmd/filter/lensCorrection"},
-        {SelectToolCommand(EditorTool::Move), L"cmd/tool/move"},
-        {SelectToolCommand(EditorTool::Marquee), L"cmd/tool/marquee"},
-        {SelectToolCommand(EditorTool::Lasso), L"cmd/tool/lasso"},
-        {SelectToolCommand(EditorTool::Wand), L"cmd/tool/wand"},
-        {SelectToolCommand(EditorTool::Crop), L"cmd/tool/crop"},
-        {SelectToolCommand(EditorTool::Brush), L"cmd/tool/brush"},
-        {SelectToolCommand(EditorTool::Eraser), L"cmd/tool/eraser"},
-        {SelectToolCommand(EditorTool::Heal), L"cmd/tool/heal"},
-        {SelectToolCommand(EditorTool::Clone), L"cmd/tool/clone"},
-        {SelectToolCommand(EditorTool::Smear), L"cmd/tool/smear"},
-        {SelectToolCommand(EditorTool::Gradient), L"cmd/tool/gradient"},
-        {SelectToolCommand(EditorTool::Shape), L"cmd/tool/shape"},
-        {SelectToolCommand(EditorTool::Eyedropper), L"cmd/tool/eyedropper"},
-        {SelectToolCommand(EditorTool::Hand), L"cmd/tool/hand"},
-        {SelectToolCommand(EditorTool::Zoom), L"cmd/tool/zoom"},
-        {kCommandNudgeSelectionLeft, L"cmd/nudge/selectionLeft"},
-        {kCommandNudgeSelectionRight, L"cmd/nudge/selectionRight"},
-        {kCommandNudgeSelectionUp, L"cmd/nudge/selectionUp"},
-        {kCommandNudgeSelectionDown, L"cmd/nudge/selectionDown"},
-        {kCommandNudgeLayerLeft, L"cmd/nudge/layerLeft"},
-        {kCommandNudgeLayerRight, L"cmd/nudge/layerRight"},
-        {kCommandNudgeLayerUp, L"cmd/nudge/layerUp"},
-        {kCommandNudgeLayerDown, L"cmd/nudge/layerDown"},
-        {kCommandNudgePixelsLeft, L"cmd/nudge/pixelsLeft"},
-        {kCommandNudgePixelsRight, L"cmd/nudge/pixelsRight"},
-        {kCommandNudgePixelsUp, L"cmd/nudge/pixelsUp"},
-        {kCommandNudgePixelsDown, L"cmd/nudge/pixelsDown"},
-        {kCommandBrushSmaller, L"cmd/brush/smaller"},
-        {kCommandBrushLarger, L"cmd/brush/larger"},
-        {kCommandBrushSofter, L"cmd/brush/softer"},
-        {kCommandBrushHarder, L"cmd/brush/harder"},
-        {kCommandBlendPrevious, L"cmd/blend/previous"},
-        {kCommandBlendNext, L"cmd/blend/next"},
-        {kCommandToggleMarqueeKind, L"cmd/tool/toggleMarquee"},
-        {kCommandToggleLassoKind, L"cmd/tool/toggleLasso"},
-        {kCommandToggleShapeKind, L"cmd/tool/toggleShape"},
-    };
-    for (const TextId& row : kIds)
-    {
-        if (id == row.id)
-        {
-            return row.command;
-        }
+        LeaveMenuKeyboard();
+        return;
     }
-    return 0;
+    if (!_attached || _menu == nullptr)
+    {
+        return;
+    }
+    DxUi::ControlHost& controls = _view.Controls();
+    _menuReturnFocus = controls.GetFocusControl();
+    _menuReturnCanvas = _canvasFocused;
+    // The bar highlights its first item when it takes the focus (MenuBar::OnFocusChanged).
+    controls.SetFocusControl(_menu);
+    _menuKeyboard = controls.GetFocusControl() == _menu;
+    if (_menuKeyboard)
+    {
+        _canvasFocused = false;
+        _accessibilityPlacementDirty = true;
+    }
+    else
+    {
+        _menuReturnFocus = nullptr;
+    }
+    _view.MarkDirty();
+}
+
+void ChromeHost::LeaveMenuKeyboard() noexcept
+{
+    if (!_menuKeyboard)
+    {
+        return;
+    }
+    _menuKeyboard = false;
+    DxUi::Control* const target = _menuReturnFocus;
+    _menuReturnFocus = nullptr;
+    if (!_attached || _menu == nullptr)
+    {
+        return;
+    }
+    DxUi::ControlHost& controls = _view.Controls();
+    if (controls.GetFocusControl() != _menu)
+    {
+        return; // a click moved the focus on: it stays there
+    }
+    controls.SetFocusControl(target);
+    if (controls.GetFocusControl() != target)
+    {
+        controls.SetFocusControl(nullptr);
+    }
+    _canvasFocused = _menuReturnCanvas;
+    _accessibilityPlacementDirty = true;
+    _view.MarkDirty();
+}
+
+bool ChromeHost::OpenMenuByMnemonic(wchar_t mnemonic) noexcept
+{
+    if (!_attached || _menu == nullptr || mnemonic < L' ')
+    {
+        return false;
+    }
+    if (!MenuKeyboardActive())
+    {
+        _menuReturnFocus = _view.Controls().GetFocusControl();
+        _menuReturnCanvas = _canvasFocused;
+    }
+    _menuKeyboard = true;
+    // The bar takes the focus and opens the item's flyout (OpenMenu, from the keyboard), which hands the focus
+    // back before the chosen command runs.
+    _inDispatch = true;
+    const bool opened = _menu->ActivateMnemonic(_view.Controls(), mnemonic);
+    _inDispatch = false;
+    if (!opened)
+    {
+        LeaveMenuKeyboard();
+    }
+    _view.MarkDirty();
+    return opened;
+}
+
+void ChromeHost::SetMenusRecordOnlyForTest(bool recordOnly) noexcept
+{
+    _menusRecordOnly = recordOnly;
+    _recordedMenu.reset();
+}
+
+std::optional<std::size_t> ChromeHost::TakeRecordedMenuForTest() noexcept
+{
+    const std::optional<std::size_t> recorded = _recordedMenu;
+    _recordedMenu.reset();
+    return recorded;
+}
+
+std::size_t ChromeHost::ShortcutRowCountForTest() const noexcept
+{
+    return _shortcutModel.rows.size();
+}
+
+int ChromeHost::ShortcutCommandAtForTest(std::size_t index) const noexcept
+{
+    return index < _shortcutModel.rows.size() ? _shortcutModel.rows[index].command : 0;
+}
+
+int ChromeHost::SelectedShortcutForTest() const noexcept
+{
+    if (_shortcutsTree == nullptr)
+    {
+        return 0;
+    }
+    const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId();
+    return selected.has_value() && _shortcutModel.FindVisibleItemById(selected.value()).has_value()
+               ? static_cast<int>(selected.value())
+               : 0;
+}
+
+void ChromeHost::SelectShortcutForTest(int command) noexcept
+{
+    if (_shortcutsTree != nullptr)
+    {
+        _shortcutsTree->SetSelectedItemId(static_cast<uint64_t>(command));
+    }
+}
+
+void ChromeHost::FocusShortcutListForTest() noexcept
+{
+    if (ShortcutsOpen() && _shortcutsTree != nullptr)
+    {
+        _view.Controls().SetFocusControl(_shortcutsTree);
+        _canvasFocused = false;
+    }
+}
+
+std::wstring ChromeHost::ShortcutSearchTextForTest() const
+{
+    return _shortcutsSearch != nullptr ? std::wstring(_shortcutsSearch->GetText()) : std::wstring{};
+}
+
+std::wstring ChromeHost::FocusedControlNameForTest() const
+{
+    const DxUi::Control* focus = _attached ? _view.Controls().GetFocusControl() : nullptr;
+    return focus != nullptr ? std::wstring(focus->GetAccessibleName()) : std::wstring{};
+}
+
+std::wstring ChromeHost::ToolTooltipForTest(EditorTool tool) const
+{
+    const DxUi::Button* button = _toolButtons[EditorToolIndex(tool)];
+    return button != nullptr ? std::wstring(button->GetTooltipText()) : std::wstring{};
+}
+
+std::wstring ChromeHost::PaletteSwapTooltipForTest() const
+{
+    const DxUi::Control* swap = _railPalette != nullptr ? _railPalette->SwapZone() : nullptr;
+    return swap != nullptr ? std::wstring(swap->GetTooltipText()) : std::wstring{};
 }
 
 void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
@@ -2485,30 +2382,23 @@ void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstri
     {
         return;
     }
-    const std::wstring undo = undoName.empty() ? LoadStringResource(nullptr, IDS_CMD_UNDO)
-                                               : FormatStringResource(nullptr, IDS_CMD_UNDO_NAMED, undoName);
-    const std::wstring redo = redoName.empty() ? LoadStringResource(nullptr, IDS_CMD_REDO)
-                                               : FormatStringResource(nullptr, IDS_CMD_REDO_NAMED, redoName);
-    (void)ModifyMenuW(edit, static_cast<UINT>(kCommandUndo),
-                      MF_BYCOMMAND | MF_STRING | (canUndo ? MF_ENABLED : MF_GRAYED),
-                      static_cast<UINT_PTR>(kCommandUndo), undo.c_str());
-    (void)ModifyMenuW(edit, static_cast<UINT>(kCommandRedo),
-                      MF_BYCOMMAND | MF_STRING | (canRedo ? MF_ENABLED : MF_GRAYED),
-                      static_cast<UINT_PTR>(kCommandRedo), redo.c_str());
+    // The name from the STRINGTABLE, the chord from the effective table (a replaced Undo shows its replacement).
+    const std::wstring undo =
+        CommandMenuCaption(undoName.empty() ? LoadStringResource(nullptr, IDS_CMD_UNDO)
+                                            : FormatStringResource(nullptr, IDS_CMD_UNDO_NAMED, undoName),
+                           kCommandUndo);
+    const std::wstring redo =
+        CommandMenuCaption(redoName.empty() ? LoadStringResource(nullptr, IDS_CMD_REDO)
+                                            : FormatStringResource(nullptr, IDS_CMD_REDO_NAMED, redoName),
+                           kCommandRedo);
+    SetMenuCaption(edit, kCommandUndo, undo, canUndo ? MF_ENABLED : MF_GRAYED);
+    SetMenuCaption(edit, kCommandRedo, redo, canRedo ? MF_ENABLED : MF_GRAYED);
 }
 
 void ChromeHost::SetEditTargets(bool masksTargeted, bool transformsSelection, bool clipped, int merge)
 {
-    const auto rename = [](HMENU menu, int command, UINT stringId)
-    {
-        if (!menu)
-        {
-            return;
-        }
-        const std::wstring caption = LoadStringResource(nullptr, stringId);
-        (void)ModifyMenuW(menu, static_cast<UINT>(command), MF_BYCOMMAND | MF_STRING, static_cast<UINT_PTR>(command),
-                          caption.c_str());
-    };
+    const auto rename = [this](HMENU menu, int command, UINT stringId)
+    { SetMenuCaption(menu, command, CommandMenuCaption(stringId, command), MF_ENABLED); };
     HMENU edit = _menus[static_cast<std::size_t>(MenuIndex::Edit)].get();
     HMENU layer = _menus[static_cast<std::size_t>(MenuIndex::Layer)].get();
     rename(edit, kCommandInvert, masksTargeted ? IDS_CMD_INVERT_MASK : IDS_CMD_INVERT);
@@ -2707,11 +2597,28 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     {
         return false;
     }
-    if (down && virtualKey == VK_ESCAPE && _canvasFocused)
+    if (down && MenuKeyboardActive() && (virtualKey == VK_ESCAPE || virtualKey == VK_F10))
     {
+        LeaveMenuKeyboard();
+        return true;
+    }
+    if (down && _canvasFocused)
+    {
+        // A key the canvas did not use goes nowhere: the chrome control that held the focus before the canvas took
+        // it (a stepper, a card's field) must not type it. Escape and Tab move the keyboard to the chrome.
+        if (virtualKey == VK_ESCAPE)
+        {
+            _canvasFocused = false;
+            _accessibilityPlacementDirty = true;
+            return true;
+        }
+        if (virtualKey != VK_TAB)
+        {
+            return false;
+        }
         _canvasFocused = false;
         _accessibilityPlacementDirty = true;
-        return true;
+        _view.Controls().SetFocusControl(nullptr);
     }
     _inDispatch = true;
     const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
@@ -2781,9 +2688,15 @@ bool ChromeHost::ForceTooltipForTest() noexcept
 
 bool ChromeHost::DispatchCharacter(wchar_t character, UINT modifiers) noexcept
 {
-    if (!_attached)
+    // The canvas takes no text, and a chrome control that held the focus before it must not either.
+    if (!_attached || _canvasFocused)
     {
         return false;
+    }
+    if (MenuKeyboardActive())
+    {
+        // A letter opens its menu; a control character (the Enter or Escape that just acted) does nothing.
+        return character >= L' ' ? OpenMenuByMnemonic(character) : true;
     }
     _inDispatch = true;
     const bool handled = _view.DispatchCharacter(character, modifiers);

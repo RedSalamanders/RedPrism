@@ -135,6 +135,9 @@
     <ClInclude Include="SystemClipboard.h" />
     <ClInclude Include="TransformOverlay.h" />
     <ClInclude Include="CommandLine.h" />
+    <ClInclude Include="CommandCatalog.h" />
+    <ClInclude Include="CommandBindings.h" />
+    <ClInclude Include="..\Common\KeyChord.h" />
     <ClInclude Include="FileDialogs.h" />
     <ClInclude Include="FrameScheduler.h" />
     <ClInclude Include="Renderer.h" />
@@ -166,6 +169,7 @@
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />
+    <ClCompile Include="ApplicationKeyboard.cpp" />
     <ClCompile Include="ApplicationLayerEdits.cpp" />
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="ApplicationSize.cpp" />

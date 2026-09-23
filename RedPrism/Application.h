@@ -4,6 +4,7 @@
 #include "CanvasRenderer.h"
 #include "CanvasSize.h"
 #include "CanvasViewport.h"
+#include "CommandBindings.h"
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
@@ -204,9 +205,24 @@ class Application final
     void SampleColorAt(Vec2 view) noexcept;
     void EndColorSampling() noexcept;
     void SyncToolOverlays() noexcept;
-    bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false, UINT scanCode = 0) noexcept;
-    // A replacement chord for this key, 0 when the key's default command was replaced, or nullopt to use the catalog.
-    [[nodiscard]] std::optional<int> ShortcutOverride(UINT virtualKey, UINT modifiers, UINT scanCode) const noexcept;
+    // ApplicationKeyboard.cpp (Specs/UI/UI_ApplicationChrome.md "Menus and accelerators"): a key down goes to the
+    // gestures of an edit in progress, then the effective binding table (`_bindings`), then the chrome; the menu
+    // bar takes a tapped Alt, F10 and Alt+letter.
+    LRESULT OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    LRESULT OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    LRESULT OnCharacter(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    void OnKeyMenu(wchar_t character) noexcept;
+    bool HandleKey(const KeyPress& press) noexcept;
+    bool HandleEditGesture(const KeyPress& press) noexcept;
+    bool HandleCanvasKey(const KeyPress& press) noexcept;
+    [[nodiscard]] KeyState CurrentKeyState() const noexcept;
+    // Self-test driver: one key press through the window procedure as the message loop delivers it — the key down
+    // (a system key with Alt), the character TranslateMessage posts, the key up — with the thread's key state
+    // holding the modifiers (MK_CONTROL, MK_SHIFT, kKeyAlt) and a real scan code (the US OEM bracket and number-row
+    // keys name their physical position). True when the key path took the key down.
+    static constexpr UINT kKeyAlt = 0x0100;
+    bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
+    int RunKeyboardSelfTest() noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
     [[nodiscard]] bool SaveDocument(bool saveAs) noexcept;
@@ -260,6 +276,9 @@ class Application final
     POINT _lastPointer{};
     bool _spacePan = false;
     bool _acceleratorShift = false;
+    CommandBindings _bindings;       // the effective binding table: catalog defaults and the settings' replacements
+    bool _suppressCharacter = false; // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
+    bool _lastKeyHandled = false;    // the last key down went to a command or a gesture (read by the self-test driver)
     bool _canvasDrag = false;
     bool _opacityEditing = false;
     bool _layoutDirty = false;

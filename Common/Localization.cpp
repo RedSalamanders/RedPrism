@@ -1,6 +1,7 @@
 #include "Localization.h"
 
 #include <algorithm>
+#include <cwctype>
 
 namespace Localization
 {
@@ -34,6 +35,15 @@ void AddTagFamily(std::vector<std::wstring>& out, std::wstring_view directory, s
     {
         AddCandidate(out, directory, tag.substr(0, dash));
     }
+}
+
+// Whether `tag` is the embedded table's language ("en", "EN-gb").
+[[nodiscard]] bool IsEmbeddedLanguage(std::wstring_view tag) noexcept
+{
+    const std::wstring_view primary = tag.substr(0, tag.find(L'-'));
+    return primary.size() == kEmbeddedLanguage.size() &&
+           std::equal(primary.begin(), primary.end(), kEmbeddedLanguage.begin(),
+                      [](wchar_t left, wchar_t right) { return std::towlower(left) == std::towlower(right); });
 }
 } // namespace
 
@@ -80,10 +90,23 @@ std::vector<std::wstring> SatelliteCandidates(std::wstring_view executableDirect
     {
         directory.remove_suffix(1);
     }
-    AddTagFamily(candidates, directory, preferredTag);
+    // The embedded table is English: an English tag ends the list (after a regional English table, if one ships),
+    // so `language: "en"` or an English display language ahead of another one keeps the English strings.
+    if (!preferredTag.empty())
+    {
+        AddTagFamily(candidates, directory, preferredTag);
+        if (IsEmbeddedLanguage(preferredTag))
+        {
+            return candidates;
+        }
+    }
     for (const std::wstring& language : systemLanguages)
     {
         AddTagFamily(candidates, directory, language);
+        if (IsEmbeddedLanguage(language))
+        {
+            break;
+        }
     }
     return candidates;
 }

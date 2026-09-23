@@ -3,6 +3,7 @@
 #include "AccessibilityRoot.h"
 #include "AdjustControls.h"
 #include "CanvasOverlay.h"
+#include "CommandBindings.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "TransformOverlay.h"
@@ -10,6 +11,7 @@
 #include <array>
 #include <d3d11.h>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <span>
@@ -348,8 +350,9 @@ struct TransformInspectorState
 
 // Editor chrome on the one HWND: MenuBar, document tabs, tool rail with the palette wells, tool header, layers
 // splitter, layers panel with the opacity stepper, status strip, and the color picker card. Owns one DxUi
-// EmbeddedHost that borrows the application device. Every visible string comes from the STRINGTABLE.
-class ChromeHost final
+// EmbeddedHost that borrows the application device. Every visible string comes from the STRINGTABLE. The command
+// ids (`kCommand…`) live on CommandIds (RedPrism/CommandCatalog.h) and read as `ChromeHost::kCommand…`.
+class ChromeHost final : public CommandIds
 {
   public:
     static constexpr float kMenuHeightDip = 30.0f;
@@ -370,118 +373,6 @@ class ChromeHost final
     static constexpr float kSwatchDip = 22.0f;
     static constexpr float kPaletteHotDip = 14.0f;
     static constexpr float kPickerMarginDip = 8.0f;
-
-    static constexpr int kCommandNew = 100;
-    static constexpr int kCommandOpen = 101;
-    static constexpr int kCommandSave = 102;
-    static constexpr int kCommandSaveAs = 103;
-    static constexpr int kCommandExportPng = 104;
-    static constexpr int kCommandExportJpeg = 105;
-    static constexpr int kCommandExit = 106;
-    static constexpr int kCommandNewCanvas = 107;
-    static constexpr int kCommandImportImages = 108;
-    static constexpr int kCommandCloseProject = 109;
-    static constexpr int kCommandUndo = 200;
-    static constexpr int kCommandRedo = 201;
-    static constexpr int kCommandFreeTransform = 202;
-    static constexpr int kCommandCut = 203;
-    static constexpr int kCommandCopy = 204;
-    static constexpr int kCommandCopyMerged = 205;
-    static constexpr int kCommandPaste = 206;
-    static constexpr int kCommandFillForeground = 207;
-    static constexpr int kCommandFillBackground = 208;
-    static constexpr int kCommandClearPixels = 209;
-    static constexpr int kCommandInvert = 210;
-    static constexpr int kCommandContentAwareFill = 211;
-    static constexpr int kCommandSwapPalette = 212;
-    static constexpr int kCommandResetPalette = 213;
-    static constexpr int kCommandNewLayer = 300;
-    static constexpr int kCommandNewFolder = 301;
-    static constexpr int kCommandDeleteLayer = 302;
-    static constexpr int kCommandToggleLayerVisibility = 303;
-    static constexpr int kCommandMoveOutOfGroup = 304;
-    static constexpr int kCommandFlipLayerHorizontal = 305;
-    static constexpr int kCommandFlipLayerVertical = 306;
-    static constexpr int kCommandLayerViaCopy = 307;
-    static constexpr int kCommandAddMask = 308;
-    static constexpr int kCommandAddBlackMask = 309;
-    static constexpr int kCommandZoomFit = 400;
-    static constexpr int kCommandZoomActual = 401;
-    static constexpr int kCommandZoomIn = 402;
-    static constexpr int kCommandZoomOut = 403;
-    static constexpr int kCommandSampleRing = 404;
-    static constexpr int kCommandKeyboardShortcuts = 405;
-    static constexpr int kCommandAbout = 500;
-    static constexpr int kCommandFlipCanvasHorizontal = 600;
-    static constexpr int kCommandFlipCanvasVertical = 601;
-    static constexpr int kCommandSelectAll = 700;
-    static constexpr int kCommandDeselect = 701;
-    static constexpr int kCommandInverse = 702;
-    static constexpr int kCommandLoadLayerSelection = 703;
-    static constexpr int kCommandLoadMaskSelection = 704;
-    static constexpr int kCommandNewLevelsAdjustment = 310;
-    static constexpr int kCommandNewCurvesAdjustment = 311;
-    static constexpr int kCommandNewHueSaturationAdjustment = 312;
-    static constexpr int kCommandNewExposureAdjustment = 313;
-    static constexpr int kCommandNewGradientMapAdjustment = 314;
-    static constexpr int kCommandNewGrainAdjustment = 315;
-    static constexpr int kCommandEditAdjustment = 316;
-    static constexpr int kCommandGroupLayers = 317;
-    static constexpr int kCommandRenameLayer = 318;
-    static constexpr int kCommandMoveLayerUp = 319;
-    static constexpr int kCommandMoveLayerDown = 320;
-    static constexpr int kCommandClipToggle = 321;
-    static constexpr int kCommandMergeDown = 322;
-    static constexpr int kCommandCurves = 602;
-    static constexpr int kCommandLevels = 603;
-    static constexpr int kCommandHueSaturation = 604;
-    static constexpr int kCommandExposure = 605;
-    static constexpr int kCommandGradientMap = 606;
-    static constexpr int kCommandGrain = 607;
-    static constexpr int kCommandCanvasSize = 608;
-    static constexpr int kCommandImageSize = 609;
-    static constexpr int kCommandGaussianBlur = 800;
-    static constexpr int kCommandMotionBlur = 801;
-    static constexpr int kCommandAddNoise = 802;
-    static constexpr int kCommandLensCorrection = 803;
-    // One id per finished local action, so a settings override can name it. Tool order matches EditorTool.
-    static constexpr int kCommandSelectToolBase = 900;
-    static constexpr int kCommandNudgeSelectionLeft = 920;
-    static constexpr int kCommandNudgeSelectionRight = 921;
-    static constexpr int kCommandNudgeSelectionUp = 922;
-    static constexpr int kCommandNudgeSelectionDown = 923;
-    static constexpr int kCommandNudgeLayerLeft = 924;
-    static constexpr int kCommandNudgeLayerRight = 925;
-    static constexpr int kCommandNudgeLayerUp = 926;
-    static constexpr int kCommandNudgeLayerDown = 927;
-    static constexpr int kCommandNudgePixelsLeft = 928;
-    static constexpr int kCommandNudgePixelsRight = 929;
-    static constexpr int kCommandNudgePixelsUp = 930;
-    static constexpr int kCommandNudgePixelsDown = 931;
-    static constexpr int kCommandBrushSmaller = 940;
-    static constexpr int kCommandBrushLarger = 941;
-    static constexpr int kCommandBrushSofter = 942;
-    static constexpr int kCommandBrushHarder = 943;
-    static constexpr int kCommandBlendPrevious = 944;
-    static constexpr int kCommandBlendNext = 945;
-    static constexpr int kCommandDeleteKey = 946;
-    static constexpr int kCommandToggleMarqueeKind = 947;
-    static constexpr int kCommandToggleLassoKind = 948;
-    static constexpr int kCommandToggleShapeKind = 949;
-
-    [[nodiscard]] static constexpr int SelectToolCommand(EditorTool tool) noexcept
-    {
-        return kCommandSelectToolBase + static_cast<int>(tool);
-    }
-    [[nodiscard]] static constexpr EditorTool ToolForSelectCommand(int command) noexcept
-    {
-        const int index = command - kCommandSelectToolBase;
-        if (index < 0 || index >= static_cast<int>(kEditorToolCount))
-        {
-            return EditorTool::Count;
-        }
-        return static_cast<EditorTool>(index);
-    }
 
     enum class MenuIndex : std::size_t
     {
@@ -703,31 +594,54 @@ class ChromeHost final
     void CloseNotice() noexcept;
     [[nodiscard]] bool NoticeOpen() const noexcept;
     [[nodiscard]] D2D1_RECT_F NoticeBoundsDip() const noexcept;
+    // Help › Command List: every catalog command with its effective chord, a search field that filters by name.
+    // Enter in the search field runs the selected row, or the first row when none is selected; Enter, Space or a
+    // double-click on the list runs its row. Closing gives the keyboard focus back to the card underneath (the
+    // Rename card's field, the color picker) or, with no such card, to the canvas.
     void OpenShortcuts() noexcept;
-    // Enter on the selected Command List row, or a double-click: close the list and run that command.
-    [[nodiscard]] bool ActivateSelectedShortcut() noexcept;
-    [[nodiscard]] bool RunShortcutRowForTest(std::size_t visibleIndex) noexcept;
-    // Replacement catalog chords. A command in the list uses that chord (empty clears it) instead of the default.
-    void SetShortcutOverrides(std::vector<std::pair<int, std::wstring>> chords) noexcept;
-    [[nodiscard]] std::wstring CatalogChord(int command, const wchar_t* fallback) const;
     void CloseShortcuts() noexcept;
     [[nodiscard]] bool ShortcutsOpen() const noexcept;
-    // Retitle menu accelerators, and the open shortcuts card, from the active keyboard layout.
+    // The effective binding table the chrome shows (borrowed; null shows the catalog defaults). Menus, the Command
+    // List, tooltips and the palette hints follow it at once.
+    void SetCommandBindings(const CommandBindings* bindings) noexcept;
+    // Retitle menu accelerators, tooltips and the open Command List from the table and the active keyboard layout.
     void RefreshDisplayedChords() noexcept;
+    // The effective chord of `command` as the chrome shows it (STRINGTABLE modifier names, the layout's key names);
+    // empty when the command has no chord.
+    [[nodiscard]] std::wstring CommandChordText(int command) const;
+    [[nodiscard]] static std::wstring ChordDisplayText(const KeyChord& chord);
     [[nodiscard]] std::wstring ShortcutChordAt(std::size_t index) const;
     [[nodiscard]] std::wstring MenuItemCaption(int command) const;
+    // Whether a chrome text input holds the keyboard focus (never while the canvas has it).
+    [[nodiscard]] bool TextInputFocused() const noexcept;
+    // Keyboard access to the menu bar (a tapped Alt or F10, SC_KEYMENU): the bar takes the focus with its first
+    // item highlighted; arrows move, Enter, Space or Down open, a letter opens that menu, Escape leaves and the
+    // focus returns where it was.
+    void ToggleMenuKeyboard() noexcept;
+    void LeaveMenuKeyboard() noexcept;
+    [[nodiscard]] bool MenuKeyboardActive() const noexcept;
+    // Alt+letter, or a letter while the menu bar has the keyboard: opens the menu with that mnemonic.
+    bool OpenMenuByMnemonic(wchar_t mnemonic) noexcept;
+    // Self-test hooks: menus are recorded instead of shown (a native flyout runs a modal loop), and the Command List
+    // and focus are read and steered without the pointer.
+    void SetMenusRecordOnlyForTest(bool recordOnly) noexcept;
+    [[nodiscard]] std::optional<std::size_t> TakeRecordedMenuForTest() noexcept;
+    [[nodiscard]] std::size_t ShortcutRowCountForTest() const noexcept;
+    [[nodiscard]] int ShortcutCommandAtForTest(std::size_t index) const noexcept;
+    [[nodiscard]] int SelectedShortcutForTest() const noexcept;
+    void SelectShortcutForTest(int command) noexcept;
+    void FocusShortcutListForTest() noexcept;
+    [[nodiscard]] std::wstring ShortcutSearchTextForTest() const;
+    [[nodiscard]] std::wstring FocusedControlNameForTest() const;
+    [[nodiscard]] std::wstring ToolTooltipForTest(EditorTool tool) const;
+    [[nodiscard]] std::wstring PaletteSwapTooltipForTest() const;
 
-    struct CommandShortcutDefault
+    // The catalog rows (RedPrism/CommandCatalog.h) under their former names.
+    using CommandShortcutDefault = CommandCatalogEntry;
+    [[nodiscard]] static std::span<const CommandShortcutDefault> CommandShortcuts() noexcept
     {
-        int command = 0;
-        unsigned captionId = 0;
-        const wchar_t* chord = L"";
-    };
-    // Every menu command and the chord shown after its tab. The self-test checks the STRINGTABLE matches.
-    [[nodiscard]] static std::span<const CommandShortcutDefault> CommandShortcuts() noexcept;
-    // The textual id a settings chord names (`cmd/edit/swapPalette`). Stable; the integer command is the menu id.
-    [[nodiscard]] static const wchar_t* TextIdForCommand(int command) noexcept;
-    [[nodiscard]] static int CommandForTextId(std::wstring_view id) noexcept;
+        return CommandCatalog();
+    }
 
   private:
     class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
@@ -756,6 +670,8 @@ class ChromeHost final
         void OnTreeReorder(const DxUi::TreeDrop& drop) override;
     };
 
+    // The Command List's rows. An item's id is its command id, so a selection survives filtering only while its
+    // command is still listed and never moves to another command.
     class ShortcutListModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
     {
       public:
@@ -771,6 +687,7 @@ class ChromeHost final
         std::function<void(int)> onInvoke;
         [[nodiscard]] std::size_t GetVisibleItemCount() const noexcept override;
         void GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const override;
+        [[nodiscard]] std::optional<std::size_t> FindVisibleItemById(uint64_t itemId) const noexcept override;
         void OnTreeItemInvoked(uint64_t itemId) override;
     };
 
@@ -782,6 +699,25 @@ class ChromeHost final
     void ArrangeShortcuts() noexcept;
     void ApplyShortcutFilter() noexcept;
     void LaunchShortcut(int command) noexcept;
+    // Every catalog command with its plain name and effective chord, filtered by the query.
+    void BuildShortcutRows() noexcept;
+    // Enter in the search field: the selected row, else the first row; nothing when no row is listed.
+    void RunShortcutFromSearch() noexcept;
+    // Up or Down in the search field moves the list's selection, the focus staying in the field.
+    bool StepShortcutSelection(int delta) noexcept;
+    // The table the chrome shows: the application's, or the catalog defaults before it arrives.
+    [[nodiscard]] const CommandBindings& Bindings() const noexcept;
+    // A menu row's caption: the STRINGTABLE caption without its accelerator column, a tab and the effective chord.
+    [[nodiscard]] std::wstring CommandMenuCaption(UINT stringId, int command) const;
+    [[nodiscard]] std::wstring CommandMenuCaption(std::wstring caption, int command) const;
+    // Writes a menu row's caption only when it changed (the dynamic captions are set on every sync).
+    static void SetMenuCaption(HMENU menu, int command, const std::wstring& caption, UINT stateFlags) noexcept;
+    // Re-suffixes every menu row with its effective chord, keeping its current name, check and gray state.
+    void RefreshMenuChords() noexcept;
+    // The tooltips that name keys: the rail tools, the palette hot zones and the brush header.
+    void RefreshShortcutHints() noexcept;
+    // `text` with the chords of `commands` that have one, as "text (A, B)"; `text` alone when none has.
+    [[nodiscard]] std::wstring WithChordHint(std::wstring text, std::initializer_list<int> commands) const;
     void BuildTransformHeader(DxUi::Panel& root);
     void ArrangeTransformHeader(float left, float top, float right, float bottom) noexcept;
     void BuildSelectionHeader(DxUi::Panel& root);
@@ -856,7 +792,13 @@ class ChromeHost final
     DxUi::Tree* _shortcutsTree = nullptr;
     DxUi::Button* _shortcutsClose = nullptr;
     ShortcutListModel _shortcutModel;
-    std::vector<std::pair<int, std::wstring>> _shortcutOverrides;
+    const CommandBindings* _bindings = nullptr;
+    std::vector<std::wstring> _chordTexts; // the effective chord text of each catalog row, in catalog order
+    bool _menuKeyboard = false;            // the menu bar took the keyboard (Alt, F10 or a mnemonic)
+    DxUi::Control* _menuReturnFocus = nullptr;
+    bool _menuReturnCanvas = false;
+    bool _menusRecordOnly = false;
+    std::optional<std::size_t> _recordedMenu;
     CanvasOverlay* _overlay = nullptr;
     DxUi::Panel* _transformHeader = nullptr;
     DxUi::Label* _transformTitle = nullptr;
