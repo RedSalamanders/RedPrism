@@ -42,7 +42,8 @@ struct KeyPress
     bool alt = false;
     bool shift = false;
     bool repeat = false;         // auto-repeat (lParam bit 30)
-    bool typesCharacter = false; // with Ctrl and Alt held (AltGr): the active layout types a character for the key
+    bool typesCharacter = false; // Ctrl and Alt from AltGr (the right Alt) or in a text input, and the active layout
+                                 // types a character for the key: text, not a chord
 };
 
 struct CommandBinding
@@ -65,6 +66,7 @@ struct KeyMatch
 {
     KeyMatchResult result = KeyMatchResult::None;
     int command = 0;
+    bool shiftAdded = false; // the chord matched with Shift added (a nudge steps by ten), not a chord holding Shift
 };
 
 // Window-manager chords no binding may take (Decision D5): Alt+F4 closes the window and Alt+Space opens its system
@@ -162,7 +164,10 @@ class CommandBindings final
     // - a replaced command loses every default chord, aliases included (Ctrl+Y for Redo, the numpad plus for Zoom
     //   In), and a chord a replacement uses is taken from every other command's defaults;
     // - a shared label (Delete Layer's Delete) stays only while a command still dispatches that chord.
-    void Build(std::span<const ShortcutBinding> replacements)
+    // `normalize` (the host's, through the active keyboard layout) first turns a replacement's chord into the form the
+    // catalog uses: a `vk` naming a key the layout places on a position key (VK_BB, the US =) becomes that position,
+    // so it takes that key's defaults (Zoom In's Ctrl+=) instead of sitting beside them.
+    void Build(std::span<const ShortcutBinding> replacements, KeyChord (*normalize)(KeyChord) noexcept = nullptr)
     {
         _bindings.clear();
         std::vector<int> replaced;
@@ -170,18 +175,19 @@ class CommandBindings final
         for (auto binding = replacements.rbegin(); binding != replacements.rend(); ++binding)
         {
             const int command = CommandForTextId(binding->commandId);
-            if (command == 0 || binding->chord.IsEmpty() || IsReservedChord(binding->chord) ||
+            const KeyChord chord = normalize != nullptr ? normalize(binding->chord) : binding->chord;
+            if (command == 0 || chord.IsEmpty() || IsReservedChord(chord) ||
                 std::find(replaced.begin(), replaced.end(), command) != replaced.end())
             {
                 continue;
             }
             replaced.push_back(command);
             const bool taken = std::any_of(chosen.begin(), chosen.end(),
-                                           [&](const CommandBinding& later) { return later.chord == binding->chord; });
+                                           [&](const CommandBinding& later) { return later.chord == chord; });
             if (!taken)
             {
                 chosen.push_back(
-                    CommandBinding{command, binding->chord, DefaultChordKind::Dispatch, true, FindCommand(command)});
+                    CommandBinding{command, chord, DefaultChordKind::Dispatch, true, FindCommand(command)});
             }
         }
         _bindings.assign(chosen.rbegin(), chosen.rend());
@@ -239,9 +245,9 @@ class CommandBindings final
                 }
                 if (press.repeat && !binding.entry->repeats)
                 {
-                    return KeyMatch{KeyMatchResult::HeldKey, binding.command};
+                    return KeyMatch{KeyMatchResult::HeldKey, binding.command, shiftAdded};
                 }
-                return KeyMatch{KeyMatchResult::Command, binding.command};
+                return KeyMatch{KeyMatchResult::Command, binding.command, shiftAdded};
             }
         }
         return {};

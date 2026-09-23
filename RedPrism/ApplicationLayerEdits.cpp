@@ -114,7 +114,8 @@ void Application::CloseOpacityEdit() noexcept
 
 void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
 {
-    if (!std::isfinite(opacity))
+    // An open panel owns the document (the stepper is disabled then): a typed opacity would fold into its entry.
+    if (!std::isfinite(opacity) || (_session.HasColorEdit() && phase != ChromeEditPhase::Cancel))
     {
         return;
     }

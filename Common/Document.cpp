@@ -2297,8 +2297,9 @@ void DocumentSession::DeleteLayer(const Guid& id)
 
 void DocumentSession::SetOpacity(double opacity)
 {
+    // An open panel owns the document (legacy canEditAppearance): an opacity would fold into its entry.
     ImageLayer* layer = ActiveLayer();
-    if (layer == nullptr || layer->isGroup || !std::isfinite(opacity))
+    if (layer == nullptr || layer->isGroup || !std::isfinite(opacity) || HasColorEdit())
     {
         return;
     }

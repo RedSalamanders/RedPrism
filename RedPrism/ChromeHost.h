@@ -486,7 +486,8 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] bool RequestLayerOpacity(double percent) noexcept;
     // Self-test hook: shows the tooltip of the hovered control at once, as the hover delay would; true when one shows.
     [[nodiscard]] bool ForceTooltipForTest() noexcept;
-    // Self-test hook: DxUi's focus on the layer opacity stepper, as a click on it would leave it.
+    // Self-test hook: DxUi's focus on the layer opacity stepper's text field, as a click on its value leaves it (the
+    // stepper itself is a panel, which takes no focus).
     void FocusLayerOpacityForTest() noexcept;
     // Self-test hook: the keyboard on the layers panel's list, as a click on a row would leave it.
     void FocusLayersForTest() noexcept;
@@ -534,6 +535,10 @@ class ChromeHost final : public CommandIds
     }
     void SetCanvasFocused(bool focused) noexcept
     {
+        if (focused)
+        {
+            LeaveMenuKeyboard(); // the menu bar never keeps the keyboard behind the canvas
+        }
         _canvasFocused = focused;
         _accessibilityPlacementDirty = true;
     }
@@ -602,8 +607,9 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] D2D1_RECT_F NoticeBoundsDip() const noexcept;
     // Help › Command List: every catalog command with its effective chord, a search field that filters by name.
     // Enter in the search field runs the selected row, or the first row when none is selected; Enter, Space or a
-    // double-click on the list runs its row. Closing gives the keyboard focus back to the card underneath (the
-    // Rename card's field, the color picker) or, with no such card, to the canvas.
+    // double-click on the list runs its row, and with no row selected the first Enter or Space only selects the first
+    // row. Closing gives the keyboard focus back to the card underneath (the Rename card's field, the color picker)
+    // or, with no such card, to the canvas.
     void OpenShortcuts() noexcept;
     void CloseShortcuts() noexcept;
     [[nodiscard]] bool ShortcutsOpen() const noexcept;
@@ -620,9 +626,26 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] std::wstring MenuItemCaption(int command) const;
     // Whether a chrome text input holds the keyboard focus (never while the canvas has it).
     [[nodiscard]] bool TextInputFocused() const noexcept;
+    // Where the keyboard is: the canvas, or DxUi's focused control (none when null). Application::OnKeyDown compares
+    // it across a key down the chrome took.
+    struct KeyboardFocusMark
+    {
+        bool canvas = false;
+        const DxUi::Control* control = nullptr;
+        [[nodiscard]] bool operator==(const KeyboardFocusMark&) const noexcept = default;
+    };
+    [[nodiscard]] KeyboardFocusMark KeyboardFocus() const noexcept;
+    // After a key down: true when it moved the keyboard (Tab, a button or row that opened a card, a command that
+    // closed one). A control a navigation key (`navigation`: Tab, the arrows) moved the focus to counts as reached
+    // with the keyboard until the next pointer press; a card opening or closing is not navigation.
+    bool NoteKeyFocusMove(const KeyboardFocusMark& before, bool navigation) noexcept;
+    // Whether the chrome control holding the focus was reached with the keyboard (Tab), not with a press: Space then
+    // presses it instead of panning (Specs/UI/UI_ApplicationChrome.md "Menus and accelerators").
+    [[nodiscard]] bool FocusFromKeyboard() const noexcept;
     // Keyboard access to the menu bar (a tapped Alt or F10, SC_KEYMENU): the bar takes the focus with its first
     // item highlighted; arrows move, Enter, Space or Down open, a letter opens that menu, Escape leaves and the
-    // focus returns where it was.
+    // focus returns where it was. A pointer press anywhere (the canvas included), the canvas taking the keyboard
+    // and the window losing the focus leave it too.
     void ToggleMenuKeyboard() noexcept;
     void LeaveMenuKeyboard() noexcept;
     [[nodiscard]] bool MenuKeyboardActive() const noexcept;
@@ -641,6 +664,12 @@ class ChromeHost final : public CommandIds
     void FocusShortcutListForTest() noexcept;
     [[nodiscard]] std::wstring ShortcutSearchTextForTest() const;
     [[nodiscard]] std::wstring FocusedControlNameForTest() const;
+    [[nodiscard]] std::wstring FocusedTextForTest() const; // the focused text field's text; empty for another control
+    // The open Command List's model fills one item from its longest row, then from its shortest, as DxUi's Tree::Paint
+    // reuses one item for every row: true when the item's text buffer kept its capacity (no allocation per row).
+    [[nodiscard]] bool ShortcutRowsKeepBuffersForTest() const;
+    // DxUi's focus on nothing, as DxUi leaves it when it prunes a hidden or disabled control; the canvas flag stays.
+    void DropChromeFocusForTest() noexcept;
     [[nodiscard]] std::wstring ToolTooltipForTest(EditorTool tool) const;
     [[nodiscard]] std::wstring PaletteSwapTooltipForTest() const;
 
@@ -719,6 +748,9 @@ class ChromeHost final : public CommandIds
     void RunShortcutFromSearch() noexcept;
     // Up or Down in the search field moves the list's selection, the focus staying in the field.
     bool StepShortcutSelection(int delta) noexcept;
+    // Enter or Space on the list with no row selected: selects the first row and runs nothing (DxUi's Tree would
+    // select it and run it at once, so a stray Enter ran New).
+    bool SelectFirstShortcutRow(UINT virtualKey) noexcept;
     // The table the chrome shows: the application's, or the catalog defaults before it arrives.
     [[nodiscard]] const CommandBindings& Bindings() const noexcept;
     // A menu row's caption: the STRINGTABLE caption without its accelerator column, a tab and the effective chord.
@@ -943,6 +975,7 @@ class ChromeHost final : public CommandIds
     const CommandBindings* _bindings = nullptr;
     std::vector<std::wstring> _chordTexts; // the effective chord text of each catalog row, in catalog order
     bool _menuKeyboard = false;            // the menu bar took the keyboard (Alt, F10 or a mnemonic)
+    bool _focusFromKeyboard = false;       // a key moved DxUi's focus since the last pointer press
     DxUi::Control* _menuReturnFocus = nullptr;
     bool _menuReturnCanvas = false;
     bool _menusRecordOnly = false;

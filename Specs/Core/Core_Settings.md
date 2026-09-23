@@ -112,6 +112,10 @@ replace.
   another command, which is then left without a chord.
 - A replacement removes every default chord of its command, aliases included (Ctrl+Y for Redo; Ctrl+Shift+= and
   the numpad plus and minus of the zoom commands), and takes its chord from every other command's defaults.
+- A replacement's `vk` naming a key the active layout places on one of the position keys (`VK_BB`, the US `=`) is
+  compared as that position (`Application::NormalizeLayoutChord`), so it takes that key's defaults too: Zoom Out
+  on `ctrl` + `VK_BB` leaves Zoom In without Ctrl+= in the menus. Letters and digits stay virtual keys. The table is
+  rebuilt when the keyboard layout changes (`WM_INPUTLANGCHANGE`).
 - A shared label (Delete Layer's `Delete`, a key the Delete key's own command dispatches) stays only while a command
   still dispatches that chord.
 
@@ -133,7 +137,9 @@ over an invalid file (backup), keeping unknown fields, leaving no temporary and 
 `chords.*`, `commands.*` and `bindings.*` prove the key names and positions, the catalog (unique ids and text ids,
 tool keys, only window-manager defaults reserved) and the binding table (defaults and aliases, a replacement
 removing every default, the later entry winning, shadowing, the shared label, ignored entries, exact modifiers,
-AltGr, the Shift and repeat rules, the scopes and conditions). The WARP self-test edits its own settings file and
+AltGr, the Shift and repeat rules, Shift added to a chord against a chord holding Shift, a `vk` replacement compared
+as its position, the scopes and conditions).
+The WARP self-test edits its own settings file and
 proves the reload applies the theme, the sample ring and the layers width live, that a broken file changes nothing
 and is not rewritten, that restoring it applies again, that a save records the window placement and that deleting
 the watched directory leaves no watch armed; its session checks prove a confirmed `WM_ENDSESSION` writes the

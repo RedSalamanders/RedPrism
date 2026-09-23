@@ -429,6 +429,14 @@
 #define IDS_KEY_SHIFT 626
 #define IDS_KEY_JOIN 627
 #define IDS_KEY_LIST 628
+// Key names the layout gives no name for (review fixes WP12, ids 760-779): the position keys' US legends, a
+// function key and any other virtual key.
+#define IDS_KEY_NUMBER_ROW_MINUS 760
+#define IDS_KEY_NUMBER_ROW_PLUS 761
+#define IDS_KEY_BRACKET_LEFT 762
+#define IDS_KEY_BRACKET_RIGHT 763
+#define IDS_KEY_FUNCTION 764
+#define IDS_KEY_VIRTUAL 765
 #define IDS_CMD_UNAVAILABLE 580
 #define IDS_PALETTE_SWAP 581
 #define IDS_PALETTE_RESET 582

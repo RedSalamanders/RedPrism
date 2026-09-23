@@ -272,6 +272,14 @@ class Application final : public ChromeEvents
     LRESULT OnKeyDown(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnKeyUp(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnCharacter(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    // The message loop's step for one queued message: a key down of the window is dispatched before it is translated,
+    // and translated only when the key down left its character (TranslateAccelerator's order).
+    void DispatchQueuedMessage(MSG& message) noexcept;
+    // A replacement chord in the catalog's form for the active layout: a `vk` naming a key the layout places on a
+    // position key becomes that position (CommandBindings::Build compares chords in that form).
+    [[nodiscard]] static KeyChord NormalizeLayoutChord(KeyChord chord) noexcept;
+    // WM_INPUTLANGCHANGE: the binding table follows the new layout, and the chrome retitles its chords.
+    void OnKeyboardLayoutChanged() noexcept;
     void OnKeyMenu(wchar_t character) noexcept;
     bool HandleKey(const KeyPress& press) noexcept;
     bool HandleEditGesture(const KeyPress& press) noexcept;
@@ -279,9 +287,10 @@ class Application final : public ChromeEvents
     [[nodiscard]] KeyState CurrentKeyState() const noexcept;
     // Self-test driver: one key press through the window procedure as the message loop delivers it — the key down
     // (a system key with Alt), the character TranslateMessage posts, the key up — with the thread's key state
-    // holding the modifiers (MK_CONTROL, MK_SHIFT, kKeyAlt) and a real scan code (the US OEM bracket and number-row
-    // keys name their physical position). True when the key path took the key down.
+    // holding the modifiers (MK_CONTROL, MK_SHIFT, kKeyAlt, kKeyAltGr) and a real scan code (the US OEM bracket and
+    // number-row keys name their physical position). True when the key path took the key down.
     static constexpr UINT kKeyAlt = 0x0100;
+    static constexpr UINT kKeyAltGr = 0x0200; // AltGr: the right Alt, with the left Ctrl Windows adds to it
     bool HandleAccelerator(UINT virtualKey, UINT modifiers, bool repeat = false) noexcept;
     int RunKeyboardSelfTest() noexcept;
     void NewDocument() noexcept;
@@ -409,10 +418,11 @@ class Application final : public ChromeEvents
     EditorTool _tool = EditorTool::Move;
     bool _spacePan = false;
     bool _acceleratorShift = false;
-    CommandBindings _bindings;       // the effective binding table: catalog defaults and the settings' replacements
-    bool _suppressCharacter = false; // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
-    bool _lastKeyHandled = false;    // the last key down went to a command or a gesture (read by the self-test driver)
-    bool _releasingCapture = false;  // a button-up releases the capture: not a capture loss
+    CommandBindings _bindings;        // the effective binding table: catalog defaults and the settings' replacements
+    bool _suppressCharacter = false;  // the key down ran a command or a gesture: its WM_CHAR / WM_SYSCHAR types nothing
+    bool _lastKeyHandled = false;     // the last key down went to a command or a gesture (read by the self-test driver)
+    std::uint16_t _keyMovedFocus = 0; // a held key whose press moved the keyboard: its repeats go nowhere
+    bool _releasingCapture = false;   // a button-up releases the capture: not a capture loss
     // The typed opacity edit: the layer it started on, that layer's opacity before the first preview (what history
     // holds) and the value previewed. Previews change the document outside history; one entry records the edit.
     struct OpacityEdit

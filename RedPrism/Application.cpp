@@ -232,8 +232,7 @@ int Application::Run(int showCommand) noexcept
             {
                 return ExitCode(static_cast<int>(message.wParam));
             }
-            TranslateMessage(&message);
-            DispatchMessageW(&message);
+            DispatchQueuedMessage(message); // ApplicationKeyboard.cpp: a key down runs before its translation
         }
 
         if (!_window)
@@ -2433,8 +2432,10 @@ void Application::SyncChrome() noexcept
     _chrome->SetPalette(_session.ForegroundColor(), _session.BackgroundColor(),
                         maskTargeted ? std::optional<bool>(_session.maskPaintWhite) : std::nullopt);
     const ImageLayer* activeLayer = _session.ActiveLayer();
-    _chrome->SetActiveLayerOpacity(
-        activeLayer != nullptr && !activeLayer->isGroup ? std::optional<double>(activeLayer->opacity) : std::nullopt);
+    // The stepper waits while a panel owns the document (legacy canEditAppearance).
+    _chrome->SetActiveLayerOpacity(activeLayer != nullptr && !activeLayer->isGroup && !_session.HasColorEdit()
+                                       ? std::optional<double>(activeLayer->opacity)
+                                       : std::nullopt);
 
     const float dpi = _screenshotDpi != 0 ? static_cast<float>(_screenshotDpi)
                                           : (_window ? static_cast<float>(GetDpiForWindow(_window.get())) : 96.0f);
@@ -4271,6 +4272,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         if (_chrome)
         {
+            _chrome->LeaveMenuKeyboard(); // a tapped Alt's menu bar does not keep the keyboard either
             _chrome->UpdateAccessibilityPlacement();
         }
         break;
@@ -4293,6 +4295,10 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         if (wParam == FALSE && HonorsPointerLoss())
         {
             EndPointerInteractions();
+        }
+        if (wParam == FALSE && _chrome)
+        {
+            _chrome->LeaveMenuKeyboard();
         }
         break;
     case WM_QUERYENDSESSION:
@@ -4375,11 +4381,7 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         OnPointer(message, wParam, lParam);
         return 0;
     case WM_INPUTLANGCHANGE:
-        if (_chrome)
-        {
-            _chrome->RefreshDisplayedChords();
-            _frameInvalidated = true;
-        }
+        OnKeyboardLayoutChanged(); // ApplicationKeyboard.cpp
         break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:

@@ -89,7 +89,7 @@ void Application::ApplySettings(const AppSettings& settings) noexcept
     _session.showsSampleRing = settings.sampleRing;
     // One effective binding table (RedPrism/CommandBindings.h): the key path dispatches from it and the chrome
     // (menus, Command List, tooltips) shows its chords.
-    _bindings.Build(settings.shortcuts);
+    _bindings.Build(settings.shortcuts, &NormalizeLayoutChord);
     if (_chrome)
     {
         _chrome->SetCommandChecked(ChromeHost::kCommandSampleRing, settings.sampleRing);
@@ -408,11 +408,13 @@ int Application::RunProductHardeningSelfTest() noexcept
     OnTool(EditorTool::Move);
     _chrome->SetCanvasFocused(true);
     _chrome->FocusLayerOpacityForTest();
+    const bool opacityFieldFocused = _chrome->TextInputFocused();
     settle();
-    if (!heldClick(EditorTool::Brush))
+    if (!opacityFieldFocused || !heldClick(EditorTool::Brush))
     {
-        SelfTestFailure(L"Clicking the Brush rail button after the opacity stepper had the focus did not "
-                        L"activate the tool.\n");
+        SelfTestFailure(std::format(L"Clicking the Brush rail button after the opacity field had the focus did not "
+                                    L"activate the tool (the field had the focus: {}).\n",
+                                    opacityFieldFocused));
         return 5;
     }
     // A user hovers before clicking, so the button's tooltip is showing at the moment of the click.

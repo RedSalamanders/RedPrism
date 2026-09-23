@@ -72,7 +72,9 @@ would; a transform drag goes back to where it started (a drag-only edit drops, a
 marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place; lifted pixels and a
 shape draft drop; crop, gradient and eyedropper drags stop where they are; Space panning ends (its key-up goes
 elsewhere); and DxUi receives `PointerAction::Cancel` then `Leave`, so its own drags restore (the layers splitter
-goes back to its start). `WM_MOUSELEAVE` reaches the canvas as well as DxUi's hover (the tip circle goes, a drag
+goes back to its start). `WM_KILLFOCUS` and `WM_ACTIVATEAPP(FALSE)` also take the keyboard back from the menu bar a
+tapped Alt or F10 gave it ([`UI_ApplicationChrome.md`](UI_ApplicationChrome.md) "Menus and accelerators").
+`WM_MOUSELEAVE` reaches the canvas as well as DxUi's hover (the tip circle goes, a drag
 without a capture ends); while a drag holds the capture, leaving the window does not end it. Quiet runs (the
 self-test, screenshots, the benchmark) drive the pointer synthetically from a hidden window whose capture follows no
 real button, so Windows may take it back whenever the user's mouse moves: they honor only the losses their own thread

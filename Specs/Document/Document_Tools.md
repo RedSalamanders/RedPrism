@@ -248,7 +248,9 @@ explicitly empty selection.
 - `ChangeBrushSize(increase)` steps the diameter by a fifth, at least one pixel, within 1–2000;
   `ChangeBrushHardness(increase)` snaps to the next quarter; `TypeOpacityDigit(digit, seconds)` is Photoshop's
   opacity typing (1–9 set 10–90 %, 0 sets 100 %, a second digit within 0.6 s makes a two-digit percent, never below
-  1 %). All three ignore keys while a stroke is in progress.
+  1 %). All three ignore keys while a stroke is in progress. `SetOpacity` (the layer's, one `Layer Opacity` entry)
+  refuses while a panel owns the document (`HasColorEdit`), as `StepBlendMode` does: the panel's entry stays open
+  until OK or Cancel, and an opacity would fold into it (legacy `canEditAppearance`).
 - `AddLayerMask(revealing)` gives the active layer a uniform 1×1 mask (`Add Reveal-All Mask` / `Add Hide-All Mask`)
   and selects it; `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
 

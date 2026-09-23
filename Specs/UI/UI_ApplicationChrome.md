@@ -289,7 +289,8 @@ Keys with the canvas focused: B chooses the Brush and E the Eraser; `[` and `]` 
 one pixel); Shift-`[` and Shift-`]` step the hardness by quarters; 1–9 set the opacity to 10–90 % and 0 to 100 %,
 two digits within 0.6 s make a two-digit percent (with the Move tool a digit sets the active layer's opacity the
 same way, one `Layer Opacity` entry per key that changes it: legacy `LayerAppearanceTests.
-moveToolNumberKeysSetSelectedLayersOpacityAsOneUndo`); Escape cancels a stroke in progress. The stroke contract lives in
+moveToolNumberKeysSetSelectedLayersOpacityAsOneUndo`), and holding a digit sets it once (its auto-repeat would pair
+with the press: 5 then 5 is 55 %); Escape cancels a stroke in progress. The stroke contract lives in
 [`Rendering_Brush.md`](../Rendering/Rendering_Brush.md), the session API in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
@@ -406,8 +407,10 @@ with that id. The key or the control does not call the session operation itself.
 `kCommandSwapPalette` (default X). Restore black over white is `kCommandResetPalette` (default D). A letter chord
 (`Ctrl+S`, `V`, `X`) is the virtual key of that letter, so it follows the key that the active layout labels with that
 letter. It is not a fixed column on a US keyboard. The chords whose legend is not a letter are a physical key
-instead, set-1 scan code, the same rule RedSalamander uses for zoom. A layout change retitles the displayed key and
-does not move the binding. Numpad `+` and `-` stay `VK_ADD` and `VK_SUBTRACT`, separate from the number row.
+instead, set-1 scan code, the same rule RedSalamander uses for zoom. A key message without a scan code (a macro pad,
+`SendInput` with a virtual key only) takes the scan code the active layout gives its virtual key. A layout change
+retitles the displayed key and does not move the binding. Numpad `+` and `-` stay `VK_ADD` and `VK_SUBTRACT`, separate
+from the number row.
 
 One effective binding table (`RedPrism/CommandBindings.h`, built by `Application::ApplySettings` from the catalog
 defaults and the settings' replacements: [`Core_Settings.md`](../Core/Core_Settings.md) "Command chords") is what the
@@ -419,10 +422,16 @@ keys do and what the chrome shows. A key down goes, in order (`RedPrism/Applicat
    Escape of a pixel drag, a warp, a shape draft or a stroke; Enter, Escape, Backspace and Delete of a lasso outline
    in progress.
 3. The table: the first binding whose chord matches and whose scope and condition hold runs its command.
-4. With the canvas focused, the canvas's own keys: the opacity digits, and Space, which pans while held.
-5. The chrome (DxUi), unless the canvas has the focus: a key the canvas did not use goes nowhere, never to the chrome
-   control that held the focus before the canvas took it; Escape and Tab move the keyboard to the chrome. An Enter or
-   Escape (without Ctrl) the focused control leaves is the OK or Cancel of a modal card (below).
+4. Space, which pans while held wherever the keyboard is, except in a chrome text input and on a chrome control the
+   keyboard reached (Tab, or a key that moved the focus to it), which takes Space as its press. A click leaves its
+   control focused and Space after it still pans: a clicked layer row opens no Rename card, a clicked button or
+   palette zone does not run again (a macOS button never takes the keyboard from the legacy canvas, so there too
+   Space after a click pans).
+5. With the canvas focused, the canvas's own keys: the opacity digits.
+6. The chrome (DxUi), unless the canvas has the focus: a key the canvas did not use goes nowhere, never to the chrome
+   control that held the focus before the canvas took it; Escape and Tab move the keyboard to the chrome. A held
+   Space or Enter presses a chrome control once: its auto-repeats go nowhere. An Enter or Escape (without Ctrl) the
+   focused control leaves is the OK or Cancel of a modal card (below).
 
 Modal cards (`ChromeHost::PushCard` / `PopCard`): the notice, the Command List, the Rename card, the size cards, the
 adjustment panel and the color picker stack in the order they open, each remembering where the keyboard was. The
@@ -434,15 +443,28 @@ top card: the notice's OK, the Command List's Escape (Enter runs a row only from
 OK and Cancel, the size card's and the panel's OK and Cancel, the picker's OK and Cancel. DxUi's embedded host routes
 no default or cancel button, so the chrome sets none.
 
-A key a command or a gesture took types no character (its `WM_CHAR` / `WM_SYSCHAR` is dropped). Matching:
+A key a command or a gesture took types no character. The message loop dispatches a key down before it translates it
+(`Application::DispatchQueuedMessage`, the order `TranslateAccelerator` keeps) and translates it only when the key down
+left its character: no character reaches a dialog the command opened, no flag is left to drop a later one, and a dead
+key a command sits on (French `^` is Brush Smaller) arms no accent for the next text. A key the menu bar used types
+nothing either; a loop that translates first (a modal one) still has the character dropped (`WM_CHAR` / `WM_SYSCHAR`).
+Neither does a key down that moved the keyboard (Tab, a button or a row that opened a card, a command that closed one),
+and until that key is released its repeats go nowhere: Space or Enter held on the Command List's Rename Layer row
+neither fills the card's field with spaces nor presses its OK. Tab and the arrows keep moving the keyboard while held.
+Matching:
 
 - Exact modifiers: a chord matches with its own Ctrl, Alt and Shift only. A command marked for it also takes its
   chord with Shift added: the tool letters, X and D (the legacy canvas read the letter, Shift or not), the M and L
-  switches, and the nudges, which step by ten with Shift. An exact chord wins over one with Shift added (Shift+U
-  switches the shape kind on the Shape tool; elsewhere it chooses the Shape tool).
+  switches, and the nudges, which step by ten with Shift added (a nudge whose own chord holds Shift, a replacement
+  on Shift+J, steps by one). An exact chord wins over one with Shift added (Shift+U switches the shape kind on the
+  Shape tool; elsewhere it chooses the Shape tool).
 - AltGr arrives as Ctrl+Alt. When the layout types a character for the key with those modifiers (€ on AltGr+E, @ on
   AZERTY AltGr+0, Polish ż on AltGr+Z), the key is text and matches no chord; a chrome text field then sees it
-  without Ctrl, so AltGr+Z does not undo in the field. Ctrl+Alt never matches a Ctrl-only chord.
+  without Ctrl, so AltGr+Z does not undo in the field. Ctrl+Alt never matches a Ctrl-only chord. Text needs AltGr
+  itself (the right Alt without the left one) or a chrome text input: left Ctrl with left Alt stays a chord, so
+  Ctrl+Alt+G toggles the clipping mask even where AltGr+G types a character (Czech, Slovak, Hungarian, Croatian,
+  Slovenian, Bosnian and Serbian Latin: `]`), while in a text field left Ctrl with left Alt types the AltGr character
+  as Windows does.
 - Scope. Canvas commands (tools, palette keys, nudges of the layer and the outline, brush keys, blend modes, the
   Delete key, Alt+Backspace) need the canvas focused. App commands (the menu chords, F2, Ctrl-arrows) run from the
   canvas and from chrome that is not a text input. Decision D4: while a chrome text input has the focus (the Rename
@@ -452,8 +474,9 @@ A key a command or a gesture took types no character (its `WM_CHAR` / `WM_SYSCHA
 - Conditions share chords: the arrows nudge the outline with a selection tool and a selection, the layer with the
   Move tool; Ctrl-arrows move the selected pixels in any tool while no outline is drawn; `[` `]` need a brush tool;
   M and L switch the Marquee's shape and the Lasso's kind on that tool (they come before choosing the tool).
-- Auto-repeat runs a command again, except the M, L and Shift+U switches: holding the key switches once. A
-  replacement keeps its command's scope, condition, Shift and repeat rules.
+- Auto-repeat runs a command again, except the M, L and Shift+U switches: holding the key switches once (the
+  opacity digits, a canvas key, set their opacity once too). A replacement keeps its command's scope, condition,
+  Shift and repeat rules.
 - Decision D5: Alt+F4 (close) and Alt+Space (the system menu) stay the window manager's whatever the settings say;
   Exit shows Alt+F4 and never dispatches it. F10 and a tapped Alt give the keyboard to the menu bar (below).
 
@@ -462,18 +485,28 @@ D9: the modifier names are STRINGTABLE entries (`IDS_KEY_CTRL`, `IDS_KEY_ALT`, `
 `IDS_KEY_JOIN`), the key names the active layout's: a letter or digit is the character (its chord follows the key
 that produces it); a position key, a named key (arrows, Delete, F2, Backspace, Enter, Space…) and a numpad key use
 `GetKeyNameTextW` with the key's set-1 scan code (extended for the navigation keys, so Delete is not the numpad's
-`Num Del`), which names numpad `+` and `-` apart from the number row. The menus' accelerator column
+`Num Del`), which names numpad `+` and `-` apart from the number row. A key the layout gives no name takes the
+table's (`IDS_KEY_NUMBER_ROW_MINUS`, `IDS_KEY_NUMBER_ROW_PLUS`, `IDS_KEY_BRACKET_LEFT`, `IDS_KEY_BRACKET_RIGHT`: the
+position keys' US legends; `IDS_KEY_FUNCTION` `F{0}`; `IDS_KEY_VIRTUAL` `Key {0:02X}`), never an English name from
+code. The menus' accelerator column
 (`ChromeHost::CommandMenuCaption`, also for the captions that follow the target: Undo and Redo with the history
 name, Invert Mask, Transform Selection, Delete Layer Mask, Release Clipping Mask, Merge Group, Merge Layers, Target
 Layer Pixels, Link Layer Mask and Enable Layer Mask), the
 Command List, the rail's tool tooltips, the palette hot zones' tooltips and the brush header's tooltips follow the
-table and `WM_INPUTLANGCHANGE`; a translated caption keeps its own name, its column is rebuilt.
+table and `WM_INPUTLANGCHANGE` (the table itself is rebuilt then, since a replacement's `vk` may name a position key
+on one layout and not on another); a translated caption keeps its own name, its column is rebuilt.
 
 The menu bar takes the keyboard from a tapped Alt or F10 (`WM_SYSCOMMAND` `SC_KEYMENU`, never the system-menu loop
 of a window without an `HMENU`): its first item highlights; Left and Right move, Enter, Space or Down open, a letter
 opens the menu with that mnemonic, Escape (or Alt, or F10) leaves, and the focus returns where it was, also before
-a command chosen from a menu opened this way runs. Alt+letter opens that menu from anywhere; an Alt chord a command
-took opens nothing and an Alt+key nothing took does nothing (no beep).
+a command chosen from a menu opened this way runs. A pointer press anywhere (a press on the canvas included), the
+canvas taking the keyboard, and the window losing the focus or the activation (`WM_KILLFOCUS`,
+`WM_ACTIVATEAPP`) leave it the same way, and so does the next key when DxUi dropped the bar's focus (it prunes a
+hidden or disabled control); keys go to the menu bar only while the canvas does not have the keyboard.
+Alt+letter opens that menu from anywhere; an Alt chord a command took opens nothing and an Alt+key nothing took
+does nothing (no beep). Releasing Alt after an Alt chord a command took (Alt+Backspace), before or after the
+chord's key, is no tap: every key up, and the key down of an Alt chord a command took, still reach `DefWindowProc`,
+which tells a tapped Alt from a chord (it sends `SC_KEYMENU` only for the tap).
 
 | Command | Shown chord | Identity |
 | --- | --- | --- |
@@ -490,8 +523,8 @@ took opens nothing and an Alt+key nothing took does nothing (no beep).
 Choosing a tool (`kCommandSelectToolBase` plus the `EditorTool` index),
 nudging the selection, the layer, or the selected pixels, a smaller or larger brush, a softer or harder brush,
 the previous or next blend mode, and the Delete key (`kCommandDeleteKey`) are commands in that same catalog.
-Shift on a nudge command steps by ten. Holding Space to pan, typing into an open edit, and Escape or Enter that
-confirms or cancels an edit already under way are gestures of that edit, not separate commands.
+Shift added to a nudge command's chord steps by ten. Holding Space to pan, typing into an open edit, and Escape or Enter
+that confirms or cancels an edit already under way are gestures of that edit, not separate commands.
 
 Help › Command List lists every command of the catalog, menu rows and local commands alike, by its plain name
 (`PlainCommandName`: the caption without its mnemonic, accelerator column or ellipsis). It opens fresh (no query, no
@@ -499,7 +532,10 @@ selection) with the keyboard in a search field that filters the list by the comm
 the effective chord as the chrome shows it. A row's id is its command id, so a selection survives filtering only
 while its command is listed and never moves to another command's row. In the search field, Up and Down move the
 selection and Enter runs the selected row, or the first listed row when none is selected (nothing when the list is
-empty); on the list, Enter, Space or a double-click runs its row. Running a row closes the list first. Enter runs a
+empty); on the list, Enter, Space (once the keyboard reached the list: after a click Space pans) or a double-click
+runs its row, except that with no row selected the first Enter or Space only selects the first row (DxUi's tree
+would select it and run it at once, so a stray Enter replaced the document with New). Running a row closes the list
+first. Enter runs a
 row only while the list's search field or list has the keyboard: in a card underneath (the Rename card's field) it
 belongs to that card. Escape or OK closes the list; when the list held the keyboard it goes back where it was (the
 Rename card's field, the color picker) or else to the canvas (Modal cards).
@@ -594,7 +630,10 @@ the typed value as its own entry — a command (menu, key, Command List), a tool
 another layer selected or a row dragged, a save, or the document replaced — so no other edit folds into it or bakes
 the preview in; the field's later commit of that same value adds nothing, to another layer or another document
 alike. The stepper is disabled for folders or without an active layer and is never rewritten while the user is
-typing in it.
+typing in it. While a panel owns the document (an adjustment layer's or an Image menu panel, `HasColorEdit`), the
+layer opacity waits for its OK or Cancel, as legacy `canEditAppearance`: the stepper is disabled, the Move tool's
+digits change nothing and `DocumentSession::SetOpacity` refuses, so no opacity folds into the panel's entry and its
+Cancel leaves the opacity as it was.
 
 ## Palette and color picker
 
@@ -784,20 +823,38 @@ picker), and the adjustment panel's live controls (a typed decimal, the Gradient
 spectrum's handle strip, the drawn editors in the UI Automation tree);
 [`Testing_Validation.md`](../Testing/Testing_Validation.md) lists them.
 The self-test's keys all go through the window procedure (`Application::HandleAccelerator` sends the key down —
-a system key with Alt —, the character `TranslateMessage` would post and the key up, with a real scan code and the
-modifiers in the thread's key state, after a frame). Its keyboard steps (`RunKeyboardSelfTest`) replace X with Q
-(Shift+Q too), let the later of two entries for one command win and show it in the palette tooltip, prove a zoom
-replacement leaves no default or alias live, move the Delete key's command to Q (Delete does nothing, Q clears, Delete
-Layer loses and regains the layout's Delete label), keep a replaced Marquee switch to once per press, type into the
+a system key with Alt —, the character `TranslateMessage` would post when the key down left it, as the message loop
+translates, and the key up, with a real scan code and the modifiers in the self-test's keyboard, after a frame); one
+step posts keys and runs them through the loop's own step (X swaps and posts no character, the French dead `^` runs
+Brush Smaller and arms no accent, `q` still types into the Command List). Its keyboard steps (`RunKeyboardSelfTest`)
+replace X with Q (Shift+Q too), let the later of two entries for one command win and show it in the palette tooltip,
+prove a zoom replacement leaves no default or alias live, put Zoom Out on Ctrl with the number-row plus key's virtual
+key (Zoom In no longer shows that chord, Zoom Out does, the key zooms out), move the Delete key's command to Q (Delete
+does nothing, Q clears, Delete Layer loses and regains the layout's Delete label), keep a replaced Marquee switch to
+once per press, nudge a layer by one pixel with a replacement on Shift+J and by ten with Shift+Left, type into the
 Command List's search field without running Q, Ctrl+A, Ctrl+Backspace, Ctrl+Z or Delete, run no Ctrl chord from
-Ctrl+Alt, filter the list to Sample Ring and run it with Enter (a typed space is text, not a pan), keep a selection
-from moving to another command's row and run the first match without one, run a selected row with Enter on the
-list, rename through the Rename card with Enter while a Delete Layer row is selected in the open list, give the
-keyboard back to the Rename card when the list closes, give it back to the canvas when a notice or the Rename card
-opened with F2 closes, close the Canvas Size card with an Escape the focused layers panel leaves (the panel keeping
-the keyboard), pan with Space only while it is held, give the menu bar the
-keyboard from a tapped Alt, F10 and `SC_KEYMENU` without a system-menu loop (a timer ends one if it starts), open the
-File menu with Alt+F but not when Alt+F is a command, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the
-legacy golden does, and show the layout's key names, the STRINGTABLE modifiers and replacements in the Command
+Ctrl+Alt, run a Ctrl+Alt replacement on a letter AltGr types a character for (E on French and German layouts; none on
+US) from the left Ctrl and Alt but not from AltGr, filter the list to Sample Ring and run it with Enter (a typed space
+is text, not a pan), keep a selection from moving to another command's row and run the first match without one, run a
+selected row with Enter on the list, only select the first row with the first Enter or Space on a list without a
+selection (the next Enter runs it), fill the row item DxUi reuses for every row without dropping its buffers (a repaint
+of the open list allocates nothing per row, as the layers tree), rename through the Rename card with Enter while a
+Delete Layer row is selected in the open list, give the keyboard back to the Rename card when the list closes, give it
+back to the canvas when a notice or the Rename card opened with F2 closes, close the Canvas Size card with an Escape the
+focused layers panel leaves (the panel keeping the keyboard), pan with Space only while it is held, pan with Space after
+a click on a layer row (no Rename card opens) and on the palette's swap zone (no second swap), press a control the
+keyboard reached (Tab to the Command List) with Space once per press (an auto-repeated Space runs nothing) and keep a
+Space held on the Rename Layer row out of the card it opened, give the menu bar the keyboard from a tapped Alt, F10 and
+`SC_KEYMENU` without a system-menu loop (a timer ends one if it starts), open the File menu with Alt+F but not when
+Alt+F is a command, take the keyboard back from the menu bar with a canvas press (B then chooses the Brush),
+`WM_KILLFOCUS` and `WM_ACTIVATEAPP`, and with the next key once the bar lost DxUi's focus, release Alt after
+Alt+Backspace (each key's own down and up messages, Backspace or Alt let go first) without the menu bar taking the
+keyboard, set the Move tool's opacity with 5, 0, Undo, 4 then 5 as the legacy golden does (the 5 follows the 4 with no
+frame between, so a slow frame cannot stretch the pair past 0.6 s), set 50 % once from a held 5 (no 55 %, no entry per
+repeat), keep the position of a key message without a scan code (the layout's right bracket key grows the brush, Ctrl
+with its number-row plus key zooms in), keep digits typed after a canvas press out of the focused opacity field (the
+Move tool's 7 sets 70 %, the Marquee's 3 types nothing), leave the layer opacity alone under an open adjustment panel
+(the digit, the stepper and a typed preview; Cancel keeps it), show the table's name for a key the layout does not name
+(VK_E7), and show the layout's key names, the STRINGTABLE modifiers and replacements in the Command
 List, the menus (Undo, Invert) and the rail tooltip. `HostTests` covers tool tables, glyphs, the string table (every
 command caption's column is its first default chord), the key names, the catalog and the binding table.

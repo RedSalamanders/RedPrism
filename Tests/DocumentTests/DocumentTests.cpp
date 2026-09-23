@@ -4818,6 +4818,26 @@ void TestImageAdjustments()
         Expect(!legacy.hsvSettings.has_value() && Adjust::RangeOf(legacy.ResolvedHsv()).hue == 120,
                "adjust.legacy-hsv-resolves");
     }
+    // RF-1109: while a panel owns the document the layer opacity waits (legacy canEditAppearance), so it cannot fold
+    // into the panel's open entry, and the panel's Cancel leaves it as it was.
+    {
+        DocumentSession session = PixelEditSession(20, 20);
+        const Raster base = SolidStraight(20, 20, 128.0 / 255, 128.0 / 255, 128.0 / 255);
+        InsertPixels(session, base, L"Gray");
+        session.AddAdjustment(AdjustmentKind::Levels);
+        const Guid id = session.ActiveLayerID().value();
+        const int entries = session.history.UndoCount();
+        const bool editing = session.BeginAdjustmentEditing(id, base) && session.HasColorEdit();
+        session.SetOpacity(0.5);
+        const double during = session.ActiveLayer()->opacity;
+        session.FinishAdjustmentEditing(false);
+        Expect(editing && during == 1.0 && session.ActiveLayer()->opacity == 1.0 &&
+                   session.history.UndoCount() == entries,
+               "appearance.opacity-waits-for-an-open-panel");
+        session.SetOpacity(0.5);
+        Expect(session.ActiveLayer()->opacity == 0.5 && session.history.UndoName() == L"Layer Opacity",
+               "appearance.opacity-after-the-panel");
+    }
     // Legacy newAdjustmentLayersStartFromThePaletteRenderAndEditInThePanel.
     {
         DocumentSession session = PixelEditSession(20, 20);

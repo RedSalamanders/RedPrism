@@ -27,16 +27,34 @@ namespace
     return std::wstring(name, static_cast<std::size_t>(length));
 }
 
+// The US legend of a position key, from the table: a key name the layout does not give.
+[[nodiscard]] UINT PositionLegendId(KeyPosition position) noexcept
+{
+    switch (position)
+    {
+    case KeyPosition::NumberRowMinus:
+        return IDS_KEY_NUMBER_ROW_MINUS;
+    case KeyPosition::NumberRowPlus:
+        return IDS_KEY_NUMBER_ROW_PLUS;
+    case KeyPosition::BracketLeft:
+        return IDS_KEY_BRACKET_LEFT;
+    case KeyPosition::BracketRight:
+    case KeyPosition::None:
+        break;
+    }
+    return IDS_KEY_BRACKET_RIGHT;
+}
+
 // The name the active keyboard layout gives a key: a letter or digit is that character (a letter chord follows the
 // key the layout labels with it); a position key and a named key use GetKeyNameTextW with the set-1 scan code
 // (extended for the navigation keys, so Delete is not "Num Del"), which also tells numpad plus and minus from the
-// number row. The canonical English name stands in when the layout has none.
+// number row. When the layout has no name, the table's stands in: the position key's legend, F13, "Key E7".
 [[nodiscard]] std::wstring LayoutKeyName(const KeyChord& chord)
 {
     if (chord.position != KeyPosition::None)
     {
         std::wstring name = KeyNameFromScan(KeyPositionScanCode(chord.position), false);
-        return name.empty() ? CanonicalChordText(At(chord.position)) : name;
+        return name.empty() ? LoadStringResource(nullptr, PositionLegendId(chord.position)) : name;
     }
     const UINT key = chord.virtualKey;
     if ((key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z'))
@@ -53,8 +71,11 @@ namespace
             return name;
         }
     }
-    const std::string stable = StableKeyName(chord.virtualKey);
-    return std::wstring(stable.begin(), stable.end());
+    if (key >= VirtualKey::kF1 && key <= VirtualKey::kF24)
+    {
+        return FormatStringResource(nullptr, IDS_KEY_FUNCTION, key - VirtualKey::kF1 + 1u);
+    }
+    return FormatStringResource(nullptr, IDS_KEY_VIRTUAL, key);
 }
 
 // A menu row with its STRINGTABLE name; ChromeHost::RefreshMenuChords then adds the effective chord.
@@ -241,14 +262,24 @@ std::size_t ChromeHost::ShortcutListModel::GetVisibleItemCount() const noexcept
 
 void ChromeHost::ShortcutListModel::GetVisibleItem(std::size_t visibleIndex, DxUi::TreeItemData& outItem) const
 {
-    outItem = {};
     if (visibleIndex >= rows.size())
     {
+        outItem = {};
         return;
     }
-    outItem.id = static_cast<uint64_t>(rows[visibleIndex].command);
-    outItem.text = rows[visibleIndex].name;
-    outItem.badgeText = rows[visibleIndex].chord;
+    // As the layers tree (RF-506): DxUi's Tree::Paint reuses one TreeItemData for every visible row, so assigning
+    // each field keeps the item's string buffers instead of dropping and reallocating two strings per row per paint.
+    const Row& row = rows[visibleIndex];
+    outItem.id = static_cast<uint64_t>(row.command);
+    outItem.parentId.reset();
+    outItem.text = row.name;
+    outItem.iconText.clear();
+    outItem.badgeText = row.chord;
+    outItem.tooltipText.clear();
+    outItem.depth = 0;
+    outItem.hasChildren = false;
+    outItem.expanded = false;
+    outItem.badgeTone = DxUi::AdornmentTone::Accent;
 }
 
 std::optional<std::size_t> ChromeHost::ShortcutListModel::FindVisibleItemById(uint64_t itemId) const noexcept
@@ -2071,6 +2102,23 @@ bool ChromeHost::StepShortcutSelection(int delta) noexcept
     return true;
 }
 
+bool ChromeHost::SelectFirstShortcutRow(UINT virtualKey) noexcept
+{
+    if ((virtualKey != VK_RETURN && virtualKey != VK_SPACE) || !ShortcutsOpen() || _shortcutsTree == nullptr ||
+        _view.Controls().GetFocusControl() != _shortcutsTree || _shortcutModel.rows.empty())
+    {
+        return false;
+    }
+    if (const std::optional<uint64_t> selected = _shortcutsTree->GetSelectedItemId();
+        selected.has_value() && _shortcutModel.FindVisibleItemById(selected.value()).has_value())
+    {
+        return false;
+    }
+    (void)_shortcutsTree->RequestSelectVisibleItem(0);
+    _view.MarkDirty();
+    return true;
+}
+
 void ChromeHost::BuildShortcutRows() noexcept
 {
     _shortcutModel.all.clear();
@@ -2183,9 +2231,31 @@ bool ChromeHost::TextInputFocused() const noexcept
     return _attached && !_canvasFocused && _view.Controls().HasActiveTextInput();
 }
 
+ChromeHost::KeyboardFocusMark ChromeHost::KeyboardFocus() const noexcept
+{
+    return KeyboardFocusMark{_canvasFocused, _attached ? _view.Controls().GetFocusControl() : nullptr};
+}
+
+bool ChromeHost::NoteKeyFocusMove(const KeyboardFocusMark& before, bool navigation) noexcept
+{
+    const KeyboardFocusMark after = KeyboardFocus();
+    if (navigation && !after.canvas && after.control != nullptr && after.control != before.control)
+    {
+        _focusFromKeyboard = true;
+    }
+    return !(after == before);
+}
+
+bool ChromeHost::FocusFromKeyboard() const noexcept
+{
+    return _focusFromKeyboard && _attached && !_canvasFocused && _view.Controls().GetFocusControl() != nullptr;
+}
+
 bool ChromeHost::MenuKeyboardActive() const noexcept
 {
-    return _menuKeyboard && _attached && _menu != nullptr && _view.Controls().GetFocusControl() == _menu;
+    // Never behind the canvas: once the canvas has the keyboard, keys are the canvas's.
+    return _menuKeyboard && !_canvasFocused && _attached && _menu != nullptr &&
+           _view.Controls().GetFocusControl() == _menu;
 }
 
 void ChromeHost::ToggleMenuKeyboard() noexcept
@@ -2200,7 +2270,7 @@ void ChromeHost::ToggleMenuKeyboard() noexcept
         return;
     }
     DxUi::ControlHost& controls = _view.Controls();
-    _menuReturnFocus = controls.GetFocusControl();
+    _menuReturnFocus = controls.GetFocusControl() != _menu ? controls.GetFocusControl() : nullptr;
     _menuReturnCanvas = _canvasFocused;
     // The bar highlights its first item when it takes the focus (MenuBar::OnFocusChanged).
     controls.SetFocusControl(_menu);
@@ -2231,10 +2301,11 @@ void ChromeHost::LeaveMenuKeyboard() noexcept
         return;
     }
     DxUi::ControlHost& controls = _view.Controls();
-    if (controls.GetFocusControl() != _menu)
+    if (controls.GetFocusControl() != _menu && controls.GetFocusControl() != nullptr)
     {
-        return; // a click moved the focus on: it stays there
+        return; // a card that opened took the keyboard: it keeps it
     }
+    // The bar holds DxUi's focus, or DxUi dropped it (a pruned control): the keyboard goes back where it was.
     controls.SetFocusControl(target);
     if (controls.GetFocusControl() != target)
     {
@@ -2253,7 +2324,8 @@ bool ChromeHost::OpenMenuByMnemonic(wchar_t mnemonic) noexcept
     }
     if (!MenuKeyboardActive())
     {
-        _menuReturnFocus = _view.Controls().GetFocusControl();
+        DxUi::Control* const focus = _view.Controls().GetFocusControl();
+        _menuReturnFocus = focus != _menu ? focus : nullptr;
         _menuReturnCanvas = _canvasFocused;
     }
     _menuKeyboard = true;
@@ -2346,6 +2418,39 @@ std::wstring ChromeHost::FocusedControlNameForTest() const
 {
     const DxUi::Control* focus = _attached ? _view.Controls().GetFocusControl() : nullptr;
     return focus != nullptr ? std::wstring(focus->GetAccessibleName()) : std::wstring{};
+}
+
+bool ChromeHost::ShortcutRowsKeepBuffersForTest() const
+{
+    const std::vector<ShortcutListModel::Row>& rows = _shortcutModel.rows;
+    if (rows.size() < 2)
+    {
+        return false;
+    }
+    const auto byName = [](const ShortcutListModel::Row& left, const ShortcutListModel::Row& right)
+    { return left.name.size() < right.name.size(); };
+    const auto longest = static_cast<std::size_t>(std::max_element(rows.begin(), rows.end(), byName) - rows.begin());
+    const auto shortest = static_cast<std::size_t>(std::min_element(rows.begin(), rows.end(), byName) - rows.begin());
+    DxUi::TreeItemData item;
+    _shortcutModel.GetVisibleItem(longest, item);
+    const std::size_t capacity = item.text.capacity();
+    _shortcutModel.GetVisibleItem(shortest, item);
+    return item.text == rows[shortest].name && item.text.capacity() >= capacity &&
+           capacity >= rows[longest].name.size();
+}
+
+void ChromeHost::DropChromeFocusForTest() noexcept
+{
+    if (_attached)
+    {
+        _view.Controls().SetFocusControl(nullptr);
+    }
+}
+
+std::wstring ChromeHost::FocusedTextForTest() const
+{
+    const auto* field = dynamic_cast<const DxUi::TextField*>(_attached ? _view.Controls().GetFocusControl() : nullptr);
+    return field != nullptr ? std::wstring(field->GetText()) : std::wstring{};
 }
 
 std::wstring ChromeHost::ToolTooltipForTest(EditorTool tool) const
@@ -2861,6 +2966,13 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
     {
         return false;
     }
+    if (event.action == DxUi::PointerAction::Down)
+    {
+        // A press anywhere, the canvas included, takes the keyboard back from the menu bar (a tapped Alt or F10),
+        // and a control it focuses was not reached with the keyboard: Space pans rather than pressing it.
+        LeaveMenuKeyboard();
+        _focusFromKeyboard = false;
+    }
     if (event.action == DxUi::PointerAction::Down && MoreToolsOpen())
     {
         const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
@@ -2938,6 +3050,10 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
         _accessibilityPlacementDirty = true;
         _view.Controls().SetFocusControl(nullptr);
     }
+    if (down && SelectFirstShortcutRow(virtualKey))
+    {
+        return true;
+    }
     _inDispatch = true;
     const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
     _inDispatch = false;
@@ -2983,9 +3099,12 @@ void ChromeHost::ReleaseFocusForPress(const DxUi::PointerEvent& event) noexcept
 
 void ChromeHost::FocusLayerOpacityForTest() noexcept
 {
+    // The stepper is a panel, which DxUi never focuses: a click on the value focuses its text field.
     if (_attached && _opacity != nullptr)
     {
-        _view.Controls().SetFocusControl(_opacity);
+        _view.Controls().SetFocusControl(&_opacity->Field());
+        _canvasFocused = false;
+        _accessibilityPlacementDirty = true;
     }
 }
 

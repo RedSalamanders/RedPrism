@@ -333,7 +333,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 471> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 477> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -805,6 +805,12 @@ void TestStringTable() noexcept
                                          IDS_KEY_SHIFT,
                                          IDS_KEY_JOIN,
                                          IDS_KEY_LIST,
+                                         IDS_KEY_NUMBER_ROW_MINUS,
+                                         IDS_KEY_NUMBER_ROW_PLUS,
+                                         IDS_KEY_BRACKET_LEFT,
+                                         IDS_KEY_BRACKET_RIGHT,
+                                         IDS_KEY_FUNCTION,
+                                         IDS_KEY_VIRTUAL,
                                          IDS_SHUTDOWN_UNSAVED,
                                          IDS_ERROR_CANVAS_DRAW,
                                          IDS_ERROR_SELECTION_DETAILED,
@@ -841,6 +847,12 @@ void TestStringTable() noexcept
                                 std::wstring(L"S")) == L"Ctrl+S" &&
                FormatStringResource(exe.get(), IDS_KEY_LIST, std::wstring(L"["), std::wstring(L"]")) == L"[, ]",
            "strings.chord-joiners");
+    // Key names a layout does not give come from the table, never from code (RF-1112).
+    Expect(FormatStringResource(exe.get(), IDS_KEY_FUNCTION, 13u) == L"F13" &&
+               FormatStringResource(exe.get(), IDS_KEY_VIRTUAL, 0xE7u) == L"Key E7" &&
+               LoadStringResource(exe.get(), IDS_KEY_NUMBER_ROW_PLUS) == L"=" &&
+               LoadStringResource(exe.get(), IDS_KEY_BRACKET_RIGHT) == L"]",
+           "strings.key-name-fallbacks");
     for (std::size_t index = 0; index < kEditorToolCount; ++index)
     {
         Expect(!LoadStringResource(exe.get(), EditorToolNameId(EditorToolAt(index))).empty(), "strings.tool-names");
@@ -1098,6 +1110,38 @@ void TestCommandBindings()
                runs(defaults, press(Shift(Key(VK_DELETE))), canvas) == C::kCommandContentAwareFill &&
                runs(defaults, press(Shift(Ctrl(Key('Z')))), chrome) == C::kCommandRedo,
            "bindings.shift-allowed-and-exact-first");
+    // A match says whether Shift was added to its chord: a nudge steps by ten then, never when its own chord holds
+    // Shift (a replacement on Shift+J steps by one).
+    const CommandBindings nudgeOnShiftJ = build({{L"cmd/nudge/layerLeft", Shift(Key('J'))}});
+    const KeyMatch shiftJ = nudgeOnShiftJ.Match(press(Shift(Key('J'))), canvas);
+    Expect(defaults.Match(press(Shift(Key(VK_LEFT))), canvas).shiftAdded &&
+               !defaults.Match(press(Key(VK_LEFT)), canvas).shiftAdded && shiftJ.command == C::kCommandNudgeLayerLeft &&
+               !shiftJ.shiftAdded,
+           "bindings.shift-added-steps-by-ten");
+    // A replacement written by virtual key for a key the layout places on a position key (vk VK_BB, the US =) is
+    // compared as that position (the host normalizes through the layout; a stand-in here): it takes the default of
+    // that key, so Zoom In no longer claims Ctrl+= while the key runs Zoom Out.
+    constexpr auto plusAsPosition = [](KeyChord chord) noexcept
+    {
+        if (chord.position == KeyPosition::None && chord.virtualKey == VK_OEM_PLUS)
+        {
+            chord.virtualKey = 0;
+            chord.position = KeyPosition::NumberRowPlus;
+        }
+        return chord;
+    };
+    const std::vector<ShortcutBinding> zoomOutOnPlus{{L"cmd/view/zoomOut", Ctrl(Key(VK_OEM_PLUS))}};
+    CommandBindings normalized;
+    normalized.Build(zoomOutOnPlus, plusAsPosition);
+    CommandBindings unnormalized;
+    unnormalized.Build(zoomOutOnPlus);
+    KeyPress plusPress = press(Ctrl(At(KeyPosition::NumberRowPlus)));
+    plusPress.virtualKey = VK_OEM_PLUS;
+    Expect(runs(normalized, plusPress, canvas) == C::kCommandZoomOut &&
+               normalized.ChordFor(C::kCommandZoomOut) == Ctrl(At(KeyPosition::NumberRowPlus)) &&
+               normalized.ChordFor(C::kCommandZoomIn) == Ctrl(Shift(At(KeyPosition::NumberRowPlus))) &&
+               unnormalized.ChordFor(C::kCommandZoomIn) == Ctrl(At(KeyPosition::NumberRowPlus)),
+           "bindings.virtual-key-replacement-takes-the-position-default");
     // Repeat: a held M switches the Marquee's shape once; a replacement keeps that rule.
     KeyPress held = press(Key('M'));
     held.repeat = true;
