@@ -1770,13 +1770,8 @@ Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed)
     {
         return result;
     }
-    LayerTransform transform = placed;
-    transform.size = Vec2{crop.width * placed.size.x / width, crop.height * placed.size.y / height};
-    const Vec2 middle =
-        PixelToDocument(placed, width, height).Apply(Vec2{crop.x + crop.width / 2.0, crop.y + crop.height / 2.0});
-    transform.origin = Vec2{middle.x - transform.size.x / 2, middle.y - transform.size.y / 2};
     result.image = cropped;
-    result.transform = transform;
+    result.transform = PlacementOfRect(placed, width, height, crop);
     result.cropX = crop.x;
     result.cropY = crop.y;
     return result;

@@ -911,7 +911,9 @@ namespace
     return nullptr;
 }
 
-[[nodiscard]] std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
+} // namespace
+
+std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
 {
     for (std::size_t i = 0; i < layers.size(); ++i)
     {
@@ -922,7 +924,6 @@ namespace
     }
     return std::nullopt;
 }
-} // namespace
 
 DocumentStatus ValidateHierarchy(const std::vector<ImageLayer>& layers)
 {
@@ -1464,30 +1465,10 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
     }
     if (active != nullptr && active->isGroup && _activeLayerID.has_value())
     {
-        const Guid folder = _activeLayerID.value();
-        std::unordered_map<Guid, std::optional<Guid>> parents;
-        for (const ImageLayer& existing : _document.value().layers)
-        {
-            parents[existing.id] = existing.parentID;
-        }
-        const auto isInside = [&](const Guid& id)
-        {
-            std::optional<Guid> parent = parents[id];
-            int steps = 0;
-            while (parent.has_value() && steps < kMaxGroupDepth)
-            {
-                if (parent.value() == folder)
-                {
-                    return true;
-                }
-                parent = parents[parent.value()];
-                ++steps;
-            }
-            return false;
-        };
+        const std::unordered_set<Guid> inside = DescendantIds(_document.value().layers, _activeLayerID.value());
         for (std::size_t i = 0; i < _document.value().layers.size(); ++i)
         {
-            if (isInside(_document.value().layers[i].id))
+            if (inside.contains(_document.value().layers[i].id))
             {
                 insertion = std::max(insertion, i + 1);
             }
@@ -1503,6 +1484,26 @@ void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstrin
     EndEdit();
 }
 
+std::wstring DocumentSession::UniqueLayerName(const std::wstring& prefix) const
+{
+    std::unordered_set<std::wstring> names;
+    if (_document.has_value())
+    {
+        for (const ImageLayer& layer : _document->layers)
+        {
+            names.insert(layer.name);
+        }
+    }
+    int number = 1;
+    std::wstring name;
+    do
+    {
+        name = prefix + std::to_wstring(number);
+        ++number;
+    } while (names.contains(name));
+    return name;
+}
+
 void DocumentSession::AddGroup()
 {
     ResolveGradient();
@@ -1510,18 +1511,7 @@ void DocumentSession::AddGroup()
     {
         return;
     }
-    std::unordered_set<std::wstring> names;
-    for (const ImageLayer& layer : _document.value().layers)
-    {
-        names.insert(layer.name);
-    }
-    int number = 1;
-    std::wstring name;
-    do
-    {
-        name = L"Folder " + std::to_wstring(number);
-        ++number;
-    } while (names.contains(name));
+    const std::wstring name = UniqueLayerName(L"Folder ");
     ImageLayer group = ImageLayer::Blank(
         name, Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)});
     group.isGroup = true;
@@ -1808,18 +1798,7 @@ void DocumentSession::GroupSelectedLayers()
             }
         }
     }
-    std::unordered_set<std::wstring> names;
-    for (const ImageLayer& layer : layers)
-    {
-        names.insert(layer.name);
-    }
-    int number = 1;
-    std::wstring name;
-    do
-    {
-        name = L"Folder " + std::to_wstring(number);
-        ++number;
-    } while (names.contains(name));
+    const std::wstring name = UniqueLayerName(L"Folder ");
     ImageLayer group = ImageLayer::Blank(
         name, Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)});
     group.isGroup = true;
@@ -2526,14 +2505,6 @@ constexpr double kTransformPi = 3.14159265358979323846;
     return ids;
 }
 
-struct CornerBounds
-{
-    double minX = 0;
-    double minY = 0;
-    double maxX = 0;
-    double maxY = 0;
-};
-
 // A linked mask placed apart from its layer under a distortion that takes the layer from `from` to `transform` and
 // that transform's corners to `corners`: carried along with the layer, then warped by the same perspective over its
 // own bounds (legacy Distort.distort). Nullopt when the carried shape is unusable (the placement then stays).
@@ -2554,19 +2525,45 @@ struct CornerBounds
     return DistortWarp::WarpMask(mask.asset.image, placement, carried, MaskEdgeBackground(mask.asset.thumbnail), limit);
 }
 
-[[nodiscard]] CornerBounds BoundsOfCorners(const std::array<Vec2, 4>& corners) noexcept
+} // namespace
+
+SelectionBounds PointBounds(std::span<const Vec2> points) noexcept
 {
-    CornerBounds bounds{corners[0].x, corners[0].y, corners[0].x, corners[0].y};
-    for (const Vec2& corner : corners)
+    SelectionBounds bounds{points[0].x, points[0].y, points[0].x, points[0].y};
+    for (const Vec2& point : points)
     {
-        bounds.minX = std::min(bounds.minX, corner.x);
-        bounds.minY = std::min(bounds.minY, corner.y);
-        bounds.maxX = std::max(bounds.maxX, corner.x);
-        bounds.maxY = std::max(bounds.maxY, corner.y);
+        bounds.minX = std::min(bounds.minX, point.x);
+        bounds.minY = std::min(bounds.minY, point.y);
+        bounds.maxX = std::max(bounds.maxX, point.x);
+        bounds.maxY = std::max(bounds.maxY, point.y);
     }
     return bounds;
 }
-} // namespace
+
+std::optional<SelectionBounds> LoopsBounds(const std::vector<SelectionLoop>& loops) noexcept
+{
+    std::optional<SelectionBounds> bounds;
+    for (const SelectionLoop& loop : loops)
+    {
+        for (const Vec2& point : loop)
+        {
+            if (!std::isfinite(point.x) || !std::isfinite(point.y))
+            {
+                continue;
+            }
+            if (!bounds.has_value())
+            {
+                bounds = SelectionBounds{point.x, point.y, point.x, point.y};
+                continue;
+            }
+            bounds->minX = std::min(bounds->minX, point.x);
+            bounds->minY = std::min(bounds->minY, point.y);
+            bounds->maxX = std::max(bounds->maxX, point.x);
+            bounds->maxY = std::max(bounds->maxY, point.y);
+        }
+    }
+    return bounds;
+}
 
 Affine2 Affine2::Rotation(double radians) noexcept
 {
@@ -2783,11 +2780,6 @@ std::vector<Guid> DocumentSession::GroupTransformMemberIDs() const
         return ids;
     }
     const CanvasDocument& document = _document.value();
-    std::unordered_map<Guid, std::optional<Guid>> parents;
-    for (const ImageLayer& layer : document.layers)
-    {
-        parents[layer.id] = layer.parentID;
-    }
     const std::unordered_set<Guid> visible = EffectiveVisibleIDs(document);
     for (const ImageLayer& layer : document.layers)
     {
@@ -2795,16 +2787,18 @@ std::vector<Guid> DocumentSession::GroupTransformMemberIDs() const
         {
             continue;
         }
-        std::optional<Guid> current = layer.id;
-        for (int depth = 0; depth < 64 && current.has_value(); ++depth)
+        if (_selected.contains(layer.id))
         {
-            if (_selected.contains(current.value()))
+            ids.push_back(layer.id);
+            continue;
+        }
+        for (const std::optional<Guid>& ancestor : AncestorChain(document.layers, layer.id))
+        {
+            if (ancestor.has_value() && _selected.contains(ancestor.value()))
             {
                 ids.push_back(layer.id);
                 break;
             }
-            const auto parent = parents.find(current.value());
-            current = parent == parents.end() ? std::nullopt : parent->second;
         }
     }
     return ids;
@@ -2812,7 +2806,7 @@ std::vector<Guid> DocumentSession::GroupTransformMemberIDs() const
 
 std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
 {
-    std::optional<CornerBounds> bounds;
+    std::optional<SelectionBounds> bounds;
     for (const Guid& id : GroupTransformMemberIDs())
     {
         const ImageLayer* layer = FindLayer(id);
@@ -2820,7 +2814,7 @@ std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
         {
             continue;
         }
-        const CornerBounds layerBounds = BoundsOfCorners(layer->transform.Corners());
+        const SelectionBounds layerBounds = PointBounds(layer->transform.Corners());
         if (!bounds.has_value())
         {
             bounds = layerBounds;
@@ -3097,24 +3091,10 @@ void DocumentSession::CommitTransform()
                     DistortWarp::Warp(mask->asset.image, transform, corners, true);
                 if (warpedMask.has_value() && !(warpedMask->image == mask->asset.image))
                 {
-                    const Raster& full = warpedMask->image;
-                    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(warped->cropWidth) *
-                                                    static_cast<std::size_t>(warped->cropHeight));
-                    for (int y = 0; y < warped->cropHeight; ++y)
-                    {
-                        const int sourceY = std::clamp(warped->cropY + y, 0, full.Height() - 1);
-                        for (int x = 0; x < warped->cropWidth; ++x)
-                        {
-                            const int sourceX = std::clamp(warped->cropX + x, 0, full.Width() - 1);
-                            bytes[static_cast<std::size_t>(y) * static_cast<std::size_t>(warped->cropWidth) +
-                                  static_cast<std::size_t>(x)] =
-                                full.Data()[static_cast<std::size_t>(sourceY) *
-                                                static_cast<std::size_t>(full.Stride()) +
-                                            static_cast<std::size_t>(sourceX)];
-                        }
-                    }
-                    Raster cropped = Raster::Make(warped->cropWidth, warped->cropHeight, RasterFormat::Gray8,
-                                                  bytes.data(), bytes.size());
+                    // The layer's warp and the mask's share the same corners and no preview limit, so they land at
+                    // the same size: the layer's alpha crop always lies inside the mask's untrimmed warped image.
+                    const Raster cropped = warpedMask->image.Crop(warped->cropX, warped->cropY, warped->image.Width(),
+                                                                  warped->image.Height(), 0);
                     if (cropped.HasStorage())
                     {
                         mask->asset.image = cropped;
@@ -3379,7 +3359,7 @@ SnapTargets DocumentSession::CropSnapTargets() const
         {
             continue;
         }
-        const CornerBounds bounds = BoundsOfCorners(DisplayedTransform(*layer).Corners());
+        const SelectionBounds bounds = PointBounds(DisplayedTransform(*layer).Corners());
         targets.xs.insert(targets.xs.end(), {std::round(bounds.minX), std::round(bounds.maxX)});
         targets.ys.insert(targets.ys.end(), {std::round(bounds.minY), std::round(bounds.maxY)});
     }
@@ -3405,7 +3385,7 @@ SnapTargets DocumentSession::TransformSnapTargets(const std::unordered_set<Guid>
         {
             continue;
         }
-        const CornerBounds bounds = BoundsOfCorners(DisplayedTransform(*layer).Corners());
+        const SelectionBounds bounds = PointBounds(DisplayedTransform(*layer).Corners());
         targets.xs.insert(targets.xs.end(), {std::round(bounds.minX), std::round((bounds.minX + bounds.maxX) / 2.0),
                                              std::round(bounds.maxX)});
         targets.ys.insert(targets.ys.end(), {std::round(bounds.minY), std::round((bounds.minY + bounds.maxY) / 2.0),
@@ -3417,7 +3397,7 @@ SnapTargets DocumentSession::TransformSnapTargets(const std::unordered_set<Guid>
 LayerTransform DocumentSession::SnappedMove(const LayerTransform& draft, const std::unordered_set<Guid>& moving,
                                             double tolerance)
 {
-    const CornerBounds bounds = BoundsOfCorners(draft.Corners());
+    const SelectionBounds bounds = PointBounds(draft.Corners());
     const SnapTargets targets = TransformSnapTargets(moving);
     const TransformSnap::Result snap =
         TransformSnap::Offset(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY, targets.xs, targets.ys, tolerance);

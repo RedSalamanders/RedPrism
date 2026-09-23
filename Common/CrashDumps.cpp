@@ -1,6 +1,7 @@
 #include "CrashDumps.h"
 
 #include "SettingsStore.h"
+#include "Utf8.h"
 
 #include <algorithm>
 #include <csignal>
@@ -10,6 +11,11 @@
 #include <exception>
 #include <new>
 #include <vector>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 #include <dbghelp.h>
 
@@ -115,6 +121,10 @@ std::wstring DefaultDirectory()
     return root.empty() ? std::wstring{} : root + L"\\Crashes";
 }
 
+// WriteMiniDump and RecordPending are the crash path: fixed buffers, CreateFileW, a raw HANDLE closed by hand
+// rather than a WIL wrapper. A heap corruption is the case they exist for (crash-handling skill), so they add
+// nothing beyond the Win32 calls themselves; TakePending and PruneDumps below run on an ordinary start only and
+// use the usual RAII.
 bool WriteMiniDump(const wchar_t* directory, _EXCEPTION_POINTERS* exception, wchar_t* pathOut,
                    std::size_t pathCapacity) noexcept
 {
@@ -206,13 +216,11 @@ std::optional<std::wstring> TakePending(const std::wstring& directory)
     {
         return std::nullopt;
     }
-    const int length = MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<int>(bytes.size()), nullptr, 0);
-    if (length <= 0)
+    std::wstring path = Utf8ToWide(bytes);
+    if (path.empty())
     {
         return std::nullopt;
     }
-    std::wstring path(static_cast<std::size_t>(length), L'\0');
-    (void)MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<int>(bytes.size()), path.data(), length);
     return path;
 }
 
@@ -220,8 +228,8 @@ std::size_t PruneDumps(const std::wstring& directory, std::size_t keep)
 {
     std::vector<std::wstring> names;
     WIN32_FIND_DATAW found{};
-    const HANDLE search = FindFirstFileW((directory + L"\\RedPrism-*.dmp").c_str(), &found);
-    if (search == INVALID_HANDLE_VALUE)
+    wil::unique_hfind search{FindFirstFileW((directory + L"\\RedPrism-*.dmp").c_str(), &found)};
+    if (!search)
     {
         return 0;
     }
@@ -231,8 +239,8 @@ std::size_t PruneDumps(const std::wstring& directory, std::size_t keep)
         {
             names.emplace_back(found.cFileName);
         }
-    } while (FindNextFileW(search, &found));
-    (void)FindClose(search);
+    } while (FindNextFileW(search.get(), &found));
+    search.reset();
     if (names.size() <= keep)
     {
         return 0;

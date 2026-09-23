@@ -1,5 +1,7 @@
 #include "TransformEdit.h"
 
+#include "Adjust.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -84,22 +86,12 @@ struct WarpBounds
 
 [[nodiscard]] std::optional<WarpBounds> BoundsOf(const std::array<Vec2, 4>& corners) noexcept
 {
-    double minX = corners[0].x;
-    double maxX = corners[0].x;
-    double minY = corners[0].y;
-    double maxY = corners[0].y;
-    for (const Vec2& corner : corners)
-    {
-        minX = std::min(minX, corner.x);
-        maxX = std::max(maxX, corner.x);
-        minY = std::min(minY, corner.y);
-        maxY = std::max(maxY, corner.y);
-    }
+    const SelectionBounds box = PointBounds(corners);
     WarpBounds bounds;
-    bounds.minX = std::floor(minX);
-    bounds.minY = std::floor(minY);
-    bounds.width = std::ceil(maxX) - bounds.minX;
-    bounds.height = std::ceil(maxY) - bounds.minY;
+    bounds.minX = std::floor(box.minX);
+    bounds.minY = std::floor(box.minY);
+    bounds.width = std::ceil(box.maxX) - bounds.minX;
+    bounds.height = std::ceil(box.maxY) - bounds.minY;
     if (bounds.width < 1 || bounds.height < 1 || bounds.width > kMaxWarpSide || bounds.height > kMaxWarpSide ||
         bounds.width * bounds.height > kMaxWarpArea)
     {
@@ -513,66 +505,19 @@ std::optional<Warped> Warp(const Raster& image, const LayerTransform& transform,
 std::optional<WarpedTrimmed> WarpTrimmed(const Raster& image, const LayerTransform& transform,
                                          const std::array<Vec2, 4>& corners)
 {
-    std::optional<Warped> warped = WarpImpl(image, transform, corners, false, 0.0, 0);
+    const std::optional<Warped> warped = WarpImpl(image, transform, corners, false, 0.0, 0);
     if (!warped.has_value())
     {
         return std::nullopt;
     }
-    const Raster& full = warped->image;
-    const std::optional<Pixels> pixels = PixelsOf(full);
-    if (!pixels.has_value())
+    // The whole-pixel bounds' alpha trim, its placement and where it started: the same crop TrimmedToAlpha gives a
+    // filter's grown grid, keeping the warp untouched (image and transform as they are) when nothing needs trimming.
+    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(warped->image, warped->transform);
+    if (!trimmed.image.HasStorage())
     {
         return std::nullopt;
     }
-    WarpedTrimmed result;
-    result.cropWidth = full.Width();
-    result.cropHeight = full.Height();
-    int left = full.Width();
-    int top = full.Height();
-    int right = -1;
-    int bottom = -1;
-    for (int y = 0; y < full.Height(); ++y)
-    {
-        for (int x = 0; x < full.Width(); ++x)
-        {
-            if (PixelAt(pixels.value(), x, y)[3] != 0)
-            {
-                left = std::min(left, x);
-                right = std::max(right, x);
-                top = std::min(top, y);
-                bottom = std::max(bottom, y);
-            }
-        }
-    }
-    // Nothing visible, or nothing to trim: keep the warp as it is.
-    if (right < left || bottom < top ||
-        (left == 0 && top == 0 && right == full.Width() - 1 && bottom == full.Height() - 1))
-    {
-        result.image = full;
-        result.transform = warped->transform;
-        return result;
-    }
-    const int width = right - left + 1;
-    const int height = bottom - top + 1;
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
-    for (int y = 0; y < height; ++y)
-    {
-        std::memcpy(bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * 4u,
-                    PixelAt(pixels.value(), left, top + y), static_cast<std::size_t>(width) * 4u);
-    }
-    result.image = Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-    if (!result.image.HasStorage())
-    {
-        return std::nullopt;
-    }
-    result.transform = warped->transform;
-    result.transform.origin = Vec2{warped->transform.origin.x + left, warped->transform.origin.y + top};
-    result.transform.size = Vec2{static_cast<double>(width), static_cast<double>(height)};
-    result.cropX = left;
-    result.cropY = top;
-    result.cropWidth = width;
-    result.cropHeight = height;
-    return result;
+    return WarpedTrimmed{trimmed.image, trimmed.transform, trimmed.cropX, trimmed.cropY};
 }
 
 std::optional<Warped> WarpMask(const Raster& mask, const LayerTransform& transform, const std::array<Vec2, 4>& corners,

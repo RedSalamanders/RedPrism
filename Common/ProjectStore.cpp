@@ -1,5 +1,6 @@
 #include "ProjectStore.h"
 
+#include "JsonRead.h"
 #include "Utf8.h"
 #include "ZipOwner.h"
 
@@ -21,8 +22,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-using unique_yyjson_doc = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
-using unique_yyjson_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc_free), yyjson_mut_doc_free>;
+using unique_yyjson_doc = JsonRead::unique_doc;
+using unique_yyjson_mut_doc = JsonRead::unique_mut_doc;
 
 namespace
 {
@@ -150,83 +151,26 @@ void FlushFileToDisk(const wchar_t* path) noexcept
     }
 }
 
-[[nodiscard]] bool GetNumberValue(yyjson_val* field, double& value)
-{
-    if (field == nullptr)
-    {
-        return false;
-    }
-    if (yyjson_is_real(field))
-    {
-        value = yyjson_get_real(field);
-        return std::isfinite(value);
-    }
-    if (yyjson_is_int(field))
-    {
-        value = static_cast<double>(yyjson_get_sint(field));
-        return true;
-    }
-    return false;
-}
-
+// Thin names over Common/JsonRead.h kept so the call sites below (and their `required` argument, matching the
+// manifest's Codable shape field by field) read the same as before the shared header existed.
 [[nodiscard]] bool GetNumber(yyjson_val* object, const char* key, double& value, bool required)
 {
-    yyjson_val* field = yyjson_obj_get(object, key);
-    if (field == nullptr)
-    {
-        return !required;
-    }
-    return GetNumberValue(field, value);
+    return JsonRead::ReadNumber(object, key, value, required);
 }
 
 [[nodiscard]] bool GetInt(yyjson_val* object, const char* key, int& value, bool required)
 {
-    double number = 0;
-    if (!GetNumber(object, key, number, required))
-    {
-        return false;
-    }
-    if (yyjson_obj_get(object, key) == nullptr)
-    {
-        return !required;
-    }
-    if (number < INT_MIN || number > INT_MAX || number != std::floor(number))
-    {
-        return false;
-    }
-    value = static_cast<int>(number);
-    return true;
+    return JsonRead::ReadInt(object, key, value, required);
 }
 
 [[nodiscard]] bool GetBool(yyjson_val* object, const char* key, bool& value, bool required)
 {
-    yyjson_val* field = yyjson_obj_get(object, key);
-    if (field == nullptr)
-    {
-        return !required;
-    }
-    if (!yyjson_is_bool(field))
-    {
-        return false;
-    }
-    value = yyjson_get_bool(field);
-    return true;
+    return JsonRead::ReadBool(object, key, value, required);
 }
 
 [[nodiscard]] bool GetString(yyjson_val* object, const char* key, std::string& value, bool required)
 {
-    yyjson_val* field = yyjson_obj_get(object, key);
-    if (field == nullptr)
-    {
-        value.clear();
-        return !required;
-    }
-    if (!yyjson_is_str(field))
-    {
-        return false;
-    }
-    value = yyjson_get_str(field);
-    return true;
+    return JsonRead::ReadString(object, key, value, required);
 }
 
 [[nodiscard]] bool ParseGuidField(yyjson_val* object, const char* key, Guid& id, bool required)
@@ -262,8 +206,8 @@ void FlushFileToDisk(const wchar_t* path) noexcept
     }
     if (yyjson_is_arr(value))
     {
-        return yyjson_arr_size(value) == 2 && GetNumberValue(yyjson_arr_get(value, 0), first) &&
-               GetNumberValue(yyjson_arr_get(value, 1), second);
+        return yyjson_arr_size(value) == 2 && JsonRead::NumberValue(yyjson_arr_get(value, 0), first) &&
+               JsonRead::NumberValue(yyjson_arr_get(value, 1), second);
     }
     if (yyjson_is_obj(value))
     {

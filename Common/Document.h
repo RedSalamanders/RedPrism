@@ -8,6 +8,7 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -336,7 +337,7 @@ enum class LayerBlendMode
 
 [[nodiscard]] constexpr int LayerBlendModeCount() noexcept
 {
-    return 14;
+    return static_cast<int>(LayerBlendMode::Luminosity) + 1;
 }
 
 enum class AdjustmentKind
@@ -588,6 +589,13 @@ struct SelectionBounds
     [[nodiscard]] bool operator==(const SelectionBounds&) const noexcept = default;
 };
 
+// The bounding box of `points`: each axis's min and max over every point (the first point's, alone, when there is
+// just one). `points` must not be empty.
+[[nodiscard]] SelectionBounds PointBounds(std::span<const Vec2> points) noexcept;
+// The bounding box of every finite point across `loops` (corners, wand traces and Clipper2 results are always
+// finite; a lasso or transform draft is not), skipping the rest; nullopt when none are finite.
+[[nodiscard]] std::optional<SelectionBounds> LoopsBounds(const std::vector<SelectionLoop>& loops) noexcept;
+
 // A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
 // means no selection; a selection with no area is an explicit empty selection, which later edits must treat as
 // "touch nothing", never as "touch everything".
@@ -598,27 +606,7 @@ struct DocumentSelection
     [[nodiscard]] bool operator==(const DocumentSelection&) const noexcept = default;
     [[nodiscard]] std::optional<SelectionBounds> Bounds() const noexcept
     {
-        std::optional<SelectionBounds> bounds;
-        for (const SelectionLoop& loop : loops)
-        {
-            for (const Vec2& point : loop)
-            {
-                if (!std::isfinite(point.x) || !std::isfinite(point.y))
-                {
-                    continue;
-                }
-                if (!bounds.has_value())
-                {
-                    bounds = SelectionBounds{point.x, point.y, point.x, point.y};
-                    continue;
-                }
-                bounds->minX = std::min(bounds->minX, point.x);
-                bounds->minY = std::min(bounds->minY, point.y);
-                bounds->maxX = std::max(bounds->maxX, point.x);
-                bounds->maxY = std::max(bounds->maxY, point.y);
-            }
-        }
-        return bounds;
+        return LoopsBounds(loops);
     }
     [[nodiscard]] bool IsEmpty() const noexcept
     {
@@ -803,11 +791,14 @@ struct SnapGuides
 };
 
 // Brush (C10, Specs/Rendering/Rendering_Brush.md).
-// Spot Healing's kind of repair (C11, Specs/Document/Document_Tools.md).
+// Spot Healing's kind of repair (C11, Specs/Document/Document_Tools.md; the legacy HealPixels.c kernel, `Heal`).
 enum class SpotHealingMode : std::uint8_t
 {
+    // Copies texture from the nearby patch whose surrounding ring of pixels best matches the ring around the spot.
     ContentAware,
+    // Fills smoothly from the spot's edges and adds grain matching the detail around it.
     CreateTexture,
+    // Like ContentAware, but takes the closest good patch.
     ProximityMatch,
 };
 
@@ -1117,6 +1108,8 @@ struct HierarchyEntry
 // A layer shown: it and every folder above it are visible.
 [[nodiscard]] bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept;
 [[nodiscard]] std::unordered_set<Guid> DescendantIds(const std::vector<ImageLayer>& layers, const Guid& id);
+// `id`'s position in `layers`; nullopt when it is not there.
+[[nodiscard]] std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const Guid& id) noexcept;
 
 class DocumentHistory
 {
@@ -1164,10 +1157,6 @@ class DocumentHistory
     [[nodiscard]] int RetainedByteLimit() const noexcept
     {
         return _retainedByteLimit;
-    }
-    [[nodiscard]] Guid CurrentRevision() const noexcept
-    {
-        return _revision;
     }
 
   private:
@@ -1497,11 +1486,11 @@ class DocumentSession
     void ResolveGradient();
     [[nodiscard]] const GradientEdit* PendingGradient() const noexcept
     {
-        return _gradient.get();
+        return _gradient ? &_gradient.value() : nullptr;
     }
     [[nodiscard]] GradientEdit* MutableGradient() noexcept
     {
-        return _gradient.get();
+        return _gradient ? &_gradient.value() : nullptr;
     }
 
     // Shape (C11): a drag in whole pixels (Shift squares, Alt grows from the center) becomes a new layer above the
@@ -1522,14 +1511,10 @@ class DocumentSession
     // "Layer 1", "Layer 2", … skipping names already in the document.
     [[nodiscard]] std::wstring NextLayerName() const;
 
-    // Pixel edits (C9b, Specs/Document/Document_Tools.md): the selection edits that need raster primitives.
-    [[nodiscard]] bool CanEditPixels() const noexcept
-    {
-        return CanPaint();
-    }
-    // Fills the selection (the whole canvas without one; an empty selection nothing) with the palette color as one
-    // entry (`Fill`, `Fill Mask`); a mask has its own palette, so black hides and white reveals. True when the fill
-    // was recorded.
+    // Pixel edits (C9b, Specs/Document/Document_Tools.md): the selection edits that need raster primitives
+    // (`CanPaint`). Fills the selection (the whole canvas without one; an empty selection nothing) with the palette
+    // color as one entry (`Fill`, `Fill Mask`); a mask has its own palette, so black hides and white reveals. True when
+    // the fill was recorded.
     bool FillSelection(FillSource source);
     // Delete with a selection: image pixels become transparent (`Clear`); on a mask the selection fills with the
     // background color, as in Photoshop.
@@ -1553,11 +1538,11 @@ class DocumentSession
     void NudgePixels(double dx, double dy);
     [[nodiscard]] const PixelMove* PendingPixelMove() const noexcept
     {
-        return _pixelMove.get();
+        return _pixelMove ? &_pixelMove.value() : nullptr;
     }
     [[nodiscard]] PixelMove* MutablePixelMove() noexcept
     {
-        return _pixelMove.get();
+        return _pixelMove ? &_pixelMove.value() : nullptr;
     }
     // The outline to draw: during a pixel move the original shifted by the drag; while transforming selected
     // pixels it follows the handles (and a distortion).
@@ -1852,9 +1837,9 @@ class DocumentSession
     WarpSource _warpSource;
     std::array<std::array<double, 3>, 3> _parkedTips{{{40, 1, 1}, {40, 0, 1}, {40, 0, 1}}};
     std::uint32_t _healSeed = 0x9e3779b9u;
-    std::shared_ptr<GradientEdit> _gradient;
+    std::optional<GradientEdit> _gradient;
     std::optional<ShapeDraft> _shapeDraft;
-    std::shared_ptr<PixelMove> _pixelMove;
+    std::optional<PixelMove> _pixelMove;
     std::optional<PixelClipboard> _clipboard;
     std::optional<ColorEdit> _colorEdit;
     bool _budgetRefused = false;
@@ -1874,16 +1859,29 @@ class DocumentSession
     // Pads the filter's grid out to cover `extent` (layer pixels), keeping what is already grown.
     bool GrowFilterGrid(int left, int top, int right, int bottom);
     void PrepareFilterPreview();
-    [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask) const;
+    // A brush stroke, gradient or Invert/pixel-move edit on `layer` (or its mask): built, validated, pixel-budget
+    // limited and clipped to the selection, or null when construction fails, the raster is invalid, or there is no
+    // document. `settings` is the brush the caller paints with; edits that only need a raster to write into (a
+    // gradient, Invert, a pixel move) leave it default.
+    [[nodiscard]] std::shared_ptr<BrushStroke> MakeRasterEdit(const ImageLayer& layer, bool mask,
+                                                              const BrushSettings& settings = {}) const;
+    // What Clone Stamp and the Wand each read at document size: `allLayers` reads `composite` (null or wrongly
+    // sized reads nothing), else the active layer's own pixels at its displayed transform; a folder or blank layer
+    // reads as transparent.
+    [[nodiscard]] Raster LayerSample(bool allLayers, const Raster* composite) const;
+    // "`prefix`1", "`prefix`2", … skipping names already in the document (`NextShapeName`, `NextLayerName`, a new
+    // folder or group).
+    [[nodiscard]] std::wstring UniqueLayerName(const std::wstring& prefix) const;
     void MergeFloating(const TransformEdit& edit, const FloatingTransform& floating);
     void CancelFloating(const FloatingTransform& floating);
     void InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection);
     // A shape layer scaled to a new size draws its shape again at that size, so a rounded corner keeps its radius
     // instead of stretching. Part of the edit that changed the size.
     void RedrawShape(std::size_t index);
-    // Installs a raster edit as one entry; `alsoApply` runs inside the same entry (a moved selection). False when
-    // nothing was installed (no pixels, or the layer changed under the edit).
-    bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply = {});
+    // Installs a raster edit as one entry; `selectionAfterCommit` replaces the selection inside the same entry (a
+    // moved selection). False when nothing was installed (no pixels, or the layer changed under the edit).
+    bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
+                      const std::optional<DocumentSelection>& selectionAfterCommit = std::nullopt);
     [[nodiscard]] std::uint32_t NextHealSeed() noexcept
     {
         _healSeed = _healSeed * 1664525u + 1013904223u;

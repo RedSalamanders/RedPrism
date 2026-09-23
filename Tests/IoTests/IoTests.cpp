@@ -199,7 +199,7 @@ void TestGuidParse()
 
 void TestNameTables()
 {
-    for (int index = 0; index < 13; ++index)
+    for (int index = 0; index < LayerBlendModeCount(); ++index)
     {
         const LayerBlendMode mode = static_cast<LayerBlendMode>(index);
         const std::optional<LayerBlendMode> back = LayerBlendModeFromName(LayerBlendModeName(mode));

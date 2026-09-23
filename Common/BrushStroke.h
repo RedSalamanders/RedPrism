@@ -115,6 +115,18 @@ class CpuBrushCoverage final : public BrushCoverageEngine
 // Half-open bounds of nonzero alpha in premultiplied BGRA (legacy brush_alpha_bounds); empty when none.
 [[nodiscard]] GridRect AlphaBounds(const std::uint8_t* bgra, int width, int height, int stride) noexcept;
 
+// `placed` places a `width` × `height` pixel grid on the document through `pixelToDocument`
+// (`PixelToDocument(placed, width, height)`); the placement of just `rect` of that grid (a crop when smaller, a
+// grow when it extends past the grid), keeping `placed`'s rotation, flips and sampling: `rect` scales `placed`'s
+// size by its own share of the grid, and `rect`'s center lands where `pixelToDocument` puts it. Shared by a
+// stroke's own grid (construction, `TransformFor`, merging a floating selection) and a trim to alpha
+// (Content-Aware Fill's grown grid, `Adjust::TrimmedToAlpha`). The overload without `pixelToDocument` computes it,
+// for a caller that does not already have it.
+[[nodiscard]] LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int height,
+                                             const Affine2& pixelToDocument, const GridRect& rect) noexcept;
+[[nodiscard]] LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int height,
+                                             const GridRect& rect) noexcept;
+
 class BrushStroke
 {
   public:
@@ -185,10 +197,6 @@ class BrushStroke
     // read at the grid pixel's document position shifted by the offset, through the coverage: over the pixels under
     // the tip, or replacing them (`replaces`).
     void SetSample(Raster sample, int offsetX, int offsetY, bool replaces);
-    [[nodiscard]] bool HasSample() const noexcept
-    {
-        return _sample.has_value();
-    }
     // The history entry the commit records (empty: the default per kind).
     void SetEditName(std::wstring name)
     {

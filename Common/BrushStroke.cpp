@@ -38,26 +38,16 @@ constexpr int kCurveDepth = 10;
 {
     const std::array<Vec2, 4> corners{map.Apply(Vec2{left, top}), map.Apply(Vec2{right, top}),
                                       map.Apply(Vec2{right, bottom}), map.Apply(Vec2{left, bottom})};
-    double minX = corners[0].x;
-    double maxX = corners[0].x;
-    double minY = corners[0].y;
-    double maxY = corners[0].y;
-    for (const Vec2& corner : corners)
-    {
-        minX = std::min(minX, corner.x);
-        maxX = std::max(maxX, corner.x);
-        minY = std::min(minY, corner.y);
-        maxY = std::max(maxY, corner.y);
-    }
-    if (!std::isfinite(minX) || !std::isfinite(maxX) || !std::isfinite(minY) || !std::isfinite(maxY))
+    const SelectionBounds box = PointBounds(corners);
+    if (!std::isfinite(box.minX) || !std::isfinite(box.maxX) || !std::isfinite(box.minY) || !std::isfinite(box.maxY))
     {
         return {};
     }
     const double clampLimit = 2.0 * BrushStroke::kMaxGridSide;
-    minX = std::clamp(minX, -clampLimit, clampLimit);
-    maxX = std::clamp(maxX, -clampLimit, clampLimit);
-    minY = std::clamp(minY, -clampLimit, clampLimit);
-    maxY = std::clamp(maxY, -clampLimit, clampLimit);
+    const double minX = std::clamp(box.minX, -clampLimit, clampLimit);
+    const double maxX = std::clamp(box.maxX, -clampLimit, clampLimit);
+    const double minY = std::clamp(box.minY, -clampLimit, clampLimit);
+    const double maxY = std::clamp(box.maxY, -clampLimit, clampLimit);
     const int x0 = static_cast<int>(std::floor(minX));
     const int y0 = static_cast<int>(std::floor(minY));
     const int x1 = static_cast<int>(std::ceil(maxX));
@@ -344,6 +334,21 @@ GridRect AlphaBounds(const std::uint8_t* bgra, int width, int height, int stride
     return GridRect{left, top, right - left, bottom - top};
 }
 
+LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int height, const Affine2& pixelToDocument,
+                               const GridRect& rect) noexcept
+{
+    LayerTransform result = placed;
+    result.size = Vec2{rect.width * placed.size.x / width, rect.height * placed.size.y / height};
+    const Vec2 center = pixelToDocument.Apply(Vec2{rect.x + rect.width / 2.0, rect.y + rect.height / 2.0});
+    result.origin = Vec2{center.x - result.size.x / 2.0, center.y - result.size.y / 2.0};
+    return result;
+}
+
+LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int height, const GridRect& rect) noexcept
+{
+    return PlacementOfRect(placed, width, height, PixelToDocument(placed, width, height), rect);
+}
+
 // ── BrushStroke ──────────────────────────────────────────────────────────
 
 BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings& settings, int canvasWidth,
@@ -397,12 +402,7 @@ BrushStroke::BrushStroke(const ImageLayer& layer, bool mask, const BrushSettings
     _height = extent.height;
     _sourceRect = GridRect{-extent.x, -extent.y, originalWidth, originalHeight};
     _pixelToDocument = Affine2::Translation(extent.x, extent.y).Concat(originalMapping);
-    LayerTransform expanded = base;
-    expanded.size = Vec2{static_cast<double>(_width) * base.size.x / originalWidth,
-                         static_cast<double>(_height) * base.size.y / originalHeight};
-    const Vec2 center = originalMapping.Apply(Vec2{extent.x + extent.width / 2.0, extent.y + extent.height / 2.0});
-    expanded.origin = Vec2{center.x - expanded.size.x / 2.0, center.y - expanded.size.y / 2.0};
-    _paintTransform = expanded;
+    _paintTransform = PlacementOfRect(base, originalWidth, originalHeight, originalMapping, extent);
     _valid = true;
     _engine->BeginStroke();
 }
@@ -815,12 +815,7 @@ GridRect BrushStroke::CommittedBounds() const noexcept
 
 LayerTransform BrushStroke::TransformFor(const GridRect& bounds) const noexcept
 {
-    const Vec2 center = _pixelToDocument.Apply(Vec2{bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0});
-    LayerTransform result = _paintTransform;
-    result.size =
-        Vec2{bounds.width * _paintTransform.size.x / _width, bounds.height * _paintTransform.size.y / _height};
-    result.origin = Vec2{center.x - result.size.x / 2.0, center.y - result.size.y / 2.0};
-    return result;
+    return PlacementOfRect(_paintTransform, _width, _height, _pixelToDocument, bounds);
 }
 
 std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
@@ -1033,26 +1028,10 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         editName = L"Spot Healing";
     }
-    std::shared_ptr<BrushStroke> stroke;
-    try
-    {
-        stroke =
-            std::make_shared<BrushStroke>(*layer, mask, settings, _document->width, _document->height, _brushEngine);
-    }
-    catch (const std::bad_alloc&)
+    std::shared_ptr<BrushStroke> stroke = MakeRasterEdit(*layer, mask, settings);
+    if (!stroke)
     {
         return false;
-    }
-    if (!stroke->IsValid())
-    {
-        return false;
-    }
-    stroke->SetPixelLimit(RasterEditPixelLimit(*layer, mask));
-    if (_document->selection.has_value())
-    {
-        const DocumentSelection& selection = _document->selection.value();
-        stroke->SetSelectionClip(
-            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
     }
     if (sample.has_value())
     {
@@ -1113,7 +1092,8 @@ void DocumentSession::FinishBrush()
     CommitStroke(stroke);
 }
 
-bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, const std::function<void()>& alsoApply)
+bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
+                                   const std::optional<DocumentSelection>& selectionAfterCommit)
 {
     if (!stroke || !_document.has_value())
     {
@@ -1176,9 +1156,9 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke, c
         current->asset = RasterAsset{result->image, result->thumbnail, layerName};
         current->transform = result->transform;
     }
-    if (alsoApply)
+    if (selectionAfterCommit.has_value())
     {
-        alsoApply();
+        _document->selection = selectionAfterCommit;
     }
     ++_editRevision;
     EndEdit();
@@ -1416,7 +1396,7 @@ bool BrushStroke::Heal(std::uint32_t seed)
         }
     }
     if (!SpotHealing::Heal(pixels.data(), gray.data(), w, h, w * 4u, static_cast<float>(_settings.opacity),
-                           static_cast<SpotHealing::Mode>(_settings.healingMode), seed))
+                           _settings.healingMode, seed))
     {
         return false;
     }
@@ -1711,26 +1691,7 @@ std::optional<Vec2> DocumentSession::CloneSamplePoint(Vec2 point) const noexcept
 
 Raster DocumentSession::CloneSample(const Raster* composite) const
 {
-    if (!_document.has_value())
-    {
-        return {};
-    }
-    const CanvasDocument& document = _document.value();
-    if (cloneSettings.sampleAllLayers)
-    {
-        if (composite == nullptr || !composite->HasStorage() || composite->Width() != document.width ||
-            composite->Height() != document.height || composite->Format() != RasterFormat::Bgra8888)
-        {
-            return {};
-        }
-        return *composite;
-    }
-    const ImageLayer* layer = ActiveLayer();
-    if (layer != nullptr && !layer->isGroup && layer->asset.has_value())
-    {
-        return RenderLayerPixels(layer->asset->image, DisplayedTransform(*layer), document.width, document.height);
-    }
-    return Raster::Make(document.width, document.height, RasterFormat::Bgra8888);
+    return LayerSample(cloneSettings.sampleAllLayers, composite);
 }
 
 Raster DocumentSession::BlurSample(bool mask) const
@@ -1844,26 +1805,10 @@ void DocumentSession::FinishWarp()
     settings.opacity = 1.0;
     settings.erasing = false;
     settings.healing = false;
-    std::shared_ptr<BrushStroke> stroke;
-    try
-    {
-        stroke =
-            std::make_shared<BrushStroke>(*current, false, settings, _document->width, _document->height, _brushEngine);
-    }
-    catch (const std::bad_alloc&)
+    const std::shared_ptr<BrushStroke> stroke = MakeRasterEdit(*current, false, settings);
+    if (!stroke)
     {
         return;
-    }
-    if (!stroke->IsValid())
-    {
-        return;
-    }
-    stroke->SetPixelLimit(RasterEditPixelLimit(*current, false));
-    if (_document->selection.has_value())
-    {
-        const DocumentSelection& selection = _document->selection.value();
-        stroke->SetSelectionClip(
-            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
     }
     stroke->SetSample(warp->Image(), 0, 0, true);
     stroke->SetEditName(warp->Mode() == SmearMode::Liquify ? L"Liquify" : L"Smudge");
@@ -1982,7 +1927,7 @@ bool DocumentSession::BeginGradient(Vec2 point)
         _gradient->start = point;
         _gradient->end = point;
         RefreshGradient();
-        return _gradient != nullptr;
+        return _gradient.has_value();
     }
     ResolveGradient();
     layer = ActiveLayer();
@@ -1991,36 +1936,15 @@ bool DocumentSession::BeginGradient(Vec2 point)
         return false;
     }
     const bool mask = _maskSelected;
-    std::shared_ptr<BrushStroke> raster;
-    try
-    {
-        raster = std::make_shared<BrushStroke>(*layer, mask, BrushSettings{}, _document->width, _document->height,
-                                               _brushEngine);
-    }
-    catch (const std::bad_alloc&)
+    std::shared_ptr<BrushStroke> raster = MakeRasterEdit(*layer, mask);
+    if (!raster)
     {
         return false;
-    }
-    if (!raster->IsValid())
-    {
-        return false;
-    }
-    raster->SetPixelLimit(RasterEditPixelLimit(*layer, mask));
-    if (_document->selection.has_value())
-    {
-        const DocumentSelection& selection = _document->selection.value();
-        raster->SetSelectionClip(
-            SelectionGeometry::Coverage(selection.loops, _document->width, _document->height, selection.antialiased));
     }
     raster->SetEditName(mask ? L"Gradient Mask" : L"Gradient");
-    try
-    {
-        _gradient = std::make_shared<GradientEdit>(GradientEdit{std::move(raster), point, point});
-    }
-    catch (const std::bad_alloc&)
-    {
-        return false;
-    }
+    // Vec2 and a moved shared_ptr cannot throw: no allocation is left to catch (unlike a pixel move's selection
+    // copy).
+    _gradient = GradientEdit{std::move(raster), point, point};
     return true;
 }
 
@@ -2074,13 +1998,13 @@ void DocumentSession::CommitGradient()
     {
         return;
     }
-    const std::shared_ptr<GradientEdit> edit = std::move(_gradient);
+    const GradientEdit edit = std::move(_gradient).value();
     _gradient.reset();
-    if (!edit->HasLine())
+    if (!edit.HasLine())
     {
         return;
     }
-    CommitStroke(edit->raster);
+    CommitStroke(edit.raster);
 }
 
 void DocumentSession::ResolveGradient()
@@ -2124,23 +2048,7 @@ void DocumentSession::ToggleShapeKind()
 
 std::wstring DocumentSession::NextShapeName(ShapeKind kind) const
 {
-    std::unordered_set<std::wstring> names;
-    if (_document.has_value())
-    {
-        for (const ImageLayer& layer : _document->layers)
-        {
-            names.insert(layer.name);
-        }
-    }
-    const std::wstring base = kind == ShapeKind::Rectangle ? L"Rectangle " : L"Ellipse ";
-    int number = 1;
-    std::wstring name;
-    do
-    {
-        name = base + std::to_wstring(number);
-        ++number;
-    } while (names.contains(name));
-    return name;
+    return UniqueLayerName(kind == ShapeKind::Rectangle ? L"Rectangle " : L"Ellipse ");
 }
 
 Raster DocumentSession::ShapeImage(ShapeKind kind, int width, int height, std::uint32_t argb, double cornerRadius)
@@ -2546,18 +2454,6 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
 
 namespace
 {
-[[nodiscard]] std::optional<std::size_t> LayerIndex(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
-{
-    for (std::size_t index = 0; index < layers.size(); ++index)
-    {
-        if (layers[index].id == id)
-        {
-            return index;
-        }
-    }
-    return std::nullopt;
-}
-
 // A selection's loops carried through a distortion of the floating pixels (legacy DistortWarp.mapPath).
 [[nodiscard]] std::vector<SelectionLoop> LoopsThroughDistortion(const std::vector<SelectionLoop>& loops,
                                                                 const LayerTransform& original, int width, int height,
@@ -2634,25 +2530,11 @@ namespace
 
 std::wstring DocumentSession::NextLayerName() const
 {
-    std::unordered_set<std::wstring> names;
-    if (_document.has_value())
-    {
-        for (const ImageLayer& layer : _document->layers)
-        {
-            names.insert(layer.name);
-        }
-    }
-    int number = 1;
-    std::wstring name;
-    do
-    {
-        name = L"Layer " + std::to_wstring(number);
-        ++number;
-    } while (names.contains(name));
-    return name;
+    return UniqueLayerName(L"Layer ");
 }
 
-std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& layer, bool mask) const
+std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& layer, bool mask,
+                                                             const BrushSettings& settings) const
 {
     if (!_document.has_value())
     {
@@ -2661,8 +2543,7 @@ std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& l
     std::shared_ptr<BrushStroke> edit;
     try
     {
-        edit = std::make_shared<BrushStroke>(layer, mask, BrushSettings{}, _document->width, _document->height,
-                                             _brushEngine);
+        edit = std::make_shared<BrushStroke>(layer, mask, settings, _document->width, _document->height, _brushEngine);
     }
     catch (const std::bad_alloc&)
     {
@@ -2855,7 +2736,7 @@ bool DocumentSession::BeginPixelMove(bool duplicate)
     {
         return false;
     }
-    const std::shared_ptr<BrushStroke> raster = MakeRasterEdit(*layer, false);
+    std::shared_ptr<BrushStroke> raster = MakeRasterEdit(*layer, false);
     if (!raster || !raster->LiftSelection())
     {
         return false;
@@ -2863,8 +2744,8 @@ bool DocumentSession::BeginPixelMove(bool duplicate)
     raster->SetEditName(duplicate ? L"Duplicate Pixels" : L"Move Pixels");
     try
     {
-        _pixelMove =
-            std::make_shared<PixelMove>(PixelMove{raster, _document->selection.value(), duplicate, Vec2{0, 0}});
+        // The selection copy (the loops being lifted) can still allocate; the raster itself no longer does.
+        _pixelMove = PixelMove{std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0}};
     }
     catch (const std::bad_alloc&)
     {
@@ -2926,15 +2807,15 @@ void DocumentSession::FinishPixelMove()
     {
         return;
     }
-    const std::shared_ptr<PixelMove> move = std::move(_pixelMove);
+    const PixelMove move = std::move(_pixelMove).value();
     _pixelMove.reset();
-    if (move->offset.x == 0.0 && move->offset.y == 0.0)
+    if (move.offset.x == 0.0 && move.offset.y == 0.0)
     {
         return;
     }
-    DocumentSelection moved = move->origin;
-    moved.loops = SelectionGeometry::Translated(moved.loops, move->offset.x, move->offset.y);
-    CommitStroke(move->raster, [&] { _document->selection = moved; });
+    DocumentSelection moved = move.origin;
+    moved.loops = SelectionGeometry::Translated(moved.loops, move.offset.x, move.offset.y);
+    CommitStroke(move.raster, moved);
 }
 
 void DocumentSession::CancelPixelMove() noexcept
@@ -3081,7 +2962,7 @@ void DocumentSession::BeginSelectionTransform()
         EndEdit();
         return;
     }
-    const std::optional<std::size_t> index = LayerIndex(_document->layers, source.id);
+    const std::optional<std::size_t> index = IndexOf(_document->layers, source.id);
     if (!index.has_value())
     {
         _document = *before;
@@ -3131,8 +3012,8 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
             break;
         }
         std::vector<ImageLayer>& layers = _document->layers;
-        const std::optional<std::size_t> floatingIndex = LayerIndex(layers, edit.layerID);
-        const std::optional<std::size_t> sourceIndex = LayerIndex(layers, floating.sourceID);
+        const std::optional<std::size_t> floatingIndex = IndexOf(layers, edit.layerID);
+        const std::optional<std::size_t> sourceIndex = IndexOf(layers, floating.sourceID);
         if (!floatingIndex.has_value() || !sourceIndex.has_value() ||
             !layers[floatingIndex.value()].asset.has_value() || !layers[sourceIndex.value()].asset.has_value())
         {
@@ -3221,11 +3102,8 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         {
             break;
         }
-        LayerTransform mergedTransform = source.transform;
-        mergedTransform.size = Vec2{extent.width * source.transform.size.x / sourceWidth,
-                                    extent.height * source.transform.size.y / sourceHeight};
-        const Vec2 center = toDocument.Apply(Vec2{extent.x + extent.width / 2.0, extent.y + extent.height / 2.0});
-        mergedTransform.origin = Vec2{center.x - mergedTransform.size.x / 2.0, center.y - mergedTransform.size.y / 2.0};
+        const LayerTransform mergedTransform =
+            PlacementOfRect(source.transform, sourceWidth, sourceHeight, toDocument, extent);
         if (!mergedTransform.IsValid())
         {
             break;
@@ -3260,7 +3138,7 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         }
         const std::wstring name = source.name;
         layers.erase(layers.begin() + static_cast<std::ptrdiff_t>(floatingIndex.value()));
-        const std::optional<std::size_t> target = LayerIndex(layers, floating.sourceID);
+        const std::optional<std::size_t> target = IndexOf(layers, floating.sourceID);
         if (!target.has_value())
         {
             break;

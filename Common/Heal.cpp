@@ -211,7 +211,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
 }
 
 [[nodiscard]] bool HealUnchecked(std::uint8_t* rgba, const std::uint8_t* coverage, std::size_t width,
-                                 std::size_t height, std::size_t stride, float opacity, Mode mode, std::uint32_t seed)
+                                 std::size_t height, std::size_t stride, float opacity, SpotHealingMode mode,
+                                 std::uint32_t seed)
 {
     const Index W = static_cast<Index>(width);
     const Index H = static_cast<Index>(height);
@@ -304,10 +305,10 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
     Index ox = 0;
     Index oy = 0;
     bool haveSource = false;
-    if (mode != Mode::CreateTexture)
+    if (mode != SpotHealingMode::CreateTexture)
     {
         static constexpr double factors[5] = {1.05, 1.35, 1.75, 2.25, 2.8};
-        const int count = mode == Mode::ProximityMatch ? 2 : 5;
+        const int count = mode == SpotHealingMode::ProximityMatch ? 2 : 5;
         double best = kInfinity;
         for (int f = 0; f < count; ++f)
         {
@@ -323,7 +324,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
                 {
                     continue;
                 }
-                score *= mode == Mode::ProximityMatch ? 1.0 + 0.6 * f : 1.0 + 0.1 * f; // nearer patches win ties
+                score *=
+                    mode == SpotHealingMode::ProximityMatch ? 1.0 + 0.6 * f : 1.0 + 0.1 * f; // nearer patches win ties
                 if (score < best)
                 {
                     best = score;
@@ -496,7 +498,7 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
 }
 
 bool Heal(std::uint8_t* bgra, const std::uint8_t* coverage, std::size_t width, std::size_t height, std::size_t stride,
-          float opacity, Mode mode, std::uint32_t seed)
+          float opacity, SpotHealingMode mode, std::uint32_t seed)
 {
     if (bgra == nullptr || coverage == nullptr || width == 0 || height == 0 || stride < width * 4)
     {

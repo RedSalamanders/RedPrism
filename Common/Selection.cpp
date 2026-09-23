@@ -1,5 +1,7 @@
 #include "Selection.h"
 
+#include "CanvasSize.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -434,11 +436,6 @@ template <typename Selected>
 {
     return SelectionGeometry::Rect(0.0, 0.0, static_cast<double>(document.width), static_cast<double>(document.height));
 }
-
-[[nodiscard]] std::uint8_t Lerp8(double a, double b, double t) noexcept
-{
-    return static_cast<std::uint8_t>(std::lround(a + (b - a) * t));
-}
 } // namespace
 
 // ── SelectionGeometry ────────────────────────────────────────────────────
@@ -480,9 +477,7 @@ std::vector<SelectionLoop> Ellipse(double x, double y, double width, double heig
 
 std::optional<SelectionBounds> Bounds(const std::vector<SelectionLoop>& loops) noexcept
 {
-    DocumentSelection selection;
-    selection.loops = loops;
-    return selection.Bounds();
+    return LoopsBounds(loops);
 }
 
 std::vector<SelectionLoop> Union(const std::vector<SelectionLoop>& a, const std::vector<SelectionLoop>& b)
@@ -906,81 +901,23 @@ Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, i
     {
         return {};
     }
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height), 0);
-    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !transform.IsValid())
+    try
     {
-        return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !transform.IsValid())
+        {
+            return Raster::Make(width, height, RasterFormat::Bgra8888);
+        }
+        // A transient sample, not a resample: High collapses to Smooth's single bilinear tap (no supersampling),
+        // and only Nearest changes what a stroke reads, matching legacy LayerRenderer.draw's interpolation choice.
+        const LayerSampling sampling =
+            transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
+        const Affine2 pixelToTarget = PixelToDocument(transform, image.Width(), image.Height());
+        return RenderPlacedImage(image, pixelToTarget, width, height, sampling);
     }
-    const int imageWidth = image.Width();
-    const int imageHeight = image.Height();
-    const std::size_t imageStride = static_cast<std::size_t>(image.Stride());
-    const std::uint8_t* source = image.Data();
-    if (source == nullptr)
+    catch (const std::bad_alloc&)
     {
-        // A sparse image that could not be assembled: the caller fails rather than reading transparency.
         return {};
     }
-    const Affine2 toPixel = PixelToDocument(transform, imageWidth, imageHeight).Inverted();
-    // Only the rows and columns the placed corners span can hold pixels.
-    const std::array<Vec2, 4> corners = transform.Corners();
-    double minX = corners[0].x;
-    double maxX = corners[0].x;
-    double minY = corners[0].y;
-    double maxY = corners[0].y;
-    for (const Vec2& corner : corners)
-    {
-        minX = std::min(minX, corner.x);
-        maxX = std::max(maxX, corner.x);
-        minY = std::min(minY, corner.y);
-        maxY = std::max(maxY, corner.y);
-    }
-    if (!std::isfinite(minX) || !std::isfinite(maxX) || !std::isfinite(minY) || !std::isfinite(maxY))
-    {
-        return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
-    }
-    const int x0 = std::max(0, static_cast<int>(std::floor(std::max(minX, -1.0))) - 1);
-    const int x1 = std::min(width - 1, static_cast<int>(std::ceil(std::min(maxX, width + 1.0))) + 1);
-    const int y0 = std::max(0, static_cast<int>(std::floor(std::max(minY, -1.0))) - 1);
-    const int y1 = std::min(height - 1, static_cast<int>(std::ceil(std::min(maxY, height + 1.0))) + 1);
-    const auto sample = [&](int px, int py, int channel) -> double
-    {
-        // Edges clamp, as the canvas draws a scaled layer: nothing fades to transparent inside the placed box.
-        px = std::clamp(px, 0, imageWidth - 1);
-        py = std::clamp(py, 0, imageHeight - 1);
-        return source[static_cast<std::size_t>(py) * imageStride + static_cast<std::size_t>(px) * 4u +
-                      static_cast<std::size_t>(channel)];
-    };
-    for (int y = y0; y <= y1; ++y)
-    {
-        std::uint8_t* row = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * 4u;
-        for (int x = x0; x <= x1; ++x)
-        {
-            const Vec2 pixel = toPixel.Apply(Vec2{x + 0.5, y + 0.5});
-            // Outside the placed box is transparent; inside, pixel centers sit at half coordinates.
-            if (!(pixel.x >= 0.0) || !(pixel.y >= 0.0) || !(pixel.x < imageWidth) || !(pixel.y < imageHeight))
-            {
-                continue;
-            }
-            const double sx = std::clamp(pixel.x - 0.5, 0.0, static_cast<double>(imageWidth - 1));
-            const double sy = std::clamp(pixel.y - 0.5, 0.0, static_cast<double>(imageHeight - 1));
-            const double fx0 = std::floor(sx);
-            const double fy0 = std::floor(sy);
-            const double tx = sx - fx0;
-            const double ty = sy - fy0;
-            const int ix = static_cast<int>(fx0);
-            const int iy = static_cast<int>(fy0);
-            std::uint8_t* out = row + static_cast<std::size_t>(x) * 4u;
-            for (int channel = 0; channel < 4; ++channel)
-            {
-                const double top =
-                    sample(ix, iy, channel) + (sample(ix + 1, iy, channel) - sample(ix, iy, channel)) * tx;
-                const double bottom =
-                    sample(ix, iy + 1, channel) + (sample(ix + 1, iy + 1, channel) - sample(ix, iy + 1, channel)) * tx;
-                out[channel] = Lerp8(top, bottom, ty);
-            }
-        }
-    }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
 }
 
 // ── DocumentSession selection API ────────────────────────────────────────
@@ -1369,14 +1306,14 @@ bool DocumentSession::LoadLayerSelection(const Guid& id, SelectionMode mode, Wan
     return true;
 }
 
-Raster DocumentSession::WandSample(const Raster* composite) const
+Raster DocumentSession::LayerSample(bool allLayers, const Raster* composite) const
 {
     if (!_document.has_value())
     {
         return {};
     }
     const CanvasDocument& document = _document.value();
-    if (wandSettings.sampleAllLayers)
+    if (allLayers)
     {
         if (composite == nullptr || !composite->HasStorage() || composite->Width() != document.width ||
             composite->Height() != document.height || composite->Format() != RasterFormat::Bgra8888)
@@ -1391,6 +1328,11 @@ Raster DocumentSession::WandSample(const Raster* composite) const
         return RenderLayerPixels(layer->asset->image, DisplayedTransform(*layer), document.width, document.height);
     }
     return Raster::Make(document.width, document.height, RasterFormat::Bgra8888);
+}
+
+Raster DocumentSession::WandSample(const Raster* composite) const
+{
+    return LayerSample(wandSettings.sampleAllLayers, composite);
 }
 
 WandFailure DocumentSession::MagicWand(Vec2 point, SelectionMode mode, const Raster* composite)

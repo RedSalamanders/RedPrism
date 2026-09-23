@@ -117,7 +117,6 @@
     <ClInclude Include="..\Common\CanvasSize.h" />
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
-    <ClInclude Include="..\Common\DocumentHistory.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
     <ClInclude Include="..\Common\Resources.h" />

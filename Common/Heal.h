@@ -1,21 +1,13 @@
 #pragma once
 
+#include "Document.h"
+
 #include <cstddef>
 #include <cstdint>
 
 // Spot healing (C11, Specs/Document/Document_Tools.md): the legacy HealPixels.c kernel, ported number for number.
 namespace SpotHealing
 {
-enum class Mode : int
-{
-    // Copies texture from the nearby patch whose surrounding ring of pixels best matches the ring around the spot.
-    ContentAware = 0,
-    // Fills smoothly from the spot's edges and adds grain matching the detail around it.
-    CreateTexture = 1,
-    // Like ContentAware, but takes the closest good patch.
-    ProximityMatch = 2,
-};
-
 // Half-open bounds of nonzero bytes in a gray bitmap; all zero when empty.
 struct Bounds
 {
@@ -36,5 +28,5 @@ struct Bounds
 // difference along the spot's edge is spread smoothly across it (a membrane fill). The result replaces the original
 // by coverage × opacity. False when memory runs out.
 [[nodiscard]] bool Heal(std::uint8_t* bgra, const std::uint8_t* coverage, std::size_t width, std::size_t height,
-                        std::size_t stride, float opacity, Mode mode, std::uint32_t seed);
+                        std::size_t stride, float opacity, SpotHealingMode mode, std::uint32_t seed);
 } // namespace SpotHealing

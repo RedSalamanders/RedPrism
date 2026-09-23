@@ -86,10 +86,10 @@ struct WarpedTrimmed
 {
     Raster image;
     LayerTransform transform;
+    // Where the crop started in the untrimmed warp's pixels (for a mask warped at the same corners to match); the
+    // crop's size is `image`'s own (`Adjust::TrimmedToAlpha`, which this crops with).
     int cropX = 0;
     int cropY = 0;
-    int cropWidth = 0;
-    int cropHeight = 0;
 };
 
 // `image`, shown through `transform`, resampled so its corners land on `corners`: the warped pixels over the

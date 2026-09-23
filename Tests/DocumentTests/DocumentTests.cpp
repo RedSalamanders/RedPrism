@@ -3,7 +3,7 @@
 #include "CanvasSize.h"
 #include "Crop.h"
 #include "Document.h"
-#include "DocumentHistory.h"
+#include "ImageFilters.h"
 #include "Selection.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
@@ -1955,6 +1955,15 @@ void TestWandKernel()
     Expect(pixelAt(scaled, 0, 0) == red && pixelAt(scaled, 7, 5) == blue && pixelAt(scaled, 3, 2)[0] > 0 &&
                pixelAt(scaled, 3, 2)[2] > 0,
            "wand.sampler-scales-bilinear");
+    // RF-802: Nearest reads the exact source pixel instead of blending, so Liquify/Clone/Blur (and the Wand) read a
+    // pixel-art layer crisp, as the canvas draws it (legacy LayerRenderer.draw: sampling == .nearest ? .none : …).
+    placement.sampling = LayerSampling::Nearest;
+    const Raster nearestScaled = RenderLayerPixels(halves, placement, 8, 6);
+    Expect(pixelAt(nearestScaled, 3, 2) == red, "wand.sampler-scales-nearest");
+    const Raster maskHalves = Gray(4, 3, {0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255});
+    const Raster maskNearest = ImageFilters::RenderMaskPixels(maskHalves, placement, 8, 6, 0);
+    Expect(maskNearest.Data()[static_cast<std::size_t>(2 * maskNearest.Stride() + 3)] == 0,
+           "mask.sampler-scales-nearest");
 }
 
 void TestWandSession()
@@ -3653,7 +3662,7 @@ void TestPixelEdits()
         session.FillSelection(FillSource::Foreground);
         session.ClearSelectedPixels();
         Expect(!session.BeginGradient(Vec2{0, 20}) && session.PendingGradient() == nullptr, "edit.empty-no-gradient");
-        Expect(!session.CanPaint() && !session.CanEditPixels() && session.Document().value() == before &&
+        Expect(!session.CanPaint() && session.Document().value() == before &&
                    session.history.UndoCount() == count && ActivePixel(session, 50, 20)[3] == 0,
                "edit.empty-selection-edits-nothing");
     }

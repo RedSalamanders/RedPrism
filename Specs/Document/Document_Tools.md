@@ -198,10 +198,12 @@ masks and traces; nullopt when nothing matches or the point is outside the image
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
 the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
 flattened composition readback; a missing or wrongly sized composite makes the click do nothing), otherwise the
-active layer's own pixels at its displayed transform without its mask (`RenderLayerPixels`: bilinear, edges
-clamped inside the placed box, transparent outside it); a folder or blank layer reads as transparent, so the whole
-canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without the canvas
-clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
+active layer's own pixels at its displayed transform without its mask (`RenderLayerPixels`: nearest when the
+layer's sampling is Nearest, else one bilinear tap with edges clamped inside the placed box — `RenderPlacedImage`,
+the same sampler `CanvasSize` places a layer with, collapsing High to Smooth since this is a transient read, not a
+resample; transparent outside the box or for an invalid transform); a folder or blank layer reads as transparent,
+so the whole canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without
+the canvas clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
 
 ## Brush session (C10)
 
@@ -263,7 +265,8 @@ composite)`; the kernels, the tile composition and the warp model live in
   document size (the active layer's pixels as placed, or the host's composite, required for All Layers). A stroke
   without a source does not start. Records `Clone Stamp`. Never on a mask.
 - **Smear** (`smearMode`: Liquify default, Blur, Smudge). Blur is a brush stroke that paints `BlurSample(mask)`, the
-  layer (or its mask, with its edge tone beyond its pixels) softened by sigma = diameter / 10 clamped to 1.5–30,
+  layer (or its mask, with its edge tone beyond its pixels; `RenderMaskPixels` samples a placed mask the same way
+  `RenderLayerPixels` samples a layer, nearest included) softened by sigma = diameter / 10 clamped to 1.5–30,
   through the tip at the Strength opacity (`Blur`). Liquify and Smudge are warps (`WarpStroke`): a document-size copy
   of the layer as shown, changed dab by dab (`BeginWarp` / `ContinueWarp`; spacing 8 % of the diameter for Smudge,
   2.5 % for Liquify; hardness at most 0.98; strength = opacity); Smudge carries the color it picked up, taking on

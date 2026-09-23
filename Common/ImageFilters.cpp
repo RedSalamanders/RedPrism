@@ -1,9 +1,9 @@
 #include "ImageFilters.h"
 
+#include "CanvasSize.h"
 #include "Selection.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <new>
 #include <vector>
@@ -120,75 +120,6 @@ namespace
     return Raster::Make(width, height, source.Format(), bytes.data(), bytes.size());
 }
 
-[[nodiscard]] Raster RenderMaskUnchecked(const Raster& mask, const LayerTransform& transform, int width, int height,
-                                         std::uint8_t background)
-{
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), background);
-    const std::uint8_t* source = mask.Data();
-    if (source == nullptr)
-    {
-        // A sparse mask that could not be assembled: nothing to render, never the background in its place.
-        return {};
-    }
-    if (!transform.IsValid())
-    {
-        return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
-    }
-    const int maskWidth = mask.Width();
-    const int maskHeight = mask.Height();
-    const std::size_t maskStride = static_cast<std::size_t>(mask.Stride());
-    const Affine2 toPixel = PixelToDocument(transform, maskWidth, maskHeight).Inverted();
-    const std::array<Vec2, 4> corners = transform.Corners();
-    double minX = corners[0].x;
-    double maxX = corners[0].x;
-    double minY = corners[0].y;
-    double maxY = corners[0].y;
-    for (const Vec2& corner : corners)
-    {
-        minX = std::min(minX, corner.x);
-        maxX = std::max(maxX, corner.x);
-        minY = std::min(minY, corner.y);
-        maxY = std::max(maxY, corner.y);
-    }
-    if (!std::isfinite(minX) || !std::isfinite(maxX) || !std::isfinite(minY) || !std::isfinite(maxY))
-    {
-        return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
-    }
-    const int x0 = std::max(0, static_cast<int>(std::floor(std::max(minX, -1.0))) - 1);
-    const int x1 = std::min(width - 1, static_cast<int>(std::ceil(std::min(maxX, width + 1.0))) + 1);
-    const int y0 = std::max(0, static_cast<int>(std::floor(std::max(minY, -1.0))) - 1);
-    const int y1 = std::min(height - 1, static_cast<int>(std::ceil(std::min(maxY, height + 1.0))) + 1);
-    const auto sample = [&](int px, int py) -> double
-    {
-        px = std::clamp(px, 0, maskWidth - 1);
-        py = std::clamp(py, 0, maskHeight - 1);
-        return source[static_cast<std::size_t>(py) * maskStride + static_cast<std::size_t>(px)];
-    };
-    for (int y = y0; y <= y1; ++y)
-    {
-        std::uint8_t* row = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width);
-        for (int x = x0; x <= x1; ++x)
-        {
-            const Vec2 pixel = toPixel.Apply(Vec2{x + 0.5, y + 0.5});
-            if (!(pixel.x >= 0.0) || !(pixel.y >= 0.0) || !(pixel.x < maskWidth) || !(pixel.y < maskHeight))
-            {
-                continue;
-            }
-            const double sx = std::clamp(pixel.x - 0.5, 0.0, static_cast<double>(maskWidth - 1));
-            const double sy = std::clamp(pixel.y - 0.5, 0.0, static_cast<double>(maskHeight - 1));
-            const double fx0 = std::floor(sx);
-            const double fy0 = std::floor(sy);
-            const double tx = sx - fx0;
-            const double ty = sy - fy0;
-            const int ix = static_cast<int>(fx0);
-            const int iy = static_cast<int>(fy0);
-            const double top = sample(ix, iy) + (sample(ix + 1, iy) - sample(ix, iy)) * tx;
-            const double bottom = sample(ix, iy + 1) + (sample(ix + 1, iy + 1) - sample(ix, iy + 1)) * tx;
-            row[static_cast<std::size_t>(x)] = Round8(top + (bottom - top) * ty);
-        }
-    }
-    return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
-}
 } // namespace
 
 Raster GaussianBlur(const Raster& source, double sigma)
@@ -214,9 +145,25 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
     {
         return {};
     }
+    if (mask.Data() == nullptr)
+    {
+        // A sparse mask that could not be assembled: nothing to render, never the background in its place.
+        return {};
+    }
     try
     {
-        return RenderMaskUnchecked(mask, transform, width, height, background);
+        if (!transform.IsValid())
+        {
+            const std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height),
+                                                  background);
+            return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+        }
+        // A transient sample, not a resample: High collapses to Smooth's single bilinear tap (no supersampling),
+        // as RenderLayerPixels does for a layer's pixels.
+        const LayerSampling sampling =
+            transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
+        const Affine2 pixelToTarget = PixelToDocument(transform, mask.Width(), mask.Height());
+        return RenderPlacedMask(mask, pixelToTarget, width, height, sampling, background);
     }
     catch (const std::bad_alloc&)
     {

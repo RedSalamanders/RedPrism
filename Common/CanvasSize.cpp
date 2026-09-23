@@ -12,7 +12,6 @@
 namespace
 {
 constexpr double kMaxResolution = 9600.0;
-constexpr int kExtensionLayerNameLength = 16;
 
 [[nodiscard]] double UnitFromPixels(double pixels, double original, double resolution, CanvasUnit unit) noexcept
 {
@@ -72,27 +71,17 @@ struct TargetSpan
         pixelToTarget.Apply(Vec2{0, 0}), pixelToTarget.Apply(Vec2{static_cast<double>(imageWidth), 0}),
         pixelToTarget.Apply(Vec2{static_cast<double>(imageWidth), static_cast<double>(imageHeight)}),
         pixelToTarget.Apply(Vec2{0, static_cast<double>(imageHeight)})};
-    double minX = corners[0].x;
-    double maxX = corners[0].x;
-    double minY = corners[0].y;
-    double maxY = corners[0].y;
-    for (const Vec2& corner : corners)
-    {
-        minX = std::min(minX, corner.x);
-        maxX = std::max(maxX, corner.x);
-        minY = std::min(minY, corner.y);
-        maxY = std::max(maxY, corner.y);
-    }
+    const SelectionBounds box = PointBounds(corners);
     TargetSpan span;
-    if (!std::isfinite(minX) || !std::isfinite(maxX) || !std::isfinite(minY) || !std::isfinite(maxY))
+    if (!std::isfinite(box.minX) || !std::isfinite(box.maxX) || !std::isfinite(box.minY) || !std::isfinite(box.maxY))
     {
         span.finite = false;
         return span;
     }
-    span.x0 = std::max(0, static_cast<int>(std::floor(std::max(minX, -1.0))) - 1);
-    span.x1 = std::min(width - 1, static_cast<int>(std::ceil(std::min(maxX, width + 1.0))) + 1);
-    span.y0 = std::max(0, static_cast<int>(std::floor(std::max(minY, -1.0))) - 1);
-    span.y1 = std::min(height - 1, static_cast<int>(std::ceil(std::min(maxY, height + 1.0))) + 1);
+    span.x0 = std::max(0, static_cast<int>(std::floor(std::max(box.minX, -1.0))) - 1);
+    span.x1 = std::min(width - 1, static_cast<int>(std::ceil(std::min(box.maxX, width + 1.0))) + 1);
+    span.y0 = std::max(0, static_cast<int>(std::floor(std::max(box.minY, -1.0))) - 1);
+    span.y1 = std::min(height - 1, static_cast<int>(std::ceil(std::min(box.maxY, height + 1.0))) + 1);
     return span;
 }
 
@@ -508,7 +497,6 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             }
             ImageLayer extension = ImageLayer::Blank(
                 L"Canvas Extension", Vec2{static_cast<double>(options.width), static_cast<double>(options.height)});
-            static_assert(kExtensionLayerNameLength == 16);
             extension.asset = RasterAsset{image, Raster::MakeThumbnail(image), extension.name};
             next.layers.insert(next.layers.begin(), std::move(extension));
         }
@@ -553,25 +541,19 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
         {
             // Each layer rasterizes on its own: the box its scaled corners span becomes its upright transform.
             const std::array<Vec2, 4> corners = layer.transform.Corners();
-            double minX = corners[0].x * sx;
-            double maxX = minX;
-            double minY = corners[0].y * sy;
-            double maxY = minY;
-            for (const Vec2& corner : corners)
-            {
-                minX = std::min(minX, corner.x * sx);
-                maxX = std::max(maxX, corner.x * sx);
-                minY = std::min(minY, corner.y * sy);
-                maxY = std::max(maxY, corner.y * sy);
-            }
-            if (!std::isfinite(minX) || !std::isfinite(maxX) || !std::isfinite(minY) || !std::isfinite(maxY))
+            const std::array<Vec2, 4> scaledCorners{
+                Vec2{corners[0].x * sx, corners[0].y * sy}, Vec2{corners[1].x * sx, corners[1].y * sy},
+                Vec2{corners[2].x * sx, corners[2].y * sy}, Vec2{corners[3].x * sx, corners[3].y * sy}};
+            const SelectionBounds box = PointBounds(scaledCorners);
+            if (!std::isfinite(box.minX) || !std::isfinite(box.maxX) || !std::isfinite(box.minY) ||
+                !std::isfinite(box.maxY))
             {
                 return ResizeStatus::TooLarge;
             }
-            const double left = std::floor(minX);
-            const double top = std::floor(minY);
-            const int boxWidth = static_cast<int>(std::ceil(maxX) - left);
-            const int boxHeight = static_cast<int>(std::ceil(maxY) - top);
+            const double left = std::floor(box.minX);
+            const double top = std::floor(box.minY);
+            const int boxWidth = static_cast<int>(std::ceil(box.maxX) - left);
+            const int boxHeight = static_cast<int>(std::ceil(box.maxY) - top);
             LayerTransform placed;
             placed.origin = Vec2{left, top};
             placed.size = Vec2{static_cast<double>(boxWidth), static_cast<double>(boxHeight)};

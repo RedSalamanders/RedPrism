@@ -1,10 +1,10 @@
 #include "Adjust.h"
+#include "BrushStroke.h"
 #include "Document.h"
 #include "Selection.h"
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <new>
 
 // The color adjustment and filter panels on the session (C12): one edit for every kind (`ColorEdit`); previews render
@@ -247,13 +247,9 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
     {
         return false;
     }
-    LayerTransform expanded = edit.transform;
-    expanded.size = Vec2{grownWidth * edit.transform.size.x / width, grownHeight * edit.transform.size.y / height};
-    const Vec2 middle = PixelToDocument(edit.transform, width, height)
-                            .Apply(Vec2{targetLeft + grownWidth / 2.0, targetTop + grownHeight / 2.0});
-    expanded.origin = Vec2{middle.x - expanded.size.x / 2, middle.y - expanded.size.y / 2};
+    const GridRect grownRect{targetLeft, targetTop, static_cast<int>(grownWidth), static_cast<int>(grownHeight)};
     edit.grownImage = grown;
-    edit.grownTransform = expanded;
+    edit.grownTransform = PlacementOfRect(edit.transform, width, height, grownRect);
     edit.grownOffsetX = -targetLeft;
     edit.grownOffsetY = -targetTop;
     PrepareFilterPreview();
@@ -323,20 +319,11 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
             const double y1 = std::min(static_cast<double>(_document->height), bounds->maxY);
             if (x1 > x0 && y1 > y0)
             {
-                double left = std::numeric_limits<double>::max();
-                double top = left;
-                double right = std::numeric_limits<double>::lowest();
-                double bottom = right;
-                for (const Vec2 corner : {Vec2{x0, y0}, Vec2{x1, y0}, Vec2{x0, y1}, Vec2{x1, y1}})
-                {
-                    const Vec2 pixel = toPixels.Apply(corner);
-                    left = std::min(left, pixel.x);
-                    top = std::min(top, pixel.y);
-                    right = std::max(right, pixel.x);
-                    bottom = std::max(bottom, pixel.y);
-                }
-                if (!GrowFilterGrid(static_cast<int>(std::floor(left)), static_cast<int>(std::floor(top)),
-                                    static_cast<int>(std::ceil(right)), static_cast<int>(std::ceil(bottom))))
+                const std::array<Vec2, 4> corners{toPixels.Apply(Vec2{x0, y0}), toPixels.Apply(Vec2{x1, y0}),
+                                                  toPixels.Apply(Vec2{x0, y1}), toPixels.Apply(Vec2{x1, y1})};
+                const SelectionBounds box = PointBounds(corners);
+                if (!GrowFilterGrid(static_cast<int>(std::floor(box.minX)), static_cast<int>(std::floor(box.minY)),
+                                    static_cast<int>(std::ceil(box.maxX)), static_cast<int>(std::ceil(box.maxY))))
                 {
                     _colorEdit.reset();
                     return;
@@ -796,7 +783,7 @@ void DocumentSession::StepBlendMode(bool forward)
     {
         return;
     }
-    constexpr int count = static_cast<int>(LayerBlendMode::Luminosity) + 1;
+    constexpr int count = LayerBlendModeCount();
     const int current = static_cast<int>(layer->blendMode);
     const int next = (current + (forward ? 1 : count - 1)) % count;
     SetBlendMode(static_cast<LayerBlendMode>(next));

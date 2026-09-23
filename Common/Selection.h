@@ -70,6 +70,9 @@ namespace MaskTracing
 // BrushRaster.pixelToDocument): pixel (0, 0) is the placed top-left corner, flips included.
 [[nodiscard]] Affine2 PixelToDocument(const LayerTransform& transform, int width, int height) noexcept;
 
-// `image` drawn at `transform` onto a transparent document-size BGRA canvas, sampled bilinearly (premultiplied,
-// transparent beyond the pixels). What the wand reads for one layer. Empty when the image's pixels cannot be read.
+// `image` drawn at `transform` onto a transparent document-size BGRA canvas (premultiplied): nearest when the
+// transform's sampling is Nearest, else bilinear with edges clamped inside the placed box (`RenderPlacedImage`,
+// collapsing High to the same single bilinear tap since this is a transient sample, not a resample). Transparent
+// beyond the placed box, or whole when the transform is invalid. What the wand reads for one layer, and what Clone
+// Stamp, Blur, Liquify/Smudge and Copy read as "the layer as shown". Empty when the image's pixels cannot be read.
 [[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height);

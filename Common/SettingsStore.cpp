@@ -1,5 +1,6 @@
 #include "SettingsStore.h"
 
+#include "JsonRead.h"
 #include "Utf8.h"
 
 #include <algorithm>
@@ -11,7 +12,6 @@
 #include <memory>
 
 #include <shlobj.h>
-#include <wil/resource.h>
 #include <windows.h>
 #include <yyjson.h>
 
@@ -21,8 +21,8 @@ namespace SettingsStore
 {
 namespace
 {
-using unique_yyjson_doc = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
-using unique_yyjson_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc_free), yyjson_mut_doc_free>;
+using unique_yyjson_doc = JsonRead::unique_doc;
+using unique_yyjson_mut_doc = JsonRead::unique_mut_doc;
 
 struct FreeDeleter
 {
@@ -36,87 +36,14 @@ constexpr std::size_t kMaxFileBytes = 16u * 1024u * 1024u;
 // Editors save UTF-8 with a byte order mark; the document is the same.
 constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
 
-// An integral JSON number in int range: an integer, or a real with no fraction (10.0), as ProjectStore reads ints.
-[[nodiscard]] std::optional<int> IntegralValue(yyjson_val* value) noexcept
-{
-    if (value == nullptr)
-    {
-        return std::nullopt;
-    }
-    if (yyjson_is_int(value))
-    {
-        if (yyjson_is_uint(value))
-        {
-            const std::uint64_t number = yyjson_get_uint(value);
-            return number <= static_cast<std::uint64_t>(INT_MAX) ? std::optional<int>(static_cast<int>(number))
-                                                                 : std::nullopt;
-        }
-        const std::int64_t number = yyjson_get_sint(value);
-        return number >= INT_MIN && number <= INT_MAX ? std::optional<int>(static_cast<int>(number)) : std::nullopt;
-    }
-    if (yyjson_is_real(value))
-    {
-        const double number = yyjson_get_real(value);
-        if (std::isfinite(number) && number == std::floor(number) && number >= static_cast<double>(INT_MIN) &&
-            number <= static_cast<double>(INT_MAX))
-        {
-            return static_cast<int>(number);
-        }
-    }
-    return std::nullopt;
-}
-
 [[nodiscard]] std::optional<int> SchemaOf(yyjson_val* root) noexcept
 {
-    const std::optional<int> schema = IntegralValue(yyjson_obj_get(root, "schema"));
-    if (!schema.has_value() || schema.value() < 1)
+    int schema = 0;
+    if (!JsonRead::ReadInt(root, "schema", schema, true) || schema < 1)
     {
         return std::nullopt;
     }
     return schema;
-}
-
-[[nodiscard]] bool ReadNumber(yyjson_val* object, const char* key, double& out) noexcept
-{
-    yyjson_val* value = yyjson_obj_get(object, key);
-    if (value == nullptr || !yyjson_is_num(value))
-    {
-        return false;
-    }
-    out = yyjson_get_num(value);
-    return std::isfinite(out);
-}
-
-[[nodiscard]] bool ReadInt(yyjson_val* object, const char* key, int& out) noexcept
-{
-    const std::optional<int> number = IntegralValue(yyjson_obj_get(object, key));
-    if (!number.has_value())
-    {
-        return false;
-    }
-    out = number.value();
-    return true;
-}
-
-[[nodiscard]] bool ReadBool(yyjson_val* object, const char* key, bool& out) noexcept
-{
-    yyjson_val* value = yyjson_obj_get(object, key);
-    if (value == nullptr || !yyjson_is_bool(value))
-    {
-        return false;
-    }
-    out = yyjson_get_bool(value);
-    return true;
-}
-
-[[nodiscard]] std::optional<std::string_view> ReadString(yyjson_val* object, const char* key) noexcept
-{
-    yyjson_val* value = yyjson_obj_get(object, key);
-    if (value == nullptr || !yyjson_is_str(value))
-    {
-        return std::nullopt;
-    }
-    return std::string_view{yyjson_get_str(value), yyjson_get_len(value)};
 }
 
 // A BCP-47 tag as Windows spells it: letters, digits and hyphens, 2 to 35 characters, no hyphen at an end.
@@ -146,28 +73,17 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     {
         return std::nullopt;
     }
-    const std::optional<std::string_view> commandId = ReadString(entry, "commandId");
-    if (!commandId.has_value() || commandId->size() < 5 || !commandId->starts_with("cmd/"))
+    std::string commandId;
+    if (!JsonRead::ReadString(entry, "commandId", commandId, true) || commandId.size() < 5 ||
+        !commandId.starts_with("cmd/"))
     {
         return std::nullopt;
     }
     ShortcutBinding binding;
-    const auto readFlag = [entry](const char* name, bool& out) noexcept
-    {
-        yyjson_val* value = yyjson_obj_get(entry, name);
-        if (value == nullptr)
-        {
-            return true;
-        }
-        if (!yyjson_is_bool(value))
-        {
-            return false;
-        }
-        out = yyjson_get_bool(value);
-        return true;
-    };
-    if (!readFlag("ctrl", binding.chord.ctrl) || !readFlag("alt", binding.chord.alt) ||
-        !readFlag("shift", binding.chord.shift))
+    // A flag missing from the entry keeps its default (false); present with the wrong type fails the whole entry.
+    if (!JsonRead::ReadBool(entry, "ctrl", binding.chord.ctrl, false) ||
+        !JsonRead::ReadBool(entry, "alt", binding.chord.alt, false) ||
+        !JsonRead::ReadBool(entry, "shift", binding.chord.shift, false))
     {
         return std::nullopt;
     }
@@ -179,22 +95,24 @@ constexpr yyjson_read_flag kReadFlags = YYJSON_READ_ALLOW_BOM;
     }
     if (hasVk)
     {
-        const std::optional<std::string_view> vk = ReadString(entry, "vk");
-        if (!vk.has_value() || !ParseStableKeyName(vk.value(), binding.chord.virtualKey))
+        std::string vk;
+        if (!JsonRead::ReadString(entry, "vk", vk, true) || !ParseStableKeyName(vk, binding.chord.virtualKey))
         {
             return std::nullopt;
         }
     }
     else
     {
-        const std::optional<std::string_view> position = ReadString(entry, "keyPosition");
-        binding.chord.position = position.has_value() ? ParseKeyPositionName(position.value()) : KeyPosition::None;
+        std::string position;
+        binding.chord.position = JsonRead::ReadString(entry, "keyPosition", position, true)
+                                     ? ParseKeyPositionName(position)
+                                     : KeyPosition::None;
         if (binding.chord.position == KeyPosition::None)
         {
             return std::nullopt;
         }
     }
-    binding.commandId = Utf8ToWide(commandId.value());
+    binding.commandId = Utf8ToWide(commandId);
     return binding;
 }
 
@@ -353,26 +271,26 @@ std::optional<AppSettings> Parse(std::string_view json)
         return std::nullopt;
     }
     AppSettings settings;
-    if (const std::optional<std::string_view> theme = ReadString(root, "theme"); theme.has_value())
+    if (std::string theme; JsonRead::ReadString(root, "theme", theme, true))
     {
-        settings.theme = ThemeFrom(theme.value());
+        settings.theme = ThemeFrom(theme);
     }
-    if (const std::optional<std::string_view> language = ReadString(root, "language");
-        language.has_value() && LanguageTagIsPlausible(language.value()))
+    if (std::string language;
+        JsonRead::ReadString(root, "language", language, true) && LanguageTagIsPlausible(language))
     {
-        settings.language = Utf8ToWide(language.value());
+        settings.language = Utf8ToWide(language);
     }
     double number = 0;
-    if (ReadNumber(root, "layersPanelWidth", number))
+    if (JsonRead::ReadNumber(root, "layersPanelWidth", number, true))
     {
         settings.layersPanelWidth = std::clamp(number, AppSettings::kLayersPanelMin, AppSettings::kLayersPanelMax);
     }
     bool flag = false;
-    if (ReadBool(root, "sampleRing", flag))
+    if (JsonRead::ReadBool(root, "sampleRing", flag, true))
     {
         settings.sampleRing = flag;
     }
-    if (ReadNumber(root, "jpegQuality", number))
+    if (JsonRead::ReadNumber(root, "jpegQuality", number, true))
     {
         settings.jpegQuality = std::clamp(number, 0.0, 1.0);
     }
@@ -381,14 +299,15 @@ std::optional<AppSettings> Parse(std::string_view json)
         WindowPlacementSetting placement;
         // Every value fits ±32767 (compared directly: std::abs of INT_MIN has no int result).
         const auto fits = [](int value) noexcept { return value >= -32767 && value <= 32767; };
-        placement.valid = ReadInt(window, "x", placement.x) && ReadInt(window, "y", placement.y) &&
-                          ReadInt(window, "width", placement.width) && ReadInt(window, "height", placement.height) &&
-                          placement.width >= AppSettings::kWindowMinWidth &&
-                          placement.height >= AppSettings::kWindowMinHeight && fits(placement.x) && fits(placement.y) &&
-                          fits(placement.width) && fits(placement.height);
+        placement.valid =
+            JsonRead::ReadInt(window, "x", placement.x, true) && JsonRead::ReadInt(window, "y", placement.y, true) &&
+            JsonRead::ReadInt(window, "width", placement.width, true) &&
+            JsonRead::ReadInt(window, "height", placement.height, true) &&
+            placement.width >= AppSettings::kWindowMinWidth && placement.height >= AppSettings::kWindowMinHeight &&
+            fits(placement.x) && fits(placement.y) && fits(placement.width) && fits(placement.height);
         if (placement.valid)
         {
-            (void)ReadBool(window, "maximized", placement.maximized);
+            (void)JsonRead::ReadBool(window, "maximized", placement.maximized, true);
             settings.window = placement;
         }
     }

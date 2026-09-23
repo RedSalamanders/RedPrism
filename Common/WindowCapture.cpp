@@ -128,34 +128,6 @@ struct CaptureSource
 }
 } // namespace
 
-HRESULT QueryWindowCaptureSupport(HWND window, SIZE* surfaceSize) noexcept
-{
-    if (!window || !surfaceSize)
-    {
-        return E_POINTER;
-    }
-    *surfaceSize = SIZE{};
-    try
-    {
-        if (!winrt::Windows::Graphics::Capture::GraphicsCaptureSession::IsSupported())
-        {
-            return E_NOTIMPL;
-        }
-        const CaptureSource source = OpenCaptureSource(window);
-        const auto size = source.item.Size();
-        *surfaceSize = SIZE{size.Width, size.Height};
-        return S_OK;
-    }
-    catch (const std::bad_alloc&)
-    {
-        return E_OUTOFMEMORY;
-    }
-    catch (const winrt::hresult_error& error)
-    {
-        return error.code();
-    }
-}
-
 HRESULT SaveWindowScreenshot(HWND window, const wchar_t* pngPath, const RECT* clientCrop) noexcept
 {
     if (!window || !pngPath || pngPath[0] == L'\0')
