@@ -25,7 +25,7 @@ merge) in [`Completeness_2026-09-21.md`](../Done/Completeness_2026-09-21.md). Se
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) | ACTIVE | `Core_PerformanceAndResources`, `Document_Tools`, `UI_ApplicationChrome` | Filters, merges, and saves return to the message pump; the UI thread only applies a finished result |
+| [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) | ACTIVE | `Core_PerformanceAndResources`, `Core_Architecture`, `Document_Tools`, `UI_ApplicationChrome`, `Rendering_Composition`, `IO_ProjectFormat` | Every per-pixel loop, codec, file and GPU readback wait leaves the UI thread on two worker lanes; previews coalesce, commits cancel, busy shows after 250 ms; the UI thread only applies finished results |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be
