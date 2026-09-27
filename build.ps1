@@ -136,6 +136,16 @@ if (-not $Clean) {
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw "Build succeeded but the expected executable was not found: $executable"
     }
+    if ($Platform -eq 'x64') {
+        Write-Host 'Checking linked x64 instructions and ISA gate controls...' -ForegroundColor Cyan
+        Import-Module (Join-Path $repoRoot 'Build\IsaScan.psm1') -Force
+        $scanRoot = Join-Path $repoRoot ".build\IsaScan\x64\$($Configuration -replace '\s', '')"
+        foreach ($name in @('RedPrism', 'HostTests', 'DocumentTests', 'CompositionTests', 'IoTests')) {
+            $binary = Join-Path (Split-Path -Parent $executable) "$name.exe"
+            $null = Invoke-RedPrismIsaScan -Binary $binary -OutputDirectory (Join-Path $scanRoot $name)
+        }
+        & (Join-Path $repoRoot 'Tests\BuildProcessTests\IsaScanTests.ps1') -MSBuildPath $msbuild -Configuration $Configuration
+    }
     Write-Host "Ready: $executable" -ForegroundColor Green
     Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
     $provenance = Write-RedPrismDxUiProvenance -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration

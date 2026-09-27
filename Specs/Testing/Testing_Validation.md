@@ -69,6 +69,21 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+### CPU dispatch and instruction boundary (P0.8)
+
+HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
+baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
+It checks the actual six scalar function entries and padded, odd-width alpha/transparent adjustment inputs.
+Existing DocumentTests and WARP numeric goldens still exercise the extracted arithmetic through the public API.
+The CLI table tests all five names plus missing, empty, duplicate, unknown and `auto` rejection.
+
+The kernel smoke runs with `--isa scalar` and requires `isa=scalar` in all 13 operation rows. Separate hidden
+processes prove unimplemented, foreign-architecture and malformed tier requests exit 2 with the expected
+diagnostic. The ordinary WARP self-test also exercises Auto initialization.
+All x64 builds run the PE/PDB-attributed VEX/EVEX gate and compiled passing/failing controls described in
+`Build_Toolchain.md`; these controls never execute their high-ISA code. ARM64 cross-builds are compile evidence,
+not native execution. Pre-AVX execution under Intel SDE remains optional and must be recorded if performed.
+
 ### Job input and progress policies (P0.6b)
 
 HostTests covers one-active/latest-pending preview ownership, stale epochs and refinements, all eight continuation

@@ -162,6 +162,34 @@ executable, platform, and configuration. The probe projects opt in through `RedP
 access must fail with a C261xx diagnostic at `ConcurrencyAnalysisProbe::Unsafe`. Probe projects,
 objects, and retained per-case logs live under `.build/AnalysisProbe/`; regular `test.ps1` does not run these controls.
 
+## CPU ISA boundary
+
+Every first-party translation unit, including intrinsic tier files, uses the platform's default `/arch`.
+Do not compile shared STL/implicit COMDAT code at a higher `/arch`. Each tier entry is an extern noinline function
+named `Kernels_<Tier>_<Module>_<Name>` in `Kernels_<Tier>_<Module>.cpp`, called through `KernelTable`.
+
+After every x64 build, `build.ps1` scans all five first-party linked executables with `llvm-objdump` and
+`llvm-pdbutil` from the Visual Studio C++ Clang tools component (or a complete standalone LLVM installation).
+`Build/IsaScan.cs` inspects decoded executable instructions for C4/C5/62 VEX/EVEX prefixes, including a preceding
+legacy address/segment prefix. It checks the PE CodeView GUID and age against the full PDB, maps decimal section
+contributions to their object, and fails on missing/ambiguous attribution or a missing/mismatched PDB.
+AVX2 objects allow VEX; AVX-512 objects allow VEX and EVEX. Other objects must match the checked-in
+`Build/IsaRuntimeAllowlist.psd1`. No broad first-party object exception is permitted.
+
+The runtime exceptions are MSVC `vector_algorithms.obj` from `msvcprt[d].lib`, and the exact PDB procedure range
+of the runtime-dispatched `wmemchr` intrinsic in the observed `ImageCodecs.obj`, `HostTests.obj` or `IoTests.obj`.
+MSVC can emit that intrinsic inside a consumer object; surrounding functions remain scanned. The function name
+alone is insufficient. Undecoded prefixes in inline data are counted separately,
+not accepted as decoded instructions. The scan is a VEX/EVEX boundary gate; it does not prove safety of arbitrary
+third-party DLL dispatch or replace execution on baseline hardware. Those libraries need their own qualification.
+
+Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
+work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
+placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named
+object from an unapproved library and a same-named function in an unapproved object MUST fail. Missing and
+mismatched PDB controls MUST fail. Reports, binary/PDB/allowlist hashes, disassembly, full
+PDB records and control logs live under `.build/IsaScan/`. `-Clean` and ARM64 builds do not invoke this x64 gate.
+
 ## Solution shape
 
 `RedPrism.sln` contains `RedPrism` (Win32 GUI), `HostTests`, `DocumentTests`, `IoTests`, and `CompositionTests`.

@@ -106,6 +106,8 @@
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
+    <ClCompile Include="..\..\Common\Kernels.cpp" />
+    <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
   </ItemGroup>

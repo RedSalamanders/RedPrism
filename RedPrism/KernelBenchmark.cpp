@@ -2,6 +2,7 @@
 
 #include "../Common/Adjust.h"
 #include "../Common/ImageFilters.h"
+#include "../Common/Kernels.h"
 
 #include <algorithm>
 #include <bit>
@@ -100,9 +101,9 @@ template <typename Prepare, typename Invoke, typename Consume>
         count % 2 == 0 ? (milliseconds[count / 2 - 1] + milliseconds[count / 2]) / 2.0 : milliseconds[count / 2];
     const std::size_t p95Index = (count * 95 + 99) / 100 - 1; // nearest rank
     std::printf("KERNEL BENCH name=%s width=%d height=%d samples=%zu warmup=1 median_ms=%.3f p95_ms=%.3f "
-                "max_ms=%.3f checksum=%016llx arch=%s config=%s\n",
+                "max_ms=%.3f checksum=%016llx arch=%s config=%s isa=%ls\n",
                 name, width, height, count, median, milliseconds[p95Index], milliseconds.back(),
-                static_cast<unsigned long long>(checksum), kArch, kConfiguration);
+                static_cast<unsigned long long>(checksum), kArch, kConfiguration, KernelIsaName(ActiveKernels().isa));
     std::fflush(stdout);
     return true;
 }

@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "CommandLine.h"
 #include "CrashDumps.h"
+#include "Kernels.h"
 #include "Localization.h"
 #include "Resources.h"
 #include "SettingsStore.h"
@@ -222,6 +223,16 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     if (FAILED(CrashDumps::InstallCrashHandler(crashDirectory.c_str(), parsed.crashProbeWorker)))
     {
         return 1;
+    }
+    const KernelSelection kernelSelection = InitializeKernels(parsed.isa);
+    if (kernelSelection != KernelSelection::Selected)
+    {
+        const UINT messageId = kernelSelection == KernelSelection::UnsupportedHardware
+                                   ? IDS_ERROR_KERNEL_ISA_UNSUPPORTED
+                                   : IDS_ERROR_KERNEL_ISA_NOT_IMPLEMENTED;
+        const bool quiet = harness || parsed.crashProbeDirectory != nullptr;
+        EmitCommandLineText(FormatStringResource(nullptr, messageId, KernelIsaName(parsed.isa)) + L"\n", true, quiet);
+        return 2;
     }
     if (parsed.crashProbeDirectory != nullptr)
     {

@@ -16,6 +16,8 @@
 #include "JobMemoryTests.h"
 #include "JobTests.h"
 #include "JobUiPolicyTests.h"
+#include "KernelCliTests.h"
+#include "KernelDispatchTests.h"
 #include "Localization.h"
 #include "MemoryAdmissionTests.h"
 #include "MemoryBenchmark.h"
@@ -450,7 +452,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 480> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 482> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -763,6 +765,8 @@ void TestStringTable() noexcept
                                          IDS_ADJUST_CONTENT_FILL_HINT,
                                          IDS_ADJUST_NO_SOURCE,
                                          IDS_ERROR_UNKNOWN_ARGUMENT,
+                                         IDS_ERROR_KERNEL_ISA_UNSUPPORTED,
+                                         IDS_ERROR_KERNEL_ISA_NOT_IMPLEMENTED,
                                          IDS_CRASH_PROMPT,
                                          IDS_A11Y_MENU_BAR,
                                          IDS_A11Y_PROJECT_TABS,
@@ -1613,6 +1617,8 @@ int wmain(int argc, wchar_t** argv)
 
     const bool stress = argc > 1 && std::wstring_view{argv[1]} == L"--stress";
     gFailures += RunExecutorValueTests();
+    gFailures += RunKernelDispatchTests();
+    gFailures += RunKernelCliTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
     gFailures += RunJobUiPolicyTests();

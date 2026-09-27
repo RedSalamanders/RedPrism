@@ -47,7 +47,11 @@
   - [x] Gate dispatch on whole-graph reservations and retry from release/pressure events. Debug event/state tests pass, including an empty-frame-drain no-polling regression.
   - [x] Transfer large buffer/storage destruction to a non-cancellable worker release queue; prove teardown lifetime. Debug tests and actual ETW positive controls pass.
   - [x] Trace and stress admission, allocation failure and deferred frees; complete the validation matrix. 307 checks in Release, actual ETW byte counts and sanitizer poison checks pass.
-- [ ] P0.8 — Add scalar kernel dispatch and the x64 VEX scan.
+- [x] P0.8 — Add scalar kernel dispatch and the x64 VEX scan. Full x64 gates, all-image instruction scans and all ARM64 cross-builds passed.
+  - [x] Implement startup tier selection and scalar entry points without changing legacy pixel math. All six bodies and five helpers match the prior source exactly after whitespace/namespace normalization.
+  - [x] Add strict `--isa` parsing and forced-tier tests; reject unavailable/unimplemented tiers. Only Scalar is implemented in this foundation slice.
+  - [x] Scan decoded executable instructions, attribute them through PDB section contributions, and prove the gate with positive/negative compiled fixtures. All five images pass in every x64 configuration; exact runtime-owner exceptions and EVEX controls verified.
+  - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
@@ -56,7 +60,7 @@
 - [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2–P0.7 are complete on x64; the P0 phase remains open. ARM64
+Implementation started 2026-09-27. Slices P0.2–P0.8 are complete on x64; the P0 phase remains open. ARM64
 Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
 
 Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
@@ -113,6 +117,13 @@ controls and no UI free of 16 MiB or more for direct/adopted/vector releases. Re
 6.669 ms full touch and 7.95 µs UI ownership retirement (enqueue only), with matching checksums and zero warm
 page faults. The [memory record](../../TestRuns/MemoryPipeline_2026-09-27.md) gives controls, after measurements,
 review corrections and qualification limits. P1 still owns every operation's declared peak and async migration.
+This slice was committed and pushed to `origin/main` as `c16f5b6`.
+
+P0.8 progress, 2026-09-27: the immutable Scalar dispatch table, guarded CPU/OS detection and strict `--isa` path
+passed the full x64 gates and all ARM64 cross-builds. All five linked x64 images pass the PDB-attributed VEX/EVEX
+gate in each configuration. Compiled controls prove baseline leaks, EVEX in AVX2, overbroad runtime exemptions
+and missing/mismatched PDBs are rejected. See the [dispatch record](../../TestRuns/KernelDispatch_2026-09-27.md).
+Only Scalar is implemented; P2 owns actual SIMD acceleration. P0.1 UI/IO measurements and the P1 migrations are next.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -126,8 +137,8 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2–P0.7 are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded; P0.8 is next.
-  P0.1 and P0.8 remain executable without an open decision.
+- **Status**: ACTIVE. P0.2–P0.8 are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded.
+  P0.1 instrumentation/measurements are next and remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
   | Decisions | Gate |
@@ -886,7 +897,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     - trunc and floor through `cvttps2dq`/`cvttpd2dq` round trips, with the precondition |x| < 2^31, which holds
       for every clamped kernel value;
     - the 32-bit low multiply (Mix32) through `pmuludq` on the even and odd lanes.
-  - `Avx2`: detected by CPUID.1:ECX[12] FMA, ECX[29] F16C and ECX[27] OSXSAVE; CPUID.(7,0):EBX[5] AVX2 and EBX[8]
+  - `Avx2`: detected by CPUID.1:ECX[12] FMA, ECX[26] XSAVE, ECX[27] OSXSAVE, ECX[28] AVX and ECX[29] F16C; CPUID.(7,0):EBX[5] AVX2 and EBX[8]
     BMI2; and XCR0[2:1] = 11b. `__check_isa_support(__IA_SUPPORT_VECTOR256)` may replace only the AVX2 and XCR0
     part.
   - Optionally `Avx512` (D16).
@@ -906,8 +917,10 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 - **Mechanical check**: in every x64 configuration, `build.ps1` finds VEX/EVEX instructions by prefix (C4/C5/62) in
   executable sections. It attributes each one to its contributing object through the linker map or PDB section
   contributions, and fails on any that is not in a `Kernels_Avx2_*`/`Kernels_Avx512_*` object.
-  - A checked-in allowlist names the runtime-dispatched MSVC STL and CRT objects (`vector_algorithms`, `wmemchr`)
-    and any third-party library with its own CPUID dispatch.
+  - A checked-in allowlist names `vector_algorithms.obj` from `msvcprt[d].lib` and the exact PDB procedure range
+    of runtime-dispatched `wmemchr`. MSVC emits that intrinsic inside consumer objects (observed in ImageCodecs),
+    so the function exception MUST NOT exempt that whole object. A new third-party exception needs evidence of
+    its own CPUID dispatch. P0.8 scans all five first-party images and matches PE/PDB GUID and age.
   - P0.8 proves the current binary passes with only that allowlist.
   - An `--isa sse2` self-test under Intel SDE with a pre-AVX CPU model is optional and recorded at closeout. An
     `--isa sse2` run on an AVX2 host cannot detect a leak.
@@ -1669,9 +1682,9 @@ of 16.2 µs. Every image kernel still has to qualify its own polling interval wh
 - **Exit**: admission and allocation-failure stress are green, and the `UiFree` trace shows no free of 16 MiB or
   more on the UI thread.
 
-**P0.8 Kernel dispatch skeleton** (ACTIVE). `KernelTable` with the scalar tier, `--isa`, and the VEX scan in
+**P0.8 Kernel dispatch skeleton** (COMPLETE on x64, 2026-09-27). `KernelTable` with the scalar tier, `--isa`, and the VEX scan in
 `build.ps1` with its allowlist. **Exit**: the current binary passes the scan with only the STL/CRT allowlist in every
-x64 configuration; goldens unchanged.
+x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also passed. See the dispatch record above.
 
 ### P1 — Nothing blocks (placement changes; kernel math unchanged)
 

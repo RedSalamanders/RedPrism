@@ -22,6 +22,9 @@ Use the repository entrypoints instead of assembling ad hoc MSBuild commands:
 ```
 
 Outputs are always `.build/<Platform>/<Configuration>/`. Intermediates are under `.build/Intermediate/`.
+Every x64 build scans all five linked images for misplaced VEX/EVEX instructions and compiles passing/failing
+controls. It requires `llvm-objdump` and `llvm-pdbutil` (VS C++ Clang tools) plus matching full PDBs. Keep tier TUs
+at default `/arch`; runtime exceptions belong only in the reviewed `Build/IsaRuntimeAllowlist.psd1`.
 Pinned vcpkg state stays beneath `.build/`. Do not substitute a developer-global install.
 
 `package.ps1` builds Release and stages the portable ZIP (`.build/packages/`, never committed) with the app-local

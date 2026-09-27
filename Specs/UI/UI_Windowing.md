@@ -130,6 +130,7 @@ command line.`) shown the same way.
 | --- | --- |
 | *(none)* | Create the titled Direct3D 11 window and run the idle message loop |
 | `--warp` | Force WARP (Microsoft Basic Render Driver) |
+| `--isa scalar\|sse2\|avx2\|avx512\|neon` | Force a CPU kernel tier before worker startup. Missing, empty, duplicate, unknown and `auto` values are refused. Unsupported or unimplemented tiers exit 2 with a localized diagnostic before creating the application. Currently only Scalar is implemented; no override selects Auto, which selects Scalar. |
 | `--self-test` | Create the titled window **hidden**, force WARP, assert the DPI-adjusted 1280×800 logical client, composite DxUi chrome, prove visible surface then 0 when hidden, exit 0 |
 | `--screenshot <png>` | Show the titled window without activating it, present chrome and the canvas (whatever the display's power, the window's visibility or occlusion), start the capture delay after the first frame that reached the display, capture through Windows.Graphics.Capture, exit 0, 8 when this system cannot capture a window (`E_NOTIMPL`, the capture API absent) or 9 when the capture failed or never happened |
 | `--dpi 96\|144` | Override layout DPI and the 1280×800 logical client scale for `--screenshot` |

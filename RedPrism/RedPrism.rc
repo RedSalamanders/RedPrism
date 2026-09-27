@@ -367,6 +367,8 @@ BEGIN
     IDS_ADJUST_CONTENT_FILL_HINT    "Fill the selection using surrounding pixels from this layer."
     IDS_ADJUST_NO_SOURCE            "Not enough unselected, opaque image pixels to synthesize a fill. Use a smaller selection with some surrounding image."
     IDS_ERROR_UNKNOWN_ARGUMENT      "Unknown argument {0}. Run RedPrism.exe --help for the command line."
+    IDS_ERROR_KERNEL_ISA_UNSUPPORTED "Kernel ISA {0} is not supported by this hardware."
+    IDS_ERROR_KERNEL_ISA_NOT_IMPLEMENTED "Kernel ISA {0} is not implemented in this build."
     IDS_CRASH_PROMPT                "RedPrism closed unexpectedly the last time it ran. A crash report was saved to:\n{0}\n\nOpen its folder? Nothing is sent anywhere."
     IDS_A11Y_MENU_BAR               "Menu bar"
     IDS_A11Y_PROJECT_TABS           "Project tabs"

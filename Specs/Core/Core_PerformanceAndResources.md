@@ -206,6 +206,24 @@ with the current `ReadRegion` fast path; it is a conservative ownership comparis
 older binary. Each pair must produce identical pixels. Reports distinguish a measured kernel-result speedup
 from full host commit latency, which also includes history, upload and presentation.
 
+## CPU instruction dispatch
+
+`Common/Kernels.h` is a standard-only boundary. Startup selects an immutable `KernelTable` before workers start;
+each adjustment wrapper loads that table once and calls the selected entry, with no dispatch in the pixel loop.
+The retained Scalar table currently owns Tables, Gradient Map, Grain, Noise, Lens Distortion and Color Cube.
+Its extracted arithmetic and loop order MUST remain identical to the legacy reference. Scalar means the portable
+reference compiled at the platform baseline; the compiler may use baseline SSE2 on x64 and NEON on ARM64.
+
+Only Scalar is implemented in P0.8. Auto therefore selects Scalar. A forced tier MUST fail if it is unsupported or
+not implemented, with no silent fallback. `SetIsaForTest` uses the same selector and may be used only with no
+kernels/jobs in flight; tests restore Auto. Rejected selections preserve the prior table. No AVX-512 subset is
+advertised before D16. Windows ARM64 reports baseline NEON, with no optional FP16/dot-product implementation yet.
+
+The x64 AVX2 tier requires SSE2; CPUID.1 ECX FMA, XSAVE, OSXSAVE, AVX and F16C; CPUID.7 EBX AVX2 and BMI2; and
+XCR0 bits 1 and 2. The detector MUST test OSXSAVE before executing XGETBV. Absent CPUID leaves are zero.
+Tier translation units retain the default `/arch`, noinline extern `Kernels_<Tier>_<Module>_<Name>` entry points,
+and the linked-image check in `Build_Toolchain.md`. New SIMD tables and measured speed qualification remain P2.
+
 ## Validation
 
 `HostTests` asserts idle vs render vs occlusion-probe selection. `RedPrism.exe --self-test --warp` presents exactly one

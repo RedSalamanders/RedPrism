@@ -84,6 +84,8 @@
 
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
+    <ClCompile Include="KernelDispatchTests.cpp" />
+    <ClCompile Include="KernelCliTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
     <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
@@ -97,6 +99,8 @@
     <ClCompile Include="..\..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
+    <ClCompile Include="..\..\Common\Kernels.cpp" />
+    <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />

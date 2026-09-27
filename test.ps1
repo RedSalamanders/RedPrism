@@ -158,7 +158,7 @@ Write-Host 'Running kernel benchmark smoke...' -ForegroundColor Cyan
 $kernelSmokeLog = Join-Path $outputRoot 'RedPrism.kernels-smoke.log'
 $kernelSmokeErr = Join-Path $outputRoot 'RedPrism.kernels-smoke.err.log'
 Remove-Item -LiteralPath $kernelSmokeLog, $kernelSmokeErr -ErrorAction SilentlyContinue
-$kernelSmoke = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--bench', 'kernels-smoke') `
+$kernelSmoke = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--bench', 'kernels-smoke', '--isa', 'scalar') `
     -PassThru -RedirectStandardOutput $kernelSmokeLog -RedirectStandardError $kernelSmokeErr
 $kernelSmokeTimeoutSeconds = 60
 if (-not $kernelSmoke.WaitForExit($kernelSmokeTimeoutSeconds * 1000)) {
@@ -176,7 +176,7 @@ if ($kernelOperationRows.Count -ne 13) {
 $kernelNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 $kernelChecksums = @{}
 foreach ($row in $kernelOperationRows) {
-    if ($row -match '^KERNEL BENCH name=(?<name>[A-Za-z0-9_]+) width=32 height=24 samples=2 warmup=1 median_ms=\S+ p95_ms=\S+ max_ms=\S+ checksum=(?<checksum>[0-9A-Fa-f]+) arch=\S+ config=\S+$') {
+    if ($row -match '^KERNEL BENCH name=(?<name>[A-Za-z0-9_]+) width=32 height=24 samples=2 warmup=1 median_ms=\S+ p95_ms=\S+ max_ms=\S+ checksum=(?<checksum>[0-9A-Fa-f]+) arch=\S+ config=\S+ isa=scalar$') {
         $kernelName = $Matches['name']
         $kernelChecksums[$kernelName] = $Matches['checksum']
     } else {
@@ -210,6 +210,26 @@ if ($bufferReports.Count -ne 1 -or $bufferReports[0] -notmatch '^BUFFER BENCH RE
     throw 'Missing or malformed buffer comparison completion report.'
 }
 Write-Host 'PASS kernel benchmark smoke: 13 operations and 3 equivalent copy/adopt pairs, 32x24, 2 samples each'
+
+$foreignIsa = if ($Platform -eq 'x64') { 'neon' } else { 'sse2' }
+foreach ($isaCase in @(
+    @{ Name = 'not-implemented'; Value = 'avx512'; Pattern = 'not implemented' },
+    @{ Name = 'unsupported'; Value = $foreignIsa; Pattern = 'not supported' },
+    @{ Name = 'malformed'; Value = 'auto'; Pattern = 'Unknown argument' }
+)) {
+    $isaError = Join-Path $outputRoot "RedPrism.isa-$($isaCase.Name).err.log"
+    $isaOutput = Join-Path $outputRoot "RedPrism.isa-$($isaCase.Name).log"
+    $isaProcess = Start-Process -WindowStyle Hidden -FilePath $executable `
+        -ArgumentList @('--bench', 'kernels-smoke', '--isa', $isaCase.Value) -PassThru `
+        -RedirectStandardOutput $isaOutput -RedirectStandardError $isaError
+    if (-not $isaProcess.WaitForExit(30000)) {
+        throw "ISA refusal did not exit (PID $($isaProcess.Id)); it was not terminated."
+    }
+    if ($isaProcess.ExitCode -ne 2 -or (Get-Content -LiteralPath $isaError -Raw) -notmatch $isaCase.Pattern) {
+        throw "ISA refusal $($isaCase.Name) did not return its expected diagnostic and exit 2."
+    }
+    Write-Host "PASS kernel-isa.$($isaCase.Name)"
+}
 
 Write-Host 'Running CRT report hook probe...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\CrtReportHookTests.ps1') -HostTestsPath $hostTests -Configuration $Configuration

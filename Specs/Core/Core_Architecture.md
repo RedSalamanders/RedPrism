@@ -36,6 +36,7 @@ borrows that device. It MUST NOT own a swap chain.
 | `JobScheduler` (owned by `Application`) | Bounded job records and UI-action queue, cancellation, progress/completion publication and owner-thread delivery | Window, chrome, document/session state, GPU context, image-operation policy |
 | `Renderer` | One `ID3D11Device`, one `ID3D11DeviceContext`, one `IDXGISwapChain1`, RTV, frame-latency waitable, occlusion registration | A second device, a chrome HWND, GDI paint, DxUi library lifetime, document rasters |
 | Document | Layer graph, COW rasters, history budget | HWND, DXGI factory, DxUi host |
+| `Kernels` (`Common/Kernels.*`) | Immutable process-lifetime CPU function tables and CPU/OS feature detection; noinline tier implementations in separate translation units | Document/session state, HWND, GPU context, scheduler |
 | `WorkerPool` (`Common/WorkerPool.*`) | Private fixed-size Windows pool, bounded payload-free dispatch wakeups, callback cleanup group, implicit MTA lifetime, cancellation and parallel helpers | HWND, document mutation, GPU context, a second scheduler |
 | `WaitPool` (`Common/WorkerPool.*`) | Dedicated one-thread pool and at most 32 one-shot event waits | Pixel work, waits inside callbacks, document mutation |
 | DxUi EmbeddedHost | Retained chrome models and their GPU surfaces | Swap chain, renderer HWND, worker, periodic timer |
@@ -84,8 +85,8 @@ UI-owned `PreviewMailbox`, `ContinuationQueue`, `HistoryWork` and `StrokeReplay`
 the command queue with recorded strokes. The mailbox, barrier and application outlive all their workers; pointer
 fields in stamps are opaque identities, not permission for workers to access UI state. See `Document_Tools.md`.
 
-These foundations do not migrate existing image operations to asynchronous execution. Memory admission remains
-P0.7; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
+These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
+specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
 `UiNeverBlocks_2026-09-22.md`.
 
 `WorkerPool::Initialize` creates a private pool with equal minimum and maximum thread counts (logical processor

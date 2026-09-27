@@ -2,8 +2,11 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+
+#include "Kernels.h"
 
 enum class RedPrismSwitch : uint8_t
 {
@@ -16,6 +19,7 @@ enum class RedPrismSwitch : uint8_t
     Bench,
     CrashProbe,
     CrashProbeWorker,
+    Isa,
     Count,
 };
 
@@ -46,6 +50,7 @@ struct RedPrismCommandLine final
     const wchar_t* bench = nullptr;
     const wchar_t* crashProbeDirectory = nullptr;
     bool crashProbeWorker = false;
+    KernelIsa isa = KernelIsa::Auto;
 };
 
 inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help", L"-h", L"/?", L"-?"};
@@ -95,6 +100,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   RedPrismSwitchValue::None, nullptr,
                                   L"Fault two private-pool threads; requires --crash-probe <directory> and "
                                   L"may appear before or after it.",
+                                  L"Diagnostics"},
+        RedPrismCommandLineSwitch{RedPrismSwitch::Isa, L"--isa", nullptr, RedPrismSwitchValue::Separate,
+                                  L"<scalar|sse2|avx2|avx512|neon>",
+                                  L"Select the CPU kernel implementation. The requested tier must be supported by "
+                                  L"this hardware and implemented in this build.",
                                   L"Diagnostics"}};
 
 inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"General", L"Diagnostics"};
@@ -162,6 +172,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     {
         *errorToken = nullptr;
     }
+    bool isaSpecified = false;
     for (int index = 1; index < argumentCount; ++index)
     {
         const RedPrismCommandLineSwitch* entry = RedPrismFindSwitch(arguments[index]);
@@ -241,6 +252,30 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
         case RedPrismSwitch::CrashProbeWorker:
             parsed.crashProbeWorker = true;
             break;
+        case RedPrismSwitch::Isa:
+            if (isaSpecified || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
+            {
+                if (errorToken)
+                {
+                    *errorToken = arguments[index];
+                }
+                return false;
+            }
+            {
+                const std::optional<KernelIsa> isa = ParseKernelIsa(arguments[index + 1]);
+                if (!isa.has_value())
+                {
+                    if (errorToken)
+                    {
+                        *errorToken = arguments[++index];
+                    }
+                    return false;
+                }
+                parsed.isa = isa.value();
+                isaSpecified = true;
+                ++index;
+            }
+            break;
         case RedPrismSwitch::Dpi:
             if (index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
             {
@@ -292,6 +327,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     text += L"Usage: RedPrism.exe [--warp]\n";
     text += L"       RedPrism.exe --self-test [--warp]\n";
     text += L"       RedPrism.exe --screenshot <png> [--warp] [--dpi 96|144]\n";
+    text += L"       RedPrism.exe [--isa scalar|sse2|avx2|avx512|neon]\n";
     text += L"       RedPrism.exe --crash-probe <directory>\n";
     text += L"       RedPrism.exe --crash-probe <directory> --crash-probe-worker\n";
     text += L"       RedPrism.exe --crash-probe-worker --crash-probe <directory>\n";
