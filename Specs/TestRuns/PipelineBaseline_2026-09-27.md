@@ -65,6 +65,29 @@ successful 100 MP blur. These results make no Photoshop performance or RAW-decod
 
 The 100 MP Gaussian row is `gaussian-refused-pixel-budget`, not successful blur processing. Current document limits refuse its initial grow, and the harness verifies no document or history change. Its displayed duration is the measured refusal path. The fixture is 10000×10000 with one raster layer; the 3840×2160 and 8192×5464 fixtures each contain two raster layers, a mask, and an exposure adjustment layer. Fixture checksums identify generated pixel content, not a RAW corpus.
 
+## WARP 45 MP — 2026-09-28
+
+The revised executable above completed all 15 scenarios on the 8192×5464 layered fixture, exit 0.
+This run uses the same measurement boundaries and warmup/run counts. Gaussian Blur succeeds at this size.
+
+| Operation | Elapsed median / p95 / max (ms) | Dispatch max (ms) | Frame max (ms) |
+|---|---:|---:|---:|
+| zoom-actual | 264.235 / 268.864 / 268.864 | 0.203 | 2.702 |
+| zoom-fit | 227.290 / 235.941 / 235.941 | 0.140 | 3.174 |
+| levels-open | 948.603 / 1058.075 / 1058.075 | 1057.378 | 0.650 |
+| levels-update | 144.942 / 183.377 / 183.377 | 177.528 | 5.802 |
+| levels-commit | 941.309 / 1052.946 / 1052.946 | 753.758 | 309.571 |
+| hsv-update | 274.870 / 353.048 / 353.048 | 349.136 | 5.604 |
+| exposure-update | 165.779 / 196.728 / 196.728 | 192.090 | 4.755 |
+| gaussian-update | 786.580 / 840.866 / 840.866 | 838.998 | 1.964 |
+| noise-update | 1154.966 / 1204.053 / 1204.053 | 886.792 | 330.342 |
+| grain-update | 1017.399 / 1138.776 / 1138.776 | 829.942 | 308.683 |
+| lens-update | 68.276 / 71.894 / 71.894 | 70.444 | 1.525 |
+| invert | 900.583 / 921.631 / 921.631 | 809.760 | 115.948 |
+| fill | 1118.340 / 1164.454 / 1164.454 | 1057.202 | 126.213 |
+| clear | 1175.994 / 1208.444 / 1208.444 | 1104.250 | 119.074 |
+| undo | 209.606 / 213.262 / 213.262 | 2.668 | 0.489 |
+
 ## Method and interpretation
 
 Each listed operation has 10 recorded runs after one excluded warmup, matching [Testing_Benchmarks.md](../Testing/Testing_Benchmarks.md). Median is the average of the two middle elapsed samples; p95 is nearest-rank (`ceil(0.95 × n)`, the largest sample for these 10-run sets); elapsed maximum is exact. Timing histogram p99 is reported by the upper bound of the bucket containing nearest-rank p99; histogram maxima are exact observed durations. Values above are converted from the logs’ microseconds to milliseconds and rounded to three decimals.
@@ -91,6 +114,7 @@ are still required before the corresponding migrations are qualified. P0.1 and G
 | `baseline-r1-ui45-2026-09-27.log` | Complete: 15 operations; final `UI BENCH REPORT status=ok`. |
 | `baseline-r1-ui100-2026-09-27.log` | Complete: 15 operations; final `UI BENCH REPORT status=ok`, exit 0. |
 | `baseline-w-ui100-2026-09-27.log` | Incomplete: eight operations completed; stopped advancing during `noise-update`, trial 1. The responsive process was idle, its window visible and not minimized. After verifying the exact owned PID/path/arguments, the primary posted its existing benchmark failure-timer message; the normal failure handler/shutdown exited 5. No forced process termination was used. The old driver did not report display-power/occlusion/job state, so the stall's cause is unconfirmed. Rows after Gaussian are not accepted. |
+| `baseline-w-ui45-2026-09-28.log` | Complete: 15 operations; final `UI BENCH REPORT status=ok`, exit 0. Revised executable hash above. |
 | `baseline-w-ui100-retry-2026-09-28.log` | Complete: 15 operations; final `UI BENCH REPORT status=ok`, exit 0. Separate retry binary SHA-256 is recorded above; its log hash is recorded below. |
 
 Follow-up on 2026-09-28: benchmark-only display/system execution requests now prevent idle display power-off and
@@ -102,8 +126,8 @@ and any rerun use the revised binary and are recorded separately.
 Full x64 Debug, Release and ASan Debug test gates passed (`.build/logs/ui-bench-x64-{Debug,Release,ASan}-tests.log`,
 each ending `All tests passed.`), including the real-loop smoke, corpus offline controls, WARP self-test, crash
 probes and harness captures. ARM64 Debug, Release and ASan Debug cross-builds passed; no native ARM64 runtime
-qualification is claimed. Skill validation, formatting and the whitespace check passed. The WARP45 baseline is
-still pending; operation coverage and the phase exit criteria remain open.
+qualification is claimed. Skill validation, formatting and the whitespace check passed. Hardware and WARP baselines at all three sizes are
+complete; the remaining operation coverage and phase exit criteria remain open.
 
 The tightened ISA parser passed all 13 synthetic dispatch/table controls, including rejection of an undecoded
 target, a target inside another instruction, an unknown instruction, a mismatched contribution, an overlong decoded
@@ -125,3 +149,4 @@ SHA-256 for retained benchmark logs (including the explicitly incomplete WARP ru
 | `baseline-r1-ui100-2026-09-27.log` | `CEDDC9EF5CA5635A77E066053BC6425B7127712CC29CA82212947795314D711D` |
 | `baseline-w-ui100-2026-09-27.log` | `BCD5AB77781ADE6BAFDA1F970BA185665F8A54CBEAC86321D1B55FF272B4A2B3` |
 | `baseline-w-ui100-retry-2026-09-28.log` | `189F948607EDA2FC57567636741818CF7FF3EB80ADFA464866A2AD1F0BBB893B` |
+| `baseline-w-ui45-2026-09-28.log` | `3E462609184678939AEA0B5A9B0415667D70A32976CBC02445760BB746734C15` |

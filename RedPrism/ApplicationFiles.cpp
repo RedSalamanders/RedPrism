@@ -255,7 +255,7 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return false;
     }
-    if (_session.history.IsModified())
+    if (_session.history.IsModified() || _session.HasColorEdit())
     {
         return true;
     }
@@ -290,7 +290,7 @@ bool Application::HasUnsavedWork() const noexcept
     return true;
 }
 
-void Application::SettleForWrite() noexcept
+bool Application::SettleForWrite() noexcept
 {
     // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo. A
     // live stroke or warp, a pending gradient and a pending transform record their entries (EditEnd::Write).
@@ -298,6 +298,7 @@ void Application::SettleForWrite() noexcept
     EndCanvasEdits(EditEnd::Write);
     _session.ClearSnapGuides();
     DocumentChanged();
+    return !_session.HasColorEdit();
 }
 
 bool Application::ConfirmDiscardChanges() noexcept
@@ -956,6 +957,94 @@ int Application::RunFilesSelfTest() noexcept
             SelfTestFailure(std::format(L"Save during an adjustment layer's panel did not apply it first "
                                         L"(applied {}, file white {}, document white {}, modified {}).\n",
                                         applied, fileWhite, documentWhite, _session.history.IsModified()));
+            return 5;
+        }
+    }
+    // A changed Levels panel is unsaved work even when its document revision is clean; Cancel leaves the live panel,
+    // preview settings, document and saved history revision untouched.
+    {
+        const std::wstring pathBefore = _documentPath;
+        const std::optional<bool> forcedDiscardBefore = _forcedDiscard;
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard = false;
+        (void)insertRed(12, 8);
+        _session.history.MarkSaved();
+        const std::optional<CanvasDocument> documentBefore = _session.Document();
+        const Guid revisionBefore = _session.history.CurrentRevision();
+        const int undoCountBefore = _session.history.UndoCount();
+        const bool cleanBefore = !_session.history.IsModified();
+        OnCommand(ChromeHost::kCommandLevels);
+        OnAdjustAction(AdjustAction::SetOutputBlack, 24.0);
+        const bool changedPanel =
+            _session.PendingColorEdit().has_value() && _session.PendingColorEdit()->kind == FilterKind::Levels &&
+            Adjust::LevelsCurrent(_session.PendingColorEdit()->settings.levels).outputBlack == 24.0;
+        const bool unsaved = HasUnsavedWork();
+        const bool cancelKept = !_forcedDiscard.value() && !ConfirmDiscardChanges();
+        const bool panelKept = _session.HasColorEdit(FilterKind::Levels) && _session.PendingColorEdit().has_value() &&
+                               Adjust::LevelsCurrent(_session.PendingColorEdit()->settings.levels).outputBlack == 24.0;
+        const bool documentKept = _session.Document() == documentBefore;
+        const bool historyKept = !_session.history.IsModified() &&
+                                 _session.history.CurrentRevision() == revisionBefore &&
+                                 _session.history.UndoCount() == undoCountBefore;
+        CancelColorEdit();
+        _documentPath = pathBefore;
+        _forcedDiscard = forcedDiscardBefore;
+        if (!cleanBefore || !changedPanel || !unsaved || !cancelKept || !panelKept || !documentKept || !historyKept)
+        {
+            SelfTestFailure(std::format(L"A changed Levels panel on a clean document was not preserved by Cancel "
+                                        L"(clean {}, changed {}, unsaved {}, cancel {}, panel {}, document {}, "
+                                        L"history {}).\n",
+                                        cleanBefore, changedPanel, unsaved, cancelKept, panelKept, documentKept,
+                                        historyKept));
+            return 5;
+        }
+    }
+    // Content-Aware Fill has no donors when the selection covers every opaque pixel. Failed settling must leave the
+    // panel and document/history intact and must not create the exact scratch project path.
+    {
+        const std::wstring pathBefore = _documentPath;
+        const std::wstring fillPath = scratch + L"fill-no-donors.prism";
+        const std::optional<bool> forcedDiscardBefore = _forcedDiscard;
+        (void)DeleteFileW(fillPath.c_str());
+        _forcedDiscard = true;
+        OnCommand(ChromeHost::kCommandNew);
+        _forcedDiscard.reset();
+        (void)insertRed(4, 4);
+        _session.ApplySelection(SelectionGeometry::Rect(0, 0, 4, 4), SelectionMode::New, L"Select");
+        _session.history.MarkSaved();
+        const bool cleanBefore = !_session.history.IsModified();
+        const std::optional<CanvasDocument> documentBefore = _session.Document();
+        const Guid revisionBefore = _session.history.CurrentRevision();
+        const int undoCountBefore = _session.history.UndoCount();
+        OnCommand(ChromeHost::kCommandContentAwareFill);
+        const bool failedPreview = _session.PendingColorEdit().has_value() &&
+                                   _session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
+                                   _session.PendingColorEdit()->previewFailed;
+        _documentPath = fillPath;
+        const bool saved = SaveDocument(false);
+        const DWORD attributes = GetFileAttributesW(fillPath.c_str());
+        const DWORD attributesError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        const bool noFile = attributes == INVALID_FILE_ATTRIBUTES &&
+                            (attributesError == ERROR_FILE_NOT_FOUND || attributesError == ERROR_PATH_NOT_FOUND);
+        const bool panelKept = _session.PendingColorEdit().has_value() &&
+                               _session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
+                               _session.PendingColorEdit()->previewFailed;
+        const bool documentKept = _session.Document() == documentBefore;
+        const bool historyKept = !_session.history.IsModified() &&
+                                 _session.history.CurrentRevision() == revisionBefore &&
+                                 _session.history.UndoCount() == undoCountBefore;
+        CancelColorEdit();
+        (void)DeleteFileW(fillPath.c_str());
+        _documentPath = pathBefore;
+        _forcedDiscard = forcedDiscardBefore;
+        if (!cleanBefore || !failedPreview || saved || !noFile || !panelKept || !documentKept || !historyKept)
+        {
+            SelfTestFailure(std::format(L"Saving with donorless Content-Aware Fill did not fail without changing "
+                                        L"state (clean {}, preview failed {}, saved {}, no file {}, panel {}, "
+                                        L"document {}, history {}).\n",
+                                        cleanBefore, failedPreview, saved, noFile, panelKept, documentKept,
+                                        historyKept));
             return 5;
         }
     }

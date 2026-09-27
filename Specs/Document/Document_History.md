@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-28
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -36,7 +36,7 @@ Undo and Redo drop it and still move history, as legacy `restore()` cancels the 
 stays. An open color panel also
 consumes the key: history stays put until OK or Cancel. The host drops any composition stroke in the
 same command. The save prompt (`ConfirmDiscardChanges`) settles nothing before it asks: a pending edit that Save
-would record (a live stroke or warp, a pending gradient, a changed transform, a typed opacity) counts as unsaved
+would record (a live stroke or warp, a pending gradient, a changed transform, a typed opacity, an open color panel) counts as unsaved
 work beside `IsModified`, so a clean document with one still asks; Cancel leaves it pending, Save settles and
 writes it, and Don't Save settles it as the document goes ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md)
 › Files).

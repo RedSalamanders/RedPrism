@@ -12,7 +12,7 @@
     - [x] Implement the real application-loop driver, machine report and 15 operation smoke scenarios; all x64 gates and ARM64 cross-builds pass.
     - [x] Acquire five per-file CC0 RAW samples and verify sizes, SHA-256 and signatures; inspect the tiled DNG layout. Offline downloader controls pass.
     - [x] Complete the benchmark driver configuration gates, including ASan, offline corpus controls and the tightened ISA parser.
-    - [ ] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. Hardware all sizes and WARP 4K/100 MP complete; WARP 45 MP running.
+    - [x] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. All six size/device scenarios complete with 15 operation rows each.
     - [ ] Extend baseline coverage to the remaining §5 operations, I/O and the non-cancellable calls before their migrations.
 - [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
   - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
@@ -60,7 +60,7 @@
   - [x] Scan decoded executable instructions, attribute them through PDB section contributions, and prove the gate with positive/negative compiled fixtures. All five images pass in every x64 configuration; exact runtime-owner exceptions and EVEX controls verified.
   - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
-  - [ ] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior.
+  - [x] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior. Full x64 gates and all ARM64 cross-builds passed; 63 new document checks and the WARP save-path checks pass.
   - [ ] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels.
   - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
@@ -153,7 +153,7 @@ This slice was committed and pushed to `origin/main` as `db7fd52`.
 P0.1b progress, 2026-09-28: the real-loop driver exercises 15 commands through posted messages, validates results
 and waits for idle jobs plus Present before accepting each sample. Full x64 Debug, Release and ASan gates and all
 ARM64 cross-builds pass. The [baseline record](../../TestRuns/PipelineBaseline_2026-09-27.md) preserves complete
-hardware 4K/45 MP/100 MP and WARP 4K/100 MP runs; WARP 45 MP is running. The original incomplete WARP 100 MP run
+hardware and WARP 4K/45 MP/100 MP runs. The original incomplete WARP 100 MP run
 is retained separately from its successful retry. Public CC0 ARW, CR3, NEF, RAF and tiled DNG files
 are acquired with matching upstream SHA-256 values; see the [corpus record](../../TestRuns/RawCorpus_2026-09-27.md).
 The 100 MP Gaussian scenario explicitly measures the existing pixel-budget refusal, not an absent preview.
@@ -161,6 +161,14 @@ The x64 scan exposed compiler-generated switch-table data that decodes as VEX; a
 recognizer replaces that false positive without adding an object or procedure exception.
 All 13 parser controls and the current-image scans pass. The driver/corpus slice is qualified; P0.1 stays open for
 the remaining operation and I/O baselines. No RAW decode or Photoshop speed comparison is claimed.
+The driver/corpus slice was committed and pushed as `e114b9e`; the final WARP 45 MP run completed immediately after.
+
+P1.1a progress, 2026-09-28: immutable filter input/result types and the shared Prepare/Run/Apply path are integrated,
+including opening-input validation, successful full-grid preview reuse, eager carried-mask thumbnails and budget
+rechecks. Processing failure keeps the panel and last-applied settings; Save/Export stop when the panel cannot
+apply. All 63 new document checks, the WARP save-path checks and existing numeric goldens pass in full x64 Debug,
+Release and ASan gates; all ARM64 cross-builds pass. See the [work-split record](../../TestRuns/ColorEditWork_2026-09-28.md).
+P1.1b owns bounded inner-kernel cancellation and peak reservations, and P1.1c owns asynchronous host wiring.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -174,8 +182,8 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2–P0.8 are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded.
-  P0.1 instrumentation/measurements are next and remain executable without an open decision.
+- **Status**: ACTIVE. P0.2–P0.8 and the P0.1 driver/corpus gates are complete on x64; all ARM64 cross-builds passed.
+  D1, D2, D3, D8 and the staged D12 policy are recorded. P0.1 coverage and P1.1 implementation are in progress.
   The open decisions in §11 gate the other slices:
 
   | Decisions | Gate |
@@ -1116,7 +1124,7 @@ and retry policy of the new job path rather than assuming current behavior alrea
 The proposed new split is:
 
 - `PrepareColorEditCommit(edit) → ColorEditJobInput`;
-- `RunColorEditJob(input, executor, token) → ColorEditJobResult`, pure work in `Common/AdjustEdit.cpp`;
+- `RunColorEditJob(input, executor, token) → ColorEditJobResult`, pure work in `Common/ColorEditWork.cpp`;
 - `ApplyColorEditResult(result) → bool`.
 
 `CommitColorEdit` stays as `Apply(Run(Prepare(edit)))` on the calling thread, with a `bad_alloc` boundary around

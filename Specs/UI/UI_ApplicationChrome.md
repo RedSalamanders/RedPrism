@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-28
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -779,7 +779,7 @@ Project, Exit and the window's close button — a modified document asks `IDS_CO
 proceeds, Cancel keeps everything as it was. Nothing settles before the answer, so Cancel leaves open panels, cards,
 the crop frame, drafts, a pending transform and a live stroke exactly as they were; the document's interactions
 settle only once Save or Don't Save lets it go. A pending edit that Save would record — a live stroke or warp, a
-pending gradient, a changed transform, a typed opacity — counts as a change, so a clean document with one still
+pending gradient, a changed transform, a typed opacity or an open color panel — counts as a change, so a clean document with one still
 asks. Quiet runs never ask (they proceed, or take the self-test's forced answer). Close Project (Ctrl+W) leaves the
 shell without a document: the status strip shows `—`, the layers panel is empty, the canvas hole shows the clear
 color and the document commands do nothing; New, Open, Import Images… and a drop start the next document. A document
@@ -792,7 +792,10 @@ Save, Save As and Export write what the canvas shows (review-fix Decision D2): b
 document as Enter would — a typed opacity records its entry, a live stroke or warp and a pending gradient commit, a
 pending transform applies, and an open color panel applies as its OK does. An adjustment layer's panel previews
 inside the document, so a file written under it would hold a value the panel's Cancel later takes back while the
-document shows clean; applying first leaves nothing to take back. A crop frame, a shape draft, a lifted-pixel drag
+document shows clean; applying first leaves nothing to take back. If applying the color panel fails or finds no
+Content-Aware Fill donors, Save, Save As and Export MUST stop before writing. Save-before-proceed returns failure,
+keeps the document and panel, and cannot continue a close or replacement. The panel remains available for retry
+or Cancel, with the filter failure or no-source feedback. A crop frame, a shape draft, a lifted-pixel drag
 and the size card are not document edits and stay. (The legacy app refuses file operations while a stroke, a panel
 or an adjustment edit is open; RedPrism applies instead.) Save writes a ZIP `.prism` for a `.prism` name or a ZIP
 file; a project opened from a folder — an exploded project, whatever its name, `*.prism` included — saves in place as

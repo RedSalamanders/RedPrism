@@ -376,7 +376,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool HasUnsavedWork() const noexcept;
     // Before Save and Export (Decision D2): the typed opacity records its entry, a live stroke, warp or pending
     // gradient commits, a pending transform applies, and an open panel applies as its OK would.
-    void SettleForWrite() noexcept;
+    [[nodiscard]] bool SettleForWrite() noexcept;
     // Session end (Specs/UI/UI_Windowing.md): a modified document refuses with a block reason and asks through the
     // posted prompt; the settings are saved when the session ends.
     [[nodiscard]] bool OnQueryEndSession(LPARAM reasons) noexcept;

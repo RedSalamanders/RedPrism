@@ -1,15 +1,16 @@
 #include "Adjust.h"
 #include "BrushStroke.h"
+#include "ColorEditWork.h"
 #include "Document.h"
 #include "Selection.h"
 
 #include <algorithm>
 #include <cmath>
-#include <new>
 
 // The color adjustment and filter panels on the session (C12): one edit for every kind (`ColorEdit`); previews render
 // synchronously from a copy of the layer no larger than the kind's preview limit and show through DisplayDocument;
-// OK renders at full size and records one entry; adjustment layers route the same panels to their live record.
+// OK runs Common/ColorEditWork's immutable graph inline and validates its result before recording one entry;
+// adjustment layers route the same panels to their live record. Host job wiring is a separate migration.
 
 namespace
 {
@@ -39,34 +40,6 @@ constexpr int kFilterPreviewSide = 2048;
         return kLutPreviewSide;
     }
     return kLutPreviewSide;
-}
-
-// An edit that changes nothing previews the layer's own pixels and closes without an entry on OK: Levels and
-// Hue/Saturation at identity, no distortion to remove, the default exposure, no grain. The other kinds always
-// record their entry (a Curves panel left on its identity curve too, as in the legacy).
-[[nodiscard]] bool ChangesNothing(FilterKind kind, const FilterSettings& settings) noexcept
-{
-    switch (kind)
-    {
-    case FilterKind::Levels:
-        return Adjust::LevelsIsIdentity(settings.levels);
-    case FilterKind::HueSaturation:
-        return Adjust::HsvIsIdentity(settings.hsv);
-    case FilterKind::LensCorrection:
-        return settings.distortion == 0;
-    case FilterKind::Exposure:
-        return settings.exposure == ExposureSettings{};
-    case FilterKind::Grain:
-        return settings.grain.amount == 0;
-    case FilterKind::GaussianBlur:
-    case FilterKind::MotionBlur:
-    case FilterKind::AddNoise:
-    case FilterKind::ContentAwareFill:
-    case FilterKind::Curves:
-    case FilterKind::GradientMap:
-        return false;
-    }
-    return false;
 }
 
 [[nodiscard]] AdjustmentColor ColorFromArgb(std::uint32_t argb) noexcept
@@ -115,20 +88,6 @@ constexpr int kFilterPreviewSide = 2048;
     return SelectionGeometry::Coverage(
         SelectionGeometry::Transformed(selection.loops, PixelToDocument(placement, width, height).Inverted()), width,
         height, selection.antialiased);
-}
-
-// The edit's kernel on `source` (placed by `placement`, `scale` pixels per layer pixel), blended through the
-// selection's coverage on that grid.
-[[nodiscard]] Raster Rendered(const ColorEdit& edit, const Raster& source, const LayerTransform& placement,
-                              double scale)
-{
-    if (!edit.selection.has_value())
-    {
-        return Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed);
-    }
-    const Raster coverage = CoverageOn(edit.selection.value(), placement, source.Width(), source.Height());
-    const Raster result = Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed, &coverage);
-    return result.HasStorage() ? Adjust::BlendThrough(result, source, coverage) : result;
 }
 
 // Levels reads the alpha- and selection-weighted histogram of what it opens on, once.
@@ -286,6 +245,7 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
     edit.original = layer->asset->image;
     edit.transform = layer->transform;
     edit.selection = _document->selection;
+    edit.sourceToken = CaptureJobToken(layer->id);
     // The last applied settings; Levels and Hue/Saturation start at identity and a Gradient Map from the foreground
     // and background colors, as in Photoshop.
     edit.settings = filterSettings.Normalized();
@@ -303,6 +263,7 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
     }
     MeasureHistogram(edit);
     _colorEdit = std::move(edit);
+    ++_colorEditSequence;
     PrepareFilterPreview();
     if (kind == FilterKind::ContentAwareFill)
     {
@@ -347,6 +308,8 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     }
     ColorEdit& edit = _colorEdit.value();
     edit.settings = settings.Normalized();
+    ++_colorEditSequence;
+    edit.commitFailed = false;
     edit.preview = preview;
     // A bigger blur needs more room around the layer than it was given.
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
@@ -359,14 +322,16 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     {
         return;
     }
-    if (!preview || ChangesNothing(edit.kind, edit.settings))
+    if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
         edit.previewRaster = {};
     }
     else
     {
-        edit.previewRaster = Rendered(edit, edit.previewSource, edit.previewTransform, edit.previewScale);
-        edit.previewFailed = edit.kind == FilterKind::ContentAwareFill && !edit.previewRaster.HasStorage();
+        bool noSource = false;
+        edit.previewRaster =
+            RenderColorEditRaster(edit, edit.previewSource, edit.previewTransform, edit.previewScale, &noSource);
+        edit.previewFailed = noSource;
     }
     ++_editRevision;
 }
@@ -391,72 +356,6 @@ void DocumentSession::UpdateHueSaturation(const HueSaturationSettings& settings,
     }
 }
 
-void DocumentSession::CommitColorEdit()
-{
-    if (FinishAdjustmentEditing(true) || !_colorEdit.has_value() || !_document.has_value())
-    {
-        return;
-    }
-    const ColorEdit edit = _colorEdit.value();
-    if (ChangesNothing(edit.kind, edit.settings))
-    {
-        CancelColorEdit();
-        return;
-    }
-    filterSettings = edit.settings;
-    Raster image = Rendered(edit, edit.Source(), edit.Placement(), 1.0);
-    if (edit.kind == FilterKind::ContentAwareFill && !image.HasStorage())
-    {
-        // Nothing to copy from: the panel stays open and says so; Cancel closes it.
-        _colorEdit->previewFailed = true;
-        ++_editRevision;
-        return;
-    }
-    LayerTransform placed = edit.Placement();
-    int cropX = 0;
-    int cropY = 0;
-    const bool spreads = edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur;
-    if (image.HasStorage() && spreads && edit.grownImage.HasStorage())
-    {
-        const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(image, placed);
-        image = trimmed.image;
-        placed = trimmed.transform;
-        cropX = trimmed.cropX;
-        cropY = trimmed.cropY;
-    }
-    // OK installs only while the layer still holds the pixels and the placement the panel opened on; otherwise the
-    // panel closes without an entry.
-    ImageLayer* layer = image.HasStorage() && placed.IsValid() ? MutableLayer(edit.layerID) : nullptr;
-    if (layer != nullptr && layer->asset.has_value() && layer->asset->image == edit.original &&
-        layer->transform == edit.transform)
-    {
-        // A grown layer's mask (covering the old grid) is carried onto the new one, its edge tone past the old edge.
-        std::optional<LayerMask> mask = layer->mask;
-        if (edit.grownImage.HasStorage() && mask.has_value() && !mask->placement.has_value() &&
-            mask->asset.image.PixelCount() > 1)
-        {
-            const std::uint8_t tone =
-                static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(mask->asset.thumbnail) * 255.0));
-            const Raster carried =
-                CarriedMask(mask->asset.image, edit.original.Width(), edit.original.Height(), edit.grownOffsetX - cropX,
-                            edit.grownOffsetY - cropY, image.Width(), image.Height(), tone);
-            if (carried.HasStorage())
-            {
-                mask->asset.image = carried;
-                mask->asset.thumbnail = Raster::MakeThumbnail(carried);
-                mask->enabled = true;
-            }
-        }
-        BeginEdit(FilterKindName(edit.kind));
-        layer->asset = RasterAsset{image, Raster::MakeThumbnail(image), layer->name};
-        layer->transform = placed;
-        layer->mask = std::move(mask);
-        EndEdit();
-    }
-    _colorEdit.reset();
-    ++_editRevision;
-}
-
 void DocumentSession::CancelColorEdit()
 {
     if (FinishAdjustmentEditing(false) || !_colorEdit.has_value())
@@ -464,6 +363,7 @@ void DocumentSession::CancelColorEdit()
         return;
     }
     _colorEdit.reset();
+    ++_colorEditSequence;
     ++_editRevision;
 }
 
@@ -734,6 +634,7 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     edit.seed = original.Grain().seed;
     MeasureHistogram(edit);
     _colorEdit = std::move(edit);
+    ++_colorEditSequence;
     _adjustmentOriginal = original;
     BeginEdit(L"Edit " + std::wstring(FilterKindName(AdjustmentFilterKind(original.kind))) + L" Adjustment");
     return true;
@@ -774,6 +675,7 @@ bool DocumentSession::FinishAdjustmentEditing(bool commit)
     // OK keeps editable settings; Cancel (including the panel's close) restores them.
     UpdateAdjustment(id, commit ? EditedAdjustment().value_or(original) : original);
     _colorEdit.reset();
+    ++_colorEditSequence;
     EndEdit();
     _adjustmentOriginal.reset();
     _adjustmentEditingID.reset();

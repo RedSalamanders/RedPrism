@@ -69,6 +69,22 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+### Immutable color-edit work (P1.1a)
+
+`DocumentTests` runs `coloreditwork.*`: independent legacy Levels clipping/gamma/alpha numbers, preview reuse,
+preview-off computation, one history entry and exact undo, and state-based no-op, cancellation and failure cases.
+Opening tokens must reject moved layers, changed masks, changed selections and resized canvases both before and
+after preparation. Newer settings, a reopened panel, another session, document replacement and undo restoration
+must reject old results without touching a newer edit. Mask carrying includes its eager semantic thumbnail;
+compatible name/resolution edits survive. Another layer consuming the remaining budget, or a refused blur-grid
+increase, must preserve pixels, mask, history and last-applied settings. Content-Aware Fill without donors and a
+processing failure have distinct results. Existing `hsv.preview-*`, filter and adjustment goldens remain required.
+
+The WARP self-test must keep a clean document's changed Levels panel under Cancel at the save prompt, and refuse
+Save before creating a file when Content-Aware Fill has no donors. The panel, document and history survive that
+refusal. The existing successful adjustment-panel save/reload case still passes. This slice does not qualify
+asynchronous dispatch, bounded inner-kernel cancellation or whole-host G1 timing.
+
 ### CPU dispatch and instruction boundary (P0.8)
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host

@@ -261,6 +261,14 @@ void Application::ApplyColorEdit() noexcept
     }
     DropDrag<HueTargetDrag>();
     _session.CommitColorEdit();
+    if (_session.TakeBudgetRefusal())
+    {
+        ReportBudgetRefusal();
+    }
+    else if (_session.PendingColorEdit().has_value() && _session.PendingColorEdit()->commitFailed)
+    {
+        ShowError(IDS_ERROR_FILTER);
+    }
     DocumentChanged();
 }
 

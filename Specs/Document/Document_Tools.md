@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-28
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
@@ -439,8 +439,8 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
   shows it in place of the layer (a mask on the layer's grid keeps its place over a grown grid). An edit that
   changes nothing (identity Levels or Hue/Saturation, lens 0, the default exposure, grain 0) previews the layer's
   own pixels and closes without an entry on OK; a Curves panel on its identity curve still records its entry, as in
-  the legacy. `CommitColorEdit` renders at full size and records the kind's name (`FilterKindName`) only while the
-  layer still holds the pixels and the placement the panel opened on; otherwise the panel closes without an entry.
+  the legacy. `CommitColorEdit` uses the immutable work graph below and records the kind's name (`FilterKindName`)
+  only while its opening inputs remain valid; a stale current panel closes without an entry.
   `CancelColorEdit` drops it. RF-801 of the 2026-09-23 review: legacy `beginHueSaturation` keeps a lasso draft and
   `commitHueSaturation` checks only the pixels, applying wherever the layer has gone; every kind follows the legacy
   Levels and filter rule instead (nothing transforms while a panel is open, so the placement check guards changes
@@ -482,6 +482,37 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
   only for the histogram and sampling and never replaces pixels.
 - `StepBlendMode(forward)`: the active layer's blend mode one step forward or back through the thirteen modes,
   wrapping, one `Layer Blend Mode` entry (Shift+= and Shift+- in the host).
+
+### Immutable destructive-panel work
+
+`PrepareColorEditCommit` captures owning inputs for `RunColorEditJob` (`Common/ColorEditWork.*`), which has no
+session, HWND, chrome or device access. `ApplyColorEditResult` runs on the session owner and executes no pixel
+kernel. The direct `CommitColorEdit` API uses this same graph with an `InlineExecutor`; the production host still
+runs it synchronously in this slice. Preview grids, histogram arithmetic and committed kernel arithmetic retain
+their existing contracts above.
+
+The opening token retains the image, placement, mask, selection, canvas size, document lifetime and restore epoch.
+Every panel begin, settings/preview update and end advances a sequence. A result from another session, an older
+sequence or a different panel MUST NOT alter or close the current panel. A matching result whose opening inputs
+are stale closes that old panel without an entry. Unrelated metadata edits, such as a name or print resolution,
+survive a valid targeted apply. A result still rechecks the current document's image and mask budgets before any
+mutation, because another layer can consume budget without invalidating the target.
+
+The worker renders full-size pixels, trims a blur, carries its opening mask and creates both thumbnails before
+returning a ready result. The mask thumbnail is semantic and MUST be installed with the mask. Failure to carry it
+or to allocate selection coverage MUST fail the entire operation. A blur whose requested margin exceeds the
+successfully prepared grid MUST fail; it cannot render on the smaller grid after a growth refusal. An enabled,
+successful preview may supply the committed pixels only when it was rendered with the current settings and seed
+on the exact full source grid and placement. Preview off always computes the full result.
+
+Ready results install the image, placement and mask in one named history transaction, then update the last-applied
+settings. Processing/allocation failure and cancellation leave pixels, mask, history and last-applied settings
+unchanged and keep the panel available for retry or Cancel. A processing failure sets `commitFailed`; the host
+reports `IDS_ERROR_FILTER`, or the existing budget notice when appropriate. A fill without donor patches remains
+the distinct `previewFailed` no-source state. Identity closes without an entry. The inline construction/computation
+boundary translates `bad_alloc` to a failed operation; existing history allocation still follows the owning
+history policy. Cancellation is checked between graph stages here; bounded inner-kernel cancellation and scheduler
+admission must land before this graph is dispatched asynchronously.
 
 ## Content-aware fill (C13)
 

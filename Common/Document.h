@@ -1105,6 +1105,9 @@ struct HueTargetDrag
     double saturation = 0;
 };
 
+struct ColorEditJobInput;
+struct ColorEditJobResult;
+
 // The one open color or filter panel, whatever its kind: the layer's pixels it started from and where they sit, the
 // selection it is limited to, the grid grown for a blur or a fill to spread into, the copy the preview renders from
 // and what the canvas shows meanwhile (`previewRaster`; empty shows the layer's own pixels). An adjustment layer's
@@ -1117,6 +1120,8 @@ struct ColorEdit
     LayerTransform transform;
     std::optional<DocumentSelection> selection;
     FilterSettings settings;
+    std::optional<JobToken> sourceToken; // Opening inputs; absent for adjustment-layer panels.
+    bool commitFailed = false;
     bool preview = true;
     std::uint32_t seed = 0; // Add Noise's and Grain's pattern, fixed while the panel is open
     Raster grownImage;      // the pixels padded out for a blur or a fill (empty when not grown)
@@ -1735,6 +1740,10 @@ class DocumentSession
     // The open Levels or Hue/Saturation panel's own settings (nothing while another kind is open).
     void UpdateLevels(const LevelsSettings& settings, bool preview);
     void UpdateHueSaturation(const HueSaturationSettings& settings, bool preview);
+    // Owning immutable work; direct Commit runs the same graph with an InlineExecutor.
+    [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditCommit() const;
+    // No pixel kernels; rejects stale work, keeps failed/cancelled panels, records one successful edit.
+    [[nodiscard]] bool ApplyColorEditResult(const ColorEditJobResult& result);
     void CommitColorEdit();
     void CancelColorEdit();
     void AutoLevels(LevelsAuto mode);
@@ -1998,6 +2007,7 @@ class DocumentSession
     std::optional<PixelMove> _pixelMove;
     std::optional<PixelClipboard> _clipboard;
     std::optional<ColorEdit> _colorEdit;
+    std::uint64_t _colorEditSequence = 0;
     bool _budgetRefused = false;
     std::optional<Guid> _adjustmentEditingID;
     std::optional<LayerAdjustment> _adjustmentOriginal;

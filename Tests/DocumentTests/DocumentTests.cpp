@@ -1,6 +1,7 @@
 #include "Adjust.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
+#include "ColorEditWorkTests.h"
 #include "Crop.h"
 #include "Document.h"
 #include "HistoryRevisionTests.h"
@@ -7203,6 +7204,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryRevisionTests();
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
+    gFailures += RunColorEditWorkTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

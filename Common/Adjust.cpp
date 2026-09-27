@@ -1331,8 +1331,12 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
 }
 
 Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& given, double scale, std::uint32_t seed,
-                 const Raster* coverage)
+                 const Raster* coverage, bool* noSource)
 {
+    if (noSource != nullptr)
+    {
+        *noSource = false;
+    }
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !std::isfinite(scale) || !(scale > 0))
     {
         return {};
@@ -1377,8 +1381,13 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
         {
             return {};
         }
-        if (ContentFill(bytes.Data(), width, height, width * 4, coverage->Data(), coverage->Stride()) != 1)
+        const int filled = ContentFill(bytes.Data(), width, height, width * 4, coverage->Data(), coverage->Stride());
+        if (filled != 1)
         {
+            if (noSource != nullptr)
+            {
+                *noSource = filled == 0;
+            }
             return {};
         }
         break;

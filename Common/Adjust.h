@@ -157,8 +157,9 @@ void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std:
 // proportionally less); `seed` is Add Noise's and Grain's pattern; `coverage` (Gray8 on the same grid) is the
 // selection Content-Aware Fill fills, which needs it. The Image menu's kinds run their adjustment layer's kernel
 // (`ApplyAdjustment`), Grain in layer pixels. Empty on failure, or when a fill found nothing to copy from.
+// When supplied, noSource is true only for a fill without donor patches; other failures leave it false.
 [[nodiscard]] Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& settings, double scale,
-                               std::uint32_t seed, const Raster* coverage = nullptr);
+                               std::uint32_t seed, const Raster* coverage = nullptr, bool* noSource = nullptr);
 // Content-Aware Fill (the legacy content_fill): selected pixels (`mask` nonzero) are synthesized from the
 // unselected opaque ones by coherent patch matching with a randomized search; unselected transparent pixels are
 // neither matched nor changed. 1 on success, 0 when no source patch exists, -1 when memory runs out.

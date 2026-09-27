@@ -3632,12 +3632,16 @@ void Application::OnCommand(int command) noexcept
         (void)SaveDocument(true);
         break;
     case ChromeHost::kCommandExportPng:
-        SettleForWrite();
-        ExportFlattened(false);
+        if (SettleForWrite())
+        {
+            ExportFlattened(false);
+        }
         break;
     case ChromeHost::kCommandExportJpeg:
-        SettleForWrite();
-        ExportFlattened(true);
+        if (SettleForWrite())
+        {
+            ExportFlattened(true);
+        }
         break;
     case ChromeHost::kCommandExit:
         if (_window)
@@ -4334,8 +4338,7 @@ bool Application::SaveDocument(bool saveAs) noexcept
         }
     }
     // The file holds what the canvas shows, and a panel's Cancel can no longer restore a value the file already has.
-    SettleForWrite();
-    if (!_session.Document().has_value())
+    if (!SettleForWrite() || !_session.Document().has_value())
     {
         return false;
     }
