@@ -48,13 +48,14 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 
 | Owner | Responsibility |
 | --- | --- |
-| `Application` | HWND, messages, DPI, command line, frame scheduling, files, commands, `DocumentSession`, `CanvasViewport`, `CanvasRenderer` |
+| `Application` | HWND, messages, DPI, command line, frame scheduling, files, commands, `DocumentSession`, `JobScheduler`, `CanvasViewport`, `CanvasRenderer` |
 | `Renderer` | D3D11 device, swap chain, Present, occlusion, adapter-of-monitor, frame order (chrome layout → canvas → chrome) |
 | `CanvasRenderer` | Document-space GPU passes, coverage textures, clipping stacks, raster residency, sparse-raster assembly and the brush stroke preview; borrows the device |
 | `GpuBrushCoverage` | The brush compute engine (`BrushCoverage.hlsl`) on the application device: per-tile density and preview buffers, readback of the preview only |
 | `ChromeHost` | DxUi EmbeddedHost shell: menus, rail with palette wells, tabs, Move-tool, selection-tool, brush, Gradient and Shape headers, the adjustment panel card with its drawn curve, levels, spectrum and ramp controls (`AdjustControls.*`, `ChromeHostAdjust.cpp`), layers with splitter and opacity stepper, status, color picker card, canvas overlay (transform box, marching ants, lasso draft, brush tip, gradient line, shape draft, sample ring, clone source); strings from resources |
 | Document (`Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection`, `BrushStroke`, `WarpStroke`, `Heal`, `ImageFilters`, `Adjust`, `AdjustEdit`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, sparse rasters, transform editing (drag geometry, snapping, warp), selection (Clipper2 booleans, coverage, wand and mask tracing), brush strokes (tiles, CPU kernel, snapshots), retouch (the spot healing kernel, clone and blur samples, warps, gradients, shapes), pixel edits (lifted pixels, invert, masks from the selection, the floating selection transform, the clipboard model), color adjustments and filters (the levels, curves, exposure, gradient map, grain, hue/saturation cube, noise, lens and motion blur kernels, the panel sessions and adjustment layer editing), `.prism` I/O, WIC — never GPU device ownership |
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
+| `JobScheduler` (`Common/Jobs.*`), owned by `Application` | Bounded job records, class/priority scheduling, cancellation, ordered completion delivery and UI actions; standard-only public header with a private implementation; no document mutation or GPU ownership |
 | `Executor`, `WorkerPool`, `WaitPool` | Standard C++ kernel execution interface; private bounded Windows compute pool and separate event-wait pool, cancellation, callback/COM lifetime; no document mutation or GPU ownership |
 
 ## Mandatory rules
@@ -62,9 +63,10 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - WIL RAII for owned Windows and COM resources. No manual `Release` / `DestroyWindow` of owned objects.
   Destroy HWNDs with `wil::unique_hwnd::reset()`.
 - `wil::com_ptr_nothrow<T>` in HRESULT code. Assign with `.put()`. Never `AddRef` then `attach`.
-- No exceptions across `wWinMain`, `WndProc`, or COM. `catch (...)` is forbidden. `std::bad_alloc` is never
-  swallowed: a `noexcept` construction boundary may translate it to `E_OUTOFMEMORY` only where the caller then
-  fails the operation or exits; hot paths do not catch at all.
+- No exceptions across `wWinMain`, `WndProc`, or COM. `catch (...)` is forbidden. The `JobScheduler` worker runner
+  catches only `std::bad_alloc`, translating it to a failed job with `E_OUTOFMEMORY`. Other allocation failures
+  remain fatal except at explicit `noexcept` construction/admission boundaries that return `E_OUTOFMEMORY` only
+  when the caller then fails the operation or exits. Hot paths do not catch.
 - Unicode `stdcpplatest`, `/W4`, `/permissive-`, SDL, warnings as errors, `/utf-8`. Headers that are not Win32
   headers do not depend on `windows.h` typedefs (`UINT`, `DWORD`); use fixed-width or plain types.
 - One D3D11 device, one flip-model swap chain, one Present. Do not render from `WM_PAINT`.

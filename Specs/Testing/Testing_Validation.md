@@ -69,6 +69,30 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+### Job scheduler and host pump (P0.6a)
+
+HostTests may create a **message-only HWND**, without a device or visible window, to prove the actual shared
+`PumpMessages`, `DrainCompletions`, `RunUiActions` and `SettleJobs` path. A worker signals entry and waits behind
+an event; a posted window-message sentinel must dispatch before its completion, and releases that event. The
+finished result applies once, the cancelled variant applies no successful result, and both release every payload.
+Expected values come from these independent state transitions, not the implementation's queue layout.
+
+Additional gates cover bounded admission with retained caller ownership on refusal, FIFO through apply/drop,
+independent serial keys, stale tickets, progress, the job-runner `bad_alloc` failure boundary, one action per
+pass, rejected reentrant drains/actions, and shutdown that joins before destroying active payloads. Gate waits
+are failure bounds only; no sleeps or timing assertions. Existing legacy image goldens remain unchanged.
+
+The WARP self-test also simulates an early mode failure with a worker waiting on the shutdown event. The actual
+`Application::Shutdown` must join it without applying its result, retain the implicit MTA through the callback,
+destroy its payload after Run returns, and leave the caller's STA alive. `Main.cpp` calls that same shutdown
+before clearing the resource satellite or leaving its COM scope on every mode return, including failures.
+
+`HostTests.exe --bench-jobs` measures scheduler overhead with eight warmups and 200 single Commit jobs. It reports
+submission and full submit-to-drain median/p95/max in microseconds, with an independently checked worker result.
+Payload construction is outside the timed intervals; admission, cancellation-state allocation, worker dispatch,
+completion delivery and payload release are included. Record Release numbers without a timing assertion. This
+is not the UI/image/RAW benchmark and proves no image speed target.
+
 ### Worker foundations (P0.5)
 
 HostTests also runs the standard-header `ExecutorTests` and Windows `WorkerPoolTests`. Their independent

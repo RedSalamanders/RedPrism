@@ -246,8 +246,8 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     {
         return 1;
     }
-    // Declared before Application: reverse destruction order then runs ~Application (UIA disconnect,
-    // DestroyWindow) before CoUninitialize, not after (RF-710). Armed only when this call actually initialized COM
+    // Declared before Application: its explicit Shutdown and destruction precede CoUninitialize (RF-710).
+    // Armed only when this call actually initialized COM
     // (RPC_E_CHANGED_MODE means something else already did, and only that owner may uninitialize it).
     wil::unique_couninitialize_call comScope{SUCCEEDED(com)};
 
@@ -262,6 +262,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     AppSettings settings;
     std::wstring settingsPath;
     wil::unique_hmodule satellite;
+    const auto shutdown = wil::scope_exit(
+        [&]() noexcept
+        {
+            application->Shutdown();
+            SetStringResourceSatellite(nullptr);
+        });
     if (harness)
     {
         settings.theme = ThemePreference::Dark;
@@ -297,9 +303,13 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     }
     application->UseSettings(std::move(settingsPath), settings);
 
-    const int exitCode = parsed.selfTest           ? application->RunSelfTest()
+    const HRESULT processing = application->InitializeProcessing();
+    const int exitCode = FAILED(processing)        ? 1
+                         : parsed.selfTest         ? application->RunSelfTest()
                          : parsed.bench != nullptr ? application->RunBenchmark()
                                                    : application->Run(showCommand);
+    // All modes, including early self-test/bench failures, join before UIA/device/satellite/STA teardown.
+    application->Shutdown();
     if (exitCode != 0 && !parsed.selfTest && parsed.bench == nullptr && parsed.screenshotPath == nullptr)
     {
         UINT messageId = IDS_ERROR_START_GENERIC;
@@ -318,7 +328,6 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         const std::wstring caption = LoadStringResource(nullptr, IDS_APP_TITLE);
         MessageBoxW(nullptr, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR);
     }
-    SetStringResourceSatellite(nullptr);
     return exitCode;
 }
 } // namespace

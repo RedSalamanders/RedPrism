@@ -82,6 +82,21 @@ sends (`InSendMessage` false), never a change another thread or process reports.
 
 Debug and Release use the same titled window. There is no XENEON-only placement path and no missing-display prompt.
 
+### Job pump and shutdown
+
+`Application` owns the `JobScheduler`. Each outer loop pass pumps queued messages, drains worker completions on the
+UI thread, then runs at most one queued UI action. Completion application and UI actions do not recurse from a
+nested window/control dispatch; reentrant completion-drain and UI-action calls are ignored. UI actions may enter a modal loop only after
+revalidating their captured target, and the modal loop cannot recursively drain jobs. The scheduler wake event is
+waited with the message queue while idle, hidden or suspended, and with the frame-latency object while waiting to
+render. A scheduler wake returns control to the outer pump so hidden/suspended completions are still drained.
+`SettleJobs` is reserved for harness/headless use, not a UI command.
+
+On shutdown, the application requests cancellation and hides the window before joining scheduler workers. It keeps
+their inputs and dependent owners alive until they return, drops undelivered callbacks, then tears down chrome,
+renderer/device, HWND and localization/COM state. A shutdown request from inside a job UI callback is deferred
+until that callback returns.
+
 ## Command line
 
 Every switch is declared once in `RedPrism/CommandLine.h`. `--help`, `-h`, `/?`, and `-?` print the catalog and exit 0

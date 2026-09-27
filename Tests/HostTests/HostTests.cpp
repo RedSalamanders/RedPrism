@@ -8,6 +8,8 @@
 #include "EditorTool.h"
 #include "ExecutorTests.h"
 #include "FrameScheduler.h"
+#include "JobBenchmark.h"
+#include "JobTests.h"
 #include "Localization.h"
 #include "Resources.h"
 #include "SettingsStore.h"
@@ -109,6 +111,49 @@ void TestFrameScheduler() noexcept
     state.displayPoweredOn = false;
     state.frameInvalidated = true;
     Expect(SelectHostFrameAction(state) == HostFrameAction::WaitForMessage, "frame.display-off");
+
+    struct CompletionPriorityCase final
+    {
+        HostFrameState state;
+        HostFrameAction whenClear;
+        const char* pendingName;
+        const char* clearedName;
+    };
+    constexpr std::array completionPriorityCases{
+        CompletionPriorityCase{{false, true, false, false, false, true},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-hidden",
+                               "frame.completions-hidden-cleared"},
+        CompletionPriorityCase{{true, true, true, false, false, true},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-suspended",
+                               "frame.completions-suspended-cleared"},
+        CompletionPriorityCase{{true, true, false, true, true, false},
+                               HostFrameAction::ProbeOcclusion,
+                               "frame.completions-occluded",
+                               "frame.completions-occluded-cleared"},
+        CompletionPriorityCase{{true, false, false, false, false, true},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-display-off",
+                               "frame.completions-display-off-cleared"},
+        CompletionPriorityCase{{true, true, false, false, false, false},
+                               HostFrameAction::WaitForMessage,
+                               "frame.completions-idle",
+                               "frame.completions-idle-cleared"},
+        CompletionPriorityCase{{true, true, false, false, false, true},
+                               HostFrameAction::Render,
+                               "frame.completions-render",
+                               "frame.completions-render-cleared"},
+    };
+    for (const CompletionPriorityCase& testCase : completionPriorityCases)
+    {
+        HostFrameState completionState = testCase.state;
+        completionState.completionsPending = true;
+        Expect(SelectHostFrameAction(completionState) == HostFrameAction::DrainCompletions, testCase.pendingName);
+
+        completionState.completionsPending = false;
+        Expect(SelectHostFrameAction(completionState) == testCase.whenClear, testCase.clearedName);
+    }
 }
 
 void TestCommandLine() noexcept
@@ -1533,6 +1578,10 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunWorkerPoolBenchmark();
     }
+    if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-jobs")
+    {
+        return RunJobBenchmark();
+    }
 #if defined(_DEBUG)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")
     {
@@ -1546,6 +1595,7 @@ int wmain(int argc, wchar_t** argv)
     const bool stress = argc > 1 && std::wstring_view{argv[1]} == L"--stress";
     gFailures += RunExecutorValueTests();
     gFailures += RunWorkerPoolTests(stress);
+    gFailures += RunJobTests(stress);
     TestAdapterSelection();
     TestFrameScheduler();
     TestCommandLine();

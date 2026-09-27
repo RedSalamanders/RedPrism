@@ -9,6 +9,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "Jobs.h"
 #include "Prompts.h"
 #include "Renderer.h"
 #include "SettingsStore.h"
@@ -68,6 +69,8 @@ class Application final : public ChromeEvents
     int RunSelfTest() noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
+    [[nodiscard]] HRESULT InitializeProcessing() noexcept;
+    void Shutdown() noexcept;
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
     void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
 
@@ -76,6 +79,8 @@ class Application final : public ChromeEvents
     static constexpr UINT_PTR kScreenshotTimerId = 1;
     static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     static void RequestFrameThunk(void* context) noexcept;
+    static void DispatchMessageThunk(void* context, void* message) noexcept;
+    int RunJobShutdownSelfTest() noexcept;
 
     HRESULT RegisterWindowClass() noexcept;
     HRESULT CreateMainWindow(bool visible) noexcept;
@@ -452,6 +457,7 @@ class Application final : public ChromeEvents
     // Declared before the session: a pending stroke tells its engine when the session drops it.
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
+    JobScheduler _jobs;
     CanvasViewport _viewport;
     CanvasRenderer _composition;
     std::wstring _screenshotPath;
@@ -487,8 +493,12 @@ class Application final : public ChromeEvents
     std::optional<Guid> _renameLayer; // the layer the open Rename card renames
     int _messageDepth = 0;            // window-procedure calls on the stack
     bool _closeDeferred = false;      // a WM_CLOSE waits for the stack to unwind
-    bool _closeConfirmed = false;     // the session-end prompt already asked: the next WM_CLOSE does not
-    bool _endSessionPending = false;  // a session end was refused and its prompt has not answered yet
+    bool _jobCloseRequested = false;  // a close message during a completion/action waits for the outer loop
+    bool _shutdownDeferred = false;   // an already-confirmed close waits for a completion/action to return
+    bool _shutdownStarted = false;
+    bool _shutdownComplete = false;
+    bool _closeConfirmed = false;    // the session-end prompt already asked: the next WM_CLOSE does not
+    bool _endSessionPending = false; // a session end was refused and its prompt has not answered yet
     bool _endSessionPromptDeferred = false;
     bool _layoutDirty = false;
     // The pointer's one interaction in flight (RF-904). A brush stroke, a warp and a shape draft are the session's own

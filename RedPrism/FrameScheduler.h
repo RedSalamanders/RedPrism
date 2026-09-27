@@ -7,6 +7,7 @@ enum class HostFrameAction
     WaitForMessage,
     ProbeOcclusion,
     Render,
+    DrainCompletions,
 };
 
 struct HostFrameState final
@@ -24,10 +25,16 @@ struct HostFrameState final
     // `--screenshot`: the capture needs presented frames whatever the window's visibility, the display's power or
     // the occlusion state says (RF-409).
     bool capturing = false;
+    bool completionsPending = false;
 };
 
 [[nodiscard]] constexpr HostFrameAction SelectHostFrameAction(const HostFrameState& state) noexcept
 {
+    if (state.completionsPending)
+    {
+        return HostFrameAction::DrainCompletions;
+    }
+
     const bool visible = state.windowVisible || state.capturing;
     const bool displayOn = state.displayPoweredOn || state.capturing;
     const bool suspended = state.rendererSuspended && !state.capturing;

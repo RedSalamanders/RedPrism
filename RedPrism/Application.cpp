@@ -20,6 +20,7 @@
 #include "WindowCapture.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <format>
@@ -150,13 +151,17 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
 
 Application::~Application()
 {
-    _displayPowerNotification.reset();
-    CloseMainWindow();
-    if (_classRegistered)
-    {
-        UnregisterClassW(kWindowClassName, _instance);
-        _classRegistered = false;
-    }
+    assert(_shutdownComplete);
+}
+
+HRESULT Application::InitializeProcessing() noexcept
+{
+    return _jobs.Initialize();
+}
+
+void Application::DispatchMessageThunk(void* context, void* message) noexcept
+{
+    static_cast<Application*>(context)->DispatchQueuedMessage(*static_cast<MSG*>(message));
 }
 
 void Application::RequestFrameThunk(void* context) noexcept
@@ -223,18 +228,28 @@ int Application::Run(int showCommand) noexcept
         ShowWindow(_window.get(), _restoreMaximized && plain ? SW_SHOWMAXIMIZED : showCommand);
     }
 
-    MSG message{};
     while (_window)
     {
-        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+        if (_shutdownDeferred)
         {
-            if (message.message == WM_QUIT)
-            {
-                return ExitCode(static_cast<int>(message.wParam));
-            }
-            DispatchQueuedMessage(message); // ApplicationKeyboard.cpp: a key down runs before its translation
+            Shutdown();
+            break;
         }
-
+        if (std::exchange(_jobCloseRequested, false))
+        {
+            SendMessageW(_window.get(), WM_CLOSE, 0, 0);
+        }
+        const auto messages = PumpMessages(DispatchMessageThunk, this);
+        if (messages.quit)
+        {
+            return ExitCode(messages.exitCode);
+        }
+        (void)DrainCompletions(_jobs);
+        (void)RunUiActions(_jobs);
+        if (_shutdownDeferred || _jobCloseRequested)
+        {
+            continue;
+        }
         if (!_window)
         {
             break;
@@ -243,7 +258,7 @@ int Application::Run(int showCommand) noexcept
         {
             // Drawing stopped after a failure it could not get past; the close it asked for prompts to save
             // (RF-401). Until then the window only answers messages.
-            if (!WaitMessage())
+            if (!WaitUntilMessage())
             {
                 break;
             }
@@ -288,7 +303,12 @@ int Application::Run(int showCommand) noexcept
         state.chromeAnimating = _chrome && _chrome->NeedsAnimation();
         state.occlusionMessages = _renderer.OcclusionMessages();
         state.capturing = capturing;
+        state.completionsPending = _jobs.HasUiWork();
         HostFrameAction frameAction = SelectHostFrameAction(state);
+        if (frameAction == HostFrameAction::DrainCompletions)
+        {
+            continue; // a producer published after this pass's drain; return to the shared outer pump
+        }
         if (frameAction == HostFrameAction::ProbeOcclusion)
         {
             _occlusionStatusChanged = false;
@@ -464,6 +484,10 @@ void SelfTestFailure(const wchar_t* message) noexcept
 
 int Application::RunSelfTest() noexcept
 {
+    if (const int failed = RunJobShutdownSelfTest(); failed != 0)
+    {
+        return failed;
+    }
     // A self-test never waits on a message box: errors it provokes must report through its own checks.
     _quietUi = true;
     _prompts = &QuietPrompts();
@@ -2799,7 +2823,33 @@ void Application::DropBrushEngine() noexcept
 
 void Application::CloseMainWindow() noexcept
 {
+    Shutdown();
+}
+
+void Application::Shutdown() noexcept
+{
+    if (_jobs.InUiCallback())
+    {
+        _shutdownDeferred = true;
+        return;
+    }
+    if (_shutdownStarted)
+    {
+        return;
+    }
+    _shutdownStarted = true;
+    _shutdownDeferred = false;
+    _jobs.RequestStop();
+    if (_window)
+    {
+        ShowWindow(_window.get(), SW_HIDE);
+    }
+    // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
+    // session/device/chrome owners and the localization satellite remain alive until every callback returns.
+    _jobs.Close();
     SaveSettings();
+    StopSettingsWatch();
+    _displayPowerNotification.reset();
     if (_window)
     {
         (void)KillTimer(_window.get(), kScreenshotTimerId);
@@ -2823,16 +2873,30 @@ void Application::CloseMainWindow() noexcept
     _renderer.Shutdown();
     _rendererReady = false;
     _window.reset();
+    if (_classRegistered)
+    {
+        UnregisterClassW(kWindowClassName, _instance);
+        _classRegistered = false;
+    }
+    _shutdownComplete = true;
 }
 
 bool Application::WaitUntilMessage(DWORD timeout) noexcept
 {
-    // The settings directory watch waits beside the queue: a change reloads on this thread, never a poll. A timeout
-    // is the next marching-ants step (RF-408); without an outline the wait is unbounded.
-    HANDLE handles[1]{};
+    // The job event and settings watch wait beside messages, including while hidden. No periodic job timer.
+    HANDLE handles[2]{};
     DWORD count = 0;
+    const DWORD noIndex = MAXDWORD;
+    DWORD jobIndex = noIndex;
+    DWORD watchIndex = noIndex;
+    if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
+    {
+        jobIndex = count;
+        handles[count++] = wake;
+    }
     if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
     {
+        watchIndex = count;
         handles[count++] = watch;
     }
     const DWORD waitResult =
@@ -2841,7 +2905,11 @@ bool Application::WaitUntilMessage(DWORD timeout) noexcept
     {
         return true;
     }
-    if (count != 0 && waitResult == WAIT_OBJECT_0)
+    if (jobIndex != noIndex && waitResult == WAIT_OBJECT_0 + jobIndex)
+    {
+        return true; // drain only after returning to the outer loop
+    }
+    if (watchIndex != noIndex && waitResult == WAIT_OBJECT_0 + watchIndex)
     {
         OnSettingsDirectoryChanged(false);
         return true;
@@ -2858,18 +2926,32 @@ bool Application::WaitForFrameLatency() noexcept
     {
         return true;
     }
-    HANDLE handles[2]{waitable, nullptr};
-    DWORD count = 1;
+    HANDLE handles[3]{};
+    DWORD count = 0;
+    DWORD jobIndex = MAXDWORD;
+    DWORD watchIndex = MAXDWORD;
+    if (const HANDLE wake = _jobs.WakeHandle(); wake != nullptr)
+    {
+        jobIndex = count;
+        handles[count++] = wake;
+    }
+    const DWORD frameIndex = count;
+    handles[count++] = waitable;
     if (const HANDLE watch = SettingsWatchHandle(); watch != nullptr)
     {
+        watchIndex = count;
         handles[count++] = watch;
     }
     const DWORD waitResult = MsgWaitForMultipleObjectsEx(count, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-    if (waitResult == WAIT_OBJECT_0)
+    if (waitResult == WAIT_OBJECT_0 + frameIndex)
     {
         return true;
     }
-    if (count == 2 && waitResult == WAIT_OBJECT_0 + 1)
+    if (jobIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + jobIndex)
+    {
+        return false;
+    }
+    if (watchIndex != MAXDWORD && waitResult == WAIT_OBJECT_0 + watchIndex)
     {
         OnSettingsDirectoryChanged(false);
         return false;
@@ -4546,6 +4628,11 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         ValidateRect(window, nullptr);
         return 0;
     case WM_CLOSE:
+        if (_jobs.InUiCallback())
+        {
+            _jobCloseRequested = true;
+            return 0;
+        }
         // Inside a modal loop or a chrome dispatch the chrome is still on the stack: the close runs once it unwinds.
         if (CloseMustWait())
         {

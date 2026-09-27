@@ -166,9 +166,11 @@
     <ClCompile Include="..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\Common\WorkerPool.cpp" />
+    <ClCompile Include="..\Common\Jobs.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />
+    <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />

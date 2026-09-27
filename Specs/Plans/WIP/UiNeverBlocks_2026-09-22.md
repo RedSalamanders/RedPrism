@@ -29,7 +29,11 @@
   - [x] Add concurrency annotations and the analysis build, including guarded/unguarded compiler controls.
   - [x] Complete the final Debug, Release, ASan stress and native-analysis regression gates.
   - [x] Record executor overhead, cancel-check cost and remaining qualification limits. Synthetic row polling gap: 16.2 µs on R1.
-- [ ] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order.
+- [x] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Define the bounded scheduler, intrusive completion channel and seven job classes.
+  - [x] Wire the shared pump and event waits into the host, including hidden-window completion priority.
+  - [x] Verify cancellation, FIFO, progress, modal reentrancy, failed jobs and all-exit shutdown with event gates.
+  - [x] Pass the configuration matrix and update normative contracts for the completed slice.
 - [ ] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state.
 - [ ] P0.7 — Add memory admission, deferred release and justified recycling.
 - [ ] P0.8 — Add scalar kernel dispatch and the x64 VEX scan.
@@ -38,11 +42,19 @@
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
 - [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
 - [ ] P5 — Optimize RAW performance to the Photoshop targets.
-- [ ] P6 — If authorized by its decisions, plan non-destructive develop and depth separately.
+- [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2–P0.5 are complete on x64; the P0 phase remains open. ARM64
+Implementation started 2026-09-27. Slices P0.2–P0.6a are complete on x64; the P0 phase remains open. ARM64
 Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
+
+Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
+updated during work and each completed, validated slice committed and pushed. This supersedes the former P6
+authorization restriction. Record concrete decisions in §11 as their phases begin, and expand P6 into its child
+plan before coding the format/depth transition. Continue between slices without another implementation approval.
+Hardware qualification and Photoshop comparisons remain measured exit criteria; implementation alone cannot
+check those boxes. Smaller agents handle bounded changes and independent checks; the primary reviews them and
+owns scheduler, GPU, storage, and RAW architecture.
 
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
 benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
@@ -68,6 +80,13 @@ about real image operations or Photoshop. The full x64 Debug, Release and ASan g
 stress, both crash probes and 27 harness screenshots. All three ARM64 cross-builds passed. See the
 [worker record](../../TestRuns/WorkerExecution_2026-09-27.md) for controls, metrics and remaining qualification.
 
+P0.6a progress, 2026-09-27: the bounded scheduler and shared message/completion/action pump now serve the host,
+including hidden-window completion delivery and shutdown on every mode exit. The complete x64 matrix, native
+analysis with its compiler controls, and all ARM64 cross-builds passed. Release synthetic scheduler dispatch
+through completion and payload release measured 19.3 µs median and 53.4 µs p95. The
+[scheduler record](../../TestRuns/JobScheduler_2026-09-27.md) gives the state-based tests, measurement scope and
+qualification limits. Image commands remain synchronous until their P1 migrations; G1 is still open.
+
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
 export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
@@ -80,7 +99,7 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2–P0.5 are complete on x64; all ARM64 cross-builds passed. D8 is recorded, so P0.6a/P0.7 can proceed.
+- **Status**: ACTIVE. P0.2–P0.6a are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded, so P0.6b/P0.7 can proceed.
   P0.1 and P0.8 remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
@@ -1751,11 +1770,15 @@ ARW, DNG and NEF recorded.
 
 ### P6 — Non-destructive develop and depth (DECISION: D6 v2, D7, D14)
 
-This plan does not authorize P6. If they are chosen, new WIP plans cover:
+The user authorized P6 on 2026-09-27. Before its implementation, a linked child WIP plan specifies migration,
+memory admission, color/alpha math, compatibility and round-trip goldens for:
 
 - `.prism` v8 develop layers (source RAW embedded or referenced, settings, a rasterize command);
 - RGBA16F documents (D7);
 - raising the pixel budget (D14).
+
+Record D6 v2, D7 and D14 choices using P4/P5 measurements before this phase starts. Preserve v1/v7 read and
+export behavior while introducing v8 explicitly; never mark format/depth work complete from a decoder-only test.
 
 ### Closeout
 
@@ -1771,8 +1794,8 @@ its "Gates" column.
 | Id | Question | Options | Recommendation | Gates | Decided |
 | --- | --- | --- | --- | --- | --- |
 | D1 | Engine for committed bytes | Exact CPU for everything; GPU with tolerances; mixed | **Exact CPU (SIMD + threads) for every legacy-golden kernel; GPU for previews within named tolerances; RAW develop commits from the GPU within `Rendering_RawDevelop.md` tolerances** | P1–P4 | |
-| D2 | Preview coalescing | Cancel on each change (the 2026-09-22 text); legacy 1 in flight + latest pending | **Legacy for interactive previews; only refinements are superseded** (the legacy authors measured that cancel-on-change starves the preview) | P0.6b, P1 | |
-| D3 | Input while earlier work is pending | Refuse mutations; allow and drop stale results; modal; queue and replay | **Chain strokes behind any pending history-recording job; queue mutating commands, wand clicks and imports (depth 8) with snapshots taken at dequeue; refuse other canvas gestures on a layer with a pending commit or stroke; the view stays live; Escape cancels commits and selections and empties the queue** | P0.6b, P1 | |
+| D2 | Preview coalescing | Cancel on each change (the 2026-09-22 text); legacy 1 in flight + latest pending | **Legacy for interactive previews; only refinements are superseded** (the legacy authors measured that cancel-on-change starves the preview) | P0.6b, P1 | 2026-09-27: adopt the recommendation under the user's through-P6 implementation instruction. |
+| D3 | Input while earlier work is pending | Refuse mutations; allow and drop stale results; modal; queue and replay | **Chain strokes behind any pending history-recording job; queue mutating commands, wand clicks and imports (depth 8) with snapshots taken at dequeue; refuse other canvas gestures on a layer with a pending commit or stroke; the view stays live; Escape cancels commits and selections and empties the queue** | P0.6b, P1 | 2026-09-27: adopt the recommendation; state machines land before the first asynchronous image commit. |
 | D4 | Gaussian σ > 32 | Keep O(σ) direct; O(1) approximation (downsample pyramid, extended box, Young–van Vliet) | **Approximation for σ > 32, specified and tested against the direct kernel at ≤ 2/255** (blur goldens are property-based; the legacy app used Core Image's GPU blur) | P2.3, σ > 32 target | |
 | D5 | RAW dependency policy | WIC Raw Image Extension (8-bit, optional, lagging); LibRaw; rawspeed (no CR3, clang-cl); Adobe DNG SDK (clang toolset, indemnity) | **LibRaw overlay port (`raw_r` DLL, no OpenMP/jasper/lcms, the callback-parallel patch) + RedPrism decoders; no lensfun; `dng-lossy`/libjpeg-turbo only if lossy DNG is wanted or WIC export misses M5; libjxl optional in P5** | P4 | |
 | D6 | RAW in the document | v1: bake to 8-bit through the Develop panel; v2: non-destructive develop layer (`.prism` v8, unreadable by legacy) | **v1 bake now; decide v2 after P4 measurements** | P4 (v1), P6 (v2) | |

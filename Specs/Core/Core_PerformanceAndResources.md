@@ -32,7 +32,8 @@ state change is pending. Operating-system scheduling noise is outside this contr
   window message, and recover with `DXGI_PRESENT_TEST` only. Occlusion polling is prohibited.
 - The swap chain MUST be created with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame latency 1.
   `ResizeBuffers` keeps that flag. Before building a frame the UI thread waits on the waitable together with the
-  message queue so `Present` does not block the UI thread. Settled idle waits on the message queue alone.
+  message queue, job event and settings watch so `Present` does not block the UI thread. Settled idle waits on
+  messages, the job event and settings watch.
 - Adapter of output: create the hardware device on the adapter whose output owns the window's monitor, never the
   default adapter while a matching output exists. Presentation MUST NOT cross adapters through DWM. Forced WARP never
   re-checks. Selection is a pure function (`SelectAdapterRecordForMonitor`) so HostTests can prove it without a
@@ -100,6 +101,26 @@ under repository `.build/`. C1 does not yet create that tree.
 
 ## Worker execution cost and lifetime
 
+`Application` owns a bounded `JobScheduler`: at most 128 records across queued, running and undrained states, and
+eight pending UI actions. The seven job classes share three OS priorities. The serial classes (`Stroke`,
+`Selection`, `Commit`, `Io`) preserve FIFO within each class and key through apply or drop. Each record has two
+aligned intrusive completion nodes; producers push to an SLIST and signal an auto-reset event. The owner drains
+FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
+unbounded scheduler queue growth; capacity exhaustion fails submission locally.
+
+The host pumps messages, drains completions and runs UI actions through shared outer-loop primitives. Completion
+application stays outside nested window/control dispatch, and no more than one UI action runs per outer-loop pass.
+Reentrant calls are ignored. The scheduler event is included in both the message wait and frame-latency wait, so
+hidden or suspended windows still process completed work without polling or a periodic timer. `SettleJobs` exists
+for harness/headless use only. Shutdown cancels and hides before joining workers, then drops undelivered callbacks
+before chrome, device, satellite and COM teardown. The job runner catches only `std::bad_alloc` and translates it
+to a failed operation with `E_OUTOFMEMORY`; explicit `noexcept` construction/admission boundaries may return that
+error, while other allocation failures remain fatal.
+
+This foundation does not mean existing image operations run asynchronously. P0.6b still owns preview mailboxes,
+queued input and stroke chaining; P0.7 owns memory admission and related resource policy; P1 owns migration of
+blocking operations away from the UI thread.
+
 The executor foundations in `Core_Architecture.md` use a private fixed-size pool and a separate one-thread wait
 pool. Idle callbacks own no polling loop. Dispatch wakeups are coalesced at the thread count per priority;
 event registrations are capped at 32 and fail locally at capacity. Parallel tiles use dynamic disjoint claims,
@@ -119,7 +140,8 @@ Published selection outlines share immutable point storage across document snaps
 result tokens. Copying such a snapshot MUST NOT copy its selection points. A geometry edit publishes new storage;
 layer-result validation compares retained selection handles and antialiasing without traversing the outline.
 Document and restore serials prevent stale work from returning after replacement or Undo/Redo. These primitives
-are specified in [`Document_Model.md`](../Document/Document_Model.md); asynchronous execution remains active work.
+are specified in [`Document_Model.md`](../Document/Document_Model.md); migrating existing image operations to
+asynchronous execution remains active work.
 
 Image operations that create a full result use the 64-byte-aligned `PixelBuffer` and transfer it to
 `Raster::Adopt`, without a second pixel allocation or copy. This covers adjustment/filter wrappers, Gaussian

@@ -11,7 +11,7 @@ Read `Specs/Testing/Testing_Validation.md` for the gates, and the owning domain 
 
 | Executable | Scope | Notes |
 | --- | --- | --- |
-| `HostTests` | Pure functions of the host (`AdapterSelection.h`, `FrameScheduler.h`, `CommandLine.h`, `EditorTool.h`), DirectWrite glyph presence, STRINGTABLE of `RedPrism.exe` | No window, no device; `--asan-probe` is the sanitizer probe |
+| `HostTests` | Pure host functions, worker/scheduler state and lifetime, DirectWrite glyph presence, STRINGTABLE of `RedPrism.exe` | Scheduler gates may create a message-only HWND; no visible window or device. `--asan-probe` is the sanitizer probe |
 | `DocumentTests` | `Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection` (Clipper2), `BrushStroke` (sparse rasters, the CPU kernel), `Heal`, `ImageFilters`, `WarpStroke` | CPU only |
 | `IoTests` | `ProjectStore`, `ImageCodecs` | Needs COM (`CoInitializeEx`), writes under `%TEMP%\RedPrism.IoTests` |
 | `CompositionTests` | `CanvasRenderer`, `CanvasViewport`, `GpuBrushCoverage` (the compute brush against the CPU kernel), sparse upload and stroke preview | Creates its own WARP device; reads pixels back |

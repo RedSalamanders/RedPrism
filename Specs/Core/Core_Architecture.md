@@ -32,7 +32,8 @@ borrows that device. It MUST NOT own a swap chain.
 
 | Owner | May own | MUST NOT own |
 | --- | --- | --- |
-| `Application` | Top-level `wil::unique_hwnd`, WndProc binding at `WM_NCCREATE`, display-power notify, command line, `SelectHostFrameAction` loop, `DocumentSession`, `CanvasRenderer`, `CanvasViewport`, the settings file and its directory watch ([`Core_Settings.md`](Core_Settings.md)), the theme, the UIA window root's placement | D3D device, swap chain, Present |
+| `Application` | Top-level `wil::unique_hwnd`, WndProc binding at `WM_NCCREATE`, display-power notify, command line, `SelectHostFrameAction` loop, `DocumentSession`, `JobScheduler` (`Common/Jobs.*`), `CanvasRenderer`, `CanvasViewport`, the settings file and its directory watch ([`Core_Settings.md`](Core_Settings.md)), the theme, the UIA window root's placement | D3D device, swap chain, Present |
+| `JobScheduler` (owned by `Application`) | Bounded job records and UI-action queue, cancellation, progress/completion publication and owner-thread delivery | Window, chrome, document/session state, GPU context, image-operation policy |
 | `Renderer` | One `ID3D11Device`, one `ID3D11DeviceContext`, one `IDXGISwapChain1`, RTV, frame-latency waitable, occlusion registration | A second device, a chrome HWND, GDI paint, DxUi library lifetime, document rasters |
 | Document | Layer graph, COW rasters, history budget | HWND, DXGI factory, DxUi host |
 | `WorkerPool` (`Common/WorkerPool.*`) | Private fixed-size Windows pool, bounded payload-free dispatch wakeups, callback cleanup group, implicit MTA lifetime, cancellation and parallel helpers | HWND, document mutation, GPU context, a second scheduler |
@@ -47,20 +48,40 @@ There is exactly one D3D11 device, one flip-model swap chain, and one `Present` 
 - Destroy the HWND with `wil::unique_hwnd::reset()`. After `WM_NCDESTROY`, `release()` so the wrapper does not
   `DestroyWindow` a dead handle.
 - Owned COM objects are `wil::com_ptr_nothrow<T>` assigned with `.put()`.
-- `wWinMain` and `WndProc` MUST NOT let exceptions escape. `catch (...)` is forbidden. `std::bad_alloc` is fatal.
+- `wWinMain` and `WndProc` MUST NOT let exceptions escape. `catch (...)` is forbidden. The job runner catches only
+  `std::bad_alloc` and turns it into a failed job carrying `E_OUTOFMEMORY`; explicit `noexcept` construction and
+  admission boundaries may return `E_OUTOFMEMORY` when the caller fails the operation or exits. Other allocation
+  failures remain fatal.
 
 ## Worker execution foundations
 
-`Common/Executor.h` is standard C++ only: `Executor`, `InlineExecutor`, `TileGrid`, `CancelSource`, `CancelToken`
-and `ParallelFor`. Kernel callers borrow an executor. Application-owned scheduling and migration of synchronous
-operations remain active work in `UiNeverBlocks_2026-09-22.md`; these foundations do not yet make host operations
-asynchronous.
+`Common/Executor.h` and the public `Common/Jobs.h` boundary are standard C++ only. `JobScheduler` hides its
+platform implementation behind a pimpl and is owned by `Application`. Its fixed capacity is 128 job records,
+including queued, running and completed-but-undrained jobs, plus eight queued UI actions. The seven classes are
+`InteractivePreview`, `Refinement`, `Stroke`, `Selection`, `Commit`, `Io` and `Background`; they map to HIGH
+(the first four), NORMAL (`Commit`, `Io`) and LOW (`Background`) worker priorities. `Stroke`, `Selection`, `Commit`
+and `Io` jobs run FIFO per `(class, serialKey)`, retaining their key until their result is applied or dropped.
+Zero is the conservative shared key. Worker callbacks carry no job payload; records remain scheduler-owned.
+
+Each record contains two aligned intrusive completion nodes, one for progress and one for final completion. Workers
+publish through an SLIST and signal the scheduler's auto-reset event. The owner reverses each detached SLIST batch
+to deliver its nodes FIFO. Progress is monotonic and published at most once per 100 ms. `PumpMessages`,
+`DrainCompletions` and `RunUiActions` are shared host primitives: completions apply only on the outer loop, and at
+most one UI action runs per outer-loop pass. Reentrant drain/action calls are ignored. The job event participates in
+both the message-only wait and the frame-latency wait, so completions return to the outer pump while hidden or
+suspended as well as while a frame is pending. `SettleJobs` is a harness/headless helper only, never a UI command.
+
+`Executor`, `InlineExecutor`, `TileGrid`, `CancelSource`, `CancelToken` and `ParallelFor` remain standard C++ kernel
+interfaces; kernel callers borrow an executor. No callbacks poll when idle.
+
+P0.6a establishes scheduling and completion delivery, but does not migrate existing image operations to asynchronous
+execution. Preview mailboxes, queued input and stroke chaining remain P0.6b; memory admission remains P0.7; moving
+blocking operations off the UI thread remains P1 work tracked in `UiNeverBlocks_2026-09-22.md`.
 
 `WorkerPool::Initialize` creates a private pool with equal minimum and maximum thread counts (logical processor
 count by default), a cleanup group and one reusable work object for each of HIGH, NORMAL and LOW priority. A
 dispatch callback carries only its owner/lane, never a job payload. Each lane coalesces outstanding wakeups at the
-thread count; the scheduler must drain its own bounded records. Admission and job state belong to the later
-scheduler. No callbacks poll when idle.
+thread count; `JobScheduler` drains its bounded records and owns job admission and state. No callbacks poll when idle.
 
 Parallel execution dynamically claims disjoint tiles; the caller participates. A call owns at most one helper
 work object, whose destruction cancels unstarted callbacks and joins running callbacks. The work object is outside
@@ -69,7 +90,7 @@ retains the caller's frame without a separate shared allocation. Failure to allo
 back to the caller. Tile bodies allocate nothing and never wait on jobs, I/O, or memory admission; nested
 `ParallelFor` uses the same cancel-before-join rule. The UI thread MUST NOT call this synchronous join.
 
-`Close` requests cancellation, stops dispatch admission, cancels queued dispatch callbacks and joins running ones.
+`WorkerPool::Close` requests cancellation, stops dispatch admission, cancels queued dispatch callbacks and joins running ones.
 It also waits on a condition variable for external parallel callers to release their helpers. Only then are the
 cleanup group, private pool and COM cookie released. Close is idempotent and runs on the owning teardown thread,
 never inside a callback. Initialization precedes publication; closed pools cannot restart. Cancellation does not
@@ -85,6 +106,11 @@ owner-thread `Remove` or `Close` has disarmed and joined the wait. Slot generati
 remove requests. Add/rearm are synchronized with close; remove/close are serialized owner-thread teardown and
 must never be called from the callback. The wait pool remains runnable even when every compute worker is busy.
 
+`Application::Shutdown` requests job cancellation, hides the window, then closes and joins the scheduler before
+releasing session inputs, chrome, renderer/device resources, the window, localization satellite or STA COM lifetime.
+Shutdown drops pending completion callbacks and UI actions after producers have joined. Calls made during a job UI
+callback defer teardown until the callback has returned.
+
 Independent state-machine expectations (no legacy counterpart) are: each tile/pixel is visited exactly once;
 inline, 1-, 2- and 4-worker outputs equal a serial coordinate formula; N jobs on N workers and nested execution
 complete; a cancelled row publishes no partial success; close retains active inputs until callbacks return; wait
@@ -93,15 +119,17 @@ failure waits. Existing image goldens remain unchanged.
 
 ## Frame loop
 
-`Application::Run` drains the message queue, then calls `SelectHostFrameAction` (`RedPrism/FrameScheduler.h`):
+`Application::Run` calls the shared message pump, completion drain and one UI action, then selects the next
+frame action (`RedPrism/FrameScheduler.h`). The first matching row wins:
 
 | State | Action |
 | --- | --- |
-| Hidden, display-off, or swap chain suspended (zero client size) | Block on the message queue |
-| Occluded, no occlusion-status message | Block on the message queue |
+| Completions or UI actions pending | Return to the outer completion/action pump, before visibility checks |
+| Hidden, display-off, or swap chain suspended (zero client size) | Block on messages, job wake and settings watch |
+| Occluded, no occlusion-status message | Block on messages, job wake and settings watch |
 | Occluded, occlusion-status message received | `Present(0, DXGI_PRESENT_TEST)` then re-evaluate |
-| Visible, powered, not occluded, not suspended, frame invalidated | Wait on the frame-latency object together with the queue, then `Renderer::Render` |
-| Visible and settled (not invalidated) | Block on the message queue |
+| Visible, powered, not occluded, not suspended, frame invalidated | Wait on frame latency, messages, job wake and settings watch; only frame latency proceeds to `Renderer::Render` |
+| Visible and settled (not invalidated) | Block on messages, job wake and settings watch |
 
 `Renderer::Render` is the only Present path. `WM_PAINT` MAY set the invalidation bit and MUST `ValidateRect`; it MUST
 NOT call `Present`, `BeginPaint` text, or GDI fill.
