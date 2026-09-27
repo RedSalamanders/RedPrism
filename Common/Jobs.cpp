@@ -88,6 +88,7 @@ struct JobScheduler::Impl final
     std::size_t liveCount = 0;      // owner thread, counts queued/running/undrained
     bool inCallback = false;        // owner thread, guards drain and actions across nested message loops
     bool closed = false;
+    JobObserver observer;
     std::array<std::unique_ptr<UiAction>, JobScheduler::kUiActionCapacity> actions;
     std::size_t actionHead = 0;
     std::size_t actionCount = 0;
@@ -99,6 +100,14 @@ struct JobScheduler::Impl final
     void CheckOwner() const noexcept
     {
         assert(ownerThread == GetCurrentThreadId());
+    }
+
+    void Notify(JobNoticeKind event, JobTicket ticket, JobClass kind, unsigned int percent = 0) noexcept
+    {
+        if (observer.notify)
+        {
+            observer.notify(observer.context, {event, ticket, kind, percent});
+        }
     }
 
     void Publish(Node& node) noexcept
@@ -237,7 +246,7 @@ JobScheduler::~JobScheduler()
     Close();
 }
 
-std::int32_t JobScheduler::Initialize(unsigned int threads) noexcept
+std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer) noexcept
 {
     if (_impl)
     {
@@ -265,6 +274,7 @@ std::int32_t JobScheduler::Initialize(unsigned int threads) noexcept
         Close();
         return result;
     }
+    _impl->observer = observer;
     const HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
     if (FAILED(result))
     {
@@ -327,6 +337,7 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         ticket = {slot, record.generation};
         ++self.liveCount;
     }
+    self.Notify(JobNoticeKind::Submitted, ticket, options.kind);
     (void)self.workers.Wake(Priority(options.kind));
     return S_OK;
 }
@@ -534,6 +545,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         auto* node = reinterpret_cast<JobScheduler::Impl::Node*>(fifo);
         fifo = fifo->Next; // save before a progress node can be republished
         auto& record = *node->record;
+        const JobTicket ticket{static_cast<std::size_t>(&record - self.records.data()), record.generation};
         if (!node->final)
         {
             const unsigned int percent = record.percent.load(std::memory_order_relaxed);
@@ -541,6 +553,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             if (!record.cancel->Token().IsCancelled() && !self.workers.ShutdownToken().stop_requested())
             {
                 record.job->Progress(percent);
+                self.Notify(JobNoticeKind::Progress, ticket, record.options.kind, percent);
             }
             continue;
         }
@@ -565,6 +578,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         }
         --self.liveCount;
         ++completed;
+        self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
     }
     self.WakeQueued();
     return completed;

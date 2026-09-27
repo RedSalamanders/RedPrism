@@ -9,6 +9,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "JobActivity.h"
 #include "Jobs.h"
 #include "Prompts.h"
 #include "Renderer.h"
@@ -77,10 +78,15 @@ class Application final : public ChromeEvents
   private:
     static constexpr wchar_t kWindowClassName[] = L"RedPrism.Window";
     static constexpr UINT_PTR kScreenshotTimerId = 1;
+    static constexpr UINT_PTR kJobIndicatorTimerId = 8;
     static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     static void RequestFrameThunk(void* context) noexcept;
     static void DispatchMessageThunk(void* context, void* message) noexcept;
     int RunJobShutdownSelfTest() noexcept;
+    static void JobNoticeThunk(void* context, JobNotice notice) noexcept;
+    void SyncJobActivity(std::uint64_t nowQpc) noexcept;
+    void OnJobIndicatorTimer() noexcept;
+    int RunJobActivitySelfTest() noexcept;
 
     HRESULT RegisterWindowClass() noexcept;
     HRESULT CreateMainWindow(bool visible) noexcept;
@@ -458,6 +464,9 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     JobScheduler _jobs;
+    JobActivity _jobActivity;
+    std::uint64_t _jobQpcFrequency = 0;
+    std::optional<JobTicket> _jobIndicatorTimer;
     CanvasViewport _viewport;
     CanvasRenderer _composition;
     std::wstring _screenshotPath;

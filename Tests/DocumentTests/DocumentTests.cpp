@@ -4,6 +4,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "HistoryRevisionTests.h"
+#include "HistoryWorkTests.h"
 #include "ImageFilters.h"
 #include "RasterConcurrencyTests.h"
 #include "Selection.h"
@@ -7201,6 +7202,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
     gFailures += RunSessionGenerationTests();
+    gFailures += RunHistoryWorkDocumentTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

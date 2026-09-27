@@ -376,6 +376,11 @@ class ChromeHost final : public CommandIds
     static constexpr float kLayersDefaultDip = 240.0f;
     static constexpr float kLayersTitleDip = 32.0f;
     static constexpr float kOpacityWidthDip = 96.0f;
+    static constexpr float kStatusZoomSectionWidthDip = 80.0f;
+    static constexpr float kStatusDocumentSectionWidthDip = 140.0f;
+    static constexpr float kJobProgressSectionWidthDip = 160.0f;
+    static constexpr float kJobProgressInsetDip = 8.0f;
+    static constexpr float kJobProgressTrackHeightDip = 8.0f;
     static constexpr float kWellBlockDip = 48.0f;
     static constexpr float kSwatchDip = 22.0f;
     static constexpr float kPaletteHotDip = 14.0f;
@@ -454,6 +459,8 @@ class ChromeHost final : public CommandIds
     void SetCommandChecked(int command, bool checked) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
     void SetStatus(std::wstring zoom, std::wstring size, std::wstring tool);
+    // Application-driven busy state; visibility timing belongs to Application. nullopt means indeterminate.
+    void SetJobProgress(bool visible, std::optional<unsigned> percent) noexcept;
     void SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo, bool canRedo);
     // Captions that follow the target, as the legacy menus did: Invert / Invert Mask, Delete Layer / Delete Layer
     // Mask, Free Transform / Transform Selection.
@@ -506,6 +513,10 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] std::wstring AdjustRadiusTextForTest() const;
     [[nodiscard]] bool FocusSizeUnitForTest() noexcept;
     [[nodiscard]] D2D1_RECT_F SpectrumBoundsDipForTest() const noexcept;
+    [[nodiscard]] bool JobProgressVisible() const noexcept;
+    [[nodiscard]] bool JobProgressIndeterminate() const noexcept;
+    [[nodiscard]] std::optional<unsigned> JobProgressPercent() const noexcept;
+    [[nodiscard]] D2D1_RECT_F JobProgressBoundsDip() const noexcept;
     // Lays the chrome out for the client size and DPI without drawing: HolePixels follows. Prepare lays out and draws.
     void Layout(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
     HRESULT Prepare(UINT widthPixels, UINT heightPixels, float dpi) noexcept;
@@ -1050,7 +1061,13 @@ class ChromeHost final : public CommandIds
     bool _documentDirty = false;
     bool _inDispatch = false;     // inside _view.Dispatch*: no accessibility flush from a re-entered Prepare
     bool _pointerPressed = false; // a chrome press in progress: DxUi's accessibility calls would cancel it
-    bool _syncing = false;        // a header or card sync is writing its controls (HoldReports)
+    struct DeferredJobProgress final
+    {
+        bool visible;
+        std::optional<unsigned> percent;
+    };
+    std::optional<DeferredJobProgress> _deferredJobProgress;
+    bool _syncing = false; // a header or card sync is writing its controls (HoldReports)
     // Detach() calls this: DxUi::ControlHost::Detach frees the whole control tree (_root.reset(), reached through
     // _view.Detach() below), so every raw pointer into it below would dangle without this. Several accessors
     // (NoticeOpen, ShortcutsOpen, MoreToolsOpen, ColorPickerOpen, AdjustPanelOpen, FilterOptionsVisible,
@@ -1070,6 +1087,7 @@ class ChromeHost final : public CommandIds
     DxUi::Label* _header = nullptr;
     DxUi::Tree* _layers = nullptr;
     DxUi::StatusStrip* _status = nullptr;
+    DxUi::ProgressBar* _jobProgress = nullptr;
     DxUi::Label* _layersTitle = nullptr;
     DxUi::Splitter* _splitter = nullptr;
     PaletteControl* _railPalette = nullptr;

@@ -97,6 +97,26 @@ their inputs and dependent owners alive until they return, drops undelivered cal
 renderer/device, HWND and localization/COM state. A shutdown request from inside a job UI callback is deferred
 until that callback returns.
 
+### Job activity and end-session policy
+
+The application observes scheduler submissions, progress and retirements on the UI thread. One timer targets the
+oldest foreground job's 250 ms deadline; it is killed before handling its message. Progress/completion events
+update the indicator without periodic polling. Already-queued timer messages revalidate current activity and cannot
+revive a completed job. Shutdown removes the timer and clears its fixed-capacity activity state.
+
+`GetEndSessionWorkPolicy` is the tested pure policy for the P1 file-flow wiring (the current synchronous file flows
+do not yet call it). Flags may overlap; each row contributes its action:
+
+| Work | Noncritical query | Critical query | Actual session end |
+| --- | --- | --- | --- |
+| Save or export in worker encode/write | Block, with a localized saving reason | Allow | Bounded wait on worker completion only; no UI apply |
+| Export still in GPU/readback | Allow | Allow | Cancel |
+| Clipboard write | Allow | Allow | Cancel |
+| None of these | Existing unsaved-document policy | Allow | No worker-write wait |
+
+HostTests enumerates all 32 combinations including the critical flag. Actual worker-write waits, shutdown block
+reasons, save-before-close continuations and file-job cancellation land with P1.7.
+
 ## Command line
 
 Every switch is declared once in `RedPrism/CommandLine.h`. `--help`, `-h`, `/?`, and `-?` print the catalog and exit 0

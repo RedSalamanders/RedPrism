@@ -117,9 +117,19 @@ before chrome, device, satellite and COM teardown. The job runner catches only `
 to a failed operation with `E_OUTOFMEMORY`; explicit `noexcept` construction/admission boundaries may return that
 error, while other allocation failures remain fatal.
 
-This foundation does not mean existing image operations run asynchronously. P0.6b still owns preview mailboxes,
-queued input and stroke chaining; P0.7 owns memory admission and related resource policy; P1 owns migration of
-blocking operations away from the UI thread.
+`PreviewMailbox` retains one active interactive request and one newest pending request. A new tick replaces only
+the pending input and invalidates a refinement; it never repeatedly cancels the interactive worker. The command
+queue is a fixed eight-entry ring. Both structures allocate no container storage. `HistoryWork` and `StrokeReplay`
+hold only ordering/state metadata; P1 owns retained stroke samples, and P0.7 accounts for their bytes.
+
+`JobActivity` uses 128 fixed records and updates only on scheduler notices. The oldest foreground operation owns
+the global progress indicator; Background, Refinement and InteractivePreview do not. A single deadline timer shows
+the indicator after 250 ms, is killed before dispatch, and is removed at completion/shutdown. It never polls job
+state. Hidden progress values do not repaint chrome. Visible indeterminate progress uses the existing frame-paced
+DxUi animation; hidden, suspended and occluded frame scheduling still waits on events.
+
+This foundation does not mean existing image operations run asynchronously. P0.7 owns memory admission and
+related resource policy; P1 owns migration of blocking operations away from the UI thread and input replay storage.
 
 The executor foundations in `Core_Architecture.md` use a private fixed-size pool and a separate one-thread wait
 pool. Idle callbacks own no polling loop. Dispatch wakeups are coalesced at the thread count per priority;

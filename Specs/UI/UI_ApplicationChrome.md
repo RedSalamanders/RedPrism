@@ -552,6 +552,22 @@ StatusStrip shows zoom percent, document size, and the current tool with its eff
 (`ChromeHost::CommandChordText`). The tab title is the file name (or Untitled) with a dirty mark when history is
 modified.
 
+The StatusStrip keeps those three text sections: zoom and document size have fixed widths, and the current tool
+section stretches. A fixed-width fourth section reserves room for a sibling `DxUi::ProgressBar`, overlaid inside the
+section with the bar's accessible name `IDS_A11Y_JOB_PROGRESS`. The bar is hidden by default. `ChromeHost::SetJobProgress`
+shows or hides it and accepts an optional integer percent: a value is clamped to 0–100, while `nullopt` selects the
+ProgressBar's indeterminate animation. Control writes and placement happen only when their values or bounds change.
+Hidden progress updates do not invalidate chrome. During a held chrome press, a visibility transition waits until
+release (or pointer leave), preserving the click across frames with the pinned library's interaction revision rules.
+Only the newest requested visibility/progress survives that brief deferral.
+The existing `EmbeddedHost` animation path advances the indeterminate bar only while the visible control requests
+animation; ChromeHost adds no timer. `Application` controls delayed visibility and waits 250 ms before showing the
+indicator for a busy operation, then hides it when the operation ends. This chrome contract does not assert that image
+operations are asynchronous or that any particular operation reports progress.
+
+`IDS_STATUS_BUSY` formats the busy label as `{0}…`. `IDS_STATUS_QUEUED_STALE` is the message for a queued action
+cancelled because its document changed before execution; the owning application flow decides when to present it.
+
 ## Notices
 
 The shell exposes the documented command surface through menus and the tool rail. No exposed function awaits an implementation since C16 closed

@@ -3,14 +3,19 @@
 #include "CanvasViewport.h"
 #include "CommandBindings.h"
 #include "CommandLine.h"
+#include "ContinuationQueueTests.h"
 #include "CrashDumps.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "ExecutorTests.h"
 #include "FrameScheduler.h"
+#include "HistoryWorkTests.h"
+#include "JobActivityTests.h"
 #include "JobBenchmark.h"
 #include "JobTests.h"
+#include "JobUiPolicyTests.h"
 #include "Localization.h"
+#include "PreviewMailboxTests.h"
 #include "Resources.h"
 #include "SettingsStore.h"
 #include "TransformOverlay.h"
@@ -438,7 +443,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 477> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 480> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -905,6 +910,9 @@ void TestStringTable() noexcept
                                          IDS_UNIT_INCHES,
                                          IDS_UNIT_CENTIMETERS,
                                          IDS_A11Y_PALETTE_NAME,
+                                         IDS_STATUS_BUSY,
+                                         IDS_STATUS_QUEUED_STALE,
+                                         IDS_A11Y_JOB_PROGRESS,
                                          IDS_KEY_CTRL,
                                          IDS_KEY_ALT,
                                          IDS_KEY_SHIFT,
@@ -1596,6 +1604,11 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunExecutorValueTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
+    gFailures += RunJobUiPolicyTests();
+    gFailures += RunJobActivityTests();
+    gFailures += RunPreviewMailboxTests();
+    gFailures += RunContinuationQueueTests();
+    gFailures += RunHistoryWorkHostTests();
     TestAdapterSelection();
     TestFrameScheduler();
     TestCommandLine();

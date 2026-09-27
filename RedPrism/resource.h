@@ -484,6 +484,9 @@
 #define IDS_UNIT_INCHES 648
 #define IDS_UNIT_CENTIMETERS 649
 #define IDS_A11Y_PALETTE_NAME 650
+#define IDS_STATUS_QUEUED_STALE 651
+#define IDS_STATUS_BUSY 652
+#define IDS_A11Y_JOB_PROGRESS 653
 #define IDS_SHUTDOWN_UNSAVED 664
 // Integration hand-offs (review fixes wave 1b, ids 666-679 of WP6's range).
 #define IDS_ERROR_SELECTION_DETAILED 666

@@ -45,6 +45,30 @@ struct JobTicket final
 {
     std::size_t slot = 128;
     std::uint64_t generation = 0;
+    [[nodiscard]] bool operator==(const JobTicket&) const noexcept = default;
+};
+
+enum class JobNoticeKind
+{
+    Submitted,
+    Progress,
+    Retired
+};
+
+struct JobNotice final
+{
+    JobNoticeKind event;
+    JobTicket ticket;
+    JobClass kind;
+    unsigned int percent = 0;
+};
+
+// Optional owner-thread observer for chrome state. Called only outside the scheduler lock; it must not invoke
+// scheduler operations, wait, or pump messages. Its context outlives Close. Shutdown drops notices with callbacks.
+struct JobObserver final
+{
+    void (*notify)(void*, JobNotice) noexcept = nullptr;
+    void* context = nullptr;
 };
 
 class JobContext final
@@ -104,7 +128,7 @@ class JobScheduler final
     JobScheduler(const JobScheduler&) = delete;
     JobScheduler& operator=(const JobScheduler&) = delete;
 
-    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0) noexcept;
+    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {}) noexcept;
     // Owner-thread operations. Failed submission leaves ownership with the caller. Queue capacity includes
     // running and completed-but-undrained jobs. A ticket never identifies a reused slot's newer generation.
     [[nodiscard]] std::int32_t Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept;

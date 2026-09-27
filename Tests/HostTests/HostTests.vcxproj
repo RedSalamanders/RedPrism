@@ -103,6 +103,11 @@
     <ClCompile Include="WorkerPoolTests.cpp" />
     <ClCompile Include="JobTests.cpp" />
     <ClCompile Include="JobBenchmark.cpp" />
+    <ClCompile Include="JobUiPolicyTests.cpp" />
+    <ClCompile Include="JobActivityTests.cpp" />
+    <ClCompile Include="PreviewMailboxTests.cpp" />
+    <ClCompile Include="ContinuationQueueTests.cpp" />
+    <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="ExecutorTests.cpp" />
     <ClCompile Include="..\..\Common\Localization.cpp" />
   </ItemGroup>

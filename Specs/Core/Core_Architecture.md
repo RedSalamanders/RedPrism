@@ -74,9 +74,19 @@ suspended as well as while a frame is pending. `SettleJobs` is a harness/headles
 `Executor`, `InlineExecutor`, `TileGrid`, `CancelSource`, `CancelToken` and `ParallelFor` remain standard C++ kernel
 interfaces; kernel callers borrow an executor. No callbacks poll when idle.
 
-P0.6a establishes scheduling and completion delivery, but does not migrate existing image operations to asynchronous
-execution. Preview mailboxes, queued input and stroke chaining remain P0.6b; memory admission remains P0.7; moving
-blocking operations off the UI thread remains P1 work tracked in `UiNeverBlocks_2026-09-22.md`.
+The scheduler's optional observer publishes Submitted, Progress and Retired notices on its owner thread, outside
+its lock. Submitted precedes worker dispatch; Retired follows the job's completion callback and payload release.
+Shutdown drops notices with callbacks. Observers must not call the scheduler, pump, or wait. The context outlives
+Close. `Application` uses these notices to update its fixed-capacity `JobActivity` and the delayed progress control.
+
+UI-owned `PreviewMailbox`, `ContinuationQueue`, `HistoryWork` and `StrokeReplay` define input and apply ordering.
+`HistoryWork` spans scheduler classes and keeps the document busy until apply/drop. Its shared input ordinals merge
+the command queue with recorded strokes. The mailbox, barrier and application outlive all their workers; pointer
+fields in stamps are opaque identities, not permission for workers to access UI state. See `Document_Tools.md`.
+
+These foundations do not migrate existing image operations to asynchronous execution. Memory admission remains
+P0.7; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
+`UiNeverBlocks_2026-09-22.md`.
 
 `WorkerPool::Initialize` creates a private pool with equal minimum and maximum thread counts (logical processor
 count by default), a cleanup group and one reusable work object for each of HIGH, NORMAL and LOW priority. A

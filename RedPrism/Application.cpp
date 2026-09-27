@@ -156,7 +156,13 @@ Application::~Application()
 
 HRESULT Application::InitializeProcessing() noexcept
 {
-    return _jobs.Initialize();
+    LARGE_INTEGER frequency{};
+    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
+    {
+        return E_FAIL;
+    }
+    _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
+    return _jobs.Initialize(0, {JobNoticeThunk, this});
 }
 
 void Application::DispatchMessageThunk(void* context, void* message) noexcept
@@ -566,6 +572,10 @@ int Application::RunSelfTest() noexcept
         return 5;
     }
     const int visibleTools = _chrome->VisibleToolButtonCount();
+    if (const int failed = RunJobActivitySelfTest(); failed != 0)
+    {
+        return failed;
+    }
     if (LucideIconsPrepared() < static_cast<int>(kEditorToolCount) || LucideIconsDrawn() < visibleTools ||
         visibleTools < 1)
     {
@@ -2847,12 +2857,15 @@ void Application::Shutdown() noexcept
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
     _jobs.Close();
+    _jobActivity.Clear();
+    _jobIndicatorTimer.reset();
     SaveSettings();
     StopSettingsWatch();
     _displayPowerNotification.reset();
     if (_window)
     {
         (void)KillTimer(_window.get(), kScreenshotTimerId);
+        (void)KillTimer(_window.get(), kJobIndicatorTimerId);
         if (_endSessionPending)
         {
             (void)ShutdownBlockReasonDestroy(_window.get());
@@ -4584,6 +4597,11 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         break;
     case WM_TIMER:
+        if (wParam == kJobIndicatorTimerId)
+        {
+            OnJobIndicatorTimer();
+            return 0;
+        }
         if (wParam == kSettingsTimerId)
         {
             (void)KillTimer(window, kSettingsTimerId);

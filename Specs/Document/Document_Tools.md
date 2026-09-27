@@ -15,6 +15,38 @@ transform is the composition's job ([`Rendering_Composition.md`](../Rendering/Re
 that shows it is described in [`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md). Since C9 it also owns the
 selection: its geometry, the session operations on it, and the Magic Wand and mask-tracing kernels.
 
+## Asynchronous tool ordering foundations
+
+`Common/PreviewMailbox.h`, `ContinuationQueue.h` and `HistoryWork.h` specify UI-owned state machines. Their actual
+tool-command migrations are P1 work; the existing direct session operations retain their synchronous contracts.
+
+- A preview mailbox has one launched interactive request and one latest pending request. Pending changes never
+  revoke the running request's right to publish. A finish releases the next request; failure releases it too.
+  Close, preview-off and reopening invalidate old epochs. Every apply also validates the owning document token.
+  Refinement may start once per settled successful sequence and is invalidated by any newer settings.
+  This preserves `Levels.swift`/`Filters.swift` coalescing and `stalePreviewCannotReturnAfterOffOrReopen`.
+- An eight-entry continuation ring owns parameters, not document snapshots. A full ring refuses a command while
+  preserving caller ownership. A multi-file drop is one entry. Consecutive New wand clicks on the same document
+  coalesce, even when full; Add/Subtract/Intersect do not. An ordinal gap (for example an interleaved stroke) prevents
+  coalescing. A replaced-document entry is dropped and counted for a notice. Imports targeting an opening document
+  must be bound to that open intent when P1 wires file flows, rather than accidentally dropped on replacement.
+- `HistoryWork` issues shared monotonic input ordinals for commands and strokes and admits one history operation
+  across all scheduler classes. Busy lasts from Begin through the UI apply/drop transaction. The host picks the
+  oldest input before Begin and takes immutable pixels, selection and its job token only afterwards. Worker completion
+  alone does not release the barrier. Old or cross-owner completion stamps cannot release newer work.
+- A stroke recording begins immediately even while history is busy. On pointer-up its `StrokeReplay` becomes Pending;
+  it can launch only after earlier input and history work apply/drop. It snapshots the current surviving document,
+  whether its predecessor succeeded, failed or was cancelled. The recording retains tool settings, target, samples
+  and random seed through apply. Escape can cancel recording before pointer-up; it cannot cancel a released stroke.
+  Escape cancels Commit/Selection and clears command continuations. A stroke's own failure retains its input in a
+  Failed state for a reported, explicit retry with a new ordinal, never an automatic idle retry loop. A changed
+  document does not consume the recording; replacement must settle or explicitly resolve it first.
+
+The state machines do not impose a stroke-count cap or own pixel/sample allocations. P1 supplies recording storage
+and replay; memory admission accounts for it. Scheduler capacity pressure must leave accepted input retained. HostTests
+use literal state/ownership expectations. DocumentTests combine these states with direct session operations and
+independent pixel/history expectations before the later worker integration tests.
+
 ## Transform model
 
 `LayerTransform` is the unrotated box (origin, size in document pixels), a clockwise rotation in degrees about the

@@ -432,6 +432,8 @@ void ChromeHost::ResetControlPointers() noexcept
     _header = nullptr;
     _layers = nullptr;
     _status = nullptr;
+    _jobProgress = nullptr;
+    _deferredJobProgress.reset();
     _layersTitle = nullptr;
     _splitter = nullptr;
     _railPalette = nullptr;
@@ -900,9 +902,15 @@ HRESULT ChromeHost::Build() noexcept
         _layers->SetDelegate(&_treeModel);
         _layers->SetReorderEnabled(true);
         _status = root->AddChild<DxUi::StatusStrip>();
-        _status->SetSections({DxUi::StatusStrip::Section{std::wstring{}, 80.0f},
-                              DxUi::StatusStrip::Section{std::wstring{}, 140.0f},
-                              DxUi::StatusStrip::Section{std::wstring{}, 0.0f}});
+        _status->SetSections({DxUi::StatusStrip::Section{std::wstring{}, kStatusZoomSectionWidthDip},
+                              DxUi::StatusStrip::Section{std::wstring{}, kStatusDocumentSectionWidthDip},
+                              DxUi::StatusStrip::Section{std::wstring{}, 0.0f},
+                              DxUi::StatusStrip::Section{std::wstring{}, kJobProgressSectionWidthDip}});
+        // StatusStrip has text sections only. This sibling occupies the reserved fourth section and paints above it.
+        _jobProgress = root->AddChild<DxUi::ProgressBar>();
+        _jobProgress->SetAccessibleName(LoadStringResource(nullptr, IDS_A11Y_JOB_PROGRESS));
+        _jobProgress->SetTrackHeightDip(kJobProgressTrackHeightDip);
+        _jobProgress->SetVisible(false);
         // The overlay draws the transform box over the hole and is never hit.
         _overlay = root->AddChild<CanvasOverlay>();
         // The splitter spans canvas and layers; only its separator (plus slop) is hittable, so it goes above them.
@@ -1421,6 +1429,16 @@ void ChromeHost::Arrange() noexcept
     if (_status)
     {
         PlaceControl(_status, D2D1::RectF(0.0f, statusTop, widthDip, heightDip));
+    }
+    if (_jobProgress)
+    {
+        const float fixedBeforeProgress = kStatusZoomSectionWidthDip + kStatusDocumentSectionWidthDip;
+        const float sectionLeft = std::max(fixedBeforeProgress, widthDip - kJobProgressSectionWidthDip);
+        const float top = statusTop + (kStatusHeightDip - kJobProgressTrackHeightDip) * 0.5f;
+        PlaceControl(_jobProgress,
+                     D2D1::RectF(sectionLeft + kJobProgressInsetDip, top,
+                                 std::max(sectionLeft + kJobProgressInsetDip, widthDip - kJobProgressInsetDip),
+                                 top + kJobProgressTrackHeightDip));
     }
     ArrangeAdjustPanel(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
     ArrangeSizeCard(layersLeft - kSplitterWidthDip, headerBottom, statusTop);
@@ -2849,6 +2867,66 @@ void ChromeHost::SetStatus(std::wstring zoom, std::wstring size, std::wstring to
     section(2, tool);
 }
 
+void ChromeHost::SetJobProgress(bool visible, std::optional<unsigned> percent) noexcept
+{
+    if (_jobProgress == nullptr)
+    {
+        return;
+    }
+    if (_pointerPressed && _jobProgress->IsVisible() != visible)
+    {
+        // The pinned EmbeddedHost cancels an ordinary held button when a sibling's visibility changes its
+        // interaction revision. Keep that press intact; replay only the latest requested visibility on release.
+        _deferredJobProgress = DeferredJobProgress{visible, percent};
+        return;
+    }
+    _deferredJobProgress.reset();
+    if (!visible)
+    {
+        // Quick/background jobs and hidden progress reports must not dirty the whole retained chrome surface.
+        ShowControl(_jobProgress, false);
+        return;
+    }
+    const bool indeterminate = !percent.has_value();
+    if (_jobProgress->IsIndeterminate() != indeterminate)
+    {
+        _jobProgress->SetIndeterminate(indeterminate);
+    }
+    if (percent.has_value())
+    {
+        const double value = static_cast<double>(std::clamp(percent.value(), 0u, 100u));
+        if (_jobProgress->GetValue() != value)
+        {
+            _jobProgress->SetValue(value);
+        }
+    }
+    ShowControl(_jobProgress, visible);
+}
+
+bool ChromeHost::JobProgressVisible() const noexcept
+{
+    return _jobProgress != nullptr && _jobProgress->IsVisible();
+}
+
+bool ChromeHost::JobProgressIndeterminate() const noexcept
+{
+    return _jobProgress != nullptr && _jobProgress->IsIndeterminate();
+}
+
+std::optional<unsigned> ChromeHost::JobProgressPercent() const noexcept
+{
+    if (_jobProgress == nullptr || _jobProgress->IsIndeterminate())
+    {
+        return std::nullopt;
+    }
+    return static_cast<unsigned int>(_jobProgress->GetValue());
+}
+
+D2D1_RECT_F ChromeHost::JobProgressBoundsDip() const noexcept
+{
+    return _jobProgress != nullptr ? _jobProgress->GetBounds() : D2D1_RECT_F{};
+}
+
 void ChromeHost::SetUndoRedoNames(const std::wstring& undoName, const std::wstring& redoName, bool canUndo,
                                   bool canRedo)
 {
@@ -3142,6 +3220,11 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
         // The press is over once DxUi has handled the release (a click in it may have switched the tool): the
         // rail latch deferred during the press applies now.
         _pointerPressed = false;
+        if (_deferredJobProgress)
+        {
+            const auto pending = *_deferredJobProgress;
+            SetJobProgress(pending.visible, pending.percent);
+        }
         if (_toolVisualsDirty)
         {
             SyncToolVisuals();

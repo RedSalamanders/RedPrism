@@ -69,6 +69,24 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+### Job input and progress policies (P0.6b)
+
+HostTests covers one-active/latest-pending preview ownership, stale epochs and refinements, all eight continuation
+slots, refusal ownership, ring wrap, wand coalescing, shared stroke ordinals, cross-class history exclusion and
+explicit failed-stroke retry. Literal virtual-QPC cases pin the 250 ms threshold without sleeps or host-speed
+assertions. All 32 end-session flag combinations have literal outcomes. Fixed activity records reject stale progress
+and retirement after slot reuse; an event-gated scheduler observer case proves UI-thread notice ordering and lifetime.
+
+DocumentTests runs actual direct session operations through the ordering state machines to check that a stroke
+uses the predecessor's applied pixels (or the surviving pixels after failure/cancel), separate undo entries, Undo
+after a pending stroke, and replacement/stale-preview guards. This qualifies ordering foundations, not the P1
+asynchronous tool migrations. Existing brush/adjustment numeric goldens remain required.
+
+The WARP self-test submits a gated job through the production scheduler observer, advances visibility using exact
+virtual QPC boundaries, prepares the status control at 96/144 DPI, tests determinate/indeterminate states, and
+settles the job through the shared pump. Completion removes its indicator and timer; a stale timer cannot revive it.
+Both showing and hiding the bar across a held rail click preserve that click through an intervening preparation.
+
 ### Job scheduler and host pump (P0.6a)
 
 HostTests may create a **message-only HWND**, without a device or visible window, to prove the actual shared

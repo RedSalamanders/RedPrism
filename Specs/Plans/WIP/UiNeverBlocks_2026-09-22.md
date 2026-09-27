@@ -34,7 +34,12 @@
   - [x] Wire the shared pump and event waits into the host, including hidden-window completion priority.
   - [x] Verify cancellation, FIFO, progress, modal reentrancy, failed jobs and all-exit shutdown with event gates.
   - [x] Pass the configuration matrix and update normative contracts for the completed slice.
-- [ ] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state.
+- [x] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Implement the one-active/latest-pending preview mailbox and ordered eight-command queue.
+  - [x] Implement the cross-class history barrier and retained stroke-replay states.
+  - [x] Wire scheduler activity into the one-shot busy deadline and localized DxUi progress control.
+  - [x] Verify state machines, document replay, observer lifetime, DPI layout and event-driven activity; complete all configuration gates.
+  - [x] Update normative contracts and the validation record for the completed slice.
 - [ ] P0.7 — Add memory admission, deferred release and justified recycling.
 - [ ] P0.8 — Add scalar kernel dispatch and the x64 VEX scan.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
@@ -45,7 +50,7 @@
 - [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2–P0.6a are complete on x64; the P0 phase remains open. ARM64
+Implementation started 2026-09-27. Slices P0.2–P0.6b are complete on x64; the P0 phase remains open. ARM64
 Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
 
 Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
@@ -86,6 +91,14 @@ analysis with its compiler controls, and all ARM64 cross-builds passed. Release 
 through completion and payload release measured 19.3 µs median and 53.4 µs p95. The
 [scheduler record](../../TestRuns/JobScheduler_2026-09-27.md) gives the state-based tests, measurement scope and
 qualification limits. Image commands remain synchronous until their P1 migrations; G1 is still open.
+This completed slice was committed and pushed to `origin/main` as `048b1cd`.
+
+P0.6b progress, 2026-09-27: preview coalescing, queued command ownership, shared history/stroke ordering and
+the delayed busy indicator passed 269 new policy/ordering checks plus the full x64 gates. The WARP self-test covers
+production activity notifications, exact visibility boundaries, 96/144 DPI and held chrome clicks. Native analysis
+and all ARM64 cross-builds passed. See the [input-policy record](../../TestRuns/JobInputPolicies_2026-09-27.md).
+P1 still owns actual tool snapshot/worker/apply migration, stroke sample storage and file-flow wiring; these
+foundation gates do not claim that image processing is already nonblocking.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -99,7 +112,7 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2–P0.6a are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded, so P0.6b/P0.7 can proceed.
+- **Status**: ACTIVE. P0.2–P0.6b are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded; P0.7 is next.
   P0.1 and P0.8 remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
@@ -402,9 +415,10 @@ UI thread (STA)                                private pool "RedPrism.Workers" (
                       └── SetEvent(jobWake) ◄── completion SLIST (two intrusive nodes per job; push never blocks)
 ```
 
-- **`JobScheduler`** (new, `Common/Jobs.{h,cpp}`) is owned by `Application`. It holds the lane queues of job
-  records, the per-target mailboxes, the completion list, the manual-reset cancel event, the `jobWake` auto-reset
-  event and the continuation queue (§4.4).
+- **`JobScheduler`** (`Common/Jobs.{h,cpp}`) is owned by `Application`. It holds the lane queues of job
+  records, the completion list, the manual-reset cancel event and the `jobWake` auto-reset event. The same host
+  owns stable per-target preview mailboxes, the history barrier, stroke recordings and the continuation queue
+  (§4.4); workers never access these UI-owned state machines.
   - Pool callbacks carry no payload. They pop the next record from the scheduler's lane queue, so a callback
     cancelled before it starts leaks nothing, and the scheduler frees queued records itself.
   - Its Win32 members sit behind a pimpl, so `Jobs.h` has only fixed-width types.
@@ -583,7 +597,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 | Selection | `generation` is unchanged since the job's snapshot. Otherwise the result is dropped with the status `IDS_STATUS_SELECTION_STALE` |
 | Whole document (merge, Image Size, Canvas Size fill) | `generation` is unchanged |
 | Save, export | Never touch the document; they complete from their snapshot. Save completes with `MarkSaved(revisionAtSnapshot)`. Revisions are opaque GUIDs; a save after Undo can legitimately write an older revision. The scheduler orders writes/completions per path and refuses a completion from another document serial; history records the revision actually written |
-| Previews | `sequence` is the newest for the target and the edit that asked for it is still open (covers the legacy `stalePreviewCannotReturnAfterOffOrReopen`) |
+| Previews | The stamp is the current launched request in its still-open mailbox epoch, and the target token remains valid. A newer pending interactive request does not invalidate the running request (D2); only a newer launched request or a closed/reopened edit does. A refinement must still be for the newest offered settings (covers the legacy `stalePreviewCannotReturnAfterOffOrReopen`) |
 
 **Busy state and the continuation queue** (D3). This keeps the legacy
 `projectOperationsBlockEditsAndQueueImageImports` semantics without losing input.
@@ -607,6 +621,10 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     re-samples from it (clone, blur, smudge, heal).
   - If the predecessor is cancelled or fails, the chained strokes re-run from their recorded input on the surviving
     image. No stroke is ever refused or dropped.
+  - A stroke's own allocation/device failure retains its input and reports failure; it never starts an automatic
+    retry loop. An explicit retry uses a fresh input ordinal. Document replacement must first settle or explicitly
+    resolve retained strokes. P0.6b implements these ownership states; P1 supplies replay storage and engine wiring,
+    with storage charged to P0.7 admission. No bounded scheduler slot refusal may discard recorded stroke input.
 - **Refusals.**
   - Other canvas gestures (Move drag, crop, gradient, shape) on a layer with a pending Commit or Stroke job are
     refused with `IDS_STATUS_BUSY` ("{0}…", the running action's name).
@@ -637,8 +655,9 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 - `WM_CLOSE` during a save leaves the window up, with the status `IDS_STATUS_CLOSE_AFTER_SAVE` ("Saving… the window
   closes when done"). Escape abandons the close.
 - While a save, or an export past its GPU stage, runs:
-  - `WM_QUERYENDSESSION` calls `ShutdownBlockReasonCreate` with `IDS_SHUTDOWN_SAVING` and returns FALSE. The loop
-    keeps pumping. The reason is destroyed when the job applies, fails or is cancelled.
+  - A noncritical `WM_QUERYENDSESSION` calls `ShutdownBlockReasonCreate` with `IDS_SHUTDOWN_SAVING` and returns
+    FALSE. A critical end is allowed, preserving the current host contract. The loop keeps pumping. The reason is
+    destroyed when the job applies, fails or is cancelled.
   - `WM_ENDSESSION(TRUE)` waits only on the worker-side completion event of that job, bounded by the end-session
     timeout, and applies nothing.
 - An export still in its GPU or readback stage is cancelled at end session, and so is any clipboard write.
