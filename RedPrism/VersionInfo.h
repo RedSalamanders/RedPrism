@@ -41,7 +41,9 @@ namespace RedPrism
         return false;
     }
     std::vector<BYTE> block(size);
-    if (!GetFileVersionInfoW(modulePath, handle, size, block.data()))
+    // GetFileVersionInfoW's dwHandle parameter is reserved and must be zero. The handle output from
+    // GetFileVersionInfoSizeW is not an input to this API.
+    if (!GetFileVersionInfoW(modulePath, 0, size, block.data()))
     {
         return false;
     }

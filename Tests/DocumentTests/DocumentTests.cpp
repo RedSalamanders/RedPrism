@@ -3355,6 +3355,24 @@ void DragGradient(DocumentSession& session, Vec2 start, Vec2 end)
     session.EndGradientDrag();
 }
 
+void TestGradientPreviewPalette()
+{
+    // Legacy paletteChangesUpdatePendingPreview, and the pending tiles feed the preview. Kept in its own
+    // function so this suite's many DocumentSession fixtures do not accumulate into one oversized stack frame.
+    DocumentSession session = GradientSession();
+    DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
+    const BrushStroke& raster = *session.PendingGradient()->raster;
+    Expect(!raster.Tiles().empty() && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 0, "gradient.preview-tiles");
+    session.SwapPaletteColors();
+    Expect(session.GradientColors()[0][0] == 1.0 && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 255,
+           "gradient.palette-updates-preview");
+    // Switching layers applies it.
+    const int count = session.history.UndoCount();
+    session.AddBlankLayer();
+    Expect(session.PendingGradient() == nullptr && session.history.UndoCount() == count + 2,
+           "gradient.layer-switch-applies");
+}
+
 void TestGradientTool()
 {
     // Legacy foregroundToBackgroundFillsCanvasAndCommitsOneUndo (pixels within 3 levels, as Core Graphics quantizes).
@@ -3526,22 +3544,7 @@ void TestGradientTool()
                    session.BackgroundColor() == 0xFFFF0000u,
                "palette.image-swap-leaves-mask-paint");
     }
-    // Legacy paletteChangesUpdatePendingPreview, and the pending tiles feed the preview.
-    {
-        DocumentSession session = GradientSession();
-        DragGradient(session, Vec2{0.5, 2}, Vec2{100.5, 2});
-        const BrushStroke& raster = *session.PendingGradient()->raster;
-        Expect(!raster.Tiles().empty() && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 0,
-               "gradient.preview-tiles");
-        session.SwapPaletteColors();
-        Expect(session.GradientColors()[0][0] == 1.0 && PixelOf(raster.Tiles().front().image, 0, 2)[2] == 255,
-               "gradient.palette-updates-preview");
-        // Switching layers applies it.
-        const int count = session.history.UndoCount();
-        session.AddBlankLayer();
-        Expect(session.PendingGradient() == nullptr && session.history.UndoCount() == count + 2,
-               "gradient.layer-switch-applies");
-    }
+    TestGradientPreviewPalette();
 }
 
 DocumentSession ShapeSession()
@@ -3745,7 +3748,6 @@ bool BoxIs(const std::optional<SelectionBounds>& box, double minX, double minY, 
 void TestPixelEdits()
 {
     const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
-    const std::array<std::uint8_t, 4> blue{255, 0, 0, 255};
     const std::array<std::uint8_t, 4> white{255, 255, 255, 255};
     // Legacy brushPaintsOnlyInsideTheSelection.
     {
@@ -3856,6 +3858,11 @@ void TestPixelEdits()
         Expect(LayerPixelOf(session, id, 10, 10)[3] == 0 && LayerPixelOf(session, id, 90, 35)[3] == 255 && soft,
                "edit.clip-follows-scaled-layers");
     }
+}
+
+void TestPixelEditMasksAndInvert()
+{
+    const std::array<std::uint8_t, 4> red{0, 0, 255, 255};
     // Legacy maskButtonAddsWhiteMaskOrHidesTheSelection and layerMenuMasksUseTheSelection.
     {
         DocumentSession session = PixelEditSession();
@@ -4696,6 +4703,10 @@ void TestHueSaturation()
                "hsv.band-refuses-crossing");
         Expect(Adjust::BandSetHandle(band, 1, 110) && band.rangeStart == 110, "hsv.band-moves-handle");
     }
+}
+
+void TestHueRangesAndSampling()
+{
     // Legacy colorRangesAdjustIndependently.
     {
         DocumentSession session = RedAndBlue();
@@ -7210,11 +7221,13 @@ int wmain(int argc, wchar_t** argv)
     TestShapeTool();
     TestEyedropper();
     TestPixelEdits();
+    TestPixelEditMasksAndInvert();
     TestPixelMoves();
     TestClipboard();
     TestFloatingSelection();
     TestLevels();
     TestHueSaturation();
+    TestHueRangesAndSampling();
     TestImageAdjustments();
     TestFilters();
     TestAdjustmentLayers();

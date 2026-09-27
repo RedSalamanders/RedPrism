@@ -4,11 +4,14 @@
 #include "Localization.h"
 #include "Resources.h"
 #include "SettingsStore.h"
+#include "WorkerPool.h"
 #include "resource.h"
 
+#include <atomic>
 #include <crtdbg.h>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 #include <new>
 #include <optional>
@@ -124,6 +127,48 @@ void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexc
     MessageBoxW(nullptr, text.c_str(), caption.c_str(), MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
 }
 
+int RunWorkerCrashProbe() noexcept
+{
+    struct Probe final
+    {
+        std::atomic<unsigned int> started{0};
+        wil::unique_handle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    } probe;
+    if (!probe.ready)
+    {
+        return 1;
+    }
+    WorkerPool pool;
+    const HRESULT started = pool.Initialize(
+        2,
+        [](void* context, WorkPriority, CancelToken) noexcept
+        {
+            auto& state = *static_cast<Probe*>(context);
+            const unsigned int index = state.started.fetch_add(1);
+            if (index == 1)
+            {
+                (void)SetEvent(state.ready.get());
+            }
+            if (WaitForSingleObject(state.ready.get(), 5000) != WAIT_OBJECT_0)
+            {
+                ExitProcess(1);
+            }
+            if (index == 0)
+            {
+                std::terminate(); // verifies the per-worker UCRT handler as well as competing faults
+            }
+            CrashDumps::RaiseProbeCrash();
+        },
+        &probe);
+    if (FAILED(started) || !pool.Wake(WorkPriority::High) || !pool.Wake(WorkPriority::High))
+    {
+        return 1;
+    }
+    // No teardown: the child exists only to fault. A missing worker/fault fails without leaving a dump.
+    (void)WaitForSingleObject(GetCurrentProcess(), 15000);
+    ExitProcess(1);
+}
+
 int RunApplication(HINSTANCE instance, int showCommand) noexcept
 {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -174,9 +219,16 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const std::wstring crashDirectory = parsed.crashProbeDirectory != nullptr ? std::wstring{parsed.crashProbeDirectory}
                                         : harness                             ? HarnessCrashDirectory()
                                                                               : CrashDumps::DefaultDirectory();
-    CrashDumps::InstallCrashHandler(crashDirectory.c_str());
+    if (FAILED(CrashDumps::InstallCrashHandler(crashDirectory.c_str(), parsed.crashProbeWorker)))
+    {
+        return 1;
+    }
     if (parsed.crashProbeDirectory != nullptr)
     {
+        if (parsed.crashProbeWorker)
+        {
+            return RunWorkerCrashProbe();
+        }
         CrashDumps::RaiseProbeCrash();
     }
 
@@ -271,7 +323,7 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
 }
 } // namespace
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
+_Use_decl_annotations_ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
 {
     return RunApplication(instance, showCommand);
 }

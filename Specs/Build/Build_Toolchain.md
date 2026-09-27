@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-27
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `format.ps1`
 
 ## Scope
@@ -130,7 +130,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | --- | --- |
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan]` | Restore WIL, yyjson, libzip, and Clipper2 (`-Asan`: the sanitized x64 tree) |
 | `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
-| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Run]` | Preflight, restore, MSBuild, provenance |
+| `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
 | `.\package.ps1 [-Platform] [-SkipBuild] [-SkipSmoke]` | Release build, the portable ZIP with its `.sha256`, the clean-extraction smoke ([`Build_Packaging.md`](Build_Packaging.md)) |
@@ -138,6 +138,29 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 
 `build.ps1` locates MSBuild from `MSBUILD_EXE_PATH`, `PATH`, or vswhere (including prerelease VS 2026). Every MSBuild
 invocation writes a UTF-8 log under `.build/logs/`.
+
+`build.ps1 -Analyze` passes `RedPrismAnalyze=true`; the root `Directory.Build.targets` enables MSVC native C++ code
+analysis (`/analyze`) and loads `EspXEngine.dll` with its `ConcurrencyCheck.dll` extension only for RedPrism projects.
+The pinned DxUi project does not receive the opt-in or the compiler plugin.
+The analysis marks the selected RedPrism vcpkg include root, the pinned DxUi source and consumer vcpkg include roots,
+and the compiler's `INCLUDE` paths (including the Windows SDK) as external, then uses `/analyze:external-` to skip
+diagnostics originating in those headers. The DxUi roots come from the resolved pinned consumer properties; analysis
+does not modify or float that dependency. It validates RedPrism's repository code, not pinned vendor implementations;
+repository diagnostics remain enabled.
+MSVC's default C6262 stack threshold remains 16 KiB for `Common/` and `RedPrism/`. Test-owned translation units whose
+full paths are under the repository's `Tests/` directory use `/analyze:stacksize 131072` (128 KiB). Several existing
+test entry functions keep multiple roughly 13 KiB `DocumentSession` fixtures alive, producing suite-only frames from
+26 KiB to about 92 KiB; the test-specific budget accommodates those fixture frames while retaining stack
+analysis and leaving the production threshold unchanged. C6262 is not globally disabled.
+The switch forces the solution `Rebuild` target, even when `-Rebuild` was not specified, so changed and new translation
+units are analyzed instead of reusing ordinary build objects. It retains the selected platform, configuration, worker
+count, and other normal build options. Analysis diagnostics remain enabled and are reported in a separate `-Analyze`
+MSBuild log under `.build/logs/`; `-Analyze` cannot be combined with `-Clean`.
+After a successful solution rebuild, `-Analyze` compiles two small static-library probes with the same MSBuild
+executable, platform, and configuration. The probe projects opt in through `RedPrismAnalysisProbe=true`. The guarded
+`WorkerResources::ExclusiveLock` access must pass native concurrency SAL analysis; a separately rebuilt unguarded
+access must fail with a C261xx diagnostic at `ConcurrencyAnalysisProbe::Unsafe`. Probe projects,
+objects, and retained per-case logs live under `.build/AnalysisProbe/`; regular `test.ps1` does not run these controls.
 
 ## Solution shape
 
@@ -152,6 +175,7 @@ headers consumed by `CanvasRenderer`.
 .\build.ps1 -Platform x64 -Configuration Debug
 .\build.ps1 -Platform x64 -Configuration Release
 .\build.ps1 -Platform x64 -Configuration "ASan Debug"
+.\build.ps1 -Platform x64 -Configuration Debug -Analyze
 .\test.ps1 -Platform x64 -Configuration Debug
 .\format.ps1 -Check
 ```

@@ -63,6 +63,11 @@ if ($Configuration -eq 'ASan Debug') {
     if ($LASTEXITCODE -ne 0) {
         throw "DocumentTests.exe --stress failed with exit code $LASTEXITCODE."
     }
+    Write-Host 'Running concurrent worker stress...' -ForegroundColor Cyan
+    & $hostTests --stress
+    if ($LASTEXITCODE -ne 0) {
+        throw "HostTests.exe --stress failed with exit code $LASTEXITCODE."
+    }
     $probeLog = Join-Path $repoRoot ".build\logs\ASan-probe-$Platform-$([guid]::NewGuid().ToString('N')).log"
     New-Item -ItemType Directory -Path (Split-Path $probeLog) -Force | Out-Null
     $previousOptions = $env:ASAN_OPTIONS
@@ -82,20 +87,32 @@ if ($Configuration -eq 'ASan Debug') {
     $global:LASTEXITCODE = 0
 }
 
-Write-Host 'Running crash probe...' -ForegroundColor Cyan
-$crashRoot = Join-Path $repoRoot (".build\logs\crash-probe-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
-$crashErr = Join-Path $outputRoot 'RedPrism.crash-probe.err.log'
-Remove-Item -LiteralPath $crashErr -ErrorAction SilentlyContinue
-$probe = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--crash-probe', ('"' + $crashRoot + '"')) -Wait -PassThru `
-    -RedirectStandardError $crashErr
-$dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-*.dmp' -ErrorAction SilentlyContinue)
-$pendingMarker = Join-Path $crashRoot 'pending.txt'
-$pendingText = if (Test-Path -LiteralPath $pendingMarker) { (Get-Content -LiteralPath $pendingMarker -Raw).Trim() } else { '' }
-if ($probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
-    throw "RedPrism.exe --crash-probe did not leave one dump and its marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
+foreach ($probeKind in @('main', 'worker')) {
+    Write-Host "Running $probeKind crash probe..." -ForegroundColor Cyan
+    $crashRoot = Join-Path $repoRoot (".build\logs\crash-probe-$probeKind-$Platform-$($Configuration -replace '\s','')-" + [guid]::NewGuid().ToString('N'))
+    $crashErr = Join-Path $outputRoot "RedPrism.crash-probe-$probeKind.err.log"
+    $probeArguments = @('--crash-probe', ('"' + $crashRoot + '"'))
+    if ($probeKind -eq 'worker') { $probeArguments += '--crash-probe-worker' }
+    $probe = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList $probeArguments -PassThru `
+        -RedirectStandardError $crashErr
+    if (-not $probe.WaitForExit(30000)) {
+        throw "The $probeKind crash probe timed out (PID $($probe.Id)); it was not terminated."
+    }
+    $probe.WaitForExit()
+    $dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-*.dmp' -ErrorAction SilentlyContinue)
+    $pendingMarker = Join-Path $crashRoot 'pending.txt'
+    $pendingText = if (Test-Path -LiteralPath $pendingMarker) { (Get-Content -LiteralPath $pendingMarker -Raw).Trim() } else { '' }
+    if ($probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
+        throw "The $probeKind crash probe did not leave one dump and marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
+    }
+    Write-Host "PASS $probeKind crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
+    $resolvedCrashRoot = [IO.Path]::GetFullPath($crashRoot)
+    $expectedCrashParent = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build\logs')) + [IO.Path]::DirectorySeparatorChar
+    if (-not $resolvedCrashRoot.StartsWith($expectedCrashParent, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing probe cleanup outside $expectedCrashParent"
+    }
+    Remove-Item -LiteralPath $resolvedCrashRoot -Recurse -Force
 }
-Write-Host "PASS crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
-Remove-Item -LiteralPath $crashRoot -Recurse -Force -ErrorAction SilentlyContinue
 $global:LASTEXITCODE = 0
 
 Write-Host 'Running command-line help...' -ForegroundColor Cyan

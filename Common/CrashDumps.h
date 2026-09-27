@@ -34,7 +34,11 @@ std::size_t PruneDumps(const std::wstring& directory, std::size_t keep);
 // Installs the process-wide handlers: an unhandled exception, an invalid CRT parameter, a pure virtual call,
 // std::terminate and abort each write a dump into `directory`, record it as pending and end the process with the
 // exception code (0xE0000001 terminate, 0xE0000002 invalid parameter, 0xE0000003 pure call, 0xE0000004 abort).
-void InstallCrashHandler(const wchar_t* directory) noexcept;
+[[nodiscard]] HRESULT InstallCrashHandler(const wchar_t* directory, bool workerProbe = false) noexcept;
+
+// The UCRT terminate handler is per-thread. Private-pool callbacks call this before user code; it installs
+// nothing unless the process crash handler was installed (in-process HostTests keep their normal handlers).
+void InstallWorkerTerminateHandler() noexcept;
 
 // Raises a fault through whatever handlers are installed (the --crash-probe gate): an access violation, or the
 // application-defined 0xE0000005 in AddressSanitizer builds, whose runtime reports access violations itself.

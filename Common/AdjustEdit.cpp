@@ -622,8 +622,13 @@ bool DocumentSession::BeginHueTargeting(const Raster& composite, Vec2 point)
             range = static_cast<ColorRange>(index);
         }
     }
+    const auto rangeIndex = static_cast<std::size_t>(range);
+    if (rangeIndex >= settings.adjustments.size())
+    {
+        return false;
+    }
     settings.range = range;
-    const RangeAdjustment& adjustment = settings.adjustments[static_cast<std::size_t>(range)];
+    const RangeAdjustment& adjustment = settings.adjustments[rangeIndex];
     edit->targetDrag = HueTargetDrag{range, adjustment.hue, adjustment.saturation};
     UpdateHueSaturation(settings, edit->preview);
     return true;

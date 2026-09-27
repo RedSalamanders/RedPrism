@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <new>
 #include <utility>
 #include <vector>
@@ -122,6 +123,13 @@ template <typename Prepare, typename Invoke, typename Consume>
     return Raster::Make(width, height, RasterFormat::Bgra8888, pixels.data(), pixels.size());
 }
 
+// Keep the benchmark's two immutable LUTs from accumulating on one stack frame. Setup/allocation is outside
+// every measured region; the reference kernel and output checksums are unchanged.
+[[nodiscard]] std::unique_ptr<Adjust::ChannelTables> MakeLevelsTable(const LevelsSettings& levels)
+{
+    return std::make_unique<Adjust::ChannelTables>(Adjust::LevelsTables(levels));
+}
+
 [[nodiscard]] bool Run(int width, int height, int iterations)
 {
     // This benchmark caps work at 100 MP and 10,000 pixels per side; Raster itself permits sides up to 30,000.
@@ -145,7 +153,8 @@ template <typename Prepare, typename Invoke, typename Consume>
 
     LevelsSettings levels;
     Adjust::SetLevelsCurrent(levels, LevelRange{18, 1.2, 238, 4, 250});
-    const Adjust::ChannelTables levelsTable = Adjust::LevelsTables(levels);
+    const auto levelsTableStorage = MakeLevelsTable(levels);
+    const Adjust::ChannelTables& levelsTable = *levelsTableStorage;
     const Adjust::ChannelTables exposureTable = Adjust::ExposureTables(ExposureSettings{0.75, 0.02, 1.1});
     const std::vector<float> cube = Adjust::ColorCube(Adjust::HsvSettings(23, 15, 4));
     if (cube.size() !=

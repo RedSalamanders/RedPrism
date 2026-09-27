@@ -1,7 +1,7 @@
 # RedPrism crash handling
 
 Status: current normative repository contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Common/CrashDumps.*`, `RedPrism/Main.cpp`
 
 ## Scope
@@ -38,8 +38,12 @@ command line parsed:
 The CRT-level handlers raise a synthetic exception with their code so the same filter writes the dump with the
 failing call's context, then the process ends with `TerminateProcess`. The filter writes with `MiniDumpWriteDump`
 (data segments, handles, thread information, unloaded modules and indirectly referenced memory) into fixed stack
-buffers: no heap, no CRT formatting beyond `swprintf_s` into those buffers. A second fault while a dump is written
-ends the process without recursion (`InterlockedCompareExchange` guard). The Windows Error Reporting dialog never
+buffers: no heap, no CRT formatting beyond `swprintf_s` into those buffers. An `InterlockedCompareExchange` guard
+records the dumping thread's id. A recursive fault on that thread gives up immediately; a fault on another thread
+waits on the pre-created manual-reset event until the dump and pending marker have been attempted. It MUST NOT
+end the process while the owner writes. Initialization returns an HRESULT and fails startup if it cannot create
+the event. Every private-pool callback installs the UCRT's per-thread terminate handler before executing work.
+The Windows Error Reporting dialog never
 appears: the filter answers `EXCEPTION_EXECUTE_HANDLER`.
 
 Debug CRT assertion dialogs are separate and stay as they are for developers; the test executables route them to
@@ -60,6 +64,13 @@ application-defined `0xE0000005` instead: the sanitizer runtime reports access v
 any filter runs (its own gate proves that), and the probe's job is the installed filter. `test.ps1` runs it in every configuration and
 requires a nonzero exit, exactly one `RedPrism-*.dmp` in the directory with a size above zero, and a `pending.txt`
 naming that file. The directory is under `.build\` and removed afterwards; the user's crash folder is untouched.
+
+`--crash-probe <directory> --crash-probe-worker` starts two private-pool callbacks behind an event gate. One calls
+`std::terminate`, verifying the per-worker UCRT hook; the other raises the normal probe fault. In this child only,
+the dump owner waits until the competing fault enters the filter, so the gate proves overlapping faults, not just
+two submitted callbacks. It must still produce exactly one nonempty dump and its marker. The probe has bounded
+failure waits and uses no window; the pool temporarily owns implicit MTA support. Normal crash handling never
+waits for a second fault.
 
 ## Validation
 

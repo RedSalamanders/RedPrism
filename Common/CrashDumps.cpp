@@ -4,6 +4,7 @@
 #include "Utf8.h"
 
 #include <algorithm>
+#include <atomic>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -35,16 +36,22 @@ constexpr DWORD kProbeCode = 0xE0000005;
 constexpr wchar_t kPendingName[] = L"pending.txt";
 
 wchar_t g_directory[kPathCapacity] = {};
-volatile LONG g_active = 0;
+volatile LONG g_ownerThread = 0;
+wil::unique_handle g_dumpFinished;
+wil::unique_handle g_competingFault;
+std::atomic<bool> g_handlersInstalled{false};
+bool g_workerProbe = false; // installed before any worker is created
 
 // Creates every missing component of `directory`. A stack copy walks the separators; nothing allocates.
 [[nodiscard]] bool CreateDirectoryTree(const wchar_t* directory) noexcept
 {
-    wchar_t path[kPathCapacity];
-    if (wcscpy_s(path, directory) != 0 || wcslen(path) < 3)
+    const std::size_t length = wcsnlen_s(directory, kPathCapacity);
+    if (length < 3 || length >= kPathCapacity)
     {
         return false;
     }
+    wchar_t path[kPathCapacity]{};
+    std::copy_n(directory, length, path);
     for (wchar_t* cursor = path + 3; *cursor; ++cursor) // past the "C:\" drive root
     {
         if (*cursor == L'\\' || *cursor == L'/')
@@ -66,16 +73,33 @@ volatile LONG g_active = 0;
 
 LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* pointers) noexcept
 {
-    // A second fault while the dump is written (or a fault inside the dumper) must not recurse.
-    if (InterlockedCompareExchange(&g_active, 1, 0) != 0)
+    const LONG thread = static_cast<LONG>(GetCurrentThreadId());
+    const LONG owner = InterlockedCompareExchange(&g_ownerThread, thread, 0);
+    if (owner != 0)
     {
+        if (owner != thread)
+        {
+            // A different crashing thread must not terminate the process before the owner finishes the marker.
+            // Only a recursive fault on the dumping thread gives up immediately.
+            if (g_workerProbe)
+            {
+                (void)SetEvent(g_competingFault.get());
+            }
+            (void)WaitForSingleObject(g_dumpFinished.get(), INFINITE);
+        }
         return EXCEPTION_EXECUTE_HANDLER;
+    }
+    if (g_workerProbe && WaitForSingleObject(g_competingFault.get(), 5000) != WAIT_OBJECT_0)
+    {
+        // Probe failure bound, not production behavior: no dump means the two-worker gate fails decisively.
+        TerminateProcess(GetCurrentProcess(), kProbeCode);
     }
     wchar_t path[kPathCapacity];
     if (WriteMiniDump(g_directory, pointers, path, kPathCapacity))
     {
         (void)RecordPending(g_directory, path);
     }
+    (void)SetEvent(g_dumpFinished.get());
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -89,8 +113,8 @@ LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* pointers) noexcept
     }
     __except (UnhandledFilter(GetExceptionInformation()))
     {
+        TerminateProcess(GetCurrentProcess(), code);
     }
-    TerminateProcess(GetCurrentProcess(), code);
     ExitProcess(code);
 }
 
@@ -257,8 +281,26 @@ std::size_t PruneDumps(const std::wstring& directory, std::size_t keep)
     return deleted;
 }
 
-void InstallCrashHandler(const wchar_t* directory) noexcept
+HRESULT InstallCrashHandler(const wchar_t* directory, bool workerProbe) noexcept
 {
+    if (g_handlersInstalled.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_INITIALIZED);
+    }
+    g_dumpFinished.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (!g_dumpFinished)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    if (workerProbe)
+    {
+        g_competingFault.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (!g_competingFault)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+    }
+    g_workerProbe = workerProbe;
     if (directory == nullptr || wcscpy_s(g_directory, directory) != 0)
     {
         g_directory[0] = 0;
@@ -269,6 +311,18 @@ void InstallCrashHandler(const wchar_t* directory) noexcept
     (void)std::set_terminate(OnTerminate);
     (void)std::signal(SIGABRT, OnAbort);
     (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
+    g_handlersInstalled.store(true, std::memory_order_release);
+    return S_OK;
+}
+
+void InstallWorkerTerminateHandler() noexcept
+{
+    thread_local bool installed = false;
+    if (!installed && g_handlersInstalled.load(std::memory_order_acquire))
+    {
+        (void)std::set_terminate(OnTerminate);
+        installed = true;
+    }
 }
 
 void RaiseProbeCrash() noexcept

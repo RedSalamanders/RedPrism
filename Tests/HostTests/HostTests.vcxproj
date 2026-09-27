@@ -98,6 +98,9 @@
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\..\Common\WorkerPool.cpp" />
+    <ClCompile Include="WorkerPoolTests.cpp" />
+    <ClCompile Include="ExecutorTests.cpp" />
     <ClCompile Include="..\..\Common\Localization.cpp" />
   </ItemGroup>
 

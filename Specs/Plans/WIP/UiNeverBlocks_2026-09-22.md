@@ -22,7 +22,13 @@
   - [x] Share immutable selection loops across snapshots without changing selection goldens.
   - [x] Mark the revision actually saved, including a save completed after another edit.
   - [x] Migrate imports, opacity previews and test/benchmark fixtures; run the full validation matrix.
-- [ ] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling.
+- [x] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling. Full x64 gates and all ARM64 cross-builds passed.
+  - [x] Implement the private worker and wait pools, cancellation, tile execution, COM lifetime and QoS. Full x64 matrix passed.
+  - [x] Prove saturated-pool, nested execution, cancellation and shutdown behavior with independent state-machine tests. Extended ASan stress passed.
+  - [x] Extend crash handling for competing worker faults and the worker probe. Both child probes passed in all x64 configurations.
+  - [x] Add concurrency annotations and the analysis build, including guarded/unguarded compiler controls.
+  - [x] Complete the final Debug, Release, ASan stress and native-analysis regression gates.
+  - [x] Record executor overhead, cancel-check cost and remaining qualification limits. Synthetic row polling gap: 16.2 µs on R1.
 - [ ] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order.
 - [ ] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state.
 - [ ] P0.7 — Add memory admission, deferred release and justified recycling.
@@ -35,8 +41,8 @@
 - [ ] P6 — If authorized by its decisions, plan non-destructive develop and depth separately.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2, P0.3 and P0.4 are complete on x64; the P0 phase remains open. ARM64
-Debug, Release and ASan Debug cross-builds passed; native ARM64 execution is unavailable on this host.
+Implementation started 2026-09-27. Slices P0.2–P0.5 are complete on x64; the P0 phase remains open. ARM64
+Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
 
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
 benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
@@ -55,6 +61,13 @@ reject stale/session-mismatched results, selections share immutable geometry, an
 saved revision. All x64 gates and ARM64 cross-builds passed, including 120 new checks. The
 [P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md) documents the reviewed fixes and remaining limits.
 
+P0.5 progress, 2026-09-27: worker/wait ownership, nested tile execution, cancellation and competing-fault crash
+handling are implemented. Full Release native analysis and its positive/negative controls passed. The checked
+synthetic fill takes 2.360 ms at 32 threads versus 6.228 ms inline; this is an executor measurement, with no claim
+about real image operations or Photoshop. The full x64 Debug, Release and ASan gates passed, including worker
+stress, both crash probes and 27 harness screenshots. All three ARM64 cross-builds passed. See the
+[worker record](../../TestRuns/WorkerExecution_2026-09-27.md) for controls, metrics and remaining qualification.
+
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
 export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
@@ -67,7 +80,8 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2/P0.3/P0.4 are complete; P0.1 and P0.8 remain executable without an open decision.
+- **Status**: ACTIVE. P0.2–P0.5 are complete on x64; all ARM64 cross-builds passed. D8 is recorded, so P0.6a/P0.7 can proceed.
+  P0.1 and P0.8 remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
   | Decisions | Gate |
@@ -393,9 +407,9 @@ UI thread (STA)                                private pool "RedPrism.Workers" (
 - **`GpuWorkQueue`** (new, `RedPrism/GpuWork.{h,cpp}`, P1.3) is UI-thread only and owned by `Application` next to
   `CanvasRenderer`. It borrows the device. It owns fences, the readback and upload rings, the slice budget and the
   capability probe.
-- **COM on workers**: `Application` calls `CoIncrementMTAUsage` when it creates the pools and keeps the cookie, so
-  pool threads run in the implicit MTA and WIC works there. The UI thread stays STA. `Application::Shutdown` calls
-  `CoDecrementMTAUsage` after the pools close. Each Io job creates its own WIC factory, the conservative choice
+- **COM on workers**: each application-owned pool calls `CoIncrementMTAUsage` at initialization and retains its
+  WIL cookie through callback/helper teardown, so pool threads run in the implicit MTA and WIC works there. The
+  UI thread stays STA. Pool close releases the cookie only after its callbacks finish. Each Io job creates its own WIC factory, the conservative choice
   until a test proves that sharing one is safe.
 - **QoS**:
   - While a user-initiated job runs, worker threads are tagged HighQoS (`SetThreadInformation`
@@ -641,10 +655,13 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 - **Deadlock-freedom invariant**:
   - The join waits only for tiles that a running thread has already claimed. It never waits for a helper callback
     to start.
-  - Helpers are one `TP_WORK` per call with reference-counted shared state. A helper that starts after the counter
-    is exhausted returns at once without touching the caller's frame.
-  - After its own claim loop, the caller calls `WaitForThreadpoolWorkCallbacks(helperWork, TRUE)`, which cancels
-    unstarted helpers and waits only for running ones.
+  - Helpers are one `TP_WORK` per call. P0.5 retains the caller's frame until WIL's cancel/join/close returns,
+    avoiding a second shared allocation. A helper that starts after the counter is exhausted returns at once;
+    no callback is disassociated or can outlive the join. Helpers are outside the dispatch cleanup group so
+    local closure cannot race cleanup-group ownership.
+  - After its own claim loop, the caller releases `wil::unique_threadpool_work`, which calls
+    `WaitForThreadpoolWorkCallbacks(helperWork, TRUE)` before close, cancels unstarted helpers and waits only for
+    running ones. Pool close also joins external parallel calls before destroying the pool.
   - Tile bodies never block: no admission, I/O, gate or completion waits. There are two named exceptions: a nested
     `ParallelFor` join, which waits only on running helpers, and the LibRaw hook bodies (§6.2), which allocate
     through `LibRaw_memmgr`, catch inside the DLL and take the stream and allocator SRWLOCKs. Neither waits on a
@@ -1543,7 +1560,7 @@ Prepare/Run/Apply wiring still belong to P0.6/P1. The complete x64 Debug, Releas
 generation/ownership checks, 15 saved-revision checks and unchanged legacy goldens. All three ARM64 profiles
 cross-build; native runtime remains untested. See the [P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md).
 
-**P0.5 Pool and crash handling** (D8)
+**P0.5 Pool and crash handling** (COMPLETE on x64, 2026-09-27; D8)
 
 - `Executor`, `WorkerPool`, `RedPrism.Waits`, `ParallelFor` with the deadlock-free join, cancel tokens, QoS, the WIL
   aliases, and the MTA cookie.
@@ -1552,6 +1569,11 @@ cross-build; native runtime remains untested. See the [P0.4 record](../../TestRu
 - The D8 AGENTS amendment.
 - **Exit**: the §8 `ParallelFor` stress passes, the cancel interval is ≤ 1 ms, output is deterministic across
   executors, and the worker crash probe passes.
+
+**Exit met for the executor foundation**: all x64 runtime gates, 64 additional ASan stress rounds, both crash
+probes and full Release native analysis passed. The checked synthetic row polls at an observed maximum interval
+of 16.2 µs. Every image kernel still has to qualify its own polling interval when migrated. See the
+[worker record](../../TestRuns/WorkerExecution_2026-09-27.md); AppVerifier and native ARM64 remain qualification limits.
 
 **P0.6a Scheduler core** (D8)
 
@@ -1755,7 +1777,7 @@ its "Gates" column.
 | D5 | RAW dependency policy | WIC Raw Image Extension (8-bit, optional, lagging); LibRaw; rawspeed (no CR3, clang-cl); Adobe DNG SDK (clang toolset, indemnity) | **LibRaw overlay port (`raw_r` DLL, no OpenMP/jasper/lcms, the callback-parallel patch) + RedPrism decoders; no lensfun; `dng-lossy`/libjpeg-turbo only if lossy DNG is wanted or WIC export misses M5; libjxl optional in P5** | P4 | |
 | D6 | RAW in the document | v1: bake to 8-bit through the Develop panel; v2: non-destructive develop layer (`.prism` v8, unreadable by legacy) | **v1 bake now; decide v2 after P4 measurements** | P4 (v1), P6 (v2) | |
 | D7 | High-bit-depth documents | 8-bit only; RGBA16F layers throughout | **8-bit documents; RAW develops in float and bakes with dither; revisit with D6 v2** | P6 | |
-| D8 | Goldens for new behavior with no legacy counterpart | — | **AGENTS.md amendment: the owning spec names an independent reference (DNG-spec synthetic vectors, LibRaw's output for decoders, the CPU reference develop within a named tolerance, state-machine goldens for jobs and crash handling); legacy goldens remain the only source for ported behavior and are never rebaselined** | P0.5–P0.7, P4 | |
+| D8 | Goldens for new behavior with no legacy counterpart | — | **AGENTS.md amendment: the owning spec names an independent reference (DNG-spec synthetic vectors, LibRaw's output for decoders, the CPU reference develop within a named tolerance, state-machine goldens for jobs and crash handling); legacy goldens remain the only source for ported behavior and are never rebaselined** | P0.5–P0.7, P4 | 2026-09-27: adopt the recommendation under the user's implementation authorization; independent state-machine expectations cover the new Windows executor. |
 | D9 | Reference machines | R1 only; R1 + R2 + R3 | **Phase exits on R1; the owner provides R2 and R3 for recorded runs** | P1, P3 and P4.8 records | |
 | D10 | Hybrid laptops (panel on the iGPU) | Adapter-of-monitor (today; never uses the dGPU); honor the Windows "High performance" preference with a cross-adapter present | **Keep adapter-of-monitor until the P3 exit measures a cross-adapter present on R2; then decide** | none now | |
 | D11 | Save speed beyond STORE + parallel | WIC PNG only; a RedPrism PNG writer (fpng-style filter + libdeflate; output any PNG reader accepts) | **Measure after P1.7; adopt the writer only if one 45 MP layer still takes more than 1.5 s** | P1.7 target | |

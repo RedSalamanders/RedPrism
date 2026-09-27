@@ -98,6 +98,21 @@ that makes them impossible.
 Fail-closed performance sandboxes live at `X:\RedPrism.Perf` (any local drive letter plus an ownership marker), never
 under repository `.build/`. C1 does not yet create that tree.
 
+## Worker execution cost and lifetime
+
+The executor foundations in `Core_Architecture.md` use a private fixed-size pool and a separate one-thread wait
+pool. Idle callbacks own no polling loop. Dispatch wakeups are coalesced at the thread count per priority;
+event registrations are capped at 32 and fail locally at capacity. Parallel tiles use dynamic disjoint claims,
+one optional Windows work object per call and a participating caller, without another C++ heap allocation for
+the call state. A failed helper allocation runs on the caller. The UI must never enter this synchronous join.
+Pool close retains active inputs, joins callbacks and helpers, then releases its implicit MTA cookie. Background
+callbacks request EcoQoS; foreground callbacks request HighQoS, restoring system-managed policy on return.
+
+Output allocation, exact image operation order and the measured cancellation interval belong to each migrated
+kernel. The executor checks between tiles; bodies check between rows or smaller work units so their measured
+interval is at most 1 ms. The coordinate-kernel benchmark qualifies executor overhead only. `--bench-executor`
+on HostTests records its checked output and cancel-check cost; it is not proof of UI latency or image speed.
+
 ## Image result ownership
 
 Published selection outlines share immutable point storage across document snapshots, history, previews and

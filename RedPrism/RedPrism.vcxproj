@@ -165,6 +165,7 @@
     <ClCompile Include="..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\Common\CrashDumps.cpp" />
+    <ClCompile Include="..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />

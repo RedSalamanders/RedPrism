@@ -55,6 +55,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 | `ChromeHost` | DxUi EmbeddedHost shell: menus, rail with palette wells, tabs, Move-tool, selection-tool, brush, Gradient and Shape headers, the adjustment panel card with its drawn curve, levels, spectrum and ramp controls (`AdjustControls.*`, `ChromeHostAdjust.cpp`), layers with splitter and opacity stepper, status, color picker card, canvas overlay (transform box, marching ants, lasso draft, brush tip, gradient line, shape draft, sample ring, clone source); strings from resources |
 | Document (`Common/Document.*`, `DocumentHistory`, `TransformEdit`, `Selection`, `BrushStroke`, `WarpStroke`, `Heal`, `ImageFilters`, `Adjust`, `AdjustEdit`, `ProjectStore`, `ImageCodecs`) | Layers, validation, history, sparse rasters, transform editing (drag geometry, snapping, warp), selection (Clipper2 booleans, coverage, wand and mask tracing), brush strokes (tiles, CPU kernel, snapshots), retouch (the spot healing kernel, clone and blur samples, warps, gradients, shapes), pixel edits (lifted pixels, invert, masks from the selection, the floating selection transform, the clipboard model), color adjustments and filters (the levels, curves, exposure, gradient map, grain, hue/saturation cube, noise, lens and motion blur kernels, the panel sessions and adjustment layer editing), `.prism` I/O, WIC — never GPU device ownership |
 | DxUi EmbeddedHost | Retained chrome; borrows the app device; no swap chain |
+| `Executor`, `WorkerPool`, `WaitPool` | Standard C++ kernel execution interface; private bounded Windows compute pool and separate event-wait pool, cancellation, callback/COM lifetime; no document mutation or GPU ownership |
 
 ## Mandatory rules
 
@@ -79,8 +80,10 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
   `Z:\src\DxUi` from restore. Design against the pinned library as it is (see `consumer-dxui` for the facts that
   matter: `Toolbar` has no layout, `Toggle` is a switch, icon-only buttons draw with the icon font).
 - Keep DxUi C++ inside `RedPrism.exe`. If a plugin ABI appears later, it is COM/POD only.
-- Every new behavior ships with its golden: a numeric expectation taken from retained numeric golden cases, never a
-  screenshot comparison or "looks fine".
+- Every behavior ships with an independent numeric golden and a documented tolerance, never a screenshot
+  comparison or "looks fine". New behavior with no legacy counterpart uses an independent reference
+  named by its owning spec (for example, state-machine expectations for worker jobs and crash handling). Existing
+  legacy goldens are never rebaselined to match an implementation.
 
 ## Performance
 

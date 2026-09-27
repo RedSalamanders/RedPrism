@@ -6,6 +6,7 @@
 #include "CrashDumps.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "ExecutorTests.h"
 #include "FrameScheduler.h"
 #include "Localization.h"
 #include "Resources.h"
@@ -13,6 +14,7 @@
 #include "TransformOverlay.h"
 #include "Version.h"
 #include "VersionInfo.h"
+#include "WorkerPoolTests.h"
 
 #include <array>
 #include <cmath>
@@ -117,6 +119,7 @@ void TestCommandLine() noexcept
     Expect(RedPrismFindSwitch(L"--screenshot") != nullptr, "cli.screenshot");
     Expect(RedPrismFindSwitch(L"--dpi") != nullptr, "cli.dpi");
     Expect(RedPrismFindSwitch(L"--demo") != nullptr, "cli.demo");
+    Expect(RedPrismFindSwitch(L"--crash-probe-worker") != nullptr, "cli.crash-probe-worker");
     Expect(RedPrismFindSwitch(L"--no-such") == nullptr, "cli.unknown-switch");
 
     wchar_t unknown[] = L"--no-such";
@@ -130,7 +133,8 @@ void TestCommandLine() noexcept
 
     RedPrismCommandLine parsed{};
     const wchar_t* error = nullptr;
-    Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath == std::wstring_view{png},
+    Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath != nullptr &&
+               parsed.screenshotPath == std::wstring_view{png},
            "cli.screenshot-parse");
 
     wchar_t dpiSwitch[] = L"--dpi";
@@ -150,7 +154,8 @@ void TestCommandLine() noexcept
     wchar_t demoValue[] = L"transform";
     wchar_t* demoArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, png, demoSwitch, demoValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(demoArgs, 5, parsed, &error) && parsed.demo == std::wstring_view{demoValue},
+    Expect(RedPrismParseCommandLine(demoArgs, 5, parsed, &error) && parsed.demo != nullptr &&
+               parsed.demo == std::wstring_view{demoValue},
            "cli.demo-parse");
     wchar_t badDemo[] = L"sketch";
     wchar_t* badDemoArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, badDemo};
@@ -162,8 +167,8 @@ void TestCommandLine() noexcept
     wchar_t probeValue[] = L"C:\\dumps";
     wchar_t* probeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeSwitch, probeValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(probeArgs, 3, parsed, &error) &&
-               parsed.crashProbeDirectory == std::wstring_view{probeValue} &&
+    Expect(RedPrismParseCommandLine(probeArgs, 3, parsed, &error) && parsed.crashProbeDirectory != nullptr &&
+               parsed.crashProbeDirectory == std::wstring_view{probeValue} && !parsed.crashProbeWorker &&
                RedPrismFindUnknownArgument(probeArgs, 3) == nullptr,
            "cli.crash-probe-parse");
     wchar_t* probeNoValue[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeSwitch};
@@ -171,41 +176,64 @@ void TestCommandLine() noexcept
     Expect(!RedPrismParseCommandLine(probeNoValue, 2, parsed, &error) && error != nullptr &&
                std::wstring_view{error} == L"--crash-probe",
            "cli.crash-probe-needs-a-directory");
+    wchar_t probeWorkerSwitch[] = L"--crash-probe-worker";
+    wchar_t* probeWorkerBeforeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeWorkerSwitch, probeSwitch,
+                                        probeValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(probeWorkerBeforeArgs, 4, parsed, &error) && parsed.crashProbeWorker &&
+               parsed.crashProbeDirectory != nullptr && parsed.crashProbeDirectory == std::wstring_view{probeValue},
+           "cli.crash-probe-worker-before-probe");
+    wchar_t* probeWorkerAfterArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeSwitch, probeValue,
+                                       probeWorkerSwitch};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(probeWorkerAfterArgs, 4, parsed, &error) && parsed.crashProbeWorker &&
+               parsed.crashProbeDirectory != nullptr && parsed.crashProbeDirectory == std::wstring_view{probeValue},
+           "cli.crash-probe-worker-after-probe");
+    wchar_t* probeWorkerNoProbe[] = {const_cast<wchar_t*>(L"RedPrism.exe"), probeWorkerSwitch};
+    parsed = {};
+    Expect(!RedPrismParseCommandLine(probeWorkerNoProbe, 2, parsed, &error) && error != nullptr &&
+               std::wstring_view{error} == L"--crash-probe-worker",
+           "cli.crash-probe-worker-needs-probe");
     wchar_t selectionValue[] = L"selection";
     wchar_t* selectionArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, selectionValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(selectionArgs, 3, parsed, &error) &&
+    Expect(RedPrismParseCommandLine(selectionArgs, 3, parsed, &error) && parsed.demo != nullptr &&
                parsed.demo == std::wstring_view{selectionValue},
            "cli.demo-selection");
     wchar_t brushValue[] = L"brush";
     wchar_t* brushArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, brushValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(brushArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{brushValue},
+    Expect(RedPrismParseCommandLine(brushArgs, 3, parsed, &error) && parsed.demo != nullptr &&
+               parsed.demo == std::wstring_view{brushValue},
            "cli.demo-brush");
     wchar_t adjustValue[] = L"adjust";
     wchar_t* adjustArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, adjustValue};
-    Expect(RedPrismParseCommandLine(adjustArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{adjustValue},
+    Expect(RedPrismParseCommandLine(adjustArgs, 3, parsed, &error) && parsed.demo != nullptr &&
+               parsed.demo == std::wstring_view{adjustValue},
            "cli.demo-adjust");
     wchar_t retouchValue[] = L"retouch";
     wchar_t* retouchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, retouchValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(retouchArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{retouchValue},
+    Expect(RedPrismParseCommandLine(retouchArgs, 3, parsed, &error) && parsed.demo != nullptr &&
+               parsed.demo == std::wstring_view{retouchValue},
            "cli.demo-retouch");
     wchar_t cropValue[] = L"crop";
     wchar_t* cropArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, cropValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(cropArgs, 3, parsed, &error) && parsed.demo == std::wstring_view{cropValue},
+    Expect(RedPrismParseCommandLine(cropArgs, 3, parsed, &error) && parsed.demo != nullptr &&
+               parsed.demo == std::wstring_view{cropValue},
            "cli.demo-crop");
     wchar_t canvasSizeValue[] = L"canvassize";
     wchar_t* canvasSizeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), demoSwitch, canvasSizeValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(canvasSizeArgs, 3, parsed, &error) &&
+    Expect(RedPrismParseCommandLine(canvasSizeArgs, 3, parsed, &error) && parsed.demo != nullptr &&
                parsed.demo == std::wstring_view{canvasSizeValue},
            "cli.demo-canvassize");
     wchar_t benchSwitch[] = L"--bench";
     wchar_t* benchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, brushValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(benchArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{brushValue},
+    Expect(RedPrismParseCommandLine(benchArgs, 3, parsed, &error) && parsed.bench != nullptr &&
+               parsed.bench == std::wstring_view{brushValue},
            "cli.bench-brush");
     wchar_t* badBenchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, badDemo};
     parsed = {};
@@ -215,25 +243,27 @@ void TestCommandLine() noexcept
     wchar_t kernelsValue[] = L"kernels";
     wchar_t* kernelsArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernelsValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(kernelsArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{kernelsValue},
+    Expect(RedPrismParseCommandLine(kernelsArgs, 3, parsed, &error) && parsed.bench != nullptr &&
+               parsed.bench == std::wstring_view{kernelsValue},
            "cli.bench-kernels");
     wchar_t kernels45Value[] = L"kernels45";
     wchar_t* kernels45Args[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernels45Value};
     parsed = {};
-    Expect(RedPrismParseCommandLine(kernels45Args, 3, parsed, &error) &&
+    Expect(RedPrismParseCommandLine(kernels45Args, 3, parsed, &error) && parsed.bench != nullptr &&
                parsed.bench == std::wstring_view{kernels45Value},
            "cli.bench-kernels45");
     wchar_t kernelsSmokeValue[] = L"kernels-smoke";
     wchar_t* kernelsSmokeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernelsSmokeValue};
     parsed = {};
-    Expect(RedPrismParseCommandLine(kernelsSmokeArgs, 3, parsed, &error) &&
+    Expect(RedPrismParseCommandLine(kernelsSmokeArgs, 3, parsed, &error) && parsed.bench != nullptr &&
                parsed.bench == std::wstring_view{kernelsSmokeValue},
            "cli.bench-kernels-smoke");
     for (const wchar_t* name : {L"buffers", L"buffers45"})
     {
         wchar_t* bufferArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, const_cast<wchar_t*>(name)};
         parsed = {};
-        Expect(RedPrismParseCommandLine(bufferArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{name},
+        Expect(RedPrismParseCommandLine(bufferArgs, 3, parsed, &error) && parsed.bench != nullptr &&
+                   parsed.bench == std::wstring_view{name},
                "cli.bench-buffers");
     }
     wchar_t* missingBenchValue[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch};
@@ -244,7 +274,8 @@ void TestCommandLine() noexcept
 
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&
-               help.find(L"--screenshot") != std::wstring::npos && help.find(L"--dpi") != std::wstring::npos,
+               help.find(L"--screenshot") != std::wstring::npos && help.find(L"--dpi") != std::wstring::npos &&
+               help.find(L"--crash-probe-worker") != std::wstring::npos,
            "cli.help-text");
 }
 
@@ -1498,6 +1529,10 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunAddressSanitizerProbe();
     }
+    if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-executor")
+    {
+        return RunWorkerPoolBenchmark();
+    }
 #if defined(_DEBUG)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")
     {
@@ -1508,6 +1543,9 @@ int wmain(int argc, wchar_t** argv)
     }
 #endif
 
+    const bool stress = argc > 1 && std::wstring_view{argv[1]} == L"--stress";
+    gFailures += RunExecutorValueTests();
+    gFailures += RunWorkerPoolTests(stress);
     TestAdapterSelection();
     TestFrameScheduler();
     TestCommandLine();

@@ -69,6 +69,27 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+### Worker foundations (P0.5)
+
+HostTests also runs the standard-header `ExecutorTests` and Windows `WorkerPoolTests`. Their independent
+reference is the execution/lifetime state table in `Core_Architecture.md`: irregular and maximum grid geometry,
+single visitation, serial-formula equality, cancellation and incomplete-tile refusal, N simultaneous jobs on
+N=1/2/4 workers, nested execution, implicit MTA, close retaining an active frame, bounded one-shot waits, stale
+wait-ticket rejection, and a wait completion while every compute worker is occupied. Event gates force the
+interleavings; 10-second waits are failure bounds only. A failed gate exits the isolated test immediately to avoid
+destroying context still borrowed by callbacks.
+
+`HostTests.exe --stress` adds 64 saturated/nested/close rounds. `test.ps1` runs this extended mode in ASan Debug,
+plus both main-thread and two-worker crash probes in every configuration. The worker child must write exactly one
+nonempty dump and its pending marker after overlapping faults, including one worker `std::terminate` path.
+
+`HostTests.exe --bench-executor` is an opt-in Release measurement: an independently checked 4096-square coordinate
+kernel through inline and 1/2/4/8/16/logical-processor executors, with warmup and 11 timed samples, plus empty-tile
+invocation overhead, cancel-token check cost and a separate synthetic row polling-gap measurement. It makes no
+timing assertions. Record it separately from image-kernel or UI/Photoshop claims. Native
+concurrency SAL analysis uses `build.ps1 -Analyze`; Application Verifier qualification records the actual enabled
+checks and executed binary under `Specs/TestRuns/`, and never substitutes for ASan or native ARM64 execution.
+
 DocumentTests also runs `generation.*` and `history-revision.*`: owning result tokens and document/restore serials,
 all session mutation families (including changes inside open edits), const session readers, shared immutable
 selection snapshots, and marking the revision actually saved after intervening edits, Undo, branching and trim.

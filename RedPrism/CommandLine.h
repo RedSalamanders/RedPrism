@@ -15,6 +15,7 @@ enum class RedPrismSwitch : uint8_t
     Demo,
     Bench,
     CrashProbe,
+    CrashProbeWorker,
     Count,
 };
 
@@ -44,6 +45,7 @@ struct RedPrismCommandLine final
     const wchar_t* demo = nullptr;
     const wchar_t* bench = nullptr;
     const wchar_t* crashProbeDirectory = nullptr;
+    bool crashProbeWorker = false;
 };
 
 inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help", L"-h", L"/?", L"-?"};
@@ -88,6 +90,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Hidden crash-handling validation: install the crash handler with <directory> for "
                                   L"its dumps, raise an access violation and exit through it; the dump and its "
                                   L"pending marker land there.",
+                                  L"Diagnostics"},
+        RedPrismCommandLineSwitch{RedPrismSwitch::CrashProbeWorker, L"--crash-probe-worker", nullptr,
+                                  RedPrismSwitchValue::None, nullptr,
+                                  L"Fault two private-pool threads; requires --crash-probe <directory> and "
+                                  L"may appear before or after it.",
                                   L"Diagnostics"}};
 
 inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"General", L"Diagnostics"};
@@ -231,6 +238,9 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             }
             parsed.crashProbeDirectory = arguments[++index];
             break;
+        case RedPrismSwitch::CrashProbeWorker:
+            parsed.crashProbeWorker = true;
+            break;
         case RedPrismSwitch::Dpi:
             if (index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
             {
@@ -264,6 +274,14 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             break;
         }
     }
+    if (parsed.crashProbeWorker && !parsed.crashProbeDirectory)
+    {
+        if (errorToken)
+        {
+            *errorToken = RedPrismSwitchName(RedPrismSwitch::CrashProbeWorker);
+        }
+        return false;
+    }
     return true;
 }
 
@@ -275,6 +293,8 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     text += L"       RedPrism.exe --self-test [--warp]\n";
     text += L"       RedPrism.exe --screenshot <png> [--warp] [--dpi 96|144]\n";
     text += L"       RedPrism.exe --crash-probe <directory>\n";
+    text += L"       RedPrism.exe --crash-probe <directory> --crash-probe-worker\n";
+    text += L"       RedPrism.exe --crash-probe-worker --crash-probe <directory>\n";
     text += L"       RedPrism.exe --help\n";
     text += L"\nWithout switches RedPrism opens a titled Direct3D 11 window with DxUi chrome.\n";
     for (const wchar_t* group : kRedPrismCommandLineGroups)

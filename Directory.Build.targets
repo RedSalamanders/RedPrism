@@ -14,6 +14,25 @@
     <Error Condition="'$(Platform)'!='x64' and '$(Platform)'!='ARM64'" Text="RedPrism supports x64 and ARM64." />
     <Error Condition="'$(Configuration)'!='Debug' and '$(Configuration)'!='Release' and '$(Configuration)'!='ASan Debug'" Text="RedPrism supports Debug, Release and ASan Debug." />
   </Target>
+  <Target Name="EnableRedPrismNativeCodeAnalysis" BeforeTargets="ClCompile"
+          Condition="'$(RedPrismAnalyze)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(RedPrismAnalysisProbe)'=='true' or '$(MSBuildProjectName)'=='RedPrism' or '$(MSBuildProjectName)'=='HostTests' or '$(MSBuildProjectName)'=='DocumentTests' or '$(MSBuildProjectName)'=='IoTests' or '$(MSBuildProjectName)'=='CompositionTests')">
+    <ItemGroup>
+      <ClCompile Update="@(ClCompile)">
+        <EnablePREfast>true</EnablePREfast>
+        <AdditionalOptions>/analyze:plugin EspXEngine.dll /analyze:external- /external:I&quot;$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\include&quot; /external:env:INCLUDE %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      </ClCompile>
+      <ClCompile Update="@(ClCompile)" Condition="'$(DxUiRoot)'!=''">
+        <AdditionalOptions>/external:I&quot;$(DxUiResolvedRoot)include&quot; %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      </ClCompile>
+      <ClCompile Update="@(ClCompile)" Condition="'$(DxUiConsumerOutputRoot)'!=''">
+        <AdditionalOptions>/external:I&quot;$(DxUiConsumerOutputRoot)vcpkg_installed\$(Platform)\$(DxUiConsumerTriplet)\include&quot; %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      </ClCompile>
+      <ClCompile Update="@(ClCompile)"
+                 Condition="$([System.String]::Copy('%(ClCompile.FullPath)').StartsWith('$(MSBuildThisFileDirectory)Tests\'))">
+        <AdditionalOptions>/analyze:stacksize 131072 %(ClCompile.AdditionalOptions)</AdditionalOptions>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
   <PropertyGroup>
     <RedPrismVcpkgRuntimeDir Condition="('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\debug\bin\</RedPrismVcpkgRuntimeDir>
     <RedPrismVcpkgRuntimeDir Condition="'$(Configuration)'=='Release'">$(VcpkgInstalledDir)$(RedPrismVcpkgTriplet)\bin\</RedPrismVcpkgRuntimeDir>

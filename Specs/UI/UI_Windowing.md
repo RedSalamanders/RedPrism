@@ -1,7 +1,7 @@
 # RedPrism windowing and host command line
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Application` HWND, DPI, and `RedPrism/CommandLine.h`
 
 ## Scope
@@ -103,6 +103,8 @@ command line.`) shown the same way.
 | `--bench kernels45` | Run the CPU kernel benchmark at 8192×5464 with 10 samples, without creating a window or initializing the GPU |
 | `--bench kernels-smoke` | Run the CPU kernel benchmark at 32×24 with 2 samples, without creating a window or initializing the GPU; this smoke run is not a performance measurement |
 | `--bench buffers`, `--bench buffers45` | Compare ten alternating copy/adopt pairs for Levels, Hue/Saturation and uniform noise at 4K or 45 MP, checking identical outputs; no window or GPU |
+| `--crash-probe <directory>` | Run the crash-handling probe using `<directory>` for its dump and pending marker. |
+| `--crash-probe-worker` | Fault two private-pool threads in this process; requires `--crash-probe <directory>`. The two switches may appear in either order. |
 | `--help` | Print the catalog and exit 0 |
 
 `--self-test` without `--warp` still uses WARP. Self-test MUST refuse a non-WARP device (exit 5).

@@ -12,6 +12,7 @@ param(
 
     [switch] $Clean,
     [switch] $Rebuild,
+    [switch] $Analyze,
     [switch] $Run,
 
     [ValidateRange(0, 256)]
@@ -29,6 +30,9 @@ if ($Clean -and $Rebuild) {
 }
 if ($Clean -and $Run) {
     throw '-Run cannot be combined with -Clean.'
+}
+if ($Clean -and $Analyze) {
+    throw '-Analyze cannot be combined with -Clean.'
 }
 
 $repoRoot = Split-Path -Parent $PSCommandPath
@@ -64,7 +68,7 @@ $BuildNumber = Resolve-BuildNumber -Requested $BuildNumber
 Write-Host ("Target: {0} | {1} | version 0.1.{2}.0" -f $Platform, $Configuration, $BuildNumber) -ForegroundColor Magenta
 
 $msbuild = Find-RedPrismMSBuild
-$target = if ($Clean) { 'Clean' } elseif ($Rebuild) { 'Rebuild' } else { 'Build' }
+$target = if ($Clean) { 'Clean' } elseif ($Rebuild -or $Analyze) { 'Rebuild' } else { 'Build' }
 if (-not $Clean) {
     Write-Host '[1/2] Dependencies' -ForegroundColor Cyan
     & (Join-Path $repoRoot 'vcpkg-install.ps1') -Platform $Platform -Asan:($Configuration -eq 'ASan Debug')
@@ -75,7 +79,8 @@ if (-not $Clean) {
 $workerArgument = if ($MaxCpuCount -gt 0) { "/m:$MaxCpuCount" } else { '/m' }
 $logDir = Join-Path $repoRoot '.build\logs'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$logPath = Join-Path $logDir ("{0}-{1}-{2}.log" -f $target, $Platform, ($Configuration -replace '\s', ''))
+$logFlavor = if ($Analyze) { '-Analyze' } else { '' }
+$logPath = Join-Path $logDir ("{0}-{1}-{2}{3}.log" -f $target, $Platform, ($Configuration -replace '\s', ''), $logFlavor)
 $arguments = @(
     $solutionPath,
     "/t:$target",
@@ -87,15 +92,44 @@ $arguments = @(
     '/verbosity:minimal',
     "/flp:LogFile=$logPath;Verbosity=minimal"
 )
+if ($Analyze) {
+    # The root targets scope /analyze and its concurrency plugin to RedPrism projects. Rebuild ensures no stale
+    # objects bypass analysis; a distinct log preserves these diagnostics beside ordinary build logs.
+    $arguments += '/p:RedPrismAnalyze=true'
+}
 
 $stageLabel = if ($Clean) { '[1/1]' } else { '[2/2]' }
 Write-Host "$stageLabel $target" -ForegroundColor Cyan
 Write-Host "MSBuild: $msbuild" -ForegroundColor DarkGray
-& $msbuild @arguments
-$exitCode = $LASTEXITCODE
+if ($Analyze) {
+    $previousEspExtensions = [Environment]::GetEnvironmentVariable('Esp.Extensions', 'Process')
+    $existingExtensions = @($previousEspExtensions -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($existingExtensions -notcontains 'ConcurrencyCheck.dll') {
+        $existingExtensions += 'ConcurrencyCheck.dll'
+    }
+    [Environment]::SetEnvironmentVariable('Esp.Extensions', ($existingExtensions -join ';'), 'Process')
+    try {
+        & $msbuild @arguments
+        $exitCode = $LASTEXITCODE
+    } finally {
+        [Environment]::SetEnvironmentVariable('Esp.Extensions', $previousEspExtensions, 'Process')
+    }
+} else {
+    & $msbuild @arguments
+    $exitCode = $LASTEXITCODE
+}
 if ($exitCode -ne 0) {
     Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
     throw "MSBuild failed with exit code $exitCode."
+}
+
+if ($Analyze) {
+    Write-Host 'Validating native concurrency analysis controls...' -ForegroundColor Cyan
+    & (Join-Path $repoRoot 'Tests\BuildProcessTests\CodeAnalysisTests.ps1') `
+        -MSBuildPath $msbuild -Platform $Platform -Configuration $Configuration
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native concurrency analysis controls failed with exit code $LASTEXITCODE."
+    }
 }
 
 if (-not $Clean) {
