@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <cstdint>
 #include <optional>
@@ -31,7 +32,11 @@ namespace SelectionGeometry
 [[nodiscard]] bool Contains(const std::vector<SelectionLoop>& loops, Vec2 point) noexcept;
 // Gray8 coverage at document resolution (255 selected). Antialiased edges carry exact-area partial coverage;
 // otherwise a pixel is selected when its center lies inside.
-[[nodiscard]] Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased);
+[[nodiscard]] Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased,
+                              const CancelToken& cancellation = {});
+// Applies the map per edge without duplicating a potentially large selection. Same numeric rasterization.
+[[nodiscard]] Raster CoverageTransformed(const std::vector<SelectionLoop>& loops, const Affine2& map, int width,
+                                         int height, bool antialiased, const CancelToken& cancellation = {});
 } // namespace SelectionGeometry
 
 // The box a drag from `anchor` to `point` spans, in whole pixels. `square` evens the sides; `fromCenter` grows the

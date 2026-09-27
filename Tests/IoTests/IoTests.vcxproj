@@ -84,6 +84,7 @@
 
   <ItemGroup>
     <ClInclude Include="..\..\Common\Document.h" />
+    <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
@@ -109,6 +110,7 @@
     <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />

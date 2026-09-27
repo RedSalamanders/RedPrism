@@ -4,6 +4,21 @@ Status: current normative diagnostic contract
 Last reviewed: 2026-09-27
 Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Build/bench/`
 
+## Filter cancellation diagnostic
+
+`HostTests.exe --bench-filter-cancel` measures 17 serial CPU cases on a deterministic 8192×5464 image: eleven
+filters, histogram, antialiased/hard coverage, downscale, carried mask and private sparse copy. It runs one warmup
+and ten observations each, using the production scheduler and cancellation token. An event marks worker entry;
+the harness requests cancellation after an event wait of 20 ms. Completed-before-cancel and deadline races are
+reported separately and excluded from the cancellation distribution. The source has opaque BGRA channels
+`(17p,13p,7p) mod 256`, alpha 255, with a selected central third in both axes. Gaussian uses radius 250 and motion
+uses distance 2000. The headless harness reserves a conservative 2 GiB for one job at a time.
+
+Rows include median, p95 and maximum from stop request to kernel return. These durations include scheduling,
+page faults and destruction of private scratch; they are **not** a direct measurement of adjacent cancellation
+checks. Setup, scheduler admission and result drain are outside the interval. No timer or timing assertion belongs
+to the ordinary correctness suite, and this diagnostic establishes neither UI responsiveness nor SIMD speed.
+
 ## UI application benchmark
 
 `RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is an opt-in measurement of application commands through the real

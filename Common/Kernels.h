@@ -6,6 +6,8 @@
 #include <string_view>
 #include <vector>
 
+#include "Executor.h"
+
 struct GrainSettings;
 namespace Adjust
 {
@@ -62,12 +64,14 @@ enum class KernelIsa : std::uint8_t
 struct KernelTable final
 {
     KernelIsa isa;
-    void (*applyTables)(std::uint8_t*, int, int, int, const Adjust::ChannelTables&) noexcept;
-    void (*applyGradientMap)(std::uint8_t*, int, int, int, const std::array<std::uint8_t, 768>&) noexcept;
-    void (*applyGrain)(std::uint8_t*, int, int, int, const GrainSettings&, double, double, double) noexcept;
-    void (*addNoise)(std::uint8_t*, int, int, int, float, bool, bool, std::uint32_t) noexcept;
-    void (*lensDistort)(const std::uint8_t*, std::uint8_t*, int, int, int, double) noexcept;
-    void (*applyCube)(std::uint8_t*, int, int, int, const std::vector<float>&) noexcept;
+    void (*applyTables)(std::uint8_t*, int, int, int, const Adjust::ChannelTables&, const CancelToken&) noexcept;
+    void (*applyGradientMap)(std::uint8_t*, int, int, int, const std::array<std::uint8_t, 768>&,
+                             const CancelToken&) noexcept;
+    void (*applyGrain)(std::uint8_t*, int, int, int, const GrainSettings&, double, double, double,
+                       const CancelToken&) noexcept;
+    void (*addNoise)(std::uint8_t*, int, int, int, float, bool, bool, std::uint32_t, const CancelToken&) noexcept;
+    void (*lensDistort)(const std::uint8_t*, std::uint8_t*, int, int, int, double, const CancelToken&) noexcept;
+    void (*applyCube)(std::uint8_t*, int, int, int, const std::vector<float>&, const CancelToken&) noexcept;
 };
 
 struct KernelCapabilities final

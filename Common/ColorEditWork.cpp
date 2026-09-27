@@ -1,11 +1,25 @@
 #include "ColorEditWork.h"
 
 #include "Adjust.h"
+#include "RasterWork.h"
 #include "Selection.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <new>
 #include <utility>
+
+namespace
+{
+bool CanReuseColorPreview(const ColorEdit& edit) noexcept
+{
+    return edit.preview && !edit.previewFailed && edit.previewRaster.HasStorage() && edit.previewScale == 1.0 &&
+           edit.previewSource == edit.Source() && edit.previewTransform == edit.Placement() &&
+           edit.previewRaster.Format() == RasterFormat::Bgra8888 &&
+           edit.previewRaster.Width() == edit.Source().Width() && edit.previewRaster.Height() == edit.Source().Height();
+}
+} // namespace
 
 bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) noexcept
 {
@@ -32,28 +46,146 @@ bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) no
     return false;
 }
 
+std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& input) noexcept
+{
+    const ColorEdit& edit = input.edit;
+    const Raster& source = edit.Source();
+    if (!source.HasStorage() || source.Format() != RasterFormat::Bgra8888 || !edit.settings.curves.IsValid())
+    {
+        return std::nullopt;
+    }
+    const auto width = static_cast<std::uint64_t>(source.Width());
+    const auto height = static_cast<std::uint64_t>(source.Height());
+    const auto pixels = width * height; // Raster limits each side to 30,000.
+    const auto allocation = [](std::uint64_t bytes) noexcept
+    { return PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes)); };
+    const std::uint64_t rgba = allocation(pixels * 4);
+    const bool reused = CanReuseColorPreview(edit);
+    const std::uint64_t privateSource = source.IsMaterialized() ? 0 : rgba;
+    std::uint64_t coverage = 0;
+    std::uint64_t coveragePeak = 0;
+    if (!reused && edit.selection.has_value())
+    {
+        coverage = allocation(pixels);
+        if (edit.selection->antialiased)
+        {
+            coveragePeak = coverage + (width + 2) * height * 2 * sizeof(float);
+        }
+        else
+        {
+            // Hard coverage reserves one {double x, int winding, padding} per edge, in place.
+            const std::uint64_t edges = edit.selection->loops.PointCount();
+            if (edges > std::numeric_limits<std::uint64_t>::max() / 32)
+            {
+                return std::nullopt;
+            }
+            coveragePeak = coverage + edges * 16;
+        }
+    }
+    std::uint64_t kernelPeak = rgba;
+    switch (edit.kind)
+    {
+    case FilterKind::GaussianBlur:
+    {
+        // RunFilter normalizes radius to [0.1,250], with 1 for a non-finite input; commit scale is one.
+        const double sigma = std::isfinite(edit.settings.radius) ? std::clamp(edit.settings.radius, 0.1, 250.0) : 1.0;
+        const auto taps = static_cast<std::uint64_t>(std::ceil(sigma * 3.0)) * 2 + 1;
+        kernelPeak += privateSource + pixels * 4 * sizeof(float) + taps * sizeof(double);
+        break;
+    }
+    case FilterKind::MotionBlur:
+        kernelPeak += privateSource;
+        break;
+    case FilterKind::LensCorrection:
+        kernelPeak += rgba; // Private source and output coexist, even for a contiguous input.
+        break;
+    case FilterKind::ContentAwareFill:
+        kernelPeak += pixels * (4 * sizeof(std::uint8_t) + 3 * sizeof(int));
+        break;
+    case FilterKind::HueSaturation:
+        kernelPeak += static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
+                      Adjust::kCubeDimension * 4 * sizeof(float);
+        break;
+    default:
+        break;
+    }
+    // Selection coverage survives filtering and blending. Blending owns the filter output, a private writable
+    // output and (only for an unassembled source) a private original. It does not copy an existing mask.
+    const std::uint64_t renderPeak =
+        reused ? 0 : coverage + std::max(kernelPeak, edit.selection ? rgba * 2 + privateSource : 0);
+    // Trim keeps input and cropped output until the crop is adopted. Finish retains the final image and eager
+    // thumbnails; a reused sparse preview may need a private copy even though ordinary kernel outputs are flat.
+    const bool trim =
+        edit.grownImage.HasStorage() && (edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur);
+    const std::uint64_t thumbnails = allocation(96 * 96 * 4) + allocation(96 * 96);
+    const std::uint64_t newImage = !reused || trim ? rgba : 0;
+    const std::uint64_t privatePreview = reused && !edit.previewRaster.IsMaterialized() ? rgba : 0;
+    std::uint64_t finishPeak =
+        std::max(newImage + thumbnails + privatePreview, trim ? (reused ? rgba : rgba * 2) + privatePreview : 0);
+    std::uint64_t metadata = 128 * 1024; // Bounded settings copies, stack, raster headers, small vectors/records.
+    if (input.token.target && input.token.target->mask)
+    {
+        const LayerMask& mask = input.token.target->mask.value();
+        if (mask.asset.image.Format() != RasterFormat::Gray8)
+        {
+            return std::nullopt;
+        }
+        const auto nameLength = static_cast<std::uint64_t>(mask.asset.name.size());
+        if (nameLength > (std::numeric_limits<std::uint64_t>::max() - metadata) / (4 * sizeof(wchar_t)) - 1)
+        {
+            return std::nullopt;
+        }
+        metadata += (nameLength + 1) * 4 * sizeof(wchar_t);
+        if (edit.grownImage.HasStorage() && !mask.placement && mask.asset.image.PixelCount() > 1)
+        {
+            std::uint64_t maskPeak = newImage + thumbnails + privatePreview + allocation(pixels) + width * sizeof(int);
+            if (!mask.asset.image.IsMaterialized())
+            {
+                maskPeak +=
+                    allocation(static_cast<std::uint64_t>(mask.asset.image.Stride()) * mask.asset.image.Height());
+            }
+            if (!mask.asset.thumbnail.IsMaterialized())
+            {
+                maskPeak += allocation(static_cast<std::uint64_t>(mask.asset.thumbnail.Stride()) *
+                                       mask.asset.thumbnail.Height());
+            }
+            finishPeak = std::max(finishPeak, maskPeak);
+        }
+    }
+    const std::uint64_t peak = std::max({coveragePeak, renderPeak, finishPeak});
+    if (peak > std::numeric_limits<std::uint64_t>::max() - metadata)
+    {
+        return std::nullopt;
+    }
+    return metadata + peak;
+}
+
 Raster RenderColorEditRaster(const ColorEdit& edit, const Raster& source, const LayerTransform& placement, double scale,
-                             bool* noSource)
+                             bool* noSource, const CancelToken& cancellation)
 {
     if (noSource != nullptr)
     {
         *noSource = false;
     }
+    if (cancellation.IsCancelled())
+    {
+        return {};
+    }
     if (!edit.selection.has_value())
     {
-        return Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed, nullptr, noSource);
+        return Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed, nullptr, noSource, cancellation);
     }
-    const Raster coverage = SelectionGeometry::Coverage(
-        SelectionGeometry::Transformed(edit.selection->loops,
-                                       PixelToDocument(placement, source.Width(), source.Height()).Inverted()),
-        source.Width(), source.Height(), edit.selection->antialiased);
+    const Raster coverage = SelectionGeometry::CoverageTransformed(
+        edit.selection->loops, PixelToDocument(placement, source.Width(), source.Height()).Inverted(), source.Width(),
+        source.Height(), edit.selection->antialiased, cancellation);
     // An allocation failure must never change a selected edit into an unselected edit.
     if (!coverage.HasStorage())
     {
         return {};
     }
-    const Raster result = Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed, &coverage, noSource);
-    return result.HasStorage() ? Adjust::BlendThrough(result, source, coverage) : result;
+    const Raster result =
+        Adjust::RunFilter(edit.kind, source, edit.settings, scale, edit.seed, &coverage, noSource, cancellation);
+    return result.HasStorage() ? Adjust::BlendThrough(result, source, coverage, cancellation) : result;
 }
 
 ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& executor, CancelToken cancellation)
@@ -93,12 +225,11 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     }
     // The direct path always replaces its preview on Update. The host's mailbox must only populate this
     // candidate from the exact current settings/source/seed once previews become asynchronous.
-    result.reusedPreview = edit.preview && !edit.previewFailed && edit.previewRaster.HasStorage() &&
-                           edit.previewScale == 1.0 && edit.previewSource == edit.Source() &&
-                           edit.previewTransform == edit.Placement();
+    result.reusedPreview = CanReuseColorPreview(edit);
     bool noSource = false;
-    Raster image = result.reusedPreview ? edit.previewRaster
-                                        : RenderColorEditRaster(edit, edit.Source(), edit.Placement(), 1.0, &noSource);
+    Raster image = result.reusedPreview
+                       ? edit.previewRaster
+                       : RenderColorEditRaster(edit, edit.Source(), edit.Placement(), 1.0, &noSource, cancellation);
     if (cancelled())
     {
         return result;
@@ -113,7 +244,7 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     int cropY = 0;
     if ((edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur) && edit.grownImage.HasStorage())
     {
-        const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(image, placed);
+        const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(image, placed, cancellation);
         image = trimmed.image;
         placed = trimmed.transform;
         cropX = trimmed.cropX;
@@ -127,19 +258,23 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     if (edit.grownImage.HasStorage() && result.mask.has_value() && !result.mask->placement.has_value() &&
         result.mask->asset.image.PixelCount() > 1)
     {
-        const std::uint8_t tone =
-            static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(result.mask->asset.thumbnail) * 255.0));
-        const Raster carried =
-            CarriedMask(result.mask->asset.image, edit.original.Width(), edit.original.Height(),
-                        edit.grownOffsetX - cropX, edit.grownOffsetY - cropY, image.Width(), image.Height(), tone);
-        if (!carried.HasStorage() || cancelled())
+        const Raster edgeThumbnail = ContiguousRasterForWork(result.mask->asset.thumbnail, cancellation);
+        if (cancelled() || (result.mask->asset.thumbnail.HasStorage() && !edgeThumbnail.HasStorage()))
+        {
+            return result;
+        }
+        const std::uint8_t tone = static_cast<std::uint8_t>(std::lround(MaskEdgeBackground(edgeThumbnail) * 255.0));
+        const Raster carried = CarriedMaskForWork(
+            result.mask->asset.image, edit.original.Width(), edit.original.Height(), edit.grownOffsetX - cropX,
+            edit.grownOffsetY - cropY, image.Width(), image.Height(), tone, cancellation);
+        if (cancelled() || !carried.HasStorage())
         {
             return result;
         }
         result.mask->asset.image = carried;
-        result.mask->asset.thumbnail = Raster::MakeThumbnail(carried);
+        result.mask->asset.thumbnail = ThumbnailRasterForWork(carried, 96, cancellation);
         result.mask->enabled = true;
-        if (!result.mask->asset.thumbnail.HasStorage())
+        if (cancelled() || !result.mask->asset.thumbnail.HasStorage())
         {
             return result;
         }
@@ -148,7 +283,7 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     {
         return result;
     }
-    result.thumbnail = Raster::MakeThumbnail(image);
+    result.thumbnail = ThumbnailRasterForWork(image, 96, cancellation);
     if (!result.thumbnail.HasStorage() || cancelled())
     {
         return result;

@@ -511,8 +511,17 @@ unchanged and keep the panel available for retry or Cancel. A processing failure
 reports `IDS_ERROR_FILTER`, or the existing budget notice when appropriate. A fill without donor patches remains
 the distinct `previewFailed` no-source state. Identity closes without an entry. The inline construction/computation
 boundary translates `bad_alloc` to a failed operation; existing history allocation still follows the owning
-history policy. Cancellation is checked between graph stages here; bounded inner-kernel cancellation and scheduler
-admission must land before this graph is dispatched asynchronously.
+history policy. The token is propagated into pixel, selection, copy, trim, carried-mask and thumbnail work. A
+cancelled result never installs partial pixels. Missing donors, cancellation and allocation failure remain distinct;
+`ContentFill` returns 0, -2 and -1 respectively. The direct in-place kernel may have written a prefix on cancellation,
+so callers MUST discard its private output. `FilterSettings::Normalized` may allocate and must allow `bad_alloc`
+to reach the owning computation boundary.
+
+`ColorEditJobMemoryBytes` declares the complete commit graph's additional allocation peak before submission.
+It accounts for rounded pixel buffers, private sparse reads, coverage, kernel scratch, blending, crop, masks,
+thumbnails and metadata. An exact resident preview avoids another filter/coverage reservation. Geometry producers
+cache selection point counts; querying the estimate does not traverse selection points or loops. The host's
+asynchronous dispatch and continuation migration remains P1.1c work.
 
 ## Content-aware fill (C13)
 

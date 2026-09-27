@@ -83,14 +83,22 @@ void SampleBilinear(const std::uint8_t* bgra, int width, int height, int stride,
 } // namespace
 
 extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyTables(std::uint8_t* bgra, int width, int height,
-                                                                       int stride,
-                                                                       const Adjust::ChannelTables& tables) noexcept
+                                                                       int stride, const Adjust::ChannelTables& tables,
+                                                                       const CancelToken& cancellation) noexcept
 {
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         std::uint8_t* p = bgra + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x, p += 4)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             const float alpha = p[3];
             if (alpha == 0.0f)
             {
@@ -111,14 +119,24 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyTables(std::uint
     }
 }
 
-extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGradientMap(
-    std::uint8_t* bgra, int width, int height, int stride, const std::array<std::uint8_t, 768>& table) noexcept
+extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGradientMap(std::uint8_t* bgra, int width, int height,
+                                                                            int stride,
+                                                                            const std::array<std::uint8_t, 768>& table,
+                                                                            const CancelToken& cancellation) noexcept
 {
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         std::uint8_t* p = bgra + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x, p += 4)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             const unsigned a = p[3];
             if (a == 0)
             {
@@ -145,7 +163,8 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGradientMap(
 extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGrain(std::uint8_t* bgra, int width, int height,
                                                                       int stride, const GrainSettings& grain,
                                                                       double originX, double originY,
-                                                                      double unitsPerPixel) noexcept
+                                                                      double unitsPerPixel,
+                                                                      const CancelToken& cancellation) noexcept
 {
     const double amount = grain.amount;
     double size = grain.size;
@@ -163,6 +182,10 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGrain(std::uint8
     const std::uint32_t fineSeed = Mix32(grain.seed ^ 0xA511E9B3U);
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         const double v = originY + (static_cast<double>(y) + 0.5) * unitsPerPixel;
         const double cellY = std::floor(v / size);
         float ty = static_cast<float>(v / size - cellY);
@@ -172,6 +195,10 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGrain(std::uint8
         std::uint8_t* p = bgra + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x, p += 4)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             const unsigned a = p[3];
             if (a == 0)
             {
@@ -213,14 +240,23 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyGrain(std::uint8
 
 extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_AddNoise(std::uint8_t* bgra, int width, int height,
                                                                     int stride, float amount, bool gaussian,
-                                                                    bool monochromatic, std::uint32_t seed) noexcept
+                                                                    bool monochromatic, std::uint32_t seed,
+                                                                    const CancelToken& cancellation) noexcept
 {
     const float spread = amount / 100.0f * 127.5f;
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         std::uint8_t* row = bgra + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             std::uint8_t* p = row + static_cast<std::size_t>(x) * 4u;
             const unsigned alpha = p[3];
             if (alpha == 0)
@@ -256,17 +292,26 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_AddNoise(std::uint8_t
 
 extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_LensDistort(const std::uint8_t* source,
                                                                        std::uint8_t* destination, int width, int height,
-                                                                       int stride, double k) noexcept
+                                                                       int stride, double k,
+                                                                       const CancelToken& cancellation) noexcept
 {
     const double cx = width * 0.5;
     const double cy = height * 0.5;
     const double halfDiagonal2 = cx * cx + cy * cy;
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         const double dy = y + 0.5 - cy;
         std::uint8_t* out = destination + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             const double dx = x + 0.5 - cx;
             const double scale = 1.0 - k * (dx * dx + dy * dy) / halfDiagonal2;
             std::array<double, 4> sums{};
@@ -281,8 +326,8 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_LensDistort(const std
 }
 
 extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyCube(std::uint8_t* bgra, int width, int height,
-                                                                     int stride,
-                                                                     const std::vector<float>& cube) noexcept
+                                                                     int stride, const std::vector<float>& cube,
+                                                                     const CancelToken& cancellation) noexcept
 {
     if (cube.size() <
         static_cast<std::size_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension * Adjust::kCubeDimension * 4)
@@ -300,9 +345,17 @@ extern "C" __declspec(noinline) void Kernels_Scalar_Adjust_ApplyCube(std::uint8_
     const float last = static_cast<float>(Adjust::kCubeDimension - 1);
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return;
+        }
         std::uint8_t* p = bgra + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
         for (int x = 0; x < width; ++x, p += 4)
         {
+            if ((x & 63) == 0 && cancellation.IsCancelled())
+            {
+                return;
+            }
             const float alpha = p[3];
             if (alpha == 0.0f)
             {

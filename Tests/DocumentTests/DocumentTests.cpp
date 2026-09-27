@@ -4,10 +4,12 @@
 #include "ColorEditWorkTests.h"
 #include "Crop.h"
 #include "Document.h"
+#include "FilterCancellationTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
 #include "RasterConcurrencyTests.h"
+#include "RasterWorkTests.h"
 #include "Selection.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
@@ -7205,6 +7207,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunColorEditWorkTests();
+    gFailures += RunRasterWorkTests();
+    gFailures += RunFilterCancellationTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

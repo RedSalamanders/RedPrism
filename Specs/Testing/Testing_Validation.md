@@ -85,6 +85,20 @@ Save before creating a file when Content-Aware Fill has no donors. The panel, do
 refusal. The existing successful adjustment-panel save/reload case still passes. This slice does not qualify
 asynchronous dispatch, bounded inner-kernel cancellation or whole-host G1 timing.
 
+### Cancellable filter graph (P1.1b)
+
+`rasterwork.*` uses literal bytes for padded crops, clipped bases, sparse inside/outside fills, replacement windows,
+nested graphs, the 64-frame traversal limit, extreme coordinates and cancelled/invalid reads. No failed operation
+may publish a raster or mutate a shared source cache. `filtercancel.*` covers every filter's pre-cancelled result,
+distinct no-donor failure, private sparse reads through public helpers, area/nearest-sampling literals and
+transformed coverage. Existing noise/grain/blur/filter numeric goldens remain unchanged.
+
+`coloreditwork.memory.*` checks selection counts through sharing/move, maximum Gaussian scratch, sparse source
+copies, persistent coverage, fill scratch and exact-preview reservation reuse. HostTests exercises cancellation
+and odd-width/padded rows through all six dispatched scalar entry points. The opt-in
+[`--bench-filter-cancel`](Testing_Benchmarks.md#filter-cancellation-diagnostic) records real stop-to-return
+distributions; those timings are not ordinary test assertions and do not establish whole-host G1.
+
 ### CPU dispatch and instruction boundary (P0.8)
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host

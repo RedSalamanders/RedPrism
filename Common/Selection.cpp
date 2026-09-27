@@ -6,7 +6,9 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <new>
+#include <span>
 #include <utility>
 
 #pragma warning(push)
@@ -73,16 +75,19 @@ struct CoverageCells
 {
     int width = 0;
     int height = 0;
-    std::vector<float> cover;
-    std::vector<float> area;
+    std::unique_ptr<float[]> cover;
+    std::unique_ptr<float[]> area;
 };
 
-void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
+[[nodiscard]] bool DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to, const CancelToken& cancellation)
 {
-    if (!std::isfinite(from.x) || !std::isfinite(from.y) || !std::isfinite(to.x) || !std::isfinite(to.y) ||
-        from.y == to.y)
+    if (!std::isfinite(from.x) || !std::isfinite(from.y) || !std::isfinite(to.x) || !std::isfinite(to.y))
     {
-        return;
+        return false;
+    }
+    if (from.y == to.y)
+    {
+        return true;
     }
     const float sign = to.y > from.y ? 1.0f : -1.0f;
     Vec2 p0 = from;
@@ -95,14 +100,24 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
     const double bottom = std::clamp(p1.y, 0.0, static_cast<double>(cells.height));
     if (top >= bottom)
     {
-        return;
+        return true;
     }
-    const double dxdy = (p1.x - p0.x) / (p1.y - p0.y);
+    const double deltaX = p1.x - p0.x;
+    const double deltaY = p1.y - p0.y;
+    const double dxdy = deltaX / deltaY;
+    if (!std::isfinite(deltaX) || !std::isfinite(deltaY) || !std::isfinite(dxdy))
+    {
+        return false;
+    }
     const std::size_t stride = static_cast<std::size_t>(cells.width) + 2u;
     const int firstRow = static_cast<int>(std::floor(top));
     const int lastRow = static_cast<int>(std::ceil(bottom));
     for (int y = firstRow; y < lastRow; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return false;
+        }
         const double rowTop = std::max(static_cast<double>(y), top);
         const double rowBottom = std::min(static_cast<double>(y + 1), bottom);
         if (rowBottom <= rowTop)
@@ -111,21 +126,37 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
         }
         double xa = p0.x + (rowTop - p0.y) * dxdy;
         double xb = p0.x + (rowBottom - p0.y) * dxdy;
+        if (!std::isfinite(xa) || !std::isfinite(xb))
+        {
+            return false;
+        }
         if (xa > xb)
         {
             std::swap(xa, xb);
         }
-        float* coverRow = cells.cover.data() + static_cast<std::size_t>(y) * stride;
-        float* areaRow = cells.area.data() + static_cast<std::size_t>(y) * stride;
+        float* coverRow = cells.cover.get() + static_cast<std::size_t>(y) * stride;
+        float* areaRow = cells.area.get() + static_cast<std::size_t>(y) * stride;
         const double rowHeight = rowBottom - rowTop;
         const double span = xb - xa;
+        if (!std::isfinite(span))
+        {
+            return false;
+        }
         // Split the segment at every column boundary; a piece's height is its share of the horizontal span.
-        int column = static_cast<int>(std::floor(xa));
+        // Keep the existing float accumulation order within one maximum canvas width to the left.
+        // More distant pieces share that exterior cell; aggregate them rather than overflow an int or
+        // walk billions of off-canvas columns for a transformed selection.
+        int column = static_cast<int>(
+            std::clamp(std::floor(xa), -static_cast<double>(kMaxCanvasSide), static_cast<double>(cells.width)));
         double pieceStart = xa;
         while (true)
         {
+            if ((column & 255) == 0 && cancellation.IsCancelled())
+            {
+                return false;
+            }
             const double columnRight = static_cast<double>(column + 1);
-            const double pieceEnd = std::min(xb, columnRight);
+            const double pieceEnd = column >= cells.width ? xb : std::min(xb, columnRight);
             const double dy = span > 0 ? rowHeight * (pieceEnd - pieceStart) / span : rowHeight;
             if (dy > 0)
             {
@@ -145,22 +176,35 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
             ++column;
         }
     }
+    return true;
 }
 
-[[nodiscard]] Raster ResolveCoverage(const CoverageCells& cells)
+[[nodiscard]] Raster ResolveCoverage(const CoverageCells& cells, const CancelToken& cancellation)
 {
     const int width = cells.width;
     const int height = cells.height;
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), 0);
+    PixelBuffer bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+    if (!bytes)
+    {
+        return {};
+    }
     const std::size_t stride = static_cast<std::size_t>(width) + 2u;
     for (int y = 0; y < height; ++y)
     {
-        const float* coverRow = cells.cover.data() + static_cast<std::size_t>(y) * stride;
-        const float* areaRow = cells.area.data() + static_cast<std::size_t>(y) * stride;
-        std::uint8_t* out = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width);
+        if (cancellation.IsCancelled())
+        {
+            return {};
+        }
+        const float* coverRow = cells.cover.get() + static_cast<std::size_t>(y) * stride;
+        const float* areaRow = cells.area.get() + static_cast<std::size_t>(y) * stride;
+        std::uint8_t* out = bytes.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width);
         float winding = coverRow[0];
         for (int x = 0; x < width; ++x)
         {
+            if ((x & 255) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             const std::size_t index = static_cast<std::size_t>(x) + 1u;
             const float value = winding + areaRow[index];
             winding += coverRow[index];
@@ -168,23 +212,94 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
             out[static_cast<std::size_t>(x)] = static_cast<std::uint8_t>(std::lround(coverage * 255.0f));
         }
     }
-    return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+    return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes));
 }
 
 // Hard-edged coverage: a pixel is selected when its center has nonzero winding.
-[[nodiscard]] Raster CenterCoverage(const std::vector<SelectionLoop>& loops, int width, int height)
+[[nodiscard]] Raster CenterCoverage(const std::vector<SelectionLoop>& loops, int width, int height, const Affine2* map,
+                                    const CancelToken& cancellation)
 {
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), 0);
+    PixelBuffer bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+    if (!bytes)
+    {
+        return {};
+    }
     struct Crossing
     {
         double x;
         int winding;
     };
-    std::vector<Crossing> crossings;
+    // Reserve the entire graph before touching pixels. Each edge contributes at most one crossing per row.
+    std::size_t capacity = 0;
+    for (const SelectionLoop& loop : loops)
+    {
+        if (cancellation.IsCancelled() || loop.size() > std::numeric_limits<std::size_t>::max() - capacity)
+        {
+            return {};
+        }
+        capacity += loop.size();
+    }
+    const auto crossings = std::make_unique_for_overwrite<Crossing[]>(capacity);
+    // In-place heapsort bounds each cancellation interval without comparator exceptions or extra image memory.
+    const auto sortCrossings = [&](std::size_t count) noexcept
+    {
+        const auto sift = [&](std::size_t start, std::size_t end) noexcept
+        {
+            std::size_t root = start;
+            while (root < end / 2)
+            {
+                if (cancellation.IsCancelled())
+                {
+                    return false;
+                }
+                std::size_t child = root * 2 + 1;
+                if (child + 1 < end && crossings[child].x < crossings[child + 1].x)
+                {
+                    ++child;
+                }
+                if (!(crossings[root].x < crossings[child].x))
+                {
+                    break;
+                }
+                std::swap(crossings[root], crossings[child]);
+                root = child;
+            }
+            return !cancellation.IsCancelled();
+        };
+        for (std::size_t start = count / 2; start > 0; --start)
+        {
+            if (!sift(start - 1, count))
+            {
+                return false;
+            }
+        }
+        for (std::size_t end = count; end > 1; --end)
+        {
+            std::swap(crossings[0], crossings[end - 1]);
+            if (!sift(0, end - 1))
+            {
+                return false;
+            }
+        }
+        return !cancellation.IsCancelled();
+    };
     for (int y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return {};
+        }
         const double centerY = y + 0.5;
-        crossings.clear();
+        std::uint8_t* out = bytes.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width);
+        for (int x = 0; x < width; x += 4096)
+        {
+            if (cancellation.IsCancelled())
+            {
+                return {};
+            }
+            std::fill_n(out + x, std::min(4096, width - x), std::uint8_t{0});
+        }
+        std::size_t crossingCount = 0;
         for (const SelectionLoop& loop : loops)
         {
             const std::size_t count = loop.size();
@@ -194,10 +309,17 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
             }
             for (std::size_t index = 0; index < count; ++index)
             {
-                const Vec2 a = loop[index];
-                const Vec2 b = loop[(index + 1) % count];
-                if (!std::isfinite(a.x) || !std::isfinite(a.y) || !std::isfinite(b.x) || !std::isfinite(b.y) ||
-                    a.y == b.y)
+                if ((index & 255u) == 0 && cancellation.IsCancelled())
+                {
+                    return {};
+                }
+                const Vec2 a = map != nullptr ? map->Apply(loop[index]) : loop[index];
+                const Vec2 b = map != nullptr ? map->Apply(loop[(index + 1) % count]) : loop[(index + 1) % count];
+                if (!std::isfinite(a.x) || !std::isfinite(a.y) || !std::isfinite(b.x) || !std::isfinite(b.y))
+                {
+                    return {};
+                }
+                if (a.y == b.y)
                 {
                     continue;
                 }
@@ -208,19 +330,32 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
                 {
                     continue;
                 }
-                const double t = (centerY - a.y) / (b.y - a.y);
-                crossings.push_back(Crossing{a.x + (b.x - a.x) * t, downward ? 1 : -1});
+                const double deltaX = b.x - a.x;
+                const double deltaY = b.y - a.y;
+                const double t = (centerY - a.y) / deltaY;
+                const double crossing = a.x + deltaX * t;
+                if (!std::isfinite(deltaX) || !std::isfinite(deltaY) || !std::isfinite(t) || !std::isfinite(crossing))
+                {
+                    return {};
+                }
+                crossings[crossingCount++] = Crossing{crossing, downward ? 1 : -1};
             }
         }
-        if (crossings.empty())
+        if (crossingCount == 0)
         {
             continue;
         }
-        std::sort(crossings.begin(), crossings.end(), [](const Crossing& l, const Crossing& r) { return l.x < r.x; });
-        std::uint8_t* out = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width);
-        int winding = 0;
-        for (std::size_t index = 0; index + 1 < crossings.size(); ++index)
+        if (!sortCrossings(crossingCount))
         {
+            return {};
+        }
+        int winding = 0;
+        for (std::size_t index = 0; index + 1 < crossingCount; ++index)
+        {
+            if ((index & 255u) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             winding += crossings[index].winding;
             if (winding == 0)
             {
@@ -229,15 +364,20 @@ void DepositEdge(CoverageCells& cells, Vec2 from, Vec2 to)
             // Pixel centers x + 0.5 inside [spanStart, spanEnd).
             const double spanStart = crossings[index].x;
             const double spanEnd = crossings[index + 1].x;
-            const int first = std::max(0, static_cast<int>(std::ceil(spanStart - 0.5)));
-            const int last = std::min(width - 1, static_cast<int>(std::ceil(spanEnd - 0.5)) - 1);
+            const int first = static_cast<int>(std::clamp(std::ceil(spanStart - 0.5), 0.0, static_cast<double>(width)));
+            const int last =
+                static_cast<int>(std::clamp(std::ceil(spanEnd - 0.5), 0.0, static_cast<double>(width))) - 1;
             for (int x = first; x <= last; ++x)
             {
+                if ((x & 255) == 0 && cancellation.IsCancelled())
+                {
+                    return {};
+                }
                 out[static_cast<std::size_t>(x)] = 255;
             }
         }
     }
-    return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+    return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes));
 }
 
 // ── Wand and tracing kernels (ported from WandPixels.c) ──────────────────
@@ -580,22 +720,35 @@ bool Contains(const std::vector<SelectionLoop>& loops, Vec2 point) noexcept
     return winding != 0;
 }
 
-Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased)
+namespace
 {
-    if (width < 1 || height < 1)
+Raster CoverageImpl(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased,
+                    const Affine2* map, const CancelToken& cancellation)
+{
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide || cancellation.IsCancelled())
     {
         return {};
     }
     if (!antialiased)
     {
-        return CenterCoverage(loops, width, height);
+        return CenterCoverage(loops, width, height, map, cancellation);
     }
     CoverageCells cells;
     cells.width = width;
     cells.height = height;
     const std::size_t count = (static_cast<std::size_t>(width) + 2u) * static_cast<std::size_t>(height);
-    cells.cover.assign(count, 0.0f);
-    cells.area.assign(count, 0.0f);
+    cells.cover = std::make_unique_for_overwrite<float[]>(count);
+    cells.area = std::make_unique_for_overwrite<float[]>(count);
+    for (std::size_t start = 0; start < count; start += 4096)
+    {
+        if (cancellation.IsCancelled())
+        {
+            return {};
+        }
+        const std::size_t length = std::min(std::size_t{4096}, count - start);
+        std::fill_n(cells.cover.get() + start, length, 0.0f);
+        std::fill_n(cells.area.get() + start, length, 0.0f);
+    }
     for (const SelectionLoop& loop : loops)
     {
         const std::size_t points = loop.size();
@@ -605,10 +758,32 @@ Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, 
         }
         for (std::size_t index = 0; index < points; ++index)
         {
-            DepositEdge(cells, loop[index], loop[(index + 1) % points]);
+            if (cancellation.IsCancelled())
+            {
+                return {};
+            }
+            const Vec2 from = map != nullptr ? map->Apply(loop[index]) : loop[index];
+            const Vec2 to = map != nullptr ? map->Apply(loop[(index + 1) % points]) : loop[(index + 1) % points];
+            if (!DepositEdge(cells, from, to, cancellation))
+            {
+                return {};
+            }
         }
     }
-    return ResolveCoverage(cells);
+    return cancellation.IsCancelled() ? Raster{} : ResolveCoverage(cells, cancellation);
+}
+} // namespace
+
+Raster Coverage(const std::vector<SelectionLoop>& loops, int width, int height, bool antialiased,
+                const CancelToken& cancellation)
+{
+    return CoverageImpl(loops, width, height, antialiased, nullptr, cancellation);
+}
+
+Raster CoverageTransformed(const std::vector<SelectionLoop>& loops, const Affine2& map, int width, int height,
+                           bool antialiased, const CancelToken& cancellation)
+{
+    return CoverageImpl(loops, width, height, antialiased, &map, cancellation);
 }
 } // namespace SelectionGeometry
 

@@ -175,6 +175,10 @@ fast path for shared storage, so equal geometry preserves redo. Flipping, transl
 must leave earlier snapshots untouched. Selection memory accounting and deferred destruction remain subsequent
 history/resource work in the active performance plan.
 
+The geometry producer caches its total point count. `PointCount()` is constant-time for snapshot/admission readers,
+copies preserve the count with shared storage, and a moved-from empty handle reports zero. This avoids an outline
+traversal when reserving a hard-coverage worker's crossing array.
+
 ### Operations
 
 `DocumentSession` ports the CPU edits used by the legacy group/history/appearance/layer tests:

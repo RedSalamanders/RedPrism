@@ -61,8 +61,16 @@
   - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
   - [x] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior. Full x64 gates and all ARM64 cross-builds passed; 63 new document checks and the WARP save-path checks pass.
-  - [ ] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels.
+  - [x] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels. Full x64 gates and all ARM64 cross-builds passed; all 13 measured 4K kernel checksums match the baseline.
+    - [x] Add private cancellable sparse reads and thread cancellation through filters, coverage, blending, cropping, masks and thumbnails.
+    - [x] Declare the complete commit allocation peak and cache selection point counts for constant-time admission estimates.
+    - [x] Complete numeric/cancellation/peak tests, Release cancellation measurements and all configuration gates. Maximum observed stop-to-return was 9.659 ms on the measured inputs; this is not a worst-case cancellation guarantee.
   - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
+    - [ ] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Implementation drafted while P1.1b completes validation.
+    - [ ] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates.
+    - [ ] Wire one-active/latest-pending previews, once-per-opening histograms and ordered commits with a busy panel and working Cancel.
+    - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
+    - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
@@ -169,6 +177,17 @@ rechecks. Processing failure keeps the panel and last-applied settings; Save/Exp
 apply. All 63 new document checks, the WARP save-path checks and existing numeric goldens pass in full x64 Debug,
 Release and ASan gates; all ARM64 cross-builds pass. See the [work-split record](../../TestRuns/ColorEditWork_2026-09-28.md).
 P1.1b owns bounded inner-kernel cancellation and peak reservations, and P1.1c owns asynchronous host wiring.
+P1.1a was committed and pushed as `c41805d`.
+
+P1.1b progress, 2026-09-28: private worker reads avoid shared sparse materialization; filters, histogram, coverage,
+blending, trim, carried masks and eager thumbnails now propagate cancellation. Large scratch arrays initialize in
+bounded chunks. Selection coverage applies the transform per edge without copying the outline; hard coverage uses
+cancellable in-place sorting. The allocation estimate covers each stage's live scratch and final result, including
+rounding and sparse input copies, and avoids charging a resident exact preview again. All final x64 gates and all
+ARM64 cross-builds passed, including curve-allocation and finite-coordinate-overflow review corrections. All 13
+4K benchmark checksums match the original baseline; observed cancellation returns and their limits are recorded
+in the [P1.1b record](../../TestRuns/FilterCancellation_2026-09-28.md). The host still invokes the graph synchronously
+until P1.1c.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -1739,6 +1758,40 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
   - transform and mask checks in every `Apply*`;
   - the panel busy UI;
   - **settle tickets, and `ConfirmDiscardChanges` as a UI action for every caller (§4.4)**.
+
+  P1.1c implementation ordering, refined against the host on 2026-09-28:
+  1. The host explicitly selects deferred color computation; direct `DocumentSession` callers retain their inline
+     behavior through the same graph. Begin/update only capture immutable handles, normalize bounded settings and
+     compute grid extents. They must not generate histograms, downscale, walk selection points, flatten sparse
+     tiles or render pixels. Cache selection bounds with their immutable geometry, as point counts already are.
+  2. Worker preparation owns grid padding and preview sources, and reuses a prepared source only for the same
+     original/grid/placement. Extend reservations to include padding and downscale temporaries; P1.1b's commit
+     estimate alone does not cover this newly moved preparation. Return prepared handles atomically. A failed
+     growth retains the panel and cannot authorize a clipped full commit.
+  3. A panel-lifetime stamp differs from its settings sequence. Histograms remain valid across settings changes
+     within that opening. Intermediate previews may publish while the latest request waits, without overwriting
+     the latest settings. A full preview can be committed only when its rendered settings/seed/grid stamp matches
+     the requested commit. Cancel/reopen, preview off, identity, replacement and shutdown invalidate the appropriate
+     mailbox/job tickets. All result paths also use the existing owning document/target checks.
+  4. OK freezes only the pending panel's mutation controls and starts ordered history work; pan, zoom, chrome and
+     cancellation keep pumping. Commit completion applies or drops before releasing the history barrier. Errors
+     and prompts are posted as owned UI actions, never shown inside completion drain. No UI continuation calls
+     `SettleJobs`; harness calls alone may wait while pumping.
+  5. Retain command parameters before waiting: project paths, ordered image batches and their drop point, Save As
+     path, export format, new/size draft and close/session-end intent. Capture the document only after preceding
+     history work applies. Save-before-proceed resumes its specific action only on successful commit and write;
+     Cancel preserves all drafts, and explicit Don't Save may discard. Revalidate document lifetime before every
+     resumed action. A batch is one queue item, and refusal of the ninth item is visible.
+  6. The inspected Add-as-Layer path currently falls through after `ToolSwitch` cancels a failed panel apply;
+     remove that failure fall-through. Canvas/Image Size currently use `DocumentGoes` to drop a panel; make their
+     pending-panel decision explicit and covered, with no resize after a failed required commit. Cover New,
+     New Canvas, project open, import-as-new, Close Project, WM_CLOSE and Windows session-end individually. There
+     is no Recent/Revert command or positional file-open command line to invent in this slice.
+  7. Exercise both direct numeric calls and deferred production calls. Use event gates for old preview/new settings,
+     histogram arrival, OK/Cancel races, failed commit before every dependent action, document replacement, queue
+     overflow and shutdown. Ordinary DPI/window resize does not settle an edit. Opening an adjustment-layer panel
+     still uses the composition readback until P1.3 replaces that GPU wait; overall G1 remains open until every
+     owning migration and measured exit criterion is complete.
 - **P1.2 Per-layer adjust draw**: the new pass mode, a DYNAMIC LUT and a DEFAULT cube updated in place per tick, and
   the coverage input. This also ends the per-tick IMMUTABLE texture creation for live adjustment layers.
 - **P1.3 GPU completion infrastructure**:

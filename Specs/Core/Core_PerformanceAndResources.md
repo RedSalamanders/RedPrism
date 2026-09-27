@@ -239,6 +239,37 @@ with the current `ReadRegion` fast path; it is a conservative ownership comparis
 older binary. Each pair must produce identical pixels. Reports distinguish a measured kernel-result speedup
 from full host commit latency, which also includes history, upload and presentation.
 
+## Cancellable image work
+
+Image jobs use private `RasterWork` reads for an unassembled sparse source. They MUST NOT enter or wait for the
+shared lazy materialization path. Already published contiguous pixels may be borrowed with owning raster handles.
+The traversal uses at most 64 frames, including the leaf; deeper graphs fail the worker operation without publishing
+an image. Ordinary raster producers use a contiguous base and contiguous tiles and need at most two frames.
+Destination padding is untouched; sparse inside-fill, outside-fill and replacement source windows remain distinct.
+
+Copy/fill chunks span at most 64 KiB between checks. Scalar adjustment loops check at row starts and every 64
+pixels; Gaussian and motion sampling check every eight pixels, and other pixel loops use bounded sub-row checks.
+Coverage and content-fill scratch initialize in chunks, without an image-sized vector zero-fill or result copy.
+Hard selection coverage sorts its crossings with a cancellable in-place heapsort. Within one maximum canvas width
+to the left, antialiased coverage retains its original accumulation order; more distant exterior pieces are
+aggregated to avoid unbounded off-canvas walks and integer conversion overflow. Pixel goldens and independent
+far-off-canvas area expectations qualify this boundary correction. Non-finite transformed endpoints or overflowing
+edge/intersection arithmetic fail the entire coverage operation before integer conversion; an invalid edge must
+never be skipped to publish a partial selection.
+
+Cancellation checks do not interrupt an OS allocator or release. Measurements MUST distinguish check granularity
+from observed stop-to-return time, which includes page faults, scheduling and scratch retirement. Kernels still
+run serially in this slice; SIMD and tile parallelism remain P2 work.
+
+`ColorEditJobMemoryBytes` takes the maximum of overlapping stage allocations, then adds 128 KiB for bounded settings,
+stack, raster headers and job records plus four copies of any mask asset name. Pixel allocations use
+`PixelBuffer::RequiredBytes`; the existing global headroom covers opaque allocator bookkeeping. Selection coverage
+survives filtering and blending. Gaussian additionally needs four float intermediates per pixel and double tap
+weights; content fill needs four byte and three integer arrays per pixel. Private copies are charged only for
+unassembled inputs, except the destructive lens kernel's explicit source copy. Eager mask thumbnails and crop
+outputs are included. A reusable full-grid preview is already resident and does not reserve another image/filter
+graph. Reservation acquisition and actual host dispatch are owned by the P1.1c migration.
+
 ## CPU instruction dispatch
 
 `Common/Kernels.h` is a standard-only boundary. Startup selects an immutable `KernelTable` before workers start;

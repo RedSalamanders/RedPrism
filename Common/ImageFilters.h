@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <cstdint>
 
@@ -10,7 +11,7 @@ namespace ImageFilters
 // `source` blurred by `sigma` pixels (a kernel of radius 3 sigma). Premultiplied BGRA treats pixels beyond the edge
 // as transparent, so edges fade; Gray8 clamps to the edge, so a mask keeps its edge tone. Empty when the source is
 // empty or memory runs out.
-[[nodiscard]] Raster GaussianBlur(const Raster& source, double sigma);
+[[nodiscard]] Raster GaussianBlur(const Raster& source, double sigma, const CancelToken& cancellation = {});
 
 // A mask's pixels placed by `transform` on a document-size Gray8 canvas filled with `background` (its edge tone):
 // nearest when the transform's sampling is Nearest, else bilinear with the edges clamped inside the placed box

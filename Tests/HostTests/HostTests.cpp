@@ -10,6 +10,7 @@
 #include "Document.h"
 #include "EditorTool.h"
 #include "ExecutorTests.h"
+#include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
 #include "JobActivityTests.h"
@@ -1611,6 +1612,10 @@ int wmain(int argc, wchar_t** argv)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-ui-timing")
     {
         return RunUiTimingBenchmark();
+    }
+    if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-filter-cancel")
+    {
+        return RunFilterWorkBenchmark();
     }
 #if defined(_DEBUG)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")

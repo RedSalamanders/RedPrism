@@ -3,12 +3,14 @@
 #include "BrushStroke.h"
 #include "ImageFilters.h"
 #include "Kernels.h"
+#include "RasterWork.h"
 #include "Selection.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <new>
 #include <utility>
 
@@ -107,17 +109,10 @@ constexpr double kPi = 3.14159265358979323846;
 }
 
 // A mutable copy of an image's pixels; false when memory runs out.
-[[nodiscard]] bool CopyPixels(const Raster& image, PixelBuffer& bytes) noexcept
+[[nodiscard]] bool CopyPixels(const Raster& image, PixelBuffer& bytes, const CancelToken& cancellation) noexcept
 {
-    const int channels = image.Channels();
-    bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(image.Width()) *
-                                     static_cast<std::size_t>(image.Height()) * static_cast<std::size_t>(channels));
-    if (!bytes)
-    {
-        return false;
-    }
-    image.ReadRegion(0, 0, image.Width(), image.Height(), bytes.Data(), image.Width() * channels, 0);
-    return true;
+    bytes = CopyRasterPixelsForWork(image, cancellation);
+    return static_cast<bool>(bytes);
 }
 
 // PDF non-separable helpers on straight colors.
@@ -331,7 +326,7 @@ const wchar_t* FilterKindName(FilterKind kind) noexcept
     return L"";
 }
 
-FilterSettings FilterSettings::Normalized() const noexcept
+FilterSettings FilterSettings::Normalized() const
 {
     FilterSettings result = *this;
     result.radius = Clamp(radius, 0.1, 250, 1);
@@ -593,26 +588,27 @@ double CurveValue(const CurvesSettings& settings, double x, int channel) noexcep
         }
     }
     i = std::min(p.size() - 2, i);
-    std::vector<double> d(p.size() - 1, 0.0);
-    for (std::size_t index = 0; index + 1 < p.size(); ++index)
-    {
-        d[index] = (p[index + 1].y - p[index].y) / (p[index + 1].x - p[index].x);
-    }
-    const auto slope = [&](std::size_t j) -> double
+    // Only the two endpoint slopes of this interval are needed. Keep the same secant arithmetic without
+    // allocating a vector inside this noexcept lookup (called 1536 times while building one RGB table).
+    const auto delta = [&](std::size_t index) noexcept
+    { return (p[index + 1].y - p[index].y) / (p[index + 1].x - p[index].x); };
+    const auto slope = [&](std::size_t j) noexcept -> double
     {
         if (j == 0)
         {
-            return d[0];
+            return delta(0);
         }
         if (j == p.size() - 1)
         {
-            return d.back();
+            return delta(p.size() - 2);
         }
-        if (d[j - 1] * d[j] <= 0)
+        const double previous = delta(j - 1);
+        const double next = delta(j);
+        if (previous * next <= 0)
         {
             return 0;
         }
-        return 2 / (1 / d[j - 1] + 1 / d[j]);
+        return 2 / (1 / previous + 1 / next);
     };
     const double h = p[i + 1].x - p[i].x;
     const double t = std::min(1.0, std::max(0.0, (x - p[i].x) / h));
@@ -682,33 +678,34 @@ std::array<std::uint8_t, 768> GradientMapTable(const GradientMapSettings& settin
 
 // ── Kernels ───────────────────────────────────────────────────────────────
 
-void ApplyTables(std::uint8_t* bgra, int width, int height, int stride, const ChannelTables& tables) noexcept
+void ApplyTables(std::uint8_t* bgra, int width, int height, int stride, const ChannelTables& tables,
+                 const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().applyTables(bgra, width, height, stride, tables);
+    ActiveKernels().applyTables(bgra, width, height, stride, tables, cancellation);
 }
 
-void ApplyGradientMap(std::uint8_t* bgra, int width, int height, int stride,
-                      const std::array<std::uint8_t, 768>& table) noexcept
+void ApplyGradientMap(std::uint8_t* bgra, int width, int height, int stride, const std::array<std::uint8_t, 768>& table,
+                      const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().applyGradientMap(bgra, width, height, stride, table);
+    ActiveKernels().applyGradientMap(bgra, width, height, stride, table, cancellation);
 }
 
 void ApplyGrain(std::uint8_t* bgra, int width, int height, int stride, const GrainSettings& grain, double originX,
-                double originY, double unitsPerPixel) noexcept
+                double originY, double unitsPerPixel, const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().applyGrain(bgra, width, height, stride, grain, originX, originY, unitsPerPixel);
+    ActiveKernels().applyGrain(bgra, width, height, stride, grain, originX, originY, unitsPerPixel, cancellation);
 }
 
 void AddNoise(std::uint8_t* bgra, int width, int height, int stride, float amount, bool gaussian, bool monochromatic,
-              std::uint32_t seed) noexcept
+              std::uint32_t seed, const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().addNoise(bgra, width, height, stride, amount, gaussian, monochromatic, seed);
+    ActiveKernels().addNoise(bgra, width, height, stride, amount, gaussian, monochromatic, seed, cancellation);
 }
 
-void LensDistort(const std::uint8_t* source, std::uint8_t* destination, int width, int height, int stride,
-                 double k) noexcept
+void LensDistort(const std::uint8_t* source, std::uint8_t* destination, int width, int height, int stride, double k,
+                 const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().lensDistort(source, destination, width, height, stride, k);
+    ActiveKernels().lensDistort(source, destination, width, height, stride, k, cancellation);
 }
 
 // ── Hue / Saturation ──────────────────────────────────────────────────────
@@ -993,8 +990,12 @@ double ShiftedHue(double hue, const HueSaturationSettings& settings) noexcept
     return Wrap360(hue + shift);
 }
 
-std::vector<float> ColorCube(const HueSaturationSettings& settings)
+std::vector<float> ColorCube(const HueSaturationSettings& settings, const CancelToken& cancellation)
 {
+    if (cancellation.IsCancelled())
+    {
+        return {};
+    }
     const std::array<HueResponse, 361> response = HueResponses(settings);
     std::vector<float> values(static_cast<std::size_t>(kCubeDimension) * kCubeDimension * kCubeDimension * 4, 0.0f);
     std::size_t index = 0;
@@ -1003,6 +1004,10 @@ std::vector<float> ColorCube(const HueSaturationSettings& settings)
     {
         for (int green = 0; green < kCubeDimension; ++green)
         {
+            if (cancellation.IsCancelled())
+            {
+                return {};
+            }
             for (int red = 0; red < kCubeDimension; ++red)
             {
                 const std::array<double, 3> color =
@@ -1018,9 +1023,10 @@ std::vector<float> ColorCube(const HueSaturationSettings& settings)
     return values;
 }
 
-void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std::vector<float>& cube) noexcept
+void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std::vector<float>& cube,
+               const CancelToken& cancellation) noexcept
 {
-    ActiveKernels().applyCube(bgra, width, height, stride, cube);
+    ActiveKernels().applyCube(bgra, width, height, stride, cube, cancellation);
 }
 
 // ── Straight-color blends ─────────────────────────────────────────────────
@@ -1104,9 +1110,10 @@ std::array<double, 3> BlendStraight(const std::array<double, 3>& backdrop, const
 // ── Whole rasters ─────────────────────────────────────────────────────────
 
 Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, double originX, double originY,
-                       double unitsPerPixel)
+                       double unitsPerPixel, const CancelToken& cancellation)
 {
-    if (!adjustment.IsValid() || !image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
+    if (cancellation.IsCancelled() || !adjustment.IsValid() || !image.HasStorage() ||
+        image.Format() != RasterFormat::Bgra8888)
     {
         return {};
     }
@@ -1122,20 +1129,16 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return image;
         }
-        std::vector<float> cube;
-        try
-        {
-            cube = ColorCube(settings);
-        }
-        catch (const std::bad_alloc&)
+        const std::vector<float> cube = ColorCube(settings, cancellation);
+        if (cube.empty())
         {
             return {};
         }
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyCube(bytes.Data(), width, height, width * 4, cube);
+        ApplyCube(bytes.Data(), width, height, width * 4, cube, cancellation);
         break;
     }
     case AdjustmentKind::Levels:
@@ -1143,32 +1146,33 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return image;
         }
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyTables(bytes.Data(), width, height, width * 4, LevelsTables(adjustment.levels));
+        ApplyTables(bytes.Data(), width, height, width * 4, LevelsTables(adjustment.levels), cancellation);
         break;
     case AdjustmentKind::Curves:
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyTables(bytes.Data(), width, height, width * 4, CurvesTables(adjustment.curves));
+        ApplyTables(bytes.Data(), width, height, width * 4, CurvesTables(adjustment.curves), cancellation);
         break;
     case AdjustmentKind::Exposure:
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyTables(bytes.Data(), width, height, width * 4, ExposureTables(adjustment.Exposure()));
+        ApplyTables(bytes.Data(), width, height, width * 4, ExposureTables(adjustment.Exposure()), cancellation);
         break;
     case AdjustmentKind::GradientMap:
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyGradientMap(bytes.Data(), width, height, width * 4, GradientMapTable(adjustment.GradientMap()));
+        ApplyGradientMap(bytes.Data(), width, height, width * 4, GradientMapTable(adjustment.GradientMap()),
+                         cancellation);
         break;
     case AdjustmentKind::Grain:
     {
@@ -1177,15 +1181,16 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return image;
         }
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        ApplyGrain(bytes.Data(), width, height, width * 4, grain, originX, originY, unitsPerPixel);
+        ApplyGrain(bytes.Data(), width, height, width * 4, grain, originX, originY, unitsPerPixel, cancellation);
         break;
     }
     }
-    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
+    return cancellation.IsCancelled() ? Raster{}
+                                      : Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
 FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment)
@@ -1226,19 +1231,31 @@ LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterS
     return adjustment;
 }
 
-LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept
+LevelsHistogram Histogram(const Raster& image, const Raster* coverage, const CancelToken& cancellation) noexcept
 {
     LevelsHistogram bins{};
-    const std::uint8_t* pixels = image.Data();
-    if (pixels == nullptr || image.Format() != RasterFormat::Bgra8888)
+    if (cancellation.IsCancelled() || !image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
+    {
+        return {};
+    }
+    const PixelBuffer privatePixels =
+        image.IsMaterialized() ? PixelBuffer{} : CopyRasterPixelsForWork(image, cancellation);
+    const std::uint8_t* pixels = image.IsMaterialized() ? image.Data() : privatePixels.Data();
+    if (pixels == nullptr)
     {
         return bins;
     }
     const std::uint8_t* mask = nullptr;
     int maskStride = 0;
+    PixelBuffer privateMask;
     if (coverage != nullptr)
     {
-        mask = coverage->Data();
+        if (coverage->Format() != RasterFormat::Gray8)
+        {
+            return {};
+        }
+        privateMask = coverage->IsMaterialized() ? PixelBuffer{} : CopyRasterPixelsForWork(*coverage, cancellation);
+        mask = coverage->IsMaterialized() ? coverage->Data() : privateMask.Data();
         maskStride = coverage->Stride();
         if (mask == nullptr || coverage->Width() != image.Width() || coverage->Height() != image.Height())
         {
@@ -1250,6 +1267,10 @@ LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept
         const std::uint8_t* row = pixels + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride());
         for (int x = 0; x < image.Width(); ++x)
         {
+            if ((x & 255) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             const std::uint8_t* p = row + static_cast<std::size_t>(x) * 4u;
             if (p[3] == 0)
             {
@@ -1269,17 +1290,22 @@ LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept
             }
         }
     }
-    return bins;
+    return cancellation.IsCancelled() ? LevelsHistogram{} : bins;
 }
 
-Raster GaussianBlurred(const Raster& image, double sigma)
+Raster GaussianBlurred(const Raster& image, double sigma, const CancelToken& cancellation)
 {
-    return ImageFilters::GaussianBlur(image, sigma);
+    return ImageFilters::GaussianBlur(image, sigma, cancellation);
 }
 
-Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
+Raster MotionBlurred(const Raster& image, double angleDegrees, double distance, const CancelToken& cancellation)
 {
-    const std::uint8_t* source = image.Data();
+    if (cancellation.IsCancelled() || !std::isfinite(angleDegrees) || !std::isfinite(distance) || distance < 0)
+    {
+        return {};
+    }
+    const Raster prepared = ContiguousRasterForWork(image, cancellation);
+    const std::uint8_t* source = prepared.Data();
     if (source == nullptr || image.Format() != RasterFormat::Bgra8888)
     {
         return {};
@@ -1288,7 +1314,7 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
     const int height = image.Height();
     const int stride = image.Stride();
     // Photoshop smears evenly along the whole distance; the streak is sampled at most every pixel, up to 96 taps.
-    const int samples = std::max(1, std::min(96, static_cast<int>(std::lround(distance))));
+    const int samples = std::max(1, static_cast<int>(std::lround(std::min(96.0, distance))));
     if (samples == 1)
     {
         return image;
@@ -1307,6 +1333,10 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
     {
         for (int x = 0; x < width; ++x)
         {
+            if ((x & 7) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             std::array<double, 4> sum{};
             for (int i = 0; i < samples; ++i)
             {
@@ -1327,17 +1357,19 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
             }
         }
     }
-    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
+    return cancellation.IsCancelled() ? Raster{}
+                                      : Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
 Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& given, double scale, std::uint32_t seed,
-                 const Raster* coverage, bool* noSource)
+                 const Raster* coverage, bool* noSource, const CancelToken& cancellation)
 {
     if (noSource != nullptr)
     {
         *noSource = false;
     }
-    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !std::isfinite(scale) || !(scale > 0))
+    if (cancellation.IsCancelled() || !image.HasStorage() || image.Format() != RasterFormat::Bgra8888 ||
+        !std::isfinite(scale) || !(scale > 0))
     {
         return {};
     }
@@ -1348,7 +1380,8 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
         settings.grain.seed = seed;
         LayerAdjustment record;
         record.kind = adjustment.value();
-        return ApplyAdjustment(AdjustmentWithSettings(std::move(record), settings), image, 0.0, 0.0, 1.0 / scale);
+        return ApplyAdjustment(AdjustmentWithSettings(std::move(record), settings), image, 0.0, 0.0, 1.0 / scale,
+                               cancellation);
     }
     const int width = image.Width();
     const int height = image.Height();
@@ -1363,25 +1396,31 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
     case FilterKind::HueSaturation:
         return {}; // returned above
     case FilterKind::GaussianBlur:
-        return GaussianBlurred(image, settings.radius * scale);
+        return GaussianBlurred(image, settings.radius * scale, cancellation);
     case FilterKind::MotionBlur:
-        return MotionBlurred(image, settings.angle, settings.distance * scale);
+        return MotionBlurred(image, settings.angle, settings.distance * scale, cancellation);
     case FilterKind::AddNoise:
-        if (!CopyPixels(image, bytes))
+        if (!CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
         AddNoise(bytes.Data(), width, height, width * 4, static_cast<float>(settings.amount), settings.gaussian,
-                 settings.monochromatic, seed);
+                 settings.monochromatic, seed, cancellation);
         break;
     case FilterKind::ContentAwareFill:
     {
-        if (coverage == nullptr || coverage->Data() == nullptr || coverage->Width() != width ||
-            coverage->Height() != height || !CopyPixels(image, bytes))
+        if (coverage == nullptr || coverage->Format() != RasterFormat::Gray8 || coverage->Width() != width ||
+            coverage->Height() != height || !CopyPixels(image, bytes, cancellation))
         {
             return {};
         }
-        const int filled = ContentFill(bytes.Data(), width, height, width * 4, coverage->Data(), coverage->Stride());
+        const Raster preparedMask = ContiguousRasterForWork(*coverage, cancellation);
+        if (!preparedMask.HasStorage())
+        {
+            return {};
+        }
+        const int filled = ContentFill(bytes.Data(), width, height, width * 4, preparedMask.Data(),
+                                       preparedMask.Stride(), cancellation);
         if (filled != 1)
         {
             if (noSource != nullptr)
@@ -1395,7 +1434,7 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
     case FilterKind::LensCorrection:
     {
         PixelBuffer source;
-        if (!CopyPixels(image, source))
+        if (!CopyPixels(image, source, cancellation))
         {
             return {};
         }
@@ -1405,34 +1444,45 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
             return {};
         }
         // The warp is relative to the image's own size, so a downscaled preview bends the same way.
-        LensDistort(source.Data(), bytes.Data(), width, height, width * 4, settings.distortion / 100 * kLensStrength);
+        LensDistort(source.Data(), bytes.Data(), width, height, width * 4, settings.distortion / 100 * kLensStrength,
+                    cancellation);
         break;
     }
     }
-    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
+    return cancellation.IsCancelled() ? Raster{}
+                                      : Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
-Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage)
+Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage,
+                    const CancelToken& cancellation)
 {
-    if (!adjusted.HasStorage() || !original.HasStorage() || adjusted.Width() != original.Width() ||
-        adjusted.Height() != original.Height() || coverage.Data() == nullptr || coverage.Width() != adjusted.Width() ||
-        coverage.Height() != adjusted.Height() || adjusted.Format() != RasterFormat::Bgra8888)
+    if (cancellation.IsCancelled() || !adjusted.HasStorage() || !original.HasStorage() ||
+        adjusted.Width() != original.Width() || adjusted.Height() != original.Height() || !coverage.HasStorage() ||
+        coverage.Width() != adjusted.Width() || coverage.Height() != adjusted.Height() ||
+        adjusted.Format() != RasterFormat::Bgra8888 || original.Format() != RasterFormat::Bgra8888 ||
+        coverage.Format() != RasterFormat::Gray8)
     {
         return {};
     }
     PixelBuffer top;
-    PixelBuffer base;
-    if (!CopyPixels(adjusted, top) || !CopyPixels(original, base))
+    const Raster base = ContiguousRasterForWork(original, cancellation);
+    const Raster preparedMask = ContiguousRasterForWork(coverage, cancellation);
+    if (!base.HasStorage() || !preparedMask.HasStorage() || !CopyPixels(adjusted, top, cancellation))
     {
         return {};
     }
     const int width = adjusted.Width();
     const int height = adjusted.Height();
-    const std::uint8_t* mask = coverage.Data();
+    const std::uint8_t* mask = preparedMask.Data();
+    const std::uint8_t* originalBytes = base.Data();
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
         {
+            if ((x & 255) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             const double c = mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(coverage.Stride()) +
                                   static_cast<std::size_t>(x)] /
                              255.0;
@@ -1441,16 +1491,16 @@ Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster
             for (std::size_t k = 0; k < 4; ++k)
             {
                 top[offset + k] =
-                    static_cast<std::uint8_t>(std::lround(top[offset + k] * c + base[offset + k] * (1.0 - c)));
+                    static_cast<std::uint8_t>(std::lround(top[offset + k] * c + originalBytes[offset + k] * (1.0 - c)));
             }
         }
     }
-    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(top));
+    return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(top));
 }
 
-Raster Downscaled(const Raster& image, int maxSide)
+Raster Downscaled(const Raster& image, int maxSide, const CancelToken& cancellation)
 {
-    if (!image.HasStorage() || maxSide < 1)
+    if (cancellation.IsCancelled() || !image.HasStorage() || maxSide < 1)
     {
         return {};
     }
@@ -1466,7 +1516,7 @@ Raster Downscaled(const Raster& image, int maxSide)
     const int outHeight = std::max(1, static_cast<int>(std::lround(height * factor)));
     const int channels = image.Channels();
     PixelBuffer source;
-    if (!CopyPixels(image, source))
+    if (!CopyPixels(image, source, cancellation))
     {
         return {};
     }
@@ -1478,10 +1528,18 @@ Raster Downscaled(const Raster& image, int maxSide)
     }
     for (int y = 0; y < outHeight; ++y)
     {
+        if (cancellation.IsCancelled())
+        {
+            return {};
+        }
         const int y0 = (y * height) / outHeight;
         const int y1 = std::max(y0 + 1, ((y + 1) * height) / outHeight);
         for (int x = 0; x < outWidth; ++x)
         {
+            if ((x & 31) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
             const int x0 = (x * width) / outWidth;
             const int x1 = std::max(x0 + 1, ((x + 1) * width) / outWidth);
             for (int c = 0; c < channels; ++c)
@@ -1491,6 +1549,10 @@ Raster Downscaled(const Raster& image, int maxSide)
                 {
                     for (int sx = x0; sx < x1; ++sx)
                     {
+                        if ((sx & 255) == 0 && cancellation.IsCancelled())
+                        {
+                            return {};
+                        }
                         sum += source[(static_cast<std::size_t>(sy) * static_cast<std::size_t>(width) +
                                        static_cast<std::size_t>(sx)) *
                                           static_cast<std::size_t>(channels) +
@@ -1504,30 +1566,72 @@ Raster Downscaled(const Raster& image, int maxSide)
             }
         }
     }
-    return Raster::Adopt(outWidth, outHeight, image.Format(), std::move(out));
+    return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(outWidth, outHeight, image.Format(), std::move(out));
 }
 
-Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed)
+Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed, const CancelToken& cancellation)
 {
-    Trimmed result{image, placed};
-    const std::uint8_t* data = image.Data();
-    if (data == nullptr || image.Format() != RasterFormat::Bgra8888)
+    const Raster prepared = ContiguousRasterForWork(image, cancellation);
+    if (!prepared.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
-        return result;
+        return {};
     }
+    Trimmed result{image, placed};
     const int width = image.Width();
     const int height = image.Height();
-    const GridRect crop = AlphaBounds(data, width, height, image.Stride());
+    int left = width;
+    int right = 0;
+    int top = height;
+    int bottom = 0;
+    const std::uint8_t* data = prepared.Data();
+    for (int y = 0; y < height; ++y)
+    {
+        if (cancellation.IsCancelled())
+        {
+            return {};
+        }
+        const std::uint8_t* row = data + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.Stride());
+        int first = 0;
+        while (first < width && row[static_cast<std::size_t>(first) * 4u + 3u] == 0)
+        {
+            if ((first & 255) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
+            ++first;
+        }
+        if (first == width)
+        {
+            continue;
+        }
+        int last = width;
+        while (last > first && row[static_cast<std::size_t>(last - 1) * 4u + 3u] == 0)
+        {
+            if ((last & 255) == 0 && cancellation.IsCancelled())
+            {
+                return {};
+            }
+            --last;
+        }
+        left = std::min(left, first);
+        right = std::max(right, last);
+        top = std::min(top, y);
+        bottom = y + 1;
+    }
+    if (cancellation.IsCancelled())
+    {
+        return {};
+    }
+    const GridRect crop{left, top, right - left, bottom - top};
     if (crop.Empty() || (crop.x == 0 && crop.y == 0 && crop.width == width && crop.height == height))
     {
         return result;
     }
-    const Raster cropped = image.Crop(crop.x, crop.y, crop.width, crop.height, 0);
-    if (!cropped.HasStorage())
+    result.image = CropRasterForWork(prepared, crop, 0, cancellation);
+    if (!result.image.HasStorage())
     {
-        return result;
+        return {};
     }
-    result.image = cropped;
     result.transform = PlacementOfRect(placed, width, height, crop);
     result.cropX = crop.x;
     result.cropY = crop.y;
@@ -1597,33 +1701,39 @@ namespace
 }
 } // namespace
 
-int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8_t* mask, int maskStride) noexcept
+namespace
 {
-    if (pixels == nullptr || mask == nullptr || w < 1 || h < 1)
+int ContentFillUnchecked(std::uint8_t* pixels, int w, int h, int stride, const std::uint8_t* mask, int maskStride,
+                         const CancelToken& cancellation)
+{
+    if (cancellation.IsCancelled())
+    {
+        return -2;
+    }
+    if (pixels == nullptr || mask == nullptr || w < 1 || h < 1 || w > kMaxCanvasSide || h > kMaxCanvasSide ||
+        stride < w * 4 || maskStride < w)
     {
         return 0;
     }
     const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
-    std::vector<std::uint8_t> known;
-    std::vector<std::uint8_t> target;
-    std::vector<std::uint8_t> valid;
-    std::vector<std::uint8_t> queued;
-    std::vector<int> donors;
-    std::vector<int> queue;
-    std::vector<int> chosen;
-    try
+    const auto known = std::make_unique_for_overwrite<std::uint8_t[]>(n);
+    const auto target = std::make_unique_for_overwrite<std::uint8_t[]>(n);
+    const auto valid = std::make_unique_for_overwrite<std::uint8_t[]>(n);
+    const auto queued = std::make_unique_for_overwrite<std::uint8_t[]>(n);
+    const auto donors = std::make_unique_for_overwrite<int[]>(n);
+    const auto queue = std::make_unique_for_overwrite<int[]>(n);
+    const auto chosen = std::make_unique_for_overwrite<int[]>(n);
+    // known/target are filled on the first pass; queue/donors are read only below their written counts.
+    for (std::size_t start = 0; start < n; start += 4096)
     {
-        known.assign(n, 0);
-        target.assign(n, 0);
-        valid.assign(n, 0);
-        queued.assign(n, 0);
-        donors.assign(n, 0);
-        queue.assign(n, 0);
-        chosen.assign(n, -1);
-    }
-    catch (const std::bad_alloc&)
-    {
-        return -1;
+        if (cancellation.IsCancelled())
+        {
+            return -2;
+        }
+        const std::size_t count = std::min(std::size_t{4096}, n - start);
+        std::fill_n(valid.get() + start, count, std::uint8_t{0});
+        std::fill_n(queued.get() + start, count, std::uint8_t{0});
+        std::fill_n(chosen.get() + start, count, -1);
     }
     const int radius = (w >= 5 && h >= 5) ? 2 : 0;
     std::size_t missing = 0;
@@ -1637,6 +1747,10 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
     {
         for (int x = 0; x < w; ++x)
         {
+            if ((x & 31) == 0 && cancellation.IsCancelled())
+            {
+                return -2;
+            }
             const std::size_t p =
                 static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
             target[p] = mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(maskStride) +
@@ -1651,12 +1765,16 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
     }
     if (missing == 0)
     {
-        return 1;
+        return cancellation.IsCancelled() ? -2 : 1;
     }
     for (int y = 0; y < h; ++y)
     {
         for (int x = 0; x < w; ++x)
         {
+            if ((x & 31) == 0 && cancellation.IsCancelled())
+            {
+                return -2;
+            }
             const std::size_t p =
                 static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
             if (!known[p])
@@ -1694,6 +1812,10 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
     {
         for (int x = 0; x < w; ++x)
         {
+            if ((x & 31) == 0 && cancellation.IsCancelled())
+            {
+                return -2;
+            }
             const std::size_t p =
                 static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
             if (target[p] &&
@@ -1710,6 +1832,10 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
     {
         while (head < tail)
         {
+            if (cancellation.IsCancelled())
+            {
+                return -2;
+            }
             const int p = queue[head++];
             const int x = p % w;
             const int y = p / w;
@@ -1737,7 +1863,7 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
                 {
                     continue;
                 }
-                const double s = PatchMatch(pixels, stride, known.data(), w, h, p, q, radius);
+                const double s = PatchMatch(pixels, stride, known.get(), w, h, p, q, radius);
                 if (best < 0 || s < score)
                 {
                     score = s;
@@ -1760,7 +1886,7 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
                     continue;
                 }
                 const int q = qy * w + qx;
-                const double s = PatchMatch(pixels, stride, known.data(), w, h, p, q, radius);
+                const double s = PatchMatch(pixels, stride, known.get(), w, h, p, q, radius);
                 if (s < score)
                 {
                     score = s;
@@ -1788,6 +1914,10 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
         // A selected area that only transparency touches starts from the best random donor, then spreads.
         while (scan < n && (!target[scan] || known[scan]))
         {
+            if ((scan & 255u) == 0 && cancellation.IsCancelled())
+            {
+                return -2;
+            }
             ++scan;
         }
         if (scan >= n)
@@ -1797,6 +1927,27 @@ int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8
         queue[tail++] = static_cast<int>(scan);
         queued[scan] = 1;
     }
-    return 1;
+    return cancellation.IsCancelled() ? -2 : 1;
+}
+std::int32_t TryContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8_t* mask, int maskStride,
+                            const CancelToken& cancellation, int& result) noexcept
+{
+    try
+    {
+        result = ContentFillUnchecked(pixels, w, h, stride, mask, maskStride, cancellation);
+        return 0;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return static_cast<std::int32_t>(0x8007000eU); // E_OUTOFMEMORY; caller fails the complete operation.
+    }
+}
+} // namespace
+
+int ContentFill(std::uint8_t* pixels, int w, int h, int stride, const std::uint8_t* mask, int maskStride,
+                const CancelToken& cancellation) noexcept
+{
+    int result = -1;
+    return TryContentFill(pixels, w, h, stride, mask, maskStride, cancellation, result) < 0 ? -1 : result;
 }
 } // namespace Adjust

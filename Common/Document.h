@@ -628,6 +628,10 @@ class SelectionLoops
     SelectionLoops(std::vector<SelectionLoop> loops)
         : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))
     {
+        for (const SelectionLoop& loop : Get())
+        {
+            _pointCount += loop.size(); // Owned Vec2 allocations cannot together exceed addressable bytes.
+        }
     }
     [[nodiscard]] const std::vector<SelectionLoop>& Get() const noexcept
     {
@@ -662,6 +666,11 @@ class SelectionLoops
     {
         return Get().size();
     }
+    // Computed by the geometry producer. Admission and snapshot readers never traverse the outline.
+    [[nodiscard]] std::uint64_t PointCount() const noexcept
+    {
+        return _loops ? _pointCount : 0;
+    }
     [[nodiscard]] const SelectionLoop& operator[](std::size_t index) const noexcept
     {
         return Get()[index];
@@ -669,6 +678,7 @@ class SelectionLoops
 
   private:
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
+    std::uint64_t _pointCount = 0;
 };
 
 // A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
@@ -1069,7 +1079,7 @@ struct FilterSettings
     LevelsSettings levels{};
     HueSaturationSettings hsv{};
     [[nodiscard]] bool operator==(const FilterSettings&) const noexcept = default;
-    [[nodiscard]] FilterSettings Normalized() const noexcept;
+    [[nodiscard]] FilterSettings Normalized() const;
 };
 
 enum class LevelsSample : std::uint8_t

@@ -1,6 +1,7 @@
 #include "KernelDispatchTests.h"
 
 #include "../../Common/Adjust.h"
+#include "../../Common/Executor.h"
 #include "../../Common/Kernels.h"
 
 #include "../../Common/Kernels_Scalar_Adjust.h"
@@ -9,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 namespace
 {
@@ -167,7 +169,7 @@ int RunKernelDispatchTests()
     std::array<std::uint8_t, stride * height> tablePixels{10, 20,   30,   255,  40,   50, 60,   128,  17,   29,  43,
                                                           0,  0xA1, 0xA2, 0xA3, 0xA4, 90, 80,   70,   255,  60,  50,
                                                           40, 128,  31,   41,   51,   0,  0xB1, 0xB2, 0xB3, 0xB4};
-    scalarTable->applyTables(tablePixels.data(), width, height, stride, constantTables);
+    scalarTable->applyTables(tablePixels.data(), width, height, stride, constantTables, CancelToken{});
     constexpr std::array<std::uint8_t, stride * height> expectedTablePixels{
         64, 128, 192, 255, 32, 64, 96, 128, 17, 29, 43, 0, 0xA1, 0xA2, 0xA3, 0xA4,
         64, 128, 192, 255, 32, 64, 96, 128, 31, 41, 51, 0, 0xB1, 0xB2, 0xB3, 0xB4};
@@ -183,11 +185,91 @@ int RunKernelDispatchTests()
     std::array<std::uint8_t, stride * height> gradientPixels{0,  0,    0,    255,  64,   64,  64,   128,  17,   29,  43,
                                                              0,  0xC1, 0xC2, 0xC3, 0xC4, 255, 255,  255,  255,  32,  32,
                                                              32, 128,  31,   41,   51,   0,   0xD1, 0xD2, 0xD3, 0xD4};
-    scalarTable->applyGradientMap(gradientPixels.data(), width, height, stride, gradient);
+    scalarTable->applyGradientMap(gradientPixels.data(), width, height, stride, gradient, CancelToken{});
     constexpr std::array<std::uint8_t, stride * height> expectedGradientPixels{
         0,   0, 255, 255, 64, 0, 64, 128, 17, 29, 43, 0, 0xC1, 0xC2, 0xC3, 0xC4,
         255, 0, 0,   255, 32, 0, 96, 128, 31, 41, 51, 0, 0xD1, 0xD2, 0xD3, 0xD4};
     expect(gradientPixels == expectedGradientPixels, "gradient-map-legacy-midpoint-alpha-transparent-padding");
+
+    const auto initializePaddedPixels = [](std::array<std::uint8_t, stride * height>& pixels, std::uint8_t padding)
+    {
+        pixels.fill(padding);
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
+                std::uint8_t* pixel = pixels.data() + y * stride + x * 4;
+                pixel[0] = 40;
+                pixel[1] = 60;
+                pixel[2] = 80;
+                pixel[3] = 255;
+            }
+        }
+    };
+    const auto hasPadding = [](const std::array<std::uint8_t, stride * height>& pixels, std::uint8_t padding)
+    {
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = width * 4; x < stride; ++x)
+            {
+                if (pixels[static_cast<std::size_t>(y * stride + x)] != padding)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    GrainSettings grain{};
+    grain.amount = 100;
+    grain.size = 4;
+    grain.roughness = 50;
+    std::vector<float> cube(
+        static_cast<std::size_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension * Adjust::kCubeDimension * 4, 0.5f);
+    std::array<std::uint8_t, stride * height> grainPixels{};
+    initializePaddedPixels(grainPixels, 0xB1);
+    scalarTable->applyGrain(grainPixels.data(), width, height, stride, grain, 0, 0, 1, CancelToken{});
+    expect(hasPadding(grainPixels, 0xB1), "apply-grain-odd-width-padding");
+    std::array<std::uint8_t, stride * height> noisePixels{};
+    initializePaddedPixels(noisePixels, 0xB2);
+    scalarTable->addNoise(noisePixels.data(), width, height, stride, 50, false, false, 17, CancelToken{});
+    expect(hasPadding(noisePixels, 0xB2), "add-noise-odd-width-padding");
+    std::array<std::uint8_t, stride * height> cubePixels{};
+    initializePaddedPixels(cubePixels, 0xB3);
+    scalarTable->applyCube(cubePixels.data(), width, height, stride, cube, CancelToken{});
+    expect(hasPadding(cubePixels, 0xB3), "apply-cube-odd-width-padding");
+    std::array<std::uint8_t, stride * height> lensSource{};
+    initializePaddedPixels(lensSource, 0xB4);
+    std::array<std::uint8_t, stride * height> lensDestination{};
+    lensDestination.fill(0xB5);
+    scalarTable->lensDistort(lensSource.data(), lensDestination.data(), width, height, stride, 0.2, CancelToken{});
+    expect(hasPadding(lensDestination, 0xB5), "lens-distort-odd-width-destination-padding");
+
+    CancelSource cancelledSource;
+    expect(cancelledSource.Cancel(), "cancel-source-requested");
+    const CancelToken cancelled = cancelledSource.Token();
+    std::array<std::uint8_t, stride * height> cancelledPixels{};
+    cancelledPixels.fill(0x5A);
+    const auto originalCancelledPixels = cancelledPixels;
+    scalarTable->applyTables(cancelledPixels.data(), width, height, stride, constantTables, cancelled);
+    const bool tablesCancelledUntouched = cancelledPixels == originalCancelledPixels;
+    scalarTable->applyGradientMap(cancelledPixels.data(), width, height, stride, gradient, cancelled);
+    const bool gradientCancelledUntouched = cancelledPixels == originalCancelledPixels;
+    scalarTable->applyGrain(cancelledPixels.data(), width, height, stride, grain, 0, 0, 1, cancelled);
+    const bool grainCancelledUntouched = cancelledPixels == originalCancelledPixels;
+    scalarTable->addNoise(cancelledPixels.data(), width, height, stride, 50, false, false, 17, cancelled);
+    const bool noiseCancelledUntouched = cancelledPixels == originalCancelledPixels;
+    std::array<std::uint8_t, stride * height> cancelledDestination{};
+    cancelledDestination.fill(0xA5);
+    const auto originalCancelledDestination = cancelledDestination;
+    scalarTable->lensDistort(cancelledPixels.data(), cancelledDestination.data(), width, height, stride, 0.2,
+                             cancelled);
+    const bool lensCancelledUntouched = cancelledDestination == originalCancelledDestination;
+    scalarTable->applyCube(cancelledPixels.data(), width, height, stride, cube, cancelled);
+    const bool cubeCancelledUntouched = cancelledPixels == originalCancelledPixels;
+    expect(tablesCancelledUntouched && gradientCancelledUntouched && grainCancelledUntouched &&
+               noiseCancelledUntouched && lensCancelledUntouched && cubeCancelledUntouched,
+           "scalar-pre-cancelled-calls-leave-output-untouched");
 
     expect(InitializeKernels(KernelIsa::Auto) == KernelSelection::Selected, "restore-auto-before-return");
     return failures;

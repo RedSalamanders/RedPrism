@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <array>
 #include <cstdint>
@@ -65,23 +66,25 @@ struct ChannelTables
 // ── Kernels on premultiplied BGRA (stride bytes per row) ──────────────────
 
 // Each color unpremultiplied, looked up between its two nearest table entries, premultiplied and clamped to the
-// alpha again (legacy levels_apply): alpha is kept and transparent pixels are left alone.
-void ApplyTables(std::uint8_t* bgra, int width, int height, int stride, const ChannelTables& tables) noexcept;
-void ApplyGradientMap(std::uint8_t* bgra, int width, int height, int stride,
-                      const std::array<std::uint8_t, 768>& table) noexcept;
+// alpha again (legacy levels_apply): alpha is kept and transparent pixels are left alone. Cancellation can leave
+// partial output; callers must discard it when the token is cancelled.
+void ApplyTables(std::uint8_t* bgra, int width, int height, int stride, const ChannelTables& tables,
+                 const CancelToken& cancellation = {}) noexcept;
+void ApplyGradientMap(std::uint8_t* bgra, int width, int height, int stride, const std::array<std::uint8_t, 768>& table,
+                      const CancelToken& cancellation = {}) noexcept;
 // Film grain: the same brightness change on all three channels, strongest in the midtones. Pixel (x, y) sits at
 // (originX + (x + 0.5) × unitsPerPixel, originY + (y + 0.5) × unitsPerPixel) and its grain depends only on that
 // position and the seed, so a piece of an image gets the same grain as that part of the whole.
 void ApplyGrain(std::uint8_t* bgra, int width, int height, int stride, const GrainSettings& grain, double originX,
-                double originY, double unitsPerPixel) noexcept;
+                double originY, double unitsPerPixel, const CancelToken& cancellation = {}) noexcept;
 // Noise on the colors, alpha untouched; uniform spans ±amount % of half the range, Gaussian's deviation is two
 // thirds of that; monochromatic adds one value to every channel. The same seed gives the same grain.
 void AddNoise(std::uint8_t* bgra, int width, int height, int stride, float amount, bool gaussian, bool monochromatic,
-              std::uint32_t seed) noexcept;
+              std::uint32_t seed, const CancelToken& cancellation = {}) noexcept;
 // Radial lens distortion: each destination pixel samples the source bilinearly at its offset from the center scaled
 // by (1 − k r²), r relative to the half diagonal; k > 0 pulls inward (barrel), k < 0 outward (pincushion).
-void LensDistort(const std::uint8_t* source, std::uint8_t* destination, int width, int height, int stride,
-                 double k) noexcept;
+void LensDistort(const std::uint8_t* source, std::uint8_t* destination, int width, int height, int stride, double k,
+                 const CancelToken& cancellation = {}) noexcept;
 // Remove Distortion at ±100 moves the corners by this share of their distance from the center.
 inline constexpr double kLensStrength = 0.35;
 
@@ -130,9 +133,10 @@ struct HueResponse
 [[nodiscard]] double ShiftedHue(double hue, const HueSaturationSettings& settings) noexcept;
 // The color cube (33 points per axis, red fastest, RGBA floats) built from the settings.
 inline constexpr int kCubeDimension = 33;
-[[nodiscard]] std::vector<float> ColorCube(const HueSaturationSettings& settings);
+[[nodiscard]] std::vector<float> ColorCube(const HueSaturationSettings& settings, const CancelToken& cancellation = {});
 // Straight colors through the cube, trilinearly (what CIColorCube does), premultiplied around the lookup.
-void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std::vector<float>& cube) noexcept;
+void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std::vector<float>& cube,
+               const CancelToken& cancellation = {}) noexcept;
 
 // ── Straight-color blends (the PDF formulas, modes as LayerBlendMode) ─────
 
@@ -145,30 +149,35 @@ void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std:
 // `originY` and `unitsPerPixel`); empty when the settings are invalid or memory runs out. Identity settings
 // return `image` itself.
 [[nodiscard]] Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, double originX = 0,
-                                     double originY = 0, double unitsPerPixel = 1);
+                                     double originY = 0, double unitsPerPixel = 1,
+                                     const CancelToken& cancellation = {});
 // A panel's settings for an adjustment record (every kind's own from the record), and the record with its kind's
 // settings taken from a panel.
 [[nodiscard]] FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment);
 [[nodiscard]] LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterSettings& settings);
 // The alpha-weighted histogram of an image, within `coverage` (Gray8 on the same grid) when given; an explicitly
 // empty coverage counts nothing.
-[[nodiscard]] LevelsHistogram Histogram(const Raster& image, const Raster* coverage) noexcept;
+[[nodiscard]] LevelsHistogram Histogram(const Raster& image, const Raster* coverage,
+                                        const CancelToken& cancellation = {}) noexcept;
 // Any kind on a raster: `scale` is pixels in `image` per original layer pixel (a downscaled preview blurs
 // proportionally less); `seed` is Add Noise's and Grain's pattern; `coverage` (Gray8 on the same grid) is the
 // selection Content-Aware Fill fills, which needs it. The Image menu's kinds run their adjustment layer's kernel
 // (`ApplyAdjustment`), Grain in layer pixels. Empty on failure, or when a fill found nothing to copy from.
 // When supplied, noSource is true only for a fill without donor patches; other failures leave it false.
 [[nodiscard]] Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& settings, double scale,
-                               std::uint32_t seed, const Raster* coverage = nullptr, bool* noSource = nullptr);
+                               std::uint32_t seed, const Raster* coverage = nullptr, bool* noSource = nullptr,
+                               const CancelToken& cancellation = {});
 // Content-Aware Fill (the legacy content_fill): selected pixels (`mask` nonzero) are synthesized from the
 // unselected opaque ones by coherent patch matching with a randomized search; unselected transparent pixels are
-// neither matched nor changed. 1 on success, 0 when no source patch exists, -1 when memory runs out.
+// neither matched nor changed. 1 on success, 0 when no source patch exists, -1 when memory runs out, -2 when cancelled.
+// On cancellation pixels may be partially written; the owner must discard this private buffer.
 [[nodiscard]] int ContentFill(std::uint8_t* bgra, int width, int height, int stride, const std::uint8_t* mask,
-                              int maskStride) noexcept;
+                              int maskStride, const CancelToken& cancellation = {}) noexcept;
 // coverage × adjusted + (1 − coverage) × original, so fully selected pixels stay exact and soft edges blend.
-[[nodiscard]] Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage);
+[[nodiscard]] Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage,
+                                  const CancelToken& cancellation = {});
 // A box-filtered copy no larger than `maxSide` on its longest side (`image` itself when it already fits).
-[[nodiscard]] Raster Downscaled(const Raster& image, int maxSide);
+[[nodiscard]] Raster Downscaled(const Raster& image, int maxSide, const CancelToken& cancellation = {});
 // `image` cropped to the pixels that are actually there, with the transform that keeps them in place and where the
 // crop started in the source grid.
 struct Trimmed
@@ -178,11 +187,13 @@ struct Trimmed
     int cropX = 0;
     int cropY = 0;
 };
-[[nodiscard]] Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed);
+[[nodiscard]] Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed,
+                                     const CancelToken& cancellation = {});
 // The room a blur needs around the layer: about three standard deviations, or half a streak.
 [[nodiscard]] double BlurMargin(FilterKind kind, const FilterSettings& settings) noexcept;
 // A Gaussian-blurred copy as the Gaussian Blur filter makes it (sigma = radius × scale).
-[[nodiscard]] Raster GaussianBlurred(const Raster& image, double sigma);
+[[nodiscard]] Raster GaussianBlurred(const Raster& image, double sigma, const CancelToken& cancellation = {});
 // An even streak of `distance` pixels along `angle` degrees (counterclockwise from horizontal on screen).
-[[nodiscard]] Raster MotionBlurred(const Raster& image, double angleDegrees, double distance);
+[[nodiscard]] Raster MotionBlurred(const Raster& image, double angleDegrees, double distance,
+                                   const CancelToken& cancellation = {});
 } // namespace Adjust

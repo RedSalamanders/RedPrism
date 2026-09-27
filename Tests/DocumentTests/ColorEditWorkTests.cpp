@@ -644,6 +644,59 @@ void CarriedMaskAndCompatibleMetadata()
                "metadata.compatible-edits-survive-targeted-apply");
     }
 }
+
+void MemoryPlanAndSelectionCount()
+{
+    SelectionLoops points{{Vec2{0, 0}, Vec2{4, 0}, Vec2{4, 4}, Vec2{0, 4}}, {Vec2{1, 1}, Vec2{2, 2}}};
+    const SelectionLoops shared = points;
+    SelectionLoops moved = std::move(points);
+    Expect(shared.PointCount() == 6 && moved.PointCount() == 6 && points.PointCount() == 0 &&
+               shared.Identity() == moved.Identity(),
+           "memory.selection-point-count-follows-shared-and-moved-geometry");
+
+    constexpr int side = 1024;
+    const Raster source = Raster::Make(side, side, RasterFormat::Bgra8888);
+    ColorEditJobInput input;
+    input.edit.original = source;
+    input.edit.preview = false;
+    input.edit.kind = FilterKind::GaussianBlur;
+    input.edit.settings.radius = 250;
+    const auto dense = ColorEditJobMemoryBytes(input);
+    constexpr std::uint64_t pixels = side * side;
+    Expect(dense && *dense >= pixels * 20 + 1501 * sizeof(double) && *dense < pixels * 21,
+           "memory.gaussian-reserves-output-float-intermediate-and-maximum-taps");
+    input.edit.original = Raster::MakeSparse(side, side, RasterFormat::Bgra8888, source, 0, 0, {}, 0);
+    const auto sparse = ColorEditJobMemoryBytes(input);
+    Expect(dense && sparse && *sparse - *dense == PixelBuffer::RequiredBytes(pixels * 4) &&
+               !input.edit.original.IsMaterialized(),
+           "memory.only-unassembled-source-adds-private-copy");
+    input.edit.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, side, side)};
+    const auto selected = ColorEditJobMemoryBytes(input);
+    Expect(selected && sparse && *selected - *sparse == PixelBuffer::RequiredBytes(pixels),
+           "memory.coverage-survives-the-gaussian-pass");
+    input.edit.kind = FilterKind::ContentAwareFill;
+    const auto fill = ColorEditJobMemoryBytes(input);
+    Expect(fill && *fill >= pixels * 21 && *fill < pixels * 22,
+           "memory.fill-reserves-seven-scratch-arrays-output-and-coverage");
+
+    input.edit.kind = FilterKind::Levels;
+    input.edit.settings = GammaLevels();
+    input.edit.original = source;
+    input.edit.selection.reset();
+    const auto levels = ColorEditJobMemoryBytes(input);
+    input.edit.preview = true;
+    input.edit.previewScale = 1;
+    input.edit.previewSource = source;
+    input.edit.previewTransform = input.edit.Placement();
+    input.edit.previewRaster = source;
+    const auto reused = ColorEditJobMemoryBytes(input);
+    Expect(levels && reused && *levels >= pixels * 4 && *reused < 256 * 1024,
+           "memory.exact-preview-reuse-does-not-reserve-resident-pixels-twice");
+    input.edit.previewRaster = Ramp(); // Wrong grid cannot count as an exact reusable preview.
+    Expect(ColorEditJobMemoryBytes(input) == levels, "memory.mismatched-preview-grid-reserves-real-filter-work");
+    input.edit.original = {};
+    Expect(!ColorEditJobMemoryBytes(input), "memory.empty-input-has-no-admissible-graph");
+}
 } // namespace
 
 int RunColorEditWorkTests()
@@ -662,5 +715,6 @@ int RunColorEditWorkTests()
     NoOpCancelledAndFailures();
     NoSourceAndSettingsApplyOnlyOnSuccess();
     CarriedMaskAndCompatibleMetadata();
+    MemoryPlanAndSelectionCount();
     return gFailures;
 }
