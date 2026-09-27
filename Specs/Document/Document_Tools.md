@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
@@ -131,6 +131,11 @@ edits must treat as "touch nothing", never as "touch everything". Loops from the
 Clipper2-normalized (outer loops and holes, no overlaps) and kept to a hundredth of a pixel; wand and mask traces are
 pixel-edge loops, outer loops clockwise and holes counterclockwise in top-left coordinates, which the nonzero rule
 fills exactly.
+
+Published loops use immutable shared storage (`SelectionLoops`,
+[`Document_Model.md`](Document_Model.md) › Immutable selection snapshots). Copies for previews and history share
+the points; geometry edits publish a replacement. This changes ownership only: winding, antialiasing, point
+values, emptiness and selection equality retain the same legacy semantics.
 
 `SelectionGeometry` (`Common/Selection.*`, Clipper2 from vcpkg) provides `Rect`; `Ellipse` (a polygon with segments
 about two pixels long, a multiple of four so the extremes are exact); `Bounds`; `Union`, `Subtract` and `Intersect`

@@ -1236,7 +1236,7 @@ void DocumentSession::AddLayerMask(bool revealing)
 {
     // Targeting the new mask is a target switch: a pending gradient applies first.
     ResolveGradient();
-    ImageLayer* layer = ActiveLayer();
+    ImageLayer* layer = MutableActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->mask.has_value())
     {
         return;
@@ -2742,7 +2742,7 @@ bool DocumentSession::BeginPixelMove(bool duplicate)
     raster->SetEditName(duplicate ? L"Duplicate Pixels" : L"Move Pixels");
     try
     {
-        // The selection copy (the loops being lifted) can still allocate; the raster itself no longer does.
+        // Pixel and immutable selection handles are shared with the document until the move is committed.
         _pixelMove = PixelMove{std::move(raster), _document->selection.value(), duplicate, Vec2{0, 0}};
     }
     catch (const std::bad_alloc&)
@@ -2985,7 +2985,7 @@ void DocumentSession::BeginSelectionTransform()
     edit.floating = FloatingTransform{
         source.id, before, beforeActive, floating.transform, lifted->image.Width(), lifted->image.Height()};
     _transformEdit = std::move(edit);
-    ++_editRevision;
+    NoteDocumentMutation();
 }
 
 std::optional<Affine2> DocumentSession::FloatingSelectionMap(const TransformEdit& edit) const noexcept

@@ -69,6 +69,11 @@ stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory m
 
 ## Test style
 
+DocumentTests also runs `generation.*` and `history-revision.*`: owning result tokens and document/restore serials,
+all session mutation families (including changes inside open edits), const session readers, shared immutable
+selection snapshots, and marking the revision actually saved after intervening edits, Undo, branching and trim.
+These are structural ownership/history checks; the existing legacy numeric tool goldens remain unchanged.
+
 Tests are in-process executables under `Tests/` with one `Expect(condition, "suite.case")` per observable fact,
 `PASS`/`FAIL` lines on stdout, and a nonzero exit on any failure. Goldens are numbers taken from the legacy Swift
 tests, never "looks fine". GPU tests create their own WARP device; nothing in `Tests/` opens a visible window. Fixture

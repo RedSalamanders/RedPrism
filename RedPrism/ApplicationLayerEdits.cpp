@@ -65,7 +65,7 @@ void Application::CloseRenameCard() noexcept
     }
 }
 
-ImageLayer* Application::OpacityEditLayer() noexcept
+const ImageLayer* Application::OpacityEditLayer() noexcept
 {
     // The typed edit's layer while it still shows the previewed value; anything else changed it, and the edit is
     // over.
@@ -74,7 +74,7 @@ ImageLayer* Application::OpacityEditLayer() noexcept
         _opacityEdit.reset();
         return nullptr;
     }
-    for (ImageLayer& layer : _session.Document().value().layers)
+    for (const ImageLayer& layer : _session.Document().value().layers)
     {
         if (layer.id == _opacityEdit->layer)
         {
@@ -91,7 +91,7 @@ ImageLayer* Application::OpacityEditLayer() noexcept
 
 void Application::CloseOpacityEdit() noexcept
 {
-    ImageLayer* layer = OpacityEditLayer();
+    const ImageLayer* layer = OpacityEditLayer();
     if (layer == nullptr)
     {
         return;
@@ -104,9 +104,12 @@ void Application::CloseOpacityEdit() noexcept
     }
     // History still holds the start value: the previewed one becomes its own entry before anything else records.
     // The field keeps its text, so its Enter or focus loss may still commit this value.
-    layer->opacity = edit.start;
+    if (!_session.PreviewLayerOpacity(edit.layer, edit.start))
+    {
+        return;
+    }
     _session.BeginEdit(L"Layer Opacity");
-    layer->opacity = edit.shown;
+    (void)_session.PreviewLayerOpacity(edit.layer, edit.shown);
     _session.EndEdit();
     _opacityRecorded = edit.shown;
     DocumentChanged();
@@ -121,7 +124,7 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
     }
     const double value = std::clamp(opacity, 0.0, 1.0);
     const std::optional<double> recorded = std::exchange(_opacityRecorded, std::nullopt);
-    ImageLayer* layer = OpacityEditLayer();
+    const ImageLayer* layer = OpacityEditLayer();
     switch (phase)
     {
     case ChromeEditPhase::Preview:
@@ -137,7 +140,11 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
             }
             _opacityEdit = OpacityEdit{layer->id, layer->opacity, layer->opacity};
         }
-        layer->opacity = value;
+        if (!_session.PreviewLayerOpacity(layer->id, value))
+        {
+            _opacityEdit.reset();
+            return;
+        }
         _opacityEdit->shown = value;
         break;
     case ChromeEditPhase::Commit:
@@ -146,9 +153,12 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
             // One entry from the value before the first preview to the committed one (none when they are equal).
             const OpacityEdit edit = _opacityEdit.value();
             _opacityEdit.reset();
-            layer->opacity = edit.start;
+            if (!_session.PreviewLayerOpacity(edit.layer, edit.start))
+            {
+                break;
+            }
             _session.BeginEdit(L"Layer Opacity");
-            layer->opacity = value;
+            (void)_session.PreviewLayerOpacity(edit.layer, value);
             _session.EndEdit();
         }
         else if (recorded != value)
@@ -162,7 +172,7 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
         // Escape restores the value history holds; an edit that already closed keeps its entry.
         if (layer != nullptr)
         {
-            layer->opacity = _opacityEdit->start;
+            (void)_session.PreviewLayerOpacity(_opacityEdit->layer, _opacityEdit->start);
         }
         _opacityEdit.reset();
         break;

@@ -117,11 +117,9 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
     layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
     layer.transform.origin = origin;
     layer.transform.rotation = rotation;
-    session.BeginEdit(L"Import Image");
-    session.Document().value().layers.push_back(layer);
-    session.EndEdit();
-    session.SelectLayer(layer.id);
-    return layer.id;
+    CanvasDocument document = session.Document().value();
+    document.layers.push_back(layer);
+    return session.ApplyImportedDocument(std::move(document), layer.id, L"Import Image") ? layer.id : Guid{};
 }
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
@@ -6801,10 +6799,14 @@ int Application::RunRenderingSelfTest() noexcept
         // lower one): what the adopted texture draws equals the committed raster.
         const auto offBy = [&](const Guid& shown) -> int
         {
-            for (ImageLayer& layer : _session.Document().value().layers)
-            {
-                layer.visible = layer.id == shown;
-            }
+            _session.EditForTest(
+                [&](CanvasDocument& document)
+                {
+                    for (ImageLayer& layer : document.layers)
+                    {
+                        layer.visible = layer.id == shown;
+                    }
+                });
             DocumentChanged();
             frame();
             std::vector<std::uint8_t> bgra;
@@ -7004,9 +7006,13 @@ int Application::RunRefusalSelfTest() noexcept
     { return _session.Document().has_value() ? _session.Document()->layers.size() : std::size_t{0}; };
     const auto addLayer = [&](ImageLayer layer, bool bottom)
     {
-        std::vector<ImageLayer>& layers = _session.Document().value().layers;
         _session.BeginEdit(L"Import Image");
-        layers.insert(bottom ? layers.begin() : layers.end(), layer);
+        _session.EditForTest(
+            [&](CanvasDocument& document)
+            {
+                std::vector<ImageLayer>& layers = document.layers;
+                layers.insert(bottom ? layers.begin() : layers.end(), layer);
+            });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();

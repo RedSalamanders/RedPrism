@@ -607,13 +607,66 @@ struct SelectionBounds
 // finite; a lasso or transform draft is not), skipping the rest; nullopt when none are finite.
 [[nodiscard]] std::optional<SelectionBounds> LoopsBounds(const std::vector<SelectionLoop>& loops) noexcept;
 
+// Published selection geometry is immutable. Copies of documents, history and job inputs share the points;
+// editing an outline constructs a new value. Equality still compares geometry, so no-op edits preserve redo.
+class SelectionLoops
+{
+  public:
+    SelectionLoops() noexcept = default;
+    SelectionLoops(std::initializer_list<SelectionLoop> loops) : SelectionLoops(std::vector<SelectionLoop>(loops)) {}
+    SelectionLoops(std::vector<SelectionLoop> loops)
+        : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))
+    {
+    }
+    [[nodiscard]] const std::vector<SelectionLoop>& Get() const noexcept
+    {
+        static const std::vector<SelectionLoop> empty;
+        return _loops ? *_loops : empty;
+    }
+    [[nodiscard]] operator const std::vector<SelectionLoop>&() const noexcept
+    {
+        return Get();
+    }
+    [[nodiscard]] bool operator==(const SelectionLoops& other) const noexcept
+    {
+        return _loops == other._loops || Get() == other.Get();
+    }
+    [[nodiscard]] const void* Identity() const noexcept
+    {
+        return _loops.get();
+    }
+    [[nodiscard]] auto begin() const noexcept
+    {
+        return Get().begin();
+    }
+    [[nodiscard]] auto end() const noexcept
+    {
+        return Get().end();
+    }
+    [[nodiscard]] bool empty() const noexcept
+    {
+        return Get().empty();
+    }
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return Get().size();
+    }
+    [[nodiscard]] const SelectionLoop& operator[](std::size_t index) const noexcept
+    {
+        return Get()[index];
+    }
+
+  private:
+    std::shared_ptr<const std::vector<SelectionLoop>> _loops;
+};
+
 // A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
 // means no selection; a selection with no area is an explicit empty selection, which later edits must treat as
 // "touch nothing", never as "touch everything".
 struct DocumentSelection
 {
     bool antialiased = true;
-    std::vector<SelectionLoop> loops;
+    SelectionLoops loops;
     [[nodiscard]] bool operator==(const DocumentSelection&) const noexcept = default;
     [[nodiscard]] std::optional<SelectionBounds> Bounds() const noexcept
     {
@@ -717,6 +770,31 @@ struct CanvasDocument
     std::vector<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
     [[nodiscard]] bool operator==(const CanvasDocument&) const noexcept = default;
+};
+
+// Result tokens own their source handles: a freed storage address can never alias a new image. The complete
+// mask record matters because placement, linking and enablement affect pixels as well as its raster does.
+struct TargetIdentity
+{
+    Guid layerId;
+    Raster image;
+    LayerTransform transform;
+    std::optional<LayerMask> mask;
+    bool isGroup = false;
+    std::optional<LayerAdjustment> adjustment;
+};
+
+struct JobToken
+{
+    Guid sessionIdentity;
+    std::uint64_t documentSerial = 0;
+    std::uint64_t generation = 0;
+    std::uint64_t restoreSerial = 0;
+    std::optional<TargetIdentity> target;
+    std::optional<DocumentSelection> selection;
+    int canvasWidth = 0;
+    int canvasHeight = 0;
+    std::uint64_t sequence = 0;
 };
 
 // The Crop tool's frame in document pixels (C16, Common/Crop.h holds its geometry, drag and snap).
@@ -1137,7 +1215,13 @@ class DocumentHistory
     [[nodiscard]] std::optional<Snapshot> Undo();
     [[nodiscard]] std::optional<Snapshot> Redo();
     void MarkSaved() noexcept;
+    void MarkSaved(const Guid& revision) noexcept;
     void Reset();
+
+    [[nodiscard]] Guid CurrentRevision() const noexcept
+    {
+        return _revision;
+    }
 
     [[nodiscard]] bool CanUndo() const noexcept
     {
@@ -1219,6 +1303,10 @@ class DocumentSession
     // A resized document (Canvas Size, Image Size, Crop: the same id, every layer still there) installed as one
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
+    // Installs a validated import assembled from this document as one entry. A different document or invalid
+    // graph/budget is refused before any session state changes. The synchronous host prepares this copy today.
+    [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,
+                                             std::wstring name);
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
     // it. The host sets the whole canvas when the tool is chosen and cancels when it goes.
     [[nodiscard]] const std::optional<CropRect>& CropFrame() const noexcept
@@ -1257,6 +1345,8 @@ class DocumentSession
     [[nodiscard]] bool MergeLayers(const MergePlan& plan, const Raster& composite);
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
+    // The host's typed opacity preview/restore, outside history; callers bracket the final value in an entry.
+    [[nodiscard]] bool PreviewLayerOpacity(const Guid& id, double opacity) noexcept;
     void SetBlendMode(LayerBlendMode mode);
     [[nodiscard]] bool LinkMask(const Guid& source, const Guid& target);
     [[nodiscard]] bool CanLinkMask(const Guid& source, const Guid& target) const;
@@ -1269,9 +1359,28 @@ class DocumentSession
     {
         return _document;
     }
-    [[nodiscard]] std::optional<CanvasDocument>& Document() noexcept
+    [[nodiscard]] std::uint64_t Generation() const noexcept
     {
-        return _document;
+        return _generation;
+    }
+    [[nodiscard]] std::uint64_t DocumentSerial() const noexcept
+    {
+        return _documentSerial;
+    }
+    [[nodiscard]] std::optional<JobToken> CaptureJobToken(const std::optional<Guid>& target = std::nullopt,
+                                                          std::uint64_t sequence = 0) const;
+    // UI-thread apply check. The caller supplies its current sequence and separately checks cancellation and
+    // whether a preview's edit remains open. A token is valid only in the session that captured it.
+    [[nodiscard]] bool CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept;
+    // Fixture construction only (DocumentTests and the application harness). Never retain the callback's
+    // reference. Production mutations use the validated edit APIs. Invalidate first even if the fixture throws.
+    template <typename Edit> void EditForTest(Edit&& edit)
+    {
+        if (_document.has_value())
+        {
+            NoteDocumentMutation();
+            std::invoke(std::forward<Edit>(edit), _document.value());
+        }
     }
     [[nodiscard]] const std::optional<Guid>& ActiveLayerID() const noexcept
     {
@@ -1279,7 +1388,6 @@ class DocumentSession
     }
     void SelectLayer(const std::optional<Guid>& id);
     [[nodiscard]] const ImageLayer* ActiveLayer() const noexcept;
-    ImageLayer* ActiveLayer() noexcept;
     [[nodiscard]] std::unordered_set<Guid>& CollapsedGroupIDs() noexcept
     {
         return _collapsed;
@@ -1784,6 +1892,29 @@ class DocumentSession
     }
 
   private:
+    // A session copy/move is a different owner even if all document counters match. Moves also retire the
+    // source identity because a moved-from optional document can remain engaged with moved-out layer storage.
+    struct TokenIdentity
+    {
+        Guid value = Guid::Generate();
+        TokenIdentity() = default;
+        TokenIdentity(const TokenIdentity&) noexcept {}
+        TokenIdentity(TokenIdentity&& source) noexcept
+        {
+            source.value = Guid::Generate();
+        }
+        TokenIdentity& operator=(const TokenIdentity&) noexcept
+        {
+            value = Guid::Generate();
+            return *this;
+        }
+        TokenIdentity& operator=(TokenIdentity&& source) noexcept
+        {
+            value = Guid::Generate();
+            source.value = Guid::Generate();
+            return *this;
+        }
+    };
     // The brush paints these channels. The palette foreground is that color, as in the legacy session.
     void ApplyForegroundToBrush() noexcept
     {
@@ -1801,8 +1932,15 @@ class DocumentSession
     static void AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers);
     static void ReleaseDetachedClipping(std::vector<ImageLayer>& layers);
     [[nodiscard]] ImageLayer* MutableLayer(const Guid& id) noexcept;
+    [[nodiscard]] ImageLayer* MutableActiveLayer() noexcept;
     [[nodiscard]] const ImageLayer* FindLayer(const Guid& id) const noexcept;
+    void NoteDocumentMutation() noexcept
+    {
+        ++_generation;
+        ++_editRevision;
+    }
 
+    TokenIdentity _tokenIdentity;
     std::optional<CanvasDocument> _document;
     std::optional<Guid> _activeLayerID;
     std::unordered_set<Guid> _selected;
@@ -1814,6 +1952,9 @@ class DocumentSession
     std::optional<CropRect> _cropRect;
     SnapGuides _snapGuides;
     bool _maskSelected = false;
+    std::uint64_t _generation = 0;
+    std::uint64_t _documentSerial = 0;
+    std::uint64_t _restoreSerial = 0;
     std::uint64_t _editRevision = 0;
     mutable std::uint64_t _displayRevision = 0;
     mutable std::optional<CanvasDocument> _displayCopy;

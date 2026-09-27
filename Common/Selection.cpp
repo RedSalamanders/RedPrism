@@ -1170,7 +1170,7 @@ void DocumentSession::MoveSelection(double dx, double dy)
     const DocumentSelection& origin = _selectionMoveOrigin.value();
     _document->selection = DocumentSelection{
         origin.antialiased, SelectionGeometry::Translated(origin.loops, std::round(dx), std::round(dy))};
-    ++_editRevision;
+    NoteDocumentMutation();
 }
 
 void DocumentSession::EndSelectionMove()
@@ -1193,7 +1193,7 @@ void DocumentSession::CancelSelectionMove()
     if (_document.has_value())
     {
         _document->selection = _selectionMoveOrigin;
-        ++_editRevision;
+        NoteDocumentMutation();
     }
     EndSelectionMove();
 }

@@ -29,7 +29,7 @@ deferred rows RF-1003, RF-1004 and RF-1115 belong to `UiNeverBlocks_2026-09-22.m
 
 | Plan | Status | Owning domain spec | Purpose |
 | --- | --- | --- | --- |
-| [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) | ACTIVE; P0.2/P0.3 complete on x64; remaining work and qualification tracked in the opening checklist | `Core_PerformanceAndResources`, `Core_Architecture`, `Core_CrashHandling`, `Document_*`, `Rendering_*`, `IO_*`, `Build_*`, `Testing_Validation`, `UI_*`; new `IO_RawDecode`, `Rendering_RawDevelop` | Implement the UI-thread, exact-kernel and RAW performance plan; measured foundation work precedes the nonblocking, SIMD/GPU and Photoshop phase exits |
+| [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md) | ACTIVE; P0.2/P0.3/P0.4 complete on x64; remaining work and qualification tracked in the opening checklist | `Core_PerformanceAndResources`, `Core_Architecture`, `Core_CrashHandling`, `Document_*`, `Rendering_*`, `IO_*`, `Build_*`, `Testing_Validation`, `UI_*`; new `IO_RawDecode`, `Rendering_RawDevelop` | Implement the UI-thread, exact-kernel and RAW performance plan; measured foundation work precedes the nonblocking, SIMD/GPU and Photoshop phase exits |
 
 On completion of a plan, merge durable requirements into the owning domain spec, move the plan to
 `Specs/Plans/Done/`, and remove its row here. Child phase plans spawned from the master program must be

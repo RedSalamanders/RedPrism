@@ -1262,7 +1262,7 @@ const ImageLayer* DocumentSession::ActiveLayer() const noexcept
     return FindLayer(_activeLayerID.value());
 }
 
-ImageLayer* DocumentSession::ActiveLayer() noexcept
+ImageLayer* DocumentSession::MutableActiveLayer() noexcept
 {
     if (!_activeLayerID.has_value())
     {
@@ -1281,7 +1281,56 @@ void DocumentSession::EndEdit()
     history.End(_document, _activeLayerID);
     // Every document edit ends here, so the display copy kept while a transform or panel preview is pending never
     // outlives a change it did not see (opacity, blend mode, a moved, deleted or merged layer, a flip, a resize).
-    ++_editRevision;
+    NoteDocumentMutation();
+}
+
+std::optional<JobToken> DocumentSession::CaptureJobToken(const std::optional<Guid>& target,
+                                                         std::uint64_t sequence) const
+{
+    if (!_document.has_value())
+    {
+        return std::nullopt;
+    }
+    JobToken token{_tokenIdentity.value, _documentSerial,  _generation,       _restoreSerial, std::nullopt,
+                   _document->selection, _document->width, _document->height, sequence};
+    if (target.has_value())
+    {
+        const ImageLayer* layer = FindLayer(target.value());
+        if (layer == nullptr)
+        {
+            return std::nullopt;
+        }
+        token.target = TargetIdentity{layer->id,        layer->asset.has_value() ? layer->asset->image : Raster{},
+                                      layer->transform, layer->mask,
+                                      layer->isGroup,   layer->adjustment};
+    }
+    return token;
+}
+
+bool DocumentSession::CanApplyJobResult(const JobToken& token, std::uint64_t latestSequence) const noexcept
+{
+    if (!_document.has_value() || token.sessionIdentity != _tokenIdentity.value ||
+        token.documentSerial != _documentSerial || token.restoreSerial != _restoreSerial ||
+        token.sequence != latestSequence || token.canvasWidth != _document->width ||
+        token.canvasHeight != _document->height)
+    {
+        return false;
+    }
+    if (!token.target.has_value())
+    {
+        return token.generation == _generation;
+    }
+    const TargetIdentity& target = token.target.value();
+    const ImageLayer* layer = FindLayer(target.layerId);
+    // A selection can have millions of edges. Validation compares the retained immutable handle in O(1), and
+    // conservatively drops a rebuilt outline even when its points happen to be equal.
+    const bool sameSelection =
+        _document->selection.has_value() == token.selection.has_value() &&
+        (!token.selection.has_value() || (_document->selection->antialiased == token.selection->antialiased &&
+                                          _document->selection->loops.Identity() == token.selection->loops.Identity()));
+    return layer != nullptr && (layer->asset.has_value() ? layer->asset->image : Raster{}) == target.image &&
+           layer->transform == target.transform && layer->mask == target.mask && sameSelection &&
+           layer->isGroup == target.isGroup && layer->adjustment == target.adjustment;
 }
 
 namespace
@@ -1347,12 +1396,18 @@ void DocumentSession::SetActiveLayerID(const std::optional<Guid>& id)
 void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
 {
     CancelCrop();
+    ++_restoreSerial;
     const bool keepMaskTarget = _maskSelected && _activeLayerID == snapshot.activeLayerID;
+    if (_document.has_value() != snapshot.document.has_value() ||
+        (_document.has_value() && _document->id != snapshot.document->id))
+    {
+        ++_documentSerial;
+    }
     _document = snapshot.document;
     SetActiveLayerID(snapshot.activeLayerID);
     const ImageLayer* active = ActiveLayer();
     _maskSelected = keepMaskTarget && active != nullptr && active->mask.has_value();
-    ++_editRevision;
+    NoteDocumentMutation();
     _displayCopy.reset();
 }
 
@@ -1468,6 +1523,7 @@ void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
         document.layers.push_back(std::move(layer));
     }
     _document = std::move(document);
+    ++_documentSerial;
     SetActiveLayerID(active);
     _collapsed.clear();
     EndEdit();
@@ -1999,6 +2055,7 @@ void DocumentSession::ToggleClippingMask(const Guid& id)
 void DocumentSession::ClearDocument()
 {
     _document.reset();
+    ++_documentSerial;
     SetActiveLayerID(std::nullopt);
     _collapsed.clear();
     _transformEdit.reset();
@@ -2006,7 +2063,7 @@ void DocumentSession::ClearDocument()
     _cropRect.reset();
     _snapGuides = {};
     _maskSelected = false;
-    ++_editRevision;
+    NoteDocumentMutation();
     _displayCopy.reset();
     _lassoDraft.reset();
     _selectionMoveOrigin.reset();
@@ -2029,6 +2086,10 @@ void DocumentSession::ClearDocument()
 
 void DocumentSession::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active)
 {
+    if (ValidateDocument(document) != DocumentStatus::Ok)
+    {
+        return;
+    }
     ClearDocument();
     _document = std::move(document);
     SetActiveLayerID(active.has_value() && FindLayer(active.value()) != nullptr ? active : std::nullopt);
@@ -2037,7 +2098,8 @@ void DocumentSession::ReplaceDocument(CanvasDocument document, const std::option
 
 void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring name)
 {
-    if (!_document.has_value() || document.id != _document.value().id)
+    if (!_document.has_value() || document.id != _document.value().id ||
+        ValidateDocument(document) != DocumentStatus::Ok)
     {
         return;
     }
@@ -2046,6 +2108,20 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     BeginEdit(std::move(name));
     _document = std::move(document);
     EndEdit();
+}
+
+bool DocumentSession::ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,
+                                            std::wstring name)
+{
+    if (!_document.has_value() || document.id != _document->id || ValidateDocument(document) != DocumentStatus::Ok)
+    {
+        return false;
+    }
+    BeginEdit(std::move(name));
+    _document = std::move(document);
+    SetActiveLayerID(active.has_value() && FindLayer(active.value()) != nullptr ? active : std::nullopt);
+    EndEdit();
+    return true;
 }
 
 std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
@@ -2339,7 +2415,7 @@ void DocumentSession::DeleteLayer(const Guid& id)
 void DocumentSession::SetOpacity(double opacity)
 {
     // An open panel owns the document (legacy canEditAppearance): an opacity would fold into its entry.
-    ImageLayer* layer = ActiveLayer();
+    ImageLayer* layer = MutableActiveLayer();
     if (layer == nullptr || layer->isGroup || !std::isfinite(opacity) || HasColorEdit())
     {
         return;
@@ -2349,9 +2425,25 @@ void DocumentSession::SetOpacity(double opacity)
     EndEdit();
 }
 
+bool DocumentSession::PreviewLayerOpacity(const Guid& id, double opacity) noexcept
+{
+    ImageLayer* layer = MutableLayer(id);
+    if (layer == nullptr || layer->isGroup || !std::isfinite(opacity))
+    {
+        return false;
+    }
+    const double value = std::clamp(opacity, 0.0, 1.0);
+    if (layer->opacity != value)
+    {
+        layer->opacity = value;
+        NoteDocumentMutation();
+    }
+    return true;
+}
+
 void DocumentSession::SetBlendMode(LayerBlendMode mode)
 {
-    ImageLayer* layer = ActiveLayer();
+    ImageLayer* layer = MutableActiveLayer();
     if (layer == nullptr || layer->isGroup)
     {
         return;
@@ -3547,7 +3639,8 @@ void DocumentSession::FlipCanvas(bool horizontally)
     if (document.selection.has_value())
     {
         // Mirrored points run the other way round; the nonzero rule does not mind.
-        for (SelectionLoop& loop : document.selection->loops)
+        std::vector<SelectionLoop> loops = document.selection->loops.Get();
+        for (SelectionLoop& loop : loops)
         {
             for (Vec2& point : loop)
             {
@@ -3561,6 +3654,7 @@ void DocumentSession::FlipCanvas(bool horizontally)
                 }
             }
         }
+        document.selection->loops = std::move(loops);
     }
     EndEdit();
 }

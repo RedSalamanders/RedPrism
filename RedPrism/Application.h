@@ -300,7 +300,7 @@ class Application final : public ChromeEvents
     // when it commits, or when anything else (a command, a tool, a canvas press, another layer, a save) closes it.
     void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept override;
     void CloseOpacityEdit() noexcept;
-    [[nodiscard]] ImageLayer* OpacityEditLayer() noexcept;
+    [[nodiscard]] const ImageLayer* OpacityEditLayer() noexcept;
     int RunLayerEditsSelfTest() noexcept;
     [[nodiscard]] bool SamplesColor() const noexcept;
     void SampleColorAt(Vec2 view) noexcept;

@@ -100,6 +100,12 @@ under repository `.build/`. C1 does not yet create that tree.
 
 ## Image result ownership
 
+Published selection outlines share immutable point storage across document snapshots, history, previews and
+result tokens. Copying such a snapshot MUST NOT copy its selection points. A geometry edit publishes new storage;
+layer-result validation compares retained selection handles and antialiasing without traversing the outline.
+Document and restore serials prevent stale work from returning after replacement or Undo/Redo. These primitives
+are specified in [`Document_Model.md`](../Document/Document_Model.md); asynchronous execution remains active work.
+
 Image operations that create a full result use the 64-byte-aligned `PixelBuffer` and transfer it to
 `Raster::Adopt`, without a second pixel allocation or copy. This covers adjustment/filter wrappers, Gaussian
 blur, placed image/mask resampling, canvas extension, WIC frame decode and the production composition readback.

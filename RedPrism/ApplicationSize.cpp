@@ -411,7 +411,7 @@ int Application::RunSizeSelfTest() noexcept
         ImageLayer layer = ImageLayer::Blank(L"Red", Vec2{6, 3});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
-        _session.Document().value().layers.push_back(layer);
+        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();

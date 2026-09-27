@@ -471,18 +471,28 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
     if (next < paths.size())
     {
         std::optional<Guid> active = _session.ActiveLayerID();
-        _session.BeginEdit(paths.size() - next > 1 ? L"Import Images" : L"Import Image");
+        std::wstring name = paths.size() - next > 1 ? L"Import Images" : L"Import Image";
+        CanvasDocument document = _session.Document().value();
+        bool imported = false;
         for (; next < paths.size(); ++next)
         {
-            const ProjectIoStatus status =
-                ImportImageOnto(_session.Document().value(), paths[next].c_str(), active, center);
+            const ProjectIoStatus status = ImportImageOnto(document, paths[next].c_str(), active, center);
             if (status != ProjectIoStatus::Ok)
             {
                 noteFailure(status);
             }
+            else
+            {
+                imported = true;
+            }
         }
-        _session.SelectLayer(active);
-        _session.EndEdit();
+        if (imported)
+        {
+            if (!_session.ApplyImportedDocument(std::move(document), active, std::move(name)))
+            {
+                noteFailure(ProjectIoStatus::Invalid);
+            }
+        }
         _viewport.followsFit = true;
     }
     if (failed)
@@ -1101,7 +1111,7 @@ int Application::RunClipboardSelfTest() noexcept
         ImageLayer layer = ImageLayer::Blank(L"Sheet", Vec2{100, 100});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
-        _session.Document().value().layers.push_back(layer);
+        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();
@@ -1255,7 +1265,7 @@ int Application::RunSessionSelfTest() noexcept
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{300, 200};
         _session.BeginEdit(L"Import Image");
-        _session.Document().value().layers.push_back(layer);
+        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
     }

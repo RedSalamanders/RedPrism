@@ -16,7 +16,12 @@
   - [x] Preserve legacy numeric goldens in the complete Debug and Release gates.
   - [x] Compare all 26 before/after checksums and record alternating ownership timings with matching pixels.
   - [x] Finish ASan qualification.
-- [ ] P0.4 — Add document generations and tokens; route mutations through validated paths.
+- [x] P0.4 — Add document generations and tokens; route mutations through validated paths. Full x64 gates and all ARM64 cross-builds passed.
+  - [x] Close mutable document/layer access; cover committed changes and changes inside open edits.
+  - [x] Add session document serials and owning result tokens with stale-result checks.
+  - [x] Share immutable selection loops across snapshots without changing selection goldens.
+  - [x] Mark the revision actually saved, including a save completed after another edit.
+  - [x] Migrate imports, opacity previews and test/benchmark fixtures; run the full validation matrix.
 - [ ] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling.
 - [ ] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order.
 - [ ] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state.
@@ -30,7 +35,7 @@
 - [ ] P6 — If authorized by its decisions, plan non-destructive develop and depth separately.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2 and P0.3 are complete on x64; the P0 phase remains open. ARM64
+Implementation started 2026-09-27. Slices P0.2, P0.3 and P0.4 are complete on x64; the P0 phase remains open. ARM64
 Debug, Release and ASan Debug cross-builds passed; native ARM64 execution is unavailable on this host.
 
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
@@ -45,6 +50,11 @@ for a 45 MP Levels result, with one fewer 170.75 MiB pixel buffer. This measures
 commit latency, responsiveness and the G2/G3 targets remain open. See the
 [foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) for controls, noise and qualification limits.
 
+P0.4 progress, 2026-09-27: session writes now pass through tracked APIs, result tokens retain their inputs and
+reject stale/session-mismatched results, selections share immutable geometry, and history can mark a captured
+saved revision. All x64 gates and ARM64 cross-builds passed, including 120 new checks. The
+[P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md) documents the reviewed fixes and remaining limits.
+
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
 export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
@@ -57,7 +67,7 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2/P0.3 are complete; P0.1, P0.4 and P0.8 remain executable without an open decision.
+- **Status**: ACTIVE. P0.2/P0.3/P0.4 are complete; P0.1 and P0.8 remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
   | Decisions | Gate |
@@ -414,13 +424,20 @@ struct TargetIdentity {                 // holds handles, compares with Raster::
     Guid layerId;
     Raster image;                       // never a bare Identity() address (AGENTS rule)
     LayerTransform transform;
-    std::optional<Raster> mask;
+    std::optional<LayerMask> mask;      // placement, linking and enablement also affect a result
+    bool isGroup;
+    std::optional<LayerAdjustment> adjustment;
 };
 struct JobToken {                       // captured on the UI thread when the job's snapshot is taken
+    Guid sessionIdentity;              // separate sessions (including copies) never accept each other's tokens
     std::uint64_t documentSerial;       // session-local counter bumped by Create/Replace/ClearDocument
                                         // (the persisted CanvasDocument::id survives reopen and resize)
     std::uint64_t generation;           // DocumentSession::Generation() at snapshot
+    std::uint64_t restoreSerial;        // every Undo/Redo restore; prevents a token returning after Undo + Redo
     std::optional<TargetIdentity> target;
+    std::optional<DocumentSelection> selection; // immutable geometry handles, never a deep snapshot copy
+    int canvasWidth;
+    int canvasHeight;
     std::uint64_t sequence;             // per-target monotonic; newer supersedes older
 };
 enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit, Io, Background };
@@ -513,7 +530,8 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 - A `uint64` bumped on every mutation of `_document`:
   - recorded `EndEdit`, `Restore`, `ReplaceDocument` and `ClearDocument`;
   - imports;
-  - opacity, blend and rename, which do not bump `_editRevision` today.
+  - opacity, blend and rename (now routed through `EndEdit`); live opacity and adjustment previews, outline moves,
+    and floating-selection insertion also invalidate before the outer transaction ends.
 - Every write through the mutable `Document()` moves behind a session API:
   - `ApplicationFiles.cpp`'s imports and `ReplaceDocument`;
   - `InsertPaintedLayer`;
@@ -531,7 +549,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 | Stroke | The token's base, which is the chained predecessor's result or the layer at snapshot, is still the layer's current content |
 | Selection | `generation` is unchanged since the job's snapshot. Otherwise the result is dropped with the status `IDS_STATUS_SELECTION_STALE` |
 | Whole document (merge, Image Size, Canvas Size fill) | `generation` is unchanged |
-| Save, export | Never touch the document; they complete from their snapshot. Save completes with `MarkSaved(revisionAtSnapshot)`, a new overload that ignores a revision older than the last one marked |
+| Save, export | Never touch the document; they complete from their snapshot. Save completes with `MarkSaved(revisionAtSnapshot)`. Revisions are opaque GUIDs; a save after Undo can legitimately write an older revision. The scheduler orders writes/completions per path and refuses a completion from another document serial; history records the revision actually written |
 | Previews | `sequence` is the newest for the target and the edit that asked for it is still open (covers the legacy `stalePreviewCannotReturnAfterOffOrReopen`) |
 
 **Busy state and the continuation queue** (D3). This keeps the legacy
@@ -1507,7 +1525,7 @@ unchanged, one full copy fewer per result, and a measured drop in result-product
 The [foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) records the paired timing and checksum
 evidence. End-to-end host commit latency, including history, upload and Present, still belongs to P0.1/P1's gates.
 
-**P0.4 Generation and tokens** (ACTIVE)
+**P0.4 Generation and tokens** (COMPLETE on x64; all ARM64 cross-builds passed)
 
 - `DocumentSession::Generation()` and `EditForTest`.
 - Migrate every host and DocumentTests write through the mutable `Document()` (the files, self-test, demo, bench,
@@ -1516,6 +1534,14 @@ evidence. End-to-end host commit latency, including history, upload and Present,
 - The `DuplicateActiveLayer` budget check, refused with a status notice. Bench fixtures are built only through
   validated paths.
 - **Exit**: DocumentTests covers a generation bump for every mutation path.
+
+Completed, 2026-09-27: const document/layer views, explicit import/opacity paths, shared immutable
+selection storage, owning tokens and captured saved revisions are implemented. A restore serial also invalidates
+layer results after Undo/Redo; checking only current image identity could otherwise revive an old job. Token
+selection checks compare retained handles in constant time. The scheduler's cancellation/open-edit checks and
+Prepare/Run/Apply wiring still belong to P0.6/P1. The complete x64 Debug, Release and ASan gates passed, with 105
+generation/ownership checks, 15 saved-revision checks and unchanged legacy goldens. All three ARM64 profiles
+cross-build; native runtime remains untested. See the [P0.4 record](../../TestRuns/SessionGenerations_2026-09-27.md).
 
 **P0.5 Pool and crash handling** (D8)
 

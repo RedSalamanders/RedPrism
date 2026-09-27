@@ -700,7 +700,7 @@ bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& va
         return false;
     }
     layer->adjustment = value;
-    ++_editRevision;
+    NoteDocumentMutation();
     return true;
 }
 

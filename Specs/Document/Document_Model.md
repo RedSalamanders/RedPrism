@@ -123,6 +123,48 @@ subset in bottom-to-top order.
 
 ## Session edits
 
+### Mutation ownership and result tokens
+
+The UI thread owns `DocumentSession`. `Document()` and `ActiveLayer()` expose const views only. Production code
+mutates through session operations, including `ApplyImportedDocument` for a validated same-document import and
+`PreviewLayerOpacity` for the typed opacity preview/restore. Import installation checks the full document graph
+and pixel budgets before replacing any state. Loaded replacements and size results also validate before install.
+`EditForTest(fn)` is a scoped fixture hook for tests and the application harness; the callback receives a document
+reference that MUST NOT escape. It invalidates the generation before the callback, including if construction fails.
+
+`Generation()` is a session-local monotonic `uint64_t` mutation stamp, distinct from the history revision and the
+display-preview revision. Every `EndEdit` advances it, even inside an outer history transaction. Restore, document
+replacement/clear, live adjustment changes, typed opacity previews/restores, outline moves/cancels, and insertion
+of a floating selection advance it before returning. It may advance for a no-op transaction; callers test equality,
+never a count of edits. Pure reads, active-target changes and drafts that leave the document untouched do not advance
+it. A new document, clear or replacement advances `DocumentSerial()`, including reopening the same persisted id.
+Undo/Redo across document ids also advances that serial. Every history restore advances a separate restore serial
+so Undo/Redo cannot revive a previously captured result even when its raster handles return.
+
+`CaptureJobToken` owns the captured image and complete mask record, including its raster, transform, linking and
+enablement, plus immutable selection handles. No cache/result identity is just a borrowed storage address.
+`CanApplyJobResult(token, latestSequence)` requires the capturing session identity, the same document and restore
+serials and the caller's current
+sequence. A whole-document token also requires the same generation. A layer token requires the target to exist
+with the same image, transform, mask, layer kind/adjustment and selection handles, on the same canvas dimensions;
+an unrelated layer's rename does not invalidate it.
+Selection validation compares immutable handle identity and antialiasing in constant time, conservatively refusing
+a separately rebuilt outline. Copies and moves receive a new session identity; a move also retires the source's
+identity. Tokens cannot cross sessions even when every counter and document field matches. The future scheduler must additionally
+check cancellation and whether a preview's edit is still open; these token helpers do not run jobs or apply pixels.
+
+### Immutable selection snapshots
+
+`DocumentSelection::loops` is a `SelectionLoops` value backed by `shared_ptr<const vector<SelectionLoop>>`.
+Copying a document, history snapshot, pending edit or token shares its points. Readers get only const vectors,
+loops and points; a geometry operation builds a new vector and publishes it as a new value. Empty outlines need
+no heap allocation. Selection equality keeps its previous value semantics (antialiasing and all points), with a
+fast path for shared storage, so equal geometry preserves redo. Flipping, translating or distorting a selection
+must leave earlier snapshots untouched. Selection memory accounting and deferred destruction remain subsequent
+history/resource work in the active performance plan.
+
+### Operations
+
 `DocumentSession` ports the CPU edits used by the legacy group/history/appearance/layer tests:
 
 - New canvas (rejects invalid sizes without touching the document), blank layer, folder: names are the lowest
@@ -183,6 +225,12 @@ the concurrency foundation closes. This is stress coverage of ownership and publ
 
 The `buffer.*` cases prove alignment, empty and overflowing allocation requests, move ownership, invalid adoption
 without consumption, zero-copy publication, shared lifetime and an adopted buffer used as a sparse base.
+
+The `generation.*` cases prove that mutating session operations invalidate whole-document tokens, including nested
+transactions, typed opacity, live adjustment editing, outline movement and floating/duplicate transforms. They
+cover Undo/Redo, same-id reopen, stale sequences, image/transform/mask/selection changes, retained input lifetime,
+refused invalid documents, and shared immutable selection snapshots with unchanged geometry/redo semantics.
+Compile-time assertions require const document/layer readers and non-throwing selection-handle copies.
 
 ```powershell
 .\test.ps1 -Platform x64 -Configuration Debug

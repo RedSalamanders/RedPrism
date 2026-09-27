@@ -1,8 +1,8 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
-Owner: `Common/DocumentHistory.h`, `Common/DocumentHistory.cpp`
+Last reviewed: 2026-09-27
+Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
 
@@ -41,8 +41,14 @@ work beside `IsModified`, so a clean document with one still asks; Cancel leaves
 writes it, and Don't Save settles it as the document goes ([`UI_ApplicationChrome.md`](../UI/UI_ApplicationChrome.md)
 › Files).
 
-`MarkSaved` stores the current revision. `IsModified` is revision ≠ saved revision. `Reset` clears stacks and
-starts a new saved revision.
+`MarkSaved(revision)` stores the revision of the document snapshot actually written to disk. Revisions are opaque
+identifiers; an older revision restored by Undo is a valid saved revision. If writing snapshot A completes while
+the live document is at revision B, B remains modified; undoing to A is clean and redoing to B is modified. The
+no-argument `MarkSaved()` stores the current revision for synchronous callers. `IsModified` is revision ≠ saved
+revision, regardless of whether the saved revision remains reachable in retained history. Before asynchronous save
+lands, its scheduler MUST enforce completion ordering and session identity and supply the written snapshot's
+revision; this slice adds the history primitive only.
+`Reset` clears stacks and starts a new saved revision.
 
 ## Trim
 
@@ -51,7 +57,8 @@ entry, else the oldest future entry. A 256 MiB trim test MUST exist (`history.
 
 ## Validation
 
-`Tests/DocumentTests` covers nested transactions, no-op rename/empty name preserving redo, entry-limit trim,
+`Tests/DocumentTests` covers saved-revision capture (current snapshot, delayed save after an edit, undo/redo,
+branching, trimmed history, and reset), nested transactions, no-op rename/empty name preserving redo, entry-limit trim,
 shared live rasters reporting 0 retained bytes, the 256 MiB unique-pixel trim, and `pending.*` (Undo/Redo drop a
 live brush, gradient, warp and pixel move without moving history; with a crop frame they drop it and still move
 history, and keep it when there is nothing to undo; Cut on a hidden layer or under an

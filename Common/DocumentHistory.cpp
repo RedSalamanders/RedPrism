@@ -73,7 +73,12 @@ std::optional<DocumentHistory::Snapshot> DocumentHistory::Redo()
 
 void DocumentHistory::MarkSaved() noexcept
 {
-    _savedRevision = _revision;
+    MarkSaved(_revision);
+}
+
+void DocumentHistory::MarkSaved(const Guid& revision) noexcept
+{
+    _savedRevision = revision;
 }
 
 void DocumentHistory::Reset()
