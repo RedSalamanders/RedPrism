@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "PipelineTrace.h"
+
 #include "Adjust.h"
 
 #include "BrushStroke.h"
@@ -162,7 +164,13 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_FAIL;
     }
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
-    return _jobs.Initialize(0, {JobNoticeThunk, this});
+    RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    if (!_jobs.EnableDeferredRelease() || !_jobs.EnableMemoryRecycling())
+    {
+        return E_OUTOFMEMORY;
+    }
+    return S_OK;
 }
 
 void Application::DispatchMessageThunk(void* context, void* message) noexcept
@@ -2892,6 +2900,7 @@ void Application::Shutdown() noexcept
         _classRegistered = false;
     }
     _shutdownComplete = true;
+    ClosePipelineTrace();
 }
 
 bool Application::WaitUntilMessage(DWORD timeout) noexcept

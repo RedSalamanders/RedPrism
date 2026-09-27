@@ -128,8 +128,40 @@ the indicator after 250 ms, is killed before dispatch, and is removed at complet
 state. Hidden progress values do not repaint chrome. Visible indeterminate progress uses the existing frame-paced
 DxUi animation; hidden, suspended and occluded frame scheduling still waits on events.
 
-This foundation does not mean existing image operations run asynchronously. P0.7 owns memory admission and
-related resource policy; P1 owns migration of blocking operations away from the UI thread and input replay storage.
+This foundation does not mean existing image operations run asynchronously. P1 owns migration of blocking
+operations away from the UI thread, operation-specific peak estimates and retained input replay storage.
+
+### Admission, release and recycled buffers
+
+Every nonzero `JobOptions::memoryBytes` request covers the complete graph's additional allocation peak. At each
+admission the owner samples `GlobalMemoryStatusEx`; the available ceiling is the smaller of physical and commit
+availability, less 1 GiB headroom and outstanding reservations, saturating at zero. Inputs already resident are
+not charged again. Children borrow `JobContext::reservedMemoryBytes`; no stage partially reserves and then waits
+for more. Migrated image jobs MUST declare their rounded allocations, scratch, staging and result peak.
+
+A waiter owns a bounded scheduler record but occupies no worker. Reservations survive completion apply/drop and
+payload destruction. Submit, retirement, deferred-release completion and memory-pressure events retry admission;
+no timer polls availability. An insufficient request waits only while a reservation, release or cache trim can
+return memory; otherwise it completes `Failed(E_OUTOFMEMORY)` without running. Snapshot failure also fails the
+operation. A cancelled waiter never runs. Same-key successors reserve only after predecessor retirement.
+
+The owner installs a thread-local deferred-release sink. Last-reference storage or directly owned pixel buffers
+of at least 16 MiB transfer an intrusive node to a non-cancellable NORMAL worker lane. This path allocates nothing,
+needs no job slot/reservation, and cannot be refused by a full job queue. Smaller or non-owner-thread frees run
+inline. Queued and executing releases count toward outstanding work. Close clears the sink, joins event sources
+and workers, then drains leftovers while hidden, before destroying events or the receiving owner.
+
+Measured fresh-page overhead justifies a process recycle pool for buffers of at least 16 MiB. It has at most 32
+slots, uses 16 MiB size classes and initially retains at most one eighth of the sampled admission ceiling, capped
+at 512 MiB. `PixelBuffer::RequiredBytes` includes rounded capacity and its 64-byte ownership record. A full cache
+returns the buffer to the CRT. Low-memory notification or failed admission disables cache returns and schedules
+worker trimming before refusal; a fresh OS sample follows completion. Cached bytes are never added twice to OS
+availability. Low/high Windows notifications alternate one-shot waits, with no repeated wait on a signaled level.
+Encoded-image, GPU and RAW cache pressure handlers land with the corresponding cache implementations.
+
+`RedPrism.Pipeline` TraceLogging emits admission transitions and `UiFree{bytes}` for actual owner-thread frees of
+at least 1 MiB. The P0.7 trace gate has positive controls and real direct-buffer/adopted/vector-raster releases;
+normal deferred operation MUST have no owner-thread free of 16 MiB or more. Hidden shutdown may free inline.
 
 The executor foundations in `Core_Architecture.md` use a private fixed-size pool and a separate one-thread wait
 pool. Idle callbacks own no polling loop. Dispatch wakeups are coalesced at the thread count per priority;

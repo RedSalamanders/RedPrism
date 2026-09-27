@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#include "PipelineTrace.h"
+
 #include "Adjust.h"
 #include "CanvasSize.h"
 #include "Crop.h"
@@ -163,6 +165,29 @@ Raster Raster::Make(int width, int height, RasterFormat format)
     return Make(width, height, format, nullptr, 0);
 }
 
+std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
+{
+    // make_unique establishes exception-safe ownership before the custom shared_ptr control block is made.
+    // If that second allocation fails, FreeStorage still returns the already-owned payload exactly once.
+    std::unique_ptr<Storage, FreeStorage> storage{std::make_unique<Storage>().release()};
+    return std::shared_ptr<Storage>{std::move(storage)};
+}
+
+void Raster::FreeStorage::operator()(Storage* storage) const noexcept
+{
+    storage->DeferredReleaseNode::bytes = storage->bytes.capacity() + storage->adoptedBytes.AllocationBytes() +
+                                          storage->tiles.capacity() * sizeof(RasterTile);
+    storage->destroy = [](DeferredReleaseNode* node) noexcept
+    {
+        std::unique_ptr<Storage> owned{static_cast<Storage*>(node)};
+        TracePipelineFree(owned->bytes.capacity());
+    };
+    if (!TryDeferRelease(*storage))
+    {
+        storage->destroy(storage);
+    }
+}
+
 Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8_t* pixels, std::size_t byteCount)
 {
     Raster raster;
@@ -181,7 +206,7 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
     {
         return raster;
     }
-    auto storage = std::make_shared<Storage>();
+    auto storage = AllocateStorage();
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -212,7 +237,7 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     {
         return {};
     }
-    auto storage = std::make_shared<Storage>();
+    auto storage = AllocateStorage();
     storage->width = width;
     storage->height = height;
     storage->stride = stride;
@@ -527,7 +552,7 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
     {
         return {};
     }
-    auto storage = std::make_shared<Storage>();
+    auto storage = AllocateStorage();
     storage->width = width;
     storage->height = height;
     storage->stride = format == RasterFormat::Gray8 ? width : width * 4;

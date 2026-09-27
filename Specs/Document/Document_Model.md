@@ -86,6 +86,18 @@ width × height × bytes-per-pixel bytes and transfers it without a pixel copy. 
 leave ownership with the caller. A successful adoption empties the caller's buffer; writers MUST discard borrowed
 mutable pointers before publication. `Raster::Make` retains its copying/zero-filling semantics for existing callers.
 
+Large last-reference storage releases can be transferred through the owning thread's deferred-release sink.
+The intrusive node remains alive until its worker destroys it; workers with no sink release inline. Directly
+owned `PixelBuffer` results follow the same rule, including unpublished/cancelled results. Clearing the sink
+before joining/draining prevents callbacks into a destroyed scheduler. Sparse bases and tiles retain independent
+shared ownership; dropping a wrapper never frees a still-referenced base or tile.
+
+`PixelBuffer` uses a separately allocated 64-byte ownership record and aligned CRT pixels. Requested size is
+distinct from rounded capacity; buffers of at least 16 MiB use 16 MiB classes for bounded recycling. Consumers
+see only the requested size. `RequiredBytes` provides the complete allocation estimate for memory admission.
+ASan poisons cached payloads and unused capacity; reuse unpoisons only the requested bytes. A detached pool never
+owns an outstanding buffer, so closing the pool while an image remains alive preserves that image's lifetime.
+
 `LayerTransform` matches archived behavioral reference: origin, size, clockwise rotation
 degrees, flipX/flipY, sampling. Valid when all values are finite, size is 1…300 000 per side, and
 `abs(origin) ≤ 1 000 000`. Its geometry helpers (`Point`, `Contains`, `Corners`, `Following`, `Mirrored`, …), the

@@ -2,81 +2,53 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <malloc.h>
 #include <memory>
-#include <utility>
 
-// Unique, uninitialized pixel memory. The CRT aligned allocator is tracked by MSVC AddressSanitizer.
-// Every byte must be written before a buffer is published as an immutable Raster.
+struct PixelAllocation;
+
+// Unique uninitialized CRT/ASan-tracked pixels. A separate small ownership record permits a last-reference
+// transfer to a worker without allocation or a copy. Every byte must be initialized before publication.
 class PixelBuffer final
 {
   public:
     static constexpr std::size_t kAlignment = 64;
 
-    PixelBuffer() noexcept = default;
+    PixelBuffer() noexcept;
+    ~PixelBuffer();
     PixelBuffer(const PixelBuffer&) = delete;
     PixelBuffer& operator=(const PixelBuffer&) = delete;
-    PixelBuffer(PixelBuffer&& other) noexcept : _data(std::move(other._data)), _size(std::exchange(other._size, 0)) {}
-    PixelBuffer& operator=(PixelBuffer&& other) noexcept
-    {
-        if (this != &other)
-        {
-            _data = std::move(other._data);
-            _size = std::exchange(other._size, 0);
-        }
-        return *this;
-    }
-
-    [[nodiscard]] static PixelBuffer TryAllocate(std::size_t size) noexcept
-    {
-        // Avoid zero-sized allocations and overflow in the allocator's alignment bookkeeping.
-        if (size == 0 || size > std::numeric_limits<std::size_t>::max() - kAlignment - sizeof(void*))
-        {
-            return {};
-        }
-        PixelBuffer buffer;
-        buffer._data.reset(static_cast<std::uint8_t*>(_aligned_malloc(size, kAlignment)));
-        if (buffer._data)
-        {
-            buffer._size = size;
-        }
-        return buffer;
-    }
-
-    [[nodiscard]] explicit operator bool() const noexcept
-    {
-        return _data != nullptr;
-    }
-    [[nodiscard]] std::uint8_t* Data() noexcept
-    {
-        return _data.get();
-    }
-    [[nodiscard]] const std::uint8_t* Data() const noexcept
-    {
-        return _data.get();
-    }
-    [[nodiscard]] std::size_t Size() const noexcept
-    {
-        return _size;
-    }
+    PixelBuffer(PixelBuffer&&) noexcept;
+    PixelBuffer& operator=(PixelBuffer&&) noexcept;
+    [[nodiscard]] static PixelBuffer TryAllocate(std::size_t size) noexcept;
+    [[nodiscard]] explicit operator bool() const noexcept;
+    [[nodiscard]] std::uint8_t* Data() noexcept;
+    [[nodiscard]] const std::uint8_t* Data() const noexcept;
+    [[nodiscard]] std::size_t Size() const noexcept;
+    [[nodiscard]] std::uint64_t AllocationBytes() const noexcept;
+    // Owned bytes for a job peak: rounded pixels plus the ownership record. The global admission headroom
+    // covers CRT allocator bookkeeping and alignment slop, which the CRT does not expose as an exact size.
+    [[nodiscard]] static std::uint64_t RequiredBytes(std::size_t size) noexcept;
     [[nodiscard]] std::uint8_t& operator[](std::size_t index) noexcept
     {
-        return _data[index];
+        return Data()[index];
     }
     [[nodiscard]] const std::uint8_t& operator[](std::size_t index) const noexcept
     {
-        return _data[index];
+        return Data()[index];
     }
 
   private:
-    struct Free
+    struct Retire
     {
-        void operator()(std::uint8_t* pixels) const noexcept
-        {
-            _aligned_free(pixels);
-        }
+        void operator()(PixelAllocation* allocation) const noexcept;
     };
-    std::unique_ptr<std::uint8_t[], Free> _data;
-    std::size_t _size = 0;
+    std::unique_ptr<PixelAllocation, Retire> _allocation;
 };
+
+// One process pool explicitly scoped by the host. All operations are thread-safe. Trim and close can destroy
+// large allocations and belong on a worker or after the window is hidden. No cache exists before initialization.
+[[nodiscard]] bool InitializePixelBufferRecycle(std::uint64_t capBytes) noexcept;
+void SetPixelBufferRecycleCap(std::uint64_t capBytes) noexcept;
+[[nodiscard]] std::uint64_t PixelBufferRecycleBytes() noexcept;
+void TrimPixelBufferRecycle() noexcept;
+void ClosePixelBufferRecycle() noexcept;

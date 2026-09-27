@@ -95,6 +95,8 @@
     <ClCompile Include="HistoryRevisionTests.cpp" />
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
+    <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
+    <ClCompile Include="..\..\Common\PipelineTrace.cpp" />
     <ClCompile Include="..\..\Common\TransformEdit.cpp" />
     <ClCompile Include="..\..\Common\Selection.cpp" />
     <ClCompile Include="..\..\Common\CanvasSize.cpp" />

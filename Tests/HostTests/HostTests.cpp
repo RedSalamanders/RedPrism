@@ -5,6 +5,7 @@
 #include "CommandLine.h"
 #include "ContinuationQueueTests.h"
 #include "CrashDumps.h"
+#include "DeferredReleaseTests.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "ExecutorTests.h"
@@ -12,9 +13,15 @@
 #include "HistoryWorkTests.h"
 #include "JobActivityTests.h"
 #include "JobBenchmark.h"
+#include "JobMemoryTests.h"
 #include "JobTests.h"
 #include "JobUiPolicyTests.h"
 #include "Localization.h"
+#include "MemoryAdmissionTests.h"
+#include "MemoryBenchmark.h"
+#include "PerfRootTests.h"
+#include "PipelineTraceTests.h"
+#include "PixelRecycleTests.h"
 #include "PreviewMailboxTests.h"
 #include "Resources.h"
 #include "SettingsStore.h"
@@ -1590,6 +1597,10 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunJobBenchmark();
     }
+    if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-memory")
+    {
+        return RunMemoryBenchmark();
+    }
 #if defined(_DEBUG)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")
     {
@@ -1606,6 +1617,12 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobTests(stress);
     gFailures += RunJobUiPolicyTests();
     gFailures += RunJobActivityTests();
+    gFailures += RunMemoryAdmissionTests();
+    gFailures += RunDeferredReleaseTests();
+    gFailures += RunPerfRootTests();
+    gFailures += RunPipelineTraceTests();
+    gFailures += RunJobMemoryTests();
+    gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();
     gFailures += RunHistoryWorkHostTests();

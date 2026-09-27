@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Executor.h"
+#include "MemoryBudget.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -39,6 +40,9 @@ struct JobOptions final
     // Stroke, Selection, Commit and Io are FIFO within (kind, serialKey), through UI apply/drop. Zero is a
     // conservative global key. The host supplies collision-free document/path keys, never a truncated hash.
     std::uint64_t serialKey = 0;
+    // Additional allocation peak for the complete graph. Immutable inputs already resident are not charged
+    // again. The reservation survives Run and UI apply/drop; children borrow it instead of reserving again.
+    std::uint64_t memoryBytes = 0;
 };
 
 struct JobTicket final
@@ -77,14 +81,17 @@ class JobContext final
     Executor& executor;
     CancelToken cancellation;
     void* const shutdownEvent; // borrowed manual-reset HANDLE, valid only during Run
+    const std::uint64_t reservedMemoryBytes;
 
     // Concurrent calls coalesce without waiting. A report never allocates. Percentages are monotonic, and
     // publication is limited to one per 100 ms. Run must join every producer before returning.
     void ReportProgress(unsigned int percent) const noexcept;
 
     using Report = void (*)(void*, unsigned int) noexcept;
-    JobContext(Executor& execution, CancelToken token, void* event, Report report, void* context) noexcept
-        : executor(execution), cancellation(token), shutdownEvent(event), _report(report), _context(context)
+    JobContext(Executor& execution, CancelToken token, void* event, Report report, void* context,
+               std::uint64_t reserved = 0) noexcept
+        : executor(execution), cancellation(token), shutdownEvent(event), reservedMemoryBytes(reserved),
+          _report(report), _context(context)
     {
     }
 
@@ -128,7 +135,18 @@ class JobScheduler final
     JobScheduler(const JobScheduler&) = delete;
     JobScheduler& operator=(const JobScheduler&) = delete;
 
-    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {}) noexcept;
+    [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {},
+                                          MemorySource memory = {}) noexcept;
+    // Explicitly bind large last-reference releases on this owner thread to this scheduler. Only one scheduler
+    // per owner may bind. Clear happens before Close joins; a full job queue cannot refuse a release.
+    [[nodiscard]] bool EnableDeferredRelease() noexcept;
+    [[nodiscard]] bool EnableMemoryRecycling() noexcept;
+    [[nodiscard]] std::uint64_t ReservedMemoryBytes() const noexcept;
+    [[nodiscard]] std::uint64_t ReleasingMemoryBytes() const noexcept;
+    // Event sources call this without waiting, only while the initialized scheduler is alive. The caller joins
+    // external producers before Close; Close joins its own worker/wait sources. The next owner drain retries
+    // admission from a fresh snapshot.
+    void NotifyMemoryChanged() noexcept;
     // Owner-thread operations. Failed submission leaves ownership with the caller. Queue capacity includes
     // running and completed-but-undrained jobs. A ticket never identifies a reused slot's newer generation.
     [[nodiscard]] std::int32_t Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept;

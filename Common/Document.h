@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DeferredRelease.h"
+
 #include "PixelBuffer.h"
 
 #include <algorithm>
@@ -223,7 +225,10 @@ class Raster
     void ForEachStorage(const std::function<void(const Raster&)>& visit) const;
 
   private:
-    struct Storage
+    // The intrusive base outlives the last shared_ptr when large storage is handed to the worker release queue.
+#pragma warning(push)
+#pragma warning(disable : 4324) // the intrusive release node requires 16-byte storage alignment
+    struct Storage : DeferredReleaseNode
     {
         int width = 0;
         int height = 0;
@@ -241,6 +246,12 @@ class Raster
         int baseY = 0;
         std::vector<RasterTile> tiles;
     };
+#pragma warning(pop)
+    struct FreeStorage final
+    {
+        void operator()(Storage* storage) const noexcept;
+    };
+    [[nodiscard]] static std::shared_ptr<Storage> AllocateStorage();
     explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage)) {}
     static void Materialize(const Storage& storage) noexcept;
     std::shared_ptr<const Storage> _storage;

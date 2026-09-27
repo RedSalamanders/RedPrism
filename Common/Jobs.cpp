@@ -1,5 +1,8 @@
 #include "Jobs.h"
 
+#include "DeferredRelease.h"
+#include "PipelineTrace.h"
+#include "PixelBuffer.h"
 #include "WorkerPool.h"
 
 #include <array>
@@ -41,6 +44,7 @@ struct JobScheduler::Impl final
     enum class State
     {
         Empty,
+        WaitingAdmission,
         Queued,
         Running,
         Completed
@@ -61,6 +65,7 @@ struct JobScheduler::Impl final
         std::uint64_t generation = 0;
         std::uint64_t sequence = 0;
         JobOptions options{};
+        std::uint64_t reserved = 0;
         std::unique_ptr<Job> job;
         std::optional<CancelSource> cancel;
         JobResult result{};
@@ -78,6 +83,7 @@ struct JobScheduler::Impl final
     Impl()
     {
         InitializeSListHead(&completions);
+        InitializeSListHead(&releases);
     }
 
     DWORD ownerThread = GetCurrentThreadId();
@@ -89,13 +95,123 @@ struct JobScheduler::Impl final
     bool inCallback = false;        // owner thread, guards drain and actions across nested message loops
     bool closed = false;
     JobObserver observer;
+    MemorySource memorySource;
+    MemoryBudget memory;
+    bool releaseSinkInstalled = false;
+    bool ownsRecycle = false;
+    bool lowPressure = false;
+    std::uint64_t recycleCap = 0;
+    std::atomic<bool> trimPending{false};
+    std::atomic<unsigned int> trimCount{0}; // queued plus executing trims
+    std::atomic<std::uint64_t> releasingBytes{0};
+    std::atomic<std::size_t> releasingCount{0};
+    std::atomic<bool> memoryChanged{false};
+    // A signal is one-shot. Low arms high and high arms low: never poll or rearm a signaled level in a loop.
+    std::atomic<unsigned int> pressureSignal{0}; // 1 low, 2 high
     std::array<std::unique_ptr<UiAction>, JobScheduler::kUiActionCapacity> actions;
     std::size_t actionHead = 0;
     std::size_t actionCount = 0;
     alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER completions{};
+    alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER releases{};
     wil::unique_handle wake;
     wil::unique_handle shutdown;
     WorkerPool workers;
+    WaitPool memoryWaits;
+    wil::unique_handle lowMemory;
+    wil::unique_handle highMemory;
+    WaitPool::Ticket lowWait;
+    WaitPool::Ticket highWait;
+
+    static_assert(sizeof(DeferredReleaseNode::link) >= sizeof(SLIST_ENTRY));
+    static_assert(alignof(DeferredReleaseNode) >= alignof(SLIST_ENTRY));
+
+    void MemoryChanged() noexcept
+    {
+        memoryChanged.store(true, std::memory_order_release);
+        (void)SetEvent(wake.get());
+    }
+
+    static void LowMemory(void* context) noexcept
+    {
+        auto& self = *static_cast<Impl*>(context);
+        self.pressureSignal.store(1, std::memory_order_release);
+        self.MemoryChanged();
+    }
+
+    static void HighMemory(void* context) noexcept
+    {
+        auto& self = *static_cast<Impl*>(context);
+        self.pressureSignal.store(2, std::memory_order_release);
+        self.MemoryChanged();
+    }
+
+    static void EnqueueRelease(void* context, DeferredReleaseNode& node) noexcept
+    {
+        auto& self = *static_cast<Impl*>(context);
+        self.CheckOwner();
+        // Count before publication; a worker can consume the node immediately. No allocation, job slot,
+        // reservation or cancellation token is needed to return memory to the OS.
+        self.releasingBytes.fetch_add(node.bytes, std::memory_order_relaxed);
+        self.releasingCount.fetch_add(1, std::memory_order_release);
+        InterlockedPushEntrySList(&self.releases, reinterpret_cast<SLIST_ENTRY*>(node.link));
+        (void)self.workers.Wake(WorkPriority::Normal);
+    }
+
+    void DrainReleases() noexcept
+    {
+        while (auto* entry = InterlockedPopEntrySList(&releases))
+        {
+            auto* node = reinterpret_cast<DeferredReleaseNode*>(entry);
+            const std::uint64_t bytes = node->bytes;
+            node->destroy(node);
+            releasingBytes.fetch_sub(bytes, std::memory_order_relaxed);
+            releasingCount.fetch_sub(1, std::memory_order_release);
+            MemoryChanged();
+        }
+    }
+
+    void RequestTrim() noexcept
+    {
+        // Disable returns before dispatch. The worker may be freeing cached pages while the UI keeps pumping.
+        SetPixelBufferRecycleCap(0);
+        trimCount.fetch_add(1, std::memory_order_release);
+        if (!trimPending.exchange(true, std::memory_order_acq_rel))
+        {
+            (void)workers.Wake(WorkPriority::Normal);
+        }
+        else
+        {
+            trimCount.fetch_sub(1, std::memory_order_release);
+        }
+    }
+
+    void TrimRecycle() noexcept
+    {
+        // A newer request may run concurrently with this one. The pool detaches its fixed slot array under
+        // its lock, so each allocation is destroyed once, outside that lock. Count includes detached pages.
+        if (trimPending.exchange(false, std::memory_order_acq_rel))
+        {
+            TrimPixelBufferRecycle();
+            trimCount.fetch_sub(1, std::memory_order_release);
+            MemoryChanged();
+        }
+    }
+
+    bool SampleMemory(MemorySnapshot& snapshot) const noexcept
+    {
+        if (memorySource.sample)
+        {
+            return memorySource.sample(memorySource.context, snapshot);
+        }
+        MEMORYSTATUSEX status{};
+        status.dwLength = sizeof(status);
+        if (!GlobalMemoryStatusEx(&status))
+        {
+            return false;
+        }
+        snapshot = {status.ullAvailPhys, status.ullAvailPageFile};
+        return true;
+    }
 
     void CheckOwner() const noexcept
     {
@@ -156,6 +272,106 @@ struct JobScheduler::Impl final
         return false;
     }
 
+    void AdmitWaiting() noexcept
+    {
+        CheckOwner();
+        // Visit every waiting record once in input order. An impossible large request must not occupy a pool
+        // callback or prevent an unrelated smaller request from running. No partial reservation is retained.
+        std::uint64_t after = 0;
+        for (;;)
+        {
+            Record* selected = nullptr;
+            {
+                WorkerResources::ExclusiveLock guard{lock};
+                if (closing)
+                {
+                    return;
+                }
+                for (auto& record : records)
+                {
+                    if (record.state == State::WaitingAdmission && record.sequence > after &&
+                        (!selected || record.sequence < selected->sequence) && !Blocked(record))
+                    {
+                        selected = &record;
+                    }
+                }
+            }
+            if (!selected)
+            {
+                break;
+            }
+            after = selected->sequence;
+            const bool cancelled = selected->cancel->Token().IsCancelled();
+            MemorySnapshot snapshot{};
+            const bool sampled = cancelled || selected->options.memoryBytes == 0 || SampleMemory(snapshot);
+            const auto decision = cancelled ? MemoryAdmission::Refused
+                                  : sampled ? memory
+                                                  .Reserve(selected->options.memoryBytes, snapshot,
+                                                           releasingBytes.load(std::memory_order_acquire) +
+                                                               (trimCount.load(std::memory_order_acquire) != 0 ? 1 : 0))
+                                                  .admission
+                                            : MemoryAdmission::Refused;
+            if (!cancelled && sampled && decision != MemoryAdmission::Ready && PixelBufferRecycleBytes() != 0)
+            {
+                RequestTrim();
+                continue;
+            }
+            TracePipelineMemory(decision == MemoryAdmission::Ready     ? "admitted"
+                                : decision == MemoryAdmission::Waiting ? "waiting"
+                                                                       : "refused",
+                                selected->options.memoryBytes, memory.Reserved(),
+                                releasingBytes.load(std::memory_order_acquire));
+            if (decision == MemoryAdmission::Waiting)
+            {
+                continue;
+            }
+            {
+                WorkerResources::ExclusiveLock guard{lock};
+                if (decision == MemoryAdmission::Ready)
+                {
+                    selected->reserved = selected->options.memoryBytes;
+                    selected->state = State::Queued;
+                }
+                else
+                {
+                    selected->result =
+                        cancelled ? JobResult{JobStatus::Cancelled} : JobResult{JobStatus::Failed, E_OUTOFMEMORY};
+                    selected->state = State::Completed;
+                }
+            }
+            if (decision != MemoryAdmission::Ready)
+            {
+                Publish(selected->final);
+            }
+        }
+        WakeQueued();
+    }
+
+    void ProcessMemoryChange() noexcept
+    {
+        if (!memoryChanged.exchange(false, std::memory_order_acq_rel))
+        {
+            return;
+        }
+        const unsigned int pressure = pressureSignal.exchange(0, std::memory_order_acq_rel);
+        if (pressure == 1)
+        {
+            lowPressure = true;
+            RequestTrim();
+            (void)memoryWaits.Rearm(highWait);
+        }
+        else if (pressure == 2)
+        {
+            lowPressure = false;
+            (void)memoryWaits.Rearm(lowWait);
+        }
+        if (ownsRecycle && !lowPressure && trimCount.load(std::memory_order_acquire) == 0)
+        {
+            SetPixelBufferRecycleCap(recycleCap);
+        }
+        AdmitWaiting();
+    }
+
     Record* Take(WorkPriority priority) noexcept
     {
         WorkerResources::ExclusiveLock guard{lock};
@@ -182,10 +398,19 @@ struct JobScheduler::Impl final
     static void Dispatch(void* context, WorkPriority priority, CancelToken) noexcept
     {
         auto& self = *static_cast<Impl*>(context);
+        if (priority == WorkPriority::Normal)
+        {
+            self.DrainReleases();
+            self.TrimRecycle();
+        }
         while (Record* record = self.Take(priority))
         {
-            JobContext execution{self.workers, record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
-                                 self.shutdown.get(), Report, record};
+            JobContext execution{self.workers,
+                                 record->cancel->Token().WithShutdown(self.workers.ShutdownToken()),
+                                 self.shutdown.get(),
+                                 Report,
+                                 record,
+                                 record->reserved};
             JobResult result{JobStatus::Cancelled};
             if (!execution.cancellation.IsCancelled())
             {
@@ -209,6 +434,11 @@ struct JobScheduler::Impl final
             }
             // No access to record after this call. A draining UI may immediately destroy/reuse the slot.
             self.Publish(record->final);
+            if (priority == WorkPriority::Normal)
+            {
+                self.DrainReleases();
+                self.TrimRecycle();
+            }
         }
     }
 
@@ -246,7 +476,7 @@ JobScheduler::~JobScheduler()
     Close();
 }
 
-std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer) noexcept
+std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer, MemorySource memory) noexcept
 {
     if (_impl)
     {
@@ -275,12 +505,96 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
         return result;
     }
     _impl->observer = observer;
-    const HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
+    _impl->memorySource = memory;
+    HRESULT result = _impl->workers.Initialize(threads, Impl::Dispatch, _impl.get());
+    if (SUCCEEDED(result) && !memory.sample)
+    {
+        _impl->lowMemory.reset(CreateMemoryResourceNotification(LowMemoryResourceNotification));
+        _impl->highMemory.reset(CreateMemoryResourceNotification(HighMemoryResourceNotification));
+        if (!_impl->lowMemory || !_impl->highMemory)
+        {
+            result = HRESULT_FROM_WIN32(GetLastError());
+        }
+        else
+        {
+            result = _impl->memoryWaits.Initialize();
+        }
+        if (SUCCEEDED(result))
+        {
+            result = _impl->memoryWaits.Add(_impl->lowMemory.get(), Impl::LowMemory, _impl.get(), _impl->lowWait);
+        }
+        if (SUCCEEDED(result))
+        {
+            result = _impl->memoryWaits.Add(_impl->highMemory.get(), Impl::HighMemory, _impl.get(), _impl->highWait);
+        }
+    }
     if (FAILED(result))
     {
         Close();
     }
     return result;
+}
+
+bool JobScheduler::EnableDeferredRelease() noexcept
+{
+    if (!_impl || _impl->closed || _impl->workers.ShutdownToken().stop_requested())
+    {
+        return false;
+    }
+    _impl->CheckOwner();
+    if (!_impl->releaseSinkInstalled)
+    {
+        _impl->releaseSinkInstalled = InstallDeferredReleaseSink(Impl::EnqueueRelease, _impl.get());
+    }
+    return _impl->releaseSinkInstalled;
+}
+
+bool JobScheduler::EnableMemoryRecycling() noexcept
+{
+    if (!_impl || _impl->closed || _impl->workers.ShutdownToken().stop_requested())
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.ownsRecycle)
+    {
+        return true;
+    }
+    MemorySnapshot snapshot{};
+    if (!self.SampleMemory(snapshot))
+    {
+        return false;
+    }
+    const auto budget = EvaluateMemoryAdmission(0, snapshot.availablePhysicalBytes, snapshot.availableCommitBytes,
+                                                self.memory.Reserved(), 0)
+                            .availableAfterReservations;
+    self.recycleCap = (std::min)(budget / 8, 512ull * 1024 * 1024);
+    self.ownsRecycle = InitializePixelBufferRecycle(self.recycleCap);
+    return self.ownsRecycle;
+}
+
+std::uint64_t JobScheduler::ReservedMemoryBytes() const noexcept
+{
+    if (!_impl)
+    {
+        return 0;
+    }
+    _impl->CheckOwner();
+    return _impl->memory.Reserved();
+}
+
+std::uint64_t JobScheduler::ReleasingMemoryBytes() const noexcept
+{
+    return _impl ? _impl->releasingBytes.load(std::memory_order_acquire) : 0;
+}
+
+void JobScheduler::NotifyMemoryChanged() noexcept
+{
+    if (_impl)
+    {
+        _impl->MemoryChanged();
+    }
 }
 
 std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept
@@ -325,6 +639,7 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         }
         record.owner = &self;
         record.options = options;
+        record.reserved = 0;
         record.sequence = ++self.nextSequence;
         record.generation = record.sequence;
         record.job = std::move(job);
@@ -333,12 +648,12 @@ std::int32_t JobScheduler::Submit(std::unique_ptr<Job>& job, JobOptions options,
         record.progressQueued.store(false, std::memory_order_relaxed);
         record.publishedPercent = 0;
         record.publishedAt = 0;
-        record.state = Impl::State::Queued;
+        record.state = Impl::State::WaitingAdmission;
         ticket = {slot, record.generation};
         ++self.liveCount;
     }
     self.Notify(JobNoticeKind::Submitted, ticket, options.kind);
-    (void)self.workers.Wake(Priority(options.kind));
+    self.AdmitWaiting();
     return S_OK;
 }
 
@@ -361,7 +676,7 @@ bool JobScheduler::Cancel(JobTicket ticket) noexcept
         cancel = record.cancel;
     }
     (void)cancel->Cancel();
-    self.WakeQueued();
+    self.AdmitWaiting();
     return true;
 }
 
@@ -417,7 +732,22 @@ void JobScheduler::Close() noexcept
         return;
     }
     RequestStop();
+    if (self.releaseSinkInstalled)
+    {
+        (void)ClearDeferredReleaseSink(_impl.get());
+        self.releaseSinkInstalled = false;
+    }
+    self.memoryWaits.Close();
+    self.lowMemory.reset();
+    self.highMemory.reset();
     self.workers.Close();
+    self.DrainReleases();
+    self.TrimRecycle();
+    if (self.ownsRecycle)
+    {
+        ClosePixelBufferRecycle();
+        self.ownsRecycle = false;
+    }
     (void)InterlockedFlushSList(&self.completions);
     std::array<std::unique_ptr<Job>, kCapacity> retired;
     {
@@ -436,6 +766,7 @@ void JobScheduler::Close() noexcept
     {
         job.reset();
     }
+    (void)self.memory.Release(self.memory.Reserved());
     for (auto& action : self.actions)
     {
         action.reset();
@@ -454,17 +785,20 @@ bool JobScheduler::IsIdle() const noexcept
         return true;
     }
     _impl->CheckOwner();
-    return _impl->liveCount == 0 && _impl->actionCount == 0;
+    return _impl->liveCount == 0 && _impl->actionCount == 0 &&
+           _impl->releasingCount.load(std::memory_order_acquire) == 0 &&
+           _impl->trimCount.load(std::memory_order_acquire) == 0;
 }
 
 bool JobScheduler::HasUiWork() const noexcept
 {
-    if (!_impl)
+    if (!_impl || _impl->closed)
     {
         return false;
     }
     _impl->CheckOwner();
-    return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0;
+    return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0 ||
+           _impl->memoryChanged.load(std::memory_order_acquire);
 }
 
 bool JobScheduler::InUiCallback() const noexcept
@@ -530,6 +864,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
     }
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
+    self.ProcessMemoryChange();
     auto* list = InterlockedFlushSList(&self.completions);
     SLIST_ENTRY* fifo = nullptr;
     while (list)
@@ -572,6 +907,10 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         }
         record.job.reset();
         record.cancel.reset();
+        const bool released = self.memory.Release(record.reserved);
+        assert(released);
+        (void)released;
+        record.reserved = 0;
         {
             WorkerResources::ExclusiveLock guard{self.lock};
             record.state = JobScheduler::Impl::State::Empty;
@@ -580,7 +919,10 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         ++completed;
         self.Notify(JobNoticeKind::Retired, ticket, record.options.kind);
     }
-    self.WakeQueued();
+    if (completed != 0)
+    {
+        self.AdmitWaiting();
+    }
     return completed;
 }
 

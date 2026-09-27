@@ -121,6 +121,14 @@ releasing session inputs, chrome, renderer/device resources, the window, localiz
 Shutdown drops pending completion callbacks and UI actions after producers have joined. Calls made during a job UI
 callback defer teardown until the callback has returned.
 
+The scheduler's owner grants memory reservations before dispatch and holds them through UI application and
+payload destruction. Waiting admission uses records, never blocked workers; memory events and retirements retry
+from an OS snapshot. An independent intrusive release queue can return memory even at the scheduler record cap.
+`Raster` and `PixelBuffer` own their release nodes. A thread-local sink binds only the application owner to the
+queue; Close clears that binding before joining/draining. The process recycle pool holds only unowned pixel
+allocations, so detaching it cannot invalidate live images. Low/high physical-memory events use one-shot waits on
+the separate wait pool. Exact budgets, cache caps and trace gates live in `Core_PerformanceAndResources.md`.
+
 Independent state-machine expectations (no legacy counterpart) are: each tile/pixel is visited exactly once;
 inline, 1-, 2- and 4-worker outputs equal a serial coordinate formula; N jobs on N workers and nested execution
 complete; a cancelled row publishes no partial success; close retains active inputs until callbacks return; wait

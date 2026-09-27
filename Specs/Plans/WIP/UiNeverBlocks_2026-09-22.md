@@ -6,6 +6,7 @@
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.
   - [ ] Add the remaining UI, ETW, IO and operation-classification measurements.
+  - [x] Add private ETW capture/decode and the marked local-drive perf-root resolver for the P0.7 free gate.
 - [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
   - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
   - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
@@ -40,7 +41,12 @@
   - [x] Wire scheduler activity into the one-shot busy deadline and localized DxUi progress control.
   - [x] Verify state machines, document replay, observer lifetime, DPI layout and event-driven activity; complete all configuration gates.
   - [x] Update normative contracts and the validation record for the completed slice.
-- [ ] P0.7 — Add memory admission, deferred release and justified recycling.
+- [x] P0.7 — Add memory admission, deferred release and justified recycling. Full x64 gates, native analysis and all ARM64 cross-builds passed.
+  - [x] Add the pure admission policy and whole-reservation accounting with overflow-safe boundaries.
+  - [x] Measure fresh-buffer page-touch and free costs against reuse before deciding the recycling policy. Three confirming 10-pair runs: fresh touch 16.64–17.51 ms versus reused 6.51–6.73 ms; free 6.02–6.36 ms. Implement a bounded recycle pool.
+  - [x] Gate dispatch on whole-graph reservations and retry from release/pressure events. Debug event/state tests pass, including an empty-frame-drain no-polling regression.
+  - [x] Transfer large buffer/storage destruction to a non-cancellable worker release queue; prove teardown lifetime. Debug tests and actual ETW positive controls pass.
+  - [x] Trace and stress admission, allocation failure and deferred frees; complete the validation matrix. 307 checks in Release, actual ETW byte counts and sanitizer poison checks pass.
 - [ ] P0.8 — Add scalar kernel dispatch and the x64 VEX scan.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
@@ -50,7 +56,7 @@
 - [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
 
-Implementation started 2026-09-27. Slices P0.2–P0.6b are complete on x64; the P0 phase remains open. ARM64
+Implementation started 2026-09-27. Slices P0.2–P0.7 are complete on x64; the P0 phase remains open. ARM64
 Debug, Release and ASan Debug cross-builds passed. Native ARM64 execution is unavailable on this host.
 
 Execution scope, 2026-09-27: the user explicitly authorized implementation through P6, with this opening checklist
@@ -99,6 +105,14 @@ production activity notifications, exact visibility boundaries, 96/144 DPI and h
 and all ARM64 cross-builds passed. See the [input-policy record](../../TestRuns/JobInputPolicies_2026-09-27.md).
 P1 still owns actual tool snapshot/worker/apply migration, stroke sample storage and file-flow wiring; these
 foundation gates do not claim that image processing is already nonblocking.
+This slice was committed and pushed to `origin/main` as `3bdc87a`.
+
+P0.7 progress, 2026-09-27: whole-graph admission, event-only retries, large deferred releases and bounded recycling
+passed the full x64 matrix, native analysis and all ARM64 cross-builds. The actual ETW stream has two positive
+controls and no UI free of 16 MiB or more for direct/adopted/vector releases. Recycled 45 MP buffers measure
+6.669 ms full touch and 7.95 µs UI ownership retirement (enqueue only), with matching checksums and zero warm
+page faults. The [memory record](../../TestRuns/MemoryPipeline_2026-09-27.md) gives controls, after measurements,
+review corrections and qualification limits. P1 still owns every operation's declared peak and async migration.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -112,7 +126,7 @@ ASan includes the extended 256-round concurrency stress and a real detection pro
 thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
 boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
 
-- **Status**: ACTIVE. P0.2–P0.6b are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded; P0.7 is next.
+- **Status**: ACTIVE. P0.2–P0.7 are complete on x64; all ARM64 cross-builds passed. D2, D3 and D8 are recorded; P0.8 is next.
   P0.1 and P0.8 remain executable without an open decision.
   The open decisions in §11 gate the other slices:
 
@@ -676,11 +690,14 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 
 **Deferred release**:
 
-- Large frees move off the UI thread through a process-global release sink in `Common/`: an atomic function pointer
-  plus context. `Application` registers the sink after the lanes start and clears it in `Shutdown` before stopping
-  them.
-- `Storage`'s deleter moves storage of 16 MiB or more to the sink when it runs on the UI thread. The check compares
-  `GetCurrentThreadId()` with an id recorded at startup.
+- Large frees move off the UI thread through a thread-local release sink in `Common/`. `Application` registers
+  the function/context pair on its UI thread after the lanes start and clears it on that thread before stopping
+  them. Other threads have no sink and free inline. This implementation decision (2026-09-27) removes the race
+  between loading a process-global function and its separately retired context, with no per-release lock or
+  reference count.
+- `Storage`'s deleter and a directly owned `PixelBuffer` transfer allocations of 16 MiB or more to that sink.
+  The buffer's allocation carries its own aligned intrusive header, so cancelled/unadopted results also avoid a
+  large UI-thread free. Normal worker destruction and final shutdown destruction remain inline.
 - The node is intrusive inside `Storage`, so queuing never allocates.
 - A NORMAL-priority Background callback drains the list. Frees are never dropped or cancelled.
 - With no sink registered (tests, shutdown, non-UI threads), the deleter frees inline.
@@ -748,6 +765,18 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     pool.
   - The pool's cap is a fixed fraction of `MemoryBudget`, and it is trimmed on memory pressure.
   - When a panel opens, the Background lane may pre-fault one result buffer of the target size.
+  - P0.7 implementation decision (2026-09-27): three independent 10-pair Release runs confirm more than
+    10 ms additional fresh-page cost at 179,044,352 bytes (20% of the 50 ms Levels budget). Pool capacity is
+    one eighth of the available admission ceiling at initialization, capped at 512 MiB and 32 slots. Large
+    allocations round to 16 MiB classes. The actual requested size remains distinct from capacity; peak estimates
+    use `PixelBuffer::RequiredBytes`, including the 64-byte ownership record. Cache returns and trims run on
+    workers, caps drop to zero during trim/low-memory handling, and a fresh OS snapshot decides admission after
+    trim completion. No available physical pages are credited twice. Scalar scratch/row pools remain part of
+    the corresponding P1/P2 kernel migrations.
+  - `PixelBuffer` now separates its small intrusive allocation record from the aligned pixels. This adds one
+    small CRT allocation per fresh buffer, permits allocation-free deferred release, and keeps pixel redzones
+    separate from metadata. Cached payloads and class slack are poisoned under ASan; reuse unpoisons only the
+    requested bytes. Measure the resulting wrapper overhead with the P0.7 benchmark before accepting the slice.
 - **Admission**:
   - `MemoryBudget` is the live admission ceiling: min(`ullAvailPageFile`, `ullAvailPhys`) from
     `GlobalMemoryStatusEx` at each admission, minus outstanding reservations, minus 1 GiB of headroom. Recycle-pool

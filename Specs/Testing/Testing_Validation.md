@@ -144,6 +144,21 @@ trees are materialized under `%TEMP%\RedPrism.IoTests`; a test that writes a fil
 
 ## Later gates (record now, implement with the feature)
 
+The P0.7 HostTests additions use independent byte/accounting and event-order references: `memory-admission.*`,
+`deferred-release.*`, `job-memory.*`, `pixel-recycle.*` and `pipeline-trace.*`. They cover no partial reservations,
+waiters outside workers, failure/cancel/drop paths, serial-key admission through retirement, release with all job
+slots occupied, pool capacity/slot limits, live buffers surviving pool close and concurrent borrowers. Under
+ASan, checks inspect poisoning of cached payload and size-class slack and unpoisoning on reuse.
+
+The ETW gate starts a private in-process TraceLogging session, includes synthetic and actual 1 MiB UI free
+positive controls, releases real 16 MiB direct/adopted/vector storage through the worker queue, and decodes the
+resulting ETL. It asserts no lost events, exact positive-control bytes and no UI free of at least 16 MiB. It needs
+no elevated system-wide tracing session. Failure to record or decode is a failure, never an omitted test.
+
+`HostTests --bench-memory` is opt-in measurement only: 8192×5464 BGRA, two warmup pairs and ten alternating fresh
+and reused pairs; allocation, touch and release have separate QPC regions. Full checksums, page-fault deltas and
+process-memory samples are outside those regions. No elapsed time is asserted by the ordinary test suite.
+
 | When | Gate |
 | --- | --- |
 | C8–C13 | Tool and filter goldens ported from retained numeric golden cases behavior, not UI-driver scripts |
@@ -160,7 +175,12 @@ an equivalent harness helper). Computer Use and desktop screenshot tools are pro
 ## Fail-closed data root
 
 When a test needs a writable sandbox for documents or perf traces, it MUST use `X:\RedPrism.Perf` (any local drive
-letter plus a directory ownership marker), never repository `.build/` as a data sandbox. C1 does not create that tree.
+letter plus a directory ownership marker), never repository `.build/` as a data sandbox. `ResolvePerfRoot` accepts
+only that exact root grammar on fixed local drives. `REDPRISM_PERF_ROOT` selects an explicit root; otherwise the
+resolver prefers an already marked X: root, then another marked local root, and finally creates a new root on the
+Windows drive. An existing unmarked, malformed-marker or reparse root is never claimed or recursively cleaned.
+The marker is `.redprism-perf-owner` with exact ASCII bytes `RedPrism performance root owner v1` followed by LF.
+The ETW harness deletes only its own PID-named trace files and leaves the ownership marker in place.
 
 ## Skills
 

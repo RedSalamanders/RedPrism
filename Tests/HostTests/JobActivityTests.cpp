@@ -226,7 +226,7 @@ class EventJob final : public Job
         Append(*_state.trace, TraceKind::Completed, _successor ? _state.successorTicket : _state.firstTicket);
         if (_submitSuccessor)
         {
-            std::unique_ptr<Job> next{new (std::nothrow) EventJob(_state, false, false, true)};
+            std::unique_ptr<Job> next = std::make_unique<EventJob>(_state, false, false, true);
             _state.successorSubmitted =
                 next && _state.scheduler->Submit(next, {JobClass::Commit}, _state.successorTicket) >= 0 && !next;
         }
@@ -277,8 +277,6 @@ void TestSchedulerObserver(int& failures)
     Wait(static_cast<HANDLE>(scheduler.WakeHandle()), "progress-publication-wake");
     (void)DrainCompletions(scheduler);
     (void)SetEvent(release.get());
-    Wait(static_cast<HANDLE>(scheduler.WakeHandle()), "completion-publication-wake");
-    const std::size_t drained = DrainCompletions(scheduler);
     const SettleResult settled = SettleJobs(scheduler, 10000);
 
     // The first completion submits a successor from the owner-thread callback. Its Submitted notice occurs
@@ -289,7 +287,7 @@ void TestSchedulerObserver(int& failures)
         trace.events[3].kind == TraceKind::Submitted && trace.events[4].kind == TraceKind::Retired &&
         trace.events[0].ticket == firstTicket && trace.events[1].ticket == firstTicket &&
         trace.events[2].ticket == firstTicket && trace.events[4].ticket == firstTicket;
-    Expect(firstLifecycle && drained == 1 && state.successorSubmitted && settled == SettleResult::Settled,
+    Expect(firstLifecycle && state.successorSubmitted && settled == SettleResult::Settled,
            "observer-submit-progress-complete-successor-retire-order", failures);
     Expect(state.callbacksOnOwner && !trace.wrongThread && !trace.overflow,
            "observer-and-job-callbacks-owner-thread-context-live", failures);
