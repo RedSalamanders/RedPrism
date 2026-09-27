@@ -66,9 +66,10 @@
     - [x] Declare the complete commit allocation peak and cache selection point counts for constant-time admission estimates.
     - [x] Complete numeric/cancellation/peak tests, Release cancellation measurements and all configuration gates. Maximum observed stop-to-return was 9.659 ms on the measured inputs; this is not a worst-case cancellation guarantee.
   - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
-    - [ ] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Implementation drafted while P1.1b completes validation.
-    - [ ] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates.
-    - [ ] Wire one-active/latest-pending previews, once-per-opening histograms and ordered commits with a busy panel and working Cancel.
+    - [x] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Full x64 gates and all ARM64 cross-builds passed.
+    - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
+    - [ ] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation.
+    - [ ] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
@@ -187,7 +188,16 @@ rounding and sparse input copies, and avoids charging a resident exact preview a
 ARM64 cross-builds passed, including curve-allocation and finite-coordinate-overflow review corrections. All 13
 4K benchmark checksums match the original baseline; observed cancellation returns and their limits are recorded
 in the [P1.1b record](../../TestRuns/FilterCancellation_2026-09-28.md). The host still invokes the graph synchronously
-until P1.1c.
+until P1.1c. P1.1b was committed and pushed as `c859bd0`.
+
+P1.1c.1 progress, 2026-09-28: deferred panel metadata, worker padding/preview/histogram graphs, lifetime/sequence
+validation, source-cache rules and preparation reservations are implemented. The direct API uses the same graph;
+its existing document goldens pass. A cheaper agent supplied cached selection bounds and another supplied
+the independent deferred-state tests; the primary owns the worker and publication logic and reviews their changes.
+All x64 configuration gates and all ARM64 cross-builds passed. The benchmark no longer requires unused identity
+preview preparation; the ISA gate now verifies an additional compiler switch-table pattern without an object
+allowlist exception. Evidence is in the [P1.1c.1 record](../../TestRuns/ColorPanelWork_2026-09-28.md).
+Production job/continuation wiring follows this boundary and is not yet complete.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic

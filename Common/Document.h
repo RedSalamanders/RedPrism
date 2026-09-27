@@ -632,6 +632,24 @@ class SelectionLoops
         {
             _pointCount += loop.size(); // Owned Vec2 allocations cannot together exceed addressable bytes.
         }
+        _bounds = LoopsBounds(Get());
+    }
+    SelectionLoops(const SelectionLoops&) noexcept = default;
+    SelectionLoops& operator=(const SelectionLoops&) noexcept = default;
+    SelectionLoops(SelectionLoops&& other) noexcept
+        : _loops(std::move(other._loops)), _pointCount(std::exchange(other._pointCount, 0)),
+          _bounds(std::exchange(other._bounds, std::nullopt))
+    {
+    }
+    SelectionLoops& operator=(SelectionLoops&& other) noexcept
+    {
+        if (this != &other)
+        {
+            _loops = std::move(other._loops);
+            _pointCount = std::exchange(other._pointCount, 0);
+            _bounds = std::exchange(other._bounds, std::nullopt);
+        }
+        return *this;
     }
     [[nodiscard]] const std::vector<SelectionLoop>& Get() const noexcept
     {
@@ -671,6 +689,11 @@ class SelectionLoops
     {
         return _loops ? _pointCount : 0;
     }
+    // Computed with the immutable geometry so selection bounds readers never traverse the outline.
+    [[nodiscard]] std::optional<SelectionBounds> Bounds() const noexcept
+    {
+        return _loops ? _bounds : std::nullopt;
+    }
     [[nodiscard]] const SelectionLoop& operator[](std::size_t index) const noexcept
     {
         return Get()[index];
@@ -679,6 +702,7 @@ class SelectionLoops
   private:
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
+    std::optional<SelectionBounds> _bounds;
 };
 
 // A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
@@ -691,7 +715,7 @@ struct DocumentSelection
     [[nodiscard]] bool operator==(const DocumentSelection&) const noexcept = default;
     [[nodiscard]] std::optional<SelectionBounds> Bounds() const noexcept
     {
-        return LoopsBounds(loops);
+        return loops.Bounds();
     }
     [[nodiscard]] bool IsEmpty() const noexcept
     {
@@ -1117,6 +1141,17 @@ struct HueTargetDrag
 
 struct ColorEditJobInput;
 struct ColorEditJobResult;
+struct ColorEditPreviewResult;
+struct ColorEditHistogramResult;
+
+struct ColorEditGrid final
+{
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    [[nodiscard]] bool operator==(const ColorEditGrid&) const noexcept = default;
+};
 
 // The one open color or filter panel, whatever its kind: the layer's pixels it started from and where they sit, the
 // selection it is limited to, the grid grown for a blur or a fill to spread into, the copy the preview renders from
@@ -1131,10 +1166,15 @@ struct ColorEdit
     std::optional<DocumentSelection> selection;
     FilterSettings settings;
     std::optional<JobToken> sourceToken; // Opening inputs; absent for adjustment-layer panels.
+    bool deferred = false; // Host captures metadata; its jobs run the same graph as direct inline callers.
+    std::uint64_t openingSequence = 0;
+    std::uint64_t previewSequence = 0;            // Exact settings/seed/grid sequence that produced previewRaster.
+    std::uint64_t previewInvalidatedSequence = 0; // Preview off/identity/growth refusal invalidates earlier output.
     bool commitFailed = false;
     bool preview = true;
-    std::uint32_t seed = 0; // Add Noise's and Grain's pattern, fixed while the panel is open
-    Raster grownImage;      // the pixels padded out for a blur or a fill (empty when not grown)
+    std::uint32_t seed = 0;                 // Add Noise's and Grain's pattern, fixed while the panel is open
+    Raster grownImage;                      // the pixels padded out for a blur or a fill (empty when not grown)
+    std::optional<ColorEditGrid> grownGrid; // Planned extent on the original grid, before worker preparation.
     LayerTransform grownTransform;
     double grownMargin = 0;
     int grownOffsetX = 0; // where the original grid sits in the grown one
@@ -1160,7 +1200,15 @@ struct ColorEdit
     }
     [[nodiscard]] const LayerTransform& Placement() const noexcept
     {
-        return grownImage.HasStorage() ? grownTransform : transform;
+        return grownGrid.has_value() || grownImage.HasStorage() ? grownTransform : transform;
+    }
+    [[nodiscard]] int SourceWidth() const noexcept
+    {
+        return grownGrid ? grownGrid->width : Source().Width();
+    }
+    [[nodiscard]] int SourceHeight() const noexcept
+    {
+        return grownGrid ? grownGrid->height : Source().Height();
     }
 };
 
@@ -1745,13 +1793,20 @@ class DocumentSession
     // One pipeline for every kind: Begin settles pending work and opens the panel on the active layer, Update
     // previews, Commit renders at full size and records one entry (an edit that changes nothing, or a layer that
     // changed under the panel, closes without one), Cancel drops the panel.
-    void BeginColorEdit(FilterKind kind);
+    void BeginColorEdit(FilterKind kind, bool deferred = false);
     void UpdateColorEdit(const FilterSettings& settings, bool preview);
     // The open Levels or Hue/Saturation panel's own settings (nothing while another kind is open).
     void UpdateLevels(const LevelsSettings& settings, bool preview);
     void UpdateHueSaturation(const HueSaturationSettings& settings, bool preview);
     // Owning immutable work; direct Commit runs the same graph with an InlineExecutor.
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditCommit() const;
+    [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditPreview() const;
+    [[nodiscard]] bool ApplyColorEditPreview(const ColorEditPreviewResult& result);
+    [[nodiscard]] bool ApplyColorEditHistogram(const ColorEditHistogramResult& result);
+    [[nodiscard]] std::uint64_t ColorEditSequence() const noexcept
+    {
+        return _colorEditSequence;
+    }
     // No pixel kernels; rejects stale work, keeps failed/cancelled panels, records one successful edit.
     [[nodiscard]] bool ApplyColorEditResult(const ColorEditJobResult& result);
     void CommitColorEdit();
@@ -1784,7 +1839,7 @@ class DocumentSession
     {
         _adjustmentEditingID = id;
     }
-    bool BeginAdjustmentEditing(const Guid& id, const Raster& below);
+    bool BeginAdjustmentEditing(const Guid& id, const Raster& below, bool deferred = false);
     bool PreviewAdjustmentEditing(bool preview);
     bool FinishAdjustmentEditing(bool commit);
     [[nodiscard]] const std::optional<LayerAdjustment>& AdjustmentOriginal() const noexcept
@@ -2034,7 +2089,10 @@ class DocumentSession
     bool GrowFilterForBlur();
     // Pads the filter's grid out to cover `extent` (layer pixels), keeping what is already grown.
     bool GrowFilterGrid(int left, int top, int right, int bottom);
-    void PrepareFilterPreview();
+    void RenderColorEditInline();
+    void MeasureColorEditHistogramInline();
+    [[nodiscard]] bool ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening,
+                                               const Raster& original) const noexcept;
     // A brush stroke, gradient or Invert/pixel-move edit on `layer` (or its mask): built, validated, pixel-budget
     // limited and clipped to the selection, or null when construction fails, the raster is invalid, or there is no
     // document. `settings` is the brush the caller paints with; edits that only need a raster to write into (a

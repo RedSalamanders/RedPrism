@@ -463,7 +463,7 @@ void Application::AdvanceUiBenchmark() noexcept
                             edit->previewRaster != state.previousPreview;
     const bool histogramReady = expected == Expected::Histogram && edit.has_value() &&
                                 edit->kind == FilterKind::Levels && edit->histogramReady &&
-                                edit->original == state.previousImage && edit->previewSource.HasStorage();
+                                edit->original == state.previousImage;
     const bool changedPixels = layer && layer->asset.has_value() && layer->asset->image != state.previousImage &&
                                _session.history.CurrentRevision() != state.previousRevision && !edit.has_value();
     const bool viewReady = expected == Expected::View && !edit.has_value() &&

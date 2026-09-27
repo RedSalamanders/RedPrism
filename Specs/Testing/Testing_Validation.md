@@ -99,6 +99,19 @@ and odd-width/padded rows through all six dispatched scalar entry points. The op
 [`--bench-filter-cancel`](Testing_Benchmarks.md#filter-cancellation-diagnostic) records real stop-to-return
 distributions; those timings are not ordinary test assertions and do not establish whole-host G1.
 
+### Deferred panel computation (P1.1c.1)
+
+`coloreditdeferred.*` tests the actual immutable preview/histogram/commit functions and session apply paths.
+Independent pixels and histogram bins prove that an old preview cannot supply a newer commit, while an opening
+histogram may arrive after a settings tick. State cases cover sparse capture without materialization, off/on
+invalidation, Cancel/reopen/replacement, target moves and selection changes, current-result metadata mismatch,
+exact reuse, grown-grid cache changes, pre-cancellation and preparation memory. Adjustment-layer parameter ticks
+preserve the fixed opening histogram but cannot create a destructive commit. `selection-loops-bounds.*` covers
+finite filtering, empty/degenerate geometry, shared copies, moves and unchanged geometry equality.
+
+These tests qualify the data and publication boundary. Host mailboxes, real-loop input, busy controls and
+file/close continuations have separate P1.1c gates; no host responsiveness claim follows from these direct tests.
+
 ### CPU dispatch and instruction boundary (P0.8)
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host

@@ -45,8 +45,8 @@ The deterministic fixture checksum identifies generated pixel content; it is not
 operation rows cover Zoom Actual and Zoom Fit view changes; opening Levels; updating Levels input gamma to 1.25 and
 committing at that value; Hue/Saturation saturation +20; Exposure +0.5; Gaussian Blur radius 10; Add Noise amount
 20; Grain amount 40; Lens Correction distortion 20; Invert; Fill with foreground; Clear Pixels; and Undo. Opening
-Levels is valid when its histogram is ready and its preview source exists; identity settings intentionally have no
-preview raster. Adjustment updates must produce a new preview raster. Zoom operations must change the actual view.
+Levels is valid when its histogram is ready for the captured opening image; identity settings intentionally have no
+preview raster and do not require an unused downscaled source. Adjustment updates must produce a new preview raster. Zoom operations must change the actual view.
 Clear Pixels is preceded by Select All during untimed preparation. At 100 MP, Gaussian Blur is instead the explicit
 `gaussian-refused-pixel-budget` case: current document limits refuse its initial grow, and the harness verifies
 refusal without a document or history change. It does not report that refusal as successful image processing.

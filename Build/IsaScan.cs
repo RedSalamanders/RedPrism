@@ -53,6 +53,8 @@ namespace RedPrismBuild
         private static readonly Regex ContributionLine = new Regex(@"^\s*SC\[.+?\]\s*\| mod = (\d+), (\d+):(\d+), size = (\d+),", RegexOptions.Compiled);
         private static readonly Regex FunctionLine = new Regex(@"\| S_[GL]PROC32(?:_ID)? \[size = \d+\] `(.+)`", RegexOptions.Compiled);
         private static readonly Regex FunctionAddress = new Regex(@"addr = (\d+):(\d+), code size = (\d+)", RegexOptions.Compiled);
+        private static readonly Regex DataLine = new Regex(@"\| S_LDATA32 \[size = \d+\] ``$", RegexOptions.Compiled);
+        private static readonly Regex DataAddress = new Regex(@"type = <no type>, addr = (\d+):(\d+)$", RegexOptions.Compiled);
         private static readonly Regex InstructionLine = new Regex(@"^\s*([0-9a-fA-F]+):\s+((?:[0-9a-fA-F]{2}\s+)+)\s*(\S.*)$", RegexOptions.Compiled);
         private static readonly Regex TierObject = new Regex(@"^Kernels_(Avx2|Avx512)_[A-Za-z][A-Za-z0-9_]*\.obj$", RegexOptions.Compiled);
 
@@ -107,9 +109,11 @@ namespace RedPrismBuild
         // not a procedure/object exemption: a decoded LEA of the image base, optional byte-index load,
         // DWORD indexed load, ADD and JMP must be contiguous. The table follows RET plus at most three
         // alignment bytes, belongs to that contribution, and every entry targets a later decoded instruction
-        // between the dispatch and the table. Unrecognized forms remain subject to the normal ISA gate.
+        // between the dispatch and the table. A matching anonymous PDB data symbol can prove a table start
+        // when multiple tables follow the function body. Unrecognized forms remain subject to the normal ISA gate.
         private static InlineTable ReadInlineTable(byte[] pe, List<Section> sections,
-            List<Contribution> contributions, ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva)
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, ulong imageBase,
+            ulong dispatch, ulong afterJump, uint tableRva)
         {
             int ownerIndex = FindContribution(contributions, dispatch);
             if (ownerIndex < 0) return null;
@@ -123,10 +127,12 @@ namespace RedPrismBuild
             afterReturn |= raw >= 3 && pe[raw - 3] == 0xc3 && pe[raw - 2] == 0x66 && pe[raw - 1] == 0x90;
             afterReturn |= raw >= 4 && pe[raw - 4] == 0xc3 && pe[raw - 3] == 0x0f &&
                            pe[raw - 2] == 0x1f && pe[raw - 1] == 0x00;
-            if (!afterReturn) return null;
+            int dataOwner;
+            if (!afterReturn && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module)) return null;
             var table = new InlineTable { Begin = begin, End = begin };
             for (int entry = 0; entry < 4096 && table.End + 4 <= owner.End && raw + 4 <= pe.Length; ++entry, raw += 4)
             {
+                if (entry != 0 && dataSymbols.ContainsKey(table.End)) break;
                 ulong target = checked(imageBase + BitConverter.ToUInt32(pe, raw));
                 if (target < afterJump || target >= begin) break;
                 table.PendingTargets.Add(target);
@@ -221,12 +227,29 @@ namespace RedPrismBuild
                     throw new InvalidDataException("Overlapping PDB contributions cannot be attributed safely.");
 
             var functions = new List<Function>();
+            var dataSymbols = new Dictionary<ulong, int>();
             string function = null;
+            bool dataSymbol = false;
             module = -1;
             foreach (string line in File.ReadLines(symbols))
             {
                 Match match = ModuleLine.Match(line);
-                if (match.Success) { module = Int32.Parse(match.Groups[1].Value); function = null; }
+                if (match.Success) { module = Int32.Parse(match.Groups[1].Value); function = null; dataSymbol = false; }
+                if (dataSymbol)
+                {
+                    match = DataAddress.Match(line.Trim());
+                    if (match.Success && module >= 0)
+                    {
+                        int index = Int32.Parse(match.Groups[1].Value);
+                        if (index >= 1 && index <= sections.Count && sections[index - 1].Executable)
+                        {
+                            ulong address = Address(index, UInt64.Parse(match.Groups[2].Value), imageBase, sections);
+                            int owner = FindContribution(contributions, address);
+                            if (owner >= 0 && contributions[owner].Module == module) dataSymbols[address] = module;
+                        }
+                    }
+                }
+                dataSymbol = DataLine.IsMatch(line.Trim());
                 match = FunctionLine.Match(line);
                 if (match.Success) function = match.Groups[1].Value;
                 else if (function != null)
@@ -250,6 +273,8 @@ namespace RedPrismBuild
             var result = new IsaScanResult();
             var inlineTables = new List<InlineTable>();
             int dispatchStage = 0;
+            bool r8Base = false;
+            int indexRegister = 0, targetRegister = 0;
             ulong dispatchBegin = 0, precedingEnd = 0;
             uint tableRva = 0;
             foreach (string line in File.ReadLines(disassembly))
@@ -263,27 +288,38 @@ namespace RedPrismBuild
                     foreach (InlineTable table in inlineTables) table.PendingTargets.Remove(address);
                 // Only a handful of possible dispatch instructions need byte-array parsing. Keep the
                 // ordinary instruction scan cheap even for multi-million-instruction Debug images.
-                if (dispatchStage != 0 || (bytes.Length == 7 && bytes[0] == "48" && bytes[1] == "8d" && bytes[2] == "0d"))
+                if (dispatchStage != 0 || (bytes.Length == 7 && bytes[1] == "8d" &&
+                    ((bytes[0] == "48" && bytes[2] == "0d") || (bytes[0] == "4c" && bytes[2] == "05"))))
                 {
                     byte[] encoded = Array.ConvertAll(bytes, b => Byte.Parse(b, NumberStyles.HexNumber));
                     if (address != precedingEnd) dispatchStage = 0;
-                    if (dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
+                    if (!r8Base && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
                         dispatchStage = 2;
-                    else if ((dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
-                    { tableRva = BitConverter.ToUInt32(encoded, 3); dispatchStage = 3; }
-                    else if (dispatchStage == 3 && encoded.Length == 3 && StartsWith(encoded, 0x48, 0x03, 0xc1))
+                    else if (r8Base && dispatchStage == 1 && encoded.Length == 9 &&
+                        (StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x84, 0x00) || StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x8c, 0x08)))
+                    { indexRegister = encoded[3] == 0x84 ? 0 : 1; dispatchStage = 2; }
+                    else if (!r8Base && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
+                    { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 0; dispatchStage = 3; }
+                    else if (r8Base && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 8 &&
+                        encoded[0] == 0x41 && encoded[1] == 0x8b &&
+                        ((indexRegister == 0 && (encoded[2] == 0x84 || encoded[2] == 0x8c) && encoded[3] == 0x80) ||
+                         (indexRegister == 1 && encoded[2] == 0x94 && encoded[3] == 0x88)))
+                    { tableRva = BitConverter.ToUInt32(encoded, 4); targetRegister = (encoded[2] >> 3) & 7; dispatchStage = 3; }
+                    else if (dispatchStage == 3 && encoded.Length == 3 &&
+                        ((!r8Base && StartsWith(encoded, 0x48, 0x03, 0xc1)) ||
+                         (r8Base && encoded[0] == 0x49 && encoded[1] == 0x03 && encoded[2] == 0xc0 + 8 * targetRegister)))
                         dispatchStage = 4;
-                    else if (dispatchStage == 4 && encoded.Length == 2 && StartsWith(encoded, 0xff, 0xe0))
+                    else if (dispatchStage == 4 && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)
                     {
-                        InlineTable table = ReadInlineTable(pe, sections, contributions, imageBase, dispatchBegin,
+                        InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, imageBase, dispatchBegin,
                             checked(address + 2), tableRva);
                         if (table != null) inlineTables.Add(table);
                         dispatchStage = 0;
                     }
                     else dispatchStage = 0;
-                    if (encoded.Length == 7 && StartsWith(encoded, 0x48, 0x8d, 0x0d) &&
+                    if (encoded.Length == 7 && (StartsWith(encoded, 0x48, 0x8d, 0x0d) || StartsWith(encoded, 0x4c, 0x8d, 0x05)) &&
                         checked((long)address + 7 + BitConverter.ToInt32(encoded, 3)) == (long)imageBase)
-                    { dispatchBegin = address; dispatchStage = 1; }
+                    { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c; indexRegister = 0; }
                 }
                 precedingEnd = checked(address + (ulong)bytes.Length);
                 int prefix = 0;

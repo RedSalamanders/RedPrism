@@ -1,6 +1,7 @@
 #include "Adjust.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
+#include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
 #include "Crop.h"
 #include "Document.h"
@@ -415,6 +416,59 @@ void TestSelection()
     document.selection = DocumentSelection{true, SelectionGeometry::Rect(1, 1, 3, 4)};
     Expect(!document.selection.value().IsEmpty() && document.selection.value().Bounds() == SelectionBounds{1, 1, 4, 5},
            "selection.bounds");
+}
+
+void TestSelectionLoopsBounds()
+{
+    SelectionLoops empty;
+    Expect(!empty.Bounds().has_value() && empty.PointCount() == 0, "selection-loops-bounds.empty");
+    DocumentSelection emptySelection{true, empty};
+    Expect(!emptySelection.Bounds().has_value() && emptySelection.IsEmpty(), "selection-loops-bounds.empty-selection");
+
+    SelectionLoops point{{Vec2{3, 4}}};
+    Expect(point.Bounds() == SelectionBounds{3, 4, 3, 4} && DocumentSelection{true, point}.IsEmpty(),
+           "selection-loops-bounds.point-degenerate");
+    SelectionLoops vertical{{Vec2{2, 1}, Vec2{2, 5}}};
+    SelectionLoops horizontal{{Vec2{1, 7}, Vec2{5, 7}}};
+    Expect(vertical.Bounds() == SelectionBounds{2, 1, 2, 5} && DocumentSelection{true, vertical}.IsEmpty() &&
+               horizontal.Bounds() == SelectionBounds{1, 7, 5, 7} && DocumentSelection{true, horizontal}.IsEmpty(),
+           "selection-loops-bounds.zero-width-height");
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double infinity = std::numeric_limits<double>::infinity();
+    SelectionLoops mixed{{Vec2{nan, 1}, Vec2{1, infinity}, Vec2{-2, 3}, Vec2{4, -5}, Vec2{-infinity, nan}}};
+    SelectionLoops nonFinite{{Vec2{nan, 1}, Vec2{1, infinity}, Vec2{-infinity, nan}}};
+    Expect(mixed.Bounds() == SelectionBounds{-2, -5, 4, 3} && !DocumentSelection{true, mixed}.IsEmpty(),
+           "selection-loops-bounds.skips-nonfinite-points");
+    Expect(!nonFinite.Bounds().has_value() && DocumentSelection{true, nonFinite}.IsEmpty(),
+           "selection-loops-bounds.no-finite-points");
+
+    SelectionLoops original{{Vec2{0, 1}, Vec2{6, 1}, Vec2{6, 8}, Vec2{0, 8}}};
+    const SelectionLoops shared = original;
+    Expect(shared.Identity() == original.Identity() && shared.Bounds() == SelectionBounds{0, 1, 6, 8} &&
+               shared == original,
+           "selection-loops-bounds.shared-copy");
+    const std::vector<SelectionLoop>& converted = shared;
+    Expect(&converted == &shared.Get() && converted.size() == 1, "selection-loops-bounds.vector-conversion");
+
+    SelectionLoops copyAssigned;
+    copyAssigned = original;
+    Expect(copyAssigned.Identity() == original.Identity() && copyAssigned.Bounds() == original.Bounds(),
+           "selection-loops-bounds.copy-assignment");
+    SelectionLoops moved(std::move(original));
+    Expect(moved.Bounds() == SelectionBounds{0, 1, 6, 8} && moved.PointCount() == 4 && !original.Bounds().has_value() &&
+               original.PointCount() == 0 && original.empty(),
+           "selection-loops-bounds.move-construction-source-empty");
+
+    SelectionLoops moveAssigned{{Vec2{-1, -1}, Vec2{1, 1}}};
+    moveAssigned = std::move(moved);
+    Expect(moveAssigned.Bounds() == SelectionBounds{0, 1, 6, 8} && moveAssigned.PointCount() == 4 &&
+               !moved.Bounds().has_value() && moved.PointCount() == 0 && moved.empty(),
+           "selection-loops-bounds.move-assignment-source-empty");
+
+    SelectionLoops equalGeometry{{Vec2{0, 1}, Vec2{6, 1}, Vec2{6, 8}, Vec2{0, 8}}};
+    Expect(moveAssigned == equalGeometry && moveAssigned.Identity() != equalGeometry.Identity(),
+           "selection-loops-bounds.geometry-equality-unchanged");
 }
 
 [[nodiscard]] Raster Gray(int width, int height, std::initializer_list<std::uint8_t> values)
@@ -7177,6 +7231,7 @@ int wmain(int argc, wchar_t** argv)
     TestHistoryBounds();
     TestHistoryTrim256MiB();
     TestSelection();
+    TestSelectionLoopsBounds();
     TestMaskPlacementHelpers();
     TestCollapsedRows();
     TestDeleteClearsClipping();
@@ -7207,6 +7262,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunColorEditWorkTests();
+    gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();
     gFailures += RunFilterCancellationTests();
     TestBrushKernel();

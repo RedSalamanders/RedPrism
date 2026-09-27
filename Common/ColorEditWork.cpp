@@ -12,14 +12,155 @@
 
 namespace
 {
-bool CanReuseColorPreview(const ColorEdit& edit) noexcept
+bool CanReuseColorPreview(const ColorEditJobInput& input) noexcept
 {
-    return edit.preview && !edit.previewFailed && edit.previewRaster.HasStorage() && edit.previewScale == 1.0 &&
-           edit.previewSource == edit.Source() && edit.previewTransform == edit.Placement() &&
-           edit.previewRaster.Format() == RasterFormat::Bgra8888 &&
+    const ColorEdit& edit = input.edit;
+    return edit.previewSequence == input.token.sequence && edit.preview && !edit.previewFailed &&
+           edit.previewRaster.HasStorage() && edit.previewScale == 1.0 && edit.previewSource == edit.Source() &&
+           edit.previewTransform == edit.Placement() && edit.previewRaster.Format() == RasterFormat::Bgra8888 &&
            edit.previewRaster.Width() == edit.Source().Width() && edit.previewRaster.Height() == edit.Source().Height();
 }
+
+bool ValidColorGrid(const ColorEdit& edit) noexcept
+{
+    if (!edit.original.HasStorage() || edit.original.Format() != RasterFormat::Bgra8888 ||
+        !edit.Source().HasStorage() || edit.Source().Format() != RasterFormat::Bgra8888 ||
+        !edit.settings.curves.IsValid())
+    {
+        return false;
+    }
+    if (!edit.grownGrid)
+    {
+        return true;
+    }
+    const ColorEditGrid& grid = *edit.grownGrid;
+    return grid.width > 0 && grid.height > 0 && grid.width <= kMaxCanvasSide && grid.height <= kMaxCanvasSide &&
+           grid.x <= 0 && grid.y <= 0 && static_cast<std::int64_t>(grid.x) + grid.width >= edit.original.Width() &&
+           static_cast<std::int64_t>(grid.y) + grid.height >= edit.original.Height() &&
+           (!edit.grownImage.HasStorage() ||
+            (edit.grownImage.Width() == grid.width && edit.grownImage.Height() == grid.height &&
+             edit.grownImage.Format() == RasterFormat::Bgra8888));
+}
+
+std::uint64_t RgbaAllocation(int width, int height) noexcept
+{
+    return PixelBuffer::RequiredBytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+}
+
+bool PrepareColorGrid(ColorEdit& edit, const CancelToken& cancellation)
+{
+    if (!ValidColorGrid(edit) || cancellation.IsCancelled())
+    {
+        return false;
+    }
+    if (edit.grownGrid && !edit.grownImage.HasStorage())
+    {
+        const ColorEditGrid& grid = *edit.grownGrid;
+        edit.grownImage = CropRasterForWork(edit.original, {grid.x, grid.y, grid.width, grid.height}, 0, cancellation);
+        if (!edit.grownImage.HasStorage())
+        {
+            return false;
+        }
+    }
+    return !cancellation.IsCancelled();
+}
+
+std::pair<int, int> PreviewSize(const ColorEdit& edit) noexcept
+{
+    const int width = edit.SourceWidth();
+    const int height = edit.SourceHeight();
+    const int limit = ColorEditPreviewLimit(edit.kind);
+    const int largest = std::max(width, height);
+    const double factor = limit > 0 && largest > limit ? static_cast<double>(limit) / largest : 1.0;
+    return {std::max(1, static_cast<int>(std::lround(width * factor))),
+            std::max(1, static_cast<int>(std::lround(height * factor)))};
+}
+
+struct CoverageMemory final
+{
+    std::uint64_t bytes = 0;
+    std::uint64_t peak = 0;
+};
+
+std::optional<CoverageMemory> CoverageMemoryBytes(const ColorEdit& edit, std::uint64_t width,
+                                                  std::uint64_t height) noexcept
+{
+    if (!edit.selection)
+    {
+        return CoverageMemory{};
+    }
+    const auto bytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(width * height));
+    if (edit.selection->antialiased)
+    {
+        return CoverageMemory{bytes, bytes + (width + 2) * height * 2 * sizeof(float)};
+    }
+    const auto edges = edit.selection->loops.PointCount();
+    if (edges > std::numeric_limits<std::uint64_t>::max() / 32)
+    {
+        return std::nullopt;
+    }
+    return CoverageMemory{bytes, bytes + edges * 16};
+}
+
+std::optional<std::uint64_t> RenderMemoryBytes(const ColorEdit& edit, int width, int height, double scale,
+                                               std::uint64_t privateSource) noexcept
+{
+    const auto coverage =
+        CoverageMemoryBytes(edit, static_cast<std::uint64_t>(width), static_cast<std::uint64_t>(height));
+    if (!coverage)
+    {
+        return std::nullopt;
+    }
+    const auto pixels = static_cast<std::uint64_t>(width) * height;
+    const auto rgba = RgbaAllocation(width, height);
+    std::uint64_t kernelPeak = rgba;
+    switch (edit.kind)
+    {
+    case FilterKind::GaussianBlur:
+    {
+        const double sigma =
+            (std::isfinite(edit.settings.radius) ? std::clamp(edit.settings.radius, 0.1, 250.0) : 1.0) * scale;
+        const auto taps = static_cast<std::uint64_t>(std::ceil(sigma * 3.0)) * 2 + 1;
+        kernelPeak += privateSource + pixels * 4 * sizeof(float) + taps * sizeof(double);
+        break;
+    }
+    case FilterKind::MotionBlur:
+        kernelPeak += privateSource;
+        break;
+    case FilterKind::LensCorrection:
+        kernelPeak += rgba;
+        break;
+    case FilterKind::ContentAwareFill:
+        kernelPeak += pixels * (4 * sizeof(std::uint8_t) + 3 * sizeof(int));
+        break;
+    case FilterKind::HueSaturation:
+        kernelPeak += static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
+                      Adjust::kCubeDimension * 4 * sizeof(float);
+        break;
+    default:
+        break;
+    }
+    const auto blendPeak = edit.selection ? rgba * 2 + privateSource : 0;
+    return std::max(coverage->peak, coverage->bytes + std::max(kernelPeak, blendPeak));
+}
 } // namespace
+
+int ColorEditPreviewLimit(FilterKind kind) noexcept
+{
+    switch (kind)
+    {
+    case FilterKind::AddNoise:
+    case FilterKind::Grain:
+    case FilterKind::ContentAwareFill:
+        return 0;
+    case FilterKind::GaussianBlur:
+    case FilterKind::MotionBlur:
+    case FilterKind::LensCorrection:
+        return 2048;
+    default:
+        return 4096;
+    }
+}
 
 bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) noexcept
 {
@@ -50,73 +191,31 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
 {
     const ColorEdit& edit = input.edit;
     const Raster& source = edit.Source();
-    if (!source.HasStorage() || source.Format() != RasterFormat::Bgra8888 || !edit.settings.curves.IsValid())
+    if (!ValidColorGrid(edit))
     {
         return std::nullopt;
     }
-    const auto width = static_cast<std::uint64_t>(source.Width());
-    const auto height = static_cast<std::uint64_t>(source.Height());
+    const auto width = static_cast<std::uint64_t>(edit.SourceWidth());
+    const auto height = static_cast<std::uint64_t>(edit.SourceHeight());
     const auto pixels = width * height; // Raster limits each side to 30,000.
     const auto allocation = [](std::uint64_t bytes) noexcept
     { return PixelBuffer::RequiredBytes(static_cast<std::size_t>(bytes)); };
     const std::uint64_t rgba = allocation(pixels * 4);
-    const bool reused = CanReuseColorPreview(edit);
-    const std::uint64_t privateSource = source.IsMaterialized() ? 0 : rgba;
-    std::uint64_t coverage = 0;
-    std::uint64_t coveragePeak = 0;
-    if (!reused && edit.selection.has_value())
+    const bool needsPadding = edit.grownGrid && !edit.grownImage.HasStorage();
+    const std::uint64_t padding = needsPadding ? rgba : 0;
+    const bool reused = !needsPadding && CanReuseColorPreview(input);
+    const std::uint64_t privateSource = needsPadding || source.IsMaterialized() ? 0 : rgba;
+    const auto renderPeak = reused
+                                ? std::optional<std::uint64_t>(0)
+                                : RenderMemoryBytes(edit, edit.SourceWidth(), edit.SourceHeight(), 1.0, privateSource);
+    if (!renderPeak)
     {
-        coverage = allocation(pixels);
-        if (edit.selection->antialiased)
-        {
-            coveragePeak = coverage + (width + 2) * height * 2 * sizeof(float);
-        }
-        else
-        {
-            // Hard coverage reserves one {double x, int winding, padding} per edge, in place.
-            const std::uint64_t edges = edit.selection->loops.PointCount();
-            if (edges > std::numeric_limits<std::uint64_t>::max() / 32)
-            {
-                return std::nullopt;
-            }
-            coveragePeak = coverage + edges * 16;
-        }
+        return std::nullopt;
     }
-    std::uint64_t kernelPeak = rgba;
-    switch (edit.kind)
-    {
-    case FilterKind::GaussianBlur:
-    {
-        // RunFilter normalizes radius to [0.1,250], with 1 for a non-finite input; commit scale is one.
-        const double sigma = std::isfinite(edit.settings.radius) ? std::clamp(edit.settings.radius, 0.1, 250.0) : 1.0;
-        const auto taps = static_cast<std::uint64_t>(std::ceil(sigma * 3.0)) * 2 + 1;
-        kernelPeak += privateSource + pixels * 4 * sizeof(float) + taps * sizeof(double);
-        break;
-    }
-    case FilterKind::MotionBlur:
-        kernelPeak += privateSource;
-        break;
-    case FilterKind::LensCorrection:
-        kernelPeak += rgba; // Private source and output coexist, even for a contiguous input.
-        break;
-    case FilterKind::ContentAwareFill:
-        kernelPeak += pixels * (4 * sizeof(std::uint8_t) + 3 * sizeof(int));
-        break;
-    case FilterKind::HueSaturation:
-        kernelPeak += static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
-                      Adjust::kCubeDimension * 4 * sizeof(float);
-        break;
-    default:
-        break;
-    }
-    // Selection coverage survives filtering and blending. Blending owns the filter output, a private writable
-    // output and (only for an unassembled source) a private original. It does not copy an existing mask.
-    const std::uint64_t renderPeak =
-        reused ? 0 : coverage + std::max(kernelPeak, edit.selection ? rgba * 2 + privateSource : 0);
     // Trim keeps input and cropped output until the crop is adopted. Finish retains the final image and eager
     // thumbnails; a reused sparse preview may need a private copy even though ordinary kernel outputs are flat.
-    const bool trim =
-        edit.grownImage.HasStorage() && (edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur);
+    const bool trim = (edit.grownGrid || edit.grownImage.HasStorage()) &&
+                      (edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur);
     const std::uint64_t thumbnails = allocation(96 * 96 * 4) + allocation(96 * 96);
     const std::uint64_t newImage = !reused || trim ? rgba : 0;
     const std::uint64_t privatePreview = reused && !edit.previewRaster.IsMaterialized() ? rgba : 0;
@@ -136,7 +235,7 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
             return std::nullopt;
         }
         metadata += (nameLength + 1) * 4 * sizeof(wchar_t);
-        if (edit.grownImage.HasStorage() && !mask.placement && mask.asset.image.PixelCount() > 1)
+        if ((edit.grownGrid || edit.grownImage.HasStorage()) && !mask.placement && mask.asset.image.PixelCount() > 1)
         {
             std::uint64_t maskPeak = newImage + thumbnails + privatePreview + allocation(pixels) + width * sizeof(int);
             if (!mask.asset.image.IsMaterialized())
@@ -152,12 +251,165 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
             finishPeak = std::max(finishPeak, maskPeak);
         }
     }
-    const std::uint64_t peak = std::max({coveragePeak, renderPeak, finishPeak});
+    const std::uint64_t peak = padding + std::max(*renderPeak, finishPeak);
     if (peak > std::numeric_limits<std::uint64_t>::max() - metadata)
     {
         return std::nullopt;
     }
     return metadata + peak;
+}
+
+std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept
+{
+    const ColorEdit& edit = input.edit;
+    if (!ValidColorGrid(edit))
+    {
+        return std::nullopt;
+    }
+    constexpr std::uint64_t metadata = 128 * 1024;
+    if (!edit.preview || ColorEditChangesNothing(edit.kind, edit.settings))
+    {
+        return metadata;
+    }
+    const auto [width, height] = PreviewSize(edit);
+    const auto rgba = RgbaAllocation(width, height);
+    const auto fullRgba = RgbaAllocation(edit.SourceWidth(), edit.SourceHeight());
+    const bool needsPadding = edit.grownGrid && !edit.grownImage.HasStorage();
+    const auto padding = needsPadding ? fullRgba : 0;
+    const bool cached = edit.previewSource.HasStorage() && edit.previewSource.Width() == width &&
+                        edit.previewSource.Height() == height && edit.previewTransform == edit.Placement();
+    const bool downscale = !cached && (width != edit.SourceWidth() || height != edit.SourceHeight());
+    const auto newSource = downscale ? rgba : 0;
+    const bool dense =
+        downscale || needsPadding || (cached ? edit.previewSource.IsMaterialized() : edit.Source().IsMaterialized());
+    const auto render =
+        RenderMemoryBytes(edit, width, height, static_cast<double>(width) / edit.SourceWidth(), dense ? 0 : rgba);
+    if (!render)
+    {
+        return std::nullopt;
+    }
+    // Downscaled currently owns a full-size private read until its smaller result is produced. It is released
+    // before filtering starts; the new padding and preview source remain owned by the returned cache.
+    const auto preparation = downscale ? fullRgba + rgba : 0;
+    return metadata + padding + std::max(preparation, newSource + *render);
+}
+
+std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept
+{
+    const ColorEdit& edit = input.edit;
+    if (!edit.original.HasStorage() || edit.original.Format() != RasterFormat::Bgra8888 ||
+        edit.kind != FilterKind::Levels)
+    {
+        return std::nullopt;
+    }
+    const auto coverage = CoverageMemoryBytes(edit, static_cast<std::uint64_t>(edit.original.Width()),
+                                              static_cast<std::uint64_t>(edit.original.Height()));
+    if (!coverage)
+    {
+        return std::nullopt;
+    }
+    const auto privateSource =
+        edit.original.IsMaterialized() ? 0 : RgbaAllocation(edit.original.Width(), edit.original.Height());
+    return 128 * 1024 + privateSource + coverage->peak;
+}
+
+ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Executor& executor,
+                                              CancelToken cancellation)
+{
+    cancellation = cancellation.WithShutdown(executor.ShutdownToken());
+    ColorEditPreviewResult result{input.token, input.edit};
+    ColorEdit& edit = result.edit;
+    edit.previewRaster = {};
+    edit.previewSequence = 0;
+    const auto failed = [&]()
+    {
+        result.status = cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
+        return std::move(result);
+    };
+    if (cancellation.IsCancelled() || !ValidColorGrid(edit))
+    {
+        return failed();
+    }
+    if (!edit.preview || ColorEditChangesNothing(edit.kind, edit.settings))
+    {
+        result.status = ColorEditJobStatus::Unchanged;
+        return result;
+    }
+    if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin || !PrepareColorGrid(edit, cancellation))
+    {
+        return failed();
+    }
+    const auto [width, height] = PreviewSize(edit);
+    if (!edit.previewSource.HasStorage() || edit.previewSource.Width() != width ||
+        edit.previewSource.Height() != height || edit.previewTransform != edit.Placement())
+    {
+        const int limit = ColorEditPreviewLimit(edit.kind);
+        edit.previewSource = limit > 0 ? Adjust::Downscaled(edit.Source(), limit, cancellation) : edit.Source();
+    }
+    if (!edit.previewSource.HasStorage() || cancellation.IsCancelled())
+    {
+        return failed();
+    }
+    edit.previewScale = static_cast<double>(width) / edit.SourceWidth();
+    edit.previewTransform = edit.Placement();
+    bool noSource = false;
+    edit.previewRaster = RenderColorEditRaster(edit, edit.previewSource, edit.previewTransform, edit.previewScale,
+                                               &noSource, cancellation);
+    if (cancellation.IsCancelled())
+    {
+        return failed();
+    }
+    if (!edit.previewRaster.HasStorage())
+    {
+        result.status = noSource ? ColorEditJobStatus::NoSource : ColorEditJobStatus::Failed;
+        return result;
+    }
+    edit.previewSequence = input.token.sequence;
+    edit.previewFailed = false;
+    result.status = ColorEditJobStatus::Ready;
+    return result;
+}
+
+ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input, Executor& executor,
+                                                  CancelToken cancellation)
+{
+    cancellation = cancellation.WithShutdown(executor.ShutdownToken());
+    const ColorEdit& edit = input.edit;
+    ColorEditHistogramResult result{input.token, edit.openingSequence, edit.original};
+    const auto failed = [&]()
+    {
+        result.status = cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
+        return std::move(result);
+    };
+    if (edit.kind != FilterKind::Levels || cancellation.IsCancelled())
+    {
+        return failed();
+    }
+    // Prepare private reads explicitly so Histogram's zero-bin failure result cannot be mistaken for an empty
+    // successful histogram. Once these handles exist, its accumulation allocates no additional pixel storage.
+    const Raster source = ContiguousRasterForWork(edit.original, cancellation);
+    if (!source.HasStorage() || source.Format() != RasterFormat::Bgra8888)
+    {
+        return failed();
+    }
+    Raster coverage;
+    if (edit.selection)
+    {
+        coverage = SelectionGeometry::CoverageTransformed(
+            edit.selection->loops, PixelToDocument(edit.transform, source.Width(), source.Height()).Inverted(),
+            source.Width(), source.Height(), edit.selection->antialiased, cancellation);
+        if (!coverage.HasStorage())
+        {
+            return failed();
+        }
+    }
+    result.histogram = Adjust::Histogram(source, edit.selection ? &coverage : nullptr, cancellation);
+    if (cancellation.IsCancelled())
+    {
+        return failed();
+    }
+    result.status = ColorEditJobStatus::Ready;
+    return result;
 }
 
 Raster RenderColorEditRaster(const ColorEdit& edit, const Raster& source, const LayerTransform& placement, double scale,
@@ -191,7 +443,7 @@ Raster RenderColorEditRaster(const ColorEdit& edit, const Raster& source, const 
 ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& executor, CancelToken cancellation)
 {
     cancellation = cancellation.WithShutdown(executor.ShutdownToken());
-    const ColorEdit& edit = input.edit;
+    ColorEdit edit = input.edit;
     ColorEditJobResult result;
     result.token = input.token;
     result.kind = edit.kind;
@@ -223,9 +475,12 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     {
         return result;
     }
-    // The direct path always replaces its preview on Update. The host's mailbox must only populate this
-    // candidate from the exact current settings/source/seed once previews become asynchronous.
-    result.reusedPreview = CanReuseColorPreview(edit);
+    if (!PrepareColorGrid(edit, cancellation))
+    {
+        (void)cancelled();
+        return result;
+    }
+    result.reusedPreview = CanReuseColorPreview(input) && (!input.edit.grownGrid || input.edit.grownImage.HasStorage());
     bool noSource = false;
     Raster image = result.reusedPreview
                        ? edit.previewRaster
@@ -310,6 +565,106 @@ std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditCommit() const
     return ColorEditJobInput{std::move(token), _colorEdit.value()};
 }
 
+std::optional<ColorEditJobInput> DocumentSession::PrepareColorEditPreview() const
+{
+    if (!_document || !_colorEdit)
+    {
+        return std::nullopt;
+    }
+    auto token = _colorEdit->sourceToken ? _colorEdit->sourceToken : CaptureJobToken(_colorEdit->layerID);
+    if (!token)
+    {
+        return std::nullopt;
+    }
+    token->sessionIdentity = _tokenIdentity.value;
+    token->sequence = _colorEditSequence;
+    return ColorEditJobInput{std::move(*token), *_colorEdit};
+}
+
+bool DocumentSession::ColorEditOpeningMatches(const JobToken& token, std::uint64_t opening,
+                                              const Raster& original) const noexcept
+{
+    if (!_document || !_colorEdit || token.sessionIdentity != _tokenIdentity.value ||
+        token.documentSerial != _documentSerial || token.restoreSerial != _restoreSerial ||
+        opening != _colorEdit->openingSequence || original != _colorEdit->original ||
+        token.sequence > _colorEditSequence || token.canvasWidth != _document->width ||
+        token.canvasHeight != _document->height || !token.target || token.target->layerId != _colorEdit->layerID)
+    {
+        return false;
+    }
+    if (!_adjustmentEditingID)
+    {
+        return CanApplyJobResult(token, token.sequence);
+    }
+    // An adjustment panel changes its own parameters during preview. The opening composite remains the fixed
+    // histogram/sampling source throughout that panel lifetime; its own adjustment change must not stale it.
+    const ImageLayer* layer = FindLayer(token.target->layerId);
+    return _adjustmentOriginal && layer && layer->adjustment && layer->transform == token.target->transform &&
+           layer->mask == token.target->mask;
+}
+
+bool DocumentSession::ApplyColorEditPreview(const ColorEditPreviewResult& result)
+{
+    if (!ColorEditOpeningMatches(result.token, result.edit.openingSequence, result.edit.original) ||
+        _adjustmentEditingID || result.edit.kind != _colorEdit->kind || result.edit.seed != _colorEdit->seed ||
+        !_colorEdit->preview || ColorEditChangesNothing(_colorEdit->kind, _colorEdit->settings) ||
+        result.token.sequence < _colorEdit->previewSequence ||
+        result.token.sequence <= _colorEdit->previewInvalidatedSequence ||
+        (result.token.sequence == _colorEditSequence &&
+         (result.edit.settings != _colorEdit->settings || result.edit.grownGrid != _colorEdit->grownGrid)))
+    {
+        return false;
+    }
+    if (result.status != ColorEditJobStatus::Ready)
+    {
+        if (result.token.sequence != _colorEditSequence || result.status == ColorEditJobStatus::Cancelled)
+        {
+            return false;
+        }
+        _colorEdit->previewRaster = {};
+        _colorEdit->previewSequence = 0;
+        _colorEdit->previewFailed = result.status == ColorEditJobStatus::NoSource;
+        ++_editRevision;
+        return false;
+    }
+    const ColorEdit& rendered = result.edit;
+    if (!rendered.previewRaster.HasStorage() || rendered.previewRaster.Format() != RasterFormat::Bgra8888 ||
+        rendered.previewRaster.Width() != rendered.previewSource.Width() ||
+        rendered.previewRaster.Height() != rendered.previewSource.Height() ||
+        rendered.previewSequence != result.token.sequence || !rendered.previewTransform.IsValid() ||
+        !(rendered.previewScale > 0 && rendered.previewScale <= 1))
+    {
+        return false;
+    }
+    // Display the completed intermediate image without rolling settings or grid planning back to that request.
+    _colorEdit->previewRaster = rendered.previewRaster;
+    _colorEdit->previewTransform = rendered.previewTransform;
+    _colorEdit->previewScale = rendered.previewScale;
+    _colorEdit->previewSequence = result.token.sequence;
+    _colorEdit->previewFailed = false;
+    if (rendered.grownGrid == _colorEdit->grownGrid && rendered.Placement() == _colorEdit->Placement())
+    {
+        _colorEdit->grownImage = rendered.grownImage;
+        _colorEdit->previewSource = rendered.previewSource;
+    }
+    ++_editRevision;
+    return true;
+}
+
+bool DocumentSession::ApplyColorEditHistogram(const ColorEditHistogramResult& result)
+{
+    if (!ColorEditOpeningMatches(result.token, result.openingSequence, result.original) ||
+        _colorEdit->kind != FilterKind::Levels || _colorEdit->histogramReady ||
+        result.status != ColorEditJobStatus::Ready)
+    {
+        return false;
+    }
+    _colorEdit->histogram = result.histogram;
+    _colorEdit->histogramReady = true;
+    ++_editRevision;
+    return true;
+}
+
 bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
 {
     if (!_colorEdit.has_value() || _adjustmentEditingID.has_value() ||
@@ -378,6 +733,42 @@ bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
 
 namespace
 {
+std::int32_t TryRunColorPreviewInline(const DocumentSession& session,
+                                      std::optional<ColorEditPreviewResult>& result) noexcept
+{
+    try
+    {
+        if (const auto input = session.PrepareColorEditPreview(); input)
+        {
+            InlineExecutor executor;
+            result.emplace(RunColorEditPreviewJob(*input, executor));
+        }
+        return 0;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return static_cast<std::int32_t>(0x8007000eU);
+    }
+}
+
+std::int32_t TryRunColorHistogramInline(const DocumentSession& session,
+                                        std::optional<ColorEditHistogramResult>& result) noexcept
+{
+    try
+    {
+        if (const auto input = session.PrepareColorEditPreview(); input)
+        {
+            InlineExecutor executor;
+            result.emplace(RunColorEditHistogramJob(*input, executor));
+        }
+        return 0;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return static_cast<std::int32_t>(0x8007000eU);
+    }
+}
+
 // Direct API construction/computation boundary. No document or history is changed here. On allocation failure
 // the caller fails this operation and retains the panel. History allocation remains in the owning apply path.
 std::int32_t TryRunColorEditInline(const DocumentSession& session, std::optional<ColorEditJobResult>& result) noexcept
@@ -397,6 +788,41 @@ std::int32_t TryRunColorEditInline(const DocumentSession& session, std::optional
     }
 }
 } // namespace
+
+void DocumentSession::RenderColorEditInline()
+{
+    std::optional<ColorEditPreviewResult> result;
+    if (TryRunColorPreviewInline(*this, result) < 0)
+    {
+        _colorEdit->previewRaster = {};
+        _colorEdit->previewSequence = 0;
+        _colorEdit->commitFailed = true;
+        ++_editRevision;
+        return;
+    }
+    if (result)
+    {
+        (void)ApplyColorEditPreview(*result);
+    }
+}
+
+void DocumentSession::MeasureColorEditHistogramInline()
+{
+    if (!_colorEdit || _colorEdit->kind != FilterKind::Levels || _colorEdit->histogramReady)
+    {
+        return;
+    }
+    std::optional<ColorEditHistogramResult> result;
+    if (TryRunColorHistogramInline(*this, result) < 0)
+    {
+        _colorEdit->commitFailed = true;
+        return;
+    }
+    if (result)
+    {
+        (void)ApplyColorEditHistogram(*result);
+    }
+}
 
 void DocumentSession::CommitColorEdit()
 {

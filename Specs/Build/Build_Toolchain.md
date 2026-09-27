@@ -186,7 +186,10 @@ third-party DLL dispatch or replace execution on baseline hardware. Those librar
 MSVC can put a switch table inside an executable contribution, and its DWORD RVAs can decode as VEX instructions.
 The scanner recognizes only the observed image-relative dispatch: contiguous decoded instructions load the image
 base into RCX, optionally remap a byte index, load an RVA through RCX + 4×RAX, add the base and jump through RAX.
-The aligned table must follow RET plus at most three alignment bytes in the same contribution. Every entry must
+It also recognizes the observed R8-base forms with RAX/RCX index and RAX/RCX/RDX target, checking that remap, load,
+add and jump use the same registers. The aligned table must follow RET plus at most three alignment bytes, or
+have an exact anonymous `S_LDATA32` start in the matching PDB and owning contribution. The latter covers multiple
+tables after one function. A following data symbol bounds the table; it is not itself an exempt range. Every entry must
 target a decoded instruction after the dispatch and before the table. Only complete instructions inside that
 verified DWORD span are counted separately as `inlineTableVectorData`; other code in the function remains gated.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the

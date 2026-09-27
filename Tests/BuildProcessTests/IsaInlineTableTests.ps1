@@ -40,7 +40,10 @@ function New-SyntheticCase {
         [string]$Fault = '',
         [switch]$OptionalByteIndex,
         [switch]$RealVex,
-        [switch]$ShortNop
+        [switch]$ShortNop,
+        [switch]$R8Base,
+        [ValidateSet(0,1,2)] [int]$TargetRegister = 0,
+        [switch]$PdbData
     )
     $directory = Join-Path $fixtureRoot $Name
     [void](New-Item -ItemType Directory -Path $directory -Force)
@@ -80,6 +83,7 @@ function New-SyntheticCase {
     Set-U32 $pe 0x5b4 $age
 
     $lea = [byte[]]@(0x48,0x8d,0x0d,0,0,0,0)
+    if ($R8Base) { $lea[0] = 0x4c; $lea[2] = 0x05 }
     if ($Fault -eq 'WrongImageBase') { $leaDisp = [Int32]($imageBase - ($imageBase + $dispatchRva + 7) + 1) }
     else { $leaDisp = [Int32]($imageBase - ($imageBase + $dispatchRva + 7)) }
     Put-Bytes $lea 3 ([BitConverter]::GetBytes($leaDisp))
@@ -90,22 +94,35 @@ function New-SyntheticCase {
     if ($OptionalByteIndex) {
         $indexLoad = [byte[]]@(0x0f,0xb6,0x84,0x01,0,0,0,0)
         Put-Bytes $indexLoad 4 ([BitConverter]::GetBytes([UInt32]0))
+        if ($R8Base) {
+            $indexLoad = [byte[]]@(0x41,0x0f,0xb6,0x84,0x00,0,0,0,0)
+            if ($TargetRegister -eq 2) { $indexLoad[3] = 0x8c; $indexLoad[4] = 0x08 }
+        }
         Put-Bytes $pe (0x400+$cursor-$sectionRva) $indexLoad
         $instructions.Add(('{0:x}: {1} movzx eax, byte ptr [rcx+rax]' -f ($imageBase+$cursor), (Hex-Bytes $indexLoad)))
-        $cursor += 8
+        $cursor += $indexLoad.Length
     }
     $loadDisp = [UInt32]($tableRva -band 0xffffffff)
     $tableLoad = [byte[]]@(0x8b,0x84,0x81,0,0,0,0)
     Put-Bytes $tableLoad 3 ([BitConverter]::GetBytes($loadDisp))
+    if ($R8Base) {
+        $tableLoad = [byte[]]@(0x41,0x8b,(0x84+8*$TargetRegister),0x80,0,0,0,0)
+        if ($TargetRegister -eq 2) { $tableLoad[3] = 0x88 }
+        Put-Bytes $tableLoad 4 ([BitConverter]::GetBytes($loadDisp))
+    }
     if ($Fault -eq 'BrokenSequence') { $tableLoad[0] = 0x89 }
     Put-Bytes $pe (0x400+$cursor-$sectionRva) $tableLoad
     $instructions.Add(('{0:x}: {1} mov eax, dword ptr [rcx+rax*4+table]' -f ($imageBase+$cursor), (Hex-Bytes $tableLoad)))
-    $cursor += 7
+    $cursor += $tableLoad.Length
     $add = [byte[]]@(0x48,0x03,0xc1)
+    if ($R8Base) { $add = [byte[]]@(0x49,0x03,(0xc0+8*$TargetRegister)) }
+    if ($Fault -eq 'WrongAddRegister') { $add[2] = 0xd8 }
     Put-Bytes $pe (0x400+$cursor-$sectionRva) $add
     $instructions.Add(('{0:x}: {1} add rax, rcx' -f ($imageBase+$cursor), (Hex-Bytes $add)))
     $cursor += 3
     $jump = [byte[]]@(0xff,0xe0)
+    if ($R8Base) { $jump[1] += $TargetRegister }
+    if ($Fault -eq 'WrongJumpRegister') { $jump[1] = 0xe3 }
     Put-Bytes $pe (0x400+$cursor-$sectionRva) $jump
     $instructions.Add(('{0:x}: {1} jmp rax' -f ($imageBase+$cursor), (Hex-Bytes $jump)))
     $afterJump = [UInt32]($cursor + 2)
@@ -116,7 +133,7 @@ function New-SyntheticCase {
     $tableBytes = [byte[]]::new(8)
     Put-Bytes $tableBytes 0 ([BitConverter]::GetBytes($target))
     Put-Bytes $tableBytes 4 ([BitConverter]::GetBytes($targetRva))
-    if ($Fault -eq 'NoRet') { $pe[0x400+$actualTableRva-$sectionRva-1] = 0x90 }
+    if ($Fault -eq 'NoRet' -or $PdbData) { $pe[0x400+$actualTableRva-$sectionRva-1] = 0x90 }
     elseif ($ShortNop) {
         $pe[0x400+$actualTableRva-$sectionRva-3] = 0xc3
         $pe[0x400+$actualTableRva-$sectionRva-2] = 0x66
@@ -138,7 +155,15 @@ function New-SyntheticCase {
     if ($splitTableContribution) { $moduleHeader += "  Mod 0001 | ``SyntheticTable.obj``:`n  Obj: ``SyntheticTable.obj``:`n" }
     $metadataText = "  Age: $age`n  GUID: {$guid}`n$moduleHeader`nSection Contributions`n$contributions"
     Set-Content -LiteralPath $metadata -Value $metadataText -Encoding utf8
-    Set-Content -LiteralPath $symbols -Value '' -Encoding utf8
+    $symbolText = ''
+    if ($PdbData -and $Fault -ne 'MissingDataSymbol') {
+        $dataModule = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+        $dataOffset = $actualTableRva - $sectionRva
+        if ($Fault -eq 'WrongDataStart') { $dataOffset += 4 }
+        $symbolText = "  Mod $dataModule | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] ```` `n".TrimEnd() +
+            "`n  type = <no type>, addr = 0001:$dataOffset`n"
+    }
+    Set-Content -LiteralPath $symbols -Value $symbolText -Encoding utf8
 
     # The target is a decoded boundary only in the valid case; middle-target deliberately lands inside it.
     $targetInstruction = [byte[]]@(0x66,0x90)
@@ -193,6 +218,20 @@ $optionalOff = New-SyntheticCase PositiveWithoutByteIndex
 Invoke-Control $optionalOff $true 2 0
 $mixed = New-SyntheticCase RealVexBesideTable -RealVex
 Invoke-Control $mixed $false 2 1
+
+foreach ($targetRegister in @(0,1,2)) {
+    $case = New-SyntheticCase "R8DataTarget$targetRegister" -R8Base -PdbData -OptionalByteIndex -TargetRegister $targetRegister
+    Invoke-Control $case $true 2 0
+}
+$case = New-SyntheticCase R8DataNoRemap -R8Base -PdbData
+Invoke-Control $case $true 2 0
+$case = New-SyntheticCase R8DataWithRealVex -R8Base -PdbData -RealVex
+Invoke-Control $case $false 2 1
+foreach ($fault in @('MissingDataSymbol','WrongDataOwner','WrongDataStart','WrongAddRegister','WrongJumpRegister',
+        'CrossContribution','ContributionBounds','MiddleOfInstruction','UnknownTargetInstruction','InstructionExtendsPastTable')) {
+    $case = New-SyntheticCase "R8Data$fault" -R8Base -PdbData -OptionalByteIndex -TargetRegister 1 -Fault $fault
+    Invoke-Control $case $false
+}
 
 foreach ($name in @('WrongImageBase','BrokenSequence','CrossContribution','ContributionBounds',
         'MiddleOfInstruction','UndecodedTarget','UnknownTargetInstruction','TargetBeforeDispatch','NoRet','InstructionExtendsPastTable')) {

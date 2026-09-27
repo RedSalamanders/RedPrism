@@ -2,46 +2,17 @@
 #include "BrushStroke.h"
 #include "ColorEditWork.h"
 #include "Document.h"
+#include "RasterWork.h"
 #include "Selection.h"
 
 #include <algorithm>
 #include <cmath>
 
-// The color adjustment and filter panels on the session (C12): one edit for every kind (`ColorEdit`); previews render
-// synchronously from a copy of the layer no larger than the kind's preview limit and show through DisplayDocument;
-// OK runs Common/ColorEditWork's immutable graph inline and validates its result before recording one entry;
-// adjustment layers route the same panels to their live record. Host job wiring is a separate migration.
+// The panel owns metadata and immutable handles. Deferred callers prepare worker inputs explicitly; direct
+// callers run the same ColorEditWork graph inline. Neither result path may overwrite newer settings.
 
 namespace
 {
-// Previews of lookup-table kinds render from a copy no larger than this on the longest side, blurs and the lens
-// from a smaller one; noise and grain preview at full size (grain made on a smaller copy would look coarser once
-// enlarged).
-constexpr int kLutPreviewSide = 4096;
-constexpr int kFilterPreviewSide = 2048;
-
-[[nodiscard]] int PreviewLimit(FilterKind kind) noexcept
-{
-    switch (kind)
-    {
-    case FilterKind::AddNoise:
-    case FilterKind::Grain:
-    case FilterKind::ContentAwareFill:
-        return 0;
-    case FilterKind::GaussianBlur:
-    case FilterKind::MotionBlur:
-    case FilterKind::LensCorrection:
-        return kFilterPreviewSide;
-    case FilterKind::Curves:
-    case FilterKind::Exposure:
-    case FilterKind::GradientMap:
-    case FilterKind::Levels:
-    case FilterKind::HueSaturation:
-        return kLutPreviewSide;
-    }
-    return kLutPreviewSide;
-}
-
 [[nodiscard]] AdjustmentColor ColorFromArgb(std::uint32_t argb) noexcept
 {
     return AdjustmentColor{((argb >> 16) & 0xFFu) / 255.0, ((argb >> 8) & 0xFFu) / 255.0, (argb & 0xFFu) / 255.0};
@@ -59,8 +30,7 @@ constexpr int kFilterPreviewSide = 2048;
 [[nodiscard]] std::optional<std::array<double, 3>> StraightPixel(const Raster& image, const LayerTransform& transform,
                                                                  Vec2 point) noexcept
 {
-    const std::uint8_t* data = image.Data();
-    if (data == nullptr)
+    if (!image.HasStorage())
     {
         return std::nullopt;
     }
@@ -69,9 +39,12 @@ constexpr int kFilterPreviewSide = 2048;
     {
         return std::nullopt;
     }
-    const std::uint8_t* p = data +
-                            static_cast<std::size_t>(std::floor(pixel.y)) * static_cast<std::size_t>(image.Stride()) +
-                            static_cast<std::size_t>(std::floor(pixel.x)) * 4u;
+    std::array<std::uint8_t, 4> sampled{};
+    if (!ReadRasterRegionForWork(image, {static_cast<int>(pixel.x), static_cast<int>(pixel.y), 1, 1}, sampled, 4, 0))
+    {
+        return std::nullopt;
+    }
+    const std::uint8_t* p = sampled.data();
     if (p[3] == 0)
     {
         return std::nullopt;
@@ -81,30 +54,6 @@ constexpr int kFilterPreviewSide = 2048;
                                  std::min(1.0, p[0] / static_cast<double>(p[3]))};
 }
 
-// The selection's coverage on the grid of a `width` × `height` raster that `placement` puts on the document.
-[[nodiscard]] Raster CoverageOn(const DocumentSelection& selection, const LayerTransform& placement, int width,
-                                int height)
-{
-    return SelectionGeometry::Coverage(
-        SelectionGeometry::Transformed(selection.loops, PixelToDocument(placement, width, height).Inverted()), width,
-        height, selection.antialiased);
-}
-
-// Levels reads the alpha- and selection-weighted histogram of what it opens on, once.
-void MeasureHistogram(ColorEdit& edit)
-{
-    if (edit.kind != FilterKind::Levels)
-    {
-        return;
-    }
-    std::optional<Raster> coverage;
-    if (edit.selection.has_value())
-    {
-        coverage = CoverageOn(edit.selection.value(), edit.transform, edit.original.Width(), edit.original.Height());
-    }
-    edit.histogram = Adjust::Histogram(edit.original, coverage.has_value() ? &coverage.value() : nullptr);
-    edit.histogramReady = true;
-}
 } // namespace
 
 bool DocumentSession::CanAdjustColors() const noexcept
@@ -138,16 +87,6 @@ ColorEdit* DocumentSession::OpenColorEdit(FilterKind kind) noexcept
 
 // ── Grown grids (blurs and Content-Aware Fill) ────────────────────────────
 
-void DocumentSession::PrepareFilterPreview()
-{
-    ColorEdit& edit = _colorEdit.value();
-    const Raster& source = edit.Source();
-    const int limit = PreviewLimit(edit.kind);
-    edit.previewSource = limit > 0 ? Adjust::Downscaled(source, limit) : source;
-    edit.previewScale = source.Width() > 0 ? static_cast<double>(edit.previewSource.Width()) / source.Width() : 1.0;
-    edit.previewTransform = edit.Placement();
-}
-
 bool DocumentSession::GrowFilterForBlur()
 {
     ColorEdit& edit = _colorEdit.value();
@@ -173,8 +112,8 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
     // The grid already grown (or the original) unioned with the extent, all in the original's pixels.
     int grownLeft = -edit.grownOffsetX;
     int grownTop = -edit.grownOffsetY;
-    int grownRight = grownLeft + (edit.grownImage.HasStorage() ? edit.grownImage.Width() : width);
-    int grownBottom = grownTop + (edit.grownImage.HasStorage() ? edit.grownImage.Height() : height);
+    int grownRight = grownLeft + edit.SourceWidth();
+    int grownBottom = grownTop + edit.SourceHeight();
     const int targetLeft = std::min(grownLeft, left);
     const int targetTop = std::min(grownTop, top);
     const int targetRight = std::max(grownRight, right);
@@ -200,18 +139,14 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
         _budgetRefused = true;
         return false;
     }
-    const Raster grown = Raster::Replacing(edit.original, -targetLeft, -targetTop, {}, 0, 0,
-                                           static_cast<int>(grownWidth), static_cast<int>(grownHeight), 0);
-    if (!grown.HasStorage())
-    {
-        return false;
-    }
     const GridRect grownRect{targetLeft, targetTop, static_cast<int>(grownWidth), static_cast<int>(grownHeight)};
-    edit.grownImage = grown;
+    edit.grownGrid = ColorEditGrid{targetLeft, targetTop, grownRect.width, grownRect.height};
+    edit.grownImage = {};
+    edit.previewSource = {};
+    edit.previewSequence = 0;
     edit.grownTransform = PlacementOfRect(edit.transform, width, height, grownRect);
     edit.grownOffsetX = -targetLeft;
     edit.grownOffsetY = -targetTop;
-    PrepareFilterPreview();
     return true;
 }
 
@@ -223,7 +158,7 @@ bool DocumentSession::CanContentAwareFill() const noexcept
 
 // ── The panel session ─────────────────────────────────────────────────────
 
-void DocumentSession::BeginColorEdit(FilterKind kind)
+void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 {
     if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
     {
@@ -240,6 +175,7 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
         return;
     }
     ColorEdit edit;
+    edit.deferred = deferred;
     edit.kind = kind;
     edit.layerID = layer->id;
     edit.original = layer->asset->image;
@@ -261,10 +197,8 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
     {
         edit.seed = NextHealSeed();
     }
-    MeasureHistogram(edit);
+    edit.openingSequence = ++_colorEditSequence;
     _colorEdit = std::move(edit);
-    ++_colorEditSequence;
-    PrepareFilterPreview();
     if (kind == FilterKind::ContentAwareFill)
     {
         // The fill extends the layer over any of the selection on the canvas past its edge.
@@ -283,6 +217,14 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
                 const std::array<Vec2, 4> corners{toPixels.Apply(Vec2{x0, y0}), toPixels.Apply(Vec2{x1, y0}),
                                                   toPixels.Apply(Vec2{x0, y1}), toPixels.Apply(Vec2{x1, y1})};
                 const SelectionBounds box = PointBounds(corners);
+                if (!std::isfinite(box.minX) || !std::isfinite(box.minY) || !std::isfinite(box.maxX) ||
+                    !std::isfinite(box.maxY) || box.minX < -kMaxCanvasSide || box.minY < -kMaxCanvasSide ||
+                    box.maxX > kMaxCanvasSide || box.maxY > kMaxCanvasSide)
+                {
+                    _budgetRefused = true;
+                    _colorEdit.reset();
+                    return;
+                }
                 if (!GrowFilterGrid(static_cast<int>(std::floor(box.minX)), static_cast<int>(std::floor(box.minY)),
                                     static_cast<int>(std::ceil(box.maxX)), static_cast<int>(std::ceil(box.maxY))))
                 {
@@ -298,6 +240,10 @@ void DocumentSession::BeginColorEdit(FilterKind kind)
         return;
     }
     UpdateColorEdit(_colorEdit->settings, true);
+    if (!deferred)
+    {
+        MeasureColorEditHistogramInline();
+    }
 }
 
 void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool preview)
@@ -315,6 +261,8 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
     {
         edit.previewRaster = {};
+        edit.previewSequence = 0;
+        edit.previewInvalidatedSequence = _colorEditSequence;
         ++_editRevision;
         return;
     }
@@ -325,13 +273,13 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
         edit.previewRaster = {};
+        edit.previewSequence = 0;
+        edit.previewFailed = false;
+        edit.previewInvalidatedSequence = _colorEditSequence;
     }
-    else
+    else if (!edit.deferred)
     {
-        bool noSource = false;
-        edit.previewRaster =
-            RenderColorEditRaster(edit, edit.previewSource, edit.previewTransform, edit.previewScale, &noSource);
-        edit.previewFailed = noSource;
+        RenderColorEditInline();
     }
     ++_editRevision;
 }
@@ -609,7 +557,7 @@ bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& va
     return true;
 }
 
-bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below)
+bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below, bool deferred)
 {
     if (!_adjustmentEditingID.has_value() || !(_adjustmentEditingID.value() == id) || _adjustmentOriginal.has_value() ||
         HasColorEdit() || !_document.has_value())
@@ -626,17 +574,21 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     const LayerAdjustment original = layer->adjustment.value();
     // The source is only for the histogram and sampling; it never replaces layer pixels.
     ColorEdit edit;
+    edit.deferred = deferred;
     edit.kind = AdjustmentFilterKind(original.kind);
     edit.layerID = id;
     edit.original = below;
     edit.transform = CanvasTransform(_document.value());
     edit.settings = Adjust::AdjustmentSettings(original);
     edit.seed = original.Grain().seed;
-    MeasureHistogram(edit);
+    edit.openingSequence = ++_colorEditSequence;
     _colorEdit = std::move(edit);
-    ++_colorEditSequence;
     _adjustmentOriginal = original;
     BeginEdit(L"Edit " + std::wstring(FilterKindName(AdjustmentFilterKind(original.kind))) + L" Adjustment");
+    if (!deferred)
+    {
+        MeasureColorEditHistogramInline();
+    }
     return true;
 }
 

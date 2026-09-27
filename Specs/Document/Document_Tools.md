@@ -433,7 +433,7 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
   and Hue/Saturation at identity, a Gradient Map from the foreground to the background color); Add Noise and Grain
   draw a pattern seed of their own (the session's heal seed, which no other kind advances).
   `UpdateColorEdit(settings, preview)` (`UpdateLevels` and `UpdateHueSaturation` change their kind's part) renders
-  the preview at once from a copy no larger than 4096 px on the longest side for the table kinds (Levels,
+  inline for direct callers, or captures metadata for a deferred caller, using a copy no larger than 4096 px on the longest side for the table kinds (Levels,
   Hue/Saturation, Curves, Exposure, Gradient Map), 2048 for blurs and the lens, full size for noise, grain and the
   fill (a smaller copy would coarsen them), blended through the selection coverage on that grid; `DisplayDocument`
   shows it in place of the layer (a mask on the layer's grid keeps its place over a grown grid). An edit that
@@ -522,6 +522,40 @@ It accounts for rounded pixel buffers, private sparse reads, coverage, kernel sc
 thumbnails and metadata. An exact resident preview avoids another filter/coverage reservation. Geometry producers
 cache selection point counts; querying the estimate does not traverse selection points or loops. The host's
 asynchronous dispatch and continuation migration remains P1.1c work.
+
+### Deferred panel computation (P1.1c.1)
+
+`BeginColorEdit(kind, true)` and `BeginAdjustmentEditing(id, below, true)` select deferred computation for that
+opening. Once preceding interactions have settled, begin/update capture owning inputs and compute growth metadata;
+they do not create histogram, coverage, padded image, downscaled source or preview pixels. `grownGrid` records the
+union of requested extents on the original image grid. A worker prepares its padding with cancellable private
+reads. Growth beyond supported coordinates or the pixel budget is refused before integer conversion or allocation.
+An unresolved growth refusal cannot commit pixels on the previous smaller grid.
+
+`PrepareColorEditPreview` captures the opening and current settings sequence. `RunColorEditPreviewJob` prepares
+the grid/source and renders the same arithmetic used by the direct API; `RunColorEditHistogramJob` reads the fixed
+opening image and selection once. Both return explicit status and owning values. Missing coverage or private source
+storage is a failure, never a successful empty histogram. `ColorEditPreviewMemoryBytes` and
+`ColorEditHistogramMemoryBytes` reserve the maximum overlapping preparation/compute allocations, including padding,
+the downscale read, coverage and sparse reads. `ColorEditJobMemoryBytes` also includes unprepared growth at commit.
+
+`openingSequence` remains stable while settings change. Histogram results validate that lifetime and the opening
+source, so a settings tick does not discard a valid measurement. Adjustment-layer histograms remain measurements
+of their opening composite while that layer's own parameters change. Cancel/reopen, restore and document
+replacement invalidate the old opening. Destructive results retain the existing target, placement, mask and
+selection checks.
+
+An intermediate preview may display without replacing the panel's current settings or growth plan. Its prepared
+source enters the cache only for the same grid and placement. `previewSequence` names the settings/seed/grid
+request actually rendered; commit reuse requires this exact current sequence plus matching source, scale, placement
+and dimensions. Preview off, identity settings and refused growth invalidate all earlier preview results, including
+ones arriving after preview is re-enabled. Failed/cancelled results never install partial pixels. A current result
+with inconsistent settings, grid or output shape is rejected.
+
+The default direct API runs these same worker functions inline and immediately applies them, preserving its numeric
+goldens. Host job submission, busy controls and file/close continuations are the next P1.1c slice; this data/API
+boundary alone does not establish a nonblocking application. Earlier tool settlement and GPU composite sampling
+retain their owning P1 migration steps.
 
 ## Content-aware fill (C13)
 

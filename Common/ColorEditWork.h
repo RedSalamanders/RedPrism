@@ -33,6 +33,30 @@ struct ColorEditJobResult final
     bool reusedPreview = false;
 };
 
+struct ColorEditPreviewResult final
+{
+    JobToken token;
+    ColorEdit edit; // Prepared handles and rendered sequence; apply never replaces the panel's current settings.
+    ColorEditJobStatus status = ColorEditJobStatus::Failed;
+};
+
+struct ColorEditHistogramResult final
+{
+    JobToken token;
+    std::uint64_t openingSequence = 0;
+    Raster original;
+    LevelsHistogram histogram{};
+    ColorEditJobStatus status = ColorEditJobStatus::Failed;
+};
+
+[[nodiscard]] int ColorEditPreviewLimit(FilterKind kind) noexcept;
+[[nodiscard]] std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept;
+[[nodiscard]] std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept;
+[[nodiscard]] ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Executor& executor,
+                                                            CancelToken cancellation = {});
+[[nodiscard]] ColorEditHistogramResult RunColorEditHistogramJob(const ColorEditJobInput& input, Executor& executor,
+                                                                CancelToken cancellation = {});
+
 [[nodiscard]] bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) noexcept;
 [[nodiscard]] Raster RenderColorEditRaster(const ColorEdit& edit, const Raster& source, const LayerTransform& placement,
                                            double scale, bool* noSource = nullptr,

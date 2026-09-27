@@ -175,9 +175,11 @@ fast path for shared storage, so equal geometry preserves redo. Flipping, transl
 must leave earlier snapshots untouched. Selection memory accounting and deferred destruction remain subsequent
 history/resource work in the active performance plan.
 
-The geometry producer caches its total point count. `PointCount()` is constant-time for snapshot/admission readers,
-copies preserve the count with shared storage, and a moved-from empty handle reports zero. This avoids an outline
-traversal when reserving a hard-coverage worker's crossing array.
+The geometry producer caches its total point count and finite-point bounds. `PointCount()`, `Bounds()` and
+`DocumentSelection::IsEmpty()` are constant-time for snapshot, panel and admission readers. Copies preserve the
+cache with shared storage; a moved-from empty handle reports zero points and no bounds. Bounds retain the same
+finite-point filtering and degenerate-selection rules as `LoopsBounds`. Geometry equality and vector access are
+unchanged. This avoids outline traversal when opening a panel or reserving a hard-coverage worker's crossing array.
 
 ### Operations
 

@@ -261,7 +261,13 @@ Cancellation checks do not interrupt an OS allocator or release. Measurements MU
 from observed stop-to-return time, which includes page faults, scheduling and scratch retirement. Kernels still
 run serially in this slice; SIMD and tile parallelism remain P2 work.
 
-`ColorEditJobMemoryBytes` takes the maximum of overlapping stage allocations, then adds 128 KiB for bounded settings,
+Panel growth is planned without touching pixels. Worker preparation allocates the padded image and optional
+downscaled source; prepared handles are cached only for the same opening image, grid and placement. Preview
+admission uses preview dimensions for render scratch and includes the downscale's full-size private read in its
+preparation peak. Histogram admission covers its original private source and selection coverage; it is independent
+of later settings ticks. No estimate walks selection points.
+
+`ColorEditJobMemoryBytes` takes the maximum of overlapping stage allocations, includes unprepared padding, then adds 128 KiB for bounded settings,
 stack, raster headers and job records plus four copies of any mask asset name. Pixel allocations use
 `PixelBuffer::RequiredBytes`; the existing global headroom covers opaque allocator bookkeeping. Selection coverage
 survives filtering and blending. Gaussian additionally needs four float intermediates per pixel and double tap
