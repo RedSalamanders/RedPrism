@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="RedPrism" Company="RedPrism">
+  <Profiles>
+    <SystemCollector Id="RedPrismSystemCollector" Name="RedPrism system events">
+      <BufferSize Value="256" />
+      <Buffers Value="64" />
+    </SystemCollector>
+
+    <EventCollector Id="RedPrismEventCollector" Name="RedPrism and graphics events">
+      <BufferSize Value="256" />
+      <Buffers Value="32" />
+    </EventCollector>
+
+    <SystemProvider Id="RedPrismSystemProvider">
+      <Keywords>
+        <Keyword Value="ProcessThread" />
+        <Keyword Value="Loader" />
+        <Keyword Value="SampledProfile" />
+        <Keyword Value="CSwitch" />
+        <Keyword Value="ReadyThread" />
+        <Keyword Value="DiskIO" />
+        <Keyword Value="FileIO" />
+        <Keyword Value="FileIOInit" />
+        <Keyword Value="Filename" />
+        <Keyword Value="AllFaults" />
+        <Keyword Value="HardFaults" />
+        <Keyword Value="MemoryInfo" />
+        <Keyword Value="DPC" />
+        <Keyword Value="Interrupt" />
+        <Keyword Value="SystemCall" />
+      </Keywords>
+      <Stacks>
+        <Stack Value="SampledProfile" />
+        <Stack Value="CSwitch" />
+        <Stack Value="ReadyThread" />
+        <Stack Value="PagefaultHard" />
+      </Stacks>
+    </SystemProvider>
+
+    <!-- TraceLogging C/C++ providers use their GUID in Name. Keywords 0x1, 0x2 and 0x4
+         are UiFree, Memory and UI timing events emitted by Common/PipelineTrace.cpp. -->
+    <EventProvider Id="RedPrismPipelineProvider" Name="7B5D9C3E-42F1-4B76-9A2D-61E8C4F037A5" Level="5">
+      <Keywords>
+        <Keyword Value="0x7" />
+      </Keywords>
+    </EventProvider>
+
+    <!-- Providers and masks are from the installed Windows CPU+GPU profile. -->
+    <EventProvider Id="RedPrismDxgKrnlProvider" Name="802EC45A-1E99-4B83-9920-87C98277BA9D" Level="5" Stack="true">
+      <Keywords>
+        <Keyword Value="0x277" />
+      </Keywords>
+    </EventProvider>
+    <EventProvider Id="RedPrismDxgiProvider" Name="CA11C036-0102-4A2D-A6AD-F03CFED5D3C9" Level="6" Stack="true">
+      <Keywords>
+        <Keyword Value="0xF" />
+      </Keywords>
+    </EventProvider>
+    <EventProvider Id="RedPrismD3D11Provider" Name="DB6F6DDB-AC77-4E88-8253-819DF9BBF140" Level="6" Stack="true">
+      <Keywords>
+        <Keyword Value="0xF" />
+      </Keywords>
+    </EventProvider>
+    <EventProvider Id="RedPrismWin32kProvider" Name="8C416C79-D49B-4F01-A467-E56D3AA8234C" Level="5" Stack="true">
+      <Keywords>
+        <Keyword Value="0x402000" />
+      </Keywords>
+    </EventProvider>
+
+    <Profile Id="RedPrism.Verbose.File" Name="RedPrism" Description="RedPrism CPU, scheduling, I/O, fault, TraceLogging, and graphics profile" DetailLevel="Verbose" LoggingMode="File">
+      <Collectors>
+        <SystemCollectorId Value="RedPrismSystemCollector">
+          <SystemProviderId Value="RedPrismSystemProvider" />
+        </SystemCollectorId>
+        <EventCollectorId Value="RedPrismEventCollector">
+          <EventProviders>
+            <EventProviderId Value="RedPrismPipelineProvider" />
+            <EventProviderId Value="RedPrismDxgKrnlProvider" />
+            <EventProviderId Value="RedPrismDxgiProvider" />
+            <EventProviderId Value="RedPrismD3D11Provider" />
+            <EventProviderId Value="RedPrismWin32kProvider" />
+          </EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

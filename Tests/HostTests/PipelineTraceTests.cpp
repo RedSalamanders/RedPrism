@@ -4,6 +4,7 @@
 #include "../../Common/Jobs.h"
 #include "../../Common/PerfRoot.h"
 #include "../../Common/PipelineTrace.h"
+#include "../../Common/UiTiming.h"
 
 #include <windows.h>
 
@@ -16,6 +17,7 @@
 #pragma warning(pop)
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -32,6 +34,39 @@ namespace
 {
 constexpr GUID kPipelineTraceProviderGuid{0x7b5d9c3e, 0x42f1, 0x4b76, {0x9a, 0x2d, 0x61, 0xe8, 0xc4, 0xf0, 0x37, 0xa5}};
 constexpr std::uint64_t kOneMiB = 1'048'576;
+constexpr std::uint32_t kUiTimingSentinelDetail = 0xa100;
+constexpr std::uint32_t kUiTimingSuppressedDetail = 0xb100;
+constexpr std::uint32_t kUiTimingWorkerDetail = 0xc100;
+
+struct TimingSentinel final
+{
+    std::uint32_t detail;
+    std::uint64_t durationUs;
+};
+
+constexpr std::array<TimingSentinel, 6> kUiTimingSentinels{{
+    {kUiTimingSentinelDetail + 1, 91'001},
+    {kUiTimingSentinelDetail + 2, 92'002},
+    {0, 93'003},
+    {kUiTimingSentinelDetail + 4, 94'004},
+    {0, 95'005},
+    {0, 96'006},
+}};
+constexpr std::array<TimingSentinel, 3> kUiTimingSuppressedSentinels{{
+    {kUiTimingSuppressedDetail + 1, 4'000},
+    {kUiTimingSuppressedDetail + 2, 4'000},
+    {0, 4'000},
+}};
+constexpr std::array<TimingSentinel, 6> kUiTimingWorkerSentinels{{
+    {kUiTimingWorkerDetail + 1, 101'001},
+    {kUiTimingWorkerDetail + 2, 102'002},
+    {0, 103'003},
+    {kUiTimingWorkerDetail + 4, 104'004},
+    {0, 105'005},
+    {0, 106'006},
+}};
+constexpr std::array<std::wstring_view, 6> kUiTimingEventNames{L"UiDispatch", L"UiMessage", L"UiDrain",
+                                                               L"UiApply",    L"UiAction",  L"UiFrame"};
 
 int g_failures = 0;
 
@@ -60,7 +95,30 @@ struct EventCapture final
     std::uint32_t undecodedEvents = 0;
     std::uint32_t largeUiFrees = 0;
     std::uint64_t uiFreeBytes = 0;
+    std::array<std::uint32_t, 6> uiTimingEvents{};
+    std::array<std::uint32_t, 6> uiTimingOwnerEvents{};
+    std::array<std::uint32_t, 6> uiTimingKeywordEvents{};
+    std::array<std::uint32_t, 3> suppressedTimingEvents{};
+    std::array<std::uint32_t, 6> workerTimingEvents{};
 };
+
+bool ReadTraceUInt32(PEVENT_RECORD record, const wchar_t* name, std::uint32_t& value) noexcept
+{
+    PROPERTY_DATA_DESCRIPTOR property{};
+    property.PropertyName = reinterpret_cast<ULONGLONG>(name);
+    property.ArrayIndex = ULONG_MAX;
+    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) ==
+           ERROR_SUCCESS;
+}
+
+bool ReadTraceUInt64(PEVENT_RECORD record, const wchar_t* name, std::uint64_t& value) noexcept
+{
+    PROPERTY_DATA_DESCRIPTOR property{};
+    property.PropertyName = reinterpret_cast<ULONGLONG>(name);
+    property.ArrayIndex = ULONG_MAX;
+    return TdhGetProperty(record, 0, nullptr, 1, &property, sizeof(value), reinterpret_cast<BYTE*>(&value)) ==
+           ERROR_SUCCESS;
+}
 
 void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
 {
@@ -96,8 +154,57 @@ void WINAPI CaptureEvent(PEVENT_RECORD record) noexcept
     {
         ++eventNameLength;
     }
-    if (eventNameLength == availableChars || std::wstring_view{eventName, eventNameLength} != L"UiFree")
+    if (eventNameLength == availableChars)
     {
+        return;
+    }
+
+    const std::wstring_view eventNameView{eventName, eventNameLength};
+    if (eventNameView != L"UiFree")
+    {
+        std::size_t timingIndex = 0;
+        while (timingIndex < kUiTimingEventNames.size() && eventNameView != kUiTimingEventNames[timingIndex])
+        {
+            ++timingIndex;
+        }
+        if (timingIndex == kUiTimingEventNames.size())
+        {
+            return;
+        }
+
+        std::uint32_t detail = 0;
+        const bool hasDetail = timingIndex == 0 || timingIndex == 1 || timingIndex == 3;
+        const wchar_t* const detailName = timingIndex == 3 ? L"jobClass" : L"msg";
+        std::uint64_t durationUs = 0;
+        if ((hasDetail && !ReadTraceUInt32(record, detailName, detail)) ||
+            !ReadTraceUInt64(record, L"durationUs", durationUs))
+        {
+            ++capture.undecodedEvents;
+            return;
+        }
+
+        const auto matches = [detail, durationUs, hasDetail](const TimingSentinel& sentinel) noexcept
+        { return durationUs == sentinel.durationUs && (!hasDetail || detail == sentinel.detail); };
+        if (timingIndex < kUiTimingSentinels.size() && matches(kUiTimingSentinels[timingIndex]))
+        {
+            ++capture.uiTimingEvents[timingIndex];
+            if (record->EventHeader.EventDescriptor.Keyword == 0x4)
+            {
+                ++capture.uiTimingKeywordEvents[timingIndex];
+            }
+            if (record->EventHeader.ThreadId == capture.uiThreadId)
+            {
+                ++capture.uiTimingOwnerEvents[timingIndex];
+            }
+        }
+        if (timingIndex < kUiTimingSuppressedSentinels.size() && matches(kUiTimingSuppressedSentinels[timingIndex]))
+        {
+            ++capture.suppressedTimingEvents[timingIndex];
+        }
+        if (timingIndex < kUiTimingWorkerSentinels.size() && matches(kUiTimingWorkerSentinels[timingIndex]))
+        {
+            ++capture.workerTimingEvents[timingIndex];
+        }
         return;
     }
 
@@ -244,10 +351,41 @@ int RunPipelineTraceTests()
 
     EventCapture capture{};
     capture.uiThreadId = GetCurrentThreadId();
+    Expect(PipelineUiTimingEnabled(), "ui-timing-enabled-by-private-capture");
+
+    TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingSentinels[0].durationUs, kUiTimingSentinels[0].detail);
+    TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingSentinels[1].durationUs, kUiTimingSentinels[1].detail);
+    TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingSentinels[2].durationUs, 0);
+    TracePipelineUi(UiTimingKind::ResultApply, kUiTimingSentinels[3].durationUs, kUiTimingSentinels[3].detail);
+    TracePipelineUi(UiTimingKind::UiAction, kUiTimingSentinels[4].durationUs, 0);
+    TracePipelineUi(UiTimingKind::Frame, kUiTimingSentinels[5].durationUs, 0);
+
+    TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingSuppressedSentinels[0].durationUs,
+                    kUiTimingSuppressedSentinels[0].detail);
+    TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingSuppressedSentinels[1].durationUs,
+                    kUiTimingSuppressedSentinels[1].detail);
+    TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingSuppressedSentinels[2].durationUs, 0);
+
+    std::atomic<bool> workerTimingEnabled{true};
     TracePipelineFree(kOneMiB - 1);
     TracePipelineFree(kOneMiB);
-    std::thread worker([]() noexcept { TracePipelineFree(kOneMiB * 2); });
+    std::thread worker(
+        [&workerTimingEnabled]() noexcept
+        {
+            workerTimingEnabled.store(PipelineUiTimingEnabled(), std::memory_order_relaxed);
+            TracePipelineFree(kOneMiB * 2);
+            TracePipelineUi(UiTimingKind::MessageDispatch, kUiTimingWorkerSentinels[0].durationUs,
+                            kUiTimingWorkerSentinels[0].detail);
+            TracePipelineUi(UiTimingKind::WindowMessage, kUiTimingWorkerSentinels[1].durationUs,
+                            kUiTimingWorkerSentinels[1].detail);
+            TracePipelineUi(UiTimingKind::CompletionDrain, kUiTimingWorkerSentinels[2].durationUs, 0);
+            TracePipelineUi(UiTimingKind::ResultApply, kUiTimingWorkerSentinels[3].durationUs,
+                            kUiTimingWorkerSentinels[3].detail);
+            TracePipelineUi(UiTimingKind::UiAction, kUiTimingWorkerSentinels[4].durationUs, 0);
+            TracePipelineUi(UiTimingKind::Frame, kUiTimingWorkerSentinels[5].durationUs, 0);
+        });
     worker.join();
+    Expect(!workerTimingEnabled.load(std::memory_order_relaxed), "worker-ui-timing-disabled");
 
     // A real inline free is a second positive control: the production allocator must reach the provider.
     {
@@ -343,5 +481,15 @@ int RunPipelineTraceTests()
     Expect(capture.uiFreeBytes == 2 * kOneMiB && capture.largeUiFrees == 0,
            "decoded-free-sizes-exclude-any-large-ui-destruction");
     Expect(capture.workerFreeEvents == 0 && capture.otherThreadFreeEvents == 0, "worker-one-mib-free-not-emitted");
+    Expect(capture.uiTimingEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "decode-all-six-ui-timing-events-and-properties");
+    Expect(capture.uiTimingOwnerEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "ui-timing-events-run-on-owner-thread");
+    Expect(capture.uiTimingKeywordEvents == std::array<std::uint32_t, 6>{1, 1, 1, 1, 1, 1},
+           "ui-timing-events-use-keyword-four");
+    Expect(capture.suppressedTimingEvents == std::array<std::uint32_t, 3>{0, 0, 0},
+           "dispatch-message-drain-at-or-below-four-ms-suppressed");
+    Expect(capture.workerTimingEvents == std::array<std::uint32_t, 6>{0, 0, 0, 0, 0, 0},
+           "worker-ui-timing-events-suppressed");
     return g_failures;
 }

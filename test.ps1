@@ -270,6 +270,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "ARM64 ASan wiring tests failed with exit code $LASTEXITCODE."
 }
 
+Write-Host 'Validating the WPR performance profile (read-only)...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\WprProfileTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "WPR profile tests failed with exit code $LASTEXITCODE."
+}
+
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 Add-Type -AssemblyName System.Drawing
 

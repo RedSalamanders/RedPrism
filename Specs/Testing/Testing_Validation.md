@@ -126,6 +126,21 @@ Payload construction is outside the timed intervals; admission, cancellation-sta
 completion delivery and payload release are included. Record Release numbers without a timing assertion. This
 is not the UI/image/RAW benchmark and proves no image speed target.
 
+### UI timing foundations (P0.1a)
+
+HostTests runs `ui-timing-histogram.*` and `ui-timing.*` numeric and state checks. Independent expectations cover bucket
+edges and nearest-rank percentiles, exact maximum and total overflow, QPC conversion (including one tick above
+4 ms and integer overflow), nested captures, worker isolation, real message dispatch and scheduler apply/action
+hooks. No test asserts an elapsed-time target. The private `pipeline-trace.*` ETW test also decodes timing event
+names, durations and detail fields, owner-thread restriction and the strictly-above-4-ms thresholds; recording
+or decoding failures and lost events fail the gate.
+
+`Tests/BuildProcessTests/WprProfileTests.ps1` checks the trace profile with `wpr -profiles` and `-profiledetails`.
+It never starts, stops or cancels a system trace; missing WPR or an invalid profile fails with diagnostics.
+`HostTests --bench-ui-timing` reports 31 batches of 20,000 empty scopes with capture off/on, QPC medians, p95 and
+maxima including loop cost. It refuses an already-enabled external timing session so its disabled-path numbers
+are interpretable. This is instrumentation overhead only; operation baselines and G1 remain in the WIP plan.
+
 ### Worker foundations (P0.5)
 
 HostTests also runs the standard-header `ExecutorTests` and Windows `WorkerPoolTests`. Their independent

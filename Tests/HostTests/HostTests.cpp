@@ -28,6 +28,8 @@
 #include "Resources.h"
 #include "SettingsStore.h"
 #include "TransformOverlay.h"
+#include "UiTimingHistogramTests.h"
+#include "UiTimingTests.h"
 #include "Version.h"
 #include "VersionInfo.h"
 #include "WorkerPoolTests.h"
@@ -1605,6 +1607,10 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunMemoryBenchmark();
     }
+    if (argc > 1 && std::wstring_view{argv[1]} == L"--bench-ui-timing")
+    {
+        return RunUiTimingBenchmark();
+    }
 #if defined(_DEBUG)
     if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")
     {
@@ -1619,6 +1625,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunExecutorValueTests();
     gFailures += RunKernelDispatchTests();
     gFailures += RunKernelCliTests();
+    gFailures += RunUiTimingHistogramTests();
+    gFailures += RunUiTimingTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
     gFailures += RunJobUiPolicyTests();

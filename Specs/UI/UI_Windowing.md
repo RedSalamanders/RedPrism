@@ -92,6 +92,11 @@ waited with the message queue while idle, hidden or suspended, and with the fram
 render. A scheduler wake returns control to the outer pump so hidden/suspended completions are still drained.
 `SettleJobs` is reserved for harness/headless use, not a UI command.
 
+The outer pump and `WindowProcedure` have separate optional timing scopes. They measure inclusive wall time;
+nested/modal dispatch is included and the two duration streams overlap. Completion apply and deferred UI
+actions have their own scopes. No timer or extra wakeup is introduced; details and ETW fields are specified in
+[`Core_PerformanceAndResources.md`](../Core/Core_PerformanceAndResources.md#ui-duration-instrumentation).
+
 On shutdown, the application requests cancellation and hides the window before joining scheduler workers. It keeps
 their inputs and dependent owners alive until they return, drops undelivered callbacks, then tears down chrome,
 renderer/device, HWND and localization/COM state. A shutdown request from inside a job UI callback is deferred

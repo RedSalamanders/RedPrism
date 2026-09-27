@@ -3,6 +3,7 @@
 #include "DeferredRelease.h"
 #include "PipelineTrace.h"
 #include "PixelBuffer.h"
+#include "UiTiming.h"
 #include "WorkerPool.h"
 
 #include <array>
@@ -838,10 +839,12 @@ MessagePumpResult PumpMessages(MessageDispatch dispatch, void* context) noexcept
         }
         if (dispatch)
         {
+            const ScopedUiTiming timing{UiTimingKind::MessageDispatch, message.message};
             dispatch(context, &message);
         }
         else
         {
+            const ScopedUiTiming timing{UiTimingKind::MessageDispatch, message.message};
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -862,6 +865,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
     {
         return 0;
     }
+    const ScopedUiTiming timing{UiTimingKind::CompletionDrain};
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
     self.ProcessMemoryChange();
@@ -892,6 +896,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
             }
             continue;
         }
+        const ScopedUiTiming applyTiming{UiTimingKind::ResultApply, static_cast<std::uint32_t>(record.options.kind)};
         JobResult result = record.result;
         if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
         {
@@ -938,6 +943,7 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     {
         return false;
     }
+    const ScopedUiTiming timing{UiTimingKind::UiAction};
     auto action = std::move(self.actions[self.actionHead]);
     self.actionHead = (self.actionHead + 1) % JobScheduler::kUiActionCapacity;
     --self.actionCount;

@@ -176,6 +176,34 @@ kernel. The executor checks between tiles; bodies check between rows or smaller 
 interval is at most 1 ms. The coordinate-kernel benchmark qualifies executor overhead only. `--bench-executor`
 on HostTests records its checked output and cancel-check cost; it is not proof of UI latency or image speed.
 
+## UI duration instrumentation
+
+`ScopedUiTiming` observes inclusive elapsed wall time on the calling thread. The production hooks cover each
+outer message dispatch, each `Application::WindowProcedure`, completion drain, final result apply (including
+payload retirement), deferred UI action, and host frame construction after the frame-latency wait. Frame timing
+ends after Present/device-recovery handling; it does not measure GPU execution or input-to-display latency.
+Nested messages and modal waits are included, so callers MUST identify modal/device-recovery scenarios before
+using these samples for a latency gate. Dispatch and WndProc durations overlap and MUST NOT be added together.
+
+With no capture or enabled ETW timing keyword, a scope reads no clock and allocates nothing. A scoped, optional
+thread-local `UiTimingCapture` accumulates fixed histograms with no synchronization or allocation. Samples round
+up from QPC ticks to microseconds, preserving a zero interval. Histogram percentiles are bucket upper bounds,
+not exact quantiles; maxima are exact observed microseconds. Invalid clocks count failures; totals saturate
+with an explicit overflow flag. Capture lifetime encloses every measured scope, and neither may move threads.
+
+Provider `RedPrism.Pipeline` uses keyword `0x4` at Verbose level for `UiDispatch{msg,durationUs}`,
+`UiMessage{msg,durationUs}`, `UiDrain{durationUs}`, `UiApply{jobClass,durationUs}`, `UiAction{durationUs}` and
+`UiFrame{durationUs}`. The first three emit only above 4,000 microseconds; the others emit each operation.
+Only the provider's initialization thread emits these events. `Build/RedPrism.wprp` enables those events plus
+free/memory events, CPU samples, scheduler stacks, file/disk I/O, faults and graphics providers. Its collector
+buffers total 24 MiB. Trace retention/collection is explicit and uses the owned performance root; the ordinary
+test suite only validates the profile with read-only WPR metadata queries and uses a private in-process ETW
+session for event proof. No polling, timer, worker, or new wakeup belongs to the timing facility.
+
+`HostTests --bench-ui-timing` measures empty scope overhead with the provider registered, tracing off, and the
+histogram capture off/on. It asserts counts, never elapsed-time limits. P0.1 scenario measurements and G1 remain
+separate from this instrumentation proof.
+
 ## Image result ownership
 
 Published selection outlines share immutable point storage across document snapshots, history, previews and

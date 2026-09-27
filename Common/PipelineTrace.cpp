@@ -1,5 +1,7 @@
 #include "PipelineTrace.h"
 
+#include "UiTiming.h"
+
 #include <windows.h>
 
 #include <TraceLoggingProvider.h>
@@ -72,4 +74,56 @@ void TracePipelineMemory(const char* event, std::uint64_t requested, std::uint64
                       TraceLoggingKeyword(0x2), TraceLoggingString(event, "event"),
                       TraceLoggingUInt64(requested, "requested"), TraceLoggingUInt64(reserved, "reserved"),
                       TraceLoggingUInt64(releasing, "releasing"));
+}
+
+bool PipelineUiTimingEnabled() noexcept
+{
+    return g_pipelineTraceRegistered && GetCurrentThreadId() == g_pipelineTraceOwnerThreadId &&
+           TraceLoggingProviderEnabled(g_pipelineTraceProvider, WINEVENT_LEVEL_VERBOSE, 0x4);
+}
+
+void TracePipelineUi(UiTimingKind kind, std::uint64_t durationUs, std::uint32_t detail) noexcept
+{
+    if (!PipelineUiTimingEnabled())
+    {
+        return;
+    }
+    if ((kind == UiTimingKind::MessageDispatch || kind == UiTimingKind::WindowMessage ||
+         kind == UiTimingKind::CompletionDrain) &&
+        durationUs <= 4000)
+    {
+        return;
+    }
+    switch (kind)
+    {
+    case UiTimingKind::MessageDispatch:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiDispatch", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt32(detail, "msg"),
+                          TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::WindowMessage:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiMessage", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt32(detail, "msg"),
+                          TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::CompletionDrain:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiDrain", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::ResultApply:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiApply", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt32(detail, "jobClass"),
+                          TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::UiAction:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiAction", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::Frame:
+        TraceLoggingWrite(g_pipelineTraceProvider, "UiFrame", TraceLoggingLevel(WINEVENT_LEVEL_VERBOSE),
+                          TraceLoggingKeyword(0x4), TraceLoggingUInt64(durationUs, "durationUs"));
+        break;
+    case UiTimingKind::Count:
+        break;
+    }
 }

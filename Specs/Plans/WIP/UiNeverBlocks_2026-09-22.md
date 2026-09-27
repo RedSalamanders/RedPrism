@@ -7,6 +7,8 @@
   - [x] Capture the 4K and 45 MP before measurements on R1.
   - [ ] Add the remaining UI, ETW, IO and operation-classification measurements.
   - [x] Add private ETW capture/decode and the marked local-drive perf-root resolver for the P0.7 free gate.
+  - [x] P0.1a — Instrument message dispatch, window handlers, completion drains, individual result apply, UI actions and frame recording with optional allocation-free timing capture and ETW; validate a WPR profile. Full x64 gates and all ARM64 cross-builds passed; disabled scope costs 4.4 ns median, capture 42–43 ns.
+  - [ ] P0.1b — Drive operation and UI/IO scenarios, record machine metadata and baseline distributions, and classify each §5 row.
 - [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
   - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
   - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
@@ -71,6 +73,9 @@ Hardware qualification and Photoshop comparisons remain measured exit criteria; 
 check those boxes. Smaller agents handle bounded changes and independent checks; the primary reviews them and
 owns scheduler, GPU, storage, and RAW architecture.
 
+RAW corpus source, 2026-09-27: the user explicitly selected publicly licensed test samples. Store verified source
+URLs, license terms and file hashes in the corpus manifest when acquiring ARW, CR3, NEF, RAF and tiled DNG fixtures.
+
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
 benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
 raster publication, buffer ownership and adoption, the concurrency tests and the paired benchmark, and ran the gates.
@@ -124,6 +129,14 @@ passed the full x64 gates and all ARM64 cross-builds. All five linked x64 images
 gate in each configuration. Compiled controls prove baseline leaks, EVEX in AVX2, overbroad runtime exemptions
 and missing/mismatched PDBs are rejected. See the [dispatch record](../../TestRuns/KernelDispatch_2026-09-27.md).
 Only Scalar is implemented; P2 owns actual SIMD acceleration. P0.1 UI/IO measurements and the P1 migrations are next.
+This slice was committed and pushed to `origin/main` as `a7c886c`.
+
+P0.1a progress, 2026-09-27: allocation-free timing scopes now cover production dispatch, WndProc, drain, result
+apply, deferred actions and frame construction. All 82 timing/histogram/trace checks pass in each x64 run,
+including actual private ETW decode and sanitizer stress. The full x64 gates and all ARM64 cross-builds passed.
+Three Release runs measured 4.4 ns median disabled and 42–43 ns with histogram capture. The
+[timing record](../../TestRuns/UiTiming_2026-09-27.md) documents scope boundaries and limitations. P0.1b owns
+real-loop operation/IO scenarios and baseline classification; P1 still owns asynchronous image work.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic

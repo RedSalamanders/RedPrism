@@ -16,6 +16,7 @@
 #include "Resources.h"
 #include "Selection.h"
 #include "SystemClipboard.h"
+#include "UiTiming.h"
 #include "Version.h"
 #include "VersionInfo.h"
 #include "WarpStroke.h"
@@ -354,6 +355,7 @@ int Application::Run(int showCommand) noexcept
             continue;
         }
 
+        const ScopedUiTiming timing{UiTimingKind::Frame};
         if (_chrome)
         {
             (void)_chrome->AdvanceAnimation(GetTickCount64());
@@ -4396,6 +4398,7 @@ void Application::ExportFlattened(bool jpeg) noexcept
 
 LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
+    const ScopedUiTiming timing{UiTimingKind::WindowMessage, message};
     Application* application = reinterpret_cast<Application*>(GetWindowLongPtrW(window, GWLP_USERDATA));
     if (message == WM_NCCREATE)
     {
