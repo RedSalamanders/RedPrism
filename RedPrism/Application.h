@@ -32,6 +32,7 @@
 #pragma warning(pop)
 
 class ChromeHost;
+struct UiBenchmarkState;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -87,6 +88,14 @@ class Application final : public ChromeEvents
     void SyncJobActivity(std::uint64_t nowQpc) noexcept;
     void OnJobIndicatorTimer() noexcept;
     int RunJobActivitySelfTest() noexcept;
+    int RunUiBenchmark() noexcept;
+    HRESULT InitializeUiBenchmark() noexcept;
+    void AdvanceUiBenchmark() noexcept;
+    void ExecuteUiBenchmarkStep() noexcept;
+    void PrepareUiBenchmarkStep() noexcept;
+    void FailUiBenchmark(const char* reason) noexcept;
+    static constexpr UINT kUiBenchmarkMessage = WM_APP + 10;
+    static constexpr UINT_PTR kUiBenchmarkTimerId = 9;
 
     HRESULT RegisterWindowClass() noexcept;
     HRESULT CreateMainWindow(bool visible) noexcept;
@@ -566,6 +575,7 @@ class Application final : public ChromeEvents
     std::optional<DocumentSelection> _overlaySelection;
     std::optional<Vec2> _brushHover; // document point under the pointer while a brush tool is active
     std::wstring _bench;
+    std::unique_ptr<UiBenchmarkState> _uiBenchmark;
     Vec2 _overlayOrigin{};
     double _overlayScale = 0.0;
     double _overlayBacking = 0.0;

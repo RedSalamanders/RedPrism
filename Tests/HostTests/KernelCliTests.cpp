@@ -13,7 +13,7 @@
 namespace
 {
 [[nodiscard]] bool ParseArguments(std::initializer_list<std::wstring_view> arguments, RedPrismCommandLine& parsed,
-                                  std::wstring& error)
+                                  std::wstring& error, std::wstring* benchmark = nullptr)
 {
     std::vector<std::wstring> storage{L"RedPrism.exe"};
     storage.reserve(arguments.size() + 1);
@@ -33,6 +33,11 @@ namespace
     const bool succeeded =
         RedPrismParseCommandLine(pointers.data(), static_cast<int>(pointers.size()), parsed, &errorToken);
     error = errorToken != nullptr ? errorToken : L"";
+    if (benchmark != nullptr)
+    {
+        // Parsed string fields borrow argv. Copy before this helper releases its temporary argv storage.
+        *benchmark = parsed.bench != nullptr ? parsed.bench : L"";
+    }
     return succeeded;
 }
 } // namespace
@@ -71,6 +76,18 @@ int RunKernelCliTests()
     check(!ParseArguments({L"--isa=scalar"}, parsed, error) && error == L"--isa=scalar", "inline-value-rejected");
     check(!ParseArguments({L"--isa", L"scalar", L"--isa", L"sse2"}, parsed, error) && error == L"--isa",
           "duplicate-switch-rejected");
+
+    constexpr std::array<std::wstring_view, 4> kUiBenchmarks{{L"ui", L"ui45", L"ui100", L"ui-smoke"}};
+    for (const std::wstring_view benchmark : kUiBenchmarks)
+    {
+        std::wstring parsedBenchmark;
+        const bool succeeded = ParseArguments({L"--bench", benchmark}, parsed, error, &parsedBenchmark);
+        check(succeeded && parsedBenchmark == benchmark && error.empty(), "valid-ui-benchmark-value");
+    }
+    check(!ParseArguments({L"--bench"}, parsed, error) && error == L"--bench", "bench-missing-value-rejected");
+    check(!ParseArguments({L"--bench", L""}, parsed, error) && error.empty(), "bench-empty-value-rejected");
+    check(!ParseArguments({L"--bench", L"ui-smoke-extra"}, parsed, error) && error == L"ui-smoke-extra",
+          "bench-invalid-value-rejected");
 
     const RedPrismCommandLineSwitch* isaSwitch = RedPrismFindSwitch(L"--isa");
     const std::wstring help = RedPrismFormatCommandLineHelp();

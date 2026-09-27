@@ -15,6 +15,7 @@ namespace RedPrismBuild
         public long TierInstructions;
         public long TierEvexInstructions;
         public long UndecodedPrefixes;
+        public long InlineTableVectorData;
         public readonly List<string> Violations = new List<string>();
     }
 
@@ -41,6 +42,11 @@ namespace RedPrismBuild
         private sealed class Module
         {
             public string Object, Library;
+        }
+        private sealed class InlineTable
+        {
+            public ulong Begin, End;
+            public readonly HashSet<ulong> PendingTargets = new HashSet<ulong>();
         }
         private static readonly Regex ModuleLine = new Regex(@"^\s*Mod (\d+) \| `(.+)`:", RegexOptions.Compiled);
         private static readonly Regex ObjectLine = new Regex(@"^\s*Obj: `(.+)`:", RegexOptions.Compiled);
@@ -88,6 +94,45 @@ namespace RedPrismBuild
         {
             return value == 0x26 || value == 0x2e || value == 0x36 || value == 0x3e || value == 0x64 ||
                    value == 0x65 || value == 0x66 || value == 0x67 || value == 0xf0 || value == 0xf2 || value == 0xf3;
+        }
+
+        private static bool StartsWith(byte[] bytes, params byte[] prefix)
+        {
+            if (bytes.Length < prefix.Length) return false;
+            for (int i = 0; i < prefix.Length; ++i) if (bytes[i] != prefix[i]) return false;
+            return true;
+        }
+
+        // Recognize only MSVC's observed image-relative DWORD switch-table dispatch. This is data proof,
+        // not a procedure/object exemption: a decoded LEA of the image base, optional byte-index load,
+        // DWORD indexed load, ADD and JMP must be contiguous. The table follows RET plus at most three
+        // alignment bytes, belongs to that contribution, and every entry targets a later decoded instruction
+        // between the dispatch and the table. Unrecognized forms remain subject to the normal ISA gate.
+        private static InlineTable ReadInlineTable(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva)
+        {
+            int ownerIndex = FindContribution(contributions, dispatch);
+            if (ownerIndex < 0) return null;
+            Contribution owner = contributions[ownerIndex];
+            ulong begin = checked(imageBase + tableRva);
+            if ((begin & 3) != 0 || begin <= afterJump || begin + 8 > owner.End || afterJump > owner.End)
+                return null;
+            int raw = checked((int)Offset(tableRva, sections, pe.Length));
+            bool afterReturn = raw >= 1 && pe[raw - 1] == 0xc3;
+            afterReturn |= raw >= 2 && pe[raw - 2] == 0xc3 && pe[raw - 1] == 0x90;
+            afterReturn |= raw >= 3 && pe[raw - 3] == 0xc3 && pe[raw - 2] == 0x66 && pe[raw - 1] == 0x90;
+            afterReturn |= raw >= 4 && pe[raw - 4] == 0xc3 && pe[raw - 3] == 0x0f &&
+                           pe[raw - 2] == 0x1f && pe[raw - 1] == 0x00;
+            if (!afterReturn) return null;
+            var table = new InlineTable { Begin = begin, End = begin };
+            for (int entry = 0; entry < 4096 && table.End + 4 <= owner.End && raw + 4 <= pe.Length; ++entry, raw += 4)
+            {
+                ulong target = checked(imageBase + BitConverter.ToUInt32(pe, raw));
+                if (target < afterJump || target >= begin) break;
+                table.PendingTargets.Add(target);
+                table.End += 4;
+            }
+            return table.End - table.Begin >= 8 ? table : null;
         }
 
         public static IsaScanResult Scan(string binary, string metadata, string symbols, string disassembly,
@@ -203,24 +248,60 @@ namespace RedPrismBuild
             }
 
             var result = new IsaScanResult();
+            var inlineTables = new List<InlineTable>();
+            int dispatchStage = 0;
+            ulong dispatchBegin = 0, precedingEnd = 0;
+            uint tableRva = 0;
             foreach (string line in File.ReadLines(disassembly))
             {
                 Match match = InstructionLine.Match(line);
                 if (!match.Success) continue;
                 ++result.Instructions;
                 string[] bytes = match.Groups[2].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                ulong address = UInt64.Parse(match.Groups[1].Value, NumberStyles.HexNumber);
+                if (!match.Groups[3].Value.StartsWith("<unknown>", StringComparison.Ordinal))
+                    foreach (InlineTable table in inlineTables) table.PendingTargets.Remove(address);
+                // Only a handful of possible dispatch instructions need byte-array parsing. Keep the
+                // ordinary instruction scan cheap even for multi-million-instruction Debug images.
+                if (dispatchStage != 0 || (bytes.Length == 7 && bytes[0] == "48" && bytes[1] == "8d" && bytes[2] == "0d"))
+                {
+                    byte[] encoded = Array.ConvertAll(bytes, b => Byte.Parse(b, NumberStyles.HexNumber));
+                    if (address != precedingEnd) dispatchStage = 0;
+                    if (dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
+                        dispatchStage = 2;
+                    else if ((dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
+                    { tableRva = BitConverter.ToUInt32(encoded, 3); dispatchStage = 3; }
+                    else if (dispatchStage == 3 && encoded.Length == 3 && StartsWith(encoded, 0x48, 0x03, 0xc1))
+                        dispatchStage = 4;
+                    else if (dispatchStage == 4 && encoded.Length == 2 && StartsWith(encoded, 0xff, 0xe0))
+                    {
+                        InlineTable table = ReadInlineTable(pe, sections, contributions, imageBase, dispatchBegin,
+                            checked(address + 2), tableRva);
+                        if (table != null) inlineTables.Add(table);
+                        dispatchStage = 0;
+                    }
+                    else dispatchStage = 0;
+                    if (encoded.Length == 7 && StartsWith(encoded, 0x48, 0x8d, 0x0d) &&
+                        checked((long)address + 7 + BitConverter.ToInt32(encoded, 3)) == (long)imageBase)
+                    { dispatchBegin = address; dispatchStage = 1; }
+                }
+                precedingEnd = checked(address + (ulong)bytes.Length);
                 int prefix = 0;
                 byte opcode = Byte.Parse(bytes[prefix], NumberStyles.HexNumber);
                 while (IsLegacyPrefix(opcode) && ++prefix < bytes.Length)
                     opcode = Byte.Parse(bytes[prefix], NumberStyles.HexNumber);
                 if (opcode != 0xc4 && opcode != 0xc5 && opcode != 0x62) continue;
+                bool inlineData = false;
+                foreach (InlineTable table in inlineTables)
+                    if (table.PendingTargets.Count == 0 && address >= table.Begin && precedingEnd <= table.End)
+                    { inlineData = true; break; }
+                if (inlineData) { ++result.InlineTableVectorData; continue; }
                 // Linear disassembly can encounter inline jump tables. An undecoded data byte is not an
                 // instruction. Report it separately instead of exempting any decoded instruction.
                 if (match.Groups[3].Value.StartsWith("<unknown>", StringComparison.Ordinal))
                 { ++result.UndecodedPrefixes; continue; }
                 ++result.VectorInstructions;
                 if (opcode == 0x62) ++result.EvexInstructions;
-                ulong address = UInt64.Parse(match.Groups[1].Value, NumberStyles.HexNumber);
                 int contributionIndex = FindContribution(contributions, address);
                 if (contributionIndex < 0)
                 {

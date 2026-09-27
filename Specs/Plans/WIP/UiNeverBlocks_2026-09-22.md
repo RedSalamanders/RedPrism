@@ -9,6 +9,11 @@
   - [x] Add private ETW capture/decode and the marked local-drive perf-root resolver for the P0.7 free gate.
   - [x] P0.1a — Instrument message dispatch, window handlers, completion drains, individual result apply, UI actions and frame recording with optional allocation-free timing capture and ETW; validate a WPR profile. Full x64 gates and all ARM64 cross-builds passed; disabled scope costs 4.4 ns median, capture 42–43 ns.
   - [ ] P0.1b — Drive operation and UI/IO scenarios, record machine metadata and baseline distributions, and classify each §5 row.
+    - [x] Implement the real application-loop driver, machine report and 15 operation smoke scenarios; all x64 gates and ARM64 cross-builds pass.
+    - [x] Acquire five per-file CC0 RAW samples and verify sizes, SHA-256 and signatures; inspect the tiled DNG layout. Offline downloader controls pass.
+    - [x] Complete the benchmark driver configuration gates, including ASan, offline corpus controls and the tightened ISA parser.
+    - [ ] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. Hardware all sizes and WARP 4K/100 MP complete; WARP 45 MP running.
+    - [ ] Extend baseline coverage to the remaining §5 operations, I/O and the non-cancellable calls before their migrations.
 - [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
   - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
   - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
@@ -55,6 +60,12 @@
   - [x] Scan decoded executable instructions, attribute them through PDB section contributions, and prove the gate with positive/negative compiled fixtures. All five images pass in every x64 configuration; exact runtime-owner exceptions and EVEX controls verified.
   - [x] Complete all configuration gates and record baseline ISA provenance before committing/pushing. 49 dispatch/CLI checks, real-process refusal tests, full x64 gates and all ARM64 cross-builds pass.
 - [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
+  - [ ] P1.1a — Separate immutable adjustment/filter work from session apply; retain the direct inline API and prove stale-result, mask, history and failure behavior.
+  - [ ] P1.1b — Add cooperative cancellation through the complete filter graph, declare peak reservations and verify unchanged scalar pixels.
+  - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
+  - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
+  - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
+  - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
 - [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
@@ -137,6 +148,19 @@ including actual private ETW decode and sanitizer stress. The full x64 gates and
 Three Release runs measured 4.4 ns median disabled and 42–43 ns with histogram capture. The
 [timing record](../../TestRuns/UiTiming_2026-09-27.md) documents scope boundaries and limitations. P0.1b owns
 real-loop operation/IO scenarios and baseline classification; P1 still owns asynchronous image work.
+This slice was committed and pushed to `origin/main` as `db7fd52`.
+
+P0.1b progress, 2026-09-28: the real-loop driver exercises 15 commands through posted messages, validates results
+and waits for idle jobs plus Present before accepting each sample. Full x64 Debug, Release and ASan gates and all
+ARM64 cross-builds pass. The [baseline record](../../TestRuns/PipelineBaseline_2026-09-27.md) preserves complete
+hardware 4K/45 MP/100 MP and WARP 4K/100 MP runs; WARP 45 MP is running. The original incomplete WARP 100 MP run
+is retained separately from its successful retry. Public CC0 ARW, CR3, NEF, RAF and tiled DNG files
+are acquired with matching upstream SHA-256 values; see the [corpus record](../../TestRuns/RawCorpus_2026-09-27.md).
+The 100 MP Gaussian scenario explicitly measures the existing pixel-budget refusal, not an absent preview.
+The x64 scan exposed compiler-generated switch-table data that decodes as VEX; a narrowly validated dispatch/table
+recognizer replaces that false positive without adding an object or procedure exception.
+All 13 parser controls and the current-image scans pass. The driver/corpus slice is qualified; P0.1 stays open for
+the remaining operation and I/O baselines. No RAW decode or Photoshop speed comparison is claimed.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -1867,7 +1891,7 @@ its "Gates" column.
 
 | Id | Question | Options | Recommendation | Gates | Decided |
 | --- | --- | --- | --- | --- | --- |
-| D1 | Engine for committed bytes | Exact CPU for everything; GPU with tolerances; mixed | **Exact CPU (SIMD + threads) for every legacy-golden kernel; GPU for previews within named tolerances; RAW develop commits from the GPU within `Rendering_RawDevelop.md` tolerances** | P1–P4 | |
+| D1 | Engine for committed bytes | Exact CPU for everything; GPU with tolerances; mixed | **Exact CPU (SIMD + threads) for every legacy-golden kernel; GPU for previews within named tolerances; RAW develop commits from the GPU within `Rendering_RawDevelop.md` tolerances** | P1–P4 | 2026-09-27: adopt the recommended mixed policy under the user's authorization through P6. Existing committed pixels remain the exact CPU reference; RAW tolerances must be specified and tested before that path ships. |
 | D2 | Preview coalescing | Cancel on each change (the 2026-09-22 text); legacy 1 in flight + latest pending | **Legacy for interactive previews; only refinements are superseded** (the legacy authors measured that cancel-on-change starves the preview) | P0.6b, P1 | 2026-09-27: adopt the recommendation under the user's through-P6 implementation instruction. |
 | D3 | Input while earlier work is pending | Refuse mutations; allow and drop stale results; modal; queue and replay | **Chain strokes behind any pending history-recording job; queue mutating commands, wand clicks and imports (depth 8) with snapshots taken at dequeue; refuse other canvas gestures on a layer with a pending commit or stroke; the view stays live; Escape cancels commits and selections and empties the queue** | P0.6b, P1 | 2026-09-27: adopt the recommendation; state machines land before the first asynchronous image commit. |
 | D4 | Gaussian σ > 32 | Keep O(σ) direct; O(1) approximation (downsample pyramid, extended box, Young–van Vliet) | **Approximation for σ > 32, specified and tested against the direct kernel at ≤ 2/255** (blur goldens are property-based; the legacy app used Core Image's GPU blur) | P2.3, σ > 32 target | |
@@ -1878,7 +1902,7 @@ its "Gates" column.
 | D9 | Reference machines | R1 only; R1 + R2 + R3 | **Phase exits on R1; the owner provides R2 and R3 for recorded runs** | P1, P3 and P4.8 records | |
 | D10 | Hybrid laptops (panel on the iGPU) | Adapter-of-monitor (today; never uses the dGPU); honor the Windows "High performance" preference with a cross-adapter present | **Keep adapter-of-monitor until the P3 exit measures a cross-adapter present on R2; then decide** | none now | |
 | D11 | Save speed beyond STORE + parallel | WIC PNG only; a RedPrism PNG writer (fpng-style filter + libdeflate; output any PNG reader accepts) | **Measure after P1.7; adopt the writer only if one 45 MP layer still takes more than 1.5 s** | P1.7 target | |
-| D12 | Preview and histogram policy | Keep 4096/2048/full; view-resolution GPU previews; the legacy 8000 px histogram source; an integer histogram | **View-resolution GPU previews for filters; the per-layer adjust draw for table kinds; the histogram redefined as exact integer numerators N = Σ a·m per bin in `uint64`, with bins[c] = N_c / 65025.0 and bins[0] = (N_r + N_g + N_b) / (3 × 65025.0), each rounded once, from an 8000 px source (legacy)** | P1–P3 | |
+| D12 | Preview and histogram policy | Keep 4096/2048/full; view-resolution GPU previews; the legacy 8000 px histogram source; an integer histogram | **View-resolution GPU previews for filters; the per-layer adjust draw for table kinds; the histogram redefined as exact integer numerators N = Σ a·m per bin in `uint64`, with bins[c] = N_c / 65025.0 and bins[0] = (N_r + N_g + N_b) / (3 × 65025.0), each rounded once, from an 8000 px source (legacy)** | P1–P3 | 2026-09-27: adopt the recommended policy in stages. P1.1a retains existing preview grids and histogram arithmetic; P2.2 changes the histogram only with the named goldens and AutoLevels parity. P1.2/P3 add GPU previews with their parity gates. |
 | D13 | History budget | 256 MiB fixed; scale with RAM; count selections | **The host passes min(25 % of RAM, 2 GiB) as a `uint64`; the class default stays 256 MiB for the legacy test; selections are counted** | P1.9 | |
 | D14 | Pixel budgets for RAW | 100 M per document (legacy); higher | **Keep 100 M until D6 v2; any RAW whose oriented, cropped frame exceeds 100 000 000 pixels returns `TooLarge`, with the embedded preview offered** | P4, P6 | |
 | D15 | Nikon HE/HE* | Ship LibRaw's decoder when it lands; refuse | **Refuse, offering the embedded preview, until a legal review of TicoRAW** | P4 | |

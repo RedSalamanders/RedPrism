@@ -153,6 +153,10 @@ frame action (`RedPrism/FrameScheduler.h`). The first matching row wins:
 `Renderer::Render` is the only Present path. `WM_PAINT` MAY set the invalidation bit and MUST `ValidateRect`; it MUST
 NOT call `Present`, `BeginPaint` text, or GDI fill.
 
+The bounded `--bench ui-smoke` correctness harness treats display power as on for frame selection and surface
+retention, while preserving the observed power state in diagnostics. It still honors visibility, suspension and
+occlusion. Full benchmark modes use the ordinary frame policy and refuse unavailable-presentation measurements.
+
 Frame construction and the shared message/completion/action primitives expose optional allocation-free timing
 scopes (`Common/UiTiming.*`). The owner may install a scoped fixed-histogram sink; ETW may independently enable
 the owner-thread provider. Neither owns work or changes event waits. Scope boundaries and inclusive-time caveats

@@ -16,6 +16,7 @@
 #include "Resources.h"
 #include "Selection.h"
 #include "SystemClipboard.h"
+#include "UiBenchmark.h"
 #include "UiTiming.h"
 #include "Version.h"
 #include "VersionInfo.h"
@@ -226,6 +227,11 @@ int Application::Run(int showCommand) noexcept
     }
     ApplySettings(_settings);
 
+    if (_uiBenchmark && FAILED(InitializeUiBenchmark()))
+    {
+        return 5;
+    }
+
     if (!_screenshotPath.empty())
     {
         // The capture timer starts after the first frame that reached the display (RenderFrame, RF-409).
@@ -269,6 +275,10 @@ int Application::Run(int showCommand) noexcept
         {
             break;
         }
+        if (_uiBenchmark)
+        {
+            AdvanceUiBenchmark();
+        }
         if (FAILED(_frameLoopFailure))
         {
             // Drawing stopped after a failure it could not get past; the close it asked for prompts to save
@@ -281,6 +291,9 @@ int Application::Run(int showCommand) noexcept
         }
 
         const bool capturing = !_screenshotPath.empty();
+        // Smoke validates command/result ordering, never performance. Like the screenshot harness it may
+        // draw with the display powered off, while retaining the ordinary visibility and occlusion guards.
+        const bool displayOn = _displayPoweredOn || (_uiBenchmark && _uiBenchmark->smoke);
         if (!_renderer.IsOccluded() || capturing)
         {
             _occlusionStatusChanged = false;
@@ -291,7 +304,7 @@ int Application::Run(int showCommand) noexcept
         // the display; the wait below wakes for the next step, nothing else (RF-408).
         DWORD waitTimeout = INFINITE;
         const bool drawable =
-            capturing || (_windowVisible && _displayPoweredOn && !_renderer.IsSuspended() && !_renderer.IsOccluded());
+            capturing || (_windowVisible && displayOn && !_renderer.IsSuspended() && !_renderer.IsOccluded());
         if (_marchingAnts && _chrome && drawable)
         {
             const std::uint64_t now = GetTickCount64();
@@ -310,7 +323,7 @@ int Application::Run(int showCommand) noexcept
 
         HostFrameState state;
         state.windowVisible = _windowVisible;
-        state.displayPoweredOn = _displayPoweredOn;
+        state.displayPoweredOn = displayOn;
         state.rendererSuspended = _renderer.IsSuspended();
         state.rendererOccluded = _renderer.IsOccluded();
         state.occlusionStatusChanged = _occlusionStatusChanged;
@@ -466,8 +479,9 @@ void Application::ReleaseSurfacesWhileUnseen() noexcept
 {
     // Hidden, minimized, occluded or display-off windows keep no document surfaces (Rendering_Composition.md,
     // RF-411); the next frame that can reach the display composes them again.
-    const bool unseen = _screenshotPath.empty() &&
-                        (!_windowVisible || !_displayPoweredOn || _renderer.IsSuspended() || _renderer.IsOccluded());
+    const bool displayOff = !_displayPoweredOn && !(_uiBenchmark && _uiBenchmark->smoke);
+    const bool unseen =
+        _screenshotPath.empty() && (!_windowVisible || displayOff || _renderer.IsSuspended() || _renderer.IsOccluded());
     if (unseen && _composition.CanvasSurfaceBytes() != 0)
     {
         _composition.ReleaseDocumentSurfaces();
@@ -4427,6 +4441,9 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
 {
     switch (message)
     {
+    case kUiBenchmarkMessage:
+        ExecuteUiBenchmarkStep();
+        return 0;
     case WM_SIZE:
         return OnSize(LOWORD(lParam), HIWORD(lParam));
     case WM_GETMINMAXINFO:
@@ -4609,6 +4626,12 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         break;
     case WM_TIMER:
+        if (wParam == kUiBenchmarkTimerId && _uiBenchmark)
+        {
+            (void)KillTimer(window, kUiBenchmarkTimerId);
+            FailUiBenchmark("failure-timeout");
+            return 0;
+        }
         if (wParam == kJobIndicatorTimerId)
         {
             OnJobIndicatorTimer();
@@ -6164,6 +6187,10 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
+    if (_bench == L"ui" || _bench == L"ui45" || _bench == L"ui100" || _bench == L"ui-smoke")
+    {
+        return RunUiBenchmark();
+    }
     if (_bench == L"kernels")
     {
         return RunKernelBenchmark();

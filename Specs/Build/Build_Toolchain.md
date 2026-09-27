@@ -183,6 +183,15 @@ alone is insufficient. Undecoded prefixes in inline data are counted separately,
 not accepted as decoded instructions. The scan is a VEX/EVEX boundary gate; it does not prove safety of arbitrary
 third-party DLL dispatch or replace execution on baseline hardware. Those libraries need their own qualification.
 
+MSVC can put a switch table inside an executable contribution, and its DWORD RVAs can decode as VEX instructions.
+The scanner recognizes only the observed image-relative dispatch: contiguous decoded instructions load the image
+base into RCX, optionally remap a byte index, load an RVA through RCX + 4×RAX, add the base and jump through RAX.
+The aligned table must follow RET plus at most three alignment bytes in the same contribution. Every entry must
+target a decoded instruction after the dispatch and before the table. Only complete instructions inside that
+verified DWORD span are counted separately as `inlineTableVectorData`; other code in the function remains gated.
+Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
+compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
+
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly
 placed tier code MUST pass, with a separately counted EVEX instruction in the AVX-512 control. A runtime-named

@@ -41,7 +41,7 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 | Session end | See below |
 | Pointer loss | See below |
 | Minimum size | `WM_GETMINMAXINFO` keeps the client at least the rail, a 200 DIP canvas, the splitter and the minimum layers panel wide, and the menu, tabs, tool header, a 200 DIP canvas and the status strip tall, at the window's DPI (or the `--dpi` layout DPI) |
-| Power | `RegisterPowerSettingNotification` for `GUID_SESSION_DISPLAY_STATUS`; display-off blocks Present |
+| Power | `RegisterPowerSettingNotification` for `GUID_SESSION_DISPLAY_STATUS`; display-off blocks Present except in the screenshot and bounded `ui-smoke` correctness harnesses. Full UI performance runs refuse display-off measurements. |
 | Adapter follow | `WM_EXITSIZEMOVE`, `WM_DISPLAYCHANGE`, and `WM_DPICHANGED` call `EnsureDeviceForWindowMonitor` |
 
 No chrome child HWND is created over the swap chain. Common file dialogs (`IFileDialog`) are allowed from C7; they are
@@ -144,6 +144,7 @@ command line.`) shown the same way.
 | `--bench kernels45` | Run the CPU kernel benchmark at 8192×5464 with 10 samples, without creating a window or initializing the GPU |
 | `--bench kernels-smoke` | Run the CPU kernel benchmark at 32×24 with 2 samples, without creating a window or initializing the GPU; this smoke run is not a performance measurement |
 | `--bench buffers`, `--bench buffers45` | Compare ten alternating copy/adopt pairs for Levels, Hue/Saturation and uniform noise at 4K or 45 MP, checking identical outputs; no window or GPU |
+| `--bench ui`, `--bench ui45`, `--bench ui100`, `--bench ui-smoke` | Measure 15 validated commands through the real application loop on 4K, 45 MP, 100 MP, or a 64×48 smoke fixture; one warmup, then 10 runs (2 for smoke). Smoke has no timing threshold. See [`Testing_Benchmarks.md`](../Testing/Testing_Benchmarks.md). |
 | `--crash-probe <directory>` | Run the crash-handling probe using `<directory>` for its dump and pending marker. |
 | `--crash-probe-worker` | Fault two private-pool threads in this process; requires `--crash-probe <directory>`. The two switches may appear in either order. |
 | `--help` | Print the catalog and exit 0 |

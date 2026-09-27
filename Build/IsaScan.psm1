@@ -62,13 +62,14 @@ function Invoke-RedPrismIsaScan {
         tierEvexInstructions = $result.TierEvexInstructions
         runtimeInstructions = $result.RuntimeInstructions
         undecodedPrefixes = $result.UndecodedPrefixes
+        inlineTableVectorData = $result.InlineTableVectorData
         violations = @($result.Violations)
     }
     $report | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'report.json') -Encoding utf8
     if ($result.Violations.Count -ne 0) {
         throw "ISA scan rejected $Binary`n$($result.Violations -join "`n")"
     }
-    Write-Host "PASS isa-scan.$([IO.Path]::GetFileName($Binary)): $($result.VectorInstructions) VEX/EVEX instructions ($($result.TierInstructions) tier, $($result.RuntimeInstructions) runtime); $($result.UndecodedPrefixes) undecoded data prefixes."
+    Write-Host "PASS isa-scan.$([IO.Path]::GetFileName($Binary)): $($result.VectorInstructions) VEX/EVEX instructions ($($result.TierInstructions) tier, $($result.RuntimeInstructions) runtime); $($result.UndecodedPrefixes) undecoded data prefixes, $($result.InlineTableVectorData) verified table data."
     return $result
 }
 

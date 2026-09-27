@@ -43,6 +43,11 @@ state change is pending. Operating-system scheduling noise is outside this contr
   prohibited.
 - Derived display state (DPI, client size, adapter LUID) is recomputed when its inputs change, not per idle wake.
 
+Diagnostic exception: the bounded `--bench ui-smoke` correctness harness may render with session display power
+off, as the screenshot harness does. It keeps visibility, suspension and occlusion checks, and its timings are
+never qualification evidence. Full UI benchmark modes fail if presentation is unavailable. See
+[`Testing_Benchmarks.md`](../Testing/Testing_Benchmarks.md).
+
 ## Pointer input and the chrome
 
 DxUi's embedded host repaints its whole surface after any invalidation, and republishing its UI Automation snapshot

@@ -791,6 +791,16 @@ bool JobScheduler::IsIdle() const noexcept
            _impl->trimCount.load(std::memory_order_acquire) == 0;
 }
 
+unsigned int JobScheduler::WorkerCount() const noexcept
+{
+    if (!_impl)
+    {
+        return 0;
+    }
+    _impl->CheckOwner();
+    return _impl->closed ? 0 : _impl->workers.Concurrency();
+}
+
 bool JobScheduler::HasUiWork() const noexcept
 {
     if (!_impl || _impl->closed)

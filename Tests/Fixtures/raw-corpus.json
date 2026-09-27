@@ -1,0 +1,904 @@
+{
+  "schema": "redprism.raw-corpus",
+  "version": 1,
+  "researchedOn": "2026-09-27",
+  "purpose": "P4 near-45-MP RAW corpus candidates; five gating downloads and hashes verified, with decoder/performance qualification still pending.",
+  "provenance": {
+    "sourcePage": "https://raw.pixls.us/",
+    "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+    "apiSnapshot": {
+      "name": "raw-pixls-index-2026-09-27.json",
+      "providedPath": "C:\\RedPrism.Perf\\raw-pixls-index-2026-09-27.json",
+      "sha256": "328eae30dfe3e826f524c9a724c3f0bfc2addc9bab26c9521bac2bc69494a2c3",
+      "sha256Scope": "Exact bytes of the provided local API snapshot; not any RAW image"
+    },
+    "sourceRowColumns": [
+      "Make",
+      "Model",
+      "Mode",
+      "Pixls (megapixels, rounded)",
+      "Remark",
+      "License HTML",
+      "Date",
+      "RAW link/checksum/size HTML",
+      "EXIF link HTML"
+    ],
+    "metadataReadOnly": true,
+    "rawImagesDownloaded": true,
+    "downloadVerification": {
+      "verifiedOn": "2026-09-27",
+      "verifiedRole": "gating",
+      "verifiedIds": [
+        4466,
+        4694,
+        1840,
+        6002,
+        7751
+      ],
+      "localCorpus": "C:\\RedPrism.Perf\\corpus",
+      "evidenceFile": "C:\\RedPrism.Perf\\corpus-verification-2026-09-27.json",
+      "evidenceFileSha256": "3624328fa6ad8b68967e89beafa2a67984d9ad5613a2a3209374bd27408e168c",
+      "apiSnapshotRecheckedSha256": "328eae30dfe3e826f524c9a724c3f0bfc2addc9bab26c9521bac2bc69494a2c3",
+      "supplemental": "id 7872 (Leica SL2) not downloaded; remains pending"
+    }
+  },
+  "verificationTerms": {
+    "confirmed": "Evidence present in the original repository row or its linked EXIF text, with basis stated per field; does not mean the RAW bytes were locally inspected.",
+    "unknown": "Not established from retrieved evidence; null is intentional."
+  },
+  "materialization": {
+    "rootPattern": "X:\\RedPrism.Perf (X is a fixed local drive letter)",
+    "subdirectory": "corpus",
+    "markerName": ".redprism-perf-owner",
+    "markerExactAscii": "RedPrism performance root owner v1\n",
+    "optInSwitch": "-Download",
+    "defaultSelection": "gating",
+    "supplementalSwitch": "-IncludeSupplemental",
+    "limits": {
+      "maxFileBytes": 134217728,
+      "maxRunBytes": 805306368,
+      "fileTimeoutSeconds": 180,
+      "runTimeoutSeconds": 1200
+    },
+    "rootPolicy": "Use an existing valid marked root, following Common/PerfRoot; do not adopt an unmarked root. The downloader may create only its corpus child and new verified files."
+  },
+  "files": [
+    {
+      "id": 4466,
+      "file": "4466-sony-ilce1-lossless.arw",
+      "format": "ARW",
+      "intendedUse": "gating",
+      "coverage": "Sony lossless ARW near 45 MP",
+      "measurementRole": "Record M1/M2/M4; does not supply the CR3/RAF M2/M4 pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/4466/nice/Sony - ILCE-1 - 14bit (4:3).ARW",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/4466/exif/A1_full_lossless_compressed.ARW.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "4012536ee0f938d8c5c5e932bb7953a03134abbd9f3f4c664cb2526c1903d492",
+      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sourceRow": [
+        "Sony",
+        "ILCE-1",
+        "14bit (4:3)",
+        53.48,
+        "AF-S mode, Aperture priority at f/8. Lossless Compressed raw full frame. In camera +1 exposure.",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2021-04-05",
+        "<a href='https://raw.pixls.us/getfile.php/4466/nice/Sony - ILCE-1 - 14bit (4:3).ARW'>Sony - ILCE-1 - 14bit (4:3).ARW</a><div class='checksumdata'><span title='sha256 Checksum'>4012536ee0f938d8c5c5e932bb7953a03134abbd9f3f4c664cb2526c1903d492</span>&nbsp;(77.80MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/4466/exif/A1_full_lossless_compressed.ARW.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "make": "Sony",
+        "model": "ILCE-1",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "14-bit lossless compressed full frame",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "14bit (4:3)",
+        "repositoryRemark": "AF-S mode, Aperture priority at f/8. Lossless Compressed raw full frame. In camera +1 exposure."
+      },
+      "size": {
+        "bytes": 81575280,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "77.80MB",
+        "note": "Downloaded file length matches the source-reported and independently measured byte count."
+      },
+      "pixels": {
+        "repositoryMegapixels": 53.48,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "confirmed",
+          "basis": "Original EXIF raw IFD",
+          "width": 8704,
+          "height": 6144,
+          "pixelCount": 53477376
+        },
+        "photoDimensions": {
+          "status": "confirmed",
+          "basis": "Exif.Photo.PixelXDimension/PixelYDimension, distinct from padded raw dimensions",
+          "width": 8640,
+          "height": 5760,
+          "pixelCount": 49766400
+        }
+      },
+      "container": {
+        "name": "ARW",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": true,
+        "family": "TIFF IFD metadata",
+        "familyStatus": "confirmed_from_original_exif",
+        "binarySignatureHex": "49492a00080000001600fe0004000100"
+      },
+      "bitsPerSample": {
+        "value": 14,
+        "status": "confirmed",
+        "basis": "Original EXIF raw IFD"
+      },
+      "cfa": {
+        "status": "confirmed",
+        "kind": "Bayer",
+        "repeat": [
+          2,
+          2
+        ],
+        "patternCodes": [
+          0,
+          1,
+          1,
+          2
+        ],
+        "pattern": "RGGB"
+      },
+      "layout": {
+        "status": "confirmed",
+        "tiled": true,
+        "tileWidth": 512,
+        "tileLength": 512,
+        "note": "The raw IFD has both tile and strip tags. Tile geometry and arrays are present; storage behavior still needs decoder validation."
+      },
+      "metadataEvidence": {
+        "status": "confirmed",
+        "basis": "Original repository EXIF text, not a local RAW decode",
+        "rawIfd": "Exif.SubImage1",
+        "tags": {
+          "Exif.SubImage1.ImageWidth": "8704",
+          "Exif.SubImage1.ImageLength": "6144",
+          "Exif.SubImage1.Compression": "JPEG",
+          "Exif.SubImage1.PhotometricInterpretation": "Color Filter Array",
+          "Exif.SubImage1.SamplesPerPixel": "1",
+          "Exif.SubImage1.CFARepeatPatternDim": "2 2",
+          "Exif.SubImage1.CFAPattern": "0 1 1 2",
+          "Exif.SubImage1.StripOffsets": "10383360",
+          "Exif.SubImage1.RowsPerStrip": "6144",
+          "Exif.SubImage1.StripByteCounts": "71191920",
+          "Exif.SubImage1.DefaultCropOrigin": "12 12",
+          "Exif.SubImage1.DefaultCropSize": "8640 5760",
+          "Exif.SubImage1.BitsPerSample": "14",
+          "Exif.SubImage1.TileWidth": "512",
+          "Exif.SubImage1.TileLength": "512",
+          "Exif.SubImage1.TileOffsets": {
+            "present": true,
+            "firstValues": [
+              10383360,
+              14672656,
+              18907936,
+              23224272,
+              27668768,
+              32033616
+            ],
+            "excerptOnly": true
+          },
+          "Exif.SubImage1.TileByteCounts": {
+            "present": true,
+            "firstValues": [
+              360368,
+              412768,
+              392048,
+              422528,
+              380384,
+              351648
+            ],
+            "excerptOnly": true
+          }
+        }
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "decodeVerified": false,
+        "downloadVerification": {
+          "verifiedOn": "2026-09-27",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\4466-sony-ilce1-lossless.arw",
+          "bytes": 81575280,
+          "sha256": "4012536ee0f938d8c5c5e932bb7953a03134abbd9f3f4c664cb2526c1903d492",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000001600fe0004000100",
+          "binarySignatureVerified": true
+        }
+      }
+    },
+    {
+      "id": 4694,
+      "file": "4694-canon-r5-raw.cr3",
+      "format": "CR3",
+      "intendedUse": "gating",
+      "coverage": "Canon normal RAW CR3 near 45 MP, no Dual Pixel",
+      "measurementRole": "CR3 M2/M4 performance gate after primary qualification.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/4694/nice/Canon - EOS R5 - 3:2.CR3",
+      "metadataUrl": null,
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "21430c36387efe65bd09ac0fcd724bfd959d93dd391ec811a1b741c8663becb5",
+      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sourceRow": [
+        "Canon",
+        "EOS R5",
+        "3:2",
+        44.76,
+        "RAW no dualpixel",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2021-05-19",
+        "<a href='https://raw.pixls.us/getfile.php/4694/nice/Canon - EOS R5 - 3:2.CR3'>Canon - EOS R5 - 3:2.CR3</a><div class='checksumdata'><span title='sha256 Checksum'>21430c36387efe65bd09ac0fcd724bfd959d93dd391ec811a1b741c8663becb5</span>&nbsp;(38.75MB)</div>",
+        ""
+      ],
+      "camera": {
+        "make": "Canon",
+        "model": "EOS R5",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "RAW, no dualpixel (repository remark)",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "3:2",
+        "repositoryRemark": "RAW no dualpixel"
+      },
+      "size": {
+        "bytes": 40632406,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "38.75MB",
+        "note": "Downloaded file length matches the source-reported and independently measured byte count."
+      },
+      "pixels": {
+        "repositoryMegapixels": 44.76,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "unknown",
+          "width": null,
+          "height": null,
+          "pixelCount": null
+        }
+      },
+      "container": {
+        "name": "CR3",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": true,
+        "family": null,
+        "familyStatus": "unknown",
+        "binarySignatureHex": "00000018667479706372782000000001"
+      },
+      "bitsPerSample": {
+        "value": null,
+        "status": "unknown"
+      },
+      "cfa": {
+        "status": "unknown",
+        "kind": null,
+        "reason": "No EXIF link in the original API row."
+      },
+      "layout": {
+        "status": "unknown",
+        "tiled": null,
+        "reason": "The original API row has no EXIF link; no binary inspection performed."
+      },
+      "metadataEvidence": {
+        "status": "unknown",
+        "basis": "No EXIF link supplied in this original API row."
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "decodeVerified": false,
+        "downloadVerification": {
+          "verifiedOn": "2026-09-27",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\4694-canon-r5-raw.cr3",
+          "bytes": 40632406,
+          "sha256": "21430c36387efe65bd09ac0fcd724bfd959d93dd391ec811a1b741c8663becb5",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "00000018667479706372782000000001",
+          "binarySignatureVerified": true
+        }
+      }
+    },
+    {
+      "id": 1840,
+      "file": "1840-nikon-d850-lossless.nef",
+      "format": "NEF",
+      "intendedUse": "gating",
+      "coverage": "Nikon 14-bit lossless NEF near 45 MP",
+      "measurementRole": "Record M1/M2/M4; does not supply the CR3/RAF M2/M4 pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1840/nice/Nikon - D850 - 14bit 14bit compressed (Lossless) (3:2).NEF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1840/exif/Nikon-D850-14bit-lossless-compressed.NEF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "0c9438258ddae5260b9f5a1aace6658a723f1cb1acace3a6cb507116dc6da4f2",
+      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sourceRow": [
+        "Nikon",
+        "D850",
+        "14bit 14bit compressed (Lossless) (3:2)",
+        45.75,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-10-19",
+        "<a href='https://raw.pixls.us/getfile.php/1840/nice/Nikon - D850 - 14bit 14bit compressed (Lossless) (3:2).NEF'>Nikon - D850 - 14bit 14bit compressed (Lossless) (3:2).NEF</a><div class='checksumdata'><span title='sha256 Checksum'>0c9438258ddae5260b9f5a1aace6658a723f1cb1acace3a6cb507116dc6da4f2</span>&nbsp;(52.64MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1840/exif/Nikon-D850-14bit-lossless-compressed.NEF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "make": "Nikon",
+        "model": "D850",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "14-bit lossless compressed",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "14bit 14bit compressed (Lossless) (3:2)",
+        "repositoryRemark": ""
+      },
+      "size": {
+        "bytes": 55196715,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "52.64MB",
+        "note": "Downloaded file length matches the source-reported and independently measured byte count."
+      },
+      "pixels": {
+        "repositoryMegapixels": 45.75,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "confirmed",
+          "basis": "Original EXIF raw IFD",
+          "width": 8288,
+          "height": 5520,
+          "pixelCount": 45749760
+        }
+      },
+      "container": {
+        "name": "NEF",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": true,
+        "family": "TIFF IFD metadata",
+        "familyStatus": "confirmed_from_original_exif",
+        "binarySignatureHex": "49492a00080000001c00fe0004000100"
+      },
+      "bitsPerSample": {
+        "value": 14,
+        "status": "confirmed",
+        "basis": "Original EXIF raw IFD"
+      },
+      "cfa": {
+        "status": "confirmed",
+        "kind": "Bayer",
+        "repeat": [
+          2,
+          2
+        ],
+        "patternCodes": [
+          0,
+          1,
+          1,
+          2
+        ],
+        "pattern": "RGGB"
+      },
+      "layout": {
+        "status": "confirmed",
+        "tiled": false,
+        "storage": "strips",
+        "rowsPerStrip": 5520,
+        "note": "Raw SubImage2 has strip offsets/counts and no tile tags in the linked dump."
+      },
+      "metadataEvidence": {
+        "status": "confirmed",
+        "basis": "Original repository EXIF text, not a local RAW decode",
+        "rawIfd": "Exif.SubImage2",
+        "tags": {
+          "Exif.SubImage2.ImageWidth": "8288",
+          "Exif.SubImage2.ImageLength": "5520",
+          "Exif.SubImage2.BitsPerSample": "14",
+          "Exif.SubImage2.Compression": "Nikon NEF Compressed",
+          "Exif.SubImage2.PhotometricInterpretation": "Color Filter Array",
+          "Exif.SubImage2.StripOffsets": "6672896",
+          "Exif.SubImage2.SamplesPerPixel": "1",
+          "Exif.SubImage2.RowsPerStrip": "5520",
+          "Exif.SubImage2.StripByteCounts": "48523819",
+          "Exif.SubImage2.CFARepeatPatternDim": "2 2",
+          "Exif.SubImage2.CFAPattern": "0 1 1 2",
+          "Exif.Nikon3.NEFCompression": "Lossless"
+        }
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "decodeVerified": false,
+        "downloadVerification": {
+          "verifiedOn": "2026-09-27",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1840-nikon-d850-lossless.nef",
+          "bytes": 55196715,
+          "sha256": "0c9438258ddae5260b9f5a1aace6658a723f1cb1acace3a6cb507116dc6da4f2",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000001c00fe0004000100",
+          "binarySignatureVerified": true
+        }
+      }
+    },
+    {
+      "id": 6002,
+      "file": "6002-fuji-xh2-lossless.raf",
+      "format": "RAF",
+      "intendedUse": "gating",
+      "coverage": "Fujifilm compressed RAF near 45 MP",
+      "measurementRole": "RAF M2/M4 performance gate after primary qualification.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/6002/nice/Fujifilm - X-H2 - 14bit 14bit compressed (3:2).RAF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/6002/exif/Fuji-X-H2-Lossless-Compressed-Raw.RAF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "109be38f59963c9b8ff289ebe1f5ec9168c52f609e5b601432bd194520b4605b",
+      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sourceRow": [
+        "Fujifilm",
+        "X-H2",
+        "14bit 14bit compressed (3:2)",
+        40.9,
+        "Lossless compression",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2022-10-04",
+        "<a href='https://raw.pixls.us/getfile.php/6002/nice/Fujifilm - X-H2 - 14bit 14bit compressed (3:2).RAF'>Fujifilm - X-H2 - 14bit 14bit compressed (3:2).RAF</a><div class='checksumdata'><span title='sha256 Checksum'>109be38f59963c9b8ff289ebe1f5ec9168c52f609e5b601432bd194520b4605b</span>&nbsp;(38.23MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/6002/exif/Fuji-X-H2-Lossless-Compressed-Raw.RAF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "make": "Fujifilm",
+        "model": "X-H2",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "14-bit lossless compressed (repository mode and remark)",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "14bit 14bit compressed (3:2)",
+        "repositoryRemark": "Lossless compression"
+      },
+      "size": {
+        "bytes": 40083440,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "38.23MB",
+        "note": "Downloaded file length matches the source-reported and independently measured byte count."
+      },
+      "pixels": {
+        "repositoryMegapixels": 40.9,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "unknown",
+          "width": null,
+          "height": null,
+          "pixelCount": null
+        }
+      },
+      "container": {
+        "name": "RAF",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": true,
+        "family": null,
+        "familyStatus": "unknown",
+        "binarySignatureHex": "46554a4946494c4d4343442d52415720"
+      },
+      "bitsPerSample": {
+        "value": 14,
+        "status": "confirmed",
+        "basis": "Repository mode"
+      },
+      "cfa": {
+        "status": "unknown",
+        "kind": null,
+        "expected": "X-Trans based on camera model; not verified from this sample's linked EXIF.",
+        "reason": "No raw CFA tags in the linked dump."
+      },
+      "layout": {
+        "status": "unknown",
+        "tiled": null,
+        "reason": "Linked EXIF describes embedded JPEG metadata; raw storage tags are absent."
+      },
+      "metadataEvidence": {
+        "status": "confirmed",
+        "basis": "Original EXIF text has Exif.Photo.PixelXDimension=4416 and PixelYDimension=2944, but no raw IFD geometry/CFA. These preview dimensions are not used as raw dimensions."
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "decodeVerified": false,
+        "downloadVerification": {
+          "verifiedOn": "2026-09-27",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\6002-fuji-xh2-lossless.raf",
+          "bytes": 40083440,
+          "sha256": "109be38f59963c9b8ff289ebe1f5ec9168c52f609e5b601432bd194520b4605b",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "46554a4946494c4d4343442d52415720",
+          "binarySignatureVerified": true
+        }
+      }
+    },
+    {
+      "id": 7751,
+      "file": "7751-pixel8pro-tiled.dng",
+      "format": "DNG",
+      "intendedUse": "gating",
+      "coverage": "Verified tiled CFA DNG, 50 MP raw storage",
+      "measurementRole": "Record M1/M2/M4; does not supply the CR3/RAF M2/M4 pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/7751/nice/Google - Pixel 8 Pro - 16bit (4:3).dng",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/7751/exif/PXL_20240415_103400204.RAW-02.ORIGINAL.dng.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "45420c595401547cca950ae58d552bc82b32d31ce1d58c082df33004016197f5",
+      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sourceRow": [
+        "Google",
+        "Pixel 8 Pro",
+        "16bit (4:3)",
+        50.14,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2025-04-28",
+        "<a href='https://raw.pixls.us/getfile.php/7751/nice/Google - Pixel 8 Pro - 16bit (4:3).dng'>Google - Pixel 8 Pro - 16bit (4:3).dng</a><div class='checksumdata'><span title='sha256 Checksum'>45420c595401547cca950ae58d552bc82b32d31ce1d58c082df33004016197f5</span>&nbsp;(43.01MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/7751/exif/PXL_20240415_103400204.RAW-02.ORIGINAL.dng.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "make": "Google",
+        "model": "Pixel 8 Pro",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "16-bit CFA DNG; JPEG compression tag in raw IFD",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "16bit (4:3)",
+        "repositoryRemark": ""
+      },
+      "size": {
+        "bytes": 45101750,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "43.01MB",
+        "note": "Downloaded file length matches the source-reported and independently measured byte count."
+      },
+      "pixels": {
+        "repositoryMegapixels": 50.14,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "confirmed",
+          "basis": "Original EXIF raw IFD",
+          "width": 8160,
+          "height": 6144,
+          "pixelCount": 50135040
+        },
+        "defaultCrop": {
+          "status": "confirmed",
+          "basis": "Original EXIF DefaultCropSize; pixel count calculated",
+          "width": 8144,
+          "height": 6128,
+          "pixelCount": 49906432
+        }
+      },
+      "container": {
+        "name": "DNG",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": true,
+        "family": "TIFF IFD metadata",
+        "familyStatus": "confirmed_from_original_exif",
+        "binarySignatureHex": "49492a00080000003800fe0004000100"
+      },
+      "bitsPerSample": {
+        "value": 16,
+        "status": "confirmed",
+        "basis": "Original EXIF raw IFD"
+      },
+      "cfa": {
+        "status": "confirmed",
+        "kind": "Bayer",
+        "repeat": [
+          2,
+          2
+        ],
+        "patternCodes": [
+          0,
+          1,
+          1,
+          2
+        ],
+        "planeColors": [
+          0,
+          1,
+          2
+        ],
+        "pattern": "RGGB"
+      },
+      "layout": {
+        "status": "confirmed",
+        "tiled": true,
+        "storage": "tiles",
+        "tileWidth": 256,
+        "tileLength": 256,
+        "gridColumns": 32,
+        "gridRows": 24,
+        "gridBasis": "Direct raw IFD tile arrays; 768 offsets/counts inspected and all ranges are within the file.",
+        "note": "TileWidth, TileLength, TileOffsets and TileByteCounts all belong to the CFA raw SubImage1. The stripped top-level JPEG preview is a separate image.",
+        "tileCount": 768,
+        "allTilesWithinFile": true
+      },
+      "metadataEvidence": {
+        "status": "confirmed",
+        "basis": "Original repository EXIF text, corroborated by direct inspection of the downloaded raw IFD and complete tile arrays.",
+        "rawIfd": "Exif.SubImage1",
+        "tags": {
+          "Exif.SubImage1.ImageWidth": "8160",
+          "Exif.SubImage1.ImageLength": "6144",
+          "Exif.SubImage1.BitsPerSample": "16",
+          "Exif.SubImage1.Compression": "JPEG",
+          "Exif.SubImage1.PhotometricInterpretation": "Color Filter Array",
+          "Exif.SubImage1.SamplesPerPixel": "1",
+          "Exif.SubImage1.TileWidth": "256",
+          "Exif.SubImage1.TileLength": "256",
+          "Exif.SubImage1.TileOffsets": {
+            "present": true,
+            "firstValues": [
+              5696748,
+              5740988,
+              5786334,
+              5831852,
+              5879410,
+              5924860
+            ],
+            "excerptOnly": true
+          },
+          "Exif.SubImage1.TileByteCounts": {
+            "present": true,
+            "firstValues": [
+              44239,
+              45345,
+              45518,
+              47558,
+              45450,
+              45654
+            ],
+            "excerptOnly": true
+          },
+          "Exif.SubImage1.CFARepeatPatternDim": "2 2",
+          "Exif.SubImage1.CFAPattern": "0 1 1 2",
+          "Exif.SubImage1.CFAPlaneColor": "0 1 2",
+          "Exif.SubImage1.CFALayout": "Rectangular (or square) layout",
+          "Exif.SubImage1.DefaultCropOrigin": "8/1 8/1",
+          "Exif.SubImage1.DefaultCropSize": "8144/1 6128/1",
+          "Exif.SubImage1.ActiveArea": "0 0 6144 8160",
+          "Exif.Image.DNGVersion": "1 6 0 0",
+          "Exif.Image.DNGBackwardVersion": "1 3 0 0"
+        }
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "decodeVerified": false,
+        "downloadVerification": {
+          "verifiedOn": "2026-09-27",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\7751-pixel8pro-tiled.dng",
+          "bytes": 45101750,
+          "sha256": "45420c595401547cca950ae58d552bc82b32d31ce1d58c082df33004016197f5",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000003800fe0004000100",
+          "binarySignatureVerified": true,
+          "binaryInspection": {
+            "rawWidth": 8160,
+            "rawHeight": 6144,
+            "bitsPerSample": 16,
+            "compression": "JPEG",
+            "photometricInterpretation": "Color Filter Array",
+            "cfaPattern": "RGGB",
+            "tiled": true,
+            "tileWidth": 256,
+            "tileHeight": 256,
+            "tileCount": 768,
+            "allTileRangesWithinFile": true,
+            "basis": "Direct inspection of the downloaded raw IFD and every tile offset/count."
+          }
+        }
+      }
+    },
+    {
+      "id": 7872,
+      "file": "7872-leica-sl2-stripped.dng",
+      "format": "DNG",
+      "intendedUse": "supplemental",
+      "coverage": "Uncompressed CFA DNG; NOT the tiled DNG gate",
+      "measurementRole": "Optional supplemental decoder coverage.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/7872/nice/Leica - SL2 - 14bit uncompressed (3:2).DNG",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/7872/exif/L1020010.DNG.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "The file's original API row, License column at index 5",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "d00f05468793e4509b53230e90dcdc078e823b254eee95f1c68b29e217df99bf",
+      "sha256Status": "Repository-supplied checksum; RAW has not been downloaded or locally hashed",
+      "sourceRow": [
+        "Leica",
+        "SL2",
+        "14bit uncompressed (3:2)",
+        47.44,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2025-05-09",
+        "<a href='https://raw.pixls.us/getfile.php/7872/nice/Leica - SL2 - 14bit uncompressed (3:2).DNG'>Leica - SL2 - 14bit uncompressed (3:2).DNG</a><div class='checksumdata'><span title='sha256 Checksum'>d00f05468793e4509b53230e90dcdc078e823b254eee95f1c68b29e217df99bf</span>&nbsp;(84.84MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/7872/exif/L1020010.DNG.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "make": "Leica",
+        "model": "SL2",
+        "status": "confirmed_from_repository_row"
+      },
+      "mode": {
+        "description": "14-bit uncompressed",
+        "status": "confirmed_from_repository_row",
+        "repositoryMode": "14bit uncompressed (3:2)",
+        "repositoryRemark": ""
+      },
+      "size": {
+        "bytes": 88964096,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-27; no response body transferred",
+        "httpStatus": 200,
+        "repositoryDisplay": "84.84MB",
+        "note": "Exact server-reported length; downloaded file length and SHA256 remain to be verified."
+      },
+      "pixels": {
+        "repositoryMegapixels": 47.44,
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "confirmed",
+          "basis": "Original EXIF raw IFD",
+          "width": 8424,
+          "height": 5632,
+          "pixelCount": 47443968
+        },
+        "defaultCrop": {
+          "status": "confirmed",
+          "basis": "Original EXIF DefaultCropSize; pixel count calculated",
+          "width": 8368,
+          "height": 5584,
+          "pixelCount": 46726912
+        }
+      },
+      "container": {
+        "name": "DNG",
+        "status": "confirmed_from_repository_row",
+        "binarySignatureVerified": false,
+        "family": "TIFF IFD metadata",
+        "familyStatus": "confirmed_from_original_exif"
+      },
+      "bitsPerSample": {
+        "value": 14,
+        "status": "confirmed",
+        "basis": "Original EXIF raw IFD"
+      },
+      "cfa": {
+        "status": "confirmed",
+        "kind": "Bayer",
+        "repeat": [
+          2,
+          2
+        ],
+        "patternCodes": [
+          1,
+          2,
+          0,
+          1
+        ],
+        "pattern": "GBRG"
+      },
+      "layout": {
+        "status": "confirmed",
+        "tiled": false,
+        "storage": "strips",
+        "rowsPerStrip": 5632,
+        "note": "Raw SubImage1 has StripOffsets and StripByteCounts, with one full-height strip; no raw tile tags in the linked dump."
+      },
+      "metadataEvidence": {
+        "status": "confirmed",
+        "basis": "Original repository EXIF text, not a local RAW decode",
+        "rawIfd": "Exif.SubImage1",
+        "tags": {
+          "Exif.SubImage1.ImageWidth": "8424",
+          "Exif.SubImage1.ImageLength": "5632",
+          "Exif.SubImage1.BitsPerSample": "14",
+          "Exif.SubImage1.Compression": "Uncompressed",
+          "Exif.SubImage1.PhotometricInterpretation": "Color Filter Array",
+          "Exif.SubImage1.StripOffsets": "5937152",
+          "Exif.SubImage1.SamplesPerPixel": "1",
+          "Exif.SubImage1.RowsPerStrip": "5632",
+          "Exif.SubImage1.StripByteCounts": "83026944",
+          "Exif.SubImage1.CFARepeatPatternDim": "2 2",
+          "Exif.SubImage1.CFAPattern": "1 2 0 1",
+          "Exif.SubImage1.CFALayout": "Rectangular (or square) layout",
+          "Exif.SubImage1.DefaultCropOrigin": "12 24",
+          "Exif.SubImage1.DefaultCropSize": "8368 5584",
+          "Exif.SubImage1.ActiveArea": "0 0 5632 8392",
+          "Exif.Image.DNGVersion": "1 4 0 0",
+          "Exif.Image.DNGBackwardVersion": "1 3 0 0"
+        }
+      },
+      "qualification": {
+        "status": "pending",
+        "downloadVerified": false,
+        "decodeVerified": false
+      }
+    }
+  ],
+  "selectionNotes": [
+    {
+      "id": 7751,
+      "decision": "Selected for tiled DNG coverage",
+      "reason": "50.14 MP repository row; CFA raw SubImage1 is 8160x6144 with 256x256 tile geometry and both tile arrays."
+    },
+    {
+      "id": 7872,
+      "decision": "Rejected for tiled gate; retained as optional supplemental",
+      "reason": "Original EXIF proves stripped raw storage, not tiled."
+    },
+    {
+      "decision": "Exclude any sample with unproven reuse rights",
+      "reason": "All selected rows explicitly link CC0-1.0. Mere public download availability or the corpus-wide upload statement is insufficient for legacy rows without file-specific license evidence."
+    }
+  ]
+}

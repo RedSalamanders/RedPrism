@@ -1,5 +1,6 @@
 #include "AdapterSelection.h"
 #include "AddressSanitizerProbe.h"
+#include "BenchmarkMachineTests.h"
 #include "CanvasViewport.h"
 #include "CommandBindings.h"
 #include "CommandLine.h"
@@ -1625,6 +1626,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunExecutorValueTests();
     gFailures += RunKernelDispatchTests();
     gFailures += RunKernelCliTests();
+    gFailures += RunBenchmarkMachineTests();
     gFailures += RunUiTimingHistogramTests();
     gFailures += RunUiTimingTests();
     gFailures += RunWorkerPoolTests(stress);

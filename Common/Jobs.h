@@ -157,6 +157,8 @@ class JobScheduler final
     // producers before destroying their inputs, results, intrusive nodes, events or COM pool lifetime.
     void Close() noexcept;
     [[nodiscard]] bool IsIdle() const noexcept;
+    // Actual initialized pool size for diagnostics; zero before initialization or after Close. Owner thread.
+    [[nodiscard]] unsigned int WorkerCount() const noexcept;
     [[nodiscard]] bool HasUiWork() const noexcept;
     [[nodiscard]] bool InUiCallback() const noexcept;
     [[nodiscard]] void* WakeHandle() const noexcept;

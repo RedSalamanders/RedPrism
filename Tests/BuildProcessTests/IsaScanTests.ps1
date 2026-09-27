@@ -7,6 +7,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
+& (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

@@ -50,6 +50,15 @@ void Wait(HANDLE event) noexcept
     }
 }
 
+// Tests that inspect a published completion before draining it need a wake from that job only. An OS
+// memory notification also wakes production schedulers; deterministic admission keeps it out of these gates.
+bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
+{
+    constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
+    snapshot = {available, available};
+    return true;
+}
+
 void WaitForScheduler(JobScheduler& scheduler) noexcept
 {
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
@@ -342,7 +351,7 @@ class ProgressJob final : public Job
 void TestProgressOrderingAndCoalescing()
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(1) >= 0, "progress-initialize");
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) >= 0, "progress-initialize");
     auto reportsIssued = Event();
     auto release = Event();
     ProgressState state{reportsIssued.get(), release.get()};
@@ -613,7 +622,7 @@ JobResult DifferentKeySecond(JobContext&, void* context)
 void TestSerialKeys()
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(2) >= 0, "serial-initialize");
+    Expect(scheduler.Initialize(2, {}, {StableMemory, nullptr}) >= 0, "serial-initialize");
     auto firstStarted = Event();
     auto firstRelease = Event();
     auto secondStarted = Event();
@@ -691,7 +700,7 @@ void MarkUiCompletion(void* context, JobResult) noexcept
 void TestUiActionsAndReentrancy()
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(1) >= 0, "ui-action-initialize");
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) >= 0, "ui-action-initialize");
     UiActionState state;
     std::unique_ptr<Job> job = std::make_unique<FunctionJob>(ReturnFinished, MarkUiCompletion, &state);
     JobTicket ticket;
@@ -770,7 +779,7 @@ void TestCancellationBeforeRunAndApply()
     scheduler.Close();
 
     JobScheduler completed;
-    Expect(completed.Initialize(1) == S_OK, "cancel-final-initialize");
+    Expect(completed.Initialize(1, {}, {StableMemory, nullptr}) == S_OK, "cancel-final-initialize");
     CancelState beforeApply;
     std::unique_ptr<Job> done = std::make_unique<FunctionJob>(CountRun, CancelledCompletion, &beforeApply);
     JobTicket doneTicket;

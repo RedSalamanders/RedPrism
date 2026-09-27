@@ -211,6 +211,14 @@ if ($bufferReports.Count -ne 1 -or $bufferReports[0] -notmatch '^BUFFER BENCH RE
 }
 Write-Host 'PASS kernel benchmark smoke: 13 operations and 3 equivalent copy/adopt pairs, 32x24, 2 samples each'
 
+Write-Host 'Running UI benchmark smoke...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\UiBenchmarkSmokeTests.ps1') `
+    -ExecutablePath $executable -OutputDirectory $outputRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "UI benchmark smoke failed with exit code $LASTEXITCODE."
+}
+$global:LASTEXITCODE = 0
+
 $foreignIsa = if ($Platform -eq 'x64') { 'neon' } else { 'sse2' }
 foreach ($isaCase in @(
     @{ Name = 'not-implemented'; Value = 'avx512'; Pattern = 'not implemented' },

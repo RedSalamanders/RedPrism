@@ -141,6 +141,15 @@ It never starts, stops or cancels a system trace; missing WPR or an invalid prof
 maxima including loop cost. It refuses an already-enabled external timing session so its disabled-path numbers
 are interpretable. This is instrumentation overhead only; operation baselines and G1 remain in the WIP plan.
 
+`RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
+[`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
+normal test runs never download the RAW corpus.
+
+Smoke may render with the session display off, while full measurements refuse that state. It validates ordered
+elapsed distributions and the total Present count over two trials. Scheduler tests that inspect undrained job
+completion use an injected stable memory source: an OS memory notification can wake a production scheduler before
+any job has published its result. Memory notification/admission behavior is independently covered by JobMemoryTests.
+
 ### Worker foundations (P0.5)
 
 HostTests also runs the standard-header `ExecutorTests` and Windows `WorkerPoolTests`. Their independent
