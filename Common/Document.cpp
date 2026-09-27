@@ -194,8 +194,32 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
     {
         storage->bytes.assign(pixels, pixels + size);
     }
+    storage->assembled.store(storage->bytes.data(), std::memory_order_release);
     raster._storage = std::move(storage);
     return raster;
+}
+
+Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels)
+{
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
+        (format != RasterFormat::Gray8 && format != RasterFormat::Bgra8888))
+    {
+        return {};
+    }
+    const int stride = format == RasterFormat::Gray8 ? width : width * 4;
+    const std::uint64_t size = static_cast<std::uint64_t>(stride) * static_cast<std::uint64_t>(height);
+    if (!pixels || size != pixels.Size())
+    {
+        return {};
+    }
+    auto storage = std::make_shared<Storage>();
+    storage->width = width;
+    storage->height = height;
+    storage->stride = stride;
+    storage->format = format;
+    storage->adoptedBytes = std::move(pixels);
+    storage->assembled.store(storage->adoptedBytes.Data(), std::memory_order_release);
+    return Raster(std::move(storage));
 }
 
 Raster Raster::MakeThumbnail(const Raster& source, int maxSide)
@@ -347,11 +371,13 @@ const std::uint8_t* Raster::Data() const noexcept
     {
         return nullptr;
     }
-    if (!_storage->materialized)
+    const std::uint8_t* pixels = _storage->assembled.load(std::memory_order_acquire);
+    if (pixels == nullptr)
     {
         Materialize(*_storage);
+        pixels = _storage->assembled.load(std::memory_order_acquire);
     }
-    return _storage->materialized ? _storage->bytes.data() : nullptr;
+    return pixels;
 }
 
 const std::vector<RasterTile>& Raster::Tiles() const noexcept
@@ -362,6 +388,12 @@ const std::vector<RasterTile>& Raster::Tiles() const noexcept
 
 void Raster::Materialize(const Storage& storage) noexcept
 {
+    // Serialize builders, not readers. A failed allocation leaves the cache unpublished and retryable.
+    const std::lock_guard lock(storage.assemblyMutex);
+    if (storage.assembled.load(std::memory_order_acquire) != nullptr)
+    {
+        return;
+    }
     const std::size_t size = static_cast<std::size_t>(storage.stride) * static_cast<std::size_t>(storage.height);
     std::vector<std::uint8_t> bytes;
     try
@@ -373,18 +405,18 @@ void Raster::Materialize(const Storage& storage) noexcept
         return;
     }
     const int channels = storage.format == RasterFormat::Gray8 ? 1 : 4;
-    if (storage.base && storage.base->materialized)
+    const std::uint8_t* base = storage.base ? storage.base->assembled.load(std::memory_order_acquire) : nullptr;
+    if (base != nullptr)
     {
-        BlitRegion(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, storage.base->bytes.data(),
-                   storage.base->stride, storage.baseX, storage.baseY, storage.base->width, storage.base->height,
-                   channels);
+        BlitRegion(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, base, storage.base->stride,
+                   storage.baseX, storage.baseY, storage.base->width, storage.base->height, channels);
     }
     for (const RasterTile& tile : storage.tiles)
     {
         BlitTile(bytes.data(), storage.stride, 0, 0, storage.width, storage.height, tile, channels);
     }
     storage.bytes = std::move(bytes);
-    storage.materialized = true;
+    storage.assembled.store(storage.bytes.data(), std::memory_order_release);
 }
 
 void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, int outStride,
@@ -395,6 +427,15 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
         return;
     }
     const int channels = Channels();
+    const std::uint8_t* pixels = _storage ? _storage->assembled.load(std::memory_order_acquire) : nullptr;
+    if (pixels != nullptr && x >= 0 && y >= 0 && width <= _storage->width && height <= _storage->height &&
+        x <= _storage->width - width && y <= _storage->height - height)
+    {
+        // Every requested pixel is present. Skip the fill pass, including for a published sparse cache.
+        BlitRegion(out, outStride, x, y, width, height, pixels, _storage->stride, 0, 0, _storage->width,
+                   _storage->height, channels);
+        return;
+    }
     for (int row = 0; row < height; ++row)
     {
         std::memset(out + static_cast<std::size_t>(row) * static_cast<std::size_t>(outStride), fill,
@@ -405,10 +446,10 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
         return;
     }
     const Storage& storage = *_storage;
-    if (storage.materialized)
+    if (pixels != nullptr)
     {
-        BlitRegion(out, outStride, x, y, width, height, storage.bytes.data(), storage.stride, 0, 0, storage.width,
-                   storage.height, channels);
+        BlitRegion(out, outStride, x, y, width, height, pixels, storage.stride, 0, 0, storage.width, storage.height,
+                   channels);
         return;
     }
     // Un-assembled sparse storage: the raster's own fill inside its bounds, then the base, then the tiles.
@@ -422,7 +463,8 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
                         storage.fill, static_cast<std::size_t>(inside.width) * static_cast<std::size_t>(channels));
         }
     }
-    if (storage.base && storage.base->materialized)
+    const std::uint8_t* base = storage.base ? storage.base->assembled.load(std::memory_order_acquire) : nullptr;
+    if (base != nullptr)
     {
         // Only the part of the base inside this raster's grid shows.
         const IntRect visible =
@@ -431,7 +473,7 @@ void Raster::ReadRegion(int x, int y, int width, int height, std::uint8_t* out, 
         if (!visible.Empty())
         {
             BlitRegion(out, outStride, x, y, width, height,
-                       storage.base->bytes.data() +
+                       base +
                            static_cast<std::size_t>(visible.y - storage.baseY) *
                                static_cast<std::size_t>(storage.base->stride) +
                            static_cast<std::size_t>(visible.x - storage.baseX) * static_cast<std::size_t>(channels),
@@ -490,7 +532,6 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
     storage->height = height;
     storage->stride = format == RasterFormat::Gray8 ? width : width * 4;
     storage->format = format;
-    storage->materialized = false;
     storage->sparse = true;
     storage->fill = fill;
     storage->base = base._storage;

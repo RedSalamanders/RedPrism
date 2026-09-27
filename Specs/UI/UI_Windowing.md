@@ -98,6 +98,11 @@ command line.`) shown the same way.
 | `--self-test` | Create the titled window **hidden**, force WARP, assert the DPI-adjusted 1280×800 logical client, composite DxUi chrome, prove visible surface then 0 when hidden, exit 0 |
 | `--screenshot <png>` | Show the titled window without activating it, present chrome and the canvas (whatever the display's power, the window's visibility or occlusion), start the capture delay after the first frame that reached the display, capture through Windows.Graphics.Capture, exit 0, 8 when this system cannot capture a window (`E_NOTIMPL`, the capture API absent) or 9 when the capture failed or never happened |
 | `--dpi 96\|144` | Override layout DPI and the 1280×800 logical client scale for `--screenshot` |
+| `--bench brush` | Run the brush benchmark on the selected device and exit |
+| `--bench kernels` | Run the CPU kernel benchmark at 3840×2160 with 10 samples, without creating a window or initializing the GPU |
+| `--bench kernels45` | Run the CPU kernel benchmark at 8192×5464 with 10 samples, without creating a window or initializing the GPU |
+| `--bench kernels-smoke` | Run the CPU kernel benchmark at 32×24 with 2 samples, without creating a window or initializing the GPU; this smoke run is not a performance measurement |
+| `--bench buffers`, `--bench buffers45` | Compare ten alternating copy/adopt pairs for Levels, Hue/Saturation and uniform noise at 4K or 45 MP, checking identical outputs; no window or GPU |
 | `--help` | Print the catalog and exit 0 |
 
 `--self-test` without `--warp` still uses WARP. Self-test MUST refuse a non-WARP device (exit 5).

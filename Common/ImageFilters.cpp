@@ -5,7 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <new>
+#include <utility>
 #include <vector>
 
 namespace ImageFilters
@@ -74,7 +76,11 @@ namespace
             }
         }
     }
-    std::vector<std::uint8_t> bytes(pixelCount * channelCount, 0);
+    PixelBuffer bytes = PixelBuffer::TryAllocate(pixelCount * channelCount);
+    if (!bytes)
+    {
+        return {};
+    }
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
@@ -110,14 +116,14 @@ namespace
         // Premultiplied pixels stay premultiplied: rounding can leave a color byte past its alpha.
         for (std::size_t p = 0; p < pixelCount; ++p)
         {
-            std::uint8_t* pixel = bytes.data() + p * 4u;
+            std::uint8_t* pixel = bytes.Data() + p * 4u;
             for (int c = 0; c < 3; ++c)
             {
                 pixel[c] = std::min(pixel[c], pixel[3]);
             }
         }
     }
-    return Raster::Make(width, height, source.Format(), bytes.data(), bytes.size());
+    return Raster::Adopt(width, height, source.Format(), std::move(bytes));
 }
 
 } // namespace
@@ -141,7 +147,8 @@ Raster GaussianBlur(const Raster& source, double sigma)
 Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int width, int height,
                         std::uint8_t background)
 {
-    if (width < 1 || height < 1 || !mask.HasStorage() || mask.Format() != RasterFormat::Gray8)
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide || !mask.HasStorage() ||
+        mask.Format() != RasterFormat::Gray8)
     {
         return {};
     }
@@ -154,9 +161,14 @@ Raster RenderMaskPixels(const Raster& mask, const LayerTransform& transform, int
     {
         if (!transform.IsValid())
         {
-            const std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height),
-                                                  background);
-            return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+            PixelBuffer bytes =
+                PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+            if (!bytes)
+            {
+                return {};
+            }
+            std::memset(bytes.Data(), background, bytes.Size());
+            return Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes));
         }
         // A transient sample, not a resample: High collapses to Smooth's single bilinear tap (no supersampling),
         // as RenderLayerPixels does for a layer's pixels.

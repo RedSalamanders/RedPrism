@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cwctype>
 #include <string>
+#include <utility>
 #include <wincodec.h>
 
 #pragma warning(push)
@@ -263,15 +264,18 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
 
     const UINT stride = mask ? width : width * 4;
     const std::size_t bytes = static_cast<std::size_t>(stride) * static_cast<std::size_t>(height);
-    std::vector<std::uint8_t> pixels(bytes);
-    result = converter->CopyPixels(nullptr, stride, static_cast<UINT>(bytes), pixels.data());
+    PixelBuffer pixels = PixelBuffer::TryAllocate(bytes);
+    if (!pixels)
+    {
+        return ImageCodecStatus::Unreadable;
+    }
+    result = converter->CopyPixels(nullptr, stride, static_cast<UINT>(bytes), pixels.Data());
     if (FAILED(result))
     {
         return ImageCodecStatus::Unreadable;
     }
 
-    decoded.image =
-        Raster::Make(static_cast<int>(width), static_cast<int>(height), format, pixels.data(), pixels.size());
+    decoded.image = Raster::Adopt(static_cast<int>(width), static_cast<int>(height), format, std::move(pixels));
     if (!decoded.image.HasStorage())
     {
         return ImageCodecStatus::Unreadable;

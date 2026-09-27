@@ -1,12 +1,16 @@
 #pragma once
 
+#include "PixelBuffer.h"
+
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -121,6 +125,8 @@ class Raster
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format);
     [[nodiscard]] static Raster Make(int width, int height, RasterFormat format, const std::uint8_t* pixels,
                                      std::size_t byteCount);
+    // Publishes a completely initialized buffer without copying. Invalid input leaves ownership with the caller.
+    [[nodiscard]] static Raster Adopt(int width, int height, RasterFormat format, PixelBuffer&& pixels);
     [[nodiscard]] static Raster MakeThumbnail(const Raster& source, int maxSide = 96);
     // A sparse raster: `base` (contiguous; may be empty) with its top-left at (baseX, baseY) of the new grid, under
     // `tiles` (clipped to the grid, later tiles over earlier ones). Pixels no base or tile reaches read `fill`.
@@ -169,7 +175,9 @@ class Raster
     // base and the tiles are separate storages (ForEachStorage).
     [[nodiscard]] std::size_t ByteSize() const noexcept
     {
-        return _storage ? _storage->bytes.size() : 0;
+        return IsMaterialized()
+                   ? static_cast<std::size_t>(_storage->stride) * static_cast<std::size_t>(_storage->height)
+                   : 0;
     }
     [[nodiscard]] const void* Identity() const noexcept
     {
@@ -188,7 +196,7 @@ class Raster
     // A sparse raster whose contiguous bytes were assembled (mouse-up must never do this).
     [[nodiscard]] bool IsMaterialized() const noexcept
     {
-        return _storage && _storage->materialized;
+        return _storage && _storage->assembled.load(std::memory_order_acquire) != nullptr;
     }
     [[nodiscard]] Raster Base() const noexcept
     {
@@ -221,8 +229,11 @@ class Raster
         int height = 0;
         int stride = 0;
         RasterFormat format = RasterFormat::Bgra8888;
+        // Written once under assemblyMutex, then published through assembled. Readers never inspect bytes.
         mutable std::vector<std::uint8_t> bytes;
-        mutable bool materialized = true;
+        PixelBuffer adoptedBytes;
+        mutable std::atomic<const std::uint8_t*> assembled{nullptr};
+        mutable std::mutex assemblyMutex;
         bool sparse = false;
         std::uint8_t fill = 0;
         std::shared_ptr<const Storage> base;

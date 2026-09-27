@@ -186,6 +186,11 @@ never the display composite, a panel's preview raster or the stroke preview (`En
 for its layer only in the display). It marks the display dirty, so the next frame composes the display document
 again (legacy `sampleCompositeColor` draws the document itself).
 
+The host takes the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
+`PixelBuffer` and adopted directly as BGRA8888, with no second full-image CPU copy. The vector overload remains for
+diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
+are never published. Readback is still synchronous at this stage; fenced completion belongs to pipeline slice P1.3.
+
 ## Failures
 
 A frame never closes the window on its own (RF-401):
@@ -231,6 +236,7 @@ here so goldens are not silently rebaselined:
 | Blit (RF-403, RF-412, `blit.*`) | a 2×1 document at zoom 2 on a 2× display covers device pixels 6–9 of a 16-pixel hole; from 200 % the boundary pixel is pure black, at 150 % blended; black and white one-pixel columns at 25 % read mid gray through the canvas mips (100–155), not black |
 | Oversize (D1, RF-401, `oversize.*`; texture limit lowered to 64, then the device's 16 384) | a 100×10 document composes through a 2× proxy with one region texture; `Readback` of the proxy fails; the display blit shows red and blue halves; `ComposeReadback` returns the exact 100×10 bytes in tiles, a 100×10 mask cuts alpha at column 30, and a stroke on a 100×10 grid previews reduced, is not adopted and reads back exactly; a 17 000×10 document composes at scale 2 and reads back byte for byte |
 | Readback (RF-402, `readback.*`) | with a red stroke preview over a white layer the display shows red while `ComposeReadback` returns white; the next display composition shows red again |
+| Adopted readback (`readback.adopted-*`, `oversize.device-limit-adopted-readback`) | the raster overload returns the vector overload's exact committed bytes, including the 17 000×10 tiled case, with aligned storage; invalid dimensions or a missing device return the exact error and an empty output |
 | Previews (RF-406, RF-407, `strokemask.*`, `adopt.*`) | a 4×4 layer's unplaced mask stays on its pixels in an 8×8 grown preview (column 1 shown, column 2 hidden) and paint beyond them shows; a uniform 1×1 mask stays uniform; a working texture is not adopted for another layer's raster or for a mask raster, and is adopted for its own |
 | Sparse upload and stroke preview (C10, `sparse.*`, `stroke.*`) | an assembled sparse raster renders like its contiguous twin; the preview texture builds from source and fill, takes tile updates, previews masks, is adopted on commit and rebuilt after a reset, and the rebuilt texture draws the tile again (`stroke.rebuilt-preview-drawn`) |
 | Compute brush (C10, `gpubrush.*`) | kernel tiles and a session stroke through `GpuBrushCoverage` match the CPU engine within 2/255 per pixel; tile buffers are released after `EndStroke` |

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <new>
+#include <utility>
 #include <vector>
 
 namespace
@@ -135,7 +136,7 @@ template <int Channels>
 // with Memory rather than installing a transparent layer.
 template <int Channels>
 [[nodiscard]] bool RenderPlaced(const Raster& source, const Affine2& pixelToTarget, int width, int height,
-                                LayerSampling sampling, std::vector<std::uint8_t>& bytes)
+                                LayerSampling sampling, PixelBuffer& bytes)
 {
     const int imageWidth = source.Width();
     const int imageHeight = source.Height();
@@ -156,7 +157,7 @@ template <int Channels>
     const double weight = 1.0 / static_cast<double>(grid * grid);
     for (int y = span.y0; y <= span.y1; ++y)
     {
-        std::uint8_t* row = bytes.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * Channels;
+        std::uint8_t* row = bytes.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(width) * Channels;
         for (int x = span.x0; x <= span.x1; ++x)
         {
             std::array<double, Channels> sum{};
@@ -372,19 +373,25 @@ int ImageSizeDraft::RoundedHeight() const noexcept
 Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int width, int height,
                          LayerSampling sampling)
 {
-    if (width < 1 || height < 1)
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
         return {};
     }
     try
     {
-        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height), 0);
+        PixelBuffer bytes =
+            PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * 4u * static_cast<std::size_t>(height));
+        if (!bytes)
+        {
+            return {};
+        }
+        std::memset(bytes.Data(), 0, bytes.Size());
         if (image.HasStorage() && image.Format() == RasterFormat::Bgra8888 &&
             !RenderPlaced<4>(image, pixelToTarget, width, height, sampling, bytes))
         {
             return {};
         }
-        return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+        return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
     }
     catch (const std::bad_alloc&)
     {
@@ -395,19 +402,25 @@ Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int 
 Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int width, int height, LayerSampling sampling,
                         std::uint8_t background)
 {
-    if (width < 1 || height < 1)
+    if (width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide)
     {
         return {};
     }
     try
     {
-        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), background);
+        PixelBuffer bytes =
+            PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
+        if (!bytes)
+        {
+            return {};
+        }
+        std::memset(bytes.Data(), background, bytes.Size());
         if (mask.HasStorage() && mask.Format() == RasterFormat::Gray8 &&
             !RenderPlaced<1>(mask, pixelToTarget, width, height, sampling, bytes))
         {
             return {};
         }
-        return Raster::Make(width, height, RasterFormat::Gray8, bytes.data(), bytes.size());
+        return Raster::Adopt(width, height, RasterFormat::Gray8, std::move(bytes));
     }
     catch (const std::bad_alloc&)
     {
@@ -470,10 +483,14 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             }
             const std::array<std::uint8_t, 4> bgra{Round8(color.blue * 255.0), Round8(color.green * 255.0),
                                                    Round8(color.red * 255.0), 255};
-            std::vector<std::uint8_t> bytes(static_cast<std::size_t>(pixels) * 4u);
-            for (std::size_t index = 0; index + 3 < bytes.size(); index += 4)
+            PixelBuffer bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(pixels) * 4u);
+            if (!bytes)
             {
-                std::memcpy(bytes.data() + index, bgra.data(), 4);
+                return ResizeStatus::Memory;
+            }
+            for (std::size_t index = 0; index + 3 < bytes.Size(); index += 4)
+            {
+                std::memcpy(bytes.Data() + index, bgra.data(), 4);
             }
             const int holeLeft = static_cast<int>(offset.x);
             const int holeTop = static_cast<int>(offset.y);
@@ -485,12 +502,11 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             {
                 if (clearX1 > clearX0)
                 {
-                    std::memset(bytes.data() + (static_cast<std::size_t>(y) * options.width + clearX0) * 4u, 0,
+                    std::memset(bytes.Data() + (static_cast<std::size_t>(y) * options.width + clearX0) * 4u, 0,
                                 static_cast<std::size_t>(clearX1 - clearX0) * 4u);
                 }
             }
-            const Raster image =
-                Raster::Make(options.width, options.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+            const Raster image = Raster::Adopt(options.width, options.height, RasterFormat::Bgra8888, std::move(bytes));
             if (!image.HasStorage())
             {
                 return ResizeStatus::Memory;

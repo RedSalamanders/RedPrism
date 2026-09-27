@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -41,6 +41,11 @@ before a copy whose mirror it checks, while the product's copy and paste keep th
 
 ## Gates
 
+The pipeline foundation adds `DocumentTests.exe --stress`: 256 rounds of eight simultaneous readers of shared
+sparse rasters (assembly, region reads, thumbnails and byte accounting), with independently computed expected
+pixels and stable-pointer checks. Eight rounds also run in the normal document suite. `test.ps1` runs the extended
+stress in ASan Debug. Neither mode asserts elapsed time; ASan diagnoses memory misuse but does not detect races.
+
 | Gate | Pass condition |
 | --- | --- |
 | Version identity | `RedPrism.exe` `OriginalFilename` is `RedPrism.exe` and `ProductName` is `RedPrism` |
@@ -57,6 +62,7 @@ before a copy whose mirror it checks, while the product's copy and paste keep th
 | Build presentation | Framed pixel-art banner identity, even scene geometry, and interactive-terminal selection |
 | Harness screenshot | `--screenshot <png> --warp --dpi 96` and `--dpi 144` each write a PNG of the empty-document shell (populated rail) captured after the first frame that reached the display (drawn even with the display off), whose client-area pixels are neither a single uniform color nor fully transparent nor smaller than 32×32 (`test.ps1` decodes the PNG and samples a grid of pixels), or exit 8 only when this system cannot capture a window — `test.ps1` treats exit 8 alone as SKIP, while exit 9 (a capture that failed or never happened) and any other nonzero exit fail the gate, and passes the output path to RedPrism.exe quoted as its own argument; `--demo transform --dpi 96` writes the transform demo (two painted layers, the rotated one's box and the header) and `--demo selection --dpi 96` the selection demo (an elliptical and a rectangular selection with the Marquee header) and `--demo brush --dpi 96` the brush demo (strokes on a backdrop with the Brush header and the tip cursor) the same way, and `--demo retouch --dpi 96` the retouch demo (a radial gradient, a rounded rectangle and an ellipse under the Shape header) and `--demo adjust --dpi 96` the adjustment demo (a Levels adjustment layer's panel with its histogram over a painted backdrop), and `--demo canvassize --dpi 96` the Canvas Size card over the transform layers (relative +200 × +100, the top-left anchor, a white extension), and `--demo crop --dpi 96` the Crop tool framing 640 × 400 of the transform layers with the shade and the header |
 | Brush benchmark | `RedPrism.exe --bench brush` (hardware) and `--warp --bench brush` exit 0 and print `BRUSH BENCH` lines; the numbers are recorded under `Specs/TestRuns/` at each closeout ([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)), not gated |
+| Kernel benchmark smoke | In Debug, Release and ASan Debug, hidden `RedPrism.exe --bench kernels-smoke` exits 0 within a bounded wait with redirected stdout and stderr. Stdout has exactly 13 unique `KERNEL BENCH name=` operation rows, each for 32×24 with `samples=2`, `warmup=1` and a nonempty hexadecimal checksum, plus exactly one `KERNEL BENCH REPORT status=ok width=32 height=24 operations=13` line. Three `BUFFER BENCH` pairs compare copy/adopt ownership in alternating order and must match the corresponding scalar-kernel checksums, with one successful completion report. `test.ps1` prints one PASS summary. This checks benchmark output and deterministic completion; it makes no wall-clock performance assertion and runs no full-size kernel benchmark. |
 | Release packaging | `package.ps1 -Platform x64` exit 0 with the clean-extraction smoke (`--help`, `--self-test --warp` with a system-only `Path`, the packaged version identity) and `package.ps1 -Platform ARM64` exit 0 (the smoke is skipped on an x64 host); a release gate run before a release and at a closeout, not part of `test.ps1` ([`Build_Packaging.md`](../Build/Build_Packaging.md)) |
 
 `ASAN_OPTIONS` for the probe is `halt_on_error=1:abort_on_error=0:detect_leaks=0`.

@@ -53,6 +53,8 @@ class CanvasRenderer final
     // the device's textures. The display composes again on its next frame.
     HRESULT ComposeReadback(const CanvasDocument& document, std::vector<std::uint8_t>& bgra, UINT& width,
                             UINT& height) noexcept;
+    // Same committed pixels, adopted directly into an immutable raster without a second full-image copy.
+    HRESULT ComposeReadback(const CanvasDocument& document, Raster& image) noexcept;
     HRESULT BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,
                          const CanvasViewport& viewport, float holeLeft, float holeTop, float holeWidth,
                          float holeHeight) noexcept;
@@ -273,6 +275,7 @@ class CanvasRenderer final
     HRESULT PrepareView(int originX, int originY, int scale, UINT width, UINT height) noexcept;
     HRESULT ComposeView(const CanvasDocument& document) noexcept;
     HRESULT ReadCanvas(std::uint8_t* out, std::size_t outStride, UINT width, UINT height) noexcept;
+    HRESULT ComposeReadbackRows(const CanvasDocument& document, std::uint8_t* out) noexcept;
     [[nodiscard]] int ScaleToFit(int width, int height) const noexcept;
     HRESULT CreateCanvas(UINT width, UINT height) noexcept;
     HRESULT CreateSurface(UINT width, UINT height, DXGI_FORMAT format, bool mips, Surface& surface) noexcept;

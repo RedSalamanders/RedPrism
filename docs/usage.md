@@ -11,6 +11,10 @@ Every switch is declared in `RedPrism/CommandLine.h`. `--help` prints that catal
 | `--dpi 96\|144` | Layout DPI for `--screenshot` |
 | `--demo transform\|selection\|brush\|retouch\|adjust\|canvassize\|crop` | Populate the new document for a `--screenshot` (`canvassize` opens the Canvas Size card, `crop` frames the canvas with the Crop tool) |
 | `--bench brush` | Run the brush benchmark (4K document, 40 and 800 px strokes, blank and opaque layers), print `BRUSH BENCH` lines and exit |
+| `--bench kernels` | Run the CPU kernel benchmark at 3840×2160 with 10 samples; exits without window or GPU setup |
+| `--bench kernels45` | Run the CPU kernel benchmark at 8192×5464 with 10 samples; exits without window or GPU setup |
+| `--bench kernels-smoke` | Run the CPU kernel benchmark at 32×24 with 2 samples; this smoke run is not a performance measurement |
+| `--bench buffers`, `--bench buffers45` | Compare copy/adopt image-result ownership in alternating pairs at 4K or 45 MP, with identical output checksums |
 | `--crash-probe <dir>` | Hidden crash-handler check: crash on purpose and confirm the dump lands in `<dir>` (used by `test.ps1`) |
 | `--help` | Print the catalog and exit 0 |
 

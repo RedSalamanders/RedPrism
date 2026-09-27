@@ -212,6 +212,35 @@ void TestCommandLine() noexcept
     Expect(!RedPrismParseCommandLine(badBenchArgs, 3, parsed, &error) && error != nullptr &&
                std::wstring_view{error} == L"sketch",
            "cli.bench-rejects-unknown");
+    wchar_t kernelsValue[] = L"kernels";
+    wchar_t* kernelsArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernelsValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(kernelsArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{kernelsValue},
+           "cli.bench-kernels");
+    wchar_t kernels45Value[] = L"kernels45";
+    wchar_t* kernels45Args[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernels45Value};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(kernels45Args, 3, parsed, &error) &&
+               parsed.bench == std::wstring_view{kernels45Value},
+           "cli.bench-kernels45");
+    wchar_t kernelsSmokeValue[] = L"kernels-smoke";
+    wchar_t* kernelsSmokeArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, kernelsSmokeValue};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(kernelsSmokeArgs, 3, parsed, &error) &&
+               parsed.bench == std::wstring_view{kernelsSmokeValue},
+           "cli.bench-kernels-smoke");
+    for (const wchar_t* name : {L"buffers", L"buffers45"})
+    {
+        wchar_t* bufferArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch, const_cast<wchar_t*>(name)};
+        parsed = {};
+        Expect(RedPrismParseCommandLine(bufferArgs, 3, parsed, &error) && parsed.bench == std::wstring_view{name},
+               "cli.bench-buffers");
+    }
+    wchar_t* missingBenchValue[] = {const_cast<wchar_t*>(L"RedPrism.exe"), benchSwitch};
+    parsed = {};
+    Expect(!RedPrismParseCommandLine(missingBenchValue, 2, parsed, &error) && error != nullptr &&
+               std::wstring_view{error} == L"--bench",
+           "cli.bench-needs-value");
 
     const std::wstring help = RedPrismFormatCommandLineHelp();
     Expect(help.find(L"--warp") != std::wstring::npos && help.find(L"--self-test") != std::wstring::npos &&

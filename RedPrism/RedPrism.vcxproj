@@ -117,6 +117,7 @@
     <ClInclude Include="..\Common\CanvasSize.h" />
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
+    <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
     <ClInclude Include="..\Common\Resources.h" />
@@ -182,6 +183,7 @@
     <ClCompile Include="ChromeHostRename.cpp" />
     <ClCompile Include="ChromeHostSize.cpp" />
     <ClCompile Include="BrushCompute.cpp" />
+    <ClCompile Include="KernelBenchmark.cpp" />
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />

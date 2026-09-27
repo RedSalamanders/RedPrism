@@ -77,9 +77,11 @@ inline constexpr std::array<RedPrismCommandLineSwitch, static_cast<size_t>(RedPr
                                   L"Size card over the transform layers; crop frames part of them with the Crop tool.",
                                   L"Diagnostics"},
         RedPrismCommandLineSwitch{
-            RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate, L"<brush>",
-            L"Run the brush benchmark on the selected device (4K document, 40 and 800 px soft "
-            L"strokes of 120 updates, blank and opaque layers), print BRUSH BENCH lines and exit 0.",
+            RedPrismSwitch::Bench, L"--bench", nullptr, RedPrismSwitchValue::Separate,
+            L"<brush|kernels|kernels45|buffers|buffers45|kernels-smoke>",
+            L"Run the brush benchmark on the selected device, or the CPU kernel benchmark (kernels: 3840x2160, 10; "
+            L"kernels45: 8192x5464, 10; kernels-smoke: 32x24, 2). The smoke mode is not a performance "
+            L"measurement. buffers and buffers45 compare copy/adopt pairs at those same image sizes.",
             L"Diagnostics"},
         RedPrismCommandLineSwitch{RedPrismSwitch::CrashProbe, L"--crash-probe", nullptr, RedPrismSwitchValue::Separate,
                                   L"<directory>",
@@ -203,7 +205,12 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             parsed.demo = arguments[++index];
             break;
         case RedPrismSwitch::Bench:
-            if (index + 1 >= argumentCount || std::wstring_view{arguments[index + 1]} != L"brush")
+            if (index + 1 >= argumentCount || (std::wstring_view{arguments[index + 1]} != L"brush" &&
+                                               std::wstring_view{arguments[index + 1]} != L"kernels" &&
+                                               std::wstring_view{arguments[index + 1]} != L"kernels45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"buffers" &&
+                                               std::wstring_view{arguments[index + 1]} != L"buffers45" &&
+                                               std::wstring_view{arguments[index + 1]} != L"kernels-smoke"))
             {
                 if (errorToken)
                 {

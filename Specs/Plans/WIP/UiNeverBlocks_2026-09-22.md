@@ -1,7 +1,64 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
-- **Status**: ACTIVE for the slices that need no open decision: P0.1–P0.4 and P0.8. The open decisions in §11 gate
-  everything else:
+## Implementation checklist
+
+- [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
+  - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
+  - [x] Capture the 4K and 45 MP before measurements on R1.
+  - [ ] Add the remaining UI, ETW, IO and operation-classification measurements.
+- [x] P0.2 — Make raster materialization thread-safe and stress-test races. Full x64 Debug, Release and ASan gates passed.
+  - [x] Publish immutable pixel pointers with acquire/release ordering and serialize first assembly.
+  - [x] Add independent byte expectations, padded reads, thumbnail checks and shared-base concurrency coverage.
+  - [x] Pass the extended 256-round stress and full ASan gate.
+- [x] P0.3 — Add `PixelBuffer`, `TryAllocate` and `Raster::Adopt`; remove result copies. Pixel equality and paired result-production timings verified; full x64 gates passed.
+  - [x] Implement aligned ownership and no-copy raster adoption with ownership and size tests.
+  - [x] Convert adjustment/filter/resize, WIC decode and production composition readback outputs.
+  - [x] Preserve legacy numeric goldens in the complete Debug and Release gates.
+  - [x] Compare all 26 before/after checksums and record alternating ownership timings with matching pixels.
+  - [x] Finish ASan qualification.
+- [ ] P0.4 — Add document generations and tokens; route mutations through validated paths.
+- [ ] P0.5 — Build the worker pool, parallel execution, cancellation and worker crash handling.
+- [ ] P0.6a — Implement the job scheduler, completion pump, settle path and shutdown order.
+- [ ] P0.6b — Implement preview mailboxes, queued input, stroke chaining and busy state.
+- [ ] P0.7 — Add memory admission, deferred release and justified recycling.
+- [ ] P0.8 — Add scalar kernel dispatch and the x64 VEX scan.
+- [ ] P1 — Move blocking operations off the UI thread and meet the G1 exit criteria.
+- [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
+- [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
+- [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
+- [ ] P5 — Optimize RAW performance to the Photoshop targets.
+- [ ] P6 — If authorized by its decisions, plan non-destructive develop and depth separately.
+- [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
+
+Implementation started 2026-09-27. Slices P0.2 and P0.3 are complete on x64; the P0 phase remains open. ARM64
+Debug, Release and ASan Debug cross-builds passed; native ARM64 execution is unavailable on this host.
+
+Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
+benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
+raster publication, buffer ownership and adoption, the concurrency tests and the paired benchmark, and ran the gates.
+P0.2 uses a standard per-storage mutex to keep `Document.h` independent of Windows types; only a first assembly
+takes it. All readers use the acquire/release pointer from §4.6. The new stress covers competing readers of one
+sparse storage and two sparse storages sharing a base. P0.1 measurement coverage remains open. The P0.3 buffer
+and adoption APIs, filter/resize/WIC conversions and production composition readback preserve kernel arithmetic.
+All 26 before/after checksums match. Alternating ownership comparisons showed a median paired saving of 51.349 ms
+for a 45 MP Levels result, with one fewer 170.75 MiB pixel buffer. This measures result production; full host
+commit latency, responsiveness and the G2/G3 targets remain open. See the
+[foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) for controls, noise and qualification limits.
+
+Code drift checked against the current source: the later review already added display proxies and tiled
+full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
+export, and the duplicate-layer pixel-budget refusal. The corresponding later slices extend these paths;
+they must not reintroduce the older limitations described in the original survey.
+
+Validation progress: the complete x64 Debug, Release and ASan gates, skill validation and formatting check passed.
+ASan includes the extended 256-round concurrency stress and a real detection probe. The kernel smoke gate runs
+13 operations and three copy/adopt comparisons on 32×24 pixels in every configuration. The review confirmed the existing fatal
+`std::bad_alloc` policy still reaches `CopyFrame` and `CommitColorEdit` through allocation of storage headers,
+thumbnails and history. P0.3 removes redundant large allocations; it does not introduce the recoverable job
+boundary. P0.5/P0.6a and P1.1/P1.7 must replace those failure paths before G1/reliability closes.
+
+- **Status**: ACTIVE. P0.2/P0.3 are complete; P0.1, P0.4 and P0.8 remain executable without an open decision.
+  The open decisions in §11 gate the other slices:
 
   | Decisions | Gate |
   | --- | --- |
@@ -133,7 +190,12 @@ recorded. M2 and M4 gate on the pair measured with sharpening 0 and noise reduct
 For scale, Photoshop takes 1.00–1.01 s for "File Open – RAW" of a 36 MP D810 NEF in Puget Bench for Photoshop 1.0
 (Photoshop 27.6–27.10). That is an average over mixed systems; §7 replaces it with same-machine numbers.
 
-## 2. What the code does today
+## 2. Starting inventory and implementation deltas
+
+The survey below explains the work from the pre-implementation code. Current completion is tracked in the
+opening checklist and the owning specs. The 2026-09-27 deltas include atomic raster publication, adopted result
+buffers, CPU benchmark modes and the already-landed review fixes noted above. Function names for the unified
+`ColorEdit` path are updated here; proposed job APIs in later sections are still future work.
 
 These facts come from reading the code, with anchors from the working tree at `0035f1b`. Line numbers in
 `Application.cpp` drift because of uncommitted edits, so the slices cite function names.
@@ -188,7 +250,7 @@ These facts come from reading the code, with anchors from the working tree at `0
   document space, while destructive Grain keys it in layer pixels (`Adjust::RunFilter`). So pass 6 cannot serve
   directly as a destructive panel preview.
 - **Mask thumbnails carry semantics.** `MaskEdgeBackground(thumbnail)` decides what a placed mask shows beyond its
-  pixels; a missing thumbnail reveals. Compose, `CommitFilter`, strokes and distort all read it synchronously.
+  pixels; a missing thumbnail reveals. Compose, `CommitColorEdit`, strokes and distort all read it synchronously.
 - **I/O**:
   - WIC only; 16-bit input is truncated to 8; there is no EXIF orientation, no ICC and no RAW (the container
     whitelist in `ImageCodecs::DecodeFromDecoder`).
@@ -207,18 +269,19 @@ These facts come from reading the code, with anchors from the working tree at `0
   - `OnCommand` settles the transform, then runs the command.
   - Undo drops a live stroke.
   - `CommitStroke` refuses a stroke whose source image changed.
-- **Staleness guards today**: every commit checks image identity. `CommitFilter`, `CommitLevels` and image
+- **Staleness guards before the job split**: pixel commits check image identity. The shared `CommitColorEdit` and image
   `CommitStroke` also check the transform. Mask identity is checked only for mask strokes. `MergeLayers` checks
   only that the ids exist. `CanvasDocument::id` persists across save, load and resize.
 - **Tests**:
   - `DocumentTests` calls some kernels directly and many through the synchronous `DocumentSession` API
-    (`CommitFilter`, `CommitLevels`, `MergeLayers`). It writes fixtures through the mutable `Document()` at dozens
+    (`CommitColorEdit`, `MergeLayers`). It writes fixtures through the mutable `Document()` at dozens
     of sites.
   - `levels.histogram-ready` and `adjustlayer.levels-histogram` assert that the histogram is ready synchronously.
   - `--self-test` asserts on the next line.
   - `HostTests` has no window and compiles no `RedPrism/*.cpp`.
   - GPU parity runs on WARP only.
-  - `--bench` knows only `brush`, and `--crash-probe` takes a directory.
+  - P0.1 has added `kernels`, `kernels45`, `buffers`, `buffers45` and `kernels-smoke` beside `brush`.
+    `--crash-probe` takes a directory.
   - The fail-closed sandbox `X:\RedPrism.Perf` is specified but not implemented.
   - There is no CI.
 - **The crash handler is single-threaded.** A second thread that faults while a dump is being written returns
@@ -464,7 +527,7 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 
 | Kind | Applies when |
 | --- | --- |
-| Layer target (filters, adjustments, raster edits, distort, shapes, Add Mask) | The layer exists and its image, transform and (if used) mask equal the token's `TargetIdentity`. Today only image identity is checked everywhere, plus the transform in `CommitFilter`, `CommitLevels` and image `CommitStroke`, and mask identity only for mask strokes. P1.1 adds the transform and mask checks to every `Apply*`. `DocumentTests` covers each: mask edited, layer moved, then a stale apply is refused |
+| Layer target (filters, adjustments, raster edits, distort, shapes, Add Mask) | The layer exists and its image, transform and (if used) mask equal the token's `TargetIdentity`. Before the split, `CommitColorEdit` checks image identity and transform; it uses the current layer mask without an identity check. Image `CommitStroke` also checks transform; mask strokes check the mask identity. P1.1 adds the transform and mask checks to every `Apply*`. `DocumentTests` covers each: mask edited, layer moved, then a stale apply is refused |
 | Stroke | The token's base, which is the chained predecessor's result or the layer at snapshot, is still the layer's current content |
 | Selection | `generation` is unchanged since the job's snapshot. Otherwise the result is dropped with the status `IDS_STATUS_SELECTION_STALE` |
 | Whole document (merge, Image Size, Canvas Size fill) | `generation` is unchanged |
@@ -592,13 +655,15 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
     acquire ordering.
   - `Data()`, `ReadRegion` (for the raster and its base), `IsMaterialized`, `ByteSize` and `MakeThumbnail` read only
     that pointer.
-  - Publication takes an SRWLOCK and double-checks the pointer. A failed allocation leaves the pointer null, and
+  - Publication takes a per-storage `std::mutex` and double-checks the pointer. A failed allocation leaves the pointer null, and
     the call can be retried (no `call_once`).
   - Later (P1.7, spec change), encoders and kernels read sparse rasters in bands through `ReadRegion`, so no save
     permanently doubles a painted layer. The test `sparse.materialize-on-data` changes with that spec change.
 - **`PixelBuffer`** is a 64-byte-aligned, uninitialized allocation.
-  - `PixelBuffer::TryAllocate` is nothrow: aligned nothrow `new`, or `VirtualAlloc` for 64 MiB or more, with ASan
-    poisoning of the slack. A null result fails the job at its boundary.
+  - `PixelBuffer::TryAllocate` is nothrow and initially uses `_aligned_malloc` / `_aligned_free` at every size.
+    This keeps both small and large allocations under the CRT's ASan tracking without a second custom
+    allocator/poisoning path. Zero size and bookkeeping overflow return empty; allocation failure fails the
+    operation at its boundary. A `VirtualAlloc` threshold is deferred until measurements justify it.
   - `Raster::Adopt(width, height, format, PixelBuffer&&)` takes ownership without copying. `Raster::Make` stays for
     goldens.
   - Kernel wrappers, readbacks and decoders write straight into the buffer they adopt.
@@ -858,9 +923,9 @@ Placement legend:
 | Image Size (`ResizeImage` → `RenderPlaced`) | Per layer, up to 4×4 bilinear samples per channel | J [Commit], layers in parallel | — | Exact: coordinates hoisted out of the channel loop, identical math |
 | Canvas Size with an extension fill; Crop | Fill loop on the UI thread | J [Commit] / S | — | Crop stays metadata-only (S) |
 | Open `.prism` (`LoadProject`) | Sequential inflate + PNG decode on the UI thread | J [Io]: entries read sequentially, then `ParallelFor` inflate + decode | Status "Opening…" | `ReplaceDocument` at apply; uploads through the ring, sliced |
-| Import / open image (`ImportImagePaths`) | WIC decode + 2 copies on the UI thread | J [Io], files in parallel | First pixels from a WIC scaled decode (`IWICBitmapSourceTransform`) | Full decode adopted into a `Raster`; EXIF orientation and ICC → sRGB (`IWICColorTransform`), matching the legacy importer |
+| Import / open image (`ImportImagePaths`) | WIC decode on the UI thread; P0.3 adopts its output buffer, and EXIF/ICC handling is already present | J [Io], files in parallel | First pixels from a WIC scaled decode (`IWICBitmapSourceTransform`) | Preserve adoption, EXIF orientation and ICC → sRGB (`IWICColorTransform`) while moving decode to jobs |
 | Save / Save As (`SaveProject`), ZIP and folder projects | Sequential PNG encode + level-9 re-deflate on the UI thread | J [Io]: `ParallelFor` encode into memory, then sequential write | Status "Saving…" | §5.3 |
-| Export PNG/JPEG (`ExportFlattened`) | Compose + readback before the dialog, encode, non-atomic write | Dialog first, then G + R + J [Io] | — | Off-screen compose; encode in bands from `ReadRegion`; temp file + `ReplaceFileW` |
+| Export PNG/JPEG (`ExportFlattened`) | Compose + readback before the dialog and encoding on the UI thread; atomic temp-file replacement already present | Dialog first, then G + R + J [Io] | — | Off-screen compose; encode in bands from `ReadRegion`; preserve flush and atomic replacement |
 | Copy / Cut / Copy Merged → system clipboard (`MirrorClipboard`) | PNG + DIBv5 encode on the UI thread; `Sleep(10)` retry loop | J [Io] | The internal clipboard updates at once | A worker builds both `HGLOBAL`s. The UI step (`OpenClipboard(hwnd)`, `EmptyClipboard`, two `SetClipboardData`, `CloseClipboard`) stays short and synchronous. A busy clipboard is retried at most 5 times through one-shot timers (50, 100, 200, 400, 800 ms), then a notice |
 | Paste from another app (`ReadImage`) | Decode while the clipboard is held open | J [Io], entirely | — | The worker runs `OpenClipboard(nullptr)` (reading needs no owner window), `GetClipboardData`, `GlobalLock`, copy, `GlobalUnlock` and `CloseClipboard` in one callback, then decodes. A busy clipboard gets the same bounded retries. The UI thread never holds the clipboard across a dispatch |
 | New Canvas card size prefill (`OpenSizeCard`) | Full decode of the clipboard image on the UI thread | J [Io] | The card opens at once with the last size; the clipboard size fills in when the job completes | Header only (`BITMAPINFOHEADER` / WIC `GetSize`) |
@@ -885,19 +950,27 @@ Placement legend:
 4. `Cancel` or Escape before OK closes the panel and discards every result by sequence. Escape or Cancel during
    "Applying…" cancels the commit and closes the panel, leaving the layer unchanged. A document replacement cancels
    both lanes for the target.
-5. `Apply` validates the token (§4.4) and installs the result through `ReplaceLayerPixels`, as one entry named for
-   the kind.
+5. `ApplyColorEditResult` validates the token (§4.4) and installs the image, placement and carried mask through the
+   session, as one entry named for the kind.
 
-`DocumentSession` exposes the split as three calls:
+The 2026-09-23 refactor already unified panels into `ColorEdit`: `BeginColorEdit`, `UpdateColorEdit`,
+`CommitColorEdit` and `CancelColorEdit`. `UpdateLevels` and `UpdateHueSaturation` are thin wrappers. P1.1 extends
+that shared pipeline; it MUST NOT restore separate per-kind sessions. In today's synchronous implementation,
+commit reruns `Rendered` at full scale from `edit.Source()` with the latest settings. A failed Content-Aware Fill
+keeps its panel open with `previewFailed`; other failed renders and stale image/transform checks close it without
+an entry. `filterSettings` is assigned before those checks. P1.1 must explicitly implement and test the failure
+and retry policy of the new job path rather than assuming current behavior already provides it.
 
-- `PrepareFilterCommit(edit) → FilterJobInput`;
-- `RunFilterJob(input, executor, token) → FilterJobResult`, which is pure and lives in `Common/AdjustEdit.cpp`;
-- `ApplyFilterResult(result) → bool`.
+The proposed new split is:
 
-`CommitFilter` stays as `Apply(Run(Prepare(edit)))` on the calling thread, with a `bad_alloc` boundary around
+- `PrepareColorEditCommit(edit) → ColorEditJobInput`;
+- `RunColorEditJob(input, executor, token) → ColorEditJobResult`, pure work in `Common/AdjustEdit.cpp`;
+- `ApplyColorEditResult(result) → bool`.
+
+`CommitColorEdit` stays as `Apply(Run(Prepare(edit)))` on the calling thread, with a `bad_alloc` boundary around
 `Run`. So the existing `DocumentTests` goldens keep passing, including `hsv.preview-live` and
-`hsv.preview-never-accumulates`. The same split applies to Levels, Hue/Saturation, raster edits, merge, resize and
-shapes.
+`hsv.preview-never-accumulates`. Levels and Hue/Saturation use that same split; raster edits, merge, resize and
+shapes follow the same Prepare/Run/Apply pattern.
 
 ### 5.2 Brush and retouch
 
@@ -1425,12 +1498,14 @@ flush is one such case; another is job-dispatch latency traded for UI-thread tim
   - the pool size, logical versus physical cores.
 - **Exit**: every "today" number in §1.2 is a measurement, and each §5 operation is classified S or not.
 
-**P0.2 Raster thread safety** (ACTIVE). The atomic assembled pointer (§4.6), and the DocumentTests `--stress` race.
-**Exit**: green in ASan Debug; goldens unchanged.
+**P0.2 Raster thread safety** (COMPLETE on x64, 2026-09-27). The atomic assembled pointer (§4.6), and the
+DocumentTests `--stress` race. **Exit met**: all x64 gates green, including 256 rounds in ASan Debug; goldens unchanged.
 
-**P0.3 `PixelBuffer`, `TryAllocate`, `Raster::Adopt`** (ACTIVE). Convert `CopyPixels`,
+**P0.3 `PixelBuffer`, `TryAllocate`, `Raster::Adopt`** (COMPLETE on x64, 2026-09-27). Converted `CopyPixels`,
 `Adjust::ApplyAdjustment`, `RunFilter`, `ImageFilters::*`, `CopyFrame` and `Readback` to adopt. **Exit**: bytes
-unchanged, one full copy fewer per result, and a measured drop in commit time.
+unchanged, one full copy fewer per result, and a measured drop in result-production time within the commit path.
+The [foundation record](../../TestRuns/PipelineFoundations_2026-09-27.md) records the paired timing and checksum
+evidence. End-to-end host commit latency, including history, upload and Present, still belongs to P0.1/P1's gates.
 
 **P0.4 Generation and tokens** (ACTIVE)
 

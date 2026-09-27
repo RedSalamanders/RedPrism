@@ -4,6 +4,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "ImageFilters.h"
+#include "RasterConcurrencyTests.h"
 #include "Selection.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
@@ -2143,6 +2144,67 @@ DocumentSession BrushSession(int width = 600, int height = 80)
 [[nodiscard]] bool IsRed(const std::array<std::uint8_t, 4>& pixel) noexcept
 {
     return pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255;
+}
+
+void TestPixelBuffer()
+{
+    PixelBuffer empty = PixelBuffer::TryAllocate(0);
+    Expect(!empty && empty.Data() == nullptr && empty.Size() == 0, "buffer.empty");
+    Expect(!PixelBuffer::TryAllocate(std::numeric_limits<std::size_t>::max()), "buffer.overflow-refused");
+    PixelBuffer pixels = PixelBuffer::TryAllocate(24);
+    Expect(pixels && reinterpret_cast<std::uintptr_t>(pixels.Data()) % PixelBuffer::kAlignment == 0,
+           "buffer.aligned-64");
+    if (!pixels)
+    {
+        return;
+    }
+    for (std::size_t i = 0; i < pixels.Size(); ++i)
+    {
+        pixels[i] = static_cast<std::uint8_t>(i * 7);
+    }
+    const std::uint8_t* original = pixels.Data();
+    PixelBuffer moved(std::move(pixels));
+    Expect(!pixels && pixels.Size() == 0 && moved.Data() == original, "buffer.move-construction");
+    pixels = std::move(moved);
+    Expect(!moved && moved.Size() == 0 && pixels.Data() == original, "buffer.move-assignment");
+    Expect(!Raster::Adopt(0, 2, RasterFormat::Bgra8888, std::move(pixels)).HasStorage() && pixels.Data() == original,
+           "buffer.invalid-grid-keeps-owner");
+    Expect(!Raster::Adopt(3, 3, RasterFormat::Bgra8888, std::move(pixels)).HasStorage() && pixels.Data() == original,
+           "buffer.invalid-size-keeps-owner");
+    Expect(!Raster::Adopt(3, 2, static_cast<RasterFormat>(42), std::move(pixels)).HasStorage() &&
+               pixels.Data() == original,
+           "buffer.invalid-format-keeps-owner");
+    Raster raster = Raster::Adopt(3, 2, RasterFormat::Bgra8888, std::move(pixels));
+    Expect(!pixels && pixels.Size() == 0 && raster.Data() == original && raster.ByteSize() == 24 &&
+               raster.IsMaterialized() && !raster.IsSparse(),
+           "buffer.adopt-does-not-copy");
+    const Raster retained = raster;
+    raster = {};
+    Expect(retained.Data() == original && retained.Data()[23] == 161, "buffer.shared-lifetime");
+    std::array<std::uint8_t, 22> region;
+    region.fill(193);
+    retained.ReadRegion(1, 0, 2, 2, region.data(), 11, 219);
+    const std::array<std::uint8_t, 22> expectedRegion{28,  35,  42,  49,  56,  63,  70,  77,  193, 193, 193,
+                                                      112, 119, 126, 133, 140, 147, 154, 161, 193, 193, 193};
+    Expect(region == expectedRegion, "buffer.contained-region-preserves-padding");
+    const Raster sparse = Raster::MakeSparse(3, 2, RasterFormat::Bgra8888, retained, 0, 0, {}, 0);
+    std::array<std::uint8_t, 24> read{};
+    sparse.ReadRegion(0, 0, 3, 2, read.data(), 12, 0);
+    Expect(std::memcmp(read.data(), original, read.size()) == 0 && !sparse.IsMaterialized(),
+           "buffer.adopted-sparse-base");
+    Expect(sparse.Data() != nullptr && std::memcmp(sparse.Data(), original, read.size()) == 0,
+           "buffer.adopted-base-assembly");
+    region.fill(193);
+    sparse.ReadRegion(1, 0, 2, 2, region.data(), 11, 219);
+    Expect(region == expectedRegion, "buffer.published-region-preserves-padding");
+    PixelBuffer gray = PixelBuffer::TryAllocate(6);
+    if (gray)
+    {
+        std::memset(gray.Data(), 73, gray.Size());
+    }
+    const Raster mask = Raster::Adopt(3, 2, RasterFormat::Gray8, std::move(gray));
+    Expect(mask.HasStorage() && mask.Stride() == 3 && mask.ByteSize() == 6 && mask.Data()[5] == 73,
+           "buffer.gray-adoption");
 }
 
 void TestSparseRaster()
@@ -6143,7 +6205,7 @@ void TestPendingEdits()
     }
 }
 
-int gCrtReportFailures = 0; // incremented only in Debug / ASan Debug; see CountCrtReportFailures below.
+std::atomic<int> gCrtReportFailures = 0; // CRT reports can arrive on concurrent raster readers.
 
 #if defined(_DEBUG)
 // Counts _CRT_ERROR / _CRT_ASSERT reports instead of trusting the CRT's own default handling to abort: a debug-heap
@@ -7021,7 +7083,7 @@ void TestGradientAppliesFirst()
     }
 }
 
-int wmain()
+int wmain(int argc, wchar_t** argv)
 {
 #if defined(_DEBUG)
     // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
@@ -7033,6 +7095,16 @@ int wmain()
     _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &CountCrtReportFailures);
 #endif
     (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
+    if (argc > 1)
+    {
+        if (argc != 2 || std::wstring_view(argv[1]) != L"--stress")
+        {
+            std::fprintf(stderr, "Usage: DocumentTests.exe [--stress]\n");
+            return 2;
+        }
+        const int failures = RunRasterConcurrencyTests(256);
+        return failures != 0 || gCrtReportFailures.load() != 0 ? 1 : 0;
+    }
     TestHierarchy();
     TestLiveMask();
     TestValidate();
@@ -7068,6 +7140,8 @@ int wmain()
     TestWandKernel();
     TestWandSession();
     TestSparseRaster();
+    TestPixelBuffer();
+    gFailures += RunRasterConcurrencyTests(8);
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();
@@ -7123,7 +7197,7 @@ int wmain()
     TestPixelMoveTiles();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {
-        std::printf("%d document tests failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);
+        std::printf("%d document tests failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures.load());
         return 1;
     }
     std::printf("All document tests passed.\n");

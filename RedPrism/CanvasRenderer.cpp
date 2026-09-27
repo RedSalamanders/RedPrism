@@ -1892,7 +1892,8 @@ HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vec
     {
         return E_UNEXPECTED;
     }
-    if (document.width < 1 || document.height < 1)
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
+        document.height > kMaxCanvasSide)
     {
         return E_INVALIDARG;
     }
@@ -1906,6 +1907,55 @@ HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vec
     {
         return E_OUTOFMEMORY;
     }
+    const HRESULT result = ComposeReadbackRows(document, bgra.data());
+    if (FAILED(result))
+    {
+        bgra.clear();
+        return result;
+    }
+    width = static_cast<UINT>(document.width);
+    height = static_cast<UINT>(document.height);
+    return S_OK;
+}
+
+HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, Raster& image) noexcept
+{
+    image = {};
+    if (!_device || !_context)
+    {
+        return E_UNEXPECTED;
+    }
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
+        document.height > kMaxCanvasSide)
+    {
+        return E_INVALIDARG;
+    }
+    PixelBuffer pixels = PixelBuffer::TryAllocate(static_cast<std::size_t>(document.width) *
+                                                  static_cast<std::size_t>(document.height) * 4u);
+    if (!pixels)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const HRESULT result = ComposeReadbackRows(document, pixels.Data());
+    if (FAILED(result))
+    {
+        return result;
+    }
+    try
+    {
+        image = Raster::Adopt(document.width, document.height, RasterFormat::Bgra8888, std::move(pixels));
+    }
+    catch (const std::bad_alloc&)
+    {
+        // A failed storage-header allocation fails this complete readback operation.
+        return E_OUTOFMEMORY;
+    }
+    return image.HasStorage() ? S_OK : E_UNEXPECTED;
+}
+
+HRESULT CanvasRenderer::ComposeReadbackRows(const CanvasDocument& document, std::uint8_t* out) noexcept
+{
+    const std::size_t documentWidth = static_cast<std::size_t>(document.width);
     // The committed document, never the stroke preview; the display composes its own document again next frame.
     _ignoreStroke = true;
     // One window when the document fits; otherwise tiles small enough that a layer's part of one, with its filtering
@@ -1928,21 +1978,14 @@ HRESULT CanvasRenderer::ComposeReadback(const CanvasDocument& document, std::vec
             if (SUCCEEDED(result))
             {
                 result = ReadCanvas(
-                    bgra.data() + (static_cast<std::size_t>(top) * documentWidth + static_cast<std::size_t>(left)) * 4u,
+                    out + (static_cast<std::size_t>(top) * documentWidth + static_cast<std::size_t>(left)) * 4u,
                     documentWidth * 4u, tileWidth, tileHeight);
             }
         }
     }
     _ignoreStroke = false;
     _documentDirty = true;
-    if (FAILED(result))
-    {
-        bgra.clear();
-        return result;
-    }
-    width = static_cast<UINT>(document.width);
-    height = static_cast<UINT>(document.height);
-    return S_OK;
+    return result;
 }
 
 HRESULT CanvasRenderer::BlitToTarget(ID3D11RenderTargetView* target, UINT targetWidth, UINT targetHeight,

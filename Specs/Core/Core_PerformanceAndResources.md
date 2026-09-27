@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -97,6 +97,29 @@ that makes them impossible.
 
 Fail-closed performance sandboxes live at `X:\RedPrism.Perf` (any local drive letter plus an ownership marker), never
 under repository `.build/`. C1 does not yet create that tree.
+
+## Image result ownership
+
+Image operations that create a full result use the 64-byte-aligned `PixelBuffer` and transfer it to
+`Raster::Adopt`, without a second pixel allocation or copy. This covers adjustment/filter wrappers, Gaussian
+blur, placed image/mask resampling, canvas extension, WIC frame decode and the production composition readback.
+`Raster::Make` remains the copying/zero-filled constructor for callers that require those semantics. Kernels
+initialize every output byte before publication. Partial renderers explicitly fill their untouched background.
+`ReadRegion` skips its fill pass only when a published contiguous image covers the entire requested region;
+row padding remains untouched.
+
+`--bench kernels` (3840×2160) and `--bench kernels45` (8192×5464) report individual kernel and whole-output
+wrapper times with a warmup, medians, p95, maxima and stable output checksums. Setup and checksum calculation are
+outside each timed region; the wrapper rows include allocation and result publication. These are CPU baselines,
+not UI latency, GPU, RAW or Photoshop comparisons. The bounded `--bench kernels-smoke` verifies the harness
+without timing assertions. Phase qualification records the command, configuration, machine, power plan and
+measurement limitations under `Specs/TestRuns/`.
+
+When separate runs show drift in unchanged controls, `--bench buffers` and `--bench buffers45` compare copy and
+adopt strategies in alternating pairs within one process. The reference uses the old vector/result-copy strategy
+with the current `ReadRegion` fast path; it is a conservative ownership comparison, not a reconstruction of an
+older binary. Each pair must produce identical pixels. Reports distinguish a measured kernel-result speedup
+from full host commit latency, which also includes history, upload and presentation.
 
 ## Validation
 

@@ -1459,6 +1459,11 @@ void TestOversize(Harness& h)
     exact = SUCCEEDED(h.composition.ComposeReadback(panorama, flat, width, height)) && width == 17000 && height == 10 &&
             std::equal(flat.begin(), flat.end(), wideBytes.begin(), wideBytes.end());
     Expect(exact, "oversize.device-limit-readback");
+    Raster adopted;
+    Expect(SUCCEEDED(h.composition.ComposeReadback(panorama, adopted)) && adopted.Width() == 17000 &&
+               adopted.Height() == 10 && adopted.ByteSize() == wideBytes.size() &&
+               std::equal(wideBytes.begin(), wideBytes.end(), adopted.Data()),
+           "oversize.device-limit-adopted-readback");
     h.composition.ReleaseDocumentSurfaces();
 }
 
@@ -1484,6 +1489,20 @@ void TestReadbackIgnoresPreview(Harness& h)
     Expect(shown.size() == 256 && At(shown, 8, 3, 3, 2) == 255 && At(shown, 8, 3, 3, 0) == 0 && read &&
                At(flat, 8, 3, 3, 0) == 255 && At(flat, 8, 3, 3, 1) == 255 && At(flat, 8, 3, 3, 2) == 255,
            "readback.document-not-preview");
+    Raster adopted;
+    Expect(SUCCEEDED(h.composition.ComposeReadback(document, adopted)) && adopted.Width() == 8 &&
+               adopted.Height() == 8 && adopted.ByteSize() == flat.size() &&
+               std::equal(flat.begin(), flat.end(), adopted.Data()) &&
+               reinterpret_cast<std::uintptr_t>(adopted.Data()) % PixelBuffer::kAlignment == 0,
+           "readback.adopted-document-not-preview");
+    CanvasDocument invalid = document;
+    invalid.width = kMaxCanvasSide + 1;
+    Expect(h.composition.ComposeReadback(invalid, adopted) == E_INVALIDARG && !adopted.HasStorage(),
+           "readback.invalid-grid-clears-adopted-output");
+    CanvasRenderer unbound;
+    adopted = Raster::Make(1, 1, RasterFormat::Bgra8888);
+    Expect(unbound.ComposeReadback(document, adopted) == E_UNEXPECTED && !adopted.HasStorage(),
+           "readback.missing-device-clears-adopted-output");
     // The display composes its preview again on the next frame.
     std::vector<std::uint8_t> again;
     Expect(SUCCEEDED(h.composition.Compose(document)) && SUCCEEDED(h.composition.Readback(again, width, height)) &&

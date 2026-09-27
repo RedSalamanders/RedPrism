@@ -133,19 +133,16 @@ constexpr double kPi = 3.14159265358979323846;
 }
 
 // A mutable copy of an image's pixels; false when memory runs out.
-[[nodiscard]] bool CopyPixels(const Raster& image, std::vector<std::uint8_t>& bytes) noexcept
+[[nodiscard]] bool CopyPixels(const Raster& image, PixelBuffer& bytes) noexcept
 {
     const int channels = image.Channels();
-    try
-    {
-        bytes.resize(static_cast<std::size_t>(image.Width()) * static_cast<std::size_t>(image.Height()) *
-                     static_cast<std::size_t>(channels));
-    }
-    catch (const std::bad_alloc&)
+    bytes = PixelBuffer::TryAllocate(static_cast<std::size_t>(image.Width()) *
+                                     static_cast<std::size_t>(image.Height()) * static_cast<std::size_t>(channels));
+    if (!bytes)
     {
         return false;
     }
-    image.ReadRegion(0, 0, image.Width(), image.Height(), bytes.data(), image.Width() * channels, 0);
+    image.ReadRegion(0, 0, image.Width(), image.Height(), bytes.Data(), image.Width() * channels, 0);
     return true;
 }
 
@@ -1354,7 +1351,7 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
     }
     const int width = image.Width();
     const int height = image.Height();
-    std::vector<std::uint8_t> bytes;
+    PixelBuffer bytes;
     switch (adjustment.kind)
     {
     case AdjustmentKind::Hsv:
@@ -1377,7 +1374,7 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return {};
         }
-        ApplyCube(bytes.data(), width, height, width * 4, cube);
+        ApplyCube(bytes.Data(), width, height, width * 4, cube);
         break;
     }
     case AdjustmentKind::Levels:
@@ -1389,28 +1386,28 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return {};
         }
-        ApplyTables(bytes.data(), width, height, width * 4, LevelsTables(adjustment.levels));
+        ApplyTables(bytes.Data(), width, height, width * 4, LevelsTables(adjustment.levels));
         break;
     case AdjustmentKind::Curves:
         if (!CopyPixels(image, bytes))
         {
             return {};
         }
-        ApplyTables(bytes.data(), width, height, width * 4, CurvesTables(adjustment.curves));
+        ApplyTables(bytes.Data(), width, height, width * 4, CurvesTables(adjustment.curves));
         break;
     case AdjustmentKind::Exposure:
         if (!CopyPixels(image, bytes))
         {
             return {};
         }
-        ApplyTables(bytes.data(), width, height, width * 4, ExposureTables(adjustment.Exposure()));
+        ApplyTables(bytes.Data(), width, height, width * 4, ExposureTables(adjustment.Exposure()));
         break;
     case AdjustmentKind::GradientMap:
         if (!CopyPixels(image, bytes))
         {
             return {};
         }
-        ApplyGradientMap(bytes.data(), width, height, width * 4, GradientMapTable(adjustment.GradientMap()));
+        ApplyGradientMap(bytes.Data(), width, height, width * 4, GradientMapTable(adjustment.GradientMap()));
         break;
     case AdjustmentKind::Grain:
     {
@@ -1423,11 +1420,11 @@ Raster ApplyAdjustment(const LayerAdjustment& adjustment, const Raster& image, d
         {
             return {};
         }
-        ApplyGrain(bytes.data(), width, height, width * 4, grain, originX, originY, unitsPerPixel);
+        ApplyGrain(bytes.Data(), width, height, width * 4, grain, originX, originY, unitsPerPixel);
         break;
     }
     }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
 FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment)
@@ -1535,12 +1532,9 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
     {
         return image;
     }
-    std::vector<std::uint8_t> bytes;
-    try
-    {
-        bytes.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
-    }
-    catch (const std::bad_alloc&)
+    PixelBuffer bytes =
+        PixelBuffer::TryAllocate(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+    if (!bytes)
     {
         return {};
     }
@@ -1564,7 +1558,7 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
                 }
             }
             std::uint8_t* out =
-                bytes.data() +
+                bytes.Data() +
                 (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * 4u;
             for (std::size_t c = 0; c < 4; ++c)
             {
@@ -1572,7 +1566,7 @@ Raster MotionBlurred(const Raster& image, double angleDegrees, double distance)
             }
         }
     }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
 Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& given, double scale, std::uint32_t seed,
@@ -1593,7 +1587,7 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
     }
     const int width = image.Width();
     const int height = image.Height();
-    std::vector<std::uint8_t> bytes;
+    PixelBuffer bytes;
     switch (kind)
     {
     case FilterKind::Curves:
@@ -1612,7 +1606,7 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
         {
             return {};
         }
-        AddNoise(bytes.data(), width, height, width * 4, static_cast<float>(settings.amount), settings.gaussian,
+        AddNoise(bytes.Data(), width, height, width * 4, static_cast<float>(settings.amount), settings.gaussian,
                  settings.monochromatic, seed);
         break;
     case FilterKind::ContentAwareFill:
@@ -1622,7 +1616,7 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
         {
             return {};
         }
-        if (ContentFill(bytes.data(), width, height, width * 4, coverage->Data(), coverage->Stride()) != 1)
+        if (ContentFill(bytes.Data(), width, height, width * 4, coverage->Data(), coverage->Stride()) != 1)
         {
             return {};
         }
@@ -1630,25 +1624,22 @@ Raster RunFilter(FilterKind kind, const Raster& image, const FilterSettings& giv
     }
     case FilterKind::LensCorrection:
     {
-        std::vector<std::uint8_t> source;
+        PixelBuffer source;
         if (!CopyPixels(image, source))
         {
             return {};
         }
-        try
-        {
-            bytes.assign(source.size(), 0);
-        }
-        catch (const std::bad_alloc&)
+        bytes = PixelBuffer::TryAllocate(source.Size());
+        if (!bytes)
         {
             return {};
         }
         // The warp is relative to the image's own size, so a downscaled preview bends the same way.
-        LensDistort(source.data(), bytes.data(), width, height, width * 4, settings.distortion / 100 * kLensStrength);
+        LensDistort(source.Data(), bytes.Data(), width, height, width * 4, settings.distortion / 100 * kLensStrength);
         break;
     }
     }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
+    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(bytes));
 }
 
 Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster& coverage)
@@ -1659,8 +1650,8 @@ Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster
     {
         return {};
     }
-    std::vector<std::uint8_t> top;
-    std::vector<std::uint8_t> base;
+    PixelBuffer top;
+    PixelBuffer base;
     if (!CopyPixels(adjusted, top) || !CopyPixels(original, base))
     {
         return {};
@@ -1684,7 +1675,7 @@ Raster BlendThrough(const Raster& adjusted, const Raster& original, const Raster
             }
         }
     }
-    return Raster::Make(width, height, RasterFormat::Bgra8888, top.data(), top.size());
+    return Raster::Adopt(width, height, RasterFormat::Bgra8888, std::move(top));
 }
 
 Raster Downscaled(const Raster& image, int maxSide)
@@ -1704,18 +1695,14 @@ Raster Downscaled(const Raster& image, int maxSide)
     const int outWidth = std::max(1, static_cast<int>(std::lround(width * factor)));
     const int outHeight = std::max(1, static_cast<int>(std::lround(height * factor)));
     const int channels = image.Channels();
-    std::vector<std::uint8_t> source;
-    std::vector<std::uint8_t> out;
+    PixelBuffer source;
     if (!CopyPixels(image, source))
     {
         return {};
     }
-    try
-    {
-        out.resize(static_cast<std::size_t>(outWidth) * static_cast<std::size_t>(outHeight) *
-                   static_cast<std::size_t>(channels));
-    }
-    catch (const std::bad_alloc&)
+    PixelBuffer out = PixelBuffer::TryAllocate(
+        static_cast<std::size_t>(outWidth) * static_cast<std::size_t>(outHeight) * static_cast<std::size_t>(channels));
+    if (!out)
     {
         return {};
     }
@@ -1747,7 +1734,7 @@ Raster Downscaled(const Raster& image, int maxSide)
             }
         }
     }
-    return Raster::Make(outWidth, outHeight, image.Format(), out.data(), out.size());
+    return Raster::Adopt(outWidth, outHeight, image.Format(), std::move(out));
 }
 
 Trimmed TrimmedToAlpha(const Raster& image, const LayerTransform& placed)

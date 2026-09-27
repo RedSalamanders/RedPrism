@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -70,6 +70,21 @@ the base and every tile once (history counts bytes that way).
 (the composition, the brush, thumbnails) MUST NOT call it. When that assembly cannot allocate, `Data()` is null and
 every consumer fails its own operation (Image Size reports Memory, a warp, trace, wand or sample fails) instead of
 reading a null pointer or substituting transparency. Identity is the storage itself, sparse or not.
+
+Concurrent readers of separate `Raster` handles sharing the same storage MUST see identical immutable pixels.
+The assembled byte pointer is published once with release ordering and read with acquire ordering. `Data()`
+serializes first assembly with a per-storage mutex and checks the pointer again after acquiring it; failed
+allocation leaves it unpublished and retryable. `ReadRegion`, `ByteSize`, `IsMaterialized` and thumbnails inspect
+only the published pointer and immutable metadata, never the vector being built. Publication does not change
+identity or invalidate a previously returned pixel pointer. A caller retains its `Raster` for the lifetime of
+any borrowed pointer. Concurrent assignment to the same handle or mutation of a document/session is not supported.
+
+`PixelBuffer::TryAllocate` provides uniquely owned, uninitialized memory aligned to 64 bytes; zero size, overflow
+or allocation failure returns an empty buffer. It uses the CRT aligned allocator so the normal ASan allocation
+checks also cover large buffers. `Raster::Adopt` accepts only a complete, tightly packed buffer of exactly
+width × height × bytes-per-pixel bytes and transfers it without a pixel copy. Invalid dimensions, format or size
+leave ownership with the caller. A successful adoption empties the caller's buffer; writers MUST discard borrowed
+mutable pointers before publication. `Raster::Make` retains its copying/zero-filling semantics for existing callers.
 
 `LayerTransform` matches archived behavioral reference: origin, size, clockwise rotation
 degrees, flipX/flipY, sampling. Valid when all values are finite, size is 1…300 000 per side, and
@@ -158,6 +173,16 @@ its base stops clipping), the active-layer rules (`active.*`), the document pixe
 duplicate, a blur's grown grid, the floating merge, masks, a merge and a distortion refused past 100 M while an edit
 that fits goes through), the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill,
 `Replacing` splits and fills, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
+
+`DocumentTests` also races eight event-gated readers through first assembly, whole-buffer reads, padded region
+reads, thumbnails and byte accounting for Gray8 and BGRA8888, on one sparse storage and on two sparse storages
+sharing a base. Expected bytes are independently computed from the base offset, tile window and fill values.
+Every materializer of a storage must receive the same stable pointer; separate caches remain distinct. The
+normal suite runs eight rounds; `DocumentTests.exe --stress` runs 256 rounds and MUST pass in ASan Debug before
+the concurrency foundation closes. This is stress coverage of ownership and publication, not a race detector.
+
+The `buffer.*` cases prove alignment, empty and overflowing allocation requests, move ownership, invalid adoption
+without consumption, zero-copy publication, shared lifetime and an adopted buffer used as a sparse base.
 
 ```powershell
 .\test.ps1 -Platform x64 -Configuration Debug

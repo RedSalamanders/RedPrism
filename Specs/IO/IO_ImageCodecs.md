@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-27
 Owner: `Common/ImageCodecs.*`
 
 ## Scope
@@ -57,3 +57,8 @@ not `Invalid`.
 `Tests/IoTests` covers PNG pixel round-trip (including the premultiplied/straight-alpha conversion across a range
 of alphas), 96 px thumbnails, JPEG encode (including the white-matte flatten and the legacy quality golden), mask
 format rejection, and the missing-HEIF clean error path under ASan Debug.
+
+Decoded frame pixels are written by `IWICBitmapSource::CopyPixels` into a `PixelBuffer` and published through
+`Raster::Adopt`. Conversion, orientation, color management, tight row strides and eager mask thumbnails are
+unchanged. Decode MUST fail if allocating or filling that buffer fails; partially initialized bytes are never
+published. There is no second full-frame pixel copy at publication.

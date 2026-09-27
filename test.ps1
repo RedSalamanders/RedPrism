@@ -58,6 +58,11 @@ foreach ($suite in @(
 }
 
 if ($Configuration -eq 'ASan Debug') {
+    Write-Host 'Running concurrent raster stress...' -ForegroundColor Cyan
+    & (Join-Path $outputRoot 'DocumentTests.exe') --stress
+    if ($LASTEXITCODE -ne 0) {
+        throw "DocumentTests.exe --stress failed with exit code $LASTEXITCODE."
+    }
     $probeLog = Join-Path $repoRoot ".build\logs\ASan-probe-$Platform-$([guid]::NewGuid().ToString('N')).log"
     New-Item -ItemType Directory -Path (Split-Path $probeLog) -Force | Out-Null
     $previousOptions = $env:ASAN_OPTIONS
@@ -131,6 +136,63 @@ if ($selfTest.ExitCode -ne 0) {
     $selfTestText = Get-Content -LiteralPath $selfTestErr -Raw -ErrorAction SilentlyContinue
     throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). $selfTestText"
 }
+
+Write-Host 'Running kernel benchmark smoke...' -ForegroundColor Cyan
+$kernelSmokeLog = Join-Path $outputRoot 'RedPrism.kernels-smoke.log'
+$kernelSmokeErr = Join-Path $outputRoot 'RedPrism.kernels-smoke.err.log'
+Remove-Item -LiteralPath $kernelSmokeLog, $kernelSmokeErr -ErrorAction SilentlyContinue
+$kernelSmoke = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--bench', 'kernels-smoke') `
+    -PassThru -RedirectStandardOutput $kernelSmokeLog -RedirectStandardError $kernelSmokeErr
+$kernelSmokeTimeoutSeconds = 60
+if (-not $kernelSmoke.WaitForExit($kernelSmokeTimeoutSeconds * 1000)) {
+    throw "RedPrism.exe --bench kernels-smoke did not finish within $kernelSmokeTimeoutSeconds s (PID $($kernelSmoke.Id) is still running; report it, do not kill it)."
+}
+if ($kernelSmoke.ExitCode -ne 0) {
+    $kernelSmokeError = Get-Content -LiteralPath $kernelSmokeErr -Raw -ErrorAction SilentlyContinue
+    throw "RedPrism.exe --bench kernels-smoke exited with code $($kernelSmoke.ExitCode). $kernelSmokeError"
+}
+$kernelSmokeLines = @(Get-Content -LiteralPath $kernelSmokeLog -ErrorAction SilentlyContinue)
+$kernelOperationRows = @($kernelSmokeLines | Where-Object { $_ -match '^KERNEL BENCH name=' })
+if ($kernelOperationRows.Count -ne 13) {
+    throw "RedPrism.exe --bench kernels-smoke printed $($kernelOperationRows.Count) operation rows, expected 13 ($kernelSmokeLog)."
+}
+$kernelNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+$kernelChecksums = @{}
+foreach ($row in $kernelOperationRows) {
+    if ($row -match '^KERNEL BENCH name=(?<name>[A-Za-z0-9_]+) width=32 height=24 samples=2 warmup=1 median_ms=\S+ p95_ms=\S+ max_ms=\S+ checksum=(?<checksum>[0-9A-Fa-f]+) arch=\S+ config=\S+$') {
+        $kernelName = $Matches['name']
+        $kernelChecksums[$kernelName] = $Matches['checksum']
+    } else {
+        throw "Malformed kernel benchmark smoke operation row: $row"
+    }
+    if (-not $kernelNames.Add($kernelName)) {
+        throw "Duplicate kernel benchmark smoke operation: $kernelName"
+    }
+}
+$kernelReports = @($kernelSmokeLines | Where-Object { $_ -match '^KERNEL BENCH REPORT\b' })
+if ($kernelReports.Count -ne 1 -or $kernelReports[0] -notmatch '^KERNEL BENCH REPORT status=ok width=32 height=24 operations=13 arch=\S+ config=\S+$') {
+    throw "RedPrism.exe --bench kernels-smoke did not print exactly one valid completion report ($kernelSmokeLog)."
+}
+$bufferRows = @($kernelSmokeLines | Where-Object { $_ -match '^BUFFER BENCH name=' })
+$bufferNames = @{ levels = 'levels_scalar'; hue_saturation = 'hue_saturation_scalar'; uniform_noise = 'uniform_noise_scalar' }
+if ($bufferRows.Count -ne 3) {
+    throw "Expected three buffer comparison rows, got $($bufferRows.Count)."
+}
+foreach ($row in $bufferRows) {
+    if ($row -notmatch '^BUFFER BENCH name=(?<name>[A-Za-z0-9_]+) width=32 height=24 samples=2 warmup=1 copy_median_ms=\S+ adopt_median_ms=\S+ median_saved_ms=\S+ median_speedup=\S+ checksum=(?<checksum>[0-9A-Fa-f]+) arch=\S+ config=\S+$') {
+        throw "Malformed buffer comparison row: $row"
+    }
+    $bufferName = $Matches['name']
+    if (-not $bufferNames.ContainsKey($bufferName) -or $Matches['checksum'] -ne $kernelChecksums[$bufferNames[$bufferName]]) {
+        throw "Unknown, duplicate or mismatched buffer comparison: $row"
+    }
+    $bufferNames.Remove($bufferName)
+}
+$bufferReports = @($kernelSmokeLines | Where-Object { $_ -match '^BUFFER BENCH REPORT\b' })
+if ($bufferReports.Count -ne 1 -or $bufferReports[0] -notmatch '^BUFFER BENCH REPORT status=ok width=32 height=24 operations=3 arch=\S+ config=\S+$') {
+    throw 'Missing or malformed buffer comparison completion report.'
+}
+Write-Host 'PASS kernel benchmark smoke: 13 operations and 3 equivalent copy/adopt pairs, 32x24, 2 samples each'
 
 Write-Host 'Running CRT report hook probe...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\CrtReportHookTests.ps1') -HostTestsPath $hostTests -Configuration $Configuration

@@ -7,6 +7,7 @@
 #include "FileDialogs.h"
 #include "FrameScheduler.h"
 #include "ImageCodecs.h"
+#include "KernelBenchmark.h"
 #include "KeyboardState.h"
 #include "LucideToolButton.h"
 #include "ProjectStore.h"
@@ -4241,15 +4242,12 @@ bool Application::SaveDocument(bool saveAs) noexcept
 std::optional<Raster> Application::ComposeDocumentReadback(const CanvasDocument& document) noexcept
 {
     BindCompositionDevice();
-    std::vector<std::uint8_t> bgra;
-    UINT width = 0;
-    UINT height = 0;
-    if (FAILED(_composition.ComposeReadback(document, bgra, width, height)) || width == 0 || height == 0)
+    Raster image;
+    if (FAILED(_composition.ComposeReadback(document, image)))
     {
         return std::nullopt;
     }
-    return Raster::Make(static_cast<int>(width), static_cast<int>(height), RasterFormat::Bgra8888, bgra.data(),
-                        bgra.size());
+    return image;
 }
 
 void Application::ExportFlattened(bool jpeg) noexcept
@@ -6051,6 +6049,22 @@ void BenchmarkReport(const std::wstring& text) noexcept
 
 int Application::RunBenchmark() noexcept
 {
+    if (_bench == L"kernels")
+    {
+        return RunKernelBenchmark();
+    }
+    if (_bench == L"kernels45")
+    {
+        return RunKernelBenchmark(8192, 5464, 10);
+    }
+    if (_bench == L"kernels-smoke")
+    {
+        return RunKernelBenchmark(32, 24, 2) == 0 ? RunBufferBenchmark(32, 24, 2) : 1;
+    }
+    if (_bench == L"buffers" || _bench == L"buffers45")
+    {
+        return _bench == L"buffers" ? RunBufferBenchmark(3840, 2160, 10) : RunBufferBenchmark(8192, 5464, 10);
+    }
     if (_bench != L"brush")
     {
         return 2;
