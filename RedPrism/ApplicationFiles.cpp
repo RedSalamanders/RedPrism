@@ -100,11 +100,11 @@ class RealPromptsImpl final : public Prompts
         return true;
     }
 
-    void PostNotice(HWND window, UINT message, UINT stringId) const noexcept override
+    void PostNotice(HWND window, UINT message, UINT stringId, int formatValue) const noexcept override
     {
         if (window != nullptr)
         {
-            (void)PostMessageW(window, message, static_cast<WPARAM>(stringId), 0);
+            (void)PostMessageW(window, message, static_cast<WPARAM>(stringId), static_cast<LPARAM>(formatValue));
         }
     }
 
@@ -166,7 +166,7 @@ class QuietPromptsImpl final : public Prompts
     {
         return false;
     }
-    void PostNotice(HWND, UINT, UINT) const noexcept override {}
+    void PostNotice(HWND, UINT, UINT, int) const noexcept override {}
     void ShowError(HWND, UINT) const noexcept override {}
     void ShowFormattedError(HWND, const std::wstring&) const noexcept override {}
     void ShowInfo(HWND, const std::wstring&, const std::wstring&) const noexcept override {}
@@ -218,6 +218,13 @@ const Prompts& QuietPrompts() noexcept
 {
     static const QuietPromptsImpl instance;
     return instance;
+}
+
+std::wstring FormatPostedNotice(UINT stringId, int formatValue) noexcept
+{
+    return stringId == IDS_ERROR_UNSUPPORTED_VERSION
+               ? FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, formatValue)
+               : LoadStringResource(nullptr, stringId);
 }
 
 void Application::ShowUnavailable(UINT captionId) noexcept
@@ -409,8 +416,17 @@ bool Application::ExecuteHostInput() noexcept
             {
                 if (_hostPathIndex < value.paths.size())
                 {
-                    _hostBatchFailed = !OpenProjectPath(value.paths[_hostPathIndex].c_str()) || _hostBatchFailed;
-                    return true; // report a failed load, preserving the document, then process the remaining batch
+                    const auto result = StartProjectOpen(value.paths[_hostPathIndex]);
+                    if (FAILED(result))
+                    {
+                        _hostBatchFailed = true;
+                        if (!FAILED(_hostBatchError))
+                            _hostBatchError = result;
+                        ++_errorsShown;
+                        _lastErrorId = IDS_ERROR_OPEN_PROJECT;
+                        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    }
+                    return true; // preserve the document on refusal and continue later project paths
                 }
                 std::array<std::wstring_view, HostInputBudget::kMaxPaths> paths{};
                 std::size_t count = 0;
@@ -540,35 +556,6 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optiona
     }
     ReportHostAdmission(
         QueueHostPaths(std::span<const std::wstring_view>(views.data(), count), HostPathAction::OpenPaths, dropPoint));
-}
-
-bool Application::OpenProjectPath(const wchar_t* path) noexcept
-{
-    if (!_hostExecuting)
-    {
-        OpenPath(path);
-        return false;
-    }
-    const ProjectLoadResult loaded = LoadProject(path);
-    if (loaded.status != ProjectIoStatus::Ok || !loaded.document.width)
-    {
-        if (loaded.status == ProjectIoStatus::UnsupportedVersion)
-        {
-            // Formatted with the file's own version, unlike ShowError's plain string, but still counted as the
-            // same error id so a quiet run's record reads the same either way.
-            ++_errorsShown;
-            _lastErrorId = IDS_ERROR_UNSUPPORTED_VERSION;
-            _prompts->ShowFormattedError(
-                _window.get(), FormatStringResource(nullptr, IDS_ERROR_UNSUPPORTED_VERSION, loaded.formatVersion));
-        }
-        else
-        {
-            ShowError(LoadErrorStringId(loaded.status));
-        }
-        return false;
-    }
-    ReplaceDocument(loaded.document, loaded.activeLayerID, path);
-    return true;
 }
 
 // A loaded or newly made document takes the session over: no outline in progress, pending edit or stroke carries

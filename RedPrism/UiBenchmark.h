@@ -55,11 +55,14 @@ struct UiBenchmarkState final
     Vec2 previousPan{};
     bool complete = false;
     bool failed = false;
+    bool savedBaselineReady = false;
+    std::uint64_t previousSessionSerial = 0;
     std::wstring saveDirectory;
     std::wstring savePath;
     std::wstring pngExportPath;
     std::wstring jpegExportPath;
     bool ownsSaveDirectory = false;
     std::optional<ContinuationReceipt> saveReceipt;
+    std::optional<ContinuationReceipt> openReceipt;
     std::optional<ContinuationReceipt> exportReceipt;
 };

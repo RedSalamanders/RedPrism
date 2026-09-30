@@ -11,6 +11,8 @@
     - [x] F3b.1 — Project manifest/PNG-header probe, adaptive decode ceilings, reopened-input refusals and resource declarations pass all x64 suites and ARM64 cross-builds; 69 tiny folder/ZIP and resource checks ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)). Host admission/reservation and independent allocation-floor controls remain F3b.3.
     - [x] F3b.2 — Detached import helper preserves first-image saved baseline, one additional entry, ignored new-canvas drop point and partial-success/cancellation policy; 31 checks and all configurations pass ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)).
     - [ ] F3b.3 — Wire both graphs under the selected host ordinal, preserve per-project batch continuation and formatted notices outside completion, qualify real cancellation/staleness/younger-input/device-independent lifetime and record open/import UI measurements.
+      - [x] F3b.3a — Project-open probe/decode jobs, validated replacement continuation, 36 phase/nine batch gates, allocation floors and 22-row smoke pass all configurations. Hardware 4K/45 MP and WARP 4K measurements recorded; apply/frame overruns leave G1 open ([evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md)).
+      - [ ] F3b.3b — Activate detached image-import worker and qualify saved baseline, one additional history entry, partial-success and ordered owner application.
 - [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision.
   - [x] F4a — Cancellable asset encoding/staged writes/libzip close preserve the external publication boundary; full configuration matrix passes.
   - [x] F4a.1 — Direct bounded PNG/JPEG file streams and staged ZIP asset-file sources remove whole-archive encoded-buffer retention. Three serial Release runs per mode at 4K/45 MP and the full matrix pass.
@@ -75,6 +77,43 @@ entry, preserving placement, grouping, active id, reported batch failure and the
 Cancellation/staleness publishes no partial prepared document. Prepare both the initial new document and the
 additional import result off-thread so the owner need not perform any per-image decoding or thumbnail work.
 
+### F3b.3b execution detail
+
+Use a metadata inspection job followed by separately admitted bounded preparation. Inspect frame zero on an owned
+WIC stream, retain standard per-path status/pixel/encoded-length values, and never call CopyPixels or create a
+Raster in the inspection helper. Orientation may swap sides but preserves the pixel count used for admission.
+PNG/JPEG/TIFF/HEIF policy remains the existing WIC import policy; RAW corpus decoding is P4. Decoder metadata
+calls can block internally on a worker and are not claimed interruptible. Inspect and cap the opened source's
+encoded length, rather than assuming a separate pathname stat describes the decoder's stream.
+
+Before preparation, declare the additional output, thumbnail, owned path, document record/name/curve and temporary
+working-copy peak. Shared source rasters/selections already resident are not charged twice. Per-path metadata and
+aggregate added-pixel ceilings must reach the reopened decoder before output allocation; changed input can only
+succeed within the declared limits. Cache failed inspection statuses in their original order. Refusal never
+submits an under-reserved preparation job. Keep probe and preparation handles/codecs confined to their respective
+workers. Both reservation charges may coexist at submission; FIFO prevents preparation before probe retirement.
+The decoder boundary must explicitly reject negative budgets and enforce the hard 100 M per-image limit even
+when a caller supplies a larger count. Current `CopyFrame` casts the signed remaining count to unsigned; the
+import slice must correct that gap rather than preserving it in the new probe's tests. Valid current callers and
+legacy pixel goldens remain unchanged. Opened-stream length caps must also be enforced at decode, not by checking
+a path before a separate filename reopen.
+
+Only a current serial/generation/ordinal/acquisition may apply. Prepare the new saved baseline and optional
+additional import document together; cancellation/staleness/allocation failure applies neither. A completed
+ordinary partial-success batch keeps its successful images and reports its failure, preserving the legacy policy.
+An existing document gets one Import Image(s) entry; a new canvas first becomes a saved baseline and additional
+images get one entry. Validate the complete prepared pair before owner replacement; a baseline replacement must
+use the explicit same-input lineage continuation rule. Existing-document younger Undo may run after import;
+younger input captured on a replaced document must be stale. Keep the first batch error across mixed project/image
+paths, post one localized import summary, and retire all ownership only after apply/drop acknowledgement.
+
+Qualify no-document/new/existing/grouped targets, placement and ignored new-canvas drop points, first and later
+failures, baseline plus one additional history entry/Undo, copied paths, after-probe source growth, exact pixel
+ceilings, complete pair publication, probe/preparation cancellation and actual allocation/admission failures,
+generation changes and reused persisted IDs, mixed batches, and hidden/device-independent completion. Add actual
+image-import benchmark rows to the host loop without timed synchronous file checks. Full configurations and
+measured UI/apply costs remain the exit gate; this plan section is not implementation evidence.
+
 The production project-save worker captures the immutable settled document, active id, resolved output path and
 exact saved revision. It marks only that revision after checked publication; it never marks a later edit saved.
 Utility export uses asynchronous document readback followed by worker encode/write under the selected global
@@ -91,8 +130,8 @@ before submission, does not multiply the frame allowance per asset, and does not
 Its host request keeps the input ordinal, receipt and input charge until acknowledged completion; current lineage
 records the published path and captured revision, while stale lineage cannot update either. A published file is
 recorded even if cancellation changes the generic job result, but a dependent close/replacement proceeds only on
-success. Project open, image import and clipboard file processing remain synchronous until their
-later slices.
+success. Project opening uses the two-job probe/decode graph described by `IO_ProjectFormat.md`; image import
+and clipboard file processing remain synchronous until their later slices.
 
 Retain an independent published flag in writer results. The scheduler may classify a job Cancelled after its
 worker published successfully; owner completion still records the actual captured saved revision/path, while

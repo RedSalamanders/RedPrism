@@ -405,8 +405,21 @@ bounded staging files; they are not retained as one encoded vector per asset. In
 overflow refuse admission without submitting work. The scheduler's one complete-graph reservation remains held
 through worker completion and owner apply/drop, while immutable raster/selection storage already resident is not charged
 again. Global available-memory admission still uses the physical/commit ceiling less 1 GiB headroom and existing
-reservations. Project open, image import and clipboard worker graphs remain later P1.7 work; this
+reservations. Image import and clipboard worker graphs remain later P1.7 work; this
 save slice does not establish G1 or a hardware timing result.
+
+### Project-open graph admission (P1.7 F3b.3a)
+
+The selected input owns one history ordinal through a metadata-probe job and a separately admitted decode job.
+Probe memory includes bounded manifest/parser/record storage and owned path; decode adds its enforced image,
+mask, layer, manifest and encoded-asset ceilings, rounded outputs and thumbnail transients. Each reservation
+survives its record's owner completion and destruction. Both charges may coexist during second submission;
+FIFO Io serialization prevents decode running until probe retirement. Refusal preserves the current document
+and records the first batch error. No worker incrementally reserves memory or waits for a larger reservation.
+Probe handles/parser owners die on the worker; only standard small plan values cross the completion boundary.
+Source reopening may observe changed bytes within caps; no file identity snapshot is implied. Opaque codec
+allocations remain in global headroom. Replacement, old document/history release, chrome and upload scope are
+measured separately; this graph does not by itself qualify G1.
 
 ### Utility export graph (P1.7 F4b.2)
 

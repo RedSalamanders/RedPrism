@@ -25,6 +25,7 @@ enum class Expected
     Size,
     Refusal,
     Saved,
+    Opened,
     PngExported,
     JpegExported
 };
@@ -40,7 +41,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 21> kOperations{{
+constexpr std::array<Operation, 22> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -60,6 +61,7 @@ constexpr std::array<Operation, 21> kOperations{{
     {"image-size-nearest", ChromeHost::kCommandImageSize, 0, {}, 0, Expected::Size, true},
     {"image-size-resolution", ChromeHost::kCommandImageSize, 0, {}, 300, Expected::Size, true},
     {"project-save", 0, 0, {}, 0, Expected::Saved},
+    {"project-open", 0, 0, {}, 0, Expected::Opened},
     {"png-export", 0, 0, {}, 0, Expected::PngExported},
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
 }};
@@ -447,8 +449,15 @@ void Application::PrepareUiBenchmarkStep() noexcept
     OnTool(EditorTool::Move);
     _viewport.Fit(DocumentSize());
     const auto operation = CurrentOperation(state);
-    state.saveReceipt.reset();
-    state.exportReceipt.reset();
+    if (operation.expected == Expected::Saved)
+    {
+        state.saveReceipt.reset();
+        state.savedBaselineReady = false;
+    }
+    if (operation.expected == Expected::Opened)
+        state.openReceipt.reset();
+    if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
+        state.exportReceipt.reset();
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
@@ -504,6 +513,12 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         _uiBenchmark->saveReceipt = QueueHostWrite(HostWriteFormat::Project, false);
         ReportHostAdmission(_uiBenchmark->saveReceipt.value());
     }
+    else if (operation.expected == Expected::Opened)
+    {
+        const std::array<std::wstring_view, 1> paths{_uiBenchmark->savePath};
+        _uiBenchmark->openReceipt = QueueHostPaths(paths, HostPathAction::OpenPaths);
+        ReportHostAdmission(_uiBenchmark->openReceipt.value());
+    }
     else if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
     {
         const auto format = operation.expected == Expected::PngExported ? HostWriteFormat::Png : HostWriteFormat::Jpeg;
@@ -552,6 +567,7 @@ void Application::AdvanceUiBenchmark() noexcept
     if (state.phase == UiBenchmarkState::Phase::Preparing)
     {
         state.previousRevision = _session.history.CurrentRevision();
+        state.previousSessionSerial = _session.DocumentSerial();
         if (_documentPath.size() >= state.previousDocumentPath.size())
         {
             FailUiBenchmark("document-path-too-long");
@@ -613,6 +629,15 @@ void Application::AdvanceUiBenchmark() noexcept
                        !edit && !_session.history.IsModified() &&
                        _session.history.CurrentRevision() == state.previousRevision && layer && layer->asset &&
                        layer->asset->image == state.previousImage;
+    const bool opened =
+        expected == Expected::Opened && state.savedBaselineReady && state.saveReceipt &&
+        state.saveReceipt->Read().outcome == HostOutcome::Succeeded && state.openReceipt &&
+        state.openReceipt->Read().outcome == HostOutcome::Succeeded &&
+        _session.DocumentSerial() != state.previousSessionSerial && _documentPath == state.savePath && document &&
+        document->width == state.fixture.width && document->height == state.fixture.height &&
+        document->layers.size() == state.fixture.layers.size() && _session.ActiveLayerID() == state.activeLayer &&
+        !_session.history.IsModified() && !_session.history.CanUndo() && !_session.history.CanRedo() &&
+        _session.history.UndoCount() == 0 && _session.history.UndoName().empty();
     const bool exportUnchanged =
         state.exportReceipt && state.exportReceipt->Read().outcome == HostOutcome::Succeeded &&
         std::wstring_view(_documentPath) ==
@@ -635,7 +660,7 @@ void Application::AdvanceUiBenchmark() noexcept
                    layer->asset && layer->asset->image != state.previousImage &&
                    _session.history.UndoName() == L"Image Size");
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
-        !(viewReady || refused || saved || pngExported || jpegExported || sizeReady || histogramReady ||
+        !(viewReady || refused || saved || opened || pngExported || jpegExported || sizeReady || histogramReady ||
           (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
@@ -652,6 +677,8 @@ void Application::AdvanceUiBenchmark() noexcept
                                            readback.readinessBarriers - state.previousReadback.readinessBarriers,
                                            readback.busyFailures - state.previousReadback.busyFailures}};
     }
+    if (saved)
+        state.savedBaselineReady = true;
     if (++state.trial > state.runs)
     {
         Report(state);

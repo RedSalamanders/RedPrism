@@ -1,5 +1,6 @@
 #include "ProjectLoadWorkTests.h"
 
+#include "PixelBuffer.h"
 #include "ProjectLoadWork.h"
 #include "ProjectStore.h"
 #include "ZipOwner.h"
@@ -551,6 +552,23 @@ void TestProbeMemoryEstimators()
     Expect(ProjectLoadMemoryBytes(maximum, 32767) != 0 &&
                ProjectLoadMemoryBytes(maximum, 32767) > ProjectLoadMetadataMemoryBytes(maximum, 32767),
            "project-load-work.hard-maxima-have-a-bounded-complete-reservation");
+
+    // Compare the reservation with PixelBuffer's public allocation contract, not with the estimator's formula.
+    const ProjectLoadLimits maskOnly{0, kMaxMaskPixels, 1, 128, 1};
+    Expect(ProjectLoadMemoryBytes(maskOnly, pathUnits) >= PixelBuffer::RequiredBytes(kMaxMaskPixels),
+           "project-load-work.mask-only-peak-covers-one-full-output-buffer");
+    const ProjectLoadLimits colorOnly{kMaxLayerPixels, 0, 1, 128, 1};
+    Expect(ProjectLoadMemoryBytes(colorOnly, pathUnits) >=
+               PixelBuffer::RequiredBytes(static_cast<std::size_t>(kMaxLayerPixels) * 4),
+           "project-load-work.color-only-peak-covers-one-full-output-buffer");
+
+    const ProjectLoadLimits recordsOnly{0, 0, static_cast<std::size_t>(kMaxLayerCount), 128, 0};
+    Expect(ProjectLoadMetadataMemoryBytes(recordsOnly, pathUnits) >=
+               static_cast<std::uint64_t>(kMaxLayerCount) * sizeof(ImageLayer),
+           "project-load-work.record-peak-covers-document-layer-array");
+    const ProjectLoadLimits manifestOnly{0, 0, 0, kMaxProjectManifestBytes, 0};
+    Expect(ProjectLoadMetadataMemoryBytes(manifestOnly, pathUnits) >= kMaxProjectManifestBytes,
+           "project-load-work.manifest-peak-covers-complete-retained-input");
 }
 } // namespace
 

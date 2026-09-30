@@ -54,24 +54,28 @@ class HistoryWork final
         _lastStarted = ordinal;
         _active = HistoryWorkStamp{this, documentSerial, ordinal, kind, ++_acquisition};
         _lastFinished.reset();
+        _lastReplacementSerial = 0;
         _cancelRequested = false;
         return _active;
     }
 
     // A selected request may need a second operation (commit, then import/resize) before a younger input starts.
-    // Only the exact latest finished acquisition in the same document can continue its ordinal. The host checks
-    // prerequisite success/lifetime before calling; this metadata does not itself authorize a dependent action.
+    // Only the exact latest finished acquisition can continue its ordinal on its current lineage, including an
+    // explicitly recorded owner replacement. The host checks prerequisite success/lifetime before calling;
+    // this metadata does not itself authorize a dependent action.
     [[nodiscard]] std::optional<HistoryWorkStamp> Continue(HistoryWorkStamp previous, std::uint64_t documentSerial,
                                                            HistoryWorkKind kind) noexcept
     {
         if (_active || !_lastFinished || *_lastFinished != previous || previous.ordinal != _lastStarted ||
-            documentSerial == 0 || previous.documentSerial != documentSerial ||
+            documentSerial == 0 ||
+            documentSerial != (_lastReplacementSerial != 0 ? _lastReplacementSerial : previous.documentSerial) ||
             _acquisition == (std::numeric_limits<std::uint64_t>::max)())
         {
             return std::nullopt;
         }
         _active = HistoryWorkStamp{this, documentSerial, previous.ordinal, kind, ++_acquisition};
         _lastFinished.reset();
+        _lastReplacementSerial = 0;
         _cancelRequested = false;
         return _active;
     }
@@ -89,8 +93,19 @@ class HistoryWork final
             return false;
         }
         _lastFinished = _active;
+        _lastReplacementSerial = 0;
         _active.reset();
         _cancelRequested = false;
+        return true;
+    }
+
+    // Only a validated owner replacement may continue a selected batch on its new session lineage. Retain the
+    // exact finished acquisition so no other input or external replacement can authorize that continuation.
+    [[nodiscard]] bool FinishReplacement(HistoryWorkStamp stamp, std::uint64_t replacementSerial) noexcept
+    {
+        if (replacementSerial == 0 || replacementSerial == stamp.documentSerial || !Finish(stamp))
+            return false;
+        _lastReplacementSerial = replacementSerial;
         return true;
     }
 
@@ -126,6 +141,7 @@ class HistoryWork final
     std::uint64_t _acquisition = 0;
     std::optional<HistoryWorkStamp> _active;
     std::optional<HistoryWorkStamp> _lastFinished;
+    std::uint64_t _lastReplacementSerial = 0;
     bool _cancelRequested = false;
 };
 

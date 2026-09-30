@@ -324,7 +324,23 @@ failure, captured revision marking without erasing a later edit, close suppressi
 command success only after the save stage, persisted transform/opacity with their own history entry before the
 captured saved revision, localized failure reporting and full terminal cleanup. These event gates
 have bounded deadlock deadlines, not performance assertions. They provide evidence for project save ownership and
-ordering; F4b.1 remains pending full qualification, and project open/import/clipboard remain synchronous.
+ordering; image import/clipboard host migrations remain open.
+
+`project-open-host.phase=* after=* case=*` exercises 36 actual host-loop gates: probe/decode before/after
+preparation, success, younger command staleness after replacement, cancellation acknowledgement, returned
+failure, actual worker/admission allocation failure, reused persisted IDs, same-lineage generation change and
+empty-session opening. Decode gates assert the complete declared decode charge without a surviving probe charge.
+Nine `project-open-host.batch=*` gates additionally exercise two ordered replacements,
+missing first file, first worker failure and decode-admission refusal followed by success, unsupported versions
+99 and zero through real notice posting/shared deferred formatting, source growth after probe,
+cancellation of the second project and external replacement during the second probe. They require exact receipt
+errors, literal loaded pixels/active id, saved baseline/reset history, preserved path/document on refusal, one
+notice per failed file, no hidden Present, view input while held, and zero retained tickets/charges/barriers.
+Pure `history-work.*` replacement controls require the exact completed acquisition and the explicitly recorded
+new lineage; old/unrelated lineages and late completion are refused. Independent load-resource floors compare
+against PixelBuffer allocation, document record storage and manifest input contracts. The 22-row UI smoke includes
+`project-open` after the independently completed save; timed readiness uses receipts and session/metadata state,
+not synchronous file reads. Full configuration and performance qualification are recorded separately.
 
 `export-readback-memory.*` adds nineteen checks for 4K/45 MP/100 MP admission, monotonic/path/metadata charges,
 invalid side/count/curve/path limits, rounded full-canvas readback and shared sparse identity without materialization.

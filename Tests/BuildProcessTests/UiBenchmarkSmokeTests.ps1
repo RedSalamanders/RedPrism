@@ -44,7 +44,7 @@ if ($machineRows.Count -ne 1) {
 $expectedNames = @(
     'zoom-actual', 'zoom-fit', 'levels-open', 'levels-update', 'levels-commit', 'hsv-update',
     'exposure-update', 'gaussian-update', 'noise-update', 'grain-update', 'lens-update',
-    'invert', 'fill', 'clear', 'undo', 'canvas-size-fill', 'image-size-nearest', 'image-size-resolution', 'project-save',
+    'invert', 'fill', 'clear', 'undo', 'canvas-size-fill', 'image-size-nearest', 'image-size-resolution', 'project-save', 'project-open',
     'png-export', 'jpeg-export'
 )
 $operationRows = @($lines | Where-Object { $_ -match '^UI BENCH name=' })
@@ -102,9 +102,9 @@ foreach ($name in $expectedNames) {
 
 $reports = @($lines | Where-Object { $_ -match '^UI BENCH REPORT\b' })
 if ($reports.Count -ne 1 -or
-    $reports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=21(?:\s+.*)?$') {
+    $reports[0] -notmatch '^UI BENCH REPORT status=ok width=64 height=48 operations=22(?:\s+.*)?$') {
     throw "UI benchmark smoke did not print exactly one valid completion report ($stdoutPath)."
 }
 
-Write-Host 'PASS UI benchmark smoke: 21 operations, 64x48, 2 samples after one warmup'
+Write-Host 'PASS UI benchmark smoke: 22 operations, 64x48, 2 samples after one warmup'
 $global:LASTEXITCODE = 0

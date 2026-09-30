@@ -26,7 +26,7 @@ class Prompts
     virtual bool ShowNotice(ChromeHost* chrome, std::wstring text) const noexcept = 0;
     // Posts `stringId` as `message` to `window` so the notice never lands inside a DxUi dispatch or a modal loop;
     // the window procedure delivers it back through ShowNotice once the post is handled.
-    virtual void PostNotice(HWND window, UINT message, UINT stringId) const noexcept = 0;
+    virtual void PostNotice(HWND window, UINT message, UINT stringId, int formatValue = 0) const noexcept = 0;
     // A blocking error dialog naming `stringId`.
     virtual void ShowError(HWND window, UINT stringId) const noexcept = 0;
     // A blocking error dialog already formatted as `text` (the unsupported-project-version message).
@@ -50,3 +50,5 @@ class Prompts
 
 [[nodiscard]] const Prompts& RealPrompts() noexcept;
 [[nodiscard]] const Prompts& QuietPrompts() noexcept;
+// Allocates only when the posted notice is handled, never during worker completion.
+[[nodiscard]] std::wstring FormatPostedNotice(UINT stringId, int formatValue) noexcept;

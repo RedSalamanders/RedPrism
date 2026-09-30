@@ -150,6 +150,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostSaveBeforeAction = false;
     _hostWriteInFlight = false;
     _hostBatchFailed = false;
+    _hostBatchError = S_OK;
     _pathClassifications = {};
     if (!_shutdownStarted && _hostRequests.Size() != 0)
     {
@@ -308,8 +309,9 @@ void Application::RunHostContinuation() noexcept
             }
             if (!first)
             {
-                FinishHostContinuation({_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded,
-                                        _hostBatchFailed ? E_FAIL : S_OK});
+                FinishHostContinuation(
+                    {_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded,
+                     _hostBatchFailed ? (FAILED(_hostBatchError) ? _hostBatchError : E_FAIL) : S_OK});
                 return;
             }
             const auto choice = paths->action == HostPathAction::OpenPaths ? PromptImageOpen(FileTitle(*first), count)
@@ -421,8 +423,19 @@ void Application::RunHostContinuation() noexcept
                 (void)_jobs.RequestUiActionSource(_continuationAction);
                 return;
             }
-            FinishHostContinuation(
-                {_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded, _hostBatchFailed ? E_FAIL : S_OK});
+            FinishHostContinuation({_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded,
+                                    _hostBatchFailed ? (FAILED(_hostBatchError) ? _hostBatchError : E_FAIL) : S_OK});
+            return;
+        case HostStage::FileComplete:
+            if (paths && _hostPathIndex < paths->paths.size())
+            {
+                ++_hostPathIndex;
+                _hostStage = HostStage::PathProject;
+                (void)_jobs.RequestUiActionSource(_continuationAction);
+                return;
+            }
+            FinishHostContinuation({_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded,
+                                    _hostBatchFailed ? (FAILED(_hostBatchError) ? _hostBatchError : E_FAIL) : S_OK});
             return;
         case HostStage::Complete:
             FinishHostContinuation({HostOutcome::Succeeded, S_OK});
@@ -467,7 +480,12 @@ void Application::CancelHostContinuations() noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_projectSaveTicket)
+        if (_projectOpenTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_projectOpenTicket.value());
+        }
+        else if (_projectSaveTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_projectSaveTicket.value());

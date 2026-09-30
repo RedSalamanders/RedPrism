@@ -577,7 +577,9 @@ void PublishExternalOwnerReady(void* context) noexcept
 void TestExternalOwnerReadinessAndCallbackReentrancy()
 {
     JobScheduler scheduler;
-    Expect(scheduler.Initialize(1) == S_OK, "external-owner.initialize");
+    // OS high/low-memory events legitimately request unrelated owner work. Isolate this readiness state machine
+    // from those asynchronous notifications, then exercise an explicit memory wake separately below.
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK, "external-owner.initialize");
     auto callbackDone = Event();
     ExternalOwnerState state;
     state.scheduler = &scheduler;
@@ -586,6 +588,11 @@ void TestExternalOwnerReadinessAndCallbackReentrancy()
     state.replacement = &replacement;
     Expect(scheduler.RegisterOwnerWork(source), "external-owner.register");
     Expect(!scheduler.IsIdle() && !scheduler.HasUiWork(), "external-owner.pending-is-idle-blocker-not-ui-work");
+    scheduler.NotifyMemoryChanged();
+    Expect(scheduler.HasUiWork() && state.pumps.load() == 0, "external-owner.memory-wake-is-separate-ready-work");
+    (void)DrainCompletions(scheduler);
+    Expect(!scheduler.IsIdle() && !scheduler.HasUiWork() && state.pumps.load() == 0,
+           "external-owner.memory-drain-does-not-pump-unready-source");
 
     auto signal = Event();
     JobEventTicket waitTicket;

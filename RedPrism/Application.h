@@ -17,6 +17,7 @@
 #include "Jobs.h"
 #include "PathClassificationWork.h"
 #include "PreviewMailbox.h"
+#include "ProjectStore.h"
 #include "Prompts.h"
 #include "Renderer.h"
 #include "SettingsStore.h"
@@ -44,6 +45,7 @@ struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct FileWorkTestGate;
 struct ProjectSaveTestGate;
+struct ProjectOpenTestGate;
 struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
@@ -302,6 +304,11 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartPathClassification(const HostPathsInput& input) noexcept;
     [[nodiscard]] bool HostPathIsProject(std::size_t index) const noexcept;
     int RunPathClassificationSelfTest() noexcept;
+    class ProjectOpenJob;
+    [[nodiscard]] HRESULT StartProjectOpen(const std::wstring& path) noexcept;
+    [[nodiscard]] HRESULT SubmitProjectOpen(HistoryWorkStamp stamp, std::uint64_t generation, std::wstring path,
+                                            std::optional<ProjectLoadLimits> limits) noexcept;
+    int RunProjectOpenSelfTest() noexcept;
     [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
     [[nodiscard]] HRESULT SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept;
     [[nodiscard]] HRESULT WriteHostOutput(HostWriteFormat format) noexcept;
@@ -489,7 +496,6 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool HonorsPointerLoss() const noexcept;
     // `dropPoint`: where a drop landed on the canvas, in document pixels; images added as layers center on it.
     void OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint = std::nullopt) noexcept;
-    [[nodiscard]] bool OpenProjectPath(const wchar_t* path) noexcept;
     void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
     void ImportImages() noexcept;
     void CloseProject() noexcept;
@@ -588,6 +594,9 @@ class Application final : public ChromeEvents
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;
     std::shared_ptr<FileWorkTestGate> _fileWorkTestGate;
+    std::optional<HistoryWorkStamp> _projectOpenStamp;
+    std::optional<JobTicket> _projectOpenTicket;
+    std::shared_ptr<ProjectOpenTestGate> _projectOpenTestGate;
     std::optional<HistoryWorkStamp> _projectSaveStamp;
     std::optional<JobTicket> _projectSaveTicket;
     std::shared_ptr<ProjectSaveTestGate> _projectSaveTestGate;
@@ -607,6 +616,7 @@ class Application final : public ChromeEvents
         Settle,
         Write,
         Execute,
+        FileComplete,
         Complete
     };
     HostStage _hostStage = HostStage::Begin;
@@ -618,6 +628,7 @@ class Application final : public ChromeEvents
     bool _hostSaveBeforeAction = false;
     bool _hostWriteInFlight = false;
     bool _hostBatchFailed = false;
+    std::int32_t _hostBatchError = S_OK;
     bool _hostExecuting = false; // only the selected runner can enter an already approved action
     HRESULT _hostExecutionError = S_OK;
     std::uint64_t _sizeInvocation = 0;

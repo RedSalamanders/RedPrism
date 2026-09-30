@@ -261,6 +261,42 @@ void TestSelectedRequestContinuesBeforeYoungerInput()
     }
 }
 
+void TestValidatedReplacementContinuation()
+{
+    HistoryWork history;
+    const auto ordinal = history.NextOrdinal();
+    const auto first = ordinal ? history.Begin(40, ordinal.value(), HistoryWorkKind::Commit) : std::nullopt;
+    if (!first)
+    {
+        Expect(false, "replacement-first-acquisition");
+        return;
+    }
+    auto wrong = first.value();
+    ++wrong.acquisition;
+    Expect(!history.FinishReplacement(wrong, 41) && history.IsCurrent(first.value()),
+           "replacement-wrong-acquisition-retains-barrier");
+    Expect(!history.FinishReplacement(first.value(), 0) && history.IsCurrent(first.value()),
+           "replacement-zero-lineage-retains-barrier");
+    Expect(!history.FinishReplacement(first.value(), 40) && history.IsCurrent(first.value()),
+           "replacement-same-lineage-retains-barrier");
+    Expect(history.FinishReplacement(first.value(), 41), "replacement-valid-owner-finishes");
+    Expect(!history.Continue(first.value(), 40, HistoryWorkKind::Commit), "replacement-old-lineage-refused");
+    Expect(!history.Continue(first.value(), 42, HistoryWorkKind::Commit), "replacement-external-lineage-refused");
+    Expect(!history.Continue(wrong, 41, HistoryWorkKind::Commit), "replacement-exact-finished-stamp-required");
+    const auto second = history.Continue(first.value(), 41, HistoryWorkKind::Commit);
+    Expect(second && second.value().ordinal == ordinal.value() &&
+               second.value().acquisition != first.value().acquisition,
+           "replacement-continues-same-input-with-new-acquisition");
+    if (!second)
+        return;
+    Expect(!history.FinishReplacement(first.value(), 42) && history.IsCurrent(second.value()),
+           "replacement-late-first-completion-cannot-release-second");
+    Expect(history.Finish(second.value()), "replacement-second-finishes");
+    Expect(!history.Continue(second.value(), 42, HistoryWorkKind::Commit),
+           "replacement-authorization-does-not-leak-to-later-stage");
+    const auto third = history.Continue(second.value(), 41, HistoryWorkKind::Commit);
+    Expect(third && history.Finish(third.value()), "replacement-ordinary-stage-retains-current-lineage");
+}
 } // namespace
 
 int RunHistoryWorkHostTests()
@@ -270,5 +306,6 @@ int RunHistoryWorkHostTests()
     TestStampAndCancellation();
     TestStrokeLifecycleAndQueueOrdering();
     TestSelectedRequestContinuesBeforeYoungerInput();
+    TestValidatedReplacementContinuation();
     return gFailures;
 }

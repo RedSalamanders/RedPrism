@@ -1,7 +1,7 @@
 # Project format (`.prism`)
 
 Status: current normative product contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `Common/ProjectStore.*`, `Common/ZipOwner.h`
 
 ## Scope
@@ -106,8 +106,27 @@ identity/content. Accepted PNG conversions, schema, ordered attachment and seman
 `ProjectLoadMetadataMemoryBytes` / `ProjectLoadMemoryBytes` declare separate metadata-probe and complete decode
 peaks. The metadata allowance includes manifest bytes, parser/string copies, record/vector growth, curve copies
 and validation. Decode adds bounded rounded outputs, transient thumbnails and one maximum encoded ZIP buffer.
-Opaque codec/library allocations remain in process admission headroom. Host activation and its real-loop tests
-remain F3b.3; these helpers alone do not move interactive open off the UI.
+Opaque codec/library allocations remain in process admission headroom.
+
+### Production project open (P1.7 F3b.3a)
+
+Interactive project open runs the probe and capped decode as separate Io jobs under one selected host input and
+history barrier. The path is copied and resolved lexically at admission. Filesystem inspection, manifest parsing,
+PNG header reads, WIC decoding, asset attachment and eager semantic mask thumbnails run on workers. Probe-owned
+metadata and file/library handles retire on its worker; only the small limits/version values reach completion.
+The decode reservation is declared before submitting the second job. FIFO Io serialization prevents decoding
+before the probe job retires; both reservation charges can coexist during submission. A refused second admission
+fails locally and leaves the current document intact.
+
+Completion validates the exact acquisition, selected ordinal, document serial and generation before replacement.
+Only a validated replacement may rebind the selected batch to the new session serial and authorize its next
+acquisition. An external replacement, including reused persisted IDs, or another generation change drops the
+result. Cancellation retains the input, receipt, barrier and reservation until acknowledgement and suppresses
+later files. Ordinary failure preserves the current document and continues later project paths; the batch retains
+the first failing HRESULT even if a later load succeeds. Each failed file posts one localized notice. Unsupported
+version formatting runs in the posted notice handler using the file's version, including zero, outside completion.
+Successful replacement resets history/targets and uses the captured path and Fit policy. Owner replacement,
+chrome preparation and uploads remain measured P1.9 costs; worker migration alone does not establish G1.
 
 ## Layer record
 
@@ -188,8 +207,8 @@ records the captured path and marks only the captured revision saved; a later ed
 Publication followed by cancellation still records the external file and captured saved revision, but cancellation
 suppresses a dependent close/replacement. Cancellation before publication and failed publication preserve the old
 destination and document path/revision. Returned failure and worker `bad_alloc` fail the receipt and show the save
-notice. A stale lineage cannot update the path or saved revision. Project open, image import and clipboard processing remain synchronous pending
-their later P1.7 slices.
+notice. A stale lineage cannot update the path or saved revision. Image import and clipboard processing remain
+synchronous pending their later P1.7 slices.
 
 Preflight declares one whole-graph peak before owning job construction; submission reserves it before any worker
 decode/encode or staged output allocation. The resolved path and worker object are

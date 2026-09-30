@@ -836,7 +836,7 @@ a folder, and Save As with the folder filter writes a folder.
 Ordered file batches, complete size drafts and layer/tool inputs retain their event-time arguments until execution.
 They share the eight-entry pending ring plus one active request and 1 MiB combined host-input budget. A refused
 input reports the busy/budget notice; earlier entries keep their order. View and chrome input remain available
-while color commits or project saves run. The write stage first settles typed opacity and live canvas edits under
+while color commits, project opens or project saves run. The write stage first settles typed opacity and live canvas edits under
 the selected ordinal; a settled write changes chrome without forcing a new document composition. A project save snapshots the settled document, active layer, output path
 and exact history revision before submission; edits and view input cannot change the saved snapshot. Only checked
 publication updates the document path and marks that captured revision saved. Cancellation before publication
@@ -848,7 +848,13 @@ quality and resolution, reads the committed whole document asynchronously and re
 and utility GPU targets before worker encoding. Later device changes cannot repeat encoding/publication.
 Export never changes the project path or saved revision. Cancellation before publication preserves the destination;
 after publication the receipt can be cancelled while the written file remains. Failure posts one localized notice.
-Project open, image import, clipboard, wand/clone and other readback callers remain later P1.7/P1 work.
+Project opening probes metadata and decodes on workers under the same selected input. A failed file leaves the
+current document intact and the batch continues; the final receipt retains its first failure. Cancellation keeps
+ownership through acknowledgement and suppresses later files. A current successful replacement alone may bind
+the remaining batch to its new session lineage. An unrelated replacement drops the result, including when IDs
+are reused. Load failures post one localized notice per failed file; unsupported versions, including zero, are
+formatted from the posted payload when the notice is delivered. Image import, clipboard, wand/clone and other
+readback callers remain later P1.7/P1 work.
 
 When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
 work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")

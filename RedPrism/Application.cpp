@@ -2204,6 +2204,8 @@ int Application::RunSelfTest() noexcept
     {
         return classification;
     }
+    if (const int opened = RunProjectOpenSelfTest(); opened != 0)
+        return opened;
     if (const int projectSave = RunProjectSaveSelfTest(); projectSave != 0)
         return projectSave;
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)
@@ -4853,7 +4855,8 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         CloseMainWindow();
         return 0;
     case kNoticeMessage:
-        if (_prompts->ShowNotice(_chrome.get(), LoadStringResource(nullptr, static_cast<UINT>(wParam))))
+        if (_prompts->ShowNotice(_chrome.get(),
+                                 FormatPostedNotice(static_cast<UINT>(wParam), static_cast<int>(lParam))))
         {
             _frameInvalidated = true;
         }
