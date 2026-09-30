@@ -257,6 +257,7 @@ struct AdjustInspectorState
     bool limitedToSelection = false;
     bool editsAdjustment = false;
     bool previewFailed = false; // Content-Aware Fill found nothing to copy from: OK waits, the note says so
+    bool busy = false;
     [[nodiscard]] bool operator==(const AdjustInspectorState&) const noexcept = default;
 };
 
@@ -513,6 +514,27 @@ class ChromeHost final : public CommandIds
     [[nodiscard]] std::wstring AdjustRadiusTextForTest() const;
     [[nodiscard]] bool FocusSizeUnitForTest() noexcept;
     [[nodiscard]] D2D1_RECT_F SpectrumBoundsDipForTest() const noexcept;
+    enum class AdjustControlForTest : std::uint8_t
+    {
+        Curves,
+        LevelsInput,
+        Spectrum,
+        LevelsAutoContrast,
+        Apply,
+        Cancel,
+        HueRange,
+        CurveRemove,
+    };
+    [[nodiscard]] const AdjustInspectorState& AdjustInspectorForTest() const noexcept
+    {
+        return _adjustInspector;
+    }
+    [[nodiscard]] D2D1_RECT_F AdjustControlBoundsForTest(AdjustControlForTest control) const noexcept;
+    [[nodiscard]] bool AdjustControlEnabledForTest(AdjustControlForTest control) const noexcept;
+    [[nodiscard]] std::uint64_t AdjustCallbackCountForTest() const noexcept
+    {
+        return _adjustCallbacksForTest;
+    }
     [[nodiscard]] bool JobProgressVisible() const noexcept;
     [[nodiscard]] bool JobProgressIndeterminate() const noexcept;
     [[nodiscard]] std::optional<unsigned> JobProgressPercent() const noexcept;
@@ -1282,6 +1304,7 @@ class ChromeHost final : public CommandIds
     DxUi::Button* _adjustCancel = nullptr;
     DxUi::Button* _adjustApply = nullptr;
     AdjustInspectorState _adjustInspector;
+    std::uint64_t _adjustCallbacksForTest = 0;
     // ChromeHostSize.cpp: the size cards.
     void BuildSizeCard(DxUi::Panel& root);
     void ArrangeSizeCard(float right, float top, float bottom) noexcept;
@@ -1367,7 +1390,12 @@ template <typename Action> void ChromeHost::Report(Action action, double value) 
     }
     else if constexpr (std::is_same_v<Action, AdjustAction>)
     {
+        if (_adjustInspector.busy && action != AdjustAction::Cancel)
+        {
+            return; // disabling a focused stepper can deliver a late focus-loss commit
+        }
         _resync |= kResyncAdjust;
+        ++_adjustCallbacksForTest;
         _events.OnAdjustAction(action, value);
     }
     else

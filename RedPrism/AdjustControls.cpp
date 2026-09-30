@@ -175,6 +175,13 @@ void CurveEditor::Paint(DxUi::ControlHost& host) const
         dc->FillEllipse(ellipse, _selected == index ? accent : plain);
         dc->DrawEllipse(ellipse, line, 1.0f);
     }
+    if (!IsEnabled())
+    {
+        D2D1_COLOR_F veil = theme.cardBackground;
+        veil.a = 0.55f;
+        dc->FillRectangle(bounds, host.GetSolidBrush(veil));
+        dc->DrawRectangle(bounds, host.GetSolidBrush(theme.disabledText), 1.0f);
+    }
 }
 
 bool CurveEditor::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT)
@@ -381,6 +388,13 @@ void LevelsBar::Paint(DxUi::ControlHost& host) const
         FillTriangle(dc, x, graphBottom + 3.0f, kHandleHalfDip - 1.0f, kHandleRowDip - 6.0f, host.GetSolidBrush(color),
                      stroke);
     }
+    if (!IsEnabled())
+    {
+        D2D1_COLOR_F veil = theme.cardBackground;
+        veil.a = 0.55f;
+        dc->FillRectangle(bounds, host.GetSolidBrush(veil));
+        dc->DrawRectangle(bounds, host.GetSolidBrush(theme.disabledText), 1.0f);
+    }
 }
 
 bool LevelsBar::OnMouseDown(DxUi::ControlHost& host, D2D1_POINT_2F point, bool rightButton, UINT)
@@ -493,6 +507,13 @@ void SpectrumEditor::Paint(DxUi::ControlHost& host) const
                                        : D2D1::RectF(x - 3.5f, (handleTop + handleBottom) / 2 - 2.5f, x + 3.5f,
                                                      (handleTop + handleBottom) / 2 + 2.5f);
         dc->FillRectangle(rect, mark);
+    }
+    if (!IsEnabled())
+    {
+        D2D1_COLOR_F veil = host.GetTheme().cardBackground;
+        veil.a = 0.55f;
+        dc->FillRectangle(bounds, host.GetSolidBrush(veil));
+        dc->DrawRectangle(bounds, host.GetSolidBrush(host.GetTheme().disabledText), 1.0f);
     }
 }
 

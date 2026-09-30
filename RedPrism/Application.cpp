@@ -2116,6 +2116,14 @@ int Application::RunSelfTest() noexcept
     {
         return colorJobs;
     }
+    if (const int adjustBusy = RunAdjustBusySelfTest(); adjustBusy != 0)
+    {
+        return adjustBusy;
+    }
+    if (const int colorCommit = RunColorCommitSelfTest(); colorCommit != 0)
+    {
+        return colorCommit;
+    }
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {

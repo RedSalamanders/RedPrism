@@ -255,7 +255,7 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
 
 void Application::ApplyColorEdit() noexcept
 {
-    if (!_session.HasColorEdit())
+    if (ColorCommitBusy() || !_session.HasColorEdit())
     {
         return;
     }
@@ -274,6 +274,7 @@ void Application::ApplyColorEdit() noexcept
 
 void Application::CancelColorEdit() noexcept
 {
+    CancelColorCommit();
     if (!_session.HasColorEdit())
     {
         return;
@@ -285,6 +286,10 @@ void Application::CancelColorEdit() noexcept
 
 void Application::OnAdjustAction(AdjustAction action, double value) noexcept
 {
+    if (ColorCommitBusy() && action != AdjustAction::Cancel)
+    {
+        return;
+    }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
     if (!std::isfinite(value) || !edit.has_value())
     {
@@ -461,6 +466,10 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
 
 void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
 {
+    if (ColorCommitBusy())
+    {
+        return;
+    }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
     if (!edit.has_value() || edit->kind != FilterKind::Curves)
     {
@@ -478,6 +487,10 @@ void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
 
 void Application::OnBandChanged(int index, double degrees) noexcept
 {
+    if (ColorCommitBusy())
+    {
+        return;
+    }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
     if (!edit.has_value() || edit->kind != FilterKind::HueSaturation || !std::isfinite(degrees))
     {
@@ -494,6 +507,10 @@ void Application::OnBandChanged(int index, double degrees) noexcept
 
 void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept
 {
+    if (ColorCommitBusy())
+    {
+        return;
+    }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
     if (!edit.has_value() || edit->kind != FilterKind::GradientMap)
     {
@@ -524,6 +541,7 @@ void Application::SyncAdjustPanel() noexcept
         return;
     }
     AdjustInspectorState state;
+    state.busy = ColorCommitBusy();
     state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
     if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value())
     {
@@ -547,6 +565,10 @@ void Application::SyncAdjustPanel() noexcept
 
 bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept
 {
+    if (ColorCommitBusy())
+    {
+        return false;
+    }
     const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
     if (!edit.has_value())
     {
@@ -806,5 +828,254 @@ int Application::RunAdjustSelfTest() noexcept
         }
     }
     OnTool(EditorTool::Move);
+    return 0;
+}
+
+int Application::RunAdjustBusySelfTest() noexcept
+{
+    if (!_chrome || !_window)
+    {
+        SelfTestFailure(L"The adjustment busy self-test needs the chrome and the window.\n");
+        return 5;
+    }
+    const auto fail = [](const std::wstring& message) noexcept
+    {
+        SelfTestFailure(message.c_str());
+        return 5;
+    };
+    const auto settle = [this]() noexcept
+    {
+        (void)_chrome->AdvanceAnimation(GetTickCount64());
+        SyncChrome();
+        (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
+    };
+    const auto prepare = [this]() noexcept
+    {
+        RECT client{};
+        if (!GetClientRect(_window.get(), &client))
+        {
+            return false;
+        }
+        return SUCCEEDED(_chrome->Prepare(static_cast<UINT>(client.right - client.left),
+                                          static_cast<UINT>(client.bottom - client.top),
+                                          static_cast<float>(GetDpiForWindow(_window.get()))));
+    };
+    const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
+    const auto cancelCapture = [&](int command, ChromeHost::AdjustControlForTest control) noexcept
+    {
+        if (!BeginColorEdit(command))
+        {
+            return false;
+        }
+        if (command == ChromeHost::kCommandHueSaturation)
+        {
+            OnAdjustAction(AdjustAction::SetRange, 1.0);
+        }
+        settle();
+        const D2D1_RECT_F bounds = _chrome->AdjustControlBoundsForTest(control);
+        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top ||
+            !_chrome->AdjustControlEnabledForTest(control))
+        {
+            CancelColorEdit();
+            return false;
+        }
+        const float x = (bounds.left + bounds.right) * 0.5f;
+        float y = (bounds.top + bounds.bottom) * 0.5f;
+        if (control == ChromeHost::AdjustControlForTest::LevelsInput)
+        {
+            y = bounds.bottom - 7.0f;
+        }
+        else if (control == ChromeHost::AdjustControlForTest::Spectrum)
+        {
+            for (float candidate = bounds.top; candidate < bounds.bottom; candidate += 0.25f)
+            {
+                if (SpectrumEditor::HandleStripContainsDip(bounds, D2D1::Point2F(x, candidate)))
+                {
+                    y = candidate;
+                    break;
+                }
+            }
+        }
+        const auto dispatch = [&](DxUi::PointerAction action, float px) noexcept
+        {
+            DxUi::PointerEvent event{};
+            event.action = action;
+            event.xPixels = px * scale;
+            event.yPixels = y * scale;
+            (void)_chrome->DispatchPointer(event);
+        };
+        const std::uint64_t before = _chrome->AdjustCallbackCountForTest();
+        dispatch(DxUi::PointerAction::Down, x);
+        dispatch(DxUi::PointerAction::Move, x + 12.0f);
+        const std::uint64_t captured = _chrome->AdjustCallbackCountForTest();
+        AdjustInspectorState busy = _chrome->AdjustInspectorForTest();
+        busy.busy = true;
+        _chrome->SetAdjustInspector(busy);
+        const std::uint64_t transition = _chrome->AdjustCallbackCountForTest();
+        dispatch(DxUi::PointerAction::Move, x + 24.0f);
+        const std::uint64_t beforePrepare = _chrome->AdjustCallbackCountForTest();
+        const bool prepared = prepare();
+        dispatch(DxUi::PointerAction::Move, x + 32.0f);
+        dispatch(DxUi::PointerAction::Up, x + 32.0f);
+        const std::uint64_t afterPrepare = _chrome->AdjustCallbackCountForTest();
+        const bool silent = captured > before && transition == captured && beforePrepare == transition &&
+                            afterPrepare == transition && prepared && !_chrome->AdjustControlEnabledForTest(control) &&
+                            !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::Apply) &&
+                            _chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::Cancel);
+        busy.busy = false;
+        _chrome->SetAdjustInspector(busy);
+        const bool restored = _chrome->AdjustControlEnabledForTest(control) && prepare();
+        const std::uint64_t freshBefore = _chrome->AdjustCallbackCountForTest();
+        float freshX = x;
+        if (control == ChromeHost::AdjustControlForTest::LevelsInput)
+        {
+            // The first drag moved gamma away from the original press. Levels captures only near a handle.
+            const LevelRange range = Adjust::LevelsCurrent(_chrome->AdjustInspectorForTest().levels);
+            const double position = range.black + (range.white - range.black) * std::pow(0.5, range.gamma);
+            freshX = bounds.left + (bounds.right - bounds.left) * static_cast<float>(position / 255.0);
+        }
+        dispatch(DxUi::PointerAction::Down, freshX);
+        dispatch(DxUi::PointerAction::Move, freshX + 18.0f);
+        dispatch(DxUi::PointerAction::Up, freshX + 18.0f);
+        const bool freshWorks = _chrome->AdjustCallbackCountForTest() > freshBefore;
+        if (!silent || !restored || !freshWorks)
+        {
+            SelfTestFailure(std::format(L"Busy control {}: callbacks {} -> {} -> {} -> {} -> {}, fresh {} -> {}, "
+                                        L"prepared {}, silent {}, restored {}, bounds {:.1f},{:.1f},{:.1f},{:.1f}.\n",
+                                        static_cast<int>(control), before, captured, transition, beforePrepare,
+                                        afterPrepare, freshBefore, _chrome->AdjustCallbackCountForTest(), prepared,
+                                        silent, restored, bounds.left, bounds.top, bounds.right, bounds.bottom));
+        }
+        CancelColorEdit();
+        _chrome->SetCanvasFocused(true);
+        settle();
+        return silent && restored && freshWorks;
+    };
+
+    const bool curves = cancelCapture(ChromeHost::kCommandCurves, ChromeHost::AdjustControlForTest::Curves);
+    const bool levels = cancelCapture(ChromeHost::kCommandLevels, ChromeHost::AdjustControlForTest::LevelsInput);
+    const bool spectrum = cancelCapture(ChromeHost::kCommandHueSaturation, ChromeHost::AdjustControlForTest::Spectrum);
+    if (!curves || !levels || !spectrum)
+    {
+        return fail(std::format(L"Busy failed to cancel captured adjustment input before and after Prepare "
+                                L"(Curves {}, Levels {}, Spectrum {}).\n",
+                                curves, levels, spectrum));
+    }
+
+    // Busy follows the stepper's existing focus-loss rule: a partial decimal commits its parsed value.
+    // Completed decimals keep their exact display, and no late focus-loss callback may change frozen settings.
+    if (!BeginColorEdit(ChromeHost::kCommandGaussianBlur))
+    {
+        return fail(L"Gaussian Blur did not open for the busy decimal check.\n");
+    }
+    settle();
+    if (!_chrome->FocusAdjustRadiusForTest())
+    {
+        CancelColorEdit();
+        return fail(L"Gaussian Blur could not focus Radius for the busy decimal check.\n");
+    }
+    (void)_chrome->DispatchCharacter(L'2', 0);
+    (void)_chrome->DispatchCharacter(L'.', 0);
+    AdjustInspectorState inspector = _chrome->AdjustInspectorForTest();
+    const bool partialBefore = _chrome->AdjustRadiusTextForTest() == L"2.";
+    const auto callbacksBeforeBusy = _chrome->AdjustCallbackCountForTest();
+    inspector.busy = true;
+    _chrome->SetAdjustInspector(inspector);
+    const bool preparedDecimal = prepare();
+    const std::wstring busyText = _chrome->AdjustRadiusTextForTest();
+    const bool partialBusy = preparedDecimal && busyText == L"2.0" &&
+                             _chrome->AdjustCallbackCountForTest() == callbacksBeforeBusy &&
+                             _session.PendingColorEdit()->settings.radius == 2;
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool partialAfter = _chrome->AdjustRadiusTextForTest() == L"2.0";
+    if (!partialBefore || !partialBusy || !partialAfter)
+    {
+        return fail(std::format(
+            L"Busy violated the decimal/focus-loss contract (before {}, during {} '{}', restored {} '{}').\n",
+            partialBefore, partialBusy, busyText, partialAfter, _chrome->AdjustRadiusTextForTest()));
+    }
+    if (!prepare() || !_chrome->FocusAdjustRadiusForTest())
+    {
+        return fail(L"The restored Radius field could not accept a fresh decimal.\n");
+    }
+    (void)_chrome->DispatchCharacter(L'2', 0);
+    (void)_chrome->DispatchCharacter(L'.', 0);
+    (void)_chrome->DispatchCharacter(L'5', 0);
+    inspector = _chrome->AdjustInspectorForTest();
+    inspector.busy = true;
+    _chrome->SetAdjustInspector(inspector);
+    const auto decimalCallbacks = _chrome->AdjustCallbackCountForTest();
+    const bool keptDecimal = prepare() && _chrome->AdjustRadiusTextForTest() == L"2.5" &&
+                             _chrome->AdjustCallbackCountForTest() == decimalCallbacks &&
+                             _session.PendingColorEdit()->settings.radius == 2.5;
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool restoredDecimal = _chrome->AdjustRadiusTextForTest() == L"2.5";
+    const std::wstring restoredText = _chrome->AdjustRadiusTextForTest();
+    const double restoredValue = _session.PendingColorEdit()->settings.radius;
+    CancelColorEdit();
+    if (!keptDecimal || !restoredDecimal)
+    {
+        return fail(std::format(L"Busy changed a complete decimal or delivered a late callback (kept {}, restored {}, "
+                                L"text '{}', value {}).\n",
+                                keptDecimal, restoredDecimal, restoredText, restoredValue));
+    }
+
+    if (!BeginColorEdit(ChromeHost::kCommandLevels))
+    {
+        return fail(L"Levels did not open for the histogram prerequisite check.\n");
+    }
+    inspector = _chrome->AdjustInspectorForTest();
+    inspector.histogramReady = false;
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool idlePrerequisite =
+        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    inspector.busy = true;
+    _chrome->SetAdjustInspector(inspector);
+    const bool busyPrerequisite =
+        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool restoredPrerequisite =
+        !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
+    CancelColorEdit();
+    if (!idlePrerequisite || !busyPrerequisite || !restoredPrerequisite)
+    {
+        return fail(std::format(L"Levels lost its histogram prerequisite (idle {}, busy {}, restored {}).\n",
+                                idlePrerequisite, busyPrerequisite, restoredPrerequisite));
+    }
+    if (!BeginColorEdit(ChromeHost::kCommandHueSaturation))
+    {
+        return fail(L"Hue/Saturation did not open for the colorize prerequisite check.\n");
+    }
+    OnAdjustAction(AdjustAction::SetColorize, 1);
+    inspector = _chrome->AdjustInspectorForTest();
+    inspector.busy = true;
+    _chrome->SetAdjustInspector(inspector);
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool rangeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::HueRange);
+    CancelColorEdit();
+    if (!rangeDisabled)
+    {
+        return fail(L"Leaving busy enabled a Hue/Saturation range disabled by Colorize.\n");
+    }
+    if (!BeginColorEdit(ChromeHost::kCommandCurves))
+    {
+        return fail(L"Curves did not open for the endpoint prerequisite check.\n");
+    }
+    inspector = _chrome->AdjustInspectorForTest();
+    inspector.busy = true;
+    _chrome->SetAdjustInspector(inspector);
+    inspector.busy = false;
+    _chrome->SetAdjustInspector(inspector);
+    const bool removeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::CurveRemove);
+    CancelColorEdit();
+    if (!removeDisabled)
+    {
+        return fail(L"Leaving busy enabled Curves removal without an interior selected point.\n");
+    }
     return 0;
 }

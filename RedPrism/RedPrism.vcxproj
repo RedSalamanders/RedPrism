@@ -126,6 +126,7 @@
     <ClInclude Include="..\Common\ZipOwner.h" />
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
+    <ClInclude Include="ColorWorkTestGate.h" />
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
@@ -183,6 +184,7 @@
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />
+    <ClCompile Include="ApplicationCommitJobs.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />

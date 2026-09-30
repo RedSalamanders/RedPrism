@@ -73,6 +73,63 @@ D2D1_RECT_F ChromeHost::SpectrumBoundsDipForTest() const noexcept
     return AdjustPanelOpen() && _spectrum != nullptr && _spectrum->IsVisible() ? _spectrum->GetBounds() : D2D1::RectF();
 }
 
+D2D1_RECT_F ChromeHost::AdjustControlBoundsForTest(AdjustControlForTest control) const noexcept
+{
+    const DxUi::Control* selected = nullptr;
+    switch (control)
+    {
+    case AdjustControlForTest::Curves:
+        selected = _curveEditor;
+        break;
+    case AdjustControlForTest::LevelsInput:
+        selected = _levelsInput;
+        break;
+    case AdjustControlForTest::Spectrum:
+        selected = _spectrum;
+        break;
+    case AdjustControlForTest::LevelsAutoContrast:
+        selected = _levelsAuto[0];
+        break;
+    case AdjustControlForTest::Apply:
+        selected = _adjustApply;
+        break;
+    case AdjustControlForTest::Cancel:
+        selected = _adjustCancel;
+        break;
+    case AdjustControlForTest::HueRange:
+        selected = _hueRange;
+        break;
+    case AdjustControlForTest::CurveRemove:
+        selected = _curveRemove;
+        break;
+    }
+    return AdjustPanelOpen() && selected != nullptr && selected->IsVisible() ? selected->GetBounds() : D2D1::RectF();
+}
+
+bool ChromeHost::AdjustControlEnabledForTest(AdjustControlForTest control) const noexcept
+{
+    switch (control)
+    {
+    case AdjustControlForTest::Curves:
+        return _curveEditor != nullptr && _curveEditor->IsEnabled();
+    case AdjustControlForTest::LevelsInput:
+        return _levelsInput != nullptr && _levelsInput->IsEnabled();
+    case AdjustControlForTest::Spectrum:
+        return _spectrum != nullptr && _spectrum->IsEnabled();
+    case AdjustControlForTest::LevelsAutoContrast:
+        return _levelsAuto[0] != nullptr && _levelsAuto[0]->IsEnabled();
+    case AdjustControlForTest::Apply:
+        return _adjustApply != nullptr && _adjustApply->IsEnabled();
+    case AdjustControlForTest::Cancel:
+        return _adjustCancel != nullptr && _adjustCancel->IsEnabled();
+    case AdjustControlForTest::HueRange:
+        return _hueRange != nullptr && _hueRange->IsEnabled();
+    case AdjustControlForTest::CurveRemove:
+        return _curveRemove != nullptr && _curveRemove->IsEnabled();
+    }
+    return false;
+}
+
 bool ChromeHost::FilterOptionsVisible() const noexcept
 {
     if (!AdjustPanelOpen() || !_adjustInspector.filter.has_value() || _adjustInspector.filter == FilterKind::Levels ||
@@ -171,9 +228,10 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _curveEditor->SetOnChange(
         [this](std::vector<CurvePoint> points)
         {
-            if (!_syncing)
+            if (!_syncing && !_adjustInspector.busy)
             {
                 _resync |= kResyncAdjust; // the editor shows the user's curve: the next push writes it back
+                ++_adjustCallbacksForTest;
                 _events.OnCurveChanged(std::move(points));
             }
         });
@@ -196,11 +254,12 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _levelsInput->SetOnHandle(
         [this](int handle, double value)
         {
-            if (_syncing)
+            if (_syncing || _adjustInspector.busy)
             {
                 return;
             }
             _resync |= kResyncAdjust;
+            ++_adjustCallbacksForTest;
             const LevelRange& range = Adjust::LevelsCurrent(_adjustInspector.levels);
             if (handle == 0)
             {
@@ -271,9 +330,10 @@ void ChromeHost::BuildAdjustPanel(DxUi::Panel& root)
     _spectrum->SetOnHandle(
         [this](int index, double degrees)
         {
-            if (!_syncing)
+            if (!_syncing && !_adjustInspector.busy)
             {
                 _resync |= kResyncAdjust;
+                ++_adjustCallbacksForTest;
                 _events.OnBandChanged(index, degrees);
             }
         });
@@ -528,6 +588,47 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         const bool levels = state.filter == FilterKind::Levels;
         const bool hsv = state.filter == FilterKind::HueSaturation;
         const auto kind = [&](FilterKind which) { return state.filter == which; };
+        const auto enableMutation = [&](DxUi::Control* control, bool prerequisite = true)
+        {
+            const bool enabled = !state.busy && prerequisite;
+            if (control != nullptr && control->IsEnabled() != enabled)
+            {
+                control->SetEnabled(enabled);
+            }
+        };
+        for (AdjustRow& entry : _adjustRows)
+        {
+            enableMutation(entry.slider);
+            enableMutation(entry.stepper);
+        }
+        enableMutation(_adjustChannel);
+        enableMutation(_curveEditor);
+        enableMutation(_curveReset);
+        enableMutation(_levelsInput);
+        enableMutation(_levelsOutput);
+        enableMutation(_levelsBlack);
+        enableMutation(_levelsGamma);
+        enableMutation(_levelsWhite);
+        enableMutation(_levelsOutBlack);
+        enableMutation(_levelsOutWhite);
+        enableMutation(_adjustPreview);
+        enableMutation(_hueTargeting);
+        enableMutation(_spectrum);
+        enableMutation(_hueInvert);
+        enableMutation(_hueColorize);
+        enableMutation(_mapShadows);
+        enableMutation(_mapHighlights);
+        enableMutation(_mapReverse);
+        enableMutation(_noiseDistribution);
+        enableMutation(_noiseMono);
+        for (DxUi::Button* control : _levelsSample)
+        {
+            enableMutation(control);
+        }
+        for (DxUi::Button* control : _hueSample)
+        {
+            enableMutation(control);
+        }
         ShowControl(_adjustChannel, levels || kind(FilterKind::Curves));
         if (levels)
         {
@@ -555,7 +656,7 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
                 SetPressedVisualIfChanged(_levelsSample[static_cast<std::size_t>(index)],
                                           _levelsSamplePressed[static_cast<std::size_t>(index)],
                                           state.levelsSample == index + 1);
-                _levelsAuto[static_cast<std::size_t>(index)]->SetEnabled(state.histogramReady);
+                enableMutation(_levelsAuto[static_cast<std::size_t>(index)], state.histogramReady);
             }
         }
         else if (kind(FilterKind::Curves))
@@ -570,12 +671,12 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
                 _curveCaption->SetText(FormatStringResource(nullptr, IDS_ADJUST_CURVE_POINT,
                                                             static_cast<int>(points[selected.value()].x),
                                                             static_cast<int>(points[selected.value()].y)));
-                _curveRemove->SetEnabled(selected.value() > 0 && selected.value() + 1 < points.size());
+                enableMutation(_curveRemove, selected.value() > 0 && selected.value() + 1 < points.size());
             }
             else
             {
                 _curveCaption->SetText(LoadStringResource(nullptr, IDS_ADJUST_CURVE_HINT));
-                _curveRemove->SetEnabled(false);
+                enableMutation(_curveRemove, false);
             }
         }
         for (DxUi::Control* control :
@@ -612,7 +713,7 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         if (hsv)
         {
             _hueRange->SetSelectedIndex(static_cast<size_t>(state.hsv.range));
-            _hueRange->SetEnabled(!state.hsv.colorize);
+            enableMutation(_hueRange, !state.hsv.colorize);
             const RangeAdjustment& range = Adjust::RangeOf(state.hsv);
             const AdjustRow& hueRow = _adjustRows[static_cast<std::size_t>(AdjustRowId::Hue)];
             const AdjustRow& saturationRow = _adjustRows[static_cast<std::size_t>(AdjustRowId::Saturation)];
@@ -689,7 +790,11 @@ void ChromeHost::SetAdjustInspector(const AdjustInspectorState& state) noexcept
         ShowControl(_adjustNote, state.limitedToSelection && !state.editsAdjustment);
         ShowControl(_adjustCancel, true);
         ShowControl(_adjustApply, true);
-        _adjustApply->SetEnabled(!(kind(FilterKind::ContentAwareFill) && state.previewFailed));
+        if (!_adjustCancel->IsEnabled())
+        {
+            _adjustCancel->SetEnabled(true);
+        }
+        enableMutation(_adjustApply, !(kind(FilterKind::ContentAwareFill) && state.previewFailed));
         if (!wasOpen)
         {
             // Enter and Escape its controls leave are its OK and Cancel; it takes no keyboard when it opens.

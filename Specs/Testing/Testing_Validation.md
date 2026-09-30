@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-30
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -277,6 +277,24 @@ The ETW harness deletes only its own PID-named trace files and leaves the owners
 Skill or `AGENTS.md` edits MUST pass `.\validate-skills.ps1` in the same change.
 
 ## Required local matrix for a closeout
+
+P1.1c.3 preparation adds two hidden WARP checks. The busy-control check uses real attached-host pointer dispatch
+to prove Curves, Levels and Spectrum report while enabled, stop reporting through busy transition and preparation,
+and accept fresh input after restoration. It also checks Cancel/OK enable states, numeric focus-loss behavior,
+completed decimal preservation, suppression of late disabled-field callbacks,
+and the histogram, Colorize and curve-removal prerequisites.
+
+The ordered-commit check gates the actual worker on owned events. It proves no history/pixel change before apply,
+mutation callback/Enter suppression, view input, rejection of a competing ordinal and release only after one
+successful apply. Four gray inputs under Gamma 2 have the independent square-root expectation
+`0, 128, 181, 255`. Cancel after pixels finish cannot close a new panel; stale identity cannot authorize a
+dependent operation; valid identity adds no entry; returned `E_OUTOFMEMORY`, an actual throwing `Job::Run`
+translated by the scheduler's `bad_alloc` catch, and actual donorless fill
+retain their panel/original image and release their barrier. Ten-second bounds detect deadlocks, never gate speed.
+Replacement deliberately reuses persisted document/layer IDs after the old pixels finish and proves session serials
+prevent publication. Adjustment-layer metadata settles once without destructive pixels; a removed target returns
+`Stale` without an engine history entry.
+Production OK/write activation and dependent caller checks remain in P1.1c.3c–d.
 
 ```powershell
 .\validate-skills.ps1

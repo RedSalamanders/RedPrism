@@ -2,6 +2,7 @@
 
 #include "Adjust.h"
 #include "ChromeHost.h"
+#include "ColorWorkTestGate.h"
 #include "resource.h"
 
 #include <array>
@@ -11,22 +12,10 @@
 #include <new>
 #include <utility>
 
-// Test-only gates are owned by each submitted job. They can never outlive their handles, even on a failed
-// harness path; shutdown wakes their wait. Production submissions retain a null gate and never wait here.
-struct ColorWorkTestGate final
+JobResult PassColorWorkTestGate(const std::shared_ptr<ColorWorkTestGate>& gate, ColorWorkTestKind kind,
+                                JobContext& context) noexcept
 {
-    wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    wil::unique_handle computed{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
-    bool histogram = false;
-    std::atomic<unsigned int> visits{0};
-};
-
-namespace
-{
-JobResult PassTestGate(const std::shared_ptr<ColorWorkTestGate>& gate, bool histogram, JobContext& context) noexcept
-{
-    if (!gate || gate->histogram != histogram)
+    if (!gate || gate->kind != kind)
     {
         return {};
     }
@@ -38,9 +27,9 @@ JobResult PassTestGate(const std::shared_ptr<ColorWorkTestGate>& gate, bool hist
     {
         return {JobStatus::Cancelled};
     }
-    return waited == WAIT_OBJECT_0 ? JobResult{} : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+    return waited == WAIT_OBJECT_0 ? gate->releasedResult
+                                   : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
 }
-} // namespace
 
 class Application::ColorPreviewJob final : public Job
 {
@@ -52,12 +41,13 @@ class Application::ColorPreviewJob final : public Job
     }
     JobResult Run(JobContext& context) override
     {
-        if (const auto gate = PassTestGate(_gate, false, context); gate.status != JobStatus::Finished)
+        if (const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
+            gate.status != JobStatus::Finished)
         {
             return gate;
         }
         _result = RunColorEditPreviewJob(_input, context.executor, context.cancellation);
-        if (_gate && !_gate->histogram)
+        if (_gate && _gate->kind == ColorWorkTestKind::Preview)
         {
             (void)SetEvent(_gate->computed.get());
         }
@@ -86,12 +76,13 @@ class Application::ColorHistogramJob final : public Job
     }
     JobResult Run(JobContext& context) override
     {
-        if (const auto gate = PassTestGate(_gate, true, context); gate.status != JobStatus::Finished)
+        if (const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Histogram, context);
+            gate.status != JobStatus::Finished)
         {
             return gate;
         }
         _result = RunColorEditHistogramJob(_input, context.executor, context.cancellation);
-        if (_gate && _gate->histogram)
+        if (_gate && _gate->kind == ColorWorkTestKind::Histogram)
         {
             (void)SetEvent(_gate->computed.get());
         }
@@ -235,6 +226,7 @@ void Application::LaunchColorPreview() noexcept
 
 void Application::CancelColorJobs() noexcept
 {
+    CancelColorCommit();
     (void)_colorPreviews.Close();
     _colorMailboxOpen = false;
     if (_colorPreviewTicket)
@@ -254,6 +246,16 @@ void Application::CancelColorJobs() noexcept
 
 void Application::RefreshColorJobs() noexcept
 {
+    // An admitted commit owns a fixed settings snapshot until its apply/drop. Preview preparation must not
+    // relaunch beneath it. A document replacement requests cancellation, but cannot release its history barrier.
+    if (ColorCommitBusy())
+    {
+        if (_colorCommitStamp->documentSerial != _session.DocumentSerial())
+        {
+            CancelColorCommit();
+        }
+        return;
+    }
     const auto& edit = _session.PendingColorEdit();
     if (_shutdownStarted || !edit || !edit->deferred)
     {
@@ -401,7 +403,7 @@ int Application::RunColorJobsSelfTest() noexcept
     const auto newGate = [&](bool histogram)
     {
         _colorWorkTestGate = std::make_shared<ColorWorkTestGate>();
-        _colorWorkTestGate->histogram = histogram;
+        _colorWorkTestGate->kind = histogram ? ColorWorkTestKind::Histogram : ColorWorkTestKind::Preview;
         return _colorWorkTestGate->entered && _colorWorkTestGate->release && _colorWorkTestGate->computed;
     };
     if (!newGate(true) || !BeginColorEdit(ChromeHost::kCommandLevels) ||

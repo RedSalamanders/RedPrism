@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-09-28
+Last reviewed: 2026-09-30
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -344,6 +344,16 @@ for radius, distance, amount, gamma and grain size, so the small values get most
 `NumericStepper`; typing into one previews live and is never reformatted out from under the typing (the stepper
 stays in its own edit until Enter, a step button or focus loss commits it, the same rule the transform, selection,
 brush, gradient and shape headers use). The drawn controls live in `RedPrism/AdjustControls.*`:
+
+`AdjustInspectorState::busy` freezes mutation controls while preserving Cancel. Disabled drawn editors use the
+theme's disabled colors and stop their captured gestures through the pinned host's input-coherence checks.
+Leaving busy restores the existing prerequisites: Levels Auto requires the opening histogram, Curves Remove
+requires an interior selected point, Hue/Saturation's range remains disabled while Colorize is selected, and a
+donorless fill keeps OK disabled. Busy suppresses late mutation callbacks, including a disabled stepper's focus-loss
+commit. Numeric text follows the existing focus rule: partial text stays while editing, focus loss formats its
+parsed value, and a complete decimal such as `2.5` keeps that value. This control contract is
+prepared by P1.1c.3a; normal OK/write callers retain inline commit until the ordered engine and their owned
+continuations activate together in P1.1c.3c.
 
 - **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
   points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the

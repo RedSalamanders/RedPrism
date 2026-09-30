@@ -10,6 +10,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "HistoryWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
 #include "PreviewMailbox.h"
@@ -246,6 +247,24 @@ class Application final : public ChromeEvents
     void OpenAdjustmentEditor() noexcept;
     [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
     void ApplyColorEdit() noexcept;
+    enum class HostOutcome
+    {
+        Pending,
+        Succeeded,
+        Cancelled,
+        Failed,
+        Stale
+    };
+    class ColorCommitJob;
+    [[nodiscard]] HostOutcome StartColorCommit(std::uint64_t ordinal) noexcept;
+    [[nodiscard]] bool ColorCommitBusy() const noexcept
+    {
+        return _colorCommitStamp.has_value();
+    }
+    void CancelColorCommit() noexcept;
+    void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
+                             JobResult completion) noexcept;
+    int RunColorCommitSelfTest() noexcept;
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
@@ -268,6 +287,7 @@ class Application final : public ChromeEvents
     // The panel's live DxUi controls (review fixes wave 1b, RF-1107): typed decimals, the Gradient Map picker's
     // lifetime, the spectrum's handle strip and the drawn editors in the UI Automation tree.
     int RunAdjustSelfTest() noexcept;
+    int RunAdjustBusySelfTest() noexcept;
     // ApplicationSize.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Size cards"): the New Canvas, Canvas Size and
     // Image Size cards edit a draft the Application owns; Apply resizes as one entry.
     [[nodiscard]] bool SizeCardOpen() const noexcept;
@@ -489,6 +509,10 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     JobScheduler _jobs;
+    HistoryWork _historyWork;
+    std::optional<HistoryWorkStamp> _colorCommitStamp;
+    std::optional<JobTicket> _colorCommitTicket;
+    HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
     PreviewMailbox<ColorEditJobInput> _colorPreviews;
     bool _colorMailboxOpen = false;
     std::uint64_t _colorDocumentSerial = 0;

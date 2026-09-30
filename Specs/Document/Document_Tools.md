@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-09-28
+Last reviewed: 2026-09-30
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
@@ -577,6 +577,31 @@ readback remains the P1.3 migration.
 Destructive OK is still inline until P1.1c.3 migrates ordered commit and every dependent file/close continuation
 together. Earlier tool settlement, commit, GPU composite sampling and other P1 operations remain blocking paths;
 this slice does not establish whole-application G1.
+
+### Ordered commit engine (P1.1c.3 preparation)
+
+`ApplicationCommitJobs.cpp` implements the commit engine used by the event-gated harness. Its production
+activation remains paired with the owned write/discard continuations; normal OK is still inline at this boundary.
+The caller supplies the oldest accepted input's ordinal from the shared `HistoryWork`. Admission acquires that
+barrier before capturing immutable work. `Pending` means this particular ordinal owns an admitted job; a
+competing ordinal cannot attach itself to another request's completion.
+
+The Commit job owns its input, result, cancellation ticket and full graph reservation. Its worker cannot access
+the Application or session. The panel's mutation callbacks freeze through apply/drop; Cancel and view input remain
+available. Preview publication closes before the commit can apply; the independent opening histogram may finish.
+Construction/admission failure releases the barrier and fails the operation. A worker failure retains request
+identity so completion marks the correct panel failed without installing default or partial pixels.
+
+Completion distinguishes `Succeeded`, `Cancelled`, `Failed` and `Stale`. It validates the panel opening,
+settings sequence, document lifetime and complete target before interpreting even `Unchanged` as success.
+Validation, apply/drop and its history transaction precede release of the barrier. Cancel requests cancellation
+and retains the barrier until the old completion drops, including a worker that already finished pixels.
+No failure dialog runs inside completion; feedback uses deferred UI work. These checks qualify the engine,
+not the pending Save/Close/import activation or whole-application responsiveness.
+
+Adjustment-layer settlement uses the same ordinal/barrier but only commits live metadata. A missing target or
+changed adjustment kind returns `Stale`, retains the panel for explicit resolution and records no engine entry.
+It cannot authorize a dependent operation merely because the inline session API could close the panel.
 
 ## Content-aware fill (C13)
 

@@ -70,6 +70,10 @@
     - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
     - [x] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation. Full x64 gates and all ARM64 cross-builds passed.
     - [ ] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
+      - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
+      - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
+      - [ ] P1.1c.3c — Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
+      - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
@@ -206,6 +210,17 @@ coalescing and Cancel/reopen. The UI benchmark also waits for the frame invalida
 owned file/close continuations remain P1.1c.3; no whole-host nonblocking claim is made at this boundary. All three
 x64 test configurations, skill validation, formatting and all ARM64 cross-builds passed. Evidence is in the
 [P1.1c.2 record](../../TestRuns/ColorPanelHost_2026-09-28.md).
+
+P1.1c.3a–b preparation, 2026-09-30: the busy-panel contract and ordered worker engine passed all x64 test
+configurations, skill/format checks and all ARM64 cross-builds. Evidence is in the
+[ordered commit record](../../TestRuns/OrderedColorCommit_2026-09-30.md).
+A cheaper agent supplied bounded embedded-host input tests; the primary reviewed the patch, preserved concurrent
+engine changes, strengthened restored-input/prerequisite checks, and implemented the commit engine and its event
+gates directly. Production OK/write callers remain inline until their owned continuations activate together;
+P1.1c.3 is not complete. No G1 or Photoshop speed claim follows from this preparation.
+The indexed [continuation child plan](ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
+request ownership, staged settlement, caller inventory, repeated history acquisitions and activation gates for
+P1.1c.3c–d. Its later stroke resolution remains integrated with P1.4; it does not claim that replay is implemented.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
