@@ -5,6 +5,8 @@
 #include "CanvasViewport.h"
 #include "Document.h"
 #include "FrameScheduler.h"
+#include "GpuCapabilityTests.h"
+#include "GpuWorkTests.h"
 #include "TransformOverlay.h"
 
 #include <algorithm>
@@ -1943,6 +1945,8 @@ int wmain()
 #endif
     (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
     TestViewport();
+    gFailures += RunGpuCapabilityTests();
+    gFailures += RunGpuWorkTests();
     TestFrameLoop();
     Harness harness;
     if (harness.Ready())

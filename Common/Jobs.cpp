@@ -48,7 +48,9 @@ struct JobScheduler::Impl final
         WaitingAdmission,
         Queued,
         Running,
-        Completed
+        Completed,
+        Suspended,
+        Resuming
     };
     struct Record;
     struct alignas(MEMORY_ALLOCATION_ALIGNMENT) Node final
@@ -61,7 +63,8 @@ struct JobScheduler::Impl final
     struct Record final
     {
         // State, sequence and slot reuse are protected by Impl::lock. The payload/options/cancel source are
-        // immutable from admission through final publication. Only the owner drains/destroys a published job.
+        // immutable during each worker stage. Published stage ownership returns to the owner until Resume;
+        // no worker can re-enter a job while its completion hook is executing.
         State state = State::Empty;
         std::uint64_t generation = 0;
         std::uint64_t sequence = 0;
@@ -115,12 +118,17 @@ struct JobScheduler::Impl final
     UiAction* actionSource = nullptr; // borrowed, owner thread only; registration outlives every callback
     bool sourceReady = false;
     bool preferSource = true;
+    OwnerWorkPump* ownerWork = nullptr; // borrowed, owner thread only
+    std::atomic<bool> ownerNotified{false};
+    bool resumesPending = false; // owner thread; promotes Resuming only outside a completion hook
     alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER completions{};
     alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER releases{};
     wil::unique_handle wake;
     wil::unique_handle shutdown;
     WorkerPool workers;
     WaitPool memoryWaits;
+    bool waitsInitialized = false;
+    std::array<std::uint64_t, WaitPool::kCapacity> eventGenerations{}; // external registrations, owner only
     wil::unique_handle lowMemory;
     wil::unique_handle highMemory;
     WaitPool::Ticket lowWait;
@@ -471,6 +479,30 @@ struct JobScheduler::Impl final
             }
         }
     }
+
+    void PromoteResumed() noexcept
+    {
+        if (!resumesPending)
+        {
+            return;
+        }
+        resumesPending = false;
+        {
+            WorkerResources::ExclusiveLock guard{lock};
+            if (closing)
+            {
+                return;
+            }
+            for (auto& record : records)
+            {
+                if (record.state == State::Resuming)
+                {
+                    record.state = State::Queued;
+                }
+            }
+        }
+        WakeQueued();
+    }
 };
 #pragma warning(pop)
 
@@ -522,6 +554,7 @@ std::int32_t JobScheduler::Initialize(unsigned int threads, JobObserver observer
         else
         {
             result = _impl->memoryWaits.Initialize();
+            _impl->waitsInitialized = SUCCEEDED(result);
         }
         if (SUCCEEDED(result))
         {
@@ -684,6 +717,130 @@ bool JobScheduler::Cancel(JobTicket ticket) noexcept
     return true;
 }
 
+bool JobScheduler::Resume(JobTicket ticket) noexcept
+{
+    if (!_impl || ticket.slot >= kCapacity)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    {
+        WorkerResources::ExclusiveLock guard{self.lock};
+        auto& record = self.records[ticket.slot];
+        if (self.closing || record.state != Impl::State::Suspended || record.generation != ticket.generation)
+        {
+            return false;
+        }
+        record.state = Impl::State::Resuming;
+    }
+    self.resumesPending = true;
+    (void)SetEvent(self.wake.get());
+    return true;
+}
+
+bool JobScheduler::RegisterOwnerWork(OwnerWorkPump& source) noexcept
+{
+    if (!_impl)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.workers.ShutdownToken().stop_requested() || self.ownerWork)
+    {
+        return false;
+    }
+    self.ownerWork = &source;
+    self.ownerNotified.store(false, std::memory_order_relaxed);
+    if (source.HasReady())
+    {
+        (void)SetEvent(self.wake.get());
+    }
+    return true;
+}
+
+bool JobScheduler::UnregisterOwnerWork(OwnerWorkPump& source) noexcept
+{
+    if (!_impl)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.ownerWork != &source || source.HasPending() || source.HasReady())
+    {
+        return false;
+    }
+    self.ownerWork = nullptr;
+    self.ownerNotified.store(false, std::memory_order_relaxed);
+    return true;
+}
+
+void JobScheduler::NotifyOwnerWork() noexcept
+{
+    if (_impl)
+    {
+        // The external producer lifetime excludes Close. Do not read owner-only registration/closing state.
+        _impl->ownerNotified.store(true, std::memory_order_release);
+        (void)SetEvent(_impl->wake.get());
+    }
+}
+
+std::int32_t JobScheduler::RegisterEventWait(void* event, void (*callback)(void*) noexcept, void* context,
+                                             JobEventTicket& ticket) noexcept
+{
+    ticket = {};
+    if (!_impl)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.workers.ShutdownToken().stop_requested())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    if (!self.waitsInitialized)
+    {
+        const HRESULT result = self.memoryWaits.Initialize();
+        if (FAILED(result))
+            return result;
+        self.waitsInitialized = true;
+    }
+    WaitPool::Ticket wait;
+    const HRESULT result = self.memoryWaits.Add(static_cast<HANDLE>(event), callback, context, wait);
+    if (SUCCEEDED(result))
+    {
+        ticket = {wait.slot, wait.generation};
+        self.eventGenerations[wait.slot] = wait.generation;
+    }
+    return result;
+}
+
+bool JobScheduler::RearmEventWait(JobEventTicket ticket) noexcept
+{
+    if (!_impl || _impl->closed || _impl->workers.ShutdownToken().stop_requested())
+        return false;
+    _impl->CheckOwner();
+    if (ticket.slot >= _impl->eventGenerations.size() || ticket.generation == 0 ||
+        _impl->eventGenerations[ticket.slot] != ticket.generation)
+        return false;
+    return _impl->memoryWaits.Rearm({ticket.slot, ticket.generation});
+}
+
+bool JobScheduler::RemoveEventWait(JobEventTicket ticket) noexcept
+{
+    if (!_impl)
+        return false;
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed)
+        return false;
+    if (ticket.slot >= self.eventGenerations.size() || ticket.generation == 0 ||
+        self.eventGenerations[ticket.slot] != ticket.generation)
+        return false;
+    self.eventGenerations[ticket.slot] = 0;
+    self.memoryWaits.Remove({ticket.slot, ticket.generation});
+    return true;
+}
+
 bool JobScheduler::PostUiAction(std::unique_ptr<UiAction>& action) noexcept
 {
     if (!_impl || !action)
@@ -776,6 +933,7 @@ void JobScheduler::RequestStop() noexcept
     }
     self.workers.RequestStop();
     self.sourceReady = false;
+    self.resumesPending = false;
 }
 
 void JobScheduler::Close() noexcept
@@ -835,6 +993,8 @@ void JobScheduler::Close() noexcept
     self.actionSource = nullptr;
     self.sourceReady = false;
     self.liveCount = 0;
+    self.ownerWork = nullptr;
+    self.ownerNotified.store(false, std::memory_order_relaxed);
     self.wake.reset();
     self.shutdown.reset();
     self.closed = true;
@@ -848,6 +1008,7 @@ bool JobScheduler::IsIdle() const noexcept
     }
     _impl->CheckOwner();
     return _impl->liveCount == 0 && _impl->actionCount == 0 && !_impl->sourceReady &&
+           (!_impl->ownerWork || (!_impl->ownerWork->HasPending() && !_impl->ownerWork->HasReady())) &&
            _impl->releasingCount.load(std::memory_order_acquire) == 0 &&
            _impl->trimCount.load(std::memory_order_acquire) == 0;
 }
@@ -870,6 +1031,8 @@ bool JobScheduler::HasUiWork() const noexcept
     }
     _impl->CheckOwner();
     return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0 || _impl->sourceReady ||
+           _impl->resumesPending ||
+           (!_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady()) ||
            _impl->memoryChanged.load(std::memory_order_acquire);
 }
 
@@ -940,6 +1103,14 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
     self.ProcessMemoryChange();
+    self.PromoteResumed();
+    // Consume before Pump so an event arriving during Pump wakes a subsequent outer pass. HasReady owns the
+    // actual predicate; a notification without ready work never creates a polling loop.
+    (void)self.ownerNotified.exchange(false, std::memory_order_acquire);
+    if (!self.workers.ShutdownToken().stop_requested() && self.ownerWork && self.ownerWork->HasReady())
+    {
+        self.ownerWork->Pump();
+    }
     auto* list = InterlockedFlushSList(&self.completions);
     SLIST_ENTRY* fifo = nullptr;
     while (list)
@@ -973,6 +1144,25 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
         {
             result = {JobStatus::Cancelled};
         }
+        if (result.status == JobStatus::Finished)
+        {
+            {
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Suspended;
+            }
+            if (record.job->DeferCompletion(result, ticket))
+            {
+                continue;
+            }
+            // A hook returning false retires even if it requested Resume. Resuming is not runnable until
+            // promotion below, so payload destruction cannot race a worker stage.
+            {
+                WorkerResources::ExclusiveLock guard{self.lock};
+                record.state = JobScheduler::Impl::State::Completed;
+            }
+            if (record.cancel->Token().IsCancelled() || self.workers.ShutdownToken().stop_requested())
+                result = {JobStatus::Cancelled};
+        }
         if (apply)
         {
             apply(context, *record.job, result);
@@ -999,6 +1189,7 @@ std::size_t DrainCompletions(JobScheduler& scheduler, JobScheduler::Apply apply,
     {
         self.AdmitWaiting();
     }
+    self.PromoteResumed();
     return completed;
 }
 

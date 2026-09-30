@@ -118,6 +118,7 @@
     <ClCompile Include="..\..\Common\Jobs.cpp" />
     <ClCompile Include="WorkerPoolTests.cpp" />
     <ClCompile Include="JobTests.cpp" />
+    <ClCompile Include="JobStageTests.cpp" />
     <ClCompile Include="JobBenchmark.cpp" />
     <ClCompile Include="MemoryBenchmark.cpp" />
     <ClCompile Include="FilterWorkBenchmark.cpp" />

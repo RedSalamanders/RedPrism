@@ -34,6 +34,7 @@ borrows that device. It MUST NOT own a swap chain.
 | --- | --- | --- |
 | `Application` | Top-level `wil::unique_hwnd`, WndProc binding at `WM_NCCREATE`, display-power notify, command line, `SelectHostFrameAction` loop, `DocumentSession`, `JobScheduler` (`Common/Jobs.*`), `CanvasRenderer`, `CanvasViewport`, the settings file and its directory watch ([`Core_Settings.md`](Core_Settings.md)), the theme, the UIA window root's placement | D3D device, swap chain, Present |
 | `JobScheduler` (owned by `Application`) | Bounded job records and UI-action queue, cancellation, progress/completion publication and owner-thread delivery | Window, chrome, document/session state, GPU context, image-operation policy |
+| `GpuWorkQueue` (optional registered owner pump, `RedPrism/GpuWork.*`) | Bounded staging/copy records, events/fences and mapped-row leases, old context/texture references through acknowledgement | Swap chain, Present, new device creation, worker pixel computation, document mutation |
 | `Renderer` | One `ID3D11Device`, one `ID3D11DeviceContext`, one `IDXGISwapChain1`, RTV, frame-latency waitable, occlusion registration | A second device, a chrome HWND, GDI paint, DxUi library lifetime, document rasters |
 | Document | Layer graph, COW rasters, history budget | HWND, DXGI factory, DxUi host |
 | `Kernels` (`Common/Kernels.*`) | Immutable process-lifetime CPU function tables and CPU/OS feature detection; noinline tier implementations in separate translation units | Document/session state, HWND, GPU context, scheduler |
@@ -58,11 +59,28 @@ There is exactly one D3D11 device, one flip-model swap chain, and one `Present` 
 
 `Common/Executor.h` and the public `Common/Jobs.h` boundary are standard C++ only. `JobScheduler` hides its
 platform implementation behind a pimpl and is owned by `Application`. Its fixed capacity is 128 job records,
-including queued, running and completed-but-undrained jobs, plus eight queued UI actions. The seven classes are
+including queued, running, suspended and completed-but-undrained jobs, plus eight queued UI actions. The seven classes are
 `InteractivePreview`, `Refinement`, `Stroke`, `Selection`, `Commit`, `Io` and `Background`; they map to HIGH
 (the first four), NORMAL (`Commit`, `Io`) and LOW (`Background`) worker priorities. `Stroke`, `Selection`, `Commit`
 and `Io` jobs run FIFO per `(class, serialKey)`, retaining their key until their result is applied or dropped.
 Zero is the conservative shared key. Worker callbacks carry no job payload; records remain scheduler-owned.
+
+Successful worker stages MAY defer final retirement through `Job::DeferCompletion(result, ticket)`. The record
+retains its original sequence, cancellation source, job owner and complete-graph memory reservation. Failed and
+cancelled stages skip this hook. Owner-thread `Resume` accepts only an exact suspended slot generation; duplicate,
+reused and shutdown tickets fail. A resume requested inside a hook cannot start another worker until that hook
+returns. A false hook finalizes once even if it requested resume. Cancellation while suspended waits for its
+external owner's acknowledgement, then skips the next Run and delivers one final Cancelled callback. Shutdown
+joins producers before destroying suspended payloads and drops callbacks.
+
+One optional stable borrowed `OwnerWorkPump` shares completion draining with the production loop and `SettleJobs`.
+Its pending work prevents idle settlement; only ready work requests an owner pass. Pump runs under the same
+reentrancy guard as completion apply and MUST NOT wait, show a modal or recursively drain. Registration/removal
+occur outside callbacks, and removal refuses pending or ready work. `NotifyOwnerWork` publishes and wakes only;
+external producers are joined before scheduler Close. It creates no queue entry, allocation, worker or timer.
+Device completion registrations use the scheduler's existing one-thread WaitPool through bounded standard-only
+event tickets. Handles and contexts remain borrowed until owner teardown removes/joins them or Close joins the
+pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
 Each record contains two aligned intrusive completion nodes, one for progress and one for final completion. Workers
 publish through an SLIST and signal the scheduler's auto-reset event. The owner reverses each detached SLIST batch

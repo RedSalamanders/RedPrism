@@ -113,6 +113,13 @@ aligned intrusive completion nodes; producers push to an SLIST and signal an aut
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
+Suspended worker stages count against the same 128-record capacity and retain their original reservation and
+FIFO key through final apply/drop. Resume consumes no second reservation, container entry or job allocation.
+Successful stage deferral cannot race worker re-entry into its UI hook. Cancellation preserves external mapped
+owners until acknowledgement and skips further Run work. One ready-only owner pump participates in both shared
+outer loops; in-flight work alone MUST NOT make `HasUiWork` true or cause polling. Its event callbacks share the
+existing 32-registration wait pool with memory pressure, rather than creating another pool/thread.
+
 One registered host UI-action source has a borrowed stable lifetime and an allocation-free coalesced readiness
 flag, independent of the eight ordinary action slots. Registration alone is idle. A ready source prevents idle
 waiting, wakes the same scheduler event and shares the one-action-per-pass bound with queued actions, alternating

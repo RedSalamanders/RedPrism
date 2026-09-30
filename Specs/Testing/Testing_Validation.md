@@ -204,6 +204,25 @@ independent serial keys, stale tickets, progress, the job-runner `bad_alloc` fai
 pass, rejected reentrant drains/actions, and shutdown that joins before destroying active payloads. Gate waits
 are failure bounds only; no sleeps or timing assertions. Existing legacy image goldens remain unchanged.
 
+`job-stage.*` covers successful multi-stage deferral, retained reservation/FIFO, exact resumed generations,
+duplicate/stale/slot-reused tickets, resume inside a hook without worker re-entry, false-hook retirement even
+after requesting resume, cancelled/failing stages and suspended shutdown. An external owned event publishes
+readiness through a joined wait callback. Pending-only owner work prevents idle settlement without claiming
+UI work; ready Pump executes under the reentrancy guard and refuses callback-time registration/removal.
+Synthetic memory checks prove successor admission remains blocked through suspended, resumed and final apply
+stages. State/event references are independent of elapsed-time performance; no hook waits on another stage.
+
+`gpu-capability.*` covers literal completion-route prerequisites and unavailable/failed-query combinations,
+plus real WARP immediate-context probing, null/deferred/mismatched-device refusal and report reset.
+`gpu-work.*` uses independent BGRA coordinate formulas for cropped row-pitch copies and single-pixel reads.
+Actual scheduler stages copy mapped rows only on a worker and acknowledge them on the owner. Cases include
+cancel after mapping, a device rebind while rows remain lent, duplicate lease refusal, eight-slot admission,
+two-copy in-flight bounds and 64 MiB staging saturation that waits for an owned acknowledgement message.
+Shutdown holds an actual mapped copy stage until the shared shutdown event, checks that its pointer remains valid
+while the scheduler joins, drops its final callback, and releases the mapping/reservation only after join.
+The queue runs without an HWND or Present. These tests qualify the foundation only; production utility
+composition, restart policy and migrated readback callers remain P1.3 requirements.
+
 The registered UI-action-source gates cover a full ordinary action queue, retained ownership on refusal,
 coalesced readiness, source/ordinary fairness, self-rearm on a later pass, event/idle state, refused reentrant
 drains and callback-time removal, exact identity, stop and borrowed-source teardown. History-work gates cover

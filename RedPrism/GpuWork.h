@@ -1,0 +1,74 @@
+#pragma once
+
+#include "GpuCapabilities.h"
+#include "Jobs.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+
+struct GpuReadbackLease final
+{
+    std::size_t slot = 8;
+    std::uint64_t generation = 0;
+    [[nodiscard]] bool operator==(const GpuReadbackLease&) const noexcept = default;
+};
+
+// Borrowed rows, valid only until the owner acknowledges the exact lease. Workers may read/copy, never call
+// the context. The queue retains the mapped texture/context even when its device generation is retired.
+struct GpuReadbackRows final
+{
+    const std::uint8_t* data = nullptr;
+    std::size_t rowPitch = 0;
+    unsigned int width = 0;
+    unsigned int height = 0;
+    GpuReadbackLease lease;
+    std::uint64_t deviceGeneration = 0;
+};
+
+class GpuReadbackReceiver
+{
+  public:
+    virtual ~GpuReadbackReceiver() = default;
+    // Owner pump callback, not message dispatch. Exactly once per admitted read. A failed read has no lease.
+    // The receiver remains alive through delivery and, for successful reads, ReleaseMapped acknowledgement.
+    virtual void ReadbackReady(JobTicket ticket, GpuReadbackRows rows, HRESULT result) noexcept = 0;
+};
+
+class GpuWorkQueue final : public OwnerWorkPump
+{
+  public:
+    static constexpr std::size_t kCapacity = 8;
+    static constexpr std::size_t kMaxInFlight = 2;
+    static constexpr std::uint64_t kStagingCapBytes = 64ULL * 1024 * 1024;
+    static constexpr unsigned int kMaxReadbackSide = 2048;
+
+    GpuWorkQueue() noexcept;
+    ~GpuWorkQueue();
+    GpuWorkQueue(const GpuWorkQueue&) = delete;
+    GpuWorkQueue& operator=(const GpuWorkQueue&) = delete;
+    [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler) noexcept;
+    [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context) noexcept;
+    // Owner thread. The source and request are retained without waiting; box is a BGRA8 mip-0 region of at
+    // most 2048 squared. Larger callers traverse tiles under their original job reservation.
+    [[nodiscard]] HRESULT EnqueueReadback(ID3D11Texture2D* source, const D3D11_BOX& box, JobTicket ticket,
+                                          GpuReadbackReceiver& receiver) noexcept;
+    [[nodiscard]] bool ReleaseMapped(GpuReadbackLease lease) noexcept;
+    // Device loss/adapter change retires lent owners. No commands are recorded on a retired context.
+    void RetireDevice() noexcept;
+    // Shutdown order: stop/join wait producers, close the scheduler workers, then release all lent owners.
+    void StopNotifications() noexcept;
+    void CloseAfterWorkers() noexcept;
+    [[nodiscard]] bool HasPending() const noexcept override;
+    [[nodiscard]] bool HasReady() const noexcept override;
+    void Pump() noexcept override;
+    [[nodiscard]] std::uint64_t StagingBytes() const noexcept;
+    [[nodiscard]] std::size_t InFlightCount() const noexcept;
+    [[nodiscard]] std::size_t LentCount() const noexcept;
+    [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept;
+    [[nodiscard]] GpuCapabilities::CompletionRoute CompletionRoute() const noexcept;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> _impl;
+};

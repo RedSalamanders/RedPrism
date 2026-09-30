@@ -52,6 +52,12 @@ struct JobTicket final
     [[nodiscard]] bool operator==(const JobTicket&) const noexcept = default;
 };
 
+struct JobEventTicket final
+{
+    std::size_t slot = 32;
+    std::uint64_t generation = 0;
+};
+
 enum class JobNoticeKind
 {
     Submitted,
@@ -107,6 +113,13 @@ class Job
     // Only bad_alloc is translated by the runner, to a failed operation. Other unexpected exceptions retain
     // the process crash policy. Kernels themselves do not catch. Run cannot leave any producer in flight.
     [[nodiscard]] virtual JobResult Run(JobContext& context) = 0;
+    // Owner thread after a successful worker stage, before final apply. Returning true retains this job, its
+    // ticket, reservation and FIFO position until Resume. Failed/cancelled stages skip this hook. Resume may
+    // be requested here; the next worker stage cannot start until this hook returns. A false return finalizes.
+    [[nodiscard]] virtual bool DeferCompletion(JobResult, JobTicket) noexcept
+    {
+        return false;
+    }
     // UI thread, outside window/control dispatch. Must not pump messages, show a modal or wait for work.
     // Called once for every drained job, including failure/cancellation. Shutdown drops callbacks entirely.
     // A posted UI action must own the values it needs: this Job is destroyed before that action runs.
@@ -123,6 +136,18 @@ class UiAction
     // UI thread, at most one action per outer loop pass. Revalidate the captured session/target here before
     // opening a modal. A modal may dispatch messages but cannot recursively drain completions or actions.
     virtual void Run() noexcept = 0;
+};
+
+// One borrowed owner-thread source for asynchronous device work. Waiting work prevents idle settlement but
+// does not request an owner pass. Event producers publish readiness before NotifyOwnerWork, and are joined
+// before unregister/Close. Pump runs outside message dispatch and must not wait, show a modal or drain again.
+class OwnerWorkPump
+{
+  public:
+    virtual ~OwnerWorkPump() = default;
+    [[nodiscard]] virtual bool HasPending() const noexcept = 0;
+    [[nodiscard]] virtual bool HasReady() const noexcept = 0;
+    virtual void Pump() noexcept = 0;
 };
 
 class JobScheduler final
@@ -151,6 +176,20 @@ class JobScheduler final
     // running and completed-but-undrained jobs. A ticket never identifies a reused slot's newer generation.
     [[nodiscard]] std::int32_t Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept;
     [[nodiscard]] bool Cancel(JobTicket ticket) noexcept;
+    // Only an exact suspended ticket can resume. Cancellation is acknowledged by a skipped worker stage and
+    // one final Cancelled callback. No new record, reservation or sequence is allocated. Duplicate/stale fails.
+    [[nodiscard]] bool Resume(JobTicket ticket) noexcept;
+    [[nodiscard]] bool RegisterOwnerWork(OwnerWorkPump& source) noexcept;
+    [[nodiscard]] bool UnregisterOwnerWork(OwnerWorkPump& source) noexcept;
+    // Thread-safe publication/wake only. External producers must be joined before Close destroys the event.
+    void NotifyOwnerWork() noexcept;
+    // Device/event sources share the scheduler's one wait pool (32 registrations, including memory pressure).
+    // Register and Remove are owner startup/teardown operations outside callbacks; Remove joins the callback.
+    // Handles/contexts remain borrowed until Remove or Close returns. Event callbacks publish only readiness.
+    [[nodiscard]] std::int32_t RegisterEventWait(void* event, void (*callback)(void*) noexcept, void* context,
+                                                 JobEventTicket& ticket) noexcept;
+    [[nodiscard]] bool RearmEventWait(JobEventTicket ticket) noexcept;
+    [[nodiscard]] bool RemoveEventWait(JobEventTicket ticket) noexcept;
     [[nodiscard]] bool PostUiAction(std::unique_ptr<UiAction>& action) noexcept;
     // One stable, borrowed owner-thread source for host continuations. Register/unregister only outside UI
     // callbacks; the source outlives registration through Unregister or Close. No ownership is transferred.

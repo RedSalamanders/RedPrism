@@ -177,7 +177,8 @@ AVX2 objects allow VEX; AVX-512 objects allow VEX and EVEX. Other objects must m
 `Build/IsaRuntimeAllowlist.psd1`. No broad first-party object exception is permitted.
 
 The runtime exceptions are MSVC `vector_algorithms.obj` from `msvcprt[d].lib`, and the exact PDB procedure range
-of the runtime-dispatched `wmemchr` intrinsic in the observed `ImageCodecs.obj`, `HostTests.obj` or `IoTests.obj`.
+of the runtime-dispatched `wmemchr` intrinsic in the observed `ImageCodecs.obj`, `HostTests.obj`, `IoTests.obj` or
+`SettingsStore.obj` (the CompositionTests worker/runtime link).
 MSVC can emit that intrinsic inside a consumer object; surrounding functions remain scanned. The function name
 alone is insufficient. Undecoded prefixes in inline data are counted separately,
 not accepted as decoded instructions. The scan is a VEX/EVEX boundary gate; it does not prove safety of arbitrary

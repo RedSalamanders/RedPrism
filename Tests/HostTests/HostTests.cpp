@@ -19,6 +19,7 @@
 #include "JobActivityTests.h"
 #include "JobBenchmark.h"
 #include "JobMemoryTests.h"
+#include "JobStageTests.h"
 #include "JobTests.h"
 #include "JobUiPolicyTests.h"
 #include "KernelCliTests.h"
@@ -1639,6 +1640,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunUiTimingTests();
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
+    gFailures += RunJobStageTests();
     gFailures += RunJobUiPolicyTests();
     gFailures += RunJobActivityTests();
     gFailures += RunMemoryAdmissionTests();

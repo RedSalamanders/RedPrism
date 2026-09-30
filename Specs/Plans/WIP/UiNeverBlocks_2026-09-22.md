@@ -88,6 +88,8 @@
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
     - [x] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures and worker-built lookups. All x64 tests and ARM64 cross-builds pass. Release 4K Levels preview: 78.856 → 5.718 ms; CPU commit reuse tradeoff recorded; G1 remains open.
     - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
+      - [x] P1.3a–c foundation — Capability route selection, resumable reservations/FIFO, shared event waits and bounded staging with native monitored-fence/lent-device/shutdown qualification; all x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuCompletionFoundation_2026-09-30.md)). Explicit fallback runtime coverage remains in the child plan.
+      - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
     - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
     - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.

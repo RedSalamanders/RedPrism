@@ -204,6 +204,36 @@ The host takes the `ComposeReadback(document, Raster&)` overload: staging rows a
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
 are never published. Readback is still synchronous at this stage; fenced completion belongs to pipeline slice P1.3.
 
+## GPU readback queue foundation (P1.3)
+
+`GpuCapabilities::Probe` borrows a device and its immediate context, verifies their COM identity and rejects
+null, deferred or mismatched contexts. Optional feature/interface queries retain both availability and HRESULT;
+unsupported queries never imply a capability. The value report covers Device5/Context4/CreateFence, Adapter4
+monitored fences, IDXGIDevice2, options2, concurrent resource creation, four required typed UAV store formats,
+minimum precision and local/nonlocal video-memory budgets. Monitored completion requires all fence interfaces,
+fence creation and the adapter's monitored-fence flag. Otherwise a successful IDXGIDevice2 query selects
+EnqueueSetEvent; no supported completion route fails locally.
+
+`GpuWorkQueue` is an optional owner pump, with eight fixed slots and at most two GPU copies in flight. Its BGRA8
+mip-0 reads accept regions up to 2048 squared; larger consumers must traverse tiles. It pools staging textures by
+power-of-two width/height classes under a 64 MiB texel-storage cap, including lent and retired textures. Driver
+allocation/row-padding overhead remains outside this declared texel cap; mapped row pitch is validated and used
+by the copy worker. When retained staging prevents a new class allocation, pending work waits for acknowledgement
+without claiming readiness or polling. A 1×1 sampler stages one texel.
+
+Only the owner records Copy, fence Signal/event registration/Flush or EnqueueSetEvent, Map READ DO_NOT_WAIT and
+Unmap. EnqueueSetEvent already flushes. Registered waits publish an atomic ready flag and wake the shared job event.
+Map occurs once after completion; WAS_STILL_DRAWING is a reported failure, never a retry. Successful delivery
+lends immutable rows with an exact lease generation. Workers may copy them, and the owner unmaps exactly once on
+acknowledgement. Duplicate/stale releases fail. A device rebind retires old pending/in-flight work; lent rows keep
+their old context/texture/fence alive until worker acknowledgement, and their bytes remain charged against the
+same staging cap. No command is recorded on a retired context. Consumers validate returned device generations
+before publication. Shutdown disarms/joins wait producers, joins copying workers, then unmaps/releases leftovers.
+
+This foundation is exercised without a window or Present. Production readback callers still use the synchronous
+path above until P1.3's utility-composition and host migrations land; it does not establish application-wide
+nonblocking readbacks or automatic restart after device loss.
+
 ## Failures
 
 A frame never closes the window on its own (RF-401):
