@@ -457,6 +457,14 @@ When all local selected files exist, they verify every size/hash and the byte-id
 manifest snapshot. Missing local corpus is reported as SKIP in this ordinary suite; P4/P5 qualification must run
 the required real-file checks without SKIP. No test downloads files from the internet.
 
+File IO cancellation qualification includes independent stream-cap/COM/lifetime tests, direct sparse PNG/JPEG
+file round trips across codec bands, and project stops at manifest, asset, ZIP close, staged and published
+boundaries. Cancelled loads expose no partial result; cancelled imports preserve original canvas/active/layers;
+prepublication saves preserve the complete destination/sibling tree and clean owned staging. A stop after
+publication still returns Ok and the saved literal pixels/metadata. The separate explicit `--bench-file` harness
+records time/memory before output verification; its measurements and the remaining production host workers,
+pending IO waits, faults and cancellation latency qualification are tracked by the P1.7 child.
+
 ```powershell
 .\validate-skills.ps1
 .\format.ps1 -Check

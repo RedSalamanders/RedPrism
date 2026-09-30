@@ -5,12 +5,14 @@
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.
 - [ ] F3 — Worker project open and ordered image import, detached results and token-checked owner application.
-  - [ ] F3a — Thread cancellation through project loads/imports with banded file/ZIP reads and no partial publication; qualify independent project cancellation tests.
+  - [x] F3a — Cancellable project loads/imports with banded file/ZIP reads and no partial publication; independent project cancellation tests and full configuration matrix pass.
   - [ ] F3b — Admit and run detached open/import graphs; preserve batch/history order and validate host cancellation/staleness/failure.
 - [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision.
-  - [ ] F4a — Thread cancellation through asset encoding, staged file writes and libzip close; preserve the external publication boundary.
-  - [ ] F4a.1 — Direct bounded file streams for PNG/JPEG and staged asset-file sources for ZIP; remove whole-archive encoded-buffer retention before admitting save/export graphs.
+  - [x] F4a — Cancellable asset encoding/staged writes/libzip close preserve the external publication boundary; full configuration matrix passes.
+  - [x] F4a.1 — Direct bounded PNG/JPEG file streams and staged ZIP asset-file sources remove whole-archive encoded-buffer retention. Three serial Release runs per mode at 4K/45 MP and the full matrix pass.
   - [ ] F4b — Admit and run owned project/save/export graphs with exact saved-revision and destination ordering tests.
+    - [ ] F4b.1 — Production project save worker owns document/path/revision and one whole-graph reservation; retain the input ordinal through publication/cancel acknowledgement, mark the published revision, and resume a dependent action only on success.
+    - [ ] F4b.2 — Asynchronous export readback/encoding graph; prevent device restart after external publication and preserve captured options/destination ordering.
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
 
@@ -19,6 +21,9 @@ Owner: `ApplicationFileJobs.cpp`, file continuations, `Common/PathClassification
 
 F1/F2 qualification: [FileFoundation_2026-09-30.md](../../TestRuns/FileFoundation_2026-09-30.md).
 These bounded foundations leave F3–F6 and overall P1.7 active.
+
+F3a/F4a/F4a.1 qualification: [ProjectStreams_2026-09-30.md](../../TestRuns/ProjectStreams_2026-09-30.md).
+The completed helper/stream slice leaves production open/import/save/export graphs at F3b/F4b.
 
 ## Ownership and ordering
 
@@ -67,6 +72,10 @@ uses the asynchronous document readback graph, then worker encode/write. Queue d
 collision-free path key. Use unique exclusive sibling temporary outputs, checked write/flush/close and rename;
 cancel before publication leaves the destination intact. Define the publication boundary so a late cancellation
 cannot report that an already committed external file was rolled back.
+
+Retain an independent published flag in writer results. The scheduler may classify a job Cancelled after its
+worker published successfully; owner completion still records the actual captured saved revision/path, while
+cancellation suppresses a dependent replacement/close. Never infer external rollback from the generic job status.
 
 ## Required evidence
 

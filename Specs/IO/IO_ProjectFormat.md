@@ -1,7 +1,7 @@
 # Project format (`.prism`)
 
 Status: current normative product contract
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-30
 Owner: `Common/ProjectStore.*`, `Common/ZipOwner.h`
 
 ## Scope
@@ -33,6 +33,12 @@ same-directory `dest.~<guid>` file opened with `ZIP_CREATE | ZIP_EXCL`, then `Re
 ZIP close, flush, and handle close must all succeed before replacement. A failed staging or durability step leaves
 the previous destination intact and removes only the temporary file or directory owned by that save. Existing ZIP
 readers accept both stored and deflated entries. Writers store already encoded PNG assets and deflate the manifest.
+
+Both shapes first encode assets serially into bounded files in the owned sibling staging directory. ZIP saves
+use file sources for those assets through close; they retain filenames/manifest, not all encoded PNG vectors.
+Staged asset/manifest files are flushed and closed before rotation or ZIP replacement. Metadata and libzip's
+per-source path copies remain charged by graph admission. Serial encoding and extra ZIP staging IO are measured
+tradeoffs; bounded parallel asset encoding remains tracked in P1.7.
 
 ## Manifest
 
@@ -122,7 +128,24 @@ Same as `ValidateDocument`: 30 000 px/side, 100 M image pixels + 100 M mask pixe
 
 ## Status codes
 
-`Ok`, `Invalid`, `UnsupportedVersion`, `TooLarge`, `MissingImage`, `Encode`.
+`Ok`, `Invalid`, `UnsupportedVersion`, `TooLarge`, `MissingImage`, `Encode`, `Cancelled`.
+
+## Worker cancellation and publication
+
+Load/save/import/export accept optional cancellation. File and ZIP member reads, staged writes and codec IO
+check between 64 KiB bands; parse/manifest construction and asset loops check between records. libzip close
+receives a cancellation callback whose token outlives archive close/discard. OS/codec/parser calls already in
+flight are not guaranteed interruptible. A cancelled load exposes no document, active id or partial pixels;
+cancelled import restores its original document dimensions, active id and layers. Unsupported-version results
+retain the declared version for error reporting. Allocating APIs propagate bad_alloc to the worker runner.
+
+The optional bounded worker observer reports preparation/publication stages, completed assets or archive
+percentage, and immediate Win32 failures where reported. Its context is borrowed until return; callbacks must
+not throw, wait or access UI. Stop before the final publication check preserves the destination and unrelated
+temporary siblings. Once exploded rotation begins, finish or recover it without treating a later stop as a
+rollback. Successful file replacement/directory publication reports Ok even when stop arrives afterward.
+Host writer jobs must separately retain this external publication fact, because scheduler cancellation can
+still override their generic Finished outcome. Mark only the revision actually published.
 
 ## Validation
 
@@ -138,3 +161,9 @@ missing image as `MissingImage`; import PNG/JPEG onto a document; and prove a fa
 archive intact; prove saved PNG ZIP entries use STORE and the manifest uses DEFLATE; load an older DEFLATE-encoded
 project; prove unique save staging preserves unrelated `dest.~*` entries and cleans up its own staging; and prove a
 replacement failure leaves an existing archive intact. ASan Debug is required for this parser.
+
+`ProjectCancellationTests` adds independent literal pixels/metadata and observer-controlled stops at manifest,
+decoded/encoded asset, libzip close, staged and published boundaries for ZIP/exploded forms. Before publication
+it verifies unchanged destination/tree, `.old` and unrelated temporary siblings, no partial load/import and
+owned-temp cleanup; after publication it verifies Ok and the new literal content. These structural tests are
+not cancellation latency bounds or injected flush/rotation/device-fault qualification.

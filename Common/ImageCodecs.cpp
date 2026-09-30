@@ -1,5 +1,6 @@
 #include "ImageCodecs.h"
 
+#include "CodecFileStream.h"
 #include "RasterWork.h"
 #include "Utf8.h"
 
@@ -373,7 +374,7 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
 
 [[nodiscard]] ImageCodecStatus EncodeToFormat(const Raster& image, const GUID& container, double quality,
                                               double resolution, std::vector<std::uint8_t>& bytes,
-                                              CancelToken cancellation)
+                                              CancelToken cancellation, IStream* destination = nullptr)
 {
     bytes.clear();
     if (cancellation.IsCancelled())
@@ -385,10 +386,13 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
         return ImageCodecStatus::Encode;
     }
     wil::com_ptr_nothrow<IStream> memory;
-    HRESULT result = CreateStreamOnHGlobal(nullptr, TRUE, memory.put());
-    if (FAILED(result))
+    HRESULT result = S_OK;
+    if (!destination)
     {
-        return ImageCodecStatus::Encode;
+        result = CreateStreamOnHGlobal(nullptr, TRUE, memory.put());
+        if (FAILED(result))
+            return ImageCodecStatus::Encode;
+        destination = memory.get();
     }
     wil::com_ptr_nothrow<IWICImagingFactory> factory;
     result = MakeFactory(factory);
@@ -398,7 +402,7 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     }
     wil::com_ptr_nothrow<IWICStream> stream;
     result = factory->CreateStream(stream.put());
-    if (FAILED(result) || FAILED(stream->InitializeFromIStream(memory.get())))
+    if (FAILED(result) || FAILED(stream->InitializeFromIStream(destination)))
     {
         return ImageCodecStatus::Encode;
     }
@@ -538,6 +542,8 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     {
         return ImageCodecStatus::Cancelled;
     }
+    if (!memory)
+        return ImageCodecStatus::Ok; // Caller owns checked durability/close and destination publication.
     STATSTG stats{};
     if (FAILED(memory->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart <= 0 ||
         static_cast<ULONGLONG>(stats.cbSize.QuadPart) > kMaxEncodedBytes)
@@ -563,10 +569,12 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     return ImageCodecStatus::Ok;
 }
 
-[[nodiscard]] ImageCodecStatus WriteAllBytes(const wchar_t* path, const std::vector<std::uint8_t>& bytes,
-                                             CancelToken cancellation)
+[[nodiscard]] ImageCodecStatus EncodeToFile(const Raster& image, const GUID& container, double quality,
+                                            double resolution, const wchar_t* path, CancelToken cancellation)
 {
-    if (path == nullptr || bytes.empty())
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (path == nullptr || !image.HasStorage())
     {
         return ImageCodecStatus::Encode;
     }
@@ -575,31 +583,25 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     const std::wstring temp = std::wstring(path) + L".~" + Guid::Generate().ToString();
-    wil::unique_hfile file{
-        CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
-    if (!file)
-        return ImageCodecStatus::Encode;
+    wil::com_ptr_nothrow<CodecFileStream> file;
+    const HRESULT created = CodecFileStream::Create(temp.c_str(), kMaxEncodedBytes, cancellation, file.put());
+    if (FAILED(created))
+        return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
     auto cleanup = wil::scope_exit(
         [&]
         {
             file.reset();
             (void)DeleteFileW(temp.c_str());
         });
-    for (std::size_t offset = 0; offset < bytes.size();)
-    {
-        if (cancellation.IsCancelled())
-            return ImageCodecStatus::Cancelled;
-        const auto count = static_cast<DWORD>((std::min)(bytes.size() - offset, std::size_t{64 * 1024}));
-        DWORD written = 0;
-        if (!WriteFile(file.get(), bytes.data() + offset, count, &written, nullptr) || written != count)
-            return ImageCodecStatus::Encode;
-        offset += count;
-    }
-    if (!FlushFileBuffers(file.get()))
-        return ImageCodecStatus::Encode;
-    const auto transferred = file.release();
-    if (!CloseHandle(transferred))
-        return ImageCodecStatus::Encode;
+    std::vector<std::uint8_t> unused;
+    const auto encoded = EncodeToFormat(image, container, quality, resolution, unused, cancellation, file.get());
+    if (encoded != ImageCodecStatus::Ok)
+        return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : encoded;
+    STATSTG stats{};
+    if (FAILED(file->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0 ||
+        stats.cbSize.QuadPart > kMaxEncodedBytes || FAILED(file->CloseChecked()))
+        return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Encode;
+    file.reset();
     if (cancellation.IsCancelled())
         return ImageCodecStatus::Cancelled;
     const DWORD existing = GetFileAttributesW(path);
@@ -802,17 +804,7 @@ ImageCodecStatus EncodePng(const Raster& image, double resolution, std::vector<s
 
 ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path, CancelToken cancellation)
 {
-    std::vector<std::uint8_t> bytes;
-    const ImageCodecStatus status = EncodePng(image, resolution, bytes, cancellation);
-    if (status != ImageCodecStatus::Ok)
-    {
-        return status;
-    }
-    if (cancellation.IsCancelled())
-    {
-        return ImageCodecStatus::Cancelled;
-    }
-    return WriteAllBytes(path, bytes, cancellation);
+    return EncodeToFile(image, GUID_ContainerFormatPng, 1.0, resolution, path, cancellation);
 }
 
 ImageCodecStatus EncodeJpeg(const Raster& image, const JpegExportOptions& options, std::vector<std::uint8_t>& bytes,
@@ -825,15 +817,5 @@ ImageCodecStatus EncodeJpeg(const Raster& image, const JpegExportOptions& option
 ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options, const wchar_t* path,
                                 CancelToken cancellation)
 {
-    std::vector<std::uint8_t> bytes;
-    const ImageCodecStatus status = EncodeJpeg(image, options, bytes, cancellation);
-    if (status != ImageCodecStatus::Ok)
-    {
-        return status;
-    }
-    if (cancellation.IsCancelled())
-    {
-        return ImageCodecStatus::Cancelled;
-    }
-    return WriteAllBytes(path, bytes, cancellation);
+    return EncodeToFile(image, GUID_ContainerFormatJpeg, options.quality, options.resolution, path, cancellation);
 }

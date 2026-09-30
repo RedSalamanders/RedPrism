@@ -15,6 +15,7 @@ enum class ProjectIoStatus
     TooLarge,
     MissingImage,
     Encode,
+    Cancelled,
 };
 
 struct ProjectLoadResult
@@ -23,6 +24,31 @@ struct ProjectLoadResult
     CanvasDocument document{};
     std::optional<Guid> activeLayerID;
     int formatVersion = 0;
+};
+
+enum class ProjectIoStage
+{
+    ManifestReady,
+    AssetDecoded,
+    AssetEncoded,
+    ArchiveWriting,
+    Staged,
+    Published,
+    CreateFailed,
+    WriteFailed,
+    FlushFailed,
+    CloseFailed,
+    RotateFailed,
+    PublishFailed,
+};
+
+// Optional bounded observer on the calling worker. It must not touch UI or throw. The context remains borrowed
+// until the operation returns. value is completed assets, percentage for ArchiveWriting, or the immediate
+// Win32 error for a failure stage; otherwise zero. Failure reports precede cleanup that may change LastError.
+struct ProjectIoObserver
+{
+    void (*notify)(void*, ProjectIoStage, unsigned int) noexcept = nullptr;
+    void* context = nullptr;
 };
 
 inline constexpr std::uint32_t kProjectReparseAttribute = 0x400u;
@@ -103,14 +129,18 @@ template <typename AttributeFn>
 }
 
 [[nodiscard]] bool PathLooksLikeZipProject(const wchar_t* path) noexcept;
-[[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path);
+[[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation = {},
+                                            ProjectIoObserver observer = {});
 [[nodiscard]] ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
-                                          const std::optional<Guid>& activeLayerID, bool zipArchive);
+                                          const std::optional<Guid>& activeLayerID, bool zipArchive,
+                                          CancelToken cancellation = {}, ProjectIoObserver observer = {});
 // The image becomes a layer above the active one (legacy EditorSession.insert), centered on `center` (a drop point,
 // in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
                                               std::optional<Guid>& activeLayerID,
-                                              std::optional<Vec2> center = std::nullopt);
-[[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path);
+                                              std::optional<Vec2> center = std::nullopt, CancelToken cancellation = {},
+                                              ProjectIoObserver observer = {});
+[[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path,
+                                                CancelToken cancellation = {});
 [[nodiscard]] ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options,
-                                                 const wchar_t* path);
+                                                 const wchar_t* path, CancelToken cancellation = {});

@@ -96,6 +96,7 @@ that makes them impossible.
 | History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached; incremental accounting remains P1.9 |
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
+| File encode buffers (P1.7) | Direct bounded temporary-file streams for PNG/JPEG; ZIP sources stream durable staged PNG files. No retention of all encoded asset vectors through archive close. Manifest/source-path/codec allocations remain in whole-graph admission/headroom; serial staging disk cost is measured separately |
 | Visible DxUi surfaces (C2) | Library cap (64 MiB visible, 0 when hidden) |
 | Hidden document GPU (C6/P1.3) | 0 display canvas surface bytes; no display Prepare/Composite/Present. Accepted utility work uses separate bounded targets and releases them at its last owner |
 | Composition (C6) | Only when the document changed or surfaces were rebuilt; a settled document composites 0 times per frame (`--self-test` proves it) |

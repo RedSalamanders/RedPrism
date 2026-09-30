@@ -321,6 +321,22 @@ void SparseBgraMultiBandRoundTrip()
         }
     }
     Expect(matches, "png.bgra-sparse-multiband-all-pixels-literal");
+
+    ScratchDirectory scratch;
+    Expect(scratch.IsCreated(), "png.bgra-file-scratch-created");
+    if (!scratch.IsCreated())
+        return;
+    const std::wstring path = scratch.Child(L"sparse.png");
+    Expect(EncodePngFile(sparse, 72, path.c_str()) == ImageCodecStatus::Ok, "png.bgra-direct-file-encode");
+    Expect(!sparse.IsMaterialized(), "png.bgra-direct-file-keeps-source-sparse");
+    DecodedImage fileDecoded;
+    const auto fileStatus = DecodeProjectPngFile(path.c_str(), false, width * height, fileDecoded);
+    matches = fileStatus == ImageCodecStatus::Ok && fileDecoded.image.Width() == width &&
+              fileDecoded.image.Height() == height;
+    for (int y = 0; matches && y < height; ++y)
+        for (int x = 0; matches && x < width; ++x)
+            matches = PixelEquals(fileDecoded.image, x, y, {17, 34, 51, 85});
+    Expect(matches, "png.bgra-direct-file-multiband-literal-pixels");
 }
 
 void SparseJpegMultiBandWhiteMatte()
@@ -395,6 +411,19 @@ void SparseJpegMultiBandWhiteMatte()
            "jpeg.white-matte-after-band-boundary-literal");
     Expect(JpegPixelNear(decoded.image, 32, 400, {127, 207, 127}, kJpegLossyRgbTolerance),
            "jpeg.white-matte-alpha-stripe-literal");
+
+    const std::wstring filePath = scratch.Child(L"direct.jpg");
+    Expect(EncodeJpegFile(sparse, JpegExportOptions{1.0, 72}, filePath.c_str()) == ImageCodecStatus::Ok,
+           "jpeg.direct-file-encode");
+    Expect(!sparse.IsMaterialized(), "jpeg.direct-file-keeps-source-sparse");
+    DecodedImage fileDecoded;
+    Expect(ImportImageFile(filePath.c_str(), width * height, fileDecoded) == ImageCodecStatus::Ok &&
+               fileDecoded.image.Width() == width && fileDecoded.image.Height() == height &&
+               JpegPixelNear(fileDecoded.image, 32, 112, {40, 80, 120}, kJpegLossyRgbTolerance) &&
+               JpegPixelNear(fileDecoded.image, 32, 254, {143, 159, 175}, kJpegLossyRgbTolerance) &&
+               JpegPixelNear(fileDecoded.image, 32, 258, {143, 159, 175}, kJpegLossyRgbTolerance) &&
+               JpegPixelNear(fileDecoded.image, 32, 400, {127, 207, 127}, kJpegLossyRgbTolerance),
+           "jpeg.direct-file-multiband-white-matte-literal");
 }
 
 void PreCancelledCalls()

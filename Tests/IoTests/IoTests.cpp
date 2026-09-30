@@ -1,10 +1,15 @@
+#include "CodecFileStreamTests.h"
+#include "FileIoBench.h"
+
 #include "Document.h"
 #include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
 #include "PathClassificationWorkTests.h"
+#include "ProjectCancellationTests.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
 #include "ZipOwner.h"
+#include <cwchar>
 
 #include <cmath>
 #include <crtdbg.h>
@@ -1689,7 +1694,7 @@ int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*ret
 }
 #endif
 
-int wmain()
+int wmain(int argc, wchar_t** argv)
 {
 #if defined(_DEBUG)
     // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
@@ -1706,6 +1711,13 @@ int wmain()
     {
         std::printf("FAIL com.init\n");
         return 1;
+    }
+    if (argc > 1)
+    {
+        const int result = std::wcscmp(argv[1], L"--bench-file") == 0 ? RunFileIoBench(argc, argv) : 2;
+        if (SUCCEEDED(com))
+            CoUninitialize();
+        return result;
     }
     TestGuidParse();
     TestNameTables();
@@ -1728,6 +1740,8 @@ int wmain()
     TestProjectSaveDurability();
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
+    gFailures += RunCodecFileStreamTests();
+    gFailures += RunProjectCancellationTests();
     TestSettingsStore();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {

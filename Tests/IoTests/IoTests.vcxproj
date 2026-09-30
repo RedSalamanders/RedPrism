@@ -63,7 +63,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -78,7 +78,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -87,10 +87,14 @@
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
+    <ClInclude Include="..\..\Common\CodecFileStream.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
     <ClInclude Include="..\..\Common\PathClassificationWork.h" />
     <ClInclude Include="PathClassificationWorkTests.h" />
     <ClInclude Include="ImageCodecWorkTests.h" />
+    <ClInclude Include="CodecFileStreamTests.h" />
+    <ClInclude Include="ProjectCancellationTests.h" />
+    <ClInclude Include="FileIoBench.h" />
     <ClInclude Include="..\..\Common\Utf8.h" />
     <ClInclude Include="..\..\Common\ZipOwner.h" />
   </ItemGroup>
@@ -116,10 +120,14 @@
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
+    <ClCompile Include="..\..\Common\CodecFileStream.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\..\Common\PathClassificationWork.cpp" />
     <ClCompile Include="PathClassificationWorkTests.cpp" />
     <ClCompile Include="ImageCodecWorkTests.cpp" />
+    <ClCompile Include="CodecFileStreamTests.cpp" />
+    <ClCompile Include="ProjectCancellationTests.cpp" />
+    <ClCompile Include="FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>
 

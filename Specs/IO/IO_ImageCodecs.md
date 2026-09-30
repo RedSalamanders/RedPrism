@@ -73,6 +73,14 @@ replacement preserves the previous destination. Successful replacement is the ex
 the operation reports success once published, even if a stop arrives afterward. Parallel asset IO and host
 worker migration remain tracked separately by P1.7.
 
+File PNG/JPEG encodes use the private `CodecFileStream` destination directly. Its exclusive file has a hard
+512 MiB cap: Write/Seek/SetSize reject exceeding the cap before changing the file or cursor. No whole encoded
+HGLOBAL or output vector is retained by file encoding. Memory encoding keeps its existing output API. The
+single calling worker owns stream cursor operations; only COM reference counts may be accessed concurrently.
+Commit checks flush; checked close transfers and checks the handle close before publication. WIC internal
+codec allocations remain part of whole-graph admission/headroom. This reduces encoded-buffer retention at the
+cost of disk staging; it is not a claim of faster encoding.
+
 ## Validation
 
 `Tests/IoTests` covers PNG pixel round-trip (including the premultiplied/straight-alpha conversion across a range
@@ -81,6 +89,9 @@ format rejection, and the missing-HEIF clean error path under ASan Debug. `Image
 literal premultiplied PNG pixels, sparse Gray/BGRA multi-band round trips, sparse JPEG bands crossing an alpha
 stripe (quality 1, 12/255 RGB tolerance away from color edges), unchanged sparse source storage, precancelled
 output clearing, distinct existing export preservation and owned-temp cleanup after replacement failure.
+`CodecFileStreamTests` proves hard-cap refusal without partial output, literal write/overwrite/read and retained
+prefix after resize, EOF/count semantics, cursor preservation, checked/closed state, cancellation, shared COM
+identity/lifetime and CREATE_NEW collision preservation. Extended bytes are not assumed to be zero.
 
 Decoded frame pixels are written by `IWICBitmapSource::CopyPixels` into a `PixelBuffer` and published through
 `Raster::Adopt`. Conversion, orientation, color management, tight row strides and eager mask thumbnails are

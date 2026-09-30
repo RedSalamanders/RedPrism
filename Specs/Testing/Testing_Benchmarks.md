@@ -93,6 +93,22 @@ architecture and configuration facts. Unavailable facts are printed as `unknown`
 CCD count, so `ccd_count` remains `unknown` and is not inferred from L3 cache count. `fma3` reports the current x64 CRT
 FMA3 math-library setting, not a processor capability claim (`n/a` on ARM64).
 
+## File IO foundation measurements
+
+`IoTests.exe --bench-file <mode> <width> <height> [layers]` explicitly runs one operation per process. Modes are
+`png-file`, `png-memory`, `zip-save` and `folder-save`; invalid arguments return 2. Dimensions/aggregate image
+pixels/layer count obey the current document limits. The adopted opaque noise fixture has a fixed coordinate
+hash. Save layers have separate identities and share source pixels, so this measures asset encoding/storage
+without claiming a multiple-distinct-raster working set. Normal IoTests execution does not run these timings.
+
+`FILE BENCH` reports only the timed encode/save operation, private bytes before/after, process lifetime peak
+working set through that operation, and output bytes. Peak working set includes fixture/setup; private before
+and after are not peak private commit. Disk modes include their checked durability and publication work;
+memory mode retains encoded bytes but performs no durable write. Compare memory retention with these scope
+differences explicit. Output dimensions, persistent document/layer identity/order and three independently
+computed opaque pixel samples per layer are verified after timing/memory capture. No timing threshold is an
+ordinary correctness assertion. Use repeated serial Release processes and record machine/source identity.
+
 ## RAW corpus preparation
 
 `Tests/Fixtures/raw-corpus.json` is the reviewed manifest for small correctness inputs and near-45 MP RAW inputs. Run
