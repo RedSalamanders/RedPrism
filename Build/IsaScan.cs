@@ -105,6 +105,31 @@ namespace RedPrismBuild
             return true;
         }
 
+        private static bool IsTableData(InlineTable table, ulong address, string[] bytes, byte[] pe,
+                                        List<Section> sections, ulong imageBase)
+        {
+            if (table.PendingTargets.Count != 0 || address < table.Begin || address >= table.End) return false;
+            ulong end = checked(address + (ulong)bytes.Length);
+            if (end <= table.End) return true;
+            // Linear disassembly can consume INT3 alignment after a proven table (observed in DxUi.Menu).
+            // Only a row starting in table data, no longer than an x64 instruction, may cross that end. Verify
+            // every reported byte against the PE and require the complete outside suffix to be 0xCC. A vector
+            // starting at/after the table, a nonpadding suffix or an unproved table remains a normal violation.
+            if (bytes.Length > 15 || address < imageBase || address - imageBase > UInt32.MaxValue) return false;
+            uint rva = checked((uint)(address - imageBase));
+            foreach (Section section in sections)
+                if (rva >= section.Rva && checked(end - imageBase) <= (ulong)section.Rva + section.Size)
+                {
+                    int raw = checked((int)Offset(rva, sections, pe.Length));
+                    if (raw > pe.Length - bytes.Length) return false;
+                    for (int i = 0; i < bytes.Length; ++i)
+                        if (pe[raw + i] != Byte.Parse(bytes[i], NumberStyles.HexNumber) ||
+                            (address + (ulong)i >= table.End && pe[raw + i] != 0xcc)) return false;
+                    return true;
+                }
+            return false;
+        }
+
         // The observed inlined clipboard switch hoists LEA r8,imagebase across this exact eight-instruction
         // prelude. Each instruction preserves R8; do not skip arbitrary instructions or accept a partial form.
         private static bool R8Prelude(byte[] bytes, int step)
@@ -132,12 +157,26 @@ namespace RedPrismBuild
         // when multiple tables follow the function body. Unrecognized forms remain subject to the normal ISA gate.
         private static InlineTable ReadInlineTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, ulong imageBase,
-            ulong dispatch, ulong afterJump, uint tableRva, bool requireDataSymbol)
+            ulong dispatch, ulong afterJump, uint tableRva, bool requireDataSymbol, bool signedByteIndex)
         {
             int ownerIndex = FindContribution(contributions, dispatch);
             if (ownerIndex < 0) return null;
             Contribution owner = contributions[ownerIndex];
             ulong begin = checked(imageBase + tableRva);
+            int dataOwner;
+            // Release std::variant uses index -1 for its default case: MOVSX RAX,byte [RBP+disp8] immediately
+            // precedes LEA RCX,imagebase, and the DWORD load is biased by exactly one entry. Prove the complete
+            // table, default included, from the exact anonymous same-owner PDB symbol; never skip an arbitrary
+            // range before a table load or weaken normal dispatch/target bounds.
+            if (signedByteIndex)
+            {
+                if (begin < imageBase + 4 || !dataSymbols.TryGetValue(begin - 4, out dataOwner) ||
+                    dataOwner != owner.Module)
+                    return null;
+                begin -= 4;
+                tableRva -= 4;
+                requireDataSymbol = true;
+            }
             if ((begin & 3) != 0 || begin <= afterJump || begin + 8 > owner.End || afterJump > owner.End)
                 return null;
             int raw = checked((int)Offset(tableRva, sections, pe.Length));
@@ -146,7 +185,6 @@ namespace RedPrismBuild
             afterReturn |= raw >= 3 && pe[raw - 3] == 0xc3 && pe[raw - 2] == 0x66 && pe[raw - 1] == 0x90;
             afterReturn |= raw >= 4 && pe[raw - 4] == 0xc3 && pe[raw - 3] == 0x0f &&
                            pe[raw - 2] == 0x1f && pe[raw - 1] == 0x00;
-            int dataOwner;
             if (requireDataSymbol && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module))
                 return null;
             if (!afterReturn && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module)) return null;
@@ -301,6 +339,7 @@ namespace RedPrismBuild
             ulong firstPreludeTarget = 0, secondPreludeTarget = 0;
             ulong dispatchBegin = 0, precedingEnd = 0;
             uint tableRva = 0;
+            bool previousSignedByteIndex = false, signedByteIndex = false;
             foreach (string line in File.ReadLines(disassembly))
             {
                 Match match = InstructionLine.Match(line);
@@ -351,7 +390,7 @@ namespace RedPrismBuild
                     else if (dispatchStage == 4 && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)
                     {
                         InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, imageBase, dispatchBegin,
-                            checked(address + 2), tableRva, preludeStep != 0 || raxBase);
+                            checked(address + 2), tableRva, preludeStep != 0 || raxBase, signedByteIndex);
                         if (table != null && preludeStep != 0)
                         {
                             ulong afterJump = checked(address + 2);
@@ -373,8 +412,11 @@ namespace RedPrismBuild
                         checked((long)address + 7 + BitConverter.ToInt32(encoded, 3)) == (long)imageBase)
                     { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c;
                       raxBase = encoded[0] == 0x48 && encoded[2] == 0x05; indexRegister = 0;
+                      signedByteIndex = !r8Base && !raxBase && previousSignedByteIndex && address == precedingEnd;
                       preludeStep = 0; firstPreludeTarget = 0; secondPreludeTarget = 0; }
                 }
+                previousSignedByteIndex = bytes.Length == 5 && bytes[0] == "48" && bytes[1] == "0f" &&
+                                          bytes[2] == "be" && bytes[3] == "45";
                 precedingEnd = checked(address + (ulong)bytes.Length);
                 int prefix = 0;
                 byte opcode = Byte.Parse(bytes[prefix], NumberStyles.HexNumber);
@@ -383,7 +425,7 @@ namespace RedPrismBuild
                 if (opcode != 0xc4 && opcode != 0xc5 && opcode != 0x62) continue;
                 bool inlineData = false;
                 foreach (InlineTable table in inlineTables)
-                    if (table.PendingTargets.Count == 0 && address >= table.Begin && precedingEnd <= table.End)
+                    if (IsTableData(table, address, bytes, pe, sections, imageBase))
                     { inlineData = true; break; }
                 if (inlineData) { ++result.InlineTableVectorData; continue; }
                 // Linear disassembly can encounter inline jump tables. An undecoded data byte is not an

@@ -192,7 +192,10 @@ add and jump use the same registers. The aligned table must follow RET plus at m
 have an exact anonymous `S_LDATA32` start in the matching PDB and owning contribution. The latter covers multiple
 tables after one function. A following data symbol bounds the table; it is not itself an exempt range. Every entry must
 target a decoded instruction after the dispatch and before the table. Only complete instructions inside that
-verified DWORD span are counted separately as `inlineTableVectorData`; other code in the function remains gated.
+verified DWORD span are counted separately as `inlineTableVectorData`. An observed linear-disassembly row starting
+inside that span may consume adjacent `INT3` alignment: the row must be at most 15 bytes, match the PE byte for
+byte, and have only `0xCC` outside the proved table. A row starting at or after the end, a nonpadding suffix or an
+unproved table stays gated. Other code in the function remains gated.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 
@@ -201,6 +204,13 @@ one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, an
 the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned table start; all existing
 decoded-target and table-bound checks apply. Corrupted registers, sequences, symbols, targets, and real vector
 instructions beside the table remain refused. This adds no object/function runtime exemption.
+
+The observed Release variant form loads a signed byte into RAX from RBP+disp8 immediately before LEA RCX of
+image base. Its DWORD load can point exactly one entry after the anonymous PDB table start: index -1 addresses
+the first/default entry. Only the exact contiguous MOVSX/LEA/load/ADD/JMP form and same-owner anonymous data
+symbol prove that bias. The complete table, including its default entry, must target decoded body instructions
+after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
+invalid default/other targets receive no exemption. This adds no runtime allowlist entry.
 
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
