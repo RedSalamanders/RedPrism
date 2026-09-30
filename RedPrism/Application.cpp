@@ -1943,6 +1943,11 @@ int Application::RunSelfTest() noexcept
         SyncChrome();
         const auto pixelAt = [&](int x, int y, std::array<int, 4>& out) -> bool
         {
+            // Harness-only: observe the completed worker preview before reading its numeric canvas result.
+            if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            {
+                return false;
+            }
             (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
             std::vector<std::uint8_t> bgra;
             UINT width = 0;
@@ -2036,6 +2041,7 @@ int Application::RunSelfTest() noexcept
         }
         OnCommand(ChromeHost::kCommandSelectAll);
         if (!HandleAccelerator(VK_DELETE, MK_SHIFT) || !_session.HasColorEdit() ||
+            SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
             !_session.PendingColorEdit()->previewFailed || !HandleAccelerator(VK_RETURN, 0) ||
             !_session.HasColorEdit() || !HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit() ||
             _chrome->AdjustPanelOpen())
@@ -2105,6 +2111,10 @@ int Application::RunSelfTest() noexcept
     if (const int adjust = RunAdjustSelfTest(); adjust != 0)
     {
         return adjust;
+    }
+    if (const int colorJobs = RunColorJobsSelfTest(); colorJobs != 0)
+    {
+        return colorJobs;
     }
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
@@ -2428,6 +2438,7 @@ Vec2 Application::DocumentSize() const noexcept
 
 void Application::DocumentChanged() noexcept
 {
+    RefreshColorJobs();
     _composition.InvalidateDocument();
     SyncChrome();
     _frameInvalidated = true;
@@ -2873,6 +2884,7 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    CancelColorJobs();
     _jobs.RequestStop();
     if (_window)
     {

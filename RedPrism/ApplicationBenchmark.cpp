@@ -423,7 +423,9 @@ void Application::AdvanceUiBenchmark() noexcept
         FailUiBenchmark("render-failure");
         return;
     }
-    if (!_jobs.IsIdle() || _renderer.PresentCount() <= state.previousPresents)
+    // A completion can arrive after an earlier frame already presented. Wait for the frame invalidated by
+    // that completion, so asynchronous work cannot pass readiness while its final image/chrome is still unseen.
+    if (!_jobs.IsIdle() || _frameInvalidated || _renderer.PresentCount() <= state.previousPresents)
     {
         return;
     }

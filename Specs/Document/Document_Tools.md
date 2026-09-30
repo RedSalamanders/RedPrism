@@ -553,9 +553,30 @@ ones arriving after preview is re-enabled. Failed/cancelled results never instal
 with inconsistent settings, grid or output shape is rejected.
 
 The default direct API runs these same worker functions inline and immediately applies them, preserving its numeric
-goldens. Host job submission, busy controls and file/close continuations are the next P1.1c slice; this data/API
-boundary alone does not establish a nonblocking application. Earlier tool settlement and GPU composite sampling
-retain their owning P1 migration steps.
+goldens. The Application explicitly chooses deferred mode for destructive and adjustment-layer panels.
+
+### Host preview and histogram jobs (P1.1c.2)
+
+`ApplicationAdjustJobs.cpp` owns one stable preview mailbox. Settings ticks retain at most one running request and
+one latest pending request; they do not cancel the running interactive preview on each tick. A completed
+intermediate result may publish before the pending request starts. Pending launch may pick up a compatible
+prepared source from that completion without changing its captured settings sequence. Each submitted job owns its
+input, result, cancellation ticket and declared memory peak. Workers cannot access the Application or session.
+
+Levels submits one Background histogram attempt per panel opening, independently of preview changes. Completion
+publishes only for the same opening image and lifetime. It updates chrome without recompositing unchanged canvas
+pixels. Failed admission/computation reports through deferred UI work and has no idle retry loop. Cancellation and
+obsolete results cannot publish partial images or histograms.
+
+Preview off, identity settings, refused growth, Cancel, reopening, document replacement and shutdown invalidate
+the appropriate mailbox/tickets. Completions apply outside message/control dispatch and then invalidate the frame.
+The host never waits for these jobs in a production command. Shutdown invalidates inputs before stopping and joining
+the scheduler. An adjustment-layer panel still uses its composition path for live parameters; its opening composite
+readback remains the P1.3 migration.
+
+Destructive OK is still inline until P1.1c.3 migrates ordered commit and every dependent file/close continuation
+together. Earlier tool settlement, commit, GPU composite sampling and other P1 operations remain blocking paths;
+this slice does not establish whole-application G1.
 
 ## Content-aware fill (C13)
 

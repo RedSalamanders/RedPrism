@@ -148,7 +148,7 @@ bool Application::BeginColorEdit(int command) noexcept
     {
         return false;
     }
-    _session.BeginColorEdit(kind.value());
+    _session.BeginColorEdit(kind.value(), true);
     if (!_session.HasColorEdit())
     {
         if (_session.TakeBudgetRefusal())
@@ -209,7 +209,7 @@ void Application::OpenAdjustmentEditor() noexcept
         return;
     }
     const std::optional<Raster> below = CompositeBelow(id.value());
-    if (!below.has_value() || !_session.BeginAdjustmentEditing(id.value(), below.value()))
+    if (!below.has_value() || !_session.BeginAdjustmentEditing(id.value(), below.value(), true))
     {
         _session.SetAdjustmentEditingID(std::nullopt);
     }

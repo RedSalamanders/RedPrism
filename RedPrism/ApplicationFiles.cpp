@@ -1018,7 +1018,8 @@ int Application::RunFilesSelfTest() noexcept
         const Guid revisionBefore = _session.history.CurrentRevision();
         const int undoCountBefore = _session.history.UndoCount();
         OnCommand(ChromeHost::kCommandContentAwareFill);
-        const bool failedPreview = _session.PendingColorEdit().has_value() &&
+        const bool failedPreview = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                   _session.PendingColorEdit().has_value() &&
                                    _session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
                                    _session.PendingColorEdit()->previewFailed;
         _documentPath = fillPath;

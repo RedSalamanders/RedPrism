@@ -112,6 +112,14 @@ finite filtering, empty/degenerate geometry, shared copies, moves and unchanged 
 These tests qualify the data and publication boundary. Host mailboxes, real-loop input, busy controls and
 file/close continuations have separate P1.1c gates; no host responsiveness claim follows from these direct tests.
 
+`--self-test --warp` additionally gates the production histogram and preview jobs with owned events. While the
+histogram is blocked, the shared pump dispatches a message and the Zoom In command; the unchanged opening histogram
+then arrives after a settings tick. Thirteen pending settings changes produce exactly one running and one final
+preview, with the final settings sequence displayed. A completed-but-undrained old preview is cancelled and its panel
+reopened; that result cannot enter the new panel. All gate waits are harness failure bounds, never timing assertions
+or production waits. The real UI benchmark smoke verifies the command/result/frame ordering in the outer host loop.
+Busy Commit controls and file/close continuations remain separate P1.1c.3 gates.
+
 ### CPU dispatch and instruction boundary (P0.8)
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host

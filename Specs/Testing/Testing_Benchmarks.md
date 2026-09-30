@@ -53,7 +53,9 @@ refusal without a document or history change. It does not report that refusal as
 
 Each timed operation begins after its fixture and command setup have idle jobs and a submitted frame. The outer interval starts immediately
 before the command is posted and ends after worker jobs are idle and a subsequent frame has reached the renderer's
-Present call. A sample is accepted only after verifying the command's result. It measures response through Present submission;
+Present call. The invalidated-frame flag must also be clear: a completion can request a new frame after an earlier
+one presented, and that earlier frame cannot stand for the completed result. A sample is accepted only after
+verifying the command's result. It measures response through Present submission;
 it does not measure display scanout or time until pixels are visible on the monitor. Nested UI timing rows report
 message dispatch, window-message handling, completion draining, result application, UI actions, and frame work as
 inclusive wall time on the owning thread.

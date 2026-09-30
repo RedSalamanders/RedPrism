@@ -68,7 +68,7 @@
   - [ ] P1.1c — Wire preview/histogram/commit jobs, settle continuations and all discard-confirmation callers; validate real-loop responsiveness and ordering.
     - [x] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Full x64 gates and all ARM64 cross-builds passed.
     - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
-    - [ ] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation.
+    - [x] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation. Full x64 gates and all ARM64 cross-builds passed.
     - [ ] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -198,6 +198,14 @@ All x64 configuration gates and all ARM64 cross-builds passed. The benchmark no 
 preview preparation; the ISA gate now verifies an additional compiler switch-table pattern without an object
 allowlist exception. Evidence is in the [P1.1c.1 record](../../TestRuns/ColorPanelWork_2026-09-28.md).
 Production job/continuation wiring follows this boundary and is not yet complete.
+
+P1.1c.1 was committed and pushed as `6a6443c`. P1.1c.2 is complete on x64: the host selects deferred
+panels, submits one-active/latest-pending previews and once-per-opening histograms, and invalidates tickets on
+panel/document/shutdown transitions. Its WARP test gates actual production jobs and checks input dispatch,
+coalescing and Cancel/reopen. The UI benchmark also waits for the frame invalidated by job publication. Commit and
+owned file/close continuations remain P1.1c.3; no whole-host nonblocking claim is made at this boundary. All three
+x64 test configurations, skill validation, formatting and all ARM64 cross-builds passed. Evidence is in the
+[P1.1c.2 record](../../TestRuns/ColorPanelHost_2026-09-28.md).
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic

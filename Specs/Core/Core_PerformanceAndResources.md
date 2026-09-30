@@ -274,7 +274,9 @@ survives filtering and blending. Gaussian additionally needs four float intermed
 weights; content fill needs four byte and three integer arrays per pixel. Private copies are charged only for
 unassembled inputs, except the destructive lens kernel's explicit source copy. Eager mask thumbnails and crop
 outputs are included. A reusable full-grid preview is already resident and does not reserve another image/filter
-graph. Reservation acquisition and actual host dispatch are owned by the P1.1c migration.
+graph. The Application submits InteractivePreview and Background histogram jobs with their declared peaks before
+any worker preparation. It retains one active/latest pending preview and one histogram attempt per opening, with
+event-driven completion and no idle retry. Commit reservation acquisition/dispatch follows in P1.1c.3.
 
 ## CPU instruction dispatch
 

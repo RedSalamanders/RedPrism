@@ -5,12 +5,14 @@
 #include "CanvasSize.h"
 #include "CanvasViewport.h"
 #include "ChromeEvents.h"
+#include "ColorEditWork.h"
 #include "CommandBindings.h"
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
 #include "JobActivity.h"
 #include "Jobs.h"
+#include "PreviewMailbox.h"
 #include "Prompts.h"
 #include "Renderer.h"
 #include "SettingsStore.h"
@@ -33,6 +35,7 @@
 
 class ChromeHost;
 struct UiBenchmarkState;
+struct ColorWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -243,6 +246,19 @@ class Application final : public ChromeEvents
     void OpenAdjustmentEditor() noexcept;
     [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
     void ApplyColorEdit() noexcept;
+    class ColorPreviewJob;
+    class ColorHistogramJob;
+    class ColorFailureAction;
+    void RefreshColorJobs() noexcept;
+    void CancelColorJobs() noexcept;
+    void LaunchColorPreview() noexcept;
+    [[nodiscard]] std::int32_t OfferColorPreview() noexcept;
+    [[nodiscard]] std::int32_t SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::Launch launch) noexcept;
+    [[nodiscard]] std::int32_t SubmitColorHistogram() noexcept;
+    void CompleteColorPreview(PreviewStamp stamp, ColorEditPreviewResult& result, JobResult completion) noexcept;
+    void CompleteColorHistogram(ColorEditHistogramResult& result, JobResult completion) noexcept;
+    void QueueColorFailure() noexcept;
+    int RunColorJobsSelfTest() noexcept;
     void CancelColorEdit() noexcept;
     void OnAdjustAction(AdjustAction action, double value) noexcept override;
     void OnCurveChanged(std::vector<CurvePoint> points) noexcept override;
@@ -473,6 +489,15 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     JobScheduler _jobs;
+    PreviewMailbox<ColorEditJobInput> _colorPreviews;
+    bool _colorMailboxOpen = false;
+    std::uint64_t _colorDocumentSerial = 0;
+    std::uint64_t _colorOpening = 0;
+    std::uint64_t _colorSeenSequence = 0;
+    bool _colorHistogramAttempted = false;
+    std::optional<JobTicket> _colorPreviewTicket;
+    std::optional<JobTicket> _colorHistogramTicket;
+    std::shared_ptr<ColorWorkTestGate> _colorWorkTestGate;
     JobActivity _jobActivity;
     std::uint64_t _jobQpcFrequency = 0;
     std::optional<JobTicket> _jobIndicatorTimer;
