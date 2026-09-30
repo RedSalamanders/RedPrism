@@ -165,7 +165,7 @@ immutable commit under that entry's ordinal. Waiting consumes source readiness; 
 stores the prerequisite outcome/error and requests a later UI action. Apply/drop finishes history before terminal
 receipt publication. Every asynchronous history finisher MUST call the common `ResumeHostHistory` hook after
 apply/drop and `HistoryWork::Finish`; it wakes queued inputs even when that earlier operation belongs to another
-kind. The current color finisher is wired; the remaining operation migrations must wire the hook at their own
+kind. Color, utility Merge/adjustment-opening and size finishers use this hook; remaining migrations must wire it at their own
 apply/drop boundaries. Cancel retires queued inputs immediately and retains active ownership/barrier through acknowledged drop.
 After a panel commit has acknowledged its terminal result, a later Cancel preserves that result and its already
 applied pixels/history. It cannot relabel Succeeded or a known Failed as Cancelled during deferred publication.
@@ -176,7 +176,11 @@ may rebind its session serial after its own successful project replacement; youn
 Size Apply owns its complete event-time draft and card invocation. Session end owns a separate request generation;
 `WM_ENDSESSION(FALSE)` invalidates a late close even when the color worker completed successfully.
 Shutdown retires requests and unregisters the borrowed source before joining their independently owned worker
-inputs. GPU readback, IO and residual canvas/history work still migrate in later P1 slices. Current staged writes
+inputs. Size-card preparation is an immutable Commit job: copied options and a full document token stay owned
+through cancellation acknowledgement and checked owner apply/drop. Its selected request continues an earlier
+panel commit's ordinal and retains the shared history barrier until completion. Merge and adjustment-opening
+readback use the separate utility composition/resumable worker graph. Remaining GPU callers, IO and residual
+canvas/history work still migrate in later P1 slices. Current staged writes
 and imports do not establish whole-application responsiveness.
 
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is

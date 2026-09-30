@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <unordered_set>
 
-DocumentHistory::DocumentHistory(int entryLimit, int retainedByteLimit) noexcept
-    : _entryLimit(std::max(0, entryLimit)), _retainedByteLimit(std::max(0, retainedByteLimit))
+DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
+    : _entryLimit(std::max(0, entryLimit)), _retainedByteLimit(retainedByteLimit)
 {
     _savedRevision = _revision;
 }
@@ -186,7 +186,7 @@ void DocumentHistory::Trim(const std::optional<CanvasDocument>& current)
     std::size_t bytes = 0;
     std::size_t keep = 0;
     const std::size_t entryLimit = static_cast<std::size_t>(_entryLimit);
-    const std::size_t byteLimit = static_cast<std::size_t>(_retainedByteLimit);
+    const std::uint64_t byteLimit = _retainedByteLimit;
     for (std::size_t index = removalOrder.size(); index > 0; --index)
     {
         if (keep + 1 > entryLimit)

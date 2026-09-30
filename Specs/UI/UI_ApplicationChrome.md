@@ -756,6 +756,13 @@ own entry), then resizes that document through `ResizeCanvas` / `ResizeImage`
 ([`Document_Tools.md`](../Document/Document_Tools.md)) as one `Canvas Size` / `Image Size` entry and fits the viewport; `TooLarge` reports `IDS_ERROR_TOO_LARGE`, any other failure
 `IDS_ERROR_RESIZE`; an unchanged size closes the card.
 
+Image Size/Canvas Size Apply closes the submitted card and starts cancellable worker preparation. Fit and
+the single named history entry occur only when its result is successfully applied. Escape during a running size
+job requests cancellation; the busy/history state remains until acknowledged drop. Reopening a card invalidates
+the earlier result and its completion leaves the new card open. Size failures are posted localized notices from
+outside the completion callback. The job's dimensions, resolution, sampling, anchor and color come from its copied
+request; subsequent draft/palette changes cannot alter that work. New Canvas keeps its existing route.
+
 | Card | Rows |
 | --- | --- |
 | New Canvas | The hint, Width and Height in pixels (1…30 000, else the invalid note replaces the sRGB note and Create Canvas is disabled), Open Project… and Import Image… (they close the card and run the command), Cancel, Create Canvas: after the save prompt a fresh unmodified untitled document with one blank layer. The size starts at 1920×1080, then the last typed size; an image on the clipboard suggests its size when the card opens |

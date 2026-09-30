@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-09-28
+Last reviewed: 2026-09-30
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -12,8 +12,11 @@ Independent history expectations are retained in the document tests.
 
 ## Budget
 
-Default `entryLimit` is **100**. Default `retainedByteLimit` is **256 MiB**. Limits are clamped to ≥0 at
-construction. `retainedBytes(current)` counts unique raster storage that appears only in history snapshots
+Default `entryLimit` is **100**, clamped to ≥0 at construction. The class and default `DocumentSession`
+`retainedByteLimit` remains **256 MiB**. The byte limit is an unsigned 64-bit value, including values ≥2 GiB.
+The application supplies an explicit session limit of **min(physical RAM / 4, 2 GiB)**, using integer division;
+a failed physical-memory query falls back to 256 MiB. The limit is selected once at application construction.
+`retainedBytes(current)` counts unique raster storage that appears only in history snapshots
 (before/after), excluding images still referenced by the live document, using pointer identity of `Raster`
 storage (Swift `ObjectIdentifier` of `CGImage`). Thumbnails count separately when they are distinct storage.
 
@@ -58,7 +61,8 @@ entry, else the oldest future entry. A 256 MiB trim test MUST exist (`history.
 ## Validation
 
 `Tests/DocumentTests` covers saved-revision capture (current snapshot, delayed save after an edit, undo/redo,
-branching, trimmed history, and reset), nested transactions, no-op rename/empty name preserving redo, entry-limit trim,
+branching, trimmed history, and reset), the unsigned 64-bit limit and physical-memory formula including failed
+query, rounding and overflow boundaries, nested transactions, no-op rename/empty name preserving redo, entry-limit trim,
 shared live rasters reporting 0 retained bytes, the 256 MiB unique-pixel trim, and `pending.*` (Undo/Redo drop a
 live brush, gradient, warp and pixel move without moving history; with a crop frame they drop it and still move
 history, and keep it when there is nothing to undo; Cut on a hidden layer or under an
@@ -66,4 +70,6 @@ open Levels panel leaves the clipboard and the pixels; a paintable Cut clears; a
 paints nothing) and `cutfull.*` (Cut on a mask and Clear with a full 100-entry history keep the copy and report
 the clear). The WARP self-test covers Ctrl+Z during a stroke, and the save prompt asking for a live stroke on a
 clean document whose Cancel leaves the stroke live for its release to record.
-Debug and ASan Debug `test.ps1` MUST run `DocumentTests.exe`.
+The WARP self-test also verifies that the application session receives the machine-derived limit. Debug and
+ASan Debug `test.ps1` MUST run `DocumentTests.exe`. Selection storage accounting and incremental accounting remain
+tracked by P1.9; the current retained-byte count covers raster storage only.

@@ -2135,6 +2135,21 @@ void DocumentSession::ApplyDocumentSize(CanvasDocument document, std::wstring na
     EndEdit();
 }
 
+bool DocumentSession::ApplyDocumentSizeIfCurrent(CanvasDocument document, std::wstring name, const JobToken& token)
+{
+    if (!CanApplyJobResult(token, token.sequence) || document.id != _document->id ||
+        ValidateDocument(document) != DocumentStatus::Ok)
+    {
+        return false;
+    }
+    _lassoDraft.reset();
+    _selectionMoveOrigin.reset();
+    BeginEdit(std::move(name));
+    _document = std::move(document);
+    EndEdit();
+    return true;
+}
+
 bool DocumentSession::ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,
                                             std::wstring name)
 {

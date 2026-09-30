@@ -1,6 +1,7 @@
 #include "FilterWorkBenchmark.h"
 
 #include "Adjust.h"
+#include "CanvasSize.h"
 #include "ColorEditWork.h"
 #include "Jobs.h"
 #include "RasterWork.h"
@@ -14,7 +15,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <optional>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace
@@ -31,6 +35,8 @@ struct Observation final
     LARGE_INTEGER finish{};
     JobResult completion;
     bool produced = false;
+    std::optional<ResizeStatus> resizeStatus;
+    CanvasDocument resized;
 };
 
 class FilterWork final : public Job
@@ -108,6 +114,47 @@ class FilterWork final : public Job
     int _operation;
     Observation& _observed;
 };
+
+class SizingWork final : public Job
+{
+  public:
+    SizingWork(const CanvasDocument& source, std::variant<CanvasSizeOptions, ImageSizeOptions> options,
+               Observation& observed)
+        : _source(source), _options(std::move(options)), _observed(observed)
+    {
+    }
+
+    JobResult Run(JobContext& context) override
+    {
+        _observed.started.SetEvent();
+        _observed.resizeStatus = std::visit(
+            [&](const auto& options)
+            {
+                using Options = std::decay_t<decltype(options)>;
+                if constexpr (std::is_same_v<Options, CanvasSizeOptions>)
+                    return ResizeCanvas(_source, options, _observed.resized, context.cancellation);
+                else
+                    return ResizeImage(_source, options, _observed.resized, context.cancellation);
+            },
+            _options);
+        const ResizeStatus status = _observed.resizeStatus.value();
+        _observed.produced = status == ResizeStatus::Ok || status == ResizeStatus::Unchanged;
+        QueryPerformanceCounter(&_observed.finish);
+        _observed.returned.SetEvent();
+        return context.cancellation.IsCancelled() || status == ResizeStatus::Cancelled ? JobResult{JobStatus::Cancelled}
+                                                                                       : JobResult{};
+    }
+
+    void Completed(JobResult result) noexcept override
+    {
+        _observed.completion = result;
+    }
+
+  private:
+    const CanvasDocument& _source;
+    const std::variant<CanvasSizeOptions, ImageSizeOptions> _options;
+    Observation& _observed;
+};
 } // namespace
 
 int RunFilterWorkBenchmark()
@@ -131,10 +178,35 @@ int RunFilterWorkBenchmark()
     }
     const Raster source = Raster::Adopt(kWidth, kHeight, RasterFormat::Bgra8888, std::move(bytes));
     const Raster mask = Raster::Adopt(kWidth, kHeight, RasterFormat::Gray8, std::move(maskBytes));
-    constexpr std::array names{"levels",       "hsv",          "curves",      "exposure",      "gradient-map",
-                               "grain",        "gaussian-250", "motion-2000", "noise",         "content-fill",
-                               "lens",         "histogram",    "coverage-aa", "coverage-hard", "downscale",
-                               "carried-mask", "sparse-copy"};
+    constexpr std::array names{"levels",
+                               "hsv",
+                               "curves",
+                               "exposure",
+                               "gradient-map",
+                               "grain",
+                               "gaussian-250",
+                               "motion-2000",
+                               "noise",
+                               "content-fill",
+                               "lens",
+                               "histogram",
+                               "coverage-aa",
+                               "coverage-hard",
+                               "downscale",
+                               "carried-mask",
+                               "sparse-copy",
+                               "sizing-canvas-fill",
+                               "sizing-image-nearest",
+                               "sizing-image-high"};
+    CanvasDocument sizingSource;
+    sizingSource.id = Guid::Generate();
+    sizingSource.width = kWidth;
+    sizingSource.height = kHeight;
+    ImageLayer sizingLayer =
+        ImageLayer::Blank(L"Benchmark source", {static_cast<double>(kWidth), static_cast<double>(kHeight)});
+    sizingLayer.asset = RasterAsset{source, {}, sizingLayer.name};
+    sizingSource.layers.push_back(std::move(sizingLayer));
+    const CanvasDocument originalSizingSource = sizingSource;
     LARGE_INTEGER frequency{};
     if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
     {
@@ -152,8 +224,38 @@ int RunFilterWorkBenchmark()
         latencies.reserve(kSamples);
         int early = 0;
         int overlap = 0;
+        int cancelled = 0;
+        const bool sizing = operation >= 17;
+        std::variant<CanvasSizeOptions, ImageSizeOptions> sizingOptions;
+        std::uint64_t reservation = 2ull * 1024 * 1024 * 1024;
+        if (operation == 17)
+        {
+            CanvasSizeOptions options;
+            options.width = kWidth + 128;
+            options.height = kHeight + 128;
+            options.anchor = 8;
+            options.fill = CanvasExtensionColor{1, 0, 0};
+            sizingOptions = options;
+            reservation = SizingMemoryBytes(sizingSource, options);
+        }
+        else if (operation >= 18)
+        {
+            ImageSizeOptions options;
+            options.width = kWidth * 3 / 4;
+            options.height = kHeight * 3 / 4;
+            options.resolution = 72;
+            options.sampling = operation == 18 ? LayerSampling::Nearest : LayerSampling::High;
+            sizingOptions = options;
+            reservation = SizingMemoryBytes(sizingSource, options);
+        }
+        if (reservation == 0 || reservation > 2ull * 1024 * 1024 * 1024)
+        {
+            succeeded = false;
+        }
         for (int sample = -1; sample < kSamples; ++sample)
         {
+            if (!succeeded)
+                break;
             Observation observation;
             if (FAILED(observation.started.create(wil::EventOptions::ManualReset)) ||
                 FAILED(observation.returned.create(wil::EventOptions::ManualReset)))
@@ -161,12 +263,15 @@ int RunFilterWorkBenchmark()
                 succeeded = false;
                 break;
             }
-            std::unique_ptr<Job> job =
-                std::make_unique<FilterWork>(source, mask, static_cast<int>(operation), observation);
+            std::unique_ptr<Job> job;
+            if (sizing)
+                job = std::make_unique<SizingWork>(sizingSource, sizingOptions, observation);
+            else
+                job = std::make_unique<FilterWork>(source, mask, static_cast<int>(operation), observation);
             JobTicket ticket;
             // This benchmark runs one job at a time. 2 GiB covers the largest 45 MP case's whole graph;
             // production filter jobs use ColorEditJobMemoryBytes instead of this measurement-only ceiling.
-            if (scheduler.Submit(job, {JobClass::Commit, 0, 2ull * 1024 * 1024 * 1024}, ticket) < 0 ||
+            if (scheduler.Submit(job, {JobClass::Commit, 0, reservation}, ticket) < 0 ||
                 WaitForSingleObject(observation.started.get(), 5000) != WAIT_OBJECT_0)
             {
                 scheduler.Close(); // Join before the observation and its handles leave scope.
@@ -194,6 +299,29 @@ int RunFilterWorkBenchmark()
                 succeeded = false;
                 break;
             }
+            if (sizing)
+            {
+                const ResizeStatus status = observation.resizeStatus.value_or(ResizeStatus::Invalid);
+                const bool emptyResult = observation.resized == CanvasDocument{};
+                const bool validFinishedResult = (status == ResizeStatus::Ok || status == ResizeStatus::Unchanged) &&
+                                                 observation.resized.width > 0 && observation.resized.height > 0 &&
+                                                 !observation.resized.layers.empty();
+                const bool validCancelledResult = status == ResizeStatus::Cancelled && emptyResult;
+                if ((observation.produced && !validFinishedResult) ||
+                    (status == ResizeStatus::Cancelled && !validCancelledResult) ||
+                    (!observation.produced && status != ResizeStatus::Cancelled) ||
+                    (observation.completion.status == JobStatus::Finished && !observation.produced) ||
+                    (status == ResizeStatus::Cancelled && observation.completion.status != JobStatus::Cancelled) ||
+                    !(sizingSource == originalSizingSource))
+                {
+                    std::printf("FILTER CANCEL ERROR name=%s reason=invalid-sizing-result resize_status=%u "
+                                "completion=%u empty=%u\n",
+                                names[operation], static_cast<unsigned int>(status),
+                                static_cast<unsigned int>(observation.completion.status), emptyResult ? 1u : 0u);
+                    succeeded = false;
+                    break;
+                }
+            }
             if (wait == WAIT_OBJECT_0 && !observation.produced)
             {
                 std::printf("FILTER CANCEL ERROR name=%s reason=empty-before-cancellation\n", names[operation]);
@@ -214,6 +342,18 @@ int RunFilterWorkBenchmark()
                 ++overlap; // Work can finish between the timeout and stop request; never call this cancellation.
                 continue;
             }
+            if (sizing)
+            {
+                if (observation.resizeStatus != ResizeStatus::Cancelled || !(observation.resized == CanvasDocument{}) ||
+                    observation.completion.status != JobStatus::Cancelled)
+                {
+                    std::printf("FILTER CANCEL ERROR name=%s reason=cancelled-sizing-result-not-empty-safe\n",
+                                names[operation]);
+                    succeeded = false;
+                    break;
+                }
+                ++cancelled;
+            }
             latencies.push_back(static_cast<double>(observation.finish.QuadPart - requested.QuadPart) * 1000.0 /
                                 static_cast<double>(frequency.QuadPart));
         }
@@ -222,10 +362,17 @@ int RunFilterWorkBenchmark()
         const double median = count == 0 ? 0 : (latencies[(count - 1) / 2] + latencies[count / 2]) / 2;
         const double p95 = count == 0 ? 0 : latencies[(count * 95 + 99) / 100 - 1];
         const double maximum = count == 0 ? 0 : latencies.back();
-        std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
-                    "median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
-                    names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
-                    succeeded ? "ok" : "failed");
+        if (sizing)
+            std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
+                        "cancelled_empty=%d peak_bytes=%llu median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
+                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, cancelled,
+                        static_cast<unsigned long long>(reservation), median, p95, maximum,
+                        succeeded ? "ok" : "failed");
+        else
+            std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
+                        "median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
+                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
+                        succeeded ? "ok" : "failed");
         std::fflush(stdout);
     }
     scheduler.Close();

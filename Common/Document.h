@@ -35,7 +35,12 @@ inline constexpr int kMinFormatVersion = 1;
 inline constexpr int kMaxFormatVersion = 7;
 inline constexpr int kCurrentFormatVersion = 7;
 inline constexpr int kHistoryEntryLimit = 100;
-inline constexpr int kHistoryRetainedByteLimit = 256 * 1024 * 1024;
+inline constexpr std::uint64_t kHistoryRetainedByteLimit = 256ull * 1024 * 1024;
+// A failed physical-memory query uses the legacy class default. Division before capping cannot overflow.
+[[nodiscard]] constexpr std::uint64_t HistoryLimitForPhysicalMemory(std::uint64_t bytes) noexcept
+{
+    return bytes == 0 ? kHistoryRetainedByteLimit : std::min<std::uint64_t>(bytes / 4, 2ull * 1024 * 1024 * 1024);
+}
 
 enum class DocumentStatus
 {
@@ -1294,7 +1299,7 @@ class DocumentHistory
     };
 
     explicit DocumentHistory(int entryLimit = kHistoryEntryLimit,
-                             int retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
+                             std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
     void End(const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
@@ -1332,7 +1337,7 @@ class DocumentHistory
     {
         return _entryLimit;
     }
-    [[nodiscard]] int RetainedByteLimit() const noexcept
+    [[nodiscard]] std::uint64_t RetainedByteLimit() const noexcept
     {
         return _retainedByteLimit;
     }
@@ -1355,12 +1360,17 @@ class DocumentHistory
     std::wstring _pendingName{L"Edit"};
     int _depth = 0;
     int _entryLimit = kHistoryEntryLimit;
-    int _retainedByteLimit = kHistoryRetainedByteLimit;
+    std::uint64_t _retainedByteLimit = kHistoryRetainedByteLimit;
 };
 
 class DocumentSession
 {
   public:
+    explicit DocumentSession(std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit)
+        : history(kHistoryEntryLimit, retainedByteLimit)
+    {
+    }
+
     DocumentHistory history;
 
     void CreateDocument(int width, int height, bool emptyLayer = false);
@@ -1389,6 +1399,7 @@ class DocumentSession
     // A resized document (Canvas Size, Image Size, Crop: the same id, every layer still there) installed as one
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
+    [[nodiscard]] bool ApplyDocumentSizeIfCurrent(CanvasDocument document, std::wstring name, const JobToken& token);
     // Installs a validated import assembled from this document as one entry. A different document or invalid
     // graph/budget is refused before any session state changes. The synchronous host prepares this copy today.
     [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,

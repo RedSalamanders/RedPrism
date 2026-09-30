@@ -127,6 +127,7 @@
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="ColorWorkTestGate.h" />
+    <ClInclude Include="SizingWorkTestGate.h" />
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
@@ -193,6 +194,7 @@
     <ClCompile Include="ApplicationLayerEdits.cpp" />
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="ApplicationSize.cpp" />
+    <ClCompile Include="ApplicationSizeJobs.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />

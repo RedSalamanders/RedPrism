@@ -258,6 +258,26 @@ Payload construction is outside the timed intervals; admission, cancellation-sta
 completion delivery and payload release are included. Record Release numbers without a timing assertion. This
 is not the UI/image/RAW benchmark and proves no image speed target.
 
+### Asynchronous sizing and project durability (P1.8 / P1.7)
+
+P1.8 adds `sizingwork.*` document checks for independent extension/nearest/mask bytes, private sparse-source
+reads, pre-cancellation with no partial output, full-token checked apply, stale/invalid/replaced-document refusal,
+one-entry undo/redo and rounded whole-graph reservation lower bounds. Existing `canvas.*` and `imagesize.*`
+legacy numeric expectations remain unchanged.
+
+The production WARP host route additionally holds actual size jobs on owned worker events before or after
+preparation. It checks retained reservation/history ownership, copied dimensions/anchor/color/sampling/resolution,
+panel commit → size → younger Undo order, early cancellation and a late Finished result after cancellation,
+runner allocation failure, exact TooLarge/Invalid/Memory/failure errors, unchanged results, generation/restore/
+document/card replacement, hidden completion without Present and complete terminal cleanup. Gate deadlines are
+failure bounds, not latency assertions. Kernel cancellation intervals are structural bounds; these events alone
+do not measure in-kernel stop latency.
+
+P1.7 project durability checks inspect ZIP methods (STORE encoded PNG, DEFLATE manifest), load an independently
+rewritten legacy DEFLATE archive, exercise ZIP and folder overwrite, preserve unrelated same-prefix paths,
+require owned staging cleanup and refuse a locked destination while preserving its distinct previous bytes and
+resolution. The folder's second-rename rollback and injected flush/close faults are not covered by these controls.
+
 ### UI timing foundations (P0.1a)
 
 HostTests runs `ui-timing-histogram.*` and `ui-timing.*` numeric and state checks. Independent expectations cover bucket

@@ -79,6 +79,11 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
 
 void Application::CancelSizeCard() noexcept
 {
+    if (_sizingTicket)
+    {
+        (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_sizingTicket.value());
+    }
     if (!SizeCardOpen())
     {
         return;
@@ -136,9 +141,7 @@ void Application::ApplySizeCard() noexcept
     {
         return;
     }
-    CanvasDocument resized;
-    ResizeStatus status = ResizeStatus::Invalid;
-    const wchar_t* name = L"";
+    std::variant<CanvasSizeOptions, ImageSizeOptions> work;
     if (kind == SizeCardKind::CanvasSize)
     {
         const CanvasSizeDraft& draft = _sizeDialog.canvas;
@@ -166,8 +169,7 @@ void Application::ApplySizeCard() noexcept
         default:
             break;
         }
-        status = ResizeCanvas(_session.Document().value(), options, resized);
-        name = L"Canvas Size";
+        work = options;
     }
     else
     {
@@ -177,32 +179,14 @@ void Application::ApplySizeCard() noexcept
         options.height = draft.resample ? draft.RoundedHeight() : _session.Document().value().height;
         options.resolution = draft.resolution;
         options.sampling = draft.sampling;
-        status = ResizeImage(_session.Document().value(), options, resized);
-        name = L"Image Size";
+        work = options;
     }
     _sizeDialog.kind = SizeCardKind::None;
-    switch (status)
-    {
-    case ResizeStatus::Ok:
-        _session.ApplyDocumentSize(std::move(resized), name);
-        _viewport.followsFit = true;
-        DocumentChanged();
-        break;
-    case ResizeStatus::Unchanged:
-        SyncChrome();
-        _frameInvalidated = true;
-        break;
-    case ResizeStatus::TooLarge:
-        SyncChrome();
-        ShowError(IDS_ERROR_TOO_LARGE);
-        break;
-    case ResizeStatus::Invalid:
-    case ResizeStatus::Memory:
-    default:
-        SyncChrome();
-        ShowError(IDS_ERROR_RESIZE);
-        break;
-    }
+    _hostExecutionError = StartSizing(std::move(work));
+    if (FAILED(_hostExecutionError))
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_RESIZE);
+    SyncChrome();
+    _frameInvalidated = true;
 }
 
 void Application::OnSizeAction(SizeAction action, double value) noexcept

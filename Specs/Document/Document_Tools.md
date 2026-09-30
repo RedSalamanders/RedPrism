@@ -689,6 +689,35 @@ edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK re
 - `DocumentSession::ApplyDocumentSize(document, name)` installs a resized document (same id) as one entry named
   `Canvas Size`, `Image Size` or `Crop`, dropping any outline draft and keeping the active layer.
 
+### Asynchronous size-card preparation (P1.8)
+
+The application's Image Size and Canvas Size Apply actions submit immutable Commit jobs after all preceding
+history work has applied. Options include the selected draft's dimensions, sampling, resolution, anchor and
+captured extension color. Workers never read the card, palette, session, window or GPU. New Canvas and Crop retain
+their existing paths. A size action that first commits a panel continues the same input ordinal with a new exact
+acquisition stamp. A younger Undo or mutation starts only after the size result has applied or been dropped.
+
+`ResizeCanvas`, `ResizeImage` and the placed rasterizers accept a cancellation token; direct callers use its empty
+default. They preserve the existing sampling order, rounding and pixel goldens. Source sparse pixels are assembled
+privately, without publishing `Raster::Data()` on a shared sparse input. Checks occur between layers, rows and
+256-pixel spans; row initialization/clear checks can cover at most 120 KiB. Cancellation returns no partial raster
+or resized document. These are structural bounds; allocation, page faults and destruction can delay acknowledgement.
+
+`SizingMemoryBytes` declares metadata, all rounded output allocations and eager thumbnail allocations, plus the
+largest private sparse-source assembly (renderers release it before starting the next layer or mask). Refused
+late-layer bounds still reserve outputs already produced before the refusal. Metadata allows the immutable input,
+detached document, apply validation and existing history copies. Resident source pixels and immutable selection
+geometry are shared. An unrepresentable reservation or failed admission fails the whole action.
+
+`ApplyDocumentSizeIfCurrent` validates the full session/document generation and restore token, same document id
+and document graph immediately before the one named transaction. The host also validates the exact history stamp
+and size-card invocation. Closing/cancelling a running operation requests cancellation and retains the request,
+reservation and history barrier through worker acknowledgement and owner apply/drop. Reopening a card invalidates
+the old result; its completion cannot close the newer card. A late Finished result after cancellation is dropped.
+Only a successfully applied changed result enables Fit and invalidates document display. Unchanged, refusal,
+failure and stale results do not add history. Worker failures use posted localized notices outside the completion
+callback; TooLarge retains the distinct Too Large notice.
+
 The Crop tool's model (`Common/Crop.*`, legacy `Crop.swift`) works on `CropRect` (x, y, width, height in document
 pixels; the session holds the pending frame, `CropFrame`, and shows the whole canvas when there is none,
 `VisibleCropRect`):

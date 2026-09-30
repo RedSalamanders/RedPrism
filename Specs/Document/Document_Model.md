@@ -162,8 +162,14 @@ with the same image, transform, mask, layer kind/adjustment and selection handle
 an unrelated layer's rename does not invalidate it.
 Selection validation compares immutable handle identity and antialiasing in constant time, conservatively refusing
 a separately rebuilt outline. Copies and moves receive a new session identity; a move also retires the source's
-identity. Tokens cannot cross sessions even when every counter and document field matches. The future scheduler must additionally
+identity. Tokens cannot cross sessions even when every counter and document field matches. A scheduler caller must additionally
 check cancellation and whether a preview's edit is still open; these token helpers do not run jobs or apply pixels.
+
+`ApplyDocumentSizeIfCurrent` is the atomic owner boundary for a worker-prepared resized document. It requires a
+current whole-document token, the same document id and a valid graph before clearing outline drafts and applying
+one named history transaction. Refused stale/invalid input changes neither the document nor its history/active
+layer. The host additionally checks its exact history acquisition and size-card invocation. Direct Crop retains
+`ApplyDocumentSize`; size arithmetic and cancellation are specified in `Document_Tools.md`.
 
 ### Immutable selection snapshots
 

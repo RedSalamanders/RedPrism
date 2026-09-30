@@ -2,14 +2,24 @@
 
 ## Implementation checklist
 
-- [ ] P1.8.1 — Define immutable size work input/result and the validated UI apply boundary; keep all current size math and numeric expectations unchanged.
-- [ ] P1.8.2 — Route Image Size through an ordered, cancellable Commit job with memory admission and stale-result rejection.
-- [ ] P1.8.3 — Route Canvas Size, including optional colored extension fill, through the same ordered Commit path.
-- [ ] P1.8.4 — Extend document and host tests for copied drafts, cancellation, ordering, failure, stale results, undo/redo and existing size scenarios.
-- [ ] P1.8.5 — Update the owning contracts and this plan with implementation decisions and qualification evidence; close only after all gates below pass.
+- [x] P1.8.1 — Define immutable size work input/result and the validated UI apply boundary; keep all current size math and numeric expectations unchanged.
+- [x] P1.8.2 — Route Image Size through an ordered, cancellable Commit job with memory admission and stale-result rejection.
+- [x] P1.8.3 — Route Canvas Size, including optional colored extension fill, through the same ordered Commit path.
+- [x] P1.8.4 — Extend document and host tests for copied drafts, cancellation, ordering, failure, stale results, undo/redo and existing size scenarios.
+- [x] P1.8.5 — Update owning contracts, record full configuration qualification and real 4K/45 MP/WARP measurements.
+- [ ] P1.8 exit — Meet the 2 ms owner-apply target after the P1.9 history/chrome/upload work; current measured failures are retained in the evidence.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.8.
-Implementation is authorized by the user's request to complete all P1. Coding and qualification remain pending.
+Implementation is authorized by the user's request to complete all P1. Functional qualification is complete;
+the measured apply gate remains open. [Evidence](../../TestRuns/AsyncSizing_2026-09-30.md).
+
+Current work: cancellable resizers and private sparse reads are integrated. The production size-card route now
+submits an immutable Commit job with a whole-graph reservation, generation/card validation and one history ordinal.
+The owner retains the request until final apply/drop and acknowledgement. Event-gated host checks, independent
+document tests, all x64 suites and all ARM64 cross-builds pass. Hardware 4K/45 MP and WARP 4K each complete all
+18 real-loop operations. The 45 MP resize requires D13's explicit 2 GiB host history limit; the earlier 256 MiB
+run correctly failed because its required undo entry was trimmed. Apply times still exceed 2 ms in several
+cases, and first-upload/action costs remain measured P1.9 work. P1.8 and G1 are not closed.
 
 ## Scope and contract
 
@@ -17,7 +27,7 @@ Move the expensive preparation for the existing Image Size and Canvas Size actio
 
 The master plan assigns P1.8 to “Image Size and the Canvas Size fill as Commit jobs.” Its requirements include the shared history barrier and copied-draft and cancellation tests. The P1 exit still requires the master plan's applicable R1/W evidence, every due self-test and legacy async test, and the measured G1 criteria; completing this child alone does not close P1 or G1. Record unavailable hardware qualification separately.
 
-## Current implementation and anchors
+## Baseline implementation and anchors (before this slice)
 
 - `Common/CanvasSize.h` defines `CanvasSizeDraft`, `ImageSizeDraft`, `CanvasSizeOptions`, `ImageSizeOptions`, `ResizeStatus`, `ResizeCanvas(const CanvasDocument&, const CanvasSizeOptions&, CanvasDocument&)`, and `ResizeImage(const CanvasDocument&, const ImageSizeOptions&, CanvasDocument&)`.
 - `Common/CanvasSize.cpp` performs the existing preparation. Both functions read a const source and write a detached output. Canvas fill allocates and clears the full extension raster; Image Size rasterizes each image/mask and creates thumbnails. The existing routines catch `std::bad_alloc` and return `ResizeStatus::Memory`; they currently have no cancellation input.

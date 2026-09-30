@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <cstdint>
 #include <optional>
@@ -102,27 +103,35 @@ enum class ResizeStatus : std::uint8_t
     TooLarge,
     Invalid,
     Memory,
+    Cancelled, // sizing was cancelled; the result document is empty
 };
+
+// Additional whole-job allocation peak, including rounded pixel allocations, eager thumbnails, one private
+// sparse-source assembly and document/history metadata. Zero means arithmetic cannot be represented. Early
+// refusal reserves metadata; later refusal also reserves the allocated prefix. The resizer retains its status.
+[[nodiscard]] std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const CanvasSizeOptions& options) noexcept;
+[[nodiscard]] std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const ImageSizeOptions& options) noexcept;
 
 // Every layer and placed mask translated by the anchor's offset onto a canvas of the new size, the content kept
 // unscaled and unclipped; a colored extension (when growing) is a bottom layer `Canvas Extension` of the new size
 // with the old canvas cut out, so the old transparency stays. The selection outline is dropped.
 [[nodiscard]] ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions& options,
-                                        CanvasDocument& result);
+                                        CanvasDocument& result, const CancelToken& cancellation = {});
 
 // Every layer rasterized at the new document scale: its transformed pixels drawn upright into the box its corners
 // span (a nonuniformly scaled rotated layer shears, which width/height/angle cannot hold), the transform reset to
 // that box with the chosen sampling; masks on their own placement and uniform masks keep their pixels with the
 // placement scaled, other masks rasterize the same way. The same size changes only the resolution.
 [[nodiscard]] ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& options,
-                                       CanvasDocument& result);
+                                       CanvasDocument& result, const CancelToken& cancellation = {});
 
 // `image` drawn through `pixelToTarget` (image pixel → target pixel) into a transparent BGRA target of the given
 // size: Nearest picks the nearest source pixel, Smooth samples bilinearly, High also averages a grid of samples per
 // target pixel when the map shrinks the image. Pixels the source does not reach stay transparent. Empty when memory
-// runs out or the source's pixels cannot be read.
+// runs out, the source's pixels cannot be read, or cancellation is requested.
 [[nodiscard]] Raster RenderPlacedImage(const Raster& image, const Affine2& pixelToTarget, int width, int height,
-                                       LayerSampling sampling);
+                                       LayerSampling sampling, const CancelToken& cancellation = {});
 // The Gray8 counterpart for a mask: pixels the mask does not reach take `background`.
 [[nodiscard]] Raster RenderPlacedMask(const Raster& mask, const Affine2& pixelToTarget, int width, int height,
-                                      LayerSampling sampling, std::uint8_t background);
+                                      LayerSampling sampling, std::uint8_t background,
+                                      const CancelToken& cancellation = {});

@@ -5,6 +5,7 @@
 #include "ColorEditWorkTests.h"
 #include "Crop.h"
 #include "Document.h"
+#include "DocumentSizingWorkTests.h"
 #include "FilterCancellationTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
@@ -358,6 +359,21 @@ void TestHistoryBounds()
 {
     Expect(DocumentHistory{}.EntryLimit() == kHistoryEntryLimit, "history.default-entries");
     Expect(DocumentHistory{}.RetainedByteLimit() == kHistoryRetainedByteLimit, "history.default-256mib");
+    Expect(DocumentSession{}.history.RetainedByteLimit() == kHistoryRetainedByteLimit,
+           "history.session-default-256mib");
+    constexpr std::uint64_t gib = 1024ull * 1024 * 1024;
+    Expect(HistoryLimitForPhysicalMemory(0) == 256ull * 1024 * 1024, "history.ram-query-fallback");
+    Expect(HistoryLimitForPhysicalMemory(4 * gib) == gib, "history.ram-quarter");
+    Expect(HistoryLimitForPhysicalMemory(8 * gib) == 2 * gib && HistoryLimitForPhysicalMemory(64 * gib) == 2 * gib &&
+               HistoryLimitForPhysicalMemory(UINT64_MAX) == 2 * gib,
+           "history.ram-cap-no-overflow");
+    Expect(HistoryLimitForPhysicalMemory(7) == 1, "history.ram-quarter-rounds-down");
+    Expect(DocumentHistory(100, 2 * gib).RetainedByteLimit() == 2 * gib &&
+               DocumentSession(2 * gib).history.RetainedByteLimit() == 2 * gib,
+           "history.uint64-session-limit");
+    Expect(DocumentHistory(-1, UINT64_MAX).EntryLimit() == 0 &&
+               DocumentHistory(-1, UINT64_MAX).RetainedByteLimit() == UINT64_MAX,
+           "history.uint64-limit-preserved-entry-clamped");
 
     DocumentHistory limited(2, 0);
     CanvasDocument doc;
@@ -7318,6 +7334,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();
     gFailures += RunFilterCancellationTests();
+    gFailures += RunDocumentSizingWorkTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

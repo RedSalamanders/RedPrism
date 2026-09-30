@@ -6,10 +6,14 @@ Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Bu
 
 ## Filter cancellation diagnostic
 
-`HostTests.exe --bench-filter-cancel` measures 17 serial CPU cases on a deterministic 8192×5464 image: eleven
-filters, histogram, antialiased/hard coverage, downscale, carried mask and private sparse copy. It runs one warmup
+`HostTests.exe --bench-filter-cancel` measures 20 serial CPU cases on a deterministic 8192×5464 image: eleven
+filters, histogram, antialiased/hard coverage, downscale, carried mask, private sparse copy and three size jobs.
+The size cases grow a single-layer canvas by 128 pixels per dimension with a red extension at anchor 8, or resize
+the image to three quarters of each dimension using nearest and high sampling. They use `SizingMemoryBytes`,
+check detached cancelled results are empty, and verify the original document remains unchanged. It runs one warmup
 and ten observations each, using the production scheduler and cancellation token. An event marks worker entry;
-the harness requests cancellation after an event wait of 20 ms. Completed-before-cancel and deadline races are
+the harness requests cancellation after an event wait of 20 ms. Entry does not identify which inner loop or
+allocation was active at the stop request. Completed-before-cancel and deadline races are
 reported separately and excluded from the cancellation distribution. The source has opaque BGRA channels
 `(17p,13p,7p) mod 256`, alpha 255, with a selected central third in both axes. Gaussian uses radius 250 and motion
 uses distance 2000. The headless harness reserves a conservative 2 GiB for one job at a time.
@@ -49,12 +53,19 @@ never used as evidence that CPU commit pixels already exist.
 
 The operation rows cover Zoom Actual and Zoom Fit view changes; opening Levels; updating Levels input gamma to 1.25 and
 committing at that value; Hue/Saturation saturation +20; Exposure +0.5; Gaussian Blur radius 10; Add Noise amount
-20; Grain amount 40; Lens Correction distortion 20; Invert; Fill with foreground; Clear Pixels; and Undo. Opening
+20; Grain amount 40; Lens Correction distortion 20; Invert; Fill with foreground; Clear Pixels; Undo; Canvas Size
+with a foreground-colored extension by 16 pixels on each side dimension at bottom-right anchor; Image Size nearest
+at half each dimension; and Image Size resolution-only at 300 ppi. Size cases require the expected dimensions,
+resolution and named history entry after asynchronous completion, with no open size card. Opening
 Levels is valid when its histogram is ready for the captured opening image; identity settings intentionally have no
 preview raster and do not require an unused downscaled source. Adjustment updates must produce a new preview raster. Zoom operations must change the actual view.
 Clear Pixels is preceded by Select All during untimed preparation. At 100 MP, Gaussian Blur is instead the explicit
 `gaussian-refused-pixel-budget` case: current document limits refuse its initial grow, and the harness verifies
 refusal without a document or history change. It does not report that refusal as successful image processing.
+The colored Canvas Size extension is likewise `canvas-size-fill-refused-pixel-budget` wherever the fixture's
+existing layers plus the requested extension exceed the pixel ceiling (the current 45 MP and 100 MP fixtures), with the unchanged
+document/history required. The smoke gate covers all 18 operation rows; historical 15-row reports remain evidence
+of their recorded version.
 
 Each timed operation begins after its fixture and command setup have idle jobs and a submitted frame. The outer interval starts immediately
 before the command is posted and ends after worker jobs are idle and a subsequent frame has reached the renderer's

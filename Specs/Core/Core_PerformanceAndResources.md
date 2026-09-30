@@ -93,7 +93,7 @@ that makes them impossible.
 
 | Budget | Limit |
 | --- | --- |
-| History retained bytes (C4) | ≤ 256 MiB, 100 entries, shared immutable rasters |
+| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Raster storage counted; selection accounting remains P1.9 |
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | Visible DxUi surfaces (C2) | Library cap (64 MiB visible, 0 when hidden) |
@@ -228,6 +228,12 @@ payload destruction. Submit, retirement, deferred-release completion and memory-
 no timer polls availability. An insufficient request waits only while a reservation, release or cache trim can
 return memory; otherwise it completes `Failed(E_OUTOFMEMORY)` without running. Snapshot failure also fails the
 operation. A cancelled waiter never runs. Same-key successors reserve only after predecessor retirement.
+
+Image Size and Canvas Size jobs declare rounded aggregate output and thumbnail allocations, one maximum
+private sparse-source assembly, and conservative metadata for snapshot/result/validation/history. Immutable
+source pixels and selection geometry remain shared. A late bounds refusal still reserves the prefix outputs
+already allocated before that refusal. Source assembly, fill, sampling and thumbnails occur on the worker;
+owner validation/history costs remain measured separately and are subject to the P1.9/G1 gates.
 
 The owner installs a thread-local deferred-release sink. Last-reference storage or directly owned pixel buffers
 of at least 16 MiB transfer an intrusive node to a non-cancellable NORMAL worker lane. This path allocates nothing,

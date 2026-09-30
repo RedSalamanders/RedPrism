@@ -171,7 +171,7 @@ commit at once and upload through the sparse path.
 | --- | --- |
 | Tile | 256 × 256 grid pixels; only touched tiles allocate (CPU image + coverage, GPU density + preview) |
 | Mouse-up | MUST NOT materialize a contiguous bitmap: `IsMaterialized()` stays false through commit, thumbnail, display and the next stroke |
-| History | A stroke retains only the tiles it replaced plus the previous thumbnail (`RetainedBytes`), never the shared tiles; the 256 MiB history cap applies |
+| History | A stroke retains only the tiles it replaced plus the previous thumbnail (`RetainedBytes`), never the shared tiles; the session's history limit applies (`Document_History.md`, D13) |
 | Pixel limit | 100 M image / 100 M mask pixels per document, checked before a stroke grows the layer |
 | Preview upload | Changed tiles only; never a full-canvas upload per pointer update |
 | Frame | One composition per pointer update (the tile update dirties the document); a settled document composites 0 times |

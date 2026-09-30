@@ -52,6 +52,12 @@ constexpr double kCommandZoomStep = 1.25;
 // Frames in a row that may fail before drawing stops and the window asks to close (RF-401).
 constexpr int kFailedFramesBeforeClose = 3;
 
+[[nodiscard]] std::uint64_t HostHistoryLimit() noexcept
+{
+    MEMORYSTATUSEX memory{sizeof(memory)};
+    return HistoryLimitForPhysicalMemory(GlobalMemoryStatusEx(&memory) ? memory.ullTotalPhys : 0);
+}
+
 [[nodiscard]] SIZE ScaleDefaultClientSize(UINT dpi) noexcept
 {
     return SIZE{MulDiv(kDefaultClientWidth, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
@@ -129,7 +135,7 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
                          const wchar_t* demo, const wchar_t* bench) noexcept
-    : _instance(instance), _forceWarp(forceWarp)
+    : _instance(instance), _session(HostHistoryLimit()), _forceWarp(forceWarp)
 {
     if (demo != nullptr && demo[0] != L'\0')
     {
@@ -545,6 +551,11 @@ void SelfTestFailure(const wchar_t* message) noexcept
 
 int Application::RunSelfTest() noexcept
 {
+    if (_session.history.RetainedByteLimit() != HostHistoryLimit())
+    {
+        SelfTestFailure(L"The application session did not receive its physical-memory history limit.\n");
+        return 5;
+    }
     const auto hostKey = [this](UINT key, UINT modifiers, bool repeat = false) noexcept
     {
         const bool handled = HandleAccelerator(key, modifiers, repeat);
@@ -2150,6 +2161,8 @@ int Application::RunSelfTest() noexcept
     {
         return sizes;
     }
+    if (const int sizing = RunSizingWorkSelfTest(); sizing != 0)
+        return sizing;
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;

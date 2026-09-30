@@ -383,6 +383,11 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     {
         return true;
     }
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && _sizingTicket)
+    {
+        CancelHostContinuations(); // acknowledgement retains the active size request and history barrier
+        return true;
+    }
     const KeyState state = CurrentKeyState();
     // The gestures of an edit under way take the key with the canvas focused, and Enter and Escape also from a chrome
     // control a click focused: a clicked header button is not pressed again by the Enter that applies the transform,

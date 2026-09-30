@@ -40,6 +40,7 @@ class ChromeHost;
 struct UiBenchmarkState;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
+struct SizingWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -345,6 +346,9 @@ class Application final : public ChromeEvents
     void OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept;
     void SyncSizeCard() noexcept;
     int RunSizeSelfTest() noexcept;
+    int RunSizingWorkSelfTest() noexcept;
+    class SizingJob;
+    [[nodiscard]] HRESULT StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
@@ -563,6 +567,9 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _utilityStamp;
     std::optional<JobTicket> _utilityTicket;
     std::shared_ptr<UtilityWorkTestGate> _utilityWorkTestGate;
+    std::optional<HistoryWorkStamp> _sizingStamp;
+    std::optional<JobTicket> _sizingTicket;
+    std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;

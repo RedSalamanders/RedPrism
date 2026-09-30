@@ -21,6 +21,7 @@ enum class Expected
     Histogram,
     Panel,
     Pixels,
+    Size,
     Refusal
 };
 
@@ -32,9 +33,10 @@ struct Operation final
     AdjustAction action;
     double value;
     Expected expected;
+    bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 15> kOperations{{
+constexpr std::array<Operation, 18> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -50,6 +52,9 @@ constexpr std::array<Operation, 15> kOperations{{
     {"fill", 0, ChromeHost::kCommandFillForeground, {}, 0, Expected::Pixels},
     {"clear", ChromeHost::kCommandSelectAll, ChromeHost::kCommandClearPixels, {}, 0, Expected::Pixels},
     {"undo", ChromeHost::kCommandInvert, ChromeHost::kCommandUndo, {}, 0, Expected::Pixels},
+    {"canvas-size-fill", ChromeHost::kCommandCanvasSize, 0, {}, 0, Expected::Size, true},
+    {"image-size-nearest", ChromeHost::kCommandImageSize, 0, {}, 0, Expected::Size, true},
+    {"image-size-resolution", ChromeHost::kCommandImageSize, 0, {}, 300, Expected::Size, true},
 }};
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
@@ -60,6 +65,22 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
         // At today's pixel ceiling even the initial blur grow is refused. Measure that real command
         // explicitly; do not label a missing preview or an ignored slider action as image processing.
         operation = {"gaussian-refused-pixel-budget", 0, ChromeHost::kCommandGaussianBlur, {}, 0, Expected::Refusal};
+    }
+    if (operation.prepareCommand == ChromeHost::kCommandCanvasSize)
+    {
+        std::int64_t usedPixels = 0;
+        for (const auto& layer : state.fixture.layers)
+            if (layer.asset)
+                usedPixels += static_cast<std::int64_t>(layer.asset->image.Width()) * layer.asset->image.Height();
+        if (static_cast<std::int64_t>(state.fixture.width + 16) * (state.fixture.height + 16) >
+            kMaxLayerPixels - usedPixels)
+            operation = {"canvas-size-fill-refused-pixel-budget",
+                         ChromeHost::kCommandCanvasSize,
+                         0,
+                         {},
+                         0,
+                         Expected::Refusal,
+                         true};
     }
     return operation;
 }
@@ -377,6 +398,30 @@ void Application::PrepareUiBenchmarkStep() noexcept
             OnAdjustAction(AdjustAction::SetInputGamma, 1.25);
         }
     }
+    if (operation.sizeAction)
+    {
+        // Card-opening commands use the owned continuation source. Advance their metadata-only opening before
+        // editing the draft; preparation is still measured only after the real-loop readiness/frame boundary.
+        (void)RunUiActions(_jobs);
+        if (operation.prepareCommand == ChromeHost::kCommandCanvasSize)
+        {
+            OnSizeAction(SizeAction::SetWidth, state.fixture.width + 16);
+            OnSizeAction(SizeAction::SetHeight, state.fixture.height + 16);
+            OnSizeAction(SizeAction::SetAnchor, 8);
+            OnSizeAction(SizeAction::SetExtension, 1);
+        }
+        else if (operation.value != 0)
+        {
+            OnSizeAction(SizeAction::SetResample, 0);
+            OnSizeAction(SizeAction::SetResolution, operation.value);
+        }
+        else
+        {
+            OnSizeAction(SizeAction::SetWidth, state.fixture.width / 2);
+            OnSizeAction(SizeAction::SetHeight, state.fixture.height / 2);
+            OnSizeAction(SizeAction::SetSampling, 0);
+        }
+    }
     // Fit must begin at a different zoom, so both view cases measure real changes.
     if (operation.command == ChromeHost::kCommandZoomFit)
     {
@@ -394,7 +439,9 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.command)
+    if (operation.sizeAction)
+        OnSizeAction(SizeAction::Apply, 0);
+    else if (operation.command)
     {
         OnCommand(operation.command);
     }
@@ -475,8 +522,22 @@ void Application::AdvanceUiBenchmark() noexcept
     const bool refused = expected == Expected::Refusal && !edit.has_value() && layer && layer->asset.has_value() &&
                          layer->asset->image == state.previousImage &&
                          _session.history.CurrentRevision() == state.previousRevision;
+    const auto operation = CurrentOperation(state);
+    const auto& document = _session.Document();
+    const bool sizeReady =
+        expected == Expected::Size && document && !SizeCardOpen() &&
+        _session.history.CurrentRevision() != state.previousRevision &&
+        (operation.prepareCommand == ChromeHost::kCommandCanvasSize
+             ? document->width == state.fixture.width + 16 && document->height == state.fixture.height + 16 &&
+                   _session.history.UndoName() == L"Canvas Size"
+         : operation.value != 0
+             ? document->width == state.fixture.width && document->height == state.fixture.height &&
+                   document->resolution == operation.value && _session.history.UndoName() == L"Image Size"
+             : document->width == state.fixture.width / 2 && document->height == state.fixture.height / 2 && layer &&
+                   layer->asset && layer->asset->image != state.previousImage &&
+                   _session.history.UndoName() == L"Image Size");
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
-        !(viewReady || refused || histogramReady || (expected == Expected::Panel && panelReady) ||
+        !(viewReady || refused || sizeReady || histogramReady || (expected == Expected::Panel && panelReady) ||
           (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
