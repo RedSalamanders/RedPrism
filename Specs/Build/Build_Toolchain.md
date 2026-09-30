@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-30
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `format.ps1`
 
 ## Scope
@@ -194,6 +194,14 @@ target a decoded instruction after the dispatch and before the table. Only compl
 verified DWORD span are counted separately as `inlineTableVectorData`; other code in the function remains gated.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
+
+For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
+prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
+LEA EAX with disp8, compare EAX with imm8, then forward JA. Every instruction preserves R8. Both branch destinations
+must decode after the computed jump and before the table. This form additionally requires the exact anonymous
+PDB data symbol in the owning contribution. A partial sequence, clobbered base, wrong instruction, invalid branch
+or absent data symbol receives no exemption. Adjacent real VEX remains rejected. No generic instruction skipping
+or new runtime allowlist entry is permitted.
 
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly

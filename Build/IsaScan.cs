@@ -105,15 +105,34 @@ namespace RedPrismBuild
             return true;
         }
 
+        // The observed inlined clipboard switch hoists LEA r8,imagebase across this exact eight-instruction
+        // prelude. Each instruction preserves R8; do not skip arbitrary instructions or accept a partial form.
+        private static bool R8Prelude(byte[] bytes, int step)
+        {
+            switch (step)
+            {
+                case 0: return bytes.Length == 2 && StartsWith(bytes, 0x8b, 0xd0); // mov edx,eax
+                case 1: return bytes.Length == 4 && StartsWith(bytes, 0x89, 0x44, 0x24); // stack store
+                case 2: return bytes.Length == 3 && StartsWith(bytes, 0x44, 0x8b, 0xe0); // mov r12d,eax
+                case 3: return bytes.Length == 2 && StartsWith(bytes, 0x85, 0xc0); // test eax,eax
+                case 4: return bytes.Length == 6 && StartsWith(bytes, 0x0f, 0x84); // je rel32
+                case 5: return bytes.Length == 3 && StartsWith(bytes, 0x8d, 0x40); // lea eax,[rax+imm8]
+                case 6: return bytes.Length == 3 && StartsWith(bytes, 0x83, 0xf8); // cmp eax,imm8
+                case 7: return bytes.Length == 2 && bytes[0] == 0x77; // ja rel8
+                default: return false;
+            }
+        }
+
         // Recognize only MSVC's observed image-relative DWORD switch-table dispatch. This is data proof,
         // not a procedure/object exemption: a decoded LEA of the image base, optional byte-index load,
-        // DWORD indexed load, ADD and JMP must be contiguous. The table follows RET plus at most three
+        // DWORD indexed load, ADD and JMP must be contiguous; the only intervening form is R8Prelude above.
+        // That form also proves both branch targets and requires an exact PDB data start. The table follows RET plus at most three
         // alignment bytes, belongs to that contribution, and every entry targets a later decoded instruction
         // between the dispatch and the table. A matching anonymous PDB data symbol can prove a table start
         // when multiple tables follow the function body. Unrecognized forms remain subject to the normal ISA gate.
         private static InlineTable ReadInlineTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, ulong imageBase,
-            ulong dispatch, ulong afterJump, uint tableRva)
+            ulong dispatch, ulong afterJump, uint tableRva, bool requireDataSymbol)
         {
             int ownerIndex = FindContribution(contributions, dispatch);
             if (ownerIndex < 0) return null;
@@ -128,6 +147,8 @@ namespace RedPrismBuild
             afterReturn |= raw >= 4 && pe[raw - 4] == 0xc3 && pe[raw - 3] == 0x0f &&
                            pe[raw - 2] == 0x1f && pe[raw - 1] == 0x00;
             int dataOwner;
+            if (requireDataSymbol && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module))
+                return null;
             if (!afterReturn && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module)) return null;
             var table = new InlineTable { Begin = begin, End = begin };
             for (int entry = 0; entry < 4096 && table.End + 4 <= owner.End && raw + 4 <= pe.Length; ++entry, raw += 4)
@@ -275,6 +296,8 @@ namespace RedPrismBuild
             int dispatchStage = 0;
             bool r8Base = false;
             int indexRegister = 0, targetRegister = 0;
+            int preludeStep = 0;
+            ulong firstPreludeTarget = 0, secondPreludeTarget = 0;
             ulong dispatchBegin = 0, precedingEnd = 0;
             uint tableRva = 0;
             foreach (string line in File.ReadLines(disassembly))
@@ -293,14 +316,23 @@ namespace RedPrismBuild
                 {
                     byte[] encoded = Array.ConvertAll(bytes, b => Byte.Parse(b, NumberStyles.HexNumber));
                     if (address != precedingEnd) dispatchStage = 0;
-                    if (!r8Base && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
+                    if (r8Base && dispatchStage == 1 && R8Prelude(encoded, preludeStep))
+                    {
+                        if (preludeStep == 4)
+                            firstPreludeTarget = checked((ulong)((long)address + encoded.Length + BitConverter.ToInt32(encoded, 2)));
+                        else if (preludeStep == 7)
+                            secondPreludeTarget = checked((ulong)((long)address + encoded.Length + unchecked((sbyte)encoded[1])));
+                        ++preludeStep;
+                    }
+                    else if (!r8Base && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
                         dispatchStage = 2;
-                    else if (r8Base && dispatchStage == 1 && encoded.Length == 9 &&
+                    else if (r8Base && dispatchStage == 1 && preludeStep == 0 && encoded.Length == 9 &&
                         (StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x84, 0x00) || StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x8c, 0x08)))
                     { indexRegister = encoded[3] == 0x84 ? 0 : 1; dispatchStage = 2; }
                     else if (!r8Base && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 0; dispatchStage = 3; }
-                    else if (r8Base && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 8 &&
+                    else if (r8Base && (dispatchStage == 1 || dispatchStage == 2) &&
+                        (preludeStep == 0 || preludeStep == 8) && encoded.Length == 8 &&
                         encoded[0] == 0x41 && encoded[1] == 0x8b &&
                         ((indexRegister == 0 && (encoded[2] == 0x84 || encoded[2] == 0x8c) && encoded[3] == 0x80) ||
                          (indexRegister == 1 && encoded[2] == 0x94 && encoded[3] == 0x88)))
@@ -312,14 +344,27 @@ namespace RedPrismBuild
                     else if (dispatchStage == 4 && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)
                     {
                         InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, imageBase, dispatchBegin,
-                            checked(address + 2), tableRva);
+                            checked(address + 2), tableRva, preludeStep != 0);
+                        if (table != null && preludeStep != 0)
+                        {
+                            ulong afterJump = checked(address + 2);
+                            if (preludeStep != 8 || firstPreludeTarget < afterJump || firstPreludeTarget >= table.Begin ||
+                                secondPreludeTarget < afterJump || secondPreludeTarget >= table.Begin)
+                                table = null;
+                            else
+                            {
+                                table.PendingTargets.Add(firstPreludeTarget);
+                                table.PendingTargets.Add(secondPreludeTarget);
+                            }
+                        }
                         if (table != null) inlineTables.Add(table);
                         dispatchStage = 0;
                     }
                     else dispatchStage = 0;
                     if (encoded.Length == 7 && (StartsWith(encoded, 0x48, 0x8d, 0x0d) || StartsWith(encoded, 0x4c, 0x8d, 0x05)) &&
                         checked((long)address + 7 + BitConverter.ToInt32(encoded, 3)) == (long)imageBase)
-                    { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c; indexRegister = 0; }
+                    { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c; indexRegister = 0;
+                      preludeStep = 0; firstPreludeTarget = 0; secondPreludeTarget = 0; }
                 }
                 precedingEnd = checked(address + (ulong)bytes.Length);
                 int prefix = 0;

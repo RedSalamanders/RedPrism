@@ -166,6 +166,14 @@ independent serial keys, stale tickets, progress, the job-runner `bad_alloc` fai
 pass, rejected reentrant drains/actions, and shutdown that joins before destroying active payloads. Gate waits
 are failure bounds only; no sleeps or timing assertions. Existing legacy image goldens remain unchanged.
 
+The registered UI-action-source gates cover a full ordinary action queue, retained ownership on refusal,
+coalesced readiness, source/ordinary fairness, self-rearm on a later pass, event/idle state, refused reentrant
+drains and callback-time removal, exact identity, stop and borrowed-source teardown. History-work gates cover
+sequential stages under one selected ordinal with distinct acquisitions, late same-kind completion refusal,
+strict initial Begin ordering and document/owner replacement. DocumentTests combines a committed pixel edit and
+Canvas Size under one request, then a younger queued Undo: the first Undo removes only size and the next restores
+the original numeric pixels. These qualify primitives; production host continuations remain separate work.
+
 The WARP self-test also simulates an early mode failure with a worker waiting on the shutdown event. The actual
 `Application::Shutdown` must join it without applying its result, retain the implicit MTA through the callback,
 destroy its payload after Run returns, and leave the caller's STA alive. `Main.cpp` calls that same shutdown

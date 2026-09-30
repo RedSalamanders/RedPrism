@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-30
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -112,6 +112,12 @@ eight pending UI actions. The seven job classes share three OS priorities. The s
 aligned intrusive completion nodes; producers push to an SLIST and signal an auto-reset event. The owner drains
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
+
+One registered host UI-action source has a borrowed stable lifetime and an allocation-free coalesced readiness
+flag, independent of the eight ordinary action slots. Registration alone is idle. A ready source prevents idle
+waiting, wakes the same scheduler event and shares the one-action-per-pass bound with queued actions, alternating
+fairly when both kinds are ready. Consumption precedes callback dispatch. Waiting continuations rearm only on
+their prerequisite's completion. Source requests do not add a worker, timer, container allocation or polling loop.
 
 The host pumps messages, drains completions and runs UI actions through shared outer-loop primitives. Completion
 application stays outside nested window/control dispatch, and no more than one UI action runs per outer-loop pass.

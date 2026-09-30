@@ -73,6 +73,8 @@
       - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
       - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
       - [ ] P1.1c.3c — Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
+        - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration remains with the production runner.
+        - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -221,6 +223,13 @@ P1.1c.3 is not complete. No G1 or Photoshop speed claim follows from this prepar
 The indexed [continuation child plan](ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
 request ownership, staged settlement, caller inventory, repeated history acquisitions and activation gates for
 P1.1c.3c–d. Its later stroke resolution remains integrated with P1.4; it does not claim that replay is implemented.
+
+P1.1c.3c primitive progress, 2026-09-30: the stable UI-action source and repeated history acquisitions passed the
+full x64 gates and all ARM64 cross-builds. Final review strengthened independent owner/document stamp tests.
+Release link-layout changes exposed a switch-table ISA scanner false positive; exact PE/PDB and branch proof now
+recognizes its observed hoisted image-base setup, with positive/negative controls and an unchanged allowlist.
+Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). Application request
+ownership, receipts, write/discard stages and production caller activation remain open; P1 and G1 remain open.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic

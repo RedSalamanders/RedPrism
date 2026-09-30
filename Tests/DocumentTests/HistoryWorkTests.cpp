@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <initializer_list>
 #include <optional>
+#include <utility>
 
 namespace
 {
@@ -321,6 +322,60 @@ void TestDocumentAndPreviewReplacement()
     }
 }
 
+void TestCommitThenSizeKeepsSelectedRequestOrder()
+{
+    DocumentSession session = MakeSession();
+    const auto original = ActivePixel(session, 0, 0);
+    const int before = session.history.UndoCount();
+    HistoryWork history;
+    const auto request = history.NextOrdinal();
+    const auto undo = history.NextOrdinal();
+    const auto commit =
+        request ? history.Begin(session.DocumentSerial(), *request, HistoryWorkKind::Commit) : std::nullopt;
+    if (!commit || !undo)
+    {
+        Expect(false, "commit-size-request-admitted");
+        return;
+    }
+    Queue queue;
+    std::uint8_t argument = 1;
+    Expect(queue.Enqueue(session.DocumentSerial(), *undo, ContinuationKind::Undo, argument) ==
+               ContinuationAdmission::Queued,
+           "undo-queued-behind-commit-size-request");
+    session.InvertPixels();
+    Expect(ActivePixel(session, 0, 0) == std::array<std::uint8_t, 4>{245, 235, 225, 255},
+           "commit-size-prerequisite-pixels-applied");
+    Expect(history.Finish(*commit), "commit-size-prerequisite-history-finished");
+    const auto size = history.Continue(*commit, session.DocumentSerial(), HistoryWorkKind::Commit);
+    if (!size)
+    {
+        Expect(false, "commit-size-dependent-stage-admitted");
+        return;
+    }
+    Expect(!history.Finish(*commit) && !queue.TakeReady(session.DocumentSerial(), history.Busy()).ready,
+           "late-prerequisite-cannot-release-size-or-queued-undo");
+    CanvasDocument sized = *session.Document();
+    sized.width = 5;
+    sized.height = 3;
+    session.ApplyDocumentSize(std::move(sized), L"Canvas Size");
+    Expect(session.Document()->width == 5 && session.Document()->height == 3 &&
+               session.history.UndoCount() == before + 2,
+           "dependent-size-records-separate-entry-after-commit");
+    Expect(history.Finish(*size), "commit-size-request-finishes-after-both-transactions");
+    const auto taken = queue.TakeReady(session.DocumentSerial(), history.Busy());
+    Expect(taken.ready && taken.ready->kind == ContinuationKind::Undo, "queued-undo-ready-after-dependent-size");
+    if (!taken.ready)
+    {
+        return;
+    }
+    session.Undo();
+    Expect(session.Document()->width == 4 && session.Document()->height == 2 &&
+               ActivePixel(session, 0, 0) == std::array<std::uint8_t, 4>{245, 235, 225, 255},
+           "queued-undo-removes-size-and-preserves-prerequisite-pixels");
+    session.Undo();
+    Expect(ActivePixel(session, 0, 0) == original, "next-undo-removes-prerequisite-pixels");
+}
+
 } // namespace
 
 int RunHistoryWorkDocumentTests()
@@ -330,5 +385,6 @@ int RunHistoryWorkDocumentTests()
     TestFailedPredecessorAndQueueOrder();
     TestSeparateUndoEntriesAndDocumentReplacement();
     TestDocumentAndPreviewReplacement();
+    TestCommitThenSizeKeepsSelectedRequestOrder();
     return gFailures;
 }

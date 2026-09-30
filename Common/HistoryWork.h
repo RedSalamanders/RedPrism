@@ -19,6 +19,7 @@ struct HistoryWorkStamp final
     std::uint64_t documentSerial = 0;
     std::uint64_t ordinal = 0;
     HistoryWorkKind kind = HistoryWorkKind::Commit;
+    std::uint64_t acquisition = 0; // a continuation of one ordinal must never alias an earlier acquisition
     [[nodiscard]] bool operator==(const HistoryWorkStamp&) const noexcept = default;
 };
 
@@ -45,12 +46,32 @@ class HistoryWork final
     [[nodiscard]] std::optional<HistoryWorkStamp> Begin(std::uint64_t documentSerial, std::uint64_t ordinal,
                                                         HistoryWorkKind kind) noexcept
     {
-        if (_active || documentSerial == 0 || ordinal == 0 || ordinal <= _lastStarted || ordinal > _next)
+        if (_active || documentSerial == 0 || ordinal == 0 || ordinal <= _lastStarted || ordinal > _next ||
+            _acquisition == (std::numeric_limits<std::uint64_t>::max)())
         {
             return std::nullopt;
         }
         _lastStarted = ordinal;
-        _active = HistoryWorkStamp{this, documentSerial, ordinal, kind};
+        _active = HistoryWorkStamp{this, documentSerial, ordinal, kind, ++_acquisition};
+        _lastFinished.reset();
+        _cancelRequested = false;
+        return _active;
+    }
+
+    // A selected request may need a second operation (commit, then import/resize) before a younger input starts.
+    // Only the exact latest finished acquisition in the same document can continue its ordinal. The host checks
+    // prerequisite success/lifetime before calling; this metadata does not itself authorize a dependent action.
+    [[nodiscard]] std::optional<HistoryWorkStamp> Continue(HistoryWorkStamp previous, std::uint64_t documentSerial,
+                                                           HistoryWorkKind kind) noexcept
+    {
+        if (_active || !_lastFinished || *_lastFinished != previous || previous.ordinal != _lastStarted ||
+            documentSerial == 0 || previous.documentSerial != documentSerial ||
+            _acquisition == (std::numeric_limits<std::uint64_t>::max)())
+        {
+            return std::nullopt;
+        }
+        _active = HistoryWorkStamp{this, documentSerial, previous.ordinal, kind, ++_acquisition};
+        _lastFinished.reset();
         _cancelRequested = false;
         return _active;
     }
@@ -67,6 +88,7 @@ class HistoryWork final
         {
             return false;
         }
+        _lastFinished = _active;
         _active.reset();
         _cancelRequested = false;
         return true;
@@ -101,7 +123,9 @@ class HistoryWork final
   private:
     std::uint64_t _next = 0;
     std::uint64_t _lastStarted = 0;
+    std::uint64_t _acquisition = 0;
     std::optional<HistoryWorkStamp> _active;
+    std::optional<HistoryWorkStamp> _lastFinished;
     bool _cancelRequested = false;
 };
 

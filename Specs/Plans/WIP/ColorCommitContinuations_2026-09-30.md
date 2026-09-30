@@ -4,8 +4,10 @@
 
 - [x] Audit the current write, discard, import, size, layer and window entry points against the owning contracts.
 - [x] Finish qualification of the busy controls and ordered commit engine in the parent P1.1c.3a–b record: all x64 test configurations and ARM64 cross-builds passed.
-- [ ] Add an allocation-free, coalesced host UI-action source with bounded scheduling and shutdown ownership.
+- [x] Add and qualify the scheduler's allocation-free, coalesced UI-action source with bounded scheduling and borrowed shutdown ownership. Application registration remains part of the runner below.
+- [x] Qualify sequential same-ordinal history acquisitions, including late same-kind completions and commit-then-size before queued Undo. Full x64 gates and all ARM64 cross-builds passed.
 - [ ] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
+- [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
 - [ ] Migrate Save, Save As, PNG/JPEG export and every replacement/close caller together with production OK.
 - [ ] Migrate ordered file batches, copied size drafts, panel/tool/layer interactions and busy callback guards.
@@ -21,6 +23,12 @@ this atomic migration activates. GPU readback, file encoding/decoding and size k
 Owners: `Application*`, `Common/Jobs.*`, `Common/HistoryWork.h`, `Common/ContinuationQueue.h`.
 Contracts: `Core_PerformanceAndResources`, `Document_Tools`, `Document_History`, `UI_ApplicationChrome`,
 `UI_Windowing`, `IO_ProjectFormat`, `IO_ImageCodecs`, `Testing_Validation`.
+
+Progress, 2026-09-30: busy controls and the ordered commit engine are qualified in the
+[engine record](../../TestRuns/OrderedColorCommit_2026-09-30.md). Scheduler/source and repeated-acquisition
+primitives are qualified in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md).
+The source is not registered by Application yet; owned request/receipt stages and the production caller migration
+remain the next slice. These primitive checks do not qualify the child plan's integrated activation matrix.
 
 ## 1. Outcomes and ownership
 
@@ -40,6 +48,12 @@ callbacks that can capture a borrowed path, draft, drop message or temporary doc
 Completion receipts are owned values and remain readable after the request leaves the queue. Worker code never
 accesses them; the owner publishes their outcome after apply/drop. Tests retain a receipt while pumping the shared
 harness. Production never waits, polls a future, calls `SettleJobs` or makes quiet mode synchronous.
+
+Queue retirement must return each owned entry or notify the owner before dropping it, so stale/replaced entries,
+Escape clearing and shutdown publish their final receipt outcomes. The current `TakeReady` stale count and `Clear`
+count serve the foundation's notice tests; the production runner needs individual entries for receipt retirement.
+Queue refusal leaves the caller's payload owned and publishes a failed admission receipt. Prove that none of these
+paths strands an externally retained receipt in Pending.
 
 ## 2. Guaranteed UI wake-up
 

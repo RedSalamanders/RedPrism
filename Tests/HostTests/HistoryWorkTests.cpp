@@ -85,9 +85,19 @@ void TestStampAndCancellation()
     {
         return;
     }
-    const HistoryWorkStamp staleDocument{stamp->owner, 13, stamp->ordinal, stamp->kind};
+    HistoryWorkStamp staleDocument = *stamp;
+    staleDocument.documentSerial = 13;
     Expect(!history.IsCurrent(staleDocument) && !history.Finish(staleDocument), "stale-document-stamp-refused");
+    const auto otherOrdinal = otherOwner.NextOrdinal();
+    const auto otherStamp = otherOrdinal ? otherOwner.Begin(12, *otherOrdinal, HistoryWorkKind::Commit) : std::nullopt;
+    if (!otherStamp)
+    {
+        Expect(false, "other-owner-matching-acquisition-begins");
+        return;
+    }
     Expect(!otherOwner.IsCurrent(stamp.value()) && !otherOwner.Finish(stamp.value()), "cross-owner-stamp-refused");
+    Expect(otherOwner.IsCurrent(*otherStamp) && otherOwner.Finish(*otherStamp),
+           "cross-owner-refusal-preserves-own-work");
     const std::optional<HistoryWorkStamp> cancel = history.RequestCancel();
     Expect(cancel.has_value() && cancel.value() == stamp.value() && history.CancelRequested(stamp.value()),
            "commit-cancel-requested");
@@ -170,6 +180,87 @@ void TestStrokeLifecycleAndQueueOrdering()
     }
 }
 
+void TestSelectedRequestContinuesBeforeYoungerInput()
+{
+    HistoryWork history;
+    HistoryWork other;
+    const auto request = history.NextOrdinal();
+    const auto younger = history.NextOrdinal();
+    if (!request || !younger)
+    {
+        Expect(false, "continuation-ordinals-issued");
+        return;
+    }
+    const auto commit = history.Begin(31, *request, HistoryWorkKind::Commit);
+    if (!commit)
+    {
+        Expect(false, "continuation-commit-admitted");
+        return;
+    }
+    Expect(!history.Continue(*commit, 31, HistoryWorkKind::Import), "unfinished-prerequisite-cannot-continue");
+    Expect(history.Finish(*commit), "prerequisite-applied-before-continuation");
+    Expect(!history.Begin(31, *request, HistoryWorkKind::Import), "begin-still-refuses-reused-ordinal");
+    Expect(!history.Continue(*commit, 32, HistoryWorkKind::Import), "replaced-document-cannot-continue");
+    const auto otherOrdinal = other.NextOrdinal();
+    const auto otherStamp = otherOrdinal ? other.Begin(31, *otherOrdinal, HistoryWorkKind::Commit) : std::nullopt;
+    if (!otherStamp)
+    {
+        Expect(false, "other-owner-matching-prerequisite-begins");
+        return;
+    }
+    Expect(other.Finish(*otherStamp), "other-owner-matching-prerequisite-finishes");
+    Expect(!other.Continue(*commit, 31, HistoryWorkKind::Import), "other-owner-cannot-continue");
+    const auto continuedOther = other.Continue(*otherStamp, 31, HistoryWorkKind::Import);
+    Expect(continuedOther && other.Finish(*continuedOther), "other-owner-refusal-preserves-own-continuation");
+    const auto imported = history.Continue(*commit, 31, HistoryWorkKind::Import);
+    Expect(imported && imported->ordinal == *request && imported->acquisition != commit->acquisition,
+           "import-retains-request-order-with-distinct-acquisition");
+    if (!imported)
+    {
+        return;
+    }
+    Expect(!history.Begin(31, *younger, HistoryWorkKind::Stroke), "younger-stroke-waits-for-dependent-import");
+    Expect(!history.IsCurrent(*commit) && !history.Finish(*commit), "late-commit-cannot-release-import");
+    Expect(history.Busy() && history.IsCurrent(*imported), "late-commit-leaves-dependent-barrier-intact");
+    Expect(history.Finish(*imported), "dependent-import-finishes");
+    Expect(!history.Continue(*commit, 31, HistoryWorkKind::Import), "older-finished-token-cannot-reacquire");
+
+    // Repeating the same kind as well as the ordinal must not resurrect a former completion.
+    const auto repeated = history.Continue(*imported, 31, HistoryWorkKind::Import);
+    Expect(repeated && *repeated != *imported, "same-kind-continuation-never-aliases-previous-stamp");
+    if (!repeated)
+    {
+        return;
+    }
+    Expect(!history.Finish(*imported) && history.IsCurrent(*repeated), "late-same-kind-completion-is-refused");
+    Expect(history.Finish(*repeated), "same-kind-continuation-finishes");
+    const auto stroke = history.Begin(31, *younger, HistoryWorkKind::Stroke);
+    Expect(stroke.has_value(), "younger-input-starts-after-whole-selected-request");
+    if (!stroke)
+    {
+        return;
+    }
+    Expect(!history.Continue(*repeated, 31, HistoryWorkKind::Import), "newer-acquisition-invalidates-prior-request");
+    Expect(history.Finish(*stroke), "younger-input-finishes");
+    Expect(!history.Continue(*repeated, 31, HistoryWorkKind::Import), "finished-newer-input-prevents-old-continuation");
+
+    const auto cancelOrdinal = history.NextOrdinal();
+    const auto cancelWork = cancelOrdinal ? history.Begin(31, *cancelOrdinal, HistoryWorkKind::Commit) : std::nullopt;
+    if (!cancelWork)
+    {
+        Expect(false, "continued-cancel-work-begins");
+        return;
+    }
+    Expect(history.RequestCancel().has_value() && history.CancelRequested(*cancelWork), "first-acquisition-cancelled");
+    Expect(history.Finish(*cancelWork), "cancelled-acquisition-dropped");
+    const auto next = history.Continue(*cancelWork, 31, HistoryWorkKind::Commit);
+    Expect(next && !history.CancelRequested(*next), "acquisition-cancellation-does-not-leak-to-next-stage");
+    if (next)
+    {
+        Expect(history.Finish(*next), "next-stage-after-drop-finishes");
+    }
+}
+
 } // namespace
 
 int RunHistoryWorkHostTests()
@@ -178,5 +269,6 @@ int RunHistoryWorkHostTests()
     TestOrdinalsAndExclusivity();
     TestStampAndCancellation();
     TestStrokeLifecycleAndQueueOrdering();
+    TestSelectedRequestContinuesBeforeYoungerInput();
     return gFailures;
 }

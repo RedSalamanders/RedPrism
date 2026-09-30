@@ -34,6 +34,11 @@ tool-command migrations are P1 work; the existing direct session operations reta
   across all scheduler classes. Busy lasts from Begin through the UI apply/drop transaction. The host picks the
   oldest input before Begin and takes immutable pixels, selection and its job token only afterwards. Worker completion
   alone does not release the barrier. Old or cross-owner completion stamps cannot release newer work.
+  A selected request that needs another history operation in the same document can Continue only from its exact
+  latest finished stamp before a younger input starts. Every acquisition has a fresh generation, even for the
+  same ordinal and kind; a late first-stage completion cannot finish the second stage. Begin still refuses reused
+  ordinals. The host validates prerequisite success and document lifetime before Continue; the ordering primitive
+  does not turn a failed or cancelled result into permission to execute dependent work.
 - A stroke recording begins immediately even while history is busy. On pointer-up its `StrokeReplay` becomes Pending;
   it can launch only after earlier input and history work apply/drop. It snapshots the current surviving document,
   whether its predecessor succeeded, failed or was cancelled. The recording retains tool settings, target, samples

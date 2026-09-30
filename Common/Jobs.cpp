@@ -112,6 +112,9 @@ struct JobScheduler::Impl final
     std::array<std::unique_ptr<UiAction>, JobScheduler::kUiActionCapacity> actions;
     std::size_t actionHead = 0;
     std::size_t actionCount = 0;
+    UiAction* actionSource = nullptr; // borrowed, owner thread only; registration outlives every callback
+    bool sourceReady = false;
+    bool preferSource = true;
     alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER completions{};
     alignas(MEMORY_ALLOCATION_ALIGNMENT) SLIST_HEADER releases{};
     wil::unique_handle wake;
@@ -700,6 +703,61 @@ bool JobScheduler::PostUiAction(std::unique_ptr<UiAction>& action) noexcept
     return true;
 }
 
+bool JobScheduler::RegisterUiActionSource(UiAction& source) noexcept
+{
+    if (!_impl)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.workers.ShutdownToken().stop_requested() || self.actionSource)
+    {
+        return false;
+    }
+    self.actionSource = &source;
+    self.sourceReady = false;
+    self.preferSource = true;
+    return true;
+}
+
+bool JobScheduler::RequestUiActionSource(UiAction& source) noexcept
+{
+    if (!_impl)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.closed || self.workers.ShutdownToken().stop_requested() || self.actionSource != &source)
+    {
+        return false;
+    }
+    if (!self.sourceReady)
+    {
+        self.sourceReady = true;
+        (void)SetEvent(self.wake.get());
+    }
+    return true;
+}
+
+bool JobScheduler::UnregisterUiActionSource(UiAction& source) noexcept
+{
+    if (!_impl)
+    {
+        return false;
+    }
+    auto& self = *_impl;
+    self.CheckOwner();
+    if (self.inCallback || self.closed || self.actionSource != &source)
+    {
+        return false;
+    }
+    self.actionSource = nullptr;
+    self.sourceReady = false;
+    return true;
+}
+
 void JobScheduler::RequestStop() noexcept
 {
     if (!_impl)
@@ -717,6 +775,7 @@ void JobScheduler::RequestStop() noexcept
         (void)SetEvent(self.shutdown.get());
     }
     self.workers.RequestStop();
+    self.sourceReady = false;
 }
 
 void JobScheduler::Close() noexcept
@@ -773,6 +832,8 @@ void JobScheduler::Close() noexcept
         action.reset();
     }
     self.actionCount = 0;
+    self.actionSource = nullptr;
+    self.sourceReady = false;
     self.liveCount = 0;
     self.wake.reset();
     self.shutdown.reset();
@@ -786,7 +847,7 @@ bool JobScheduler::IsIdle() const noexcept
         return true;
     }
     _impl->CheckOwner();
-    return _impl->liveCount == 0 && _impl->actionCount == 0 &&
+    return _impl->liveCount == 0 && _impl->actionCount == 0 && !_impl->sourceReady &&
            _impl->releasingCount.load(std::memory_order_acquire) == 0 &&
            _impl->trimCount.load(std::memory_order_acquire) == 0;
 }
@@ -808,7 +869,7 @@ bool JobScheduler::HasUiWork() const noexcept
         return false;
     }
     _impl->CheckOwner();
-    return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0 ||
+    return QueryDepthSList(&_impl->completions) != 0 || _impl->actionCount != 0 || _impl->sourceReady ||
            _impl->memoryChanged.load(std::memory_order_acquire);
 }
 
@@ -949,14 +1010,28 @@ bool RunUiActions(JobScheduler& scheduler) noexcept
     }
     auto& self = *scheduler._impl;
     self.CheckOwner();
-    if (self.inCallback || self.closed || self.actionCount == 0)
+    if (self.inCallback || self.closed || (self.actionCount == 0 && !self.sourceReady))
     {
         return false;
     }
     const ScopedUiTiming timing{UiTimingKind::UiAction};
-    auto action = std::move(self.actions[self.actionHead]);
-    self.actionHead = (self.actionHead + 1) % JobScheduler::kUiActionCapacity;
-    --self.actionCount;
+    const bool runSource = self.sourceReady && (self.actionCount == 0 || self.preferSource);
+    std::unique_ptr<UiAction> owned;
+    UiAction* action = nullptr;
+    if (runSource)
+    {
+        action = self.actionSource;
+        self.sourceReady = false;
+        self.preferSource = false;
+    }
+    else
+    {
+        owned = std::move(self.actions[self.actionHead]);
+        action = owned.get();
+        self.actionHead = (self.actionHead + 1) % JobScheduler::kUiActionCapacity;
+        --self.actionCount;
+        self.preferSource = true;
+    }
     self.inCallback = true;
     const auto leave = wil::scope_exit([&]() noexcept { self.inCallback = false; });
     action->Run();

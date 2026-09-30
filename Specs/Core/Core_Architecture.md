@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-30
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -72,6 +72,14 @@ most one UI action runs per outer-loop pass. Reentrant drain/action calls are ig
 both the message-only wait and the frame-latency wait, so completions return to the outer pump while hidden or
 suspended as well as while a frame is pending. `SettleJobs` is a harness/headless helper only, never a UI command.
 
+The scheduler also admits one stable, borrowed owner-thread UI-action source. Registration and removal occur
+outside callbacks; the object outlives registration through removal or Close. A ready request coalesces without
+allocation or an ordinary action slot. Readiness participates in idle/work/wake accounting and is consumed before
+the callback, so self-rearm schedules a later pass. When both kinds are ready, source and ordinary FIFO actions
+alternate, starting with the source. RequestStop refuses new source requests and drops readiness; Close removes
+the borrowed pointer without invoking or destroying the source. The host disarms while waiting for a prerequisite
+and requests its source when that prerequisite completes. It MUST NOT rearm an unchanged waiting state.
+
 `Executor`, `InlineExecutor`, `TileGrid`, `CancelSource`, `CancelToken` and `ParallelFor` remain standard C++ kernel
 interfaces; kernel callers borrow an executor. No callbacks poll when idle.
 
@@ -84,6 +92,10 @@ UI-owned `PreviewMailbox`, `ContinuationQueue`, `HistoryWork` and `StrokeReplay`
 `HistoryWork` spans scheduler classes and keeps the document busy until apply/drop. Its shared input ordinals merge
 the command queue with recorded strokes. The mailbox, barrier and application outlive all their workers; pointer
 fields in stamps are opaque identities, not permission for workers to access UI state. See `Document_Tools.md`.
+Each history acquisition has a distinct generation, including successive stages of the same selected input.
+Only the exact latest finished acquisition can continue its ordinal, in the same document. Initial Begin retains
+strict ordinal ordering. The host owns prerequisite outcome and document-lifetime validation; a finished barrier
+stamp alone does not authorize dependent work.
 
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
 specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in

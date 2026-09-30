@@ -152,6 +152,14 @@ class JobScheduler final
     [[nodiscard]] std::int32_t Submit(std::unique_ptr<Job>& job, JobOptions options, JobTicket& ticket) noexcept;
     [[nodiscard]] bool Cancel(JobTicket ticket) noexcept;
     [[nodiscard]] bool PostUiAction(std::unique_ptr<UiAction>& action) noexcept;
+    // One stable, borrowed owner-thread source for host continuations. Register/unregister only outside UI
+    // callbacks; the source outlives registration through Unregister or Close. No ownership is transferred.
+    [[nodiscard]] bool RegisterUiActionSource(UiAction& source) noexcept;
+    // Coalesces without allocation, including from a completion/action callback or with a full ordinary queue.
+    // Readiness is consumed before Run; self-rearm schedules a later outer pass. A waiting host must not rearm
+    // until its prerequisite completes. RequestStop refuses new requests and drops source readiness.
+    [[nodiscard]] bool RequestUiActionSource(UiAction& source) noexcept;
+    [[nodiscard]] bool UnregisterUiActionSource(UiAction& source) noexcept;
     void RequestStop() noexcept;
     // Owner thread, outside every UI callback. Hides/cancel coordination belongs to Application. Close joins
     // producers before destroying their inputs, results, intrusive nodes, events or COM pool lifetime.
