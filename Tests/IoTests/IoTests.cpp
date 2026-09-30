@@ -1417,8 +1417,11 @@ void TestProjectSaveDurability()
     WriteText(folderSentinel / L"keep.txt", "keep this unrelated directory");
     Expect(SaveProject(folderPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
            "save-durability.folder-first-save");
-    Expect(SaveProject(folderPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
-           "save-durability.folder-rotation");
+    const auto rotated = SaveProject(folderPath.c_str(), document, std::nullopt, false);
+    if (rotated != ProjectIoStatus::Ok)
+        std::fprintf(stderr, "Folder rotation status=%u win32=%lu path=%ls\n", static_cast<unsigned int>(rotated),
+                     GetLastError(), folderPath.c_str());
+    Expect(rotated == ProjectIoStatus::Ok, "save-durability.folder-rotation");
     Expect(ReadText(folderSentinel / L"keep.txt") == "keep this unrelated directory",
            "save-durability.folder-keeps-unowned-staging");
     const ProjectLoadResult folderReloaded = LoadProject(folderPath.c_str());

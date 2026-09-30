@@ -178,14 +178,18 @@ Copying a document, history snapshot, pending edit or token shares its points. R
 loops and points; a geometry operation builds a new vector and publishes it as a new value. Empty outlines need
 no heap allocation. Selection equality keeps its previous value semantics (antialiasing and all points), with a
 fast path for shared storage, so equal geometry preserves redo. Flipping, translating or distorting a selection
-must leave earlier snapshots untouched. Selection memory accounting and deferred destruction remain subsequent
-history/resource work in the active performance plan.
+must leave earlier snapshots untouched. History counts retained immutable selection capacity by held storage
+identity, excluding the live document's identity. Deferred destruction remains subsequent resource work in the
+active performance plan.
 
 The geometry producer caches its total point count and finite-point bounds. `PointCount()`, `Bounds()` and
 `DocumentSelection::IsEmpty()` are constant-time for snapshot, panel and admission readers. Copies preserve the
 cache with shared storage; a moved-from empty handle reports zero points and no bounds. Bounds retain the same
 finite-point filtering and degenerate-selection rules as `LoopsBounds`. Geometry equality and vector access are
 unchanged. This avoids outline traversal when opening a panel or reserving a hard-coverage worker's crossing array.
+The same producer caches `StorageBytes()`: the vector object and retained outer/inner capacities, including spare
+capacity, with opaque allocator/control-block overhead covered by global headroom. Copies and moves preserve
+this cache; empty/moved-from handles report zero. History byte queries do not traverse the outline.
 
 ### Operations
 

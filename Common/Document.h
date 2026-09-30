@@ -641,9 +641,14 @@ class SelectionLoops
     SelectionLoops(std::vector<SelectionLoop> loops)
         : _loops(loops.empty() ? nullptr : std::make_shared<const std::vector<SelectionLoop>>(std::move(loops)))
     {
+        if (_loops)
+        {
+            _storageBytes = sizeof(std::vector<SelectionLoop>) + Get().capacity() * sizeof(SelectionLoop);
+        }
         for (const SelectionLoop& loop : Get())
         {
             _pointCount += loop.size(); // Owned Vec2 allocations cannot together exceed addressable bytes.
+            _storageBytes += loop.capacity() * sizeof(Vec2);
         }
         _bounds = LoopsBounds(Get());
     }
@@ -651,7 +656,7 @@ class SelectionLoops
     SelectionLoops& operator=(const SelectionLoops&) noexcept = default;
     SelectionLoops(SelectionLoops&& other) noexcept
         : _loops(std::move(other._loops)), _pointCount(std::exchange(other._pointCount, 0)),
-          _bounds(std::exchange(other._bounds, std::nullopt))
+          _bounds(std::exchange(other._bounds, std::nullopt)), _storageBytes(std::exchange(other._storageBytes, 0))
     {
     }
     SelectionLoops& operator=(SelectionLoops&& other) noexcept
@@ -661,6 +666,7 @@ class SelectionLoops
             _loops = std::move(other._loops);
             _pointCount = std::exchange(other._pointCount, 0);
             _bounds = std::exchange(other._bounds, std::nullopt);
+            _storageBytes = std::exchange(other._storageBytes, 0);
         }
         return *this;
     }
@@ -707,6 +713,12 @@ class SelectionLoops
     {
         return _loops ? _bounds : std::nullopt;
     }
+    // Declared retained storage: the shared outer vector header and its retained capacity, plus each loop's retained
+    // capacity. Excludes allocator and shared-control-block overhead; reads the construction-time cache only.
+    [[nodiscard]] std::uint64_t StorageBytes() const noexcept
+    {
+        return _loops ? _storageBytes : 0;
+    }
     [[nodiscard]] const SelectionLoop& operator[](std::size_t index) const noexcept
     {
         return Get()[index];
@@ -716,6 +728,7 @@ class SelectionLoops
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
     std::optional<SelectionBounds> _bounds;
+    std::uint64_t _storageBytes = 0;
 };
 
 // A document-space selection outline, clipped to the canvas when drawn (not when moved). nullopt on the document
@@ -2068,7 +2081,7 @@ class DocumentSession
     }
     // True when Undo/Redo should not move history: an open color panel, or a pending edit that this call drops.
     [[nodiscard]] bool CancelPendingEdit();
-    void Restore(const DocumentHistory::Snapshot& snapshot);
+    void Restore(DocumentHistory::Snapshot snapshot);
     // Every change of the active layer goes through here (legacy EditorSession.activeLayerID didSet): another layer
     // drops the mask target, and the selection becomes that layer alone. A mask stays targeted only while the
     // active layer has one.

@@ -7,12 +7,14 @@
 #include "Document.h"
 #include "DocumentSizingWorkTests.h"
 #include "FilterCancellationTests.h"
+#include "HistoryAccountingTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterWorkTests.h"
 #include "Selection.h"
+#include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
@@ -7335,6 +7337,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRasterWorkTests();
     gFailures += RunFilterCancellationTests();
     gFailures += RunDocumentSizingWorkTests();
+    gFailures += RunSelectionStorageTests();
+    gFailures += RunHistoryAccountingTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

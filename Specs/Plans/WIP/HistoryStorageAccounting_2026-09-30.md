@@ -3,16 +3,19 @@
 ## Implementation checklist
 
 - [x] D13 explicit uint64 application limit, class default and machine-query fallback; 45 MP sizing retains undo.
-- [ ] Cache retained selection container capacity at geometry construction; constant-time immutable reads.
-- [ ] Count unique selection storage in history with the same live-document exclusion as raster storage.
-- [ ] Move pending snapshots and history entries; return a complete restore snapshot even when trim removes its entry.
-- [ ] Move the returned snapshot into the session; preserve mask targeting, crop/pending-edit and revision semantics.
-- [ ] Independent sharing, spare-capacity, trim, restore-after-trim and unchanged legacy history tests.
-- [ ] Full configuration matrix and measured real-loop history/apply costs; record outstanding P1.9 gates.
+- [x] Cache retained selection container capacity at geometry construction; constant-time immutable reads.
+- [x] Count unique selection storage in history with the same live-document exclusion as raster storage.
+- [x] Move pending snapshots and history entries; return a complete restore snapshot even when trim removes its entry.
+- [x] Move the returned snapshot into the session; preserve mask targeting, crop/pending-edit and revision semantics.
+- [x] Independent sharing, spare-capacity, trim, restore-after-trim and unchanged legacy history tests.
+- [x] Full configuration matrix and measured real-loop history/apply costs; record outstanding P1.9 gates.
 - [ ] Incremental accounting, lazy image thumbnails and first uploads; complete the remaining P1.9 work before closure.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.9.
 Owner: `Common/Document.h`, `DocumentHistory.cpp`, session restore and host upload/chrome costs.
+
+The bounded storage/move slice is qualified; [evidence](../../TestRuns/HistoryStorage_2026-09-30.md).
+Incremental accounting, thumbnails, uploads and the measured apply target remain active.
 
 ## Immediate implementation
 
@@ -31,8 +34,8 @@ entry order, pending-edit cancellation and active layer/mask/crop behavior remai
 
 ## Tests and limits
 
-Use small independent fixtures where undo/redo trimming removes the corresponding destination entry, then
-verify the returned document/revision/active id remain valid. Count shared and distinct selections across
+Use a small independent fixture where Undo trimming removes its destination entry, then verify the returned
+document/revision/active id remain valid. Verify normal Redo ownership and revision restoration. Count shared and distinct selections across
 history/live states, spare reserved capacity and a tiny budget that drops a selection-only retained entry.
 Keep all existing numeric history/session/pending-edit goldens unchanged. Run all required x64 configurations
 and ARM64 cross-builds; native ARM64 runtime requires another host. Timing is evidence, not an ordinary test gate.

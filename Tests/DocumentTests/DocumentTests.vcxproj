@@ -88,6 +88,8 @@
     <ClInclude Include="ColorEditDeferredTests.h" />
     <ClInclude Include="FilterCancellationTests.h" />
     <ClInclude Include="DocumentSizingWorkTests.h" />
+    <ClInclude Include="SelectionStorageTests.h" />
+    <ClInclude Include="HistoryAccountingTests.h" />
     <ClInclude Include="RasterWorkTests.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
@@ -100,6 +102,8 @@
     <ClCompile Include="ColorEditDeferredTests.cpp" />
     <ClCompile Include="FilterCancellationTests.cpp" />
     <ClCompile Include="DocumentSizingWorkTests.cpp" />
+    <ClCompile Include="SelectionStorageTests.cpp" />
+    <ClCompile Include="HistoryAccountingTests.cpp" />
     <ClCompile Include="RasterWorkTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />

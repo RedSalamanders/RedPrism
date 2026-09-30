@@ -5,7 +5,12 @@
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.
 - [ ] F3 — Worker project open and ordered image import, detached results and token-checked owner application.
+  - [ ] F3a — Thread cancellation through project loads/imports with banded file/ZIP reads and no partial publication; qualify independent project cancellation tests.
+  - [ ] F3b — Admit and run detached open/import graphs; preserve batch/history order and validate host cancellation/staleness/failure.
 - [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision.
+  - [ ] F4a — Thread cancellation through asset encoding, staged file writes and libzip close; preserve the external publication boundary.
+  - [ ] F4a.1 — Direct bounded file streams for PNG/JPEG and staged asset-file sources for ZIP; remove whole-archive encoded-buffer retention before admitting save/export graphs.
+  - [ ] F4b — Admit and run owned project/save/export graphs with exact saved-revision and destination ordering tests.
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
 

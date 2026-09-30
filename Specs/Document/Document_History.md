@@ -19,6 +19,10 @@ a failed physical-memory query falls back to 256 MiB. The limit is selected once
 `retainedBytes(current)` counts unique raster storage that appears only in history snapshots
 (before/after), excluding images still referenced by the live document, using pointer identity of `Raster`
 storage (Swift `ObjectIdentifier` of `CGImage`). Thumbnails count separately when they are distinct storage.
+Immutable selection storage also counts once by its held `SelectionLoops` identity, excluding the live
+document's selection identity. Its cached charge includes the outer vector object, outer retained capacity
+and each loop's retained point capacity; spare capacity counts. Opaque allocator/control-block overhead is
+covered by global headroom. The byte query never traverses selection points. Empty geometry owns no storage.
 
 ## Transactions
 
@@ -28,7 +32,10 @@ If the ended document equals the pending before-document, **do not** push an ent
 entry, and clears redo, then trims.
 
 Undo/redo are ignored while `depth != 0`. Undo restores the entry’s before snapshot (document + active layer
-id + revision). Redo restores after.
+id + revision). Redo restores after. The completed pending snapshot and stack entry transfer ownership by
+move. Each restore result independently owns its document, active id and revision before trimming can erase
+the destination stack entry. Session restoration takes that result by value and moves its document into place;
+it preserves the existing crop, pending-edit, document/restore serial and mask-target rules.
 
 A pending edit that is not a history entry yet (gradient, transform, brush, warp, pixel move, shape draft) is
 dropped by the first Undo and by the first Redo, and history does not move on that call; an outline being moved

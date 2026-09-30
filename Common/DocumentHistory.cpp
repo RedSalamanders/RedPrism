@@ -31,14 +31,14 @@ void DocumentHistory::End(const std::optional<CanvasDocument>& document, const s
     {
         return;
     }
-    Snapshot before = _pending.value();
+    Snapshot before = std::move(_pending.value());
     _pending.reset();
     if (before.document == document)
     {
         return;
     }
     _revision = Guid::Generate();
-    _past.push_back(Entry{_pendingName, std::move(before), Snapshot{document, selection, _revision}});
+    _past.push_back(Entry{std::move(_pendingName), std::move(before), Snapshot{document, selection, _revision}});
     _future.clear();
     Trim(document);
 }
@@ -51,10 +51,12 @@ std::optional<DocumentHistory::Snapshot> DocumentHistory::Undo()
     }
     Entry entry = std::move(_past.back());
     _past.pop_back();
-    _future.push_back(entry);
-    _revision = entry.before.revision;
-    Trim(entry.before.document);
-    return entry.before;
+    // Trim may erase the destination entry. Keep the one required restore copy independent of both stacks.
+    Snapshot restored = entry.before;
+    _future.push_back(std::move(entry));
+    _revision = restored.revision;
+    Trim(restored.document);
+    return restored;
 }
 
 std::optional<DocumentHistory::Snapshot> DocumentHistory::Redo()
@@ -65,10 +67,11 @@ std::optional<DocumentHistory::Snapshot> DocumentHistory::Redo()
     }
     Entry entry = std::move(_future.back());
     _future.pop_back();
-    _past.push_back(entry);
-    _revision = entry.after.revision;
-    Trim(entry.after.document);
-    return entry.after;
+    Snapshot restored = entry.after;
+    _past.push_back(std::move(entry));
+    _revision = restored.revision;
+    Trim(restored.document);
+    return restored;
 }
 
 void DocumentHistory::MarkSaved() noexcept
@@ -108,7 +111,8 @@ namespace
 // A painted layer shares its base and untouched tiles with earlier snapshots, and a snapshot shares unedited
 // layers with the document around it: each live storage counts once, the first time `seen` meets it. Also how
 // RetainedBytes seeds `seen` with the current document's own storages (with a throwaway `bytes`), so they are
-// never counted as retained by history.
+// never counted as retained by history. Selection identities are held by the same snapshots and charged once
+// from their construction-time capacity cache; no point traversal or borrowed identity survives this call.
 void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unordered_set<const void*>& seen,
                       std::size_t& bytes)
 {
@@ -139,6 +143,15 @@ void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unorde
         {
             add(layer.mask.value().asset.image);
             add(layer.mask.value().asset.thumbnail);
+        }
+    }
+    if (document.value().selection.has_value())
+    {
+        const SelectionLoops& loops = document.value().selection.value().loops;
+        const void* identity = loops.Identity();
+        if (identity != nullptr && seen.insert(identity).second)
+        {
+            bytes += static_cast<std::size_t>(loops.StorageBytes());
         }
     }
 }

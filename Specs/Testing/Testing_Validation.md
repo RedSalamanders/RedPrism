@@ -11,6 +11,15 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Retained selection and history ownership
+
+`DocumentTests` runs `selectionstorage.*` and `history-accounting.*`: empty/shared/moved geometry, reserved
+capacity without changed geometry, each selection identity charged once with live exclusion, equal-geometry
+no-op preserving redo, selection-only byte-budget trimming, and a valid owned Undo result after trimming erases
+its future entry. Normal Undo/Redo restore the expected document, active id and revision. Existing history,
+saved revision, pending-edit, mask/crop and 256 MiB trim numeric expectations stay unchanged. Full matrix and
+real application-loop qualification are recorded in [HistoryStorage_2026-09-30.md](../TestRuns/HistoryStorage_2026-09-30.md).
+
 `.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
 then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated
 negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-switch`) MUST NOT become the test

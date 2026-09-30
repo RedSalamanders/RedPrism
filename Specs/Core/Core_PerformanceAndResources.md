@@ -93,7 +93,7 @@ that makes them impossible.
 
 | Budget | Limit |
 | --- | --- |
-| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Raster storage counted; selection accounting remains P1.9 |
+| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached; incremental accounting remains P1.9 |
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | Visible DxUi surfaces (C2) | Library cap (64 MiB visible, 0 when hidden) |

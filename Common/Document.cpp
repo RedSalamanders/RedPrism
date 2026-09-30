@@ -1418,7 +1418,7 @@ void DocumentSession::SetActiveLayerID(const std::optional<Guid>& id)
     }
 }
 
-void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
+void DocumentSession::Restore(DocumentHistory::Snapshot snapshot)
 {
     CancelCrop();
     ++_restoreSerial;
@@ -1428,7 +1428,7 @@ void DocumentSession::Restore(const DocumentHistory::Snapshot& snapshot)
     {
         ++_documentSerial;
     }
-    _document = snapshot.document;
+    _document = std::move(snapshot.document);
     SetActiveLayerID(snapshot.activeLayerID);
     const ImageLayer* active = ActiveLayer();
     _maskSelected = keepMaskTarget && active != nullptr && active->mask.has_value();
@@ -1492,10 +1492,10 @@ void DocumentSession::Undo()
     {
         return;
     }
-    const std::optional<DocumentHistory::Snapshot> snapshot = history.Undo();
+    std::optional<DocumentHistory::Snapshot> snapshot = history.Undo();
     if (snapshot.has_value())
     {
-        Restore(snapshot.value());
+        Restore(std::move(snapshot.value()));
     }
 }
 
@@ -1505,10 +1505,10 @@ void DocumentSession::Redo()
     {
         return;
     }
-    const std::optional<DocumentHistory::Snapshot> snapshot = history.Redo();
+    std::optional<DocumentHistory::Snapshot> snapshot = history.Redo();
     if (snapshot.has_value())
     {
-        Restore(snapshot.value());
+        Restore(std::move(snapshot.value()));
     }
 }
 
