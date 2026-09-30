@@ -5,6 +5,8 @@
 #include "CommandBindings.h"
 #include "CommandLine.h"
 #include "ContinuationQueueTests.h"
+#include "ContinuationReceiptTests.h"
+#include "ContinuationRequestTests.h"
 #include "CrashDumps.h"
 #include "DeferredReleaseTests.h"
 #include "Document.h"
@@ -1646,6 +1648,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();
+    gFailures += RunContinuationReceiptTests();
+    gFailures += RunContinuationRequestTests();
     gFailures += RunHistoryWorkHostTests();
     TestAdapterSelection();
     TestFrameScheduler();

@@ -106,6 +106,21 @@ clear their queue before teardown; count-only forms do not publish results. Refu
 ownership and invokes no retirement. The host publishes the corresponding outcome before releasing an observed
 request. The queue neither stores a callback nor invokes one from its destructor.
 
+`ContinuationReceipt` is an owning, copyable observer of one result (`Pending`, `Succeeded`, `Cancelled`, `Failed`
+or `Stale`, plus a fixed-width error). `ContinuationCompletion` is its unique, movable publisher. Both observation
+and publication stay on the UI owner thread; workers never access the result. Only the first terminal publication
+is accepted. Dropping or overwriting a pending publisher publishes `Cancelled`; explicit stale/failure retirement
+publishes its specific result first. Observers remain readable after request/queue/host ownership ends, without
+borrowing a host, document or window. They do not pump, wait or dispatch callbacks. A pending receipt never
+authorizes dependent work.
+
+`HostRequest` owns a typed event-time input and publisher. Inputs include a whole ordered path batch, selected
+write parameters, a full size-card draft, layer/tool parameters and panel/session-end lifetime keys. Inputs retain
+no session/pixel snapshot, worker state, host pointer or callable. The selected runner obtains a snapshot only
+after prerequisite history has applied/dropped. Request move-overwrite/destruction retires publication before
+owned input storage releases. This defines the request model; production producers and the staged runner remain
+tracked in `ColorCommitContinuations_2026-09-30.md`.
+
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
 specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
 `UiNeverBlocks_2026-09-22.md`.

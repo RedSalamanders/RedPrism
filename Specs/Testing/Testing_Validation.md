@@ -148,6 +148,16 @@ Literal metadata and FIFO expectations cover ring wrap, callback-before-release 
 Clear, transferred entry lifetime, no callback while history is busy, and full/invalid admission retaining caller
 ownership. These qualify per-entry retirement, not the production runner's typed payloads or receipt publication.
 
+`continuation-receipt.*` tests the real observer/publisher model: first terminal outcome/error, invalid and pending
+publication refusal, copies/moves surviving publisher destruction, moved-from destruction, unique publication,
+pending abandonment and immediate failed admission values. Actual retirement-aware queues cover full/invalid
+refusal retaining ownership, stale and superseded outcomes, FIFO Clear keeping the active input pending, and
+destructor cancellation fallback. This does not qualify the production construction boundary's allocation failure.
+`continuation-request.*` tests the actual typed host inputs: original Unicode path order/drop point, write options,
+all size-draft fields, layer/name ownership, panel/document and session-end keys, move-overwrite retirement and
+retained outcomes after input release. These qualify owned inputs/results; actual caller effects, bounded payload
+admission and staged runner activation remain P1.1c.3c work.
+
 DocumentTests runs actual direct session operations through the ordering state machines to check that a stroke
 uses the predecessor's applied pixels (or the surviving pixels after failure/cancel), separate undo entries, Undo
 after a pending stroke, and replacement/stale-preview guards. This qualifies ordering foundations, not the P1

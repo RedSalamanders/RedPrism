@@ -7,6 +7,7 @@
 #include "ChromeEvents.h"
 #include "ColorEditWork.h"
 #include "CommandBindings.h"
+#include "ContinuationRequests.h"
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
@@ -247,14 +248,7 @@ class Application final : public ChromeEvents
     void OpenAdjustmentEditor() noexcept;
     [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
     void ApplyColorEdit() noexcept;
-    enum class HostOutcome
-    {
-        Pending,
-        Succeeded,
-        Cancelled,
-        Failed,
-        Stale
-    };
+    using HostOutcome = ContinuationOutcome;
     class ColorCommitJob;
     [[nodiscard]] HostOutcome StartColorCommit(std::uint64_t ordinal) noexcept;
     [[nodiscard]] bool ColorCommitBusy() const noexcept
@@ -397,12 +391,7 @@ class Application final : public ChromeEvents
     // ApplicationFiles.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Files" and "Unimplemented functions"): images
     // opened as a layer or a new project, the save prompt, Import Images, Close Project and the notice for a
     // function that has no implementation yet.
-    enum class ImageOpenChoice : std::uint8_t
-    {
-        AddLayer,
-        NewProject,
-        Cancel,
-    };
+    using ImageOpenChoice = HostImageOpenChoice;
     static constexpr UINT kEndSessionMessage = WM_APP + 8; // the save prompt a refused session end posts
     static constexpr UINT kNoticeMessage = WM_APP + 9;     // a notice card to show (wParam: its string id)
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
@@ -679,18 +668,7 @@ class Application final : public ChromeEvents
     int _budgetNotices = 0;                          // budget refusals reported (ReportBudgetRefusal)
     std::optional<ImageOpenChoice> _forcedImageOpen; // the self-test's answer to the image-open prompt
     std::optional<bool> _forcedDiscard;              // the self-test's answer to the save prompt (true: Don't Save)
-    struct SizeDialog
-    {
-        SizeCardKind kind{}; // None
-        CanvasSizeDraft canvas;
-        int anchor = 4;
-        int extension = 0; // 0 transparent, 1 foreground, 2 background, 3 black, 4 white, 5 custom
-        uint32_t customArgb = 0xFFFFFFFFu;
-        uint32_t customBefore = 0xFFFFFFFFu; // the custom color before the picker opened (Cancel restores)
-        ImageSizeDraft image;
-        double newWidth = 1920; // New Canvas: the last typed size, or the clipboard image's
-        double newHeight = 1080;
-    };
+    using SizeDialog = HostSizeDraft;
     SizeDialog _sizeDialog;
     bool _forceWarp = false;
     std::wstring _settingsPath;

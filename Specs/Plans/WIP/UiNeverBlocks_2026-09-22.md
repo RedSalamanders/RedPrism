@@ -76,6 +76,7 @@
         - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration remains with the production runner.
         - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
         - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
+        - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -85,6 +86,11 @@
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
 - [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
+  - [x] Specify file-backed RAW qualification and review ViewerImgRaw's decode/resource/cancellation patterns; provenance checks alone do not qualify decoded pixels.
+  - [ ] Run real ARW, CR3, NEF, RAF and tiled DNG decode/reference tests with the five licensed corpus files; verify the RAF's actual CFA pattern.
+  - [ ] Run malformed/truncated/source-length/overflow and allocation-budget tests, cancellation and late-result gates, and preview/full-result distinction.
+  - [ ] Run RAW open → develop → editable bake → save → reopen/export tests through the real host, including Cancel, failure and ordered batches.
+  - [ ] Require the complete corpus for P4/P5 closeout; record each file's status, dimensions, decoded checksum, numeric reference and CPU/GPU tolerances, with no qualification SKIPs.
 - [ ] P5 — Optimize RAW performance to the Photoshop targets.
 - [ ] P6 — Implement non-destructive develop, high-bit-depth documents and revised pixel budgets in a detailed child plan.
 - [ ] Final validation closeout — Update owning specs and docs, complete the closeout matrix, and move this plan to Done.
@@ -102,6 +108,9 @@ owns scheduler, GPU, storage, and RAW architecture.
 
 RAW corpus source, 2026-09-27: the user explicitly selected publicly licensed test samples. Store verified source
 URLs, license terms and file hashes in the corpus manifest when acquiring ARW, CR3, NEF, RAF and tiled DNG fixtures.
+RAW test scope, 2026-09-30: the user requested explicit RAW file tests and suggested RedSalamander's ViewerImgRaw
+as inspiration. §6.9 records the file-backed matrix and applicable source patterns. The five existing downloads
+are verified inputs; RAW decode, develop and round-trip qualification remain P4 work.
 
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
 benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
@@ -233,7 +242,9 @@ Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026
 ownership, receipts, write/discard stages and production caller activation remain open; P1 and G1 remain open.
 Per-entry continuation retirement also passed the full x64 gates and all ARM64 cross-builds; the
 [retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md) proves each dropped entry's ownership and
-observable outcome through the callback. Production typed receipts and their publication remain with the runner.
+observable outcome through the callback. The [owned request/receipt record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md)
+also qualifies the actual model in all configurations, with 85 receipt and 21 typed-input assertions per x64 suite.
+Production producer admission, staged publication and caller activation remain with the runner.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -1547,6 +1558,86 @@ the parity reference for the GPU.
   corpus SKIP when it is absent, as the Fluent-font check does. Each P4/P5 closeout record shows that the
   corpus-dependent tests ran (not SKIP) in x64 ASan Debug.
 
+### 6.9 File-backed RAW qualification and ViewerImgRaw reference
+
+**Implementation reference reviewed on 2026-09-30.** The user's reference is
+`Z:\src\RedSalamander\Plugins\ViewerImgRaw`, clean at RedSalamander commit
+`b5b0996292736b70983d9202f5cfedb79f12e38a`. Relevant anchors:
+
+- [Decode.cpp](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.Decode.cpp:706): cancellation through LibRaw's
+  progress callback and stale request generations; preview extraction and full decode are separate stages.
+- [Full RAW decode](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.Decode.cpp:1601): validates dimensions
+  after unpack and before process, then validates output format, checked sample/byte products and source length.
+  Its reservation scope releases on failed processing. RedPrism additionally declares the full decode peak before
+  dispatch; post-unpack validation alone does not bound unpack allocations.
+- [Resource policy](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.ResourcePolicy.h:10): checked arithmetic
+  and explicit input, image, embedded-preview and speculative-cache caps. Adapt the validation pattern to §4.6
+  and §6.1, with boundary tests; its 64 Mi-pixel/16,384-side viewer caps are separate from RedPrism's policy.
+- [Async protocol](Z:/src/RedSalamander/Plugins/ViewerImgRaw/ViewerImgRaw.AsyncProtocol.h:17): progress fields and
+  terminal sequencing deserve independent state tests. RedPrism uses its scheduler's completion/progress channel
+  and session serials, with no borrowed HWND in worker progress.
+
+The viewer requests `output_bps = 8`, optionally half-size, then converts processed data into BGRA. Its output is
+a browsing result. RedPrism retains CFA/linear precision and follows §6.4 for develop, orientation and final bake.
+The viewer's `dcraw_process()` result is not a numeric develop oracle. Keep RedPrism's §6.2 decoder build/options,
+single application GPU device, ordered imports and bounded develop cache. Do not copy plugin module/unload or
+neighbor-prefetch ownership into the editor. The reference survey ran no RedSalamander tests or RAW decodes.
+
+**Real files.** `Tests/Fixtures/raw-corpus.json` supplies the exact filenames, per-file CC0 evidence, sizes and
+SHA-256. Resolve them under the marked `X:\RedPrism.Perf\corpus`; never silently download, substitute another camera
+file or modify the source corpus during a test. The first five rows below are mandatory for P4/P5 qualification.
+The ordinary developer suite may explicitly SKIP missing corpus tests; the phase qualification invocation must
+fail if any required file/reference is missing, mismatched, unsupported unexpectedly or skipped. All synthetic
+and hostile generated-file tests run without the downloaded corpus. Publish this distinction in the P4 test
+runner and `Testing_Validation.md` when implementing it.
+
+| File class / manifest ID | File-backed assertions | Owner / gate |
+| --- | --- | --- |
+| Sony lossless ARW / 4466 | Probe/preview/full decode return distinct statuses; active-area dimensions and decoded planes agree with the pinned decoder reference; full-quality develop/bake has a recorded checksum | IoTests + real host; correctness required, speed recorded under §7 |
+| Canon CR3 / 4694 | Correct frame/active area, lossless raw samples and camera metadata; CPU/GPU develop parity; no embedded preview mistaken for full-quality readiness | IoTests + real host; §7 CR3 performance gate after correctness |
+| Nikon lossless NEF / 1840 | Unpack/sample and bit-depth reference, orientation/crop, preview/no-preview path and full-quality output; reject source truncation | IoTests + real host; correctness required, speed recorded |
+| Fuji lossless RAF / 6002 | Read actual CFA metadata and assert X-Trans only when independently confirmed; channels/edges follow the reference for the decoded layout; compressed decode matches pinned LibRaw | IoTests + develop tests; §7 RAF performance gate after correctness |
+| Pixel 8 Pro tiled DNG / 7751 | Decode the already verified 8160×6144 CFA16/JPEG7 image with 256² tiles and 768 in-file tile ranges; tile/strip-independent sample order, active crop and CPU/GPU seams agree with reference | IoTests + develop tests; actual decode required, container inspection alone insufficient |
+| Generated Bayer/X-Trans/linear DNGs | §6.8 analytic pixel/tag/profile goldens, with exact sample patterns, deterministic generator and expected sizes; the real RAF remains a separate file test | IoTests + DocumentTests + WARP; always run |
+
+The current RAF manifest marks its X-Trans pattern as expected from the camera model, not locally decoded. Verify
+the decoded CFA and store independent reference evidence before marking that real-file coverage complete. If it
+does not supply X-Trans, acquire another individually licensed/hashed file and add it to the manifest; the known
+synthetic X-Trans pattern remains mandatory. Record uncropped sensor size separately from oriented active output.
+
+**Failure, recovery and lifetime matrix.** Generate mutants into a test-owned temporary directory from synthetic
+fixtures or read-only source copies; retain the original hashes. Each row asserts the precise status named by
+`IO_RawDecode.md`, no partial successful image/document, and reservation/input retirement. Do not infer cancellation
+latency from a progress callback: record non-interruptible library regions separately under §6.2.
+
+| Scenario | Required observations |
+| --- | --- |
+| Empty/truncated header, IFD or payload; invalid/missing tile bytes | Deterministic invalid-data status; no out-of-bounds read or partial success; existing document survives |
+| Recursive IFDs, invalid offsets/counts, zero/oversized tile geometry, overflowing stride/sample products | Checked rejection within the declared admission peak; generated controls for every arithmetic boundary; ASan and fuzz seed regression |
+| Wrong extension/signature, unsupported compression/CFA/profile/opcode, excessive source bytes or active-area pixels | Distinguish invalid/unsupported/too-large cases; oversized RAW offers only the specified preview fallback, with no successful full decode |
+| No embedded preview, malformed embedded JPEG, preview succeeds then full decode fails | Supported no-preview path reaches full decode; corrupt preview has an explicit fallback/failure; thumbnail never completes the full-quality/editable receipt |
+| Memory admission refusal, decoder allocation/IO/read-count failure, failure after a reserved stage | Specific failure outcome, full request/reservation retirement, usable existing document and retry; no idle retry loop |
+| Cancel during probe/unpack/develop/bake; late success after Cancel | Event-gated cancellation acknowledges drop before releasing the barrier; no pixels/history from late work; retained input remains valid through the callback |
+| Newer settings, close/reopen, document replacement with reused persisted IDs, hidden/minimized completion, device loss | Exact session/opening/sequence/device validation, newest applicable preview only, no stale upload or repeated wake; CPU recovery policy matches §4.7 |
+| Simultaneous ARW/CR3/NEF/RAF/DNG jobs and memory pressure | Independent decoder state, bounded whole peaks, deterministic numeric results; pressure eviction releases caches without invalidating an active input |
+
+**Actual editor round trips.** A hidden application harness opens each required file through the real path, observes
+embedded preview separately, changes develop settings, commits a full-quality editable layer, saves `.prism`,
+reopens it and exports PNG/JPEG. Check decoded/developed pixel reference, oriented dimensions, working color,
+active layer, recorded revision and one Develop RAW history entry. Reopened v1 projects retain baked pixels and
+the existing project schema's document/layer metadata; RAW source/develop settings and pre-save undo history are
+not v1 persistence requirements. P6 qualifies non-destructive RAW persistence. Compare PNG pixels
+exactly at the codec boundary; JPEG uses the codec contract's lossy reference, not byte equality with PNG.
+
+Also exercise Add Layer/New Project, mixed project+RAW drops and multi-RAW batches with the one prompt and ordered
+panels; first file failure, failed required settlement, admission refusal and cancelling an intermediate panel
+must produce the specified surviving document and individually observed outcomes. Save/Discard/Cancel and failed
+Save precede replacement without losing a draft. Synthetic/reference gates run in all x64 configurations; required
+real-file cases must run without SKIP in the P4/P5 ASan qualification and Release measurements. ARM64 compilation
+is separate from native ARM64 execution. Record per-file status, reference version/options, sample hash, developed
+checksum/tolerance, dimensions, peak memory and which cases actually ran. §7 measures preview, editable bake,
+slider and export times only after these correctness gates; no wall-clock threshold belongs to unit tests.
+
 ## 7. Faster-than-Photoshop protocol
 
 **Setup**
@@ -1953,9 +2044,14 @@ speedup of each tier over scalar.
 - **P4.7 CPU SIMD develop engine.**
 - **P4.8 Measurement**: M1–M5 and the §7 G2 filter pairs against Photoshop on R1 (and R2/R3 per D9), in
   `RawVsPhotoshop_<date>.md` and `Filters_<date>.md`.
+- **P4.9 File-backed qualification**: §6.9's required five-file decode/reference and editor round-trip matrix,
+  verified actual RAF CFA, hostile generated files, cancellation/recovery/admission and mandatory-corpus runner
+  mode. Required real-file cases run without SKIP in Release and x64 ASan qualification; ordinary developer
+  missing-corpus skips remain explicitly reported.
 
-**P4 exit**: all §6.8 goldens are green; M1 and M3 are met; M2 and M4 are ≤ Photoshop for CR3 and RAF on R1, with
-ARW, DNG and NEF recorded.
+**P4 exit**: all §6.8 goldens and §6.9 required-file correctness/round-trip/failure gates are green, with no missing,
+mismatched or skipped required corpus case; M1 and M3 are met; M2 and M4 are ≤ Photoshop for CR3 and RAF on R1,
+with ARW, DNG and NEF speeds recorded. Recorded-only speed rows still require correctness.
 
 ### P5 — RAW at 0.5 × Photoshop
 
@@ -1969,6 +2065,8 @@ ARW, DNG and NEF recorded.
 
 **P5 exit**, all warm on R1 and recorded:
 
+- §6.8–6.9 correctness and mandatory-corpus qualification pass again for the optimized decoder paths, without
+  missing, mismatched or skipped required cases.
 - M1 ≤ 100 ms.
 - M2 and M4 ≤ 0.5 × Photoshop for all five classes.
 - M5 ≤ Photoshop.

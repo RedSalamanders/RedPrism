@@ -6,7 +6,8 @@
 - [x] Finish qualification of the busy controls and ordered commit engine in the parent P1.1c.3a–b record: all x64 test configurations and ARM64 cross-builds passed.
 - [x] Add and qualify the scheduler's allocation-free, coalesced UI-action source with bounded scheduling and borrowed shutdown ownership. Application registration remains part of the runner below.
 - [x] Qualify sequential same-ordinal history acquisitions, including late same-kind completions and commit-then-size before queued Undo. Full x64 gates and all ARM64 cross-builds passed.
-- [ ] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
+- [x] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
+  - [x] Qualify the owning observer/publisher model and typed event-time paths, full size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer/runner activation remains open.
 - [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
   - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
@@ -31,7 +32,9 @@ primitives are qualified in the [continuation record](../../TestRuns/Continuatio
 The source is not registered by Application yet; owned request/receipt stages and the production caller migration
 remain the next slice. These primitive checks do not qualify the child plan's integrated activation matrix.
 Per-entry retirement is qualified in the [retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md).
-The queue supplies every dropped entry before release; typed host receipt publication remains open.
+The queue supplies every dropped entry before release. The typed host request/receipt model passed all x64
+configurations and ARM64 cross-builds in the [ownership record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md);
+production producer admission and staged publication remain open.
 
 ## 1. Outcomes and ownership
 
@@ -52,9 +55,10 @@ Completion receipts are owned values and remain readable after the request leave
 accesses them; the owner publishes their outcome after apply/drop. Tests retain a receipt while pumping the shared
 harness. Production never waits, polls a future, calls `SettleJobs` or makes quiet mode synchronous.
 
-Queue retirement must return each owned entry or notify the owner before dropping it, so stale/replaced entries,
-Escape clearing and shutdown publish their final receipt outcomes. The current `TakeReady` stale count and `Clear`
-count serve the foundation's notice tests; the production runner needs individual entries for receipt retirement.
+Queue retirement must use the retirement-aware overloads to receive each owned entry before dropping it, so
+stale/replaced entries, Escape clearing and shutdown publish their final receipt outcomes. Counts remain available
+for notices. `HostRequest::Retire` maps stale to Stale and replaced/cleared to Cancelled; dropping a still-pending
+unique publisher is a Cancelled fallback. Only the first terminal outcome is published.
 Queue refusal leaves the caller's payload owned and publishes a failed admission receipt. Prove that none of these
 paths strands an externally retained receipt in Pending.
 

@@ -139,6 +139,15 @@ the callback; detached ownership survives until callback return or transfer. Cal
 state and MUST NOT pump, wait, dispatch UI or access the same queue. Receipt construction and request byte budgets
 belong to the eventual host admission path. These primitives alone do not activate production continuations.
 
+Each owned continuation creates one shared result allocation at request construction, outside hot dispatch.
+Receipt reads/copies, terminal publication, publisher moves and abandonment allocate no storage, acquire no
+lock, start no worker and signal no event. A unique publisher retires a pending result as `Cancelled` on
+destruction or move-overwrite. Externally retained observers own only that result, never input paths or pixels.
+The owning construction/admission boundary MUST fail the whole request on `std::bad_alloc`, returning the
+allocation-free immediate `ContinuationReceipt::Failure(E_OUTOFMEMORY)` value. Full/invalid queue admission
+retains the input for explicit failed publication. The future production admission path bounds and accounts for
+path/name bytes; a fixed eight-entry ring alone does not bound variable-length payloads.
+
 `JobActivity` uses 128 fixed records and updates only on scheduler notices. The oldest foreground operation owns
 the global progress indicator; Background, Refinement and InteractivePreview do not. A single deadline timer shows
 the indicator after 250 ms, is killed before dispatch, and is removed at completion/shutdown. It never polls job
