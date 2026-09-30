@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <type_traits>
 
 namespace
 {
@@ -14,6 +16,22 @@ struct Lifetime final
 {
     int destroyed = 0;
     int moves = 0;
+};
+
+enum class RequestState
+{
+    Pending,
+    Failed,
+    Succeeded,
+    Cancelled,
+    Stale
+};
+
+struct RetirementReceipt final
+{
+    bool retired = false;
+    ContinuationRetirement outcome = ContinuationRetirement::Stale;
+    RequestState state = RequestState::Pending;
 };
 
 struct CountedDelete final
@@ -38,14 +56,23 @@ struct TrackedRequest final
     int value = 0;
     Payload payload;
     Lifetime* lifetime = nullptr;
+    std::shared_ptr<RetirementReceipt> receipt;
 
     TrackedRequest(Lifetime& owner, int operation, int parameter, int ownedValue)
         : opcode(operation), value(parameter), payload(new int(ownedValue), CountedDelete{&owner}), lifetime(&owner)
     {
     }
 
+    TrackedRequest(Lifetime& owner, int operation, int parameter, int ownedValue,
+                   std::shared_ptr<RetirementReceipt> retirementReceipt)
+        : TrackedRequest(owner, operation, parameter, ownedValue)
+    {
+        receipt = std::move(retirementReceipt);
+    }
+
     TrackedRequest(TrackedRequest&& other) noexcept
-        : opcode(other.opcode), value(other.value), payload(std::move(other.payload)), lifetime(other.lifetime)
+        : opcode(other.opcode), value(other.value), payload(std::move(other.payload)), lifetime(other.lifetime),
+          receipt(std::move(other.receipt))
     {
         ++lifetime->moves;
     }
@@ -58,6 +85,7 @@ struct TrackedRequest final
             value = other.value;
             payload = std::move(other.payload);
             lifetime = other.lifetime;
+            receipt = std::move(other.receipt);
             ++lifetime->moves;
         }
         return *this;
@@ -68,6 +96,58 @@ struct TrackedRequest final
 };
 
 using Queue = ContinuationQueue<TrackedRequest>;
+
+static_assert(std::is_nothrow_destructible_v<Queue>);
+static_assert(std::is_nothrow_move_constructible_v<Queue>);
+
+struct RetirementRecord final
+{
+    std::uint64_t documentSerial = 0;
+    std::uint64_t ordinal = 0;
+    ContinuationKind kind = ContinuationKind::Command;
+    ContinuationRetirement outcome = ContinuationRetirement::Stale;
+    int destroyedAtCallback = 0;
+    bool ownsPayload = false;
+};
+
+struct RetirementLog final
+{
+    std::array<RetirementRecord, 32> records{};
+    std::size_t count = 0;
+    bool overflowed = false;
+    Lifetime* lifetime = nullptr;
+    std::uint64_t retainOrdinal = 0;
+    std::optional<Queue::Entry> retained;
+
+    void operator()(Queue::Entry&& entry, ContinuationRetirement outcome) noexcept
+    {
+        if (count < records.size())
+        {
+            records[count] = RetirementRecord{entry.documentSerial,
+                                              entry.ordinal,
+                                              entry.kind,
+                                              outcome,
+                                              lifetime == nullptr ? 0 : lifetime->destroyed,
+                                              entry.input.payload != nullptr};
+            ++count;
+        }
+        else
+        {
+            overflowed = true;
+        }
+        if (entry.input.receipt)
+        {
+            entry.input.receipt->retired = true;
+            entry.input.receipt->outcome = outcome;
+            entry.input.receipt->state =
+                outcome == ContinuationRetirement::Stale ? RequestState::Stale : RequestState::Cancelled;
+        }
+        if (entry.ordinal == retainOrdinal)
+        {
+            retained.emplace(std::move(entry));
+        }
+    }
+};
 
 int g_failures = 0;
 
@@ -83,6 +163,23 @@ void Expect(bool condition, const char* name) noexcept
 TrackedRequest Make(Lifetime& lifetime, int opcode, int value, int ownedValue)
 {
     return TrackedRequest{lifetime, opcode, value, ownedValue};
+}
+
+TrackedRequest MakeWithReceipt(Lifetime& lifetime, int opcode, int value, int ownedValue,
+                               const std::shared_ptr<RetirementReceipt>& receipt)
+{
+    return TrackedRequest{lifetime, opcode, value, ownedValue, receipt};
+}
+
+void ExpectRetirement(const RetirementLog& log, std::size_t index, std::uint64_t documentSerial, std::uint64_t ordinal,
+                      ContinuationKind kind, ContinuationRetirement outcome, int destroyedAtCallback, const char* name)
+{
+    const bool exists = index < log.count;
+    Expect(!log.overflowed && exists && log.records[index].documentSerial == documentSerial &&
+               log.records[index].ordinal == ordinal && log.records[index].kind == kind &&
+               log.records[index].outcome == outcome && log.records[index].destroyedAtCallback == destroyedAtCallback &&
+               log.records[index].ownsPayload,
+           name);
 }
 
 void Enqueue(Queue& queue, std::uint64_t document, std::uint64_t ordinal, ContinuationKind kind,
@@ -352,6 +449,273 @@ void TestUndoRedoOrder()
                "undo-redo-observes-literal-fifo-values");
     }
 }
+
+void TestSupersededRetirement()
+{
+    Lifetime lifetime;
+    Queue queue;
+    RetirementLog retire;
+    retire.lifetime = &lifetime;
+    std::array<std::shared_ptr<RetirementReceipt>, 2> receipts{std::make_shared<RetirementReceipt>(),
+                                                               std::make_shared<RetirementReceipt>()};
+
+    TrackedRequest original = MakeWithReceipt(lifetime, 1, 11, 501, receipts[0]);
+    const ContinuationAdmission originalAdmission = queue.Enqueue(81, 40, ContinuationKind::WandNew, original, retire);
+    Expect(originalAdmission == ContinuationAdmission::Queued, "retirement-first-wand-queued");
+    if (originalAdmission != ContinuationAdmission::Queued)
+    {
+        return;
+    }
+    TrackedRequest replacement = MakeWithReceipt(lifetime, 2, 12, 502, receipts[1]);
+    const ContinuationAdmission replacementAdmission =
+        queue.Enqueue(81, 41, ContinuationKind::WandNew, replacement, retire);
+    Expect(replacementAdmission == ContinuationAdmission::Coalesced, "retirement-consecutive-wand-replaces");
+    if (replacementAdmission != ContinuationAdmission::Coalesced)
+    {
+        return;
+    }
+
+    Expect(retire.count == 1 && receipts[0]->retired && receipts[0]->outcome == ContinuationRetirement::Superseded &&
+               receipts[0]->state == RequestState::Cancelled && lifetime.destroyed == 1 && !retire.overflowed,
+           "superseded-receipt-published-before-old-request-release");
+    ExpectRetirement(retire, 0, 81, 40, ContinuationKind::WandNew, ContinuationRetirement::Superseded, 0,
+                     "superseded-callback-sees-live-old-payload-and-exact-metadata");
+    Expect(queue.Size() == 1 && queue.Front() != nullptr && queue.Front()->documentSerial == 81 &&
+               queue.Front()->ordinal == 41 && queue.Front()->kind == ContinuationKind::WandNew &&
+               queue.Front()->input.value == 12 && queue.Front()->input.payload &&
+               *queue.Front()->input.payload == 502 && !receipts[1]->retired,
+           "coalesced-replacement-remains-pending-with-updated-metadata");
+    Queue::Taken active = queue.TakeReady(81, false);
+    Expect(active.ready && active.ready.value().ordinal == 41 && active.ready.value().input.receipt == receipts[1] &&
+               !receipts[1]->retired && receipts[1]->state == RequestState::Pending,
+           "taken-replacement-is-active-and-not-retired");
+    if (active.ready && active.ready.value().input.receipt == receipts[1])
+    {
+        active.ready.value().input.receipt->state = RequestState::Failed;
+        active.ready.reset();
+        Expect(receipts[1]->state == RequestState::Failed && lifetime.destroyed == 2,
+               "active-replacement-owner-publishes-failure-before-release");
+    }
+}
+
+void TestRetirementRefusalAndStaleSkip()
+{
+    Lifetime fullLifetime;
+    Queue fullQueue;
+    RetirementLog fullRetire;
+    fullRetire.lifetime = &fullLifetime;
+    std::array<TrackedRequest, Queue::kCapacity> requests{
+        Make(fullLifetime, 0, 10, 510), Make(fullLifetime, 1, 11, 511), Make(fullLifetime, 2, 12, 512),
+        Make(fullLifetime, 3, 13, 513), Make(fullLifetime, 4, 14, 514), Make(fullLifetime, 5, 15, 515),
+        Make(fullLifetime, 6, 16, 516), Make(fullLifetime, 7, 17, 517)};
+    for (std::size_t i = 0; i < requests.size(); ++i)
+    {
+        const ContinuationAdmission admission = fullQueue.Enqueue(82, static_cast<std::uint64_t>(i + 1),
+                                                                  ContinuationKind::Command, requests[i], fullRetire);
+        Expect(admission == ContinuationAdmission::Queued, "retirement-full-case-fills");
+        if (admission != ContinuationAdmission::Queued)
+        {
+            return;
+        }
+    }
+    std::shared_ptr<RetirementReceipt> fullReceipt = std::make_shared<RetirementReceipt>();
+    TrackedRequest full = MakeWithReceipt(fullLifetime, 8, 18, 518, fullReceipt);
+    const int movesBeforeFull = fullLifetime.moves;
+    const ContinuationAdmission fullAdmission = fullQueue.Enqueue(82, 9, ContinuationKind::Command, full, fullRetire);
+    const bool fullRefused = fullAdmission == ContinuationAdmission::Full && full.payload && *full.payload == 518 &&
+                             fullLifetime.moves == movesBeforeFull && fullRetire.count == 0 &&
+                             fullReceipt->state == RequestState::Pending && full.receipt == fullReceipt;
+    Expect(fullRefused, "full-refusal-retains-caller-without-retirement");
+    if (!fullRefused)
+    {
+        return;
+    }
+    full.receipt->state = RequestState::Failed;
+    Expect(fullReceipt->state == RequestState::Failed && full.payload && fullRetire.count == 0,
+           "full-refusal-caller-can-mark-retained-request-failed");
+
+    std::shared_ptr<RetirementReceipt> invalidReceipt = std::make_shared<RetirementReceipt>();
+    TrackedRequest invalid = MakeWithReceipt(fullLifetime, 9, 19, 519, invalidReceipt);
+    const int movesBeforeInvalid = fullLifetime.moves;
+    const ContinuationAdmission invalidAdmission =
+        fullQueue.Enqueue(82, 8, ContinuationKind::Undo, invalid, fullRetire);
+    const bool invalidRefused = invalidAdmission == ContinuationAdmission::InvalidOrder && invalid.payload &&
+                                *invalid.payload == 519 && fullLifetime.moves == movesBeforeInvalid &&
+                                fullRetire.count == 0 && invalidReceipt->state == RequestState::Pending &&
+                                invalid.receipt == invalidReceipt;
+    Expect(invalidRefused, "invalid-order-retains-caller-without-retirement");
+    if (!invalidRefused)
+    {
+        return;
+    }
+    invalid.receipt->state = RequestState::Failed;
+    Expect(invalidReceipt->state == RequestState::Failed && invalid.payload && fullRetire.count == 0,
+           "invalid-order-caller-can-mark-retained-request-failed");
+
+    Lifetime staleLifetime;
+    Queue staleQueue;
+    RetirementLog staleRetire;
+    staleRetire.lifetime = &staleLifetime;
+    std::array<std::shared_ptr<RetirementReceipt>, 3> receipts{std::make_shared<RetirementReceipt>(),
+                                                               std::make_shared<RetirementReceipt>(),
+                                                               std::make_shared<RetirementReceipt>()};
+    TrackedRequest staleOne = MakeWithReceipt(staleLifetime, 1, 21, 521, receipts[0]);
+    const ContinuationAdmission staleOneAdmission =
+        staleQueue.Enqueue(90, 1, ContinuationKind::Command, staleOne, staleRetire);
+    Expect(staleOneAdmission == ContinuationAdmission::Queued, "stale-retirement-first-entry-queued");
+    if (staleOneAdmission != ContinuationAdmission::Queued)
+    {
+        return;
+    }
+    TrackedRequest staleTwo = MakeWithReceipt(staleLifetime, 2, 22, 522, receipts[1]);
+    const ContinuationAdmission staleTwoAdmission =
+        staleQueue.Enqueue(90, 2, ContinuationKind::Import, staleTwo, staleRetire);
+    Expect(staleTwoAdmission == ContinuationAdmission::Queued, "stale-retirement-second-entry-queued");
+    if (staleTwoAdmission != ContinuationAdmission::Queued)
+    {
+        return;
+    }
+    TrackedRequest live = MakeWithReceipt(staleLifetime, 3, 23, 523, receipts[2]);
+    const ContinuationAdmission liveAdmission = staleQueue.Enqueue(91, 3, ContinuationKind::Redo, live, staleRetire);
+    Expect(liveAdmission == ContinuationAdmission::Queued, "stale-retirement-live-entry-queued");
+    if (liveAdmission != ContinuationAdmission::Queued)
+    {
+        return;
+    }
+
+    const Queue::Taken busy = staleQueue.TakeReady(91, true, staleRetire);
+    Expect(!busy.ready && busy.stale == 0 && staleRetire.count == 0 && staleLifetime.destroyed == 0 &&
+               staleQueue.Size() == 3,
+           "busy-take-does-not-retire-stale-or-live-entry");
+    const Queue::Taken ready = staleQueue.TakeReady(91, false, staleRetire);
+    Expect(ready.stale == 2 && ready.ready && ready.ready.value().ordinal == 3 && staleQueue.Size() == 0 &&
+               staleRetire.count == 2 && staleLifetime.destroyed == 2 && !staleRetire.overflowed,
+           "stale-skip-retires-in-order-before-returning-live-entry");
+    ExpectRetirement(staleRetire, 0, 90, 1, ContinuationKind::Command, ContinuationRetirement::Stale, 0,
+                     "stale-first-retirement-metadata-order-and-destruction");
+    ExpectRetirement(staleRetire, 1, 90, 2, ContinuationKind::Import, ContinuationRetirement::Stale, 1,
+                     "stale-second-retirement-metadata-order-and-destruction");
+    Expect(receipts[0]->retired && receipts[0]->outcome == ContinuationRetirement::Stale &&
+               receipts[0]->state == RequestState::Stale && receipts[1]->retired &&
+               receipts[1]->outcome == ContinuationRetirement::Stale && receipts[1]->state == RequestState::Stale &&
+               !receipts[2]->retired && receipts[2]->state == RequestState::Pending,
+           "stale-receipts-record-outcomes-and-live-request-remains-active");
+}
+
+void TestRetirementClearWrapAndTransfer()
+{
+    Lifetime wrapLifetime;
+    Queue wrapQueue;
+    RetirementLog wrapRetire;
+    wrapRetire.lifetime = &wrapLifetime;
+    for (std::uint64_t ordinal = 1; ordinal <= 6; ++ordinal)
+    {
+        TrackedRequest request =
+            Make(wrapLifetime, static_cast<int>(ordinal), static_cast<int>(ordinal), static_cast<int>(600 + ordinal));
+        const ContinuationAdmission admission =
+            wrapQueue.Enqueue(100, ordinal, ContinuationKind::Command, request, wrapRetire);
+        Expect(admission == ContinuationAdmission::Queued, "retirement-wrap-initial-fill");
+        if (admission != ContinuationAdmission::Queued)
+        {
+            return;
+        }
+    }
+    for (std::uint64_t ordinal = 1; ordinal <= 5; ++ordinal)
+    {
+        const Queue::Taken taken = wrapQueue.TakeReady(100, false);
+        const bool takenExpected = taken.ready && taken.ready.value().ordinal == ordinal;
+        Expect(takenExpected, "retirement-wrap-prefix-taken");
+        if (!takenExpected)
+        {
+            return;
+        }
+    }
+    for (std::uint64_t ordinal = 7; ordinal <= 12; ++ordinal)
+    {
+        TrackedRequest request =
+            Make(wrapLifetime, static_cast<int>(ordinal), static_cast<int>(ordinal), static_cast<int>(600 + ordinal));
+        const ContinuationAdmission admission =
+            wrapQueue.Enqueue(100, ordinal, ContinuationKind::Command, request, wrapRetire);
+        Expect(admission == ContinuationAdmission::Queued, "retirement-wrap-refill");
+        if (admission != ContinuationAdmission::Queued)
+        {
+            return;
+        }
+    }
+    const std::size_t wrappedCleared = wrapQueue.Clear(wrapRetire);
+    const bool wrappedClearExpected = wrappedCleared == 7 && wrapQueue.Size() == 0 && wrapRetire.count == 7;
+    Expect(wrappedClearExpected, "clear-retires-seven-wrapped-entries");
+    if (!wrappedClearExpected)
+    {
+        return;
+    }
+    constexpr std::array<std::uint64_t, 7> wrappedExpected{6, 7, 8, 9, 10, 11, 12};
+    for (std::size_t i = 0; i < wrappedExpected.size(); ++i)
+    {
+        ExpectRetirement(wrapRetire, i, 100, wrappedExpected[i], ContinuationKind::Command,
+                         ContinuationRetirement::Cancelled, static_cast<int>(5 + i),
+                         "wrapped-clear-retires-literal-fifo-with-progressive-destruction");
+    }
+    const std::size_t retiredBeforeEmptyClear = wrapRetire.count;
+    Expect(wrapQueue.Clear(wrapRetire) == 0 && wrapRetire.count == retiredBeforeEmptyClear,
+           "empty-clear-does-not-call-retirement");
+
+    Lifetime transferLifetime;
+    Queue transferQueue;
+    RetirementLog transferRetire;
+    transferRetire.lifetime = &transferLifetime;
+    transferRetire.retainOrdinal = 2;
+    std::array<std::shared_ptr<RetirementReceipt>, 3> receipts{std::make_shared<RetirementReceipt>(),
+                                                               std::make_shared<RetirementReceipt>(),
+                                                               std::make_shared<RetirementReceipt>()};
+    for (std::uint64_t ordinal = 1; ordinal <= 3; ++ordinal)
+    {
+        TrackedRequest request =
+            MakeWithReceipt(transferLifetime, static_cast<int>(ordinal), static_cast<int>(ordinal + 30),
+                            static_cast<int>(700 + ordinal), receipts[static_cast<std::size_t>(ordinal - 1)]);
+        const ContinuationAdmission admission =
+            transferQueue.Enqueue(101, ordinal, ContinuationKind::Command, request, transferRetire);
+        Expect(admission == ContinuationAdmission::Queued, "clear-transfer-entry-queued");
+        if (admission != ContinuationAdmission::Queued)
+        {
+            return;
+        }
+    }
+    Queue::Taken active = transferQueue.TakeReady(101, false);
+    const bool activeExpected = active.ready && active.ready.value().ordinal == 1 && !receipts[0]->retired &&
+                                receipts[0]->state == RequestState::Pending &&
+                                active.ready.value().input.receipt == receipts[0];
+    Expect(activeExpected, "taken-active-entry-remains-pending-before-clear");
+    if (!activeExpected)
+    {
+        return;
+    }
+    const std::size_t transferCleared = transferQueue.Clear(transferRetire);
+    const bool transferClearExpected = transferCleared == 2 && transferRetire.count == 2 && transferQueue.Size() == 0;
+    Expect(transferClearExpected, "clear-cancels-queued-entries-in-order");
+    if (!transferClearExpected)
+    {
+        return;
+    }
+    ExpectRetirement(transferRetire, 0, 101, 2, ContinuationKind::Command, ContinuationRetirement::Cancelled, 0,
+                     "clear-first-cancellation-can-transfer-entry-ownership");
+    ExpectRetirement(transferRetire, 1, 101, 3, ContinuationKind::Command, ContinuationRetirement::Cancelled, 0,
+                     "clear-second-cancellation-follows-first");
+    Expect(receipts[1]->retired && receipts[1]->outcome == ContinuationRetirement::Cancelled &&
+               receipts[1]->state == RequestState::Cancelled && receipts[2]->retired &&
+               receipts[2]->outcome == ContinuationRetirement::Cancelled &&
+               receipts[2]->state == RequestState::Cancelled && transferRetire.retained &&
+               transferRetire.retained.value().ordinal == 2 && transferRetire.retained.value().input.payload &&
+               *transferRetire.retained.value().input.payload == 702 && transferLifetime.destroyed == 1 &&
+               !transferRetire.overflowed && !receipts[0]->retired && receipts[0]->state == RequestState::Pending,
+           "clear-transfer-keeps-cancelled-payload-alive-and-active-entry-pending");
+    transferRetire.retained.reset();
+    Expect(transferLifetime.destroyed == 2, "transferred-entry-releases-after-callback-owner-drops-it");
+    active.ready.value().input.receipt->state = RequestState::Succeeded;
+    active.ready.reset();
+    Expect(transferLifetime.destroyed == 3 && receipts[0]->state == RequestState::Succeeded && !receipts[0]->retired,
+           "active-entry-succeeds-under-owner-control-after-queue-clear");
+}
 } // namespace
 
 int RunContinuationQueueTests()
@@ -364,5 +728,8 @@ int RunContinuationQueueTests()
     TestRingWrapAndClearOrder();
     TestOrdinalValidation();
     TestUndoRedoOrder();
+    TestSupersededRetirement();
+    TestRetirementRefusalAndStaleSkip();
+    TestRetirementClearWrapAndTransfer();
     return g_failures;
 }

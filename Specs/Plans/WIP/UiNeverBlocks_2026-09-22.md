@@ -75,6 +75,7 @@
       - [ ] P1.1c.3c — Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
         - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration remains with the production runner.
         - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
+        - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -230,6 +231,9 @@ Release link-layout changes exposed a switch-table ISA scanner false positive; e
 recognizes its observed hoisted image-base setup, with positive/negative controls and an unchanged allowlist.
 Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). Application request
 ownership, receipts, write/discard stages and production caller activation remain open; P1 and G1 remain open.
+Per-entry continuation retirement also passed the full x64 gates and all ARM64 cross-builds; the
+[retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md) proves each dropped entry's ownership and
+observable outcome through the callback. Production typed receipts and their publication remain with the runner.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic

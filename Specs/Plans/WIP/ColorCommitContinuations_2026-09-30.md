@@ -8,6 +8,7 @@
 - [x] Qualify sequential same-ordinal history acquisitions, including late same-kind completions and commit-then-size before queued Undo. Full x64 gates and all ARM64 cross-builds passed.
 - [ ] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
 - [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
+  - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
 - [ ] Migrate Save, Save As, PNG/JPEG export and every replacement/close caller together with production OK.
 - [ ] Migrate ordered file batches, copied size drafts, panel/tool/layer interactions and busy callback guards.
@@ -29,6 +30,8 @@ Progress, 2026-09-30: busy controls and the ordered commit engine are qualified 
 primitives are qualified in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md).
 The source is not registered by Application yet; owned request/receipt stages and the production caller migration
 remain the next slice. These primitive checks do not qualify the child plan's integrated activation matrix.
+Per-entry retirement is qualified in the [retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md).
+The queue supplies every dropped entry before release; typed host receipt publication remains open.
 
 ## 1. Outcomes and ownership
 

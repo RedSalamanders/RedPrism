@@ -143,6 +143,11 @@ explicit failed-stroke retry. Literal virtual-QPC cases pin the 250 ms threshold
 assertions. All 32 end-session flag combinations have literal outcomes. Fixed activity records reject stale progress
 and retirement after slot reuse; an event-gated scheduler observer case proves UI-thread notice ordering and lifetime.
 
+Retirement-aware queue tests retain independent receipt references across superseded, stale and cleared entries.
+Literal metadata and FIFO expectations cover ring wrap, callback-before-release ownership, active entries surviving
+Clear, transferred entry lifetime, no callback while history is busy, and full/invalid admission retaining caller
+ownership. These qualify per-entry retirement, not the production runner's typed payloads or receipt publication.
+
 DocumentTests runs actual direct session operations through the ordering state machines to check that a stroke
 uses the predecessor's applied pixels (or the surviving pixels after failure/cancel), separate undo entries, Undo
 after a pending stroke, and replacement/stale-preview guards. This qualifies ordering foundations, not the P1

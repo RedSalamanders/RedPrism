@@ -133,6 +133,12 @@ the pending input and invalidates a refinement; it never repeatedly cancels the 
 queue is a fixed eight-entry ring. Both structures allocate no container storage. `HistoryWork` and `StrokeReplay`
 hold only ordering/state metadata; P1 owns retained stroke samples, and P0.7 accounts for their bytes.
 
+Continuation retirement uses caller-supplied, non-throwing callbacks with no retained callable, allocation,
+additional queue storage or worker. At most eight entries retire per TakeReady/Clear call. Queue mutation precedes
+the callback; detached ownership survives until callback return or transfer. Callbacks only publish/transfer owned
+state and MUST NOT pump, wait, dispatch UI or access the same queue. Receipt construction and request byte budgets
+belong to the eventual host admission path. These primitives alone do not activate production continuations.
+
 `JobActivity` uses 128 fixed records and updates only on scheduler notices. The oldest foreground operation owns
 the global progress indicator; Background, Refinement and InteractivePreview do not. A single deadline timer shows
 the indicator after 250 ms, is killed before dispatch, and is removed at completion/shutdown. It never polls job

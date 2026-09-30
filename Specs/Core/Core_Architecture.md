@@ -97,6 +97,15 @@ Only the exact latest finished acquisition can continue its ordinal, in the same
 strict ordinal ordering. The host owns prerequisite outcome and document-lifetime validation; a finished barrier
 stamp alone does not authorize dependent work.
 
+`ContinuationQueue` offers synchronous owner-thread retirement callbacks for each superseded tail, stale
+document entry and cancelled queued entry. The entry is detached, or its replacement installed, before callback
+dispatch, and its input remains owned through that callback. Clear retires in input order, including ring wrap;
+taken entries are the active owner's responsibility. Callbacks may move out the entry, but MUST NOT access the
+same queue, dispatch UI, pump or wait. Receipt-owning callers MUST use retirement-aware overloads and explicitly
+clear their queue before teardown; count-only forms do not publish results. Refused admission retains caller
+ownership and invokes no retirement. The host publishes the corresponding outcome before releasing an observed
+request. The queue neither stores a callback nor invokes one from its destructor.
+
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
 specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
 `UiNeverBlocks_2026-09-22.md`.

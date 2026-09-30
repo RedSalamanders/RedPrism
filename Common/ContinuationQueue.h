@@ -27,12 +27,20 @@ enum class ContinuationAdmission
     InvalidOrder
 };
 
+enum class ContinuationRetirement
+{
+    Superseded,
+    Stale,
+    Cancelled
+};
+
 // UI-owned event parameters, never a document snapshot. The owner takes immutable pixels/selection and the
 // result token only when TakeReady returns the command, after preceding history work has applied or dropped.
 // Ordinals come from one host sequence shared with recorded strokes, preserving their relative input order.
 template <typename Request> class ContinuationQueue final
 {
-    static_assert(std::is_nothrow_move_constructible_v<Request> && std::is_nothrow_move_assignable_v<Request>);
+    static_assert(std::is_nothrow_move_constructible_v<Request> && std::is_nothrow_move_assignable_v<Request> &&
+                  std::is_nothrow_destructible_v<Request>);
 
   public:
     static constexpr std::size_t kCapacity = 8;
@@ -53,6 +61,18 @@ template <typename Request> class ContinuationQueue final
     [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal,
                                                 ContinuationKind kind, Request& input) noexcept
     {
+        return Enqueue(documentSerial, ordinal, kind, input, Discard);
+    }
+
+    // Retirement callbacks receive each detached entry before its owned input is released. They may retain it
+    // by moving, but must not access this queue, dispatch UI, pump or wait. No callback is stored or allocated.
+    // Receipt-owning callers use these overloads for coalescing, stale drops and explicit teardown; the count-only
+    // forms are for requests without an externally observed result. A callback never runs on refused admission.
+    template <typename Retire>
+    [[nodiscard]] ContinuationAdmission Enqueue(std::uint64_t documentSerial, std::uint64_t ordinal,
+                                                ContinuationKind kind, Request& input, Retire&& retire) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         if (ordinal == 0 || ordinal <= _lastOrdinal)
         {
             return ContinuationAdmission::InvalidOrder;
@@ -66,8 +86,10 @@ template <typename Request> class ContinuationQueue final
             if (previous.kind == ContinuationKind::WandNew && previous.documentSerial == documentSerial &&
                 ordinal - previous.ordinal == 1)
             {
+                Entry superseded = std::move(_entries[tail].value());
                 _entries[tail].emplace(Entry{documentSerial, ordinal, kind, std::move(input)});
                 _lastOrdinal = ordinal;
+                retire(std::move(superseded), ContinuationRetirement::Superseded);
                 return ContinuationAdmission::Coalesced;
             }
         }
@@ -91,6 +113,13 @@ template <typename Request> class ContinuationQueue final
 
     [[nodiscard]] Taken TakeReady(std::uint64_t currentDocumentSerial, bool historyBusy) noexcept
     {
+        return TakeReady(currentDocumentSerial, historyBusy, Discard);
+    }
+
+    template <typename Retire>
+    [[nodiscard]] Taken TakeReady(std::uint64_t currentDocumentSerial, bool historyBusy, Retire&& retire) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         Taken result;
         if (historyBusy)
         {
@@ -104,6 +133,7 @@ template <typename Request> class ContinuationQueue final
             if (entry->documentSerial != currentDocumentSerial)
             {
                 ++result.stale;
+                retire(std::move(entry.value()), ContinuationRetirement::Stale);
                 continue;
             }
             result.ready = std::move(entry);
@@ -115,10 +145,21 @@ template <typename Request> class ContinuationQueue final
     // Escape/Cancel clears queued commands. It does not own or cancel a completed-pointer stroke.
     [[nodiscard]] std::size_t Clear() noexcept
     {
+        return Clear(Discard);
+    }
+
+    // Explicitly retire queued requests before destroying a receipt-owning queue. Taken/active entries remain
+    // the owner's responsibility. The destructor does not retain or invoke an owner callback.
+    template <typename Retire> [[nodiscard]] std::size_t Clear(Retire&& retire) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
         const std::size_t removed = _count;
-        for (auto& entry : _entries)
+        while (_count != 0)
         {
-            entry.reset();
+            auto entry = std::exchange(_entries[_head], std::nullopt);
+            _head = (_head + 1) % kCapacity;
+            --_count;
+            retire(std::move(entry.value()), ContinuationRetirement::Cancelled);
         }
         _head = 0;
         _count = 0;
@@ -131,6 +172,8 @@ template <typename Request> class ContinuationQueue final
     }
 
   private:
+    static void Discard(Entry&&, ContinuationRetirement) noexcept {}
+
     std::array<std::optional<Entry>, kCapacity> _entries;
     std::size_t _head = 0;
     std::size_t _count = 0;
