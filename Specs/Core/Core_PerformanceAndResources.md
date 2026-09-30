@@ -148,6 +148,22 @@ allocation-free immediate `ContinuationReceipt::Failure(E_OUTOFMEMORY)` value. F
 retains the input for explicit failed publication. The future production admission path bounds and accounts for
 path/name bytes; a fixed eight-entry ring alone does not bound variable-length payloads.
 
+`HostInputBudget` now bounds the combined declared request storage of queued and active host inputs to 1 MiB.
+An owned batch contains at most 256 paths, each at most 32,767 UTF-16 code units on Windows. Capacity-based
+accounting includes vector slots, string terminators, conservative per-container overhead and fixed request/result
+allowance; small logical contents cannot hide a large retained capacity. Checked admission inspects at most 256
+paths and allocates no storage. This is a declared storage charge, with ordinary global allocator headroom; it is
+not a bound on operating-system page commitment or caller-owned input created before admission.
+
+`HostRequest::TryCreate` reserves that charge before creating its shared result, moves the payload only on
+success, and returns the ticket on construction failure. A refused request preserves its caller-owned input and
+must return an immediate failure. Tickets follow queue-to-active and move transfers; retirement publishes before
+input destruction, then returns the charge. Receipt observers retain neither input bytes nor budget tickets.
+Admitted payloads expose only const access, so their charged capacities cannot grow after admission. The budget
+outlives all request owners. The numeric Application bridge uses this path; bare model construction is confined
+to tests. Future path/name producers MUST preflight borrowed arguments before copying them and separately reserve
+any output selected later by a staged runner; those production producers remain inactive.
+
 The first Application source bridge admits fixed numeric panel inputs only: at most eight pending entries plus
 one active request, with one small shared result per observed input. An empty registration costs no wakeup or
 worker. A waiting active commit and queued inputs behind earlier history consume readiness without rearming;

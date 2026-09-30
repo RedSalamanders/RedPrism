@@ -121,6 +121,13 @@ after prerequisite history has applied/dropped. Request move-overwrite/destructi
 owned input storage releases. This defines the request model; production producers and the staged runner remain
 tracked in `ColorCommitContinuations_2026-09-30.md`.
 
+Budgeted host construction reserves declared retained storage before allocating the result publisher. An
+allocation failure returns the reservation and leaves the input owned by its caller. The ticket moves with the
+request across queued/active ownership and returns only after publication and input destruction. The budget is
+an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after
+construction; selected paths and other later-stage state require separate admission. See
+`Core_PerformanceAndResources.md` for the storage/count/length limits and production activation boundary.
+
 `Application` now registers its stable continuation source during processing initialization and unregisters it
 before scheduler stop/join. The initial bridge admits only numeric panel requests through an owning construction
 boundary; production UI producers remain inactive until the dependent caller migration. It selects one owned

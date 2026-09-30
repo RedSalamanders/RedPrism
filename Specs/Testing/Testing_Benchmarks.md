@@ -79,9 +79,9 @@ FMA3 math-library setting, not a processor capability claim (`n/a` on ARM64).
 
 ## RAW corpus preparation
 
-`Tests/Fixtures/raw-corpus.json` is the reviewed manifest for near-45 MP RAW inputs. Run
+`Tests/Fixtures/raw-corpus.json` is the reviewed manifest for small correctness inputs and near-45 MP RAW inputs. Run
 `pwsh -File Build/bench/get-raw-corpus.ps1` to preview the selected files and sizes. Network access requires an
-explicit `-Download`; the default selection is the five gating files, with the supplemental Leica DNG included
+explicit `-Download`; the default selection includes `gating` and `correctness` files, with the supplemental Leica DNG included
 only by `-IncludeSupplemental`. `-Offline` verifies existing files and refuses missing files before creating an
 HTTP client or sending a request. Ordinary tests never fetch corpus files or require network access.
 
@@ -90,3 +90,16 @@ SHA-256. Download mode requires an existing marked `X:\RedPrism.Perf` root on a 
 an unmarked root. Existing files must match the manifest. New downloads are checked against size and SHA-256 before
 they are committed without replacing a target. The manifest and checksum provide corpus identity; separate decode
 and performance qualification is required before treating a file as a measured RAW result.
+
+The required extension matrix is ARW, CR2, CR3, DNG, NEF, ORF, PEF, RAF and RW2, matching the active plan's v1 scope;
+it does not promise every format understood by LibRaw. Small files cover compressed/lossless/uncompressed NEF,
+compressed ARW, uncompressed RAF and the remaining camera containers. Layout identification still requires the
+pinned decoder reference. The five `gating` files retain their performance roles; additional `correctness` files
+do not change the Photoshop speed thresholds.
+
+The reviewed CC0 legal text is checked in at `Tests/Fixtures/Licenses/CC0-1.0.txt`, with its original URL and
+SHA-256 in the manifest. Successful `-Download` (including an all-present `-Offline` run) saves that exact text and
+`raw-corpus-<SHA256-of-exact-manifest-bytes>.json` beside the images. These snapshots carry the original per-file
+license rows, URLs and hashes. Evidence writes use the same pinned, no-replacement file policy as images; differing
+existing evidence fails without overwriting it. Preview never creates evidence. Updated manifests create distinct
+snapshots, allowing prior acquisition evidence to remain intact. No license fetch occurs in tests or offline mode.

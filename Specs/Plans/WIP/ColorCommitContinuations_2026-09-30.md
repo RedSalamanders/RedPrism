@@ -8,6 +8,8 @@
 - [x] Qualify sequential same-ordinal history acquisitions, including late same-kind completions and commit-then-size before queued Undo. Full x64 gates and all ARM64 cross-builds passed.
 - [x] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
   - [x] Qualify the owning observer/publisher model and typed event-time paths, full size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer/runner activation remains open.
+  - [x] Qualify capacity-based request admission, the combined queued/active byte budget, immutable retained payloads and reservation retirement. All x64 gates and ARM64 cross-builds passed; borrowed-input preflight and staged-state admission remain open.
+  - [ ] Bound borrowed path/name values before copying them and reserve later selected output/state before activating production producers.
 - [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
   - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
@@ -41,9 +43,14 @@ production producer admission and staged publication remain open.
 Initial bridge progress is recorded in [HostContinuationBridge_2026-09-30.md](../../TestRuns/HostContinuationBridge_2026-09-30.md).
 It registers the source, bounds numeric requests to eight pending plus one active, preserves real worker errors,
 and publishes after acknowledged apply/drop. Each future asynchronous history finisher must call the common
-`ResumeHostHistory` hook after barrier release. Actual selection/stroke/IO migration and variable-length payload
-admission remain open. Cancel after acknowledged panel success/failure preserves that result; multi-stage
+`ResumeHostHistory` hook after barrier release. Capacity-based request accounting now follows inputs through queue,
+active work and retirement; qualification is recorded below. Actual selection/stroke/IO migration, borrowed-input
+preflight and later-stage storage admission remain open. Cancel after acknowledged panel success/failure preserves that result; multi-stage
 write/discard actions need an explicit policy for cancelling their remaining stages.
+
+Request admission is qualified in [HostInputAdmission_2026-09-30.md](../../TestRuns/HostInputAdmission_2026-09-30.md):
+38 checks per normal HostTests invocation, 76 with ASan stress, actual host quota/receipt-allocation controls,
+full x64 Debug/Release/ASan gates and all three ARM64 cross-builds. This does not activate production file callers.
 
 ## 1. Outcomes and ownership
 

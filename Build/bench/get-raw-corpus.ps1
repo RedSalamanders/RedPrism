@@ -12,8 +12,11 @@ an unmarked root or creates/repairs its marker. Root/marker semantics match
 Common/PerfRoot.cpp. Root selection: -PerfRoot, REDPRISM_PERF_ROOT, then
 existing marked roots on X followed by the other fixed drives in letter order.
 
-Default selection is the five gating classes; -IncludeSupplemental adds the
+Default selection includes the five performance gating files and the smaller
+correctness files for every planned v1 extension. -IncludeSupplemental adds the
 stripped Leica DNG. No retries, redirects, resumptions, or overwrites.
+Successful materialization also saves the reviewed CC0 legal text and an exact
+manifest snapshot beside the images. Existing differing files are preserved.
 -Offline verifies already-present files and refuses missing files before creating
 an HTTP client or sending a request.
 Ceilings: 128 MiB/file, 768 MiB/run, 180 seconds/file, 1200 seconds/run.
@@ -47,19 +50,28 @@ $manifestPath = if ($ManifestPath) { $ManifestPath } else { Join-Path $repoRoot 
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "RAW corpus manifest does not exist: $manifestPath"
 }
-$manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+$manifestBytes = [IO.File]::ReadAllBytes($manifestPath)
+$manifest = [Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json
 if ($manifest.schema -cne 'redprism.raw-corpus' -or $manifest.version -ne 1) {
     throw 'Unsupported RAW corpus manifest schema/version.'
 }
+$licensePath = Join-Path $repoRoot 'Tests\Fixtures\Licenses\CC0-1.0.txt'
+$licenseBytes = [IO.File]::ReadAllBytes($licensePath)
+$licenseHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($licenseBytes)).ToLowerInvariant()
+if ($manifest.licenseText.sourceUrl -cne 'https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt' -or
+    $manifest.licenseText.sha256 -cne $licenseHash) {
+    throw 'CC0 legal text does not match the reviewed manifest.'
+}
+$manifestHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($manifestBytes)).ToLowerInvariant()
 
 $seenIds = [Collections.Generic.HashSet[int]]::new()
 $seenFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($entry in $manifest.files) {
     if ($entry.id -le 0 -or -not $seenIds.Add($entry.id) -or
-        $entry.file -cnotmatch '\A[0-9]+-[a-z0-9-]+\.(arw|cr3|nef|raf|dng)\z' -or
+        $entry.file -cnotmatch '\A[0-9]+-[a-z0-9-]+\.(arw|cr2|cr3|dng|nef|orf|pef|raf|rw2)\z' -or
         -not $seenFiles.Add($entry.file) -or
         $entry.suppliedSha256 -cnotmatch '\A[0-9a-f]{64}\z' -or
-        $entry.intendedUse -notin @('gating', 'supplemental')) {
+        $entry.intendedUse -notin @('gating', 'correctness', 'supplemental')) {
         throw 'Invalid or duplicate corpus id, simple filename, SHA256, or role.'
     }
     if ($entry.license -cne 'CC0-1.0' -or $entry.licenseUrl -cne $licenseUrl -or
@@ -80,7 +92,7 @@ foreach ($entry in $manifest.files) {
         throw "Missing or oversized server-reported byte count for id $($entry.id)."
     }
 }
-$selected = @($manifest.files | Where-Object { $_.intendedUse -eq 'gating' -or $IncludeSupplemental })
+$selected = @($manifest.files | Where-Object { $_.intendedUse -in @('gating', 'correctness') -or $IncludeSupplemental })
 $expectedRunBytes = [long](($selected | Measure-Object -Property { $_.size.bytes } -Sum).Sum)
 if ($selected.Count -eq 0 -or $expectedRunBytes -gt $maxRunBytes) {
     throw 'Empty selection or selection exceeds the fixed run byte budget.'
@@ -254,6 +266,41 @@ function Get-CorpusHash([IO.Stream] $Stream, [Threading.CancellationToken] $Toke
     } finally { $hash.Dispose() }
 }
 
+function Save-CorpusEvidence([string] $Directory, [Threading.CancellationToken] $Token) {
+    foreach ($artifact in @(
+        @{ Name = 'CC0-1.0.txt'; Bytes = $licenseBytes; Hash = $licenseHash },
+        @{ Name = "raw-corpus-$manifestHash.json"; Bytes = $manifestBytes; Hash = $manifestHash }
+    )) {
+        $target = Join-Path $Directory $artifact.Name
+        $stream = [RedPrism.RawCorpusFilesV1]::TryOpenRead($target)
+        if ($stream) {
+            try {
+                if ($stream.Length -ne $artifact.Bytes.Length -or (Get-CorpusHash $stream $Token) -cne $artifact.Hash) {
+                    throw "Existing license/evidence differs; preserved without replacement: $target"
+                }
+            } finally { $stream.Dispose() }
+            continue
+        }
+        $part = $null
+        $committed = $false
+        $partPath = Join-Path $Directory ($artifact.Name + '.' + [guid]::NewGuid().ToString('N') + '.part')
+        try {
+            $Token.ThrowIfCancellationRequested()
+            $part = [RedPrism.RawCorpusFilesV1]::CreatePart($partPath)
+            $part.Write($artifact.Bytes, 0, $artifact.Bytes.Length)
+            $part.Flush($true)
+            $Token.ThrowIfCancellationRequested()
+            [RedPrism.RawCorpusFilesV1]::CommitNew($part, $target)
+            $committed = $true
+            Write-Host "Saved license/evidence: $target"
+        } finally {
+            try {
+                if ($part -and -not $committed) { [RedPrism.RawCorpusFilesV1]::DiscardPart($part) }
+            } finally { if ($part) { $part.Dispose() } }
+        }
+    }
+}
+
 $owned = $null
 $corpusHandle = $null
 $client = $null
@@ -305,10 +352,17 @@ try {
             Write-Host "Verified existing: $target"
         } finally { $checkCancellation.Dispose() }
     }
-    if ($pending.Count -eq 0) { return }
+    if ($pending.Count -eq 0) {
+        Save-CorpusEvidence $corpusPath $runCancellation.Token
+        return
+    }
     if ($Offline) {
         throw "Offline mode refused $($pending.Count) missing corpus file(s); no HTTP request was sent."
     }
+
+    # Save the license and source recipe before any image is committed. If a later transfer fails, every saved
+    # image still has its license and original per-file row locally. This snapshot need not claim decode success.
+    Save-CorpusEvidence $corpusPath $runCancellation.Token
 
     $handler = [Net.Http.HttpClientHandler]::new()
     $handler.AllowAutoRedirect = $false

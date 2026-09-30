@@ -284,6 +284,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "WPR profile tests failed with exit code $LASTEXITCODE."
 }
 
+Write-Host 'Validating RAW corpus preparation (offline only)...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\RawCorpusTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "RAW corpus preparation tests failed with exit code $LASTEXITCODE."
+}
+
 Write-Host 'Capturing harness screenshots (empty-document shell)...' -ForegroundColor Cyan
 Add-Type -AssemblyName System.Drawing
 

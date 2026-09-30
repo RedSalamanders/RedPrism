@@ -11,6 +11,7 @@
   - [ ] P0.1b — Drive operation and UI/IO scenarios, record machine metadata and baseline distributions, and classify each §5 row.
     - [x] Implement the real application-loop driver, machine report and 15 operation smoke scenarios; all x64 gates and ARM64 cross-builds pass.
     - [x] Acquire five per-file CC0 RAW samples and verify sizes, SHA-256 and signatures; inspect the tiled DNG layout. Offline downloader controls pass.
+    - [x] Expand the local corpus to all nine planned v1 extensions, with smaller correctness files, additional compression/layout candidates, and saved CC0 legal text/per-file provenance. Decode/develop qualification remains P4 work.
     - [x] Complete the benchmark driver configuration gates, including ASan, offline corpus controls and the tightened ISA parser.
     - [x] Record Release hardware/WARP distributions at 4K, 45 MP and 100 MP. All six size/device scenarios complete with 15 operation rows each.
     - [ ] Extend baseline coverage to the remaining §5 operations, I/O and the non-cancellable calls before their migrations.
@@ -78,6 +79,8 @@
         - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
         - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
         - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
+        - [x] Qualify capacity-based request admission and a combined queued/active byte budget, with immutable retained input and release after publication. Full x64 gates and all ARM64 cross-builds passed; actual production producer activation remains open.
+        - [ ] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -88,7 +91,7 @@
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
 - [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
   - [x] Specify file-backed RAW qualification and review ViewerImgRaw's decode/resource/cancellation patterns; provenance checks alone do not qualify decoded pixels.
-  - [ ] Run real ARW, CR3, NEF, RAF and tiled DNG decode/reference tests with the five licensed corpus files; verify the RAF's actual CFA pattern.
+  - [ ] Run real decode/reference tests for every `gating`/`correctness` input across all nine extensions, CFA/linear/YCC layouts and compression variants; verify the RAFs' actual CFA patterns. The five large files additionally retain their performance roles.
   - [ ] Run malformed/truncated/source-length/overflow and allocation-budget tests, cancellation and late-result gates, and preview/full-result distinction.
   - [ ] Run RAW open → develop → editable bake → save → reopen/export tests through the real host, including Cancel, failure and ordered batches.
   - [ ] Require the complete corpus for P4/P5 closeout; record each file's status, dimensions, decoded checksum, numeric reference and CPU/GPU tolerances, with no qualification SKIPs.
@@ -112,6 +115,11 @@ URLs, license terms and file hashes in the corpus manifest when acquiring ARW, C
 RAW test scope, 2026-09-30: the user requested explicit RAW file tests and suggested RedSalamander's ViewerImgRaw
 as inspiration. §6.9 records the file-backed matrix and applicable source patterns. The five existing downloads
 are verified inputs; RAW decode, develop and round-trip qualification remain P4 work.
+RAW acquisition scope, 2026-09-30: the user requested local samples and licenses for every supported RAW format,
+plus some large performance inputs. The manifest's default selection now includes all `correctness` files in
+addition to the five `gating` files. This covers the nine planned v1 extensions, without expanding decoder scope.
+The local corpus includes exact CC0 legal text and manifest snapshots; see
+[the acquisition record](../../TestRuns/RawCorpus_2026-09-30.md) for identities and remaining layout qualification.
 
 Progress, 2026-09-27: the user authorized implementation. Cheaper agents handled the initial checklist, scalar
 benchmark, CLI integration, smoke gate and bounded reviews. The primary agent reviewed their work, implemented
@@ -1594,7 +1602,8 @@ neighbor-prefetch ownership into the editor. The reference survey ran no RedSala
 
 **Real files.** `Tests/Fixtures/raw-corpus.json` supplies the exact filenames, per-file CC0 evidence, sizes and
 SHA-256. Resolve them under the marked `X:\RedPrism.Perf\corpus`; never silently download, substitute another camera
-file or modify the source corpus during a test. The first five rows below are mandatory for P4/P5 qualification.
+file or modify the source corpus during a test. Every `gating` and `correctness` manifest entry is mandatory for
+P4/P5 correctness qualification. The five large files below additionally retain their §7 performance roles.
 The ordinary developer suite may explicitly SKIP missing corpus tests; the phase qualification invocation must
 fail if any required file/reference is missing, mismatched, unsupported unexpectedly or skipped. All synthetic
 and hostile generated-file tests run without the downloaded corpus. Publish this distinction in the P4 test
@@ -1603,6 +1612,12 @@ runner and `Testing_Validation.md` when implementing it.
 | File class / manifest ID | File-backed assertions | Owner / gate |
 | --- | --- | --- |
 | Sony lossless ARW / 4466 | Probe/preview/full decode return distinct statuses; active-area dimensions and decoded planes agree with the pinned decoder reference; full-quality develop/bake has a recorded checksum | IoTests + real host; correctness required, speed recorded under §7 |
+| Smaller ARW / 1582; Sony YCC small / 6931 | Compressed Bayer versus decoded three-channel YCC classification; no second CFA demosaic or duplicate white balance for YCC; validate actual decoded layout before accepting the candidate as coverage | IoTests + develop tests; correctness required |
+| CR2 / 1230; smaller CR3 / 4661 | Full Bayer RAW, crop and active-area reference; correct compression/frame path, full decode distinct from preview | IoTests + real host; correctness required |
+| NEF compressed / 5227, uncompressed / 5364, 12-bit lossless / 959 | Exercise all supported compression families against pinned unpack references, in addition to the large 14-bit lossless file | IoTests + real host; correctness required |
+| Uncompressed RAF / 842, 1214 | Independently verify X-Trans/Bayer classification, raw samples and orientation; do not infer CFA solely from camera name | IoTests + develop tests; correctness required |
+| Uncompressed Linear Raw DNG / 1031 | Verify actual three-channel 16-bit linear layout, profile/matrix policy, strip reads and active area against the decoder reference; no CFA demosaic; do not use excluded lossy JPEG DNG as a substitute | IoTests + develop tests + real host; correctness required |
+| RW2 / 1395; ORF / 5424; PEF / 2239; smaller CFA DNG / 943 | Probe, preview/no-preview, unpack, camera metadata, crop and develop against the applicable independent reference; each extension reaches the real host round trip | IoTests + real host; correctness required |
 | Canon CR3 / 4694 | Correct frame/active area, lossless raw samples and camera metadata; CPU/GPU develop parity; no embedded preview mistaken for full-quality readiness | IoTests + real host; §7 CR3 performance gate after correctness |
 | Nikon lossless NEF / 1840 | Unpack/sample and bit-depth reference, orientation/crop, preview/no-preview path and full-quality output; reject source truncation | IoTests + real host; correctness required, speed recorded |
 | Fuji lossless RAF / 6002 | Read actual CFA metadata and assert X-Trans only when independently confirmed; channels/edges follow the reference for the decoded layout; compressed decode matches pinned LibRaw | IoTests + develop tests; §7 RAF performance gate after correctness |

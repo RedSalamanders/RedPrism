@@ -520,6 +520,7 @@ class Application final : public ChromeEvents
     JobScheduler _jobs;
     HistoryWork _historyWork;
     ContinuationAction _continuationAction{*this}; // stable borrowed source; unregister before joining jobs
+    HostInputBudget _hostInputBudget;              // outlives queued and active request reservations
     HostRequestQueue _hostRequests;
     std::optional<HostRequestQueue::Entry> _activeHostRequest;
     std::optional<HistoryWorkStamp> _hostCommitStamp;

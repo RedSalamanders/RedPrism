@@ -47,11 +47,13 @@ ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcep
         {
             return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW));
         }
-        if (_hostAdmissionAllocationFailureForTest)
+        HostRequestInput input = HostPanelOkInput{opening};
+        auto owned = HostRequest::TryCreate(input, _hostInputBudget, _hostAdmissionAllocationFailureForTest);
+        if (!owned)
         {
-            throw std::bad_alloc{}; // harness injection at the actual owning request construction boundary
+            return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
         }
-        HostRequest request = HostRequest::Create(HostPanelOkInput{opening});
+        HostRequest request = std::move(owned.value());
         const auto receipt = request.Receipt();
         const auto admission = _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(),
                                                      ContinuationKind::Command, request, RetireHostContinuation);
@@ -126,7 +128,7 @@ void Application::RunHostContinuation() noexcept
         FinishHostContinuation(_hostPrerequisite);
         return;
     }
-    const auto* panel = std::get_if<HostPanelOkInput>(&active.input.input);
+    const auto* panel = std::get_if<HostPanelOkInput>(&active.input.Input());
     const auto& edit = _session.PendingColorEdit();
     if (!panel || !edit || panel->opening != edit->openingSequence)
     {
@@ -269,16 +271,33 @@ int Application::RunHostContinuationSelfTest() noexcept
         _colorWorkTestGate->kind = ColorWorkTestKind::Commit;
         return _colorWorkTestGate->entered && _colorWorkTestGate->release && _colorWorkTestGate->computed;
     };
-    if (!prepare() || !_hostSourceRegistered || !_jobs.IsIdle() || _hostRequests.Size() != 0 || _activeHostRequest)
+    if (!prepare() || !_hostSourceRegistered || !_jobs.IsIdle() || _hostRequests.Size() != 0 || _activeHostRequest ||
+        _hostInputBudget.Used() != 0)
     {
         return fail(L"The registered host source was not idle before request admission.\n");
     }
     const auto opening = _session.PendingColorEdit()->openingSequence;
+    auto fullBudget = _hostInputBudget.TryReserve(HostInputBudget::kStorageLimit);
+    const auto refusedBudget = QueuePanelCommit(opening);
+    if (!fullBudget ||
+        refusedBudget.Read() !=
+            ContinuationReceipt::Result{HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)} ||
+        _hostRequests.Size() != 0 || !_jobs.IsIdle() || !_session.HasColorEdit() ||
+        _hostInputBudget.Used() != HostInputBudget::kStorageLimit)
+    {
+        return fail(L"The host byte budget did not refuse admission without mutation or an unowned receipt.\n");
+    }
+    fullBudget.reset();
+    if (_hostInputBudget.Used() != 0)
+    {
+        return fail(L"The host byte budget did not return its released reservation.\n");
+    }
+    std::printf("PASS continuation-host.byte-budget-refusal-and-release\n");
     _hostAdmissionAllocationFailureForTest = true;
     const auto refusedAllocation = QueuePanelCommit(opening);
     _hostAdmissionAllocationFailureForTest = false;
     if (refusedAllocation.Read() != ContinuationReceipt::Result{HostOutcome::Failed, E_OUTOFMEMORY} ||
-        _hostRequests.Size() != 0 || !_jobs.IsIdle() || !_session.HasColorEdit())
+        _hostRequests.Size() != 0 || !_jobs.IsIdle() || !_session.HasColorEdit() || _hostInputBudget.Used() != 0)
     {
         return fail(L"The host owning construction boundary did not fail allocation without admission.\n");
     }
@@ -305,7 +324,8 @@ int Application::RunHostContinuationSelfTest() noexcept
             return fail(L"Host Clear stranded an accepted receipt Pending.\n");
         }
     }
-    if (!settled() || !_jobs.IsIdle() || _activeHostRequest || _hostRequests.Size() != 0)
+    if (!settled() || !_jobs.IsIdle() || _activeHostRequest || _hostRequests.Size() != 0 ||
+        _hostInputBudget.Used() != 0)
     {
         return fail(L"An empty cleared host source kept waking.\n");
     }

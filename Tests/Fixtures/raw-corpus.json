@@ -1,8 +1,8 @@
 {
   "schema": "redprism.raw-corpus",
   "version": 1,
-  "researchedOn": "2026-09-27",
-  "purpose": "P4 near-45-MP RAW corpus candidates; five gating downloads and hashes verified, with decoder/performance qualification still pending.",
+  "researchedOn": "2026-09-30",
+  "purpose": "All nine planned v1 RAW extensions: small correctness inputs plus five large performance inputs; decode/develop qualification remains P4 work.",
   "provenance": {
     "sourcePage": "https://raw.pixls.us/",
     "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
@@ -26,20 +26,40 @@
     "metadataReadOnly": true,
     "rawImagesDownloaded": true,
     "downloadVerification": {
-      "verifiedOn": "2026-09-27",
-      "verifiedRole": "gating",
+      "verifiedOn": "2026-09-30",
+      "verifiedRole": "gating + correctness",
       "verifiedIds": [
         4466,
         4694,
         1840,
         6002,
-        7751
+        7751,
+        1230,
+        1395,
+        5424,
+        2239,
+        1582,
+        5227,
+        5364,
+        959,
+        842,
+        1214,
+        943,
+        4661,
+        6931,
+        1031
       ],
       "localCorpus": "C:\\RedPrism.Perf\\corpus",
-      "evidenceFile": "C:\\RedPrism.Perf\\corpus-verification-2026-09-27.json",
-      "evidenceFileSha256": "3624328fa6ad8b68967e89beafa2a67984d9ad5613a2a3209374bd27408e168c",
-      "apiSnapshotRecheckedSha256": "328eae30dfe3e826f524c9a724c3f0bfc2addc9bab26c9521bac2bc69494a2c3",
-      "supplemental": "id 7872 (Leica SL2) not downloaded; remains pending"
+      "evidenceFile": "C:\\RedPrism.Perf\\corpus-verification-2026-09-30-v2.json",
+      "evidenceFileSha256": "f8d03f5eef937bc08c3adb8536d6db195caeb11f398ae046a8cfea1840d78a9b",
+      "apiSnapshotRecheckedSha256": "8dc5f5c74e20cc3a38f4548d53bba4bb516835e2a859e80bf86e7ac6283b3aa3",
+      "supplemental": "Optional Leica id 7872 not downloaded; every default gating/correctness file is downloaded and verified"
+    },
+    "expansionApiSnapshot": {
+      "name": "raw-pixls-index-2026-09-30.json",
+      "providedPath": "C:\\RedPrism.Perf\\raw-pixls-index-2026-09-30.json",
+      "sha256": "8dc5f5c74e20cc3a38f4548d53bba4bb516835e2a859e80bf86e7ac6283b3aa3",
+      "sha256Scope": "Exact API snapshot bytes, including per-file license/checksum source rows"
     }
   },
   "verificationTerms": {
@@ -52,7 +72,7 @@
     "markerName": ".redprism-perf-owner",
     "markerExactAscii": "RedPrism performance root owner v1\n",
     "optInSwitch": "-Download",
-    "defaultSelection": "gating",
+    "defaultSelection": "gating + correctness",
     "supplementalSwitch": "-IncludeSupplemental",
     "limits": {
       "maxFileBytes": 134217728,
@@ -60,7 +80,7 @@
       "fileTimeoutSeconds": 180,
       "runTimeoutSeconds": 1200
     },
-    "rootPolicy": "Use an existing valid marked root, following Common/PerfRoot; do not adopt an unmarked root. The downloader may create only its corpus child and new verified files."
+    "rootPolicy": "Use an existing valid marked root, following Common/PerfRoot; do not adopt an unmarked root. Create only corpus children/new verified files, CC0 text and content-addressed exact manifest snapshots; preserve differing existing files."
   },
   "files": [
     {
@@ -82,7 +102,7 @@
         "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
       },
       "suppliedSha256": "4012536ee0f938d8c5c5e932bb7953a03134abbd9f3f4c664cb2526c1903d492",
-      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
       "sourceRow": [
         "Sony",
         "ILCE-1",
@@ -217,13 +237,19 @@
         "downloadVerified": true,
         "decodeVerified": false,
         "downloadVerification": {
-          "verifiedOn": "2026-09-27",
+          "id": 4466,
+          "file": "4466-sony-ilce1-lossless.arw",
+          "format": "ARW",
+          "intendedUse": "gating",
           "localFile": "C:\\RedPrism.Perf\\corpus\\4466-sony-ilce1-lossless.arw",
           "bytes": 81575280,
           "sha256": "4012536ee0f938d8c5c5e932bb7953a03134abbd9f3f4c664cb2526c1903d492",
           "sha256MatchesSupplied": true,
           "binarySignatureHex": "49492a00080000001600fe0004000100",
-          "binarySignatureVerified": true
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/4466/nice/Sony - ILCE-1 - 14bit (4:3).ARW",
+          "license": "CC0-1.0"
         }
       }
     },
@@ -246,7 +272,7 @@
         "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
       },
       "suppliedSha256": "21430c36387efe65bd09ac0fcd724bfd959d93dd391ec811a1b741c8663becb5",
-      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
       "sourceRow": [
         "Canon",
         "EOS R5",
@@ -318,13 +344,19 @@
         "downloadVerified": true,
         "decodeVerified": false,
         "downloadVerification": {
-          "verifiedOn": "2026-09-27",
+          "id": 4694,
+          "file": "4694-canon-r5-raw.cr3",
+          "format": "CR3",
+          "intendedUse": "gating",
           "localFile": "C:\\RedPrism.Perf\\corpus\\4694-canon-r5-raw.cr3",
           "bytes": 40632406,
           "sha256": "21430c36387efe65bd09ac0fcd724bfd959d93dd391ec811a1b741c8663becb5",
           "sha256MatchesSupplied": true,
           "binarySignatureHex": "00000018667479706372782000000001",
-          "binarySignatureVerified": true
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/4694/nice/Canon - EOS R5 - 3:2.CR3",
+          "license": "CC0-1.0"
         }
       }
     },
@@ -347,7 +379,7 @@
         "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
       },
       "suppliedSha256": "0c9438258ddae5260b9f5a1aace6658a723f1cb1acace3a6cb507116dc6da4f2",
-      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
       "sourceRow": [
         "Nikon",
         "D850",
@@ -448,13 +480,19 @@
         "downloadVerified": true,
         "decodeVerified": false,
         "downloadVerification": {
-          "verifiedOn": "2026-09-27",
+          "id": 1840,
+          "file": "1840-nikon-d850-lossless.nef",
+          "format": "NEF",
+          "intendedUse": "gating",
           "localFile": "C:\\RedPrism.Perf\\corpus\\1840-nikon-d850-lossless.nef",
           "bytes": 55196715,
           "sha256": "0c9438258ddae5260b9f5a1aace6658a723f1cb1acace3a6cb507116dc6da4f2",
           "sha256MatchesSupplied": true,
           "binarySignatureHex": "49492a00080000001c00fe0004000100",
-          "binarySignatureVerified": true
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1840/nice/Nikon - D850 - 14bit 14bit compressed (Lossless) (3:2).NEF",
+          "license": "CC0-1.0"
         }
       }
     },
@@ -477,7 +515,7 @@
         "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
       },
       "suppliedSha256": "109be38f59963c9b8ff289ebe1f5ec9168c52f609e5b601432bd194520b4605b",
-      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
       "sourceRow": [
         "Fujifilm",
         "X-H2",
@@ -551,13 +589,19 @@
         "downloadVerified": true,
         "decodeVerified": false,
         "downloadVerification": {
-          "verifiedOn": "2026-09-27",
+          "id": 6002,
+          "file": "6002-fuji-xh2-lossless.raf",
+          "format": "RAF",
+          "intendedUse": "gating",
           "localFile": "C:\\RedPrism.Perf\\corpus\\6002-fuji-xh2-lossless.raf",
           "bytes": 40083440,
           "sha256": "109be38f59963c9b8ff289ebe1f5ec9168c52f609e5b601432bd194520b4605b",
           "sha256MatchesSupplied": true,
           "binarySignatureHex": "46554a4946494c4d4343442d52415720",
-          "binarySignatureVerified": true
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/6002/nice/Fujifilm - X-H2 - 14bit 14bit compressed (3:2).RAF",
+          "license": "CC0-1.0"
         }
       }
     },
@@ -580,7 +624,7 @@
         "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
       },
       "suppliedSha256": "45420c595401547cca950ae58d552bc82b32d31ce1d58c082df33004016197f5",
-      "sha256Status": "Local SHA256 and byte count verified against the original API row on 2026-09-27",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
       "sourceRow": [
         "Google",
         "Pixel 8 Pro",
@@ -728,27 +772,19 @@
         "downloadVerified": true,
         "decodeVerified": false,
         "downloadVerification": {
-          "verifiedOn": "2026-09-27",
+          "id": 7751,
+          "file": "7751-pixel8pro-tiled.dng",
+          "format": "DNG",
+          "intendedUse": "gating",
           "localFile": "C:\\RedPrism.Perf\\corpus\\7751-pixel8pro-tiled.dng",
           "bytes": 45101750,
           "sha256": "45420c595401547cca950ae58d552bc82b32d31ce1d58c082df33004016197f5",
           "sha256MatchesSupplied": true,
           "binarySignatureHex": "49492a00080000003800fe0004000100",
           "binarySignatureVerified": true,
-          "binaryInspection": {
-            "rawWidth": 8160,
-            "rawHeight": 6144,
-            "bitsPerSample": 16,
-            "compression": "JPEG",
-            "photometricInterpretation": "Color Filter Array",
-            "cfaPattern": "RGGB",
-            "tiled": true,
-            "tileWidth": 256,
-            "tileHeight": 256,
-            "tileCount": 768,
-            "allTileRangesWithinFile": true,
-            "basis": "Direct inspection of the downloaded raw IFD and every tile offset/count."
-          }
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/7751/nice/Google - Pixel 8 Pro - 16bit (4:3).dng",
+          "license": "CC0-1.0"
         }
       }
     },
@@ -883,6 +919,1180 @@
         "downloadVerified": false,
         "decodeVerified": false
       }
+    },
+    {
+      "id": 1230,
+      "file": "1230-canon-rebelxt-bayer.cr2",
+      "format": "CR2",
+      "intendedUse": "correctness",
+      "coverage": "Canon full Bayer RAW CR2",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1230/nice/Canon - EOS Digital Rebel XT - RAW (3:2).CR2",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1230/exif/IMG_8728.CR2.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "4b47ba27c0090efa091aaf99babc76d9a3e6f6f121b443d6c58c3ce7275cd770",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Canon",
+        "EOS Digital Rebel XT",
+        "RAW (3:2)",
+        7.96,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-03-24",
+        "<a href='https://raw.pixls.us/getfile.php/1230/nice/Canon - EOS Digital Rebel XT - RAW (3:2).CR2'>Canon - EOS Digital Rebel XT - RAW (3:2).CR2</a><div class='checksumdata'><span title='sha256 Checksum'>4b47ba27c0090efa091aaf99babc76d9a3e6f6f121b443d6c58c3ce7275cd770</span>&nbsp;(7.11MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1230/exif/IMG_8728.CR2.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "EOS Digital Rebel XT",
+        "status": "confirmed_from_repository_row",
+        "make": "Canon"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "RAW (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 7456886,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 7.96,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 1230,
+          "file": "1230-canon-rebelxt-bayer.cr2",
+          "format": "CR2",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1230-canon-rebelxt-bayer.cr2",
+          "bytes": 7456886,
+          "sha256": "4b47ba27c0090efa091aaf99babc76d9a3e6f6f121b443d6c58c3ce7275cd770",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00100000004352020007e60a00",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1230/nice/Canon - EOS Digital Rebel XT - RAW (3:2).CR2",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 1395,
+      "file": "1395-panasonic-lx3-crop.rw2",
+      "format": "RW2",
+      "intendedUse": "correctness",
+      "coverage": "Panasonic RW2; 1:1 crop",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1395/nice/Panasonic - DMC-LX3 - 1:1.RW2",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1395/exif/P1020593.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "6663d5b6539de15640ded2b0f422c8affb8cf1bec93e27b3548e970226c063a5",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Panasonic",
+        "DMC-LX3",
+        "1:1",
+        7.52,
+        "please upload the full set :)",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-05-08",
+        "<a href='https://raw.pixls.us/getfile.php/1395/nice/Panasonic - DMC-LX3 - 1:1.RW2'>Panasonic - DMC-LX3 - 1:1.RW2</a><div class='checksumdata'><span title='sha256 Checksum'>6663d5b6539de15640ded2b0f422c8affb8cf1bec93e27b3548e970226c063a5</span>&nbsp;(9.24MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1395/exif/P1020593.RW2.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "DMC-LX3",
+        "status": "confirmed_from_repository_row",
+        "make": "Panasonic"
+      },
+      "mode": {
+        "repositoryRemark": "please upload the full set :)",
+        "description": "1:1",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 9693184,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 7.52,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 1395,
+          "file": "1395-panasonic-lx3-crop.rw2",
+          "format": "RW2",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1395-panasonic-lx3-crop.rw2",
+          "bytes": 9693184,
+          "sha256": "6663d5b6539de15640ded2b0f422c8affb8cf1bec93e27b3548e970226c063a5",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "494955001800000088e774d8f8251d4d",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1395/nice/Panasonic - DMC-LX3 - 1:1.RW2",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 5424,
+      "file": "5424-olympus-e10.orf",
+      "format": "ORF",
+      "intendedUse": "correctness",
+      "coverage": "Olympus ORF",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/5424/nice/Olympus - E-10 - 16bit (4:3).ORF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/5424/exif/P7198607.ORF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "2bfdade72439017a60a47aad1e5bbcb1aca36f2be7a21e94a4257a678fb6f4da",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Olympus",
+        "E-10",
+        "16bit (4:3)",
+        3.8,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2022-04-14",
+        "<a href='https://raw.pixls.us/getfile.php/5424/nice/Olympus - E-10 - 16bit (4:3).ORF'>Olympus - E-10 - 16bit (4:3).ORF</a><div class='checksumdata'><span title='sha256 Checksum'>2bfdade72439017a60a47aad1e5bbcb1aca36f2be7a21e94a4257a678fb6f4da</span>&nbsp;(7.26MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/5424/exif/P7198607.ORF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "E-10",
+        "status": "confirmed_from_repository_row",
+        "make": "Olympus"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "16bit (4:3)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 7614592,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 3.8,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 5424,
+          "file": "5424-olympus-e10.orf",
+          "format": "ORF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\5424-olympus-e10.orf",
+          "bytes": 7614592,
+          "sha256": "2bfdade72439017a60a47aad1e5bbcb1aca36f2be7a21e94a4257a678fb6f4da",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "4d4d4f52000000080014010000040000",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/5424/nice/Olympus - E-10 - 16bit (4:3).ORF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 2239,
+      "file": "2239-pentax-k10d-compressed.pef",
+      "format": "PEF",
+      "intendedUse": "correctness",
+      "coverage": "Pentax compressed PEF",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/2239/nice/Pentax - K10D - 12bit 12bit compressed (3:2).PEF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/2239/exif/_IGP7284.PEF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "e35ae4154a468be3154f5f462e884ba5941f010d3e8f23d347fbec14809f44d3",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Pentax",
+        "K10D",
+        "12bit 12bit compressed (3:2)",
+        10.33,
+        "please upload full set (DNG+PEF) :)",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2018-01-15",
+        "<a href='https://raw.pixls.us/getfile.php/2239/nice/Pentax - K10D - 12bit 12bit compressed (3:2).PEF'>Pentax - K10D - 12bit 12bit compressed (3:2).PEF</a><div class='checksumdata'><span title='sha256 Checksum'>e35ae4154a468be3154f5f462e884ba5941f010d3e8f23d347fbec14809f44d3</span>&nbsp;(9.12MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/2239/exif/_IGP7284.PEF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "K10D",
+        "status": "confirmed_from_repository_row",
+        "make": "Pentax"
+      },
+      "mode": {
+        "repositoryRemark": "please upload full set (DNG+PEF) :)",
+        "description": "12bit 12bit compressed (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 9561139,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 10.33,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 2239,
+          "file": "2239-pentax-k10d-compressed.pef",
+          "format": "PEF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\2239-pentax-k10d-compressed.pef",
+          "bytes": 9561139,
+          "sha256": "e35ae4154a468be3154f5f462e884ba5941f010d3e8f23d347fbec14809f44d3",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "4d4d002a000000080013010000040000",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/2239/nice/Pentax - K10D - 12bit 12bit compressed (3:2).PEF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 1582,
+      "file": "1582-sony-a7s-compressed.arw",
+      "format": "ARW",
+      "intendedUse": "correctness",
+      "coverage": "Sony compressed ARW; APS-C crop",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1582/nice/Sony - ILCE-7S - 14bit 14bit compressed (3:2).ARW",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1582/exif/DSC04126.ARW.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "a35ebb2fbec929daa5beb20d1ce5c15a8aac7b1a7a231455387f3df8a7442e07",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Sony",
+        "ILCE-7S",
+        "14bit 14bit compressed (3:2)",
+        5.27,
+        "APS-C crop",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-07-13",
+        "<a href='https://raw.pixls.us/getfile.php/1582/nice/Sony - ILCE-7S - 14bit 14bit compressed (3:2).ARW'>Sony - ILCE-7S - 14bit 14bit compressed (3:2).ARW</a><div class='checksumdata'><span title='sha256 Checksum'>a35ebb2fbec929daa5beb20d1ce5c15a8aac7b1a7a231455387f3df8a7442e07</span>&nbsp;(5.88MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1582/exif/DSC04126.ARW.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "ILCE-7S",
+        "status": "confirmed_from_repository_row",
+        "make": "Sony"
+      },
+      "mode": {
+        "repositoryRemark": "APS-C crop",
+        "description": "14bit 14bit compressed (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 6160384,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 5.27,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 1582,
+          "file": "1582-sony-a7s-compressed.arw",
+          "format": "ARW",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1582-sony-a7s-compressed.arw",
+          "bytes": 6160384,
+          "sha256": "a35ebb2fbec929daa5beb20d1ce5c15a8aac7b1a7a231455387f3df8a7442e07",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000001200fe0004000100",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1582/nice/Sony - ILCE-7S - 14bit 14bit compressed (3:2).ARW",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 5227,
+      "file": "5227-nikon-d2h-compressed.nef",
+      "format": "NEF",
+      "intendedUse": "correctness",
+      "coverage": "Nikon 12-bit compressed NEF",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/5227/nice/Nikon - D2H - 12bit 12bit compressed (Lossy (type 1)) (3:2).NEF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/5227/exif/D2H_3957.NEF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "155edb938f884ea7372ce98d4ff5f965c3e413b43b95bc9923da6e92082cf914",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Nikon",
+        "D2H",
+        "12bit 12bit compressed (Lossy (type 1)) (3:2)",
+        4.11,
+        "color target",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2022-02-18",
+        "<a href='https://raw.pixls.us/getfile.php/5227/nice/Nikon - D2H - 12bit 12bit compressed (Lossy (type 1)) (3:2).NEF'>Nikon - D2H - 12bit 12bit compressed (Lossy (type 1)) (3:2).NEF</a><div class='checksumdata'><span title='sha256 Checksum'>155edb938f884ea7372ce98d4ff5f965c3e413b43b95bc9923da6e92082cf914</span>&nbsp;(3.09MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/5227/exif/D2H_3957.NEF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "D2H",
+        "status": "confirmed_from_repository_row",
+        "make": "Nikon"
+      },
+      "mode": {
+        "repositoryRemark": "color target",
+        "description": "12bit 12bit compressed (Lossy (type 1)) (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 3236017,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 4.11,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 5227,
+          "file": "5227-nikon-d2h-compressed.nef",
+          "format": "NEF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\5227-nikon-d2h-compressed.nef",
+          "bytes": 3236017,
+          "sha256": "155edb938f884ea7372ce98d4ff5f965c3e413b43b95bc9923da6e92082cf914",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "4d4d002a00000008001800fe00040000",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/5227/nice/Nikon - D2H - 12bit 12bit compressed (Lossy (type 1)) (3:2).NEF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 5364,
+      "file": "5364-nikon-d1h-uncompressed.nef",
+      "format": "NEF",
+      "intendedUse": "correctness",
+      "coverage": "Nikon 12-bit uncompressed NEF",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/5364/nice/Nikon - D1H - 12bit 12bit uncompressed (3:2).NEF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/5364/exif/DSC_3671.NEF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Nikon",
+        "D1H",
+        "12bit 12bit uncompressed (3:2)",
+        2.66,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2022-03-31",
+        "<a href='https://raw.pixls.us/getfile.php/5364/nice/Nikon - D1H - 12bit 12bit uncompressed (3:2).NEF'>Nikon - D1H - 12bit 12bit uncompressed (3:2).NEF</a><div class='checksumdata'><span title='sha256 Checksum'>d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571</span>&nbsp;(3.89MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/5364/exif/DSC_3671.NEF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "D1H",
+        "status": "confirmed_from_repository_row",
+        "make": "Nikon"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "12bit 12bit uncompressed (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 4082468,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 2.66,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 5364,
+          "file": "5364-nikon-d1h-uncompressed.nef",
+          "format": "NEF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\5364-nikon-d1h-uncompressed.nef",
+          "bytes": 4082468,
+          "sha256": "d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "4d4d002a00000008001a00fe00040000",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/5364/nice/Nikon - D1H - 12bit 12bit uncompressed (3:2).NEF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 959,
+      "file": "959-nikon-d7000-lossless12.nef",
+      "format": "NEF",
+      "intendedUse": "correctness",
+      "coverage": "Nikon 12-bit lossless NEF",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/959/nice/Nikon - D7000 - 12bit 12bit compressed (Lossless) (3:2).NEF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/959/exif/Lossless compressed 12-bit D7000 NIK_3877.NEF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "65d8d063de99befa2f8463c3b1114cb5bf71e35aed6466d36fca39e83d0353bc",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Nikon",
+        "D7000",
+        "12bit 12bit compressed (Lossless) (3:2)",
+        16.37,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-01-22",
+        "<a href='https://raw.pixls.us/getfile.php/959/nice/Nikon - D7000 - 12bit 12bit compressed (Lossless) (3:2).NEF'>Nikon - D7000 - 12bit 12bit compressed (Lossless) (3:2).NEF</a><div class='checksumdata'><span title='sha256 Checksum'>65d8d063de99befa2f8463c3b1114cb5bf71e35aed6466d36fca39e83d0353bc</span>&nbsp;(14.34MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/959/exif/Lossless compressed 12-bit D7000 NIK_3877.NEF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "D7000",
+        "status": "confirmed_from_repository_row",
+        "make": "Nikon"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "12bit 12bit compressed (Lossless) (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 15037786,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 16.37,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 959,
+          "file": "959-nikon-d7000-lossless12.nef",
+          "format": "NEF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\959-nikon-d7000-lossless12.nef",
+          "bytes": 15037786,
+          "sha256": "65d8d063de99befa2f8463c3b1114cb5bf71e35aed6466d36fca39e83d0353bc",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "4d4d002a00000008001b00fe00040000",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/959/nice/Nikon - D7000 - 12bit 12bit compressed (Lossless) (3:2).NEF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 842,
+      "file": "842-fuji-xm1-uncompressed.raf",
+      "format": "RAF",
+      "intendedUse": "correctness",
+      "coverage": "Fuji uncompressed RAF; candidate X-Trans (decoder validation pending)",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/842/nice/Fujifilm - X-M1 - 12bit 12bit uncompressed (3:2).RAF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/842/exif/DSCF1442.RAF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "eef4e9ae629d2d81cef5a234fb853c14c88b3c0c12c39d635a1f9fa2a871bec3",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Fujifilm",
+        "X-M1",
+        "12bit 12bit uncompressed (3:2)",
+        16.83,
+        "Aperture-priority",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-01-12",
+        "<a href='https://raw.pixls.us/getfile.php/842/nice/Fujifilm - X-M1 - 12bit 12bit uncompressed (3:2).RAF'>Fujifilm - X-M1 - 12bit 12bit uncompressed (3:2).RAF</a><div class='checksumdata'><span title='sha256 Checksum'>eef4e9ae629d2d81cef5a234fb853c14c88b3c0c12c39d635a1f9fa2a871bec3</span>&nbsp;(24.88MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/842/exif/DSCF1442.RAF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "X-M1",
+        "status": "confirmed_from_repository_row",
+        "make": "Fujifilm"
+      },
+      "mode": {
+        "repositoryRemark": "Aperture-priority",
+        "description": "12bit 12bit uncompressed (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 26089324,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 16.83,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 842,
+          "file": "842-fuji-xm1-uncompressed.raf",
+          "format": "RAF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\842-fuji-xm1-uncompressed.raf",
+          "bytes": 26089324,
+          "sha256": "eef4e9ae629d2d81cef5a234fb853c14c88b3c0c12c39d635a1f9fa2a871bec3",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "46554a4946494c4d4343442d52415720",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/842/nice/Fujifilm - X-M1 - 12bit 12bit uncompressed (3:2).RAF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 1214,
+      "file": "1214-fuji-xa1-uncompressed.raf",
+      "format": "RAF",
+      "intendedUse": "correctness",
+      "coverage": "Fuji uncompressed RAF; candidate Bayer (decoder validation pending)",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1214/nice/Fujifilm - X-A1 - 12bit 12bit uncompressed (3:2).RAF",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1214/exif/DSCF2482.RAF.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "b2ddb5fe31a3b976d12961c72a2689de8742739df3d8f757614eca65f8df2a61",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Fujifilm",
+        "X-A1",
+        "12bit 12bit uncompressed (3:2)",
+        16.83,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-03-23",
+        "<a href='https://raw.pixls.us/getfile.php/1214/nice/Fujifilm - X-A1 - 12bit 12bit uncompressed (3:2).RAF'>Fujifilm - X-A1 - 12bit 12bit uncompressed (3:2).RAF</a><div class='checksumdata'><span title='sha256 Checksum'>b2ddb5fe31a3b976d12961c72a2689de8742739df3d8f757614eca65f8df2a61</span>&nbsp;(24.95MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1214/exif/DSCF2482.RAF.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "X-A1",
+        "status": "confirmed_from_repository_row",
+        "make": "Fujifilm"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "12bit 12bit uncompressed (3:2)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 26160640,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 16.83,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 1214,
+          "file": "1214-fuji-xa1-uncompressed.raf",
+          "format": "RAF",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1214-fuji-xa1-uncompressed.raf",
+          "bytes": 26160640,
+          "sha256": "b2ddb5fe31a3b976d12961c72a2689de8742739df3d8f757614eca65f8df2a61",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "46554a4946494c4d4343442d52415720",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1214/nice/Fujifilm - X-A1 - 12bit 12bit uncompressed (3:2).RAF",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 943,
+      "file": "943-canon-s2is-cfa.dng",
+      "format": "DNG",
+      "intendedUse": "correctness",
+      "coverage": "Camera CFA DNG via CHDK (metadata/decoder validation pending)",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/943/nice/Canon - PowerShot S2 IS - 10bit 10bit DNG, CHDK ver. 1.4.1 (4:3).DNG",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/943/exif/IMG_1739.DNG.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "4435b19b7faffd81c62311b722dd49021a8b2af92bebe89dcbb74a0c9fff3d1b",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Canon",
+        "PowerShot S2 IS",
+        "10bit 10bit DNG, CHDK ver. 1.4.1 (4:3)",
+        5.26,
+        "",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-01-19",
+        "<a href='https://raw.pixls.us/getfile.php/943/nice/Canon - PowerShot S2 IS - 10bit 10bit DNG, CHDK ver. 1.4.1 (4:3).DNG'>Canon - PowerShot S2 IS - 10bit 10bit DNG, CHDK ver. 1.4.1 (4:3).DNG</a><div class='checksumdata'><span title='sha256 Checksum'>4435b19b7faffd81c62311b722dd49021a8b2af92bebe89dcbb74a0c9fff3d1b</span>&nbsp;(6.31MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/943/exif/IMG_1739.DNG.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "model": "PowerShot S2 IS",
+        "status": "confirmed_from_repository_row",
+        "make": "Canon"
+      },
+      "mode": {
+        "repositoryRemark": "",
+        "description": "10bit 10bit DNG, CHDK ver. 1.4.1 (4:3)",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 6611520,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 5.26,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 943,
+          "file": "943-canon-s2is-cfa.dng",
+          "format": "DNG",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\943-canon-s2is-cfa.dng",
+          "bytes": 6611520,
+          "sha256": "4435b19b7faffd81c62311b722dd49021a8b2af92bebe89dcbb74a0c9fff3d1b",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000002200fe0004000100",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/943/nice/Canon - PowerShot S2 IS - 10bit 10bit DNG, CHDK ver. 1.4.1 (4:3).DNG",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 4661,
+      "file": "4661-canon-r6-crop-raw.cr3",
+      "format": "CR3",
+      "intendedUse": "correctness",
+      "coverage": "Canon normal RAW CR3; 1.6x crop",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/4661/nice/Canon - EOS R6 - 3:2.CR3",
+      "metadataUrl": "",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "6156ee9cfd1a61e08719a8309095d05162891fd2adb8dd1505b31d4716dcee05",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Canon",
+        "EOS R6",
+        "3:2",
+        7.74,
+        "RAW 1.6x crop",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2021-05-14",
+        "<a href='https://raw.pixls.us/getfile.php/4661/nice/Canon - EOS R6 - 3:2.CR3'>Canon - EOS R6 - 3:2.CR3</a><div class='checksumdata'><span title='sha256 Checksum'>6156ee9cfd1a61e08719a8309095d05162891fd2adb8dd1505b31d4716dcee05</span>&nbsp;(9.36MB)</div>",
+        ""
+      ],
+      "camera": {
+        "model": "EOS R6",
+        "status": "confirmed_from_repository_row",
+        "make": "Canon"
+      },
+      "mode": {
+        "repositoryRemark": "RAW 1.6x crop",
+        "description": "3:2",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 9815638,
+        "httpStatus": 200,
+        "status": "confirmed"
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 7.74,
+        "rawDimensions": {
+          "status": "unknown"
+        }
+      },
+      "cfa": {
+        "reason": "Repository make/model is not an independent decoded CFA oracle.",
+        "status": "unknown"
+      },
+      "layout": {
+        "reason": "Decoder qualification pending.",
+        "status": "unknown"
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "status": "download_verified_decode_pending",
+        "downloadVerification": {
+          "id": 4661,
+          "file": "4661-canon-r6-crop-raw.cr3",
+          "format": "CR3",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\4661-canon-r6-crop-raw.cr3",
+          "bytes": 9815638,
+          "sha256": "6156ee9cfd1a61e08719a8309095d05162891fd2adb8dd1505b31d4716dcee05",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "00000018667479706372782000000001",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/4661/nice/Canon - EOS R6 - 3:2.CR3",
+          "license": "CC0-1.0"
+        }
+      }
+    },
+    {
+      "id": 6931,
+      "file": "6931-sony-a7iv-ycc-small.arw",
+      "format": "ARW",
+      "intendedUse": "correctness",
+      "coverage": "Sony YCC small pseudo-RAW; metadata candidate, decoder validation pending",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/6931/nice/Sony - ILCE-7M4 - 4:3.ARW",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/6931/exif/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Sony",
+        "ILCE-7M4",
+        "4:3",
+        9.18,
+        "Full frame raw \"lossless-small\"",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2023-10-19",
+        "<a href='https://raw.pixls.us/getfile.php/6931/nice/Sony - ILCE-7M4 - 4:3.ARW'>Sony - ILCE-7M4 - 4:3.ARW</a><div class='checksumdata'><span title='sha256 Checksum'>cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223</span>&nbsp;(21.87MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/6931/exif/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "status": "confirmed_from_repository_row",
+        "model": "ILCE-7M4",
+        "make": "Sony"
+      },
+      "mode": {
+        "status": "confirmed_from_repository_row",
+        "repositoryRemark": "Full frame raw \"lossless-small\"",
+        "description": "4:3"
+      },
+      "size": {
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "bytes": 22933504,
+        "httpStatus": 200
+      },
+      "pixels": {
+        "repositoryValueIsRounded": true,
+        "rawDimensions": {
+          "status": "unknown"
+        },
+        "repositoryMegapixels": 9.18
+      },
+      "cfa": {
+        "status": "unknown",
+        "reason": "Repository make/model is not an independent decoded CFA oracle."
+      },
+      "layout": {
+        "status": "unknown",
+        "reason": "Decoder qualification pending."
+      },
+      "qualification": {
+        "status": "download_verified_decode_pending",
+        "decodeVerified": false,
+        "downloadVerified": true,
+        "downloadVerification": {
+          "id": 6931,
+          "file": "6931-sony-a7iv-ycc-small.arw",
+          "format": "ARW",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\6931-sony-a7iv-ycc-small.arw",
+          "bytes": 22933504,
+          "sha256": "cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000001300fe0004000100",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/6931/nice/Sony - ILCE-7M4 - 4:3.ARW",
+          "license": "CC0-1.0"
+        }
+      },
+      "metadataEvidence": {
+        "status": "confirmed_from_original_exif_text_not_decoder",
+        "sourceUrl": "https://raw.pixls.us/getfile.php/6931/exif/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW.exif.txt",
+        "localFile": "C:\\RedPrism.Perf\\corpus\\6931-sony-a7iv-ycc-small.arw.metadata.txt",
+        "sha256": "10a66cef12e1c545ca61b95fc025d00eaa7324c8e715a5e12347723159b01ae2"
+      }
+    },
+    {
+      "id": 1031,
+      "file": "1031-canon5d3-linear-uncompressed.dng",
+      "format": "DNG",
+      "intendedUse": "correctness",
+      "coverage": "Uncompressed three-channel Linear Raw DNG; linked EXIF evidence, decoder validation pending",
+      "measurementRole": "Correctness/compression coverage; not a Photoshop performance pass gate.",
+      "sourcePage": "https://raw.pixls.us/",
+      "originalDirectUrl": "https://raw.pixls.us/getfile.php/1031/nice/Adobe DNG Converter - Canon EOS 5D Mark III - uncompressed, rgb (3:2).DNG",
+      "metadataUrl": "https://raw.pixls.us/getfile.php/1031/exif/5G4A9395-uncompressed.DNG.exif.txt",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "licenseEvidenceApi": "https://raw.pixls.us/json/getrepository.php?set=all",
+      "licenseEvidence": {
+        "status": "confirmed",
+        "basis": "Original API License column (index 5), 2026-09-30 snapshot",
+        "rowLicenseHtml": "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>"
+      },
+      "suppliedSha256": "357e664b2a59da2bfa1e6d729be7314e5efdb4ea8610b9c4fa37546437540686",
+      "sha256Status": "Local SHA256, byte count and format signature verified against original API row on 2026-09-30; decoder qualification pending",
+      "sourceRow": [
+        "Adobe DNG Converter",
+        "Canon EOS 5D Mark III",
+        "uncompressed, rgb (3:2)",
+        10.45,
+        "pls keep, unique compression",
+        "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+        "2017-02-01",
+        "<a href='https://raw.pixls.us/getfile.php/1031/nice/Adobe DNG Converter - Canon EOS 5D Mark III - uncompressed, rgb (3:2).DNG'>Adobe DNG Converter - Canon EOS 5D Mark III - uncompressed, rgb (3:2).DNG</a><div class='checksumdata'><span title='sha256 Checksum'>357e664b2a59da2bfa1e6d729be7314e5efdb4ea8610b9c4fa37546437540686</span>&nbsp;(60.73MB)</div>",
+        "<a target='_blank' href='https://raw.pixls.us/getfile.php/1031/exif/5G4A9395-uncompressed.DNG.exif.txt'>exifdata</a>"
+      ],
+      "camera": {
+        "status": "confirmed_from_repository_row",
+        "make": "Adobe DNG Converter",
+        "model": "Canon EOS 5D Mark III"
+      },
+      "mode": {
+        "description": "uncompressed, rgb (3:2)",
+        "repositoryRemark": "pls keep, unique compression",
+        "status": "confirmed_from_repository_row"
+      },
+      "size": {
+        "bytes": 63674890,
+        "status": "confirmed",
+        "basis": "HTTP HEAD Content-Length from originalDirectUrl, 2026-09-30",
+        "httpStatus": 200
+      },
+      "pixels": {
+        "rawDimensions": {
+          "status": "unknown"
+        },
+        "repositoryValueIsRounded": true,
+        "repositoryMegapixels": 10.45
+      },
+      "cfa": {
+        "status": "unknown",
+        "reason": "Repository make/model is not an independent decoded CFA oracle."
+      },
+      "layout": {
+        "status": "unknown",
+        "reason": "Decoder qualification pending."
+      },
+      "qualification": {
+        "decodeVerified": false,
+        "status": "download_verified_decode_pending",
+        "downloadVerified": true,
+        "downloadVerification": {
+          "id": 1031,
+          "file": "1031-canon5d3-linear-uncompressed.dng",
+          "format": "DNG",
+          "intendedUse": "correctness",
+          "localFile": "C:\\RedPrism.Perf\\corpus\\1031-canon5d3-linear-uncompressed.dng",
+          "bytes": 63674890,
+          "sha256": "357e664b2a59da2bfa1e6d729be7314e5efdb4ea8610b9c4fa37546437540686",
+          "sha256MatchesSupplied": true,
+          "binarySignatureHex": "49492a00080000003d00fe0004000100",
+          "binarySignatureVerified": true,
+          "decodeVerified": false,
+          "originalDirectUrl": "https://raw.pixls.us/getfile.php/1031/nice/Adobe DNG Converter - Canon EOS 5D Mark III - uncompressed, rgb (3:2).DNG",
+          "license": "CC0-1.0"
+        }
+      },
+      "metadataEvidence": {
+        "status": "confirmed_from_original_exif_text_not_decoder",
+        "sourceUrl": "https://raw.pixls.us/getfile.php/1031/exif/5G4A9395-uncompressed.DNG.exif.txt",
+        "localFile": "C:\\RedPrism.Perf\\corpus\\1031-canon5d3-linear-uncompressed.dng.metadata.txt",
+        "sha256": "15545d29026e2e11eb8c91e8a4943b05facef4b27dd47d74cf5a8790b40736b1"
+      }
     }
   ],
   "selectionNotes": [
@@ -900,5 +2110,37 @@
       "decision": "Exclude any sample with unproven reuse rights",
       "reason": "All selected rows explicitly link CC0-1.0. Mere public download availability or the corpus-wide upload statement is insufficient for legacy rows without file-specific license evidence."
     }
-  ]
+  ],
+  "licenseText": {
+    "sourceUrl": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt",
+    "repositoryFile": "Tests/Fixtures/Licenses/CC0-1.0.txt",
+    "localCorpusFile": "CC0-1.0.txt",
+    "downloadedOn": "2026-09-30",
+    "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+  },
+  "coverageRequirements": {
+    "requiredExtensions": [
+      "ARW",
+      "CR2",
+      "CR3",
+      "DNG",
+      "NEF",
+      "ORF",
+      "PEF",
+      "RAF",
+      "RW2"
+    ],
+    "requiredRoles": [
+      "gating",
+      "correctness"
+    ],
+    "linearRawCandidate": 1031,
+    "sonyYccCandidate": 6931,
+    "xTransCandidates": [
+      6002,
+      842
+    ],
+    "bayerRafCandidate": 1214,
+    "note": "File extension/signature coverage is acquired. CFA/linear/YCC samples, camera metadata, decode/develop reference and editor round trips must still be independently qualified in P4."
+  }
 }
