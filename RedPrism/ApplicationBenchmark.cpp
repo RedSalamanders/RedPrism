@@ -441,6 +441,7 @@ void Application::AdvanceUiBenchmark() noexcept
         state.previousImage = layer->asset->image;
         const auto& edit = _session.PendingColorEdit();
         state.previousPreview = edit.has_value() ? edit->previewRaster : Raster{};
+        state.previousPreviewSequence = edit.has_value() ? edit->previewSequence : 0;
         state.previousZoom = _viewport.zoom;
         state.previousPan = _viewport.pan;
         state.timing = {};
@@ -461,8 +462,9 @@ void Application::AdvanceUiBenchmark() noexcept
     const auto expected = CurrentOperation(state).expected;
     const auto& edit = _session.PendingColorEdit();
     const auto* layer = _session.ActiveLayer();
-    const bool panelReady = edit.has_value() && !edit->previewFailed && edit->previewRaster.HasStorage() &&
-                            edit->previewRaster != state.previousPreview;
+    const bool panelReady = edit.has_value() && !edit->previewFailed &&
+                            ((edit->previewLookup && edit->previewSequence > state.previousPreviewSequence) ||
+                             (edit->previewRaster.HasStorage() && edit->previewRaster != state.previousPreview));
     const bool histogramReady = expected == Expected::Histogram && edit.has_value() &&
                                 edit->kind == FilterKind::Levels && edit->histogramReady &&
                                 edit->original == state.previousImage;

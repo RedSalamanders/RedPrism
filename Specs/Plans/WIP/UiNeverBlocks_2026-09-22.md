@@ -86,7 +86,7 @@
     - [x] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [x] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency; all six configurations passed and all 15 Release 4K operations completed. Residual costs keep P1/G1 open.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
-    - [ ] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures; worker-built lookup inputs and WARP parity.
+    - [x] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures and worker-built lookups. All x64 tests and ARM64 cross-builds pass. Release 4K Levels preview: 78.856 → 5.718 ms; CPU commit reuse tradeoff recorded; G1 remains open.
     - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
     - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
@@ -1972,6 +1972,10 @@ x64 configuration; goldens unchanged. Exit met; all ARM64 cross-builds also pass
      owning migration and measured exit criterion is complete.
 - **P1.2 Per-layer adjust draw**: the new pass mode, a DYNAMIC LUT and a DEFAULT cube updated in place per tick, and
   the coverage input. This also ends the per-tick IMMUTABLE texture creation for live adjustment layers.
+  Completed in [GpuAdjustmentPreviews_2026-09-30.md](../Done/GpuAdjustmentPreviews_2026-09-30.md), with
+  [qualification and measured tradeoff](../../TestRuns/GpuAdjustmentPreviews_2026-09-30.md). GPU previews do not
+  provide a CPU commit raster; CPU commits remain worker computations until their later optimization. P1.3 follows
+  [GpuCompletionReadback_2026-09-30.md](GpuCompletionReadback_2026-09-30.md).
 - **P1.3 GPU completion infrastructure**:
   - `GpuWorkQueue` is created, and `Pump` is added to `Run` and to `SettleJobs`;
   - the capability probe, fences and `EnqueueSetEvent`;

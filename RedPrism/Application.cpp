@@ -2497,6 +2497,7 @@ Vec2 Application::DocumentSize() const noexcept
 void Application::DocumentChanged() noexcept
 {
     RefreshColorJobs();
+    SyncColorLookupPreview();
     _composition.InvalidateDocument();
     SyncChrome();
     _frameInvalidated = true;

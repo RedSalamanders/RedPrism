@@ -347,6 +347,19 @@ graph. The Application submits InteractivePreview and Background histogram jobs 
 any worker preparation. It retains one active/latest pending preview and one histogram attempt per opening, with
 event-driven completion and no idle retry. Commit reservation acquisition/dispatch follows in P1.1c.3.
 
+P1.2 adjustment previews return immutable lookup/source/coverage handles rather than a filtered CPU image.
+Their memory plan reserves 1 MiB for the bounded lookup build and metadata, the overlapping downscale/padding
+peak and uncached selection coverage. Compatible resident source/coverage is not charged again. LUT/cube resources
+are reused per layer and counted with the transient layer-grid target in `CanvasSurfaceBytes`; hidden release
+removes all of them. GPU lookup output never qualifies as a reusable full-resolution CPU commit. Settled frames
+record no additional preview or composition pass. First raster upload and readback are still synchronous costs
+until P1.3/P1.9; this change alone does not establish G1.
+The measured 4K tradeoff is recorded in
+[`GpuAdjustmentPreviews_2026-09-30.md`](../TestRuns/GpuAdjustmentPreviews_2026-09-30.md): Levels preview median
+falls from 78.856 to 5.718 ms, while its commit rises from 8.661 to 83.861 ms because no reusable CPU preview raster
+exists. CPU commit stays off the UI thread; exact commit optimization remains P2/P3. Residual apply/history and
+other raster operations keep G1 open.
+
 ## CPU instruction dispatch
 
 `Common/Kernels.h` is a standard-only boundary. Startup selects an immutable `KernelTable` before workers start;

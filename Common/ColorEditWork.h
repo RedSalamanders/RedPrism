@@ -9,6 +9,8 @@ struct ColorEditJobInput final
 {
     JobToken token;
     ColorEdit edit;
+    bool lookupPreview = false;
+    std::optional<LayerAdjustment> liveAdjustment;
 };
 
 enum class ColorEditJobStatus

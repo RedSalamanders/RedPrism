@@ -155,6 +155,8 @@ void ApplyCube(std::uint8_t* bgra, int width, int height, int stride, const std:
 // settings taken from a panel.
 [[nodiscard]] FilterSettings AdjustmentSettings(const LayerAdjustment& adjustment);
 [[nodiscard]] LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterSettings& settings);
+[[nodiscard]] std::shared_ptr<const AdjustmentLookup> BuildAdjustmentLookup(const LayerAdjustment& adjustment,
+                                                                            const CancelToken& cancellation = {});
 // The alpha-weighted histogram of an image, within `coverage` (Gray8 on the same grid) when given; an explicitly
 // empty coverage counts nothing.
 [[nodiscard]] LevelsHistogram Histogram(const Raster& image, const Raster* coverage,

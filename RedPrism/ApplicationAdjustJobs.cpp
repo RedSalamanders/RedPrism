@@ -134,6 +134,38 @@ void Application::QueueColorFailure() noexcept
     }
 }
 
+void Application::ConfigureColorLookupPreview(ColorEditJobInput& input) const
+{
+    input.lookupPreview = FilterIsImageAdjustment(input.edit.kind);
+    if (const auto id = _session.AdjustmentEditingID(); id)
+    {
+        const ImageLayer* layer = _session.ActiveLayer();
+        if (layer && layer->id == *id && layer->adjustment)
+        {
+            input.liveAdjustment = layer->adjustment;
+        }
+    }
+}
+
+void Application::SyncColorLookupPreview() noexcept
+{
+    const auto& edit = _session.PendingColorEdit();
+    if (edit && _session.AdjustmentEditingID() && _session.AdjustmentOriginal())
+    {
+        _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
+            edit->layerID, {}, {}, edit->preview ? edit->previewLookup : nullptr, _session.AdjustmentOriginal(), 1.0});
+    }
+    else if (edit && edit->preview && edit->previewLookup && !edit->previewLookupOnly)
+    {
+        _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
+            edit->layerID, edit->previewSource, edit->previewCoverage, edit->previewLookup, {}, edit->previewScale});
+    }
+    else
+    {
+        _composition.SetAdjustmentPreview(std::nullopt);
+    }
+}
+
 std::int32_t Application::SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::Launch launch) noexcept
 {
     try
@@ -145,6 +177,7 @@ std::int32_t Application::SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::
             current->edit.openingSequence == launch.input.edit.openingSequence &&
             current->token.documentSerial == launch.input.token.documentSerial)
         {
+            ConfigureColorLookupPreview(*current);
             launch.input = std::move(*current);
         }
         const auto memory = ColorEditPreviewMemoryBytes(launch.input);
@@ -203,6 +236,10 @@ std::int32_t Application::OfferColorPreview() noexcept
     try
     {
         auto input = _session.PrepareColorEditPreview();
+        if (input)
+        {
+            ConfigureColorLookupPreview(*input);
+        }
         return input && _colorPreviews.Offer(*input).accepted ? S_OK : E_INVALIDARG;
     }
     catch (const std::bad_alloc&)
@@ -285,9 +322,9 @@ void Application::RefreshColorJobs() noexcept
         return;
     }
     _colorSeenSequence = sequence;
-    const bool pixels = !_session.AdjustmentEditingID() && edit->preview &&
-                        !ColorEditChangesNothing(edit->kind, edit->settings) &&
-                        Adjust::BlurMargin(edit->kind, edit->settings) <= edit->grownMargin;
+    const bool pixels = _session.AdjustmentEditingID().has_value() ||
+                        (edit->preview && !ColorEditChangesNothing(edit->kind, edit->settings) &&
+                         Adjust::BlurMargin(edit->kind, edit->settings) <= edit->grownMargin);
     if (!pixels)
     {
         (void)_colorPreviews.Close();
@@ -469,7 +506,7 @@ int Application::RunColorJobsSelfTest() noexcept
     (void)SetEvent(_colorWorkTestGate->release.get());
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
         _colorWorkTestGate->visits.load() != 2 || _colorPreviews.HasPending() ||
-        !_session.PendingColorEdit()->previewRaster.HasStorage() ||
+        !_session.PendingColorEdit()->previewLookup || _session.PendingColorEdit()->previewRaster.HasStorage() ||
         _session.PendingColorEdit()->previewSequence != _session.ColorEditSequence() ||
         _session.PendingColorEdit()->settings.levels.ranges[0].gamma != 3)
     {
@@ -494,10 +531,82 @@ int Application::RunColorJobsSelfTest() noexcept
     CancelColorEdit(); // Its successful pixels exist, but no completion has been drained yet.
     if (!BeginColorEdit(ChromeHost::kCommandLevels) ||
         SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-        _session.PendingColorEdit()->previewRaster.HasStorage() || !_session.PendingColorEdit()->histogramReady ||
-        _session.ActiveLayer()->asset->image != source)
+        _session.PendingColorEdit()->previewRaster.HasStorage() || _session.PendingColorEdit()->previewLookup ||
+        !_session.PendingColorEdit()->histogramReady || _session.ActiveLayer()->asset->image != source)
     {
         return fail(L"A completed old preview crossed the cancelled panel lifetime.\n");
     }
+    CancelColorEdit();
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        return fail(L"The live adjustment fixture could not retire earlier work.\n");
+    }
+    _session.AddAdjustment(AdjustmentKind::Levels);
+    const auto adjustmentId = _session.AdjustmentEditingID();
+    LayerAdjustment original;
+    original.kind = AdjustmentKind::Levels;
+    original.levels.ranges[0].gamma = 1.25;
+    if (!adjustmentId || !_session.UpdateAdjustment(*adjustmentId, original) ||
+        !_session.BeginAdjustmentEditing(*adjustmentId, source, true) || !newGate(false))
+    {
+        return fail(L"The live adjustment lookup fixture did not open.\n");
+    }
+    DocumentChanged();
+    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+    {
+        return fail(L"The live adjustment did not build its lookup on a worker.\n");
+    }
+    const auto matchesAdjustment = [&](const LayerAdjustment& adjustment)
+    {
+        const CanvasDocument* display = _session.DisplayDocument();
+        std::vector<std::uint8_t> shown;
+        UINT width = 0;
+        UINT height = 0;
+        const Raster expected = Adjust::ApplyAdjustment(adjustment, source);
+        if (!display || FAILED(_composition.Compose(*display)) || FAILED(_composition.Readback(shown, width, height)) ||
+            width != 4 || height != 1 || !expected.HasStorage() || shown.size() != 16)
+            return false;
+        const auto* bytes = expected.Data();
+        for (std::size_t index = 0; index < shown.size(); ++index)
+        {
+            if (std::abs(static_cast<int>(shown[index]) - bytes[index]) > (index % 4 == 3 ? 0 : 1))
+                return false;
+        }
+        return true;
+    };
+    OnAdjustAction(AdjustAction::SetInputGamma, 3);
+    if (!matchesAdjustment(original) || !_colorPreviews.HasPending())
+    {
+        return fail(L"Pending live adjustment work changed the canvas before its immutable lookup completed.\n");
+    }
+    (void)SetEvent(_colorWorkTestGate->release.get());
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+        !_session.PendingColorEdit()->previewLookup || !_session.PendingColorEdit()->previewLookupOnly ||
+        _session.PendingColorEdit()->previewRaster.HasStorage() ||
+        _session.PendingColorEdit()->previewSequence != _session.ColorEditSequence() ||
+        _session.PendingColorEdit()->previewLookup->adjustment.levels.ranges[0].gamma != 3 ||
+        !matchesAdjustment(_session.PendingColorEdit()->previewLookup->adjustment))
+    {
+        return fail(L"The live adjustment mailbox did not publish the latest lookup and matching GPU pixels.\n");
+    }
+    std::printf("PASS color-jobs.live-worker-lookup-and-latest-gpu-pixels\n");
+    if (!newGate(false))
+        return fail(L"The live preview-off gate could not be created.\n");
+    _session.UpdateColorEdit(_session.PendingColorEdit()->settings, false);
+    DocumentChanged();
+    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 || !matchesAdjustment(original))
+    {
+        return fail(L"Live preview off waited for a worker before restoring the opening adjustment.\n");
+    }
+    CancelColorEdit();
+    (void)SetEvent(_colorWorkTestGate->release.get());
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _session.HasColorEdit() ||
+        !matchesAdjustment(original))
+    {
+        return fail(L"A late lookup crossed live adjustment Cancel.\n");
+    }
+    std::printf("PASS color-jobs.live-preview-off-and-cancel-in-flight\n");
+    _session.SelectLayer(active); // leave the image target expected by the following host fixtures
+    DocumentChanged();
     return 0;
 }

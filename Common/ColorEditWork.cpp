@@ -262,6 +262,8 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
 std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept
 {
     const ColorEdit& edit = input.edit;
+    if (input.liveAdjustment)
+        return 1024 * 1024; // immutable tables/cube, bounded settings and result metadata, without raster work
     if (!ValidColorGrid(edit))
     {
         return std::nullopt;
@@ -291,6 +293,16 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput
     // Downscaled currently owns a full-size private read until its smaller result is produced. It is released
     // before filtering starts; the new padding and preview source remain owned by the returned cache.
     const auto preparation = downscale ? fullRgba + rgba : 0;
+    if (input.lookupPreview && FilterIsImageAdjustment(edit.kind))
+    {
+        const auto coverage = CoverageMemoryBytes(edit, width, height);
+        if (!coverage)
+            return std::nullopt;
+        const bool cachedCoverage = cached && edit.previewCoverage.Format() == RasterFormat::Gray8 &&
+                                    edit.previewCoverage.Width() == width && edit.previewCoverage.Height() == height;
+        return metadata + 1024 * 1024 + padding +
+               std::max(preparation, newSource + (cachedCoverage ? 0 : coverage->peak));
+    }
     return metadata + padding + std::max(preparation, newSource + *render);
 }
 
@@ -320,12 +332,25 @@ ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Ex
     ColorEditPreviewResult result{input.token, input.edit};
     ColorEdit& edit = result.edit;
     edit.previewRaster = {};
+    edit.previewCoverage = {};
+    edit.previewLookup.reset();
+    edit.previewLookupOnly = false;
     edit.previewSequence = 0;
     const auto failed = [&]()
     {
         result.status = cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
         return std::move(result);
     };
+    if (input.liveAdjustment)
+    {
+        edit.previewLookup = Adjust::BuildAdjustmentLookup(input.liveAdjustment.value(), cancellation);
+        if (!edit.previewLookup)
+            return failed();
+        edit.previewLookupOnly = true;
+        edit.previewSequence = input.token.sequence;
+        result.status = ColorEditJobStatus::Ready;
+        return result;
+    }
     if (cancellation.IsCancelled() || !ValidColorGrid(edit))
     {
         return failed();
@@ -352,6 +377,42 @@ ColorEditPreviewResult RunColorEditPreviewJob(const ColorEditJobInput& input, Ex
     }
     edit.previewScale = static_cast<double>(width) / edit.SourceWidth();
     edit.previewTransform = edit.Placement();
+    if (input.lookupPreview && FilterIsImageAdjustment(edit.kind))
+    {
+        LayerAdjustment adjustment;
+        adjustment.kind = FilterAdjustmentKind(edit.kind).value();
+        adjustment = Adjust::AdjustmentWithSettings(std::move(adjustment), edit.settings);
+        if (adjustment.kind == AdjustmentKind::Grain)
+        {
+            auto grain = adjustment.Grain();
+            grain.seed = edit.seed;
+            adjustment.grainSettings = grain;
+        }
+        edit.previewLookup = Adjust::BuildAdjustmentLookup(adjustment, cancellation);
+        if (edit.selection)
+        {
+            if (input.edit.previewSource == edit.previewSource &&
+                input.edit.previewTransform == edit.previewTransform &&
+                input.edit.previewCoverage.Format() == RasterFormat::Gray8 &&
+                input.edit.previewCoverage.Width() == width && input.edit.previewCoverage.Height() == height)
+            {
+                edit.previewCoverage = input.edit.previewCoverage;
+            }
+            else
+            {
+                edit.previewCoverage = SelectionGeometry::CoverageTransformed(
+                    edit.selection->loops, PixelToDocument(edit.previewTransform, width, height).Inverted(), width,
+                    height, edit.selection->antialiased, cancellation);
+            }
+            if (!edit.previewCoverage.HasStorage())
+                return failed();
+        }
+        if (!edit.previewLookup || cancellation.IsCancelled())
+            return failed();
+        edit.previewSequence = input.token.sequence;
+        result.status = ColorEditJobStatus::Ready;
+        return result;
+    }
     bool noSource = false;
     edit.previewRaster = RenderColorEditRaster(edit, edit.previewSource, edit.previewTransform, edit.previewScale,
                                                &noSource, cancellation);
@@ -605,11 +666,13 @@ bool DocumentSession::ColorEditOpeningMatches(const JobToken& token, std::uint64
 
 bool DocumentSession::ApplyColorEditPreview(const ColorEditPreviewResult& result)
 {
+    const bool live = result.edit.previewLookupOnly;
     if (!ColorEditOpeningMatches(result.token, result.edit.openingSequence, result.edit.original) ||
-        _adjustmentEditingID || result.edit.kind != _colorEdit->kind || result.edit.seed != _colorEdit->seed ||
-        !_colorEdit->preview || ColorEditChangesNothing(_colorEdit->kind, _colorEdit->settings) ||
+        live != _adjustmentEditingID.has_value() || result.edit.kind != _colorEdit->kind ||
+        result.edit.seed != _colorEdit->seed ||
+        (!live && (!_colorEdit->preview || ColorEditChangesNothing(_colorEdit->kind, _colorEdit->settings))) ||
         result.token.sequence < _colorEdit->previewSequence ||
-        result.token.sequence <= _colorEdit->previewInvalidatedSequence ||
+        (!live && result.token.sequence <= _colorEdit->previewInvalidatedSequence) ||
         (result.token.sequence == _colorEditSequence &&
          (result.edit.settings != _colorEdit->settings || result.edit.grownGrid != _colorEdit->grownGrid)))
     {
@@ -622,15 +685,37 @@ bool DocumentSession::ApplyColorEditPreview(const ColorEditPreviewResult& result
             return false;
         }
         _colorEdit->previewRaster = {};
+        if (!live)
+            _colorEdit->previewLookup.reset();
+        _colorEdit->previewCoverage = {};
         _colorEdit->previewSequence = 0;
         _colorEdit->previewFailed = result.status == ColorEditJobStatus::NoSource;
         ++_editRevision;
         return false;
     }
     const ColorEdit& rendered = result.edit;
-    if (!rendered.previewRaster.HasStorage() || rendered.previewRaster.Format() != RasterFormat::Bgra8888 ||
-        rendered.previewRaster.Width() != rendered.previewSource.Width() ||
-        rendered.previewRaster.Height() != rendered.previewSource.Height() ||
+    if (live)
+    {
+        if (!rendered.previewLookup || !rendered.previewLookup->adjustment.IsValid() ||
+            FilterAdjustmentKind(result.edit.kind) != rendered.previewLookup->adjustment.kind ||
+            rendered.previewSequence != result.token.sequence)
+            return false;
+        _colorEdit->previewLookup = rendered.previewLookup;
+        _colorEdit->previewLookupOnly = true;
+        _colorEdit->previewSequence = result.token.sequence;
+        ++_editRevision;
+        return true;
+    }
+    const Raster& displayed = rendered.previewLookup ? rendered.previewSource : rendered.previewRaster;
+    if (!displayed.HasStorage() || displayed.Format() != RasterFormat::Bgra8888 ||
+        displayed.Width() != rendered.previewSource.Width() || displayed.Height() != rendered.previewSource.Height() ||
+        (rendered.previewLookup &&
+         (!rendered.previewLookup->adjustment.IsValid() ||
+          FilterAdjustmentKind(result.edit.kind) != rendered.previewLookup->adjustment.kind)) ||
+        (rendered.selection && rendered.previewLookup &&
+         (!rendered.previewCoverage.HasStorage() || rendered.previewCoverage.Format() != RasterFormat::Gray8 ||
+          rendered.previewCoverage.Width() != displayed.Width() ||
+          rendered.previewCoverage.Height() != displayed.Height())) ||
         rendered.previewSequence != result.token.sequence || !rendered.previewTransform.IsValid() ||
         !(rendered.previewScale > 0 && rendered.previewScale <= 1))
     {
@@ -638,6 +723,9 @@ bool DocumentSession::ApplyColorEditPreview(const ColorEditPreviewResult& result
     }
     // Display the completed intermediate image without rolling settings or grid planning back to that request.
     _colorEdit->previewRaster = rendered.previewRaster;
+    _colorEdit->previewLookup = rendered.previewLookup;
+    _colorEdit->previewCoverage = rendered.previewCoverage;
+    _colorEdit->previewLookupOnly = false;
     _colorEdit->previewTransform = rendered.previewTransform;
     _colorEdit->previewScale = rendered.previewScale;
     _colorEdit->previewSequence = result.token.sequence;
@@ -693,6 +781,8 @@ bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
         return false;
     case ColorEditJobStatus::Failed:
         _colorEdit->commitFailed = true;
+        _colorEdit->previewLookup.reset();
+        _colorEdit->previewCoverage = {};
         ++_editRevision;
         return false;
     case ColorEditJobStatus::Ready:

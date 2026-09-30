@@ -542,6 +542,14 @@ struct LayerAdjustment
     [[nodiscard]] bool IsValid() const noexcept;
 };
 
+// Immutable CPU lookup values prepared off the UI thread. Graphics owners upload them on their own device.
+struct AdjustmentLookup final
+{
+    LayerAdjustment adjustment;
+    std::array<float, 256 * 4> table{};
+    std::vector<float> cube;
+};
+
 enum class ShapeKind
 {
     Rectangle,
@@ -1155,7 +1163,8 @@ struct ColorEditGrid final
 
 // The one open color or filter panel, whatever its kind: the layer's pixels it started from and where they sit, the
 // selection it is limited to, the grid grown for a blur or a fill to spread into, the copy the preview renders from
-// and what the canvas shows meanwhile (`previewRaster`; empty shows the layer's own pixels). An adjustment layer's
+// and what the canvas shows meanwhile (`previewRaster`, or worker lookup/source/coverage for a GPU preview).
+// With neither representation the layer's own pixels show. An adjustment layer's
 // panel holds the composite beneath the layer as `original`, for the histogram and sampling only.
 struct ColorEdit
 {
@@ -1168,7 +1177,7 @@ struct ColorEdit
     std::optional<JobToken> sourceToken; // Opening inputs; absent for adjustment-layer panels.
     bool deferred = false; // Host captures metadata; its jobs run the same graph as direct inline callers.
     std::uint64_t openingSequence = 0;
-    std::uint64_t previewSequence = 0;            // Exact settings/seed/grid sequence that produced previewRaster.
+    std::uint64_t previewSequence = 0;            // Exact settings/seed/grid sequence of the published preview.
     std::uint64_t previewInvalidatedSequence = 0; // Preview off/identity/growth refusal invalidates earlier output.
     bool commitFailed = false;
     bool preview = true;
@@ -1182,6 +1191,9 @@ struct ColorEdit
     Raster previewSource;    // the source no larger than the kind's preview limit
     double previewScale = 1; // pixels in previewSource per source pixel
     Raster previewRaster;
+    Raster previewCoverage;
+    std::shared_ptr<const AdjustmentLookup> previewLookup;
+    bool previewLookupOnly = false; // live adjustment metadata, without a destructive layer-grid target
     LayerTransform previewTransform;
     // An automatic filter that found nothing to work from (Content-Aware Fill without opaque surroundings): the
     // panel says so and OK waits.

@@ -452,6 +452,25 @@ float4 PixelMain(PixelInput input) : SV_TARGET
     int2 destPixel = int2(input.position.xy);
     float2 document = viewOrigin + input.position.xy * viewScale;
 
+    if (passMode == kCompositionPassLayerAdjust)
+    {
+        // The transient target is on the layer's pixel grid, before its transform, opacity and real mask.
+        // Match the CPU byte result before BlendThrough; the source alpha is retained exactly.
+        float4 src = g_source.Load(int3(destPixel, 0));
+        float3 color = float3(0, 0, 0);
+        if (src.a > 0)
+        {
+            float3 adjusted = AdjustStraight(saturate(src.rgb / src.a), document);
+            adjusted = floor(saturate(adjusted * src.a) * 255.0 + 0.5) / 255.0;
+            float coverage = 1;
+            if ((flags & kCompositionFlagHasMask) != 0)
+            {
+                coverage = saturate(g_mask.Load(int3(destPixel, 0)));
+            }
+            color = floor(lerp(src.rgb, adjusted, coverage) * 255.0 + 0.5) / 255.0;
+        }
+        return float4(color, src.a);
+    }
     if (passMode == kCompositionPassAdjust || passMode == kCompositionPassStackAdjust)
     {
         return AdjustPass(document, destPixel, passMode == kCompositionPassStackAdjust);

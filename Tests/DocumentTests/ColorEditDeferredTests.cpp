@@ -1,10 +1,12 @@
 #include "ColorEditDeferredTests.h"
 
+#include "Adjust.h"
 #include "ColorEditWork.h"
 #include "Document.h"
 #include "Selection.h"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <utility>
@@ -497,6 +499,235 @@ void OpeningTargetChecksAndAdjustmentHistogram()
                !session.PendingColorEdit()->histogramReady,
            "adjustment.reopen-rejects-old-histogram");
 }
+
+void LookupPreviewBuildsImmutableInputsAndKeepsCpuCommitExact()
+{
+    DocumentSession session = Session();
+    session.BeginColorEdit(FilterKind::Levels, true);
+    session.UpdateColorEdit(GammaLevels(), true);
+    auto input = session.PrepareColorEditPreview();
+    Expect(input.has_value(), "lookup.input-prepared");
+    if (!input)
+    {
+        return;
+    }
+
+    input->lookupPreview = true;
+    const auto histogram = Histogram(input.value());
+    const auto result = Preview(input.value());
+    const auto* lookupPixels = result.edit.previewSource.Data();
+    Expect(result.status == ColorEditJobStatus::Ready && result.edit.previewLookup &&
+               result.edit.previewLookup->adjustment.kind == AdjustmentKind::Levels && lookupPixels != nullptr &&
+               result.edit.previewSequence == input->token.sequence &&
+               result.edit.previewSource == input->edit.original && !result.edit.previewRaster.HasStorage() &&
+               !result.edit.previewCoverage.HasStorage(),
+           "lookup.worker-returns-source-and-immutable-levels-lookup-only");
+    Expect(histogram.status == ColorEditJobStatus::Ready && histogram.histogram[0][64] == 1.0 &&
+               histogram.original == input->edit.original,
+           "lookup.histogram-remains-based-on-opening-pixels");
+    Expect(session.ApplyColorEditPreview(result) && session.PendingColorEdit()->previewLookup &&
+               session.PendingColorEdit()->previewSequence == result.token.sequence &&
+               !session.PendingColorEdit()->previewRaster.HasStorage(),
+           "lookup.lookup-only-result-publishes-without-raster");
+    Expect(session.ApplyColorEditHistogram(histogram) && session.PendingColorEdit()->histogramReady &&
+               session.PendingColorEdit()->settings == GammaLevels() &&
+               session.PendingColorEdit()->histogram == histogram.histogram,
+           "lookup.histogram-applies-independently-of-lookup-preview");
+
+    const auto commitInput = session.PrepareColorEditCommit();
+    Expect(commitInput.has_value(), "lookup.cpu-commit-input-prepared");
+    if (!commitInput)
+    {
+        return;
+    }
+    const auto committed = Commit(commitInput.value());
+    const auto* committedPixels = committed.image.Data();
+    Expect(committed.status == ColorEditJobStatus::Ready && !committed.reusedPreview && committedPixels != nullptr &&
+               committedPixels[0] == 0 && std::abs(static_cast<int>(committedPixels[4]) - 128) <= 1 &&
+               std::abs(static_cast<int>(committedPixels[8]) - 181) <= 1 && committedPixels[7] == 255 &&
+               committedPixels[11] == 255,
+           "lookup.preview-is-never-reused-as-cpu-commit-result");
+}
+
+void LookupPreviewReusesCompatibleSelectionCoverage()
+{
+    DocumentSession session = Session();
+    session.EditForTest([](CanvasDocument& document)
+                        { document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)}; });
+    session.BeginColorEdit(FilterKind::Levels, true);
+    session.UpdateColorEdit(GammaLevels(), true);
+    auto firstInput = session.PrepareColorEditPreview();
+    Expect(firstInput.has_value(), "lookup-coverage.first-input-prepared");
+    if (!firstInput)
+    {
+        return;
+    }
+    firstInput->lookupPreview = true;
+    const auto first = Preview(firstInput.value());
+    const Raster source = first.edit.previewSource;
+    const Raster coverage = first.edit.previewCoverage;
+    Expect(first.status == ColorEditJobStatus::Ready && coverage.HasStorage() &&
+               coverage.Format() == RasterFormat::Gray8 && coverage.Width() == source.Width() &&
+               coverage.Height() == source.Height() && session.ApplyColorEditPreview(first),
+           "lookup-coverage.first-selection-coverage-published");
+
+    FilterSettings changedSettings = GammaLevels();
+    changedSettings.levels.ranges[0].gamma = 1.5;
+    session.UpdateColorEdit(changedSettings, true);
+    auto secondInput = session.PrepareColorEditPreview();
+    Expect(secondInput.has_value(), "lookup-coverage.second-input-prepared");
+    if (!secondInput)
+    {
+        return;
+    }
+    secondInput->lookupPreview = true;
+    const auto second = Preview(secondInput.value());
+    Expect(second.status == ColorEditJobStatus::Ready && second.edit.previewSource == source &&
+               second.edit.previewCoverage == coverage && second.edit.previewLookup &&
+               !second.edit.previewRaster.HasStorage(),
+           "lookup-coverage.same-source-reuses-coverage-across-settings");
+}
+
+void LookupPreviewInvalidationAndPreCancellation()
+{
+    {
+        DocumentSession session = Session();
+        session.BeginColorEdit(FilterKind::Levels, true);
+        session.UpdateColorEdit(GammaLevels(), true);
+        auto input = session.PrepareColorEditPreview();
+        Expect(input.has_value(), "lookup-invalidation.input-prepared");
+        if (!input)
+        {
+            return;
+        }
+        input->lookupPreview = true;
+        CancelSource cancellation;
+        (void)cancellation.Cancel();
+        const auto cancelled = Preview(input.value(), cancellation.Token());
+        Expect(cancelled.status == ColorEditJobStatus::Cancelled && !cancelled.edit.previewLookup &&
+                   !session.ApplyColorEditPreview(cancelled),
+               "lookup.pre-cancelled-worker-does-not-publish");
+    }
+    {
+        DocumentSession session = Session();
+        session.BeginColorEdit(FilterKind::Levels, true);
+        session.UpdateColorEdit(GammaLevels(), true);
+        auto input = session.PrepareColorEditPreview();
+        Expect(input.has_value(), "lookup-preview-off.input-prepared");
+        if (!input)
+        {
+            return;
+        }
+        input->lookupPreview = true;
+        const auto result = Preview(input.value());
+        session.UpdateColorEdit(GammaLevels(), false);
+        Expect(!session.ApplyColorEditPreview(result) && !session.PendingColorEdit()->previewLookup &&
+                   !session.PendingColorEdit()->previewRaster.HasStorage(),
+               "lookup-preview-off-rejects-inflight-result");
+    }
+    {
+        DocumentSession session = Session();
+        session.BeginColorEdit(FilterKind::Levels, true);
+        session.UpdateColorEdit(GammaLevels(), true);
+        auto input = session.PrepareColorEditPreview();
+        Expect(input.has_value(), "lookup-reopen.input-prepared");
+        if (!input)
+        {
+            return;
+        }
+        input->lookupPreview = true;
+        const auto result = Preview(input.value());
+        session.CancelColorEdit();
+        session.BeginColorEdit(FilterKind::Levels, true);
+        Expect(!session.ApplyColorEditPreview(result) && session.HasColorEdit(FilterKind::Levels) &&
+                   !session.PendingColorEdit()->previewLookup,
+               "lookup-reopen-rejects-old-panel-result");
+    }
+    {
+        DocumentSession session = Session();
+        session.EditForTest([](CanvasDocument& document)
+                            { document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)}; });
+        session.BeginColorEdit(FilterKind::Levels, true);
+        session.UpdateColorEdit(GammaLevels(), true);
+        auto input = session.PrepareColorEditPreview();
+        Expect(input.has_value(), "lookup-selection-change.input-prepared");
+        if (!input)
+        {
+            return;
+        }
+        input->lookupPreview = true;
+        const auto result = Preview(input.value());
+        session.EditForTest([](CanvasDocument& document)
+                            { document.selection = DocumentSelection{true, SelectionGeometry::Rect(1, 0, 3, 1)}; });
+        Expect(!session.ApplyColorEditPreview(result) && !session.PendingColorEdit()->previewLookup,
+               "lookup-selection-change-rejects-old-target-token");
+    }
+    {
+        DocumentSession session = Session();
+        session.BeginColorEdit(FilterKind::Levels, true);
+        auto input = session.PrepareColorEditPreview();
+        Expect(input.has_value(), "lookup-identity.input-prepared");
+        if (!input)
+        {
+            return;
+        }
+        input->lookupPreview = true;
+        const auto identity = Preview(input.value());
+        Expect(identity.status == ColorEditJobStatus::Unchanged && !identity.edit.previewLookup &&
+                   !identity.edit.previewRaster.HasStorage(),
+               "lookup-identity-does-not-build-preview");
+    }
+}
+
+void LiveAdjustmentLookupDisplaysIntermediateWithoutRollingControlsBack()
+{
+    DocumentSession session = Session();
+    const Raster below = session.ActiveLayer()->asset->image;
+    session.AddAdjustment(AdjustmentKind::Levels);
+    const auto id = session.AdjustmentEditingID();
+    if (!id || !session.BeginAdjustmentEditing(id.value(), below, true))
+    {
+        Expect(false, "live-lookup.panel-opened");
+        return;
+    }
+    session.UpdateColorEdit(GammaLevels(), true);
+    auto input = session.PrepareColorEditPreview();
+    Expect(input.has_value(), "live-lookup.input-prepared");
+    if (!input)
+    {
+        return;
+    }
+    LayerAdjustment gamma = session.AdjustmentOriginal().value();
+    gamma = Adjust::AdjustmentWithSettings(std::move(gamma), GammaLevels());
+    input->liveAdjustment = gamma;
+    const auto intermediate = Preview(input.value());
+    FilterSettings newerSettings = ClippedLevels();
+    session.UpdateColorEdit(newerSettings, true);
+    Expect(intermediate.status == ColorEditJobStatus::Ready && intermediate.edit.previewLookup &&
+               intermediate.edit.previewLookupOnly && !intermediate.edit.previewRaster.HasStorage() &&
+               session.ApplyColorEditPreview(intermediate) && session.PendingColorEdit()->settings == newerSettings &&
+               session.PendingColorEdit()->previewLookup == intermediate.edit.previewLookup &&
+               !session.PendingColorEdit()->previewRaster.HasStorage(),
+           "live-lookup-old-result-applies-without-reverting-current-controls");
+
+    session.CancelColorEdit();
+    session.SetAdjustmentEditingID(id);
+    Expect(session.BeginAdjustmentEditing(id.value(), below, true), "live-lookup.reopen-succeeds");
+    session.UpdateColorEdit(GammaLevels(), true);
+    auto staleInput = session.PrepareColorEditPreview();
+    if (!staleInput)
+    {
+        Expect(false, "live-lookup.cancel-input-prepared");
+        return;
+    }
+    staleInput->liveAdjustment = gamma;
+    const auto stale = Preview(staleInput.value());
+    session.CancelColorEdit();
+    session.SetAdjustmentEditingID(id);
+    Expect(session.BeginAdjustmentEditing(id.value(), below, true) && !session.ApplyColorEditPreview(stale) &&
+               !session.PendingColorEdit()->previewLookup,
+           "live-lookup-cancel-rejects-late-result-after-reopen");
+}
 } // namespace
 
 int RunColorEditDeferredTests()
@@ -512,5 +743,9 @@ int RunColorEditDeferredTests()
     MemoryPlansIncludePaddingDownscaleAndCoverage();
     CancelAndIdentityNeverPublishOrCommit();
     OpeningTargetChecksAndAdjustmentHistogram();
+    LookupPreviewBuildsImmutableInputsAndKeepsCpuCommitExact();
+    LookupPreviewReusesCompatibleSelectionCoverage();
+    LookupPreviewInvalidationAndPreCancellation();
+    LiveAdjustmentLookupDisplaysIntermediateWithoutRollingControlsBack();
     return gFailures;
 }

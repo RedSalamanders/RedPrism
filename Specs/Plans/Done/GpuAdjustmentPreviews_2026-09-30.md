@@ -2,17 +2,17 @@
 
 ## Implementation checklist
 
-- [ ] Add immutable worker-built lookup/coverage inputs for the six existing adjustment kinds; preserve direct CPU goldens.
-- [ ] Reuse DYNAMIC LUT and DEFAULT cube textures across settings changes; account for and retire their storage.
-- [ ] Add a layer-grid adjustment pass that preserves alpha, mixes through edit selection coverage and keys destructive grain in layer pixels.
-- [ ] Draw the adjusted layer through its ordinary opacity/mask/blend/clipping/folder passes; keep passes 6/7 for adjustment layers.
-- [ ] Activate worker-prepared GPU previews through the existing one-active/latest-pending mailbox and owning result validation.
-- [ ] Preserve preview off/identity/Cancel/reopen, settled zero-pass frames, hidden release and device recreation.
-- [ ] Prove WARP parity against RunFilter plus BlendThrough on translated/scaled layers, selection, masks, clipping and grain; prove lookup reuse.
-- [ ] Run skills/format, all x64 test configurations and ARM64 cross-builds; record real-loop measurements and remaining costs.
-- [ ] Reconcile owning contracts/checklists, commit/push and move this plan to Done.
+- [x] Add immutable worker-built lookup/coverage inputs for the six existing adjustment kinds; preserve direct CPU goldens.
+- [x] Reuse DYNAMIC LUT and DEFAULT cube textures across settings changes; account for and retire their storage.
+- [x] Add a layer-grid adjustment pass that preserves alpha, mixes through edit selection coverage and keys destructive grain in layer pixels.
+- [x] Draw the adjusted layer through its ordinary opacity/mask/blend/clipping/folder passes; keep passes 6/7 for adjustment layers.
+- [x] Activate worker-prepared GPU previews through the existing one-active/latest-pending mailbox and owning result validation.
+- [x] Preserve preview off/identity/Cancel/reopen, settled zero-pass frames, hidden release and device recreation.
+- [x] Prove WARP parity against RunFilter plus BlendThrough on translated/scaled layers, selection, masks, clipping and grain; prove lookup reuse.
+- [x] Run skills/format, all x64 test configurations and ARM64 cross-builds; record real-loop measurements and remaining costs.
+- [x] Reconcile owning contracts/checklists, commit/push and move this plan to Done.
 
-Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.2.
+Status: DONE. Parent: [UiNeverBlocks_2026-09-22.md](../WIP/UiNeverBlocks_2026-09-22.md), P1.2.
 Owners: `Common/ColorEditWork.*`, `Common/AdjustEdit.cpp`, `Common/Document.h`, `ApplicationAdjustJobs.cpp`,
 `CanvasRenderer.*`, composition shaders and CompositionTests. Graphics resources remain on the UI thread;
 lookup construction and selection rasterization remain immutable worker work.
@@ -49,5 +49,4 @@ tolerances (table 1/255, cube 4/255, grain 2/255). Include partial alpha, transl
 underlying different colors, upper layers, masks, clipping stacks and lookup changes. Assert unchanged texture
 creation counters after warmup and zero extra compositions on a settled frame. Do not change legacy expected pixels.
 
-Progress: design follows the inspected composition ownership/pass contracts. Production code begins after the
-P1.1c.3 activation checkpoint is qualified and committed.
+Progress: all checklist items completed. All x64 tests and ARM64 cross-builds passed, with Release real-loop measurements recorded in [GpuAdjustmentPreviews_2026-09-30.md](../../TestRuns/GpuAdjustmentPreviews_2026-09-30.md). P1.3 and the rest of P1/G1 remain open.

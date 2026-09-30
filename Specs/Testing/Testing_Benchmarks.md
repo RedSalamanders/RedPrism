@@ -41,8 +41,13 @@ power/idle behavior is unchanged. See [SetThreadExecutionState](https://learn.mi
 | `ui100` | 10000×10000, one raster layer | 10 after one warmup |
 | `ui-smoke` | 64×48, same layered fixture | 2 after one warmup |
 
-The deterministic fixture checksum identifies generated pixel content; it is not a RAW corpus checksum. The
-operation rows cover Zoom Actual and Zoom Fit view changes; opening Levels; updating Levels input gamma to 1.25 and
+The deterministic fixture checksum identifies generated pixel content; it is not a RAW corpus checksum.
+
+The panel readiness check accepts either a changed CPU preview raster or a newer published GPU lookup sequence, then
+requires the frame invalidated by that completion to be presented before recording the result. A GPU lookup is
+never used as evidence that CPU commit pixels already exist.
+
+The operation rows cover Zoom Actual and Zoom Fit view changes; opening Levels; updating Levels input gamma to 1.25 and
 committing at that value; Hue/Saturation saturation +20; Exposure +0.5; Gaussian Blur radius 10; Add Noise amount
 20; Grain amount 40; Lens Correction distortion 20; Invert; Fill with foreground; Clear Pixels; and Undo. Opening
 Levels is valid when its histogram is ready for the captured opening image; identity settings intentionally have no

@@ -1231,6 +1231,45 @@ LayerAdjustment AdjustmentWithSettings(LayerAdjustment adjustment, const FilterS
     return adjustment;
 }
 
+std::shared_ptr<const AdjustmentLookup> BuildAdjustmentLookup(const LayerAdjustment& adjustment,
+                                                              const CancelToken& cancellation)
+{
+    if (!adjustment.IsValid() || cancellation.IsCancelled())
+        return {};
+    auto lookup = std::make_shared<AdjustmentLookup>();
+    lookup->adjustment = adjustment;
+    if (adjustment.kind == AdjustmentKind::Hsv)
+    {
+        lookup->cube = ColorCube(adjustment.ResolvedHsv(), cancellation);
+        if (lookup->cube.size() != static_cast<std::size_t>(kCubeDimension * kCubeDimension * kCubeDimension * 4))
+            return {};
+    }
+    else if (adjustment.kind == AdjustmentKind::GradientMap)
+    {
+        const auto colors = GradientMapTable(adjustment.GradientMap());
+        for (std::size_t i = 0; i < 256; ++i)
+        {
+            for (std::size_t c = 0; c < 3; ++c)
+                lookup->table[i * 4 + c] = colors[i * 3 + c] / 255.0f;
+            lookup->table[i * 4 + 3] = 1;
+        }
+    }
+    else if (adjustment.kind != AdjustmentKind::Grain)
+    {
+        const ChannelTables tables = adjustment.kind == AdjustmentKind::Levels ? LevelsTables(adjustment.levels)
+                                     : adjustment.kind == AdjustmentKind::Curves
+                                         ? CurvesTables(adjustment.curves)
+                                         : ExposureTables(adjustment.Exposure());
+        for (std::size_t i = 0; i < 256; ++i)
+        {
+            for (std::size_t c = 0; c < 3; ++c)
+                lookup->table[i * 4 + c] = tables.values[c * 256 + i];
+            lookup->table[i * 4 + 3] = 1;
+        }
+    }
+    return cancellation.IsCancelled() ? std::shared_ptr<const AdjustmentLookup>{} : std::move(lookup);
+}
+
 LevelsHistogram Histogram(const Raster& image, const Raster* coverage, const CancelToken& cancellation) noexcept
 {
     LevelsHistogram bins{};

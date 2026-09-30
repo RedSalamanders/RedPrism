@@ -301,6 +301,8 @@ class Application final : public ChromeEvents
     class ColorHistogramJob;
     class ColorFailureAction;
     void RefreshColorJobs() noexcept;
+    void ConfigureColorLookupPreview(ColorEditJobInput& input) const;
+    void SyncColorLookupPreview() noexcept;
     void CancelColorJobs() noexcept;
     void LaunchColorPreview() noexcept;
     [[nodiscard]] std::int32_t OfferColorPreview() noexcept;

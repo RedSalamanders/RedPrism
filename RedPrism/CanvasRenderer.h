@@ -48,6 +48,17 @@ class CanvasRenderer final
     }
     // The display composite (with the stroke preview in place of its layer), at the proxy scale the document needs.
     HRESULT Compose(const CanvasDocument& document) noexcept;
+    struct AdjustmentPreview final
+    {
+        Guid layerId;
+        Raster source;
+        Raster coverage;
+        std::shared_ptr<const AdjustmentLookup> lookup;
+        std::optional<LayerAdjustment> liveOriginal;
+        double previewScale = 1;
+        [[nodiscard]] bool operator==(const AdjustmentPreview&) const noexcept = default;
+    };
+    void SetAdjustmentPreview(std::optional<AdjustmentPreview> preview) noexcept;
     // `document` flattened at full resolution into premultiplied BGRA rows (width x height x 4), without the stroke
     // preview: what export, Copy Merged, the wand and the eyedroppers read. Tiled when the document is larger than
     // the device's textures. The display composes again on its next frame.
@@ -109,6 +120,14 @@ class CanvasRenderer final
     [[nodiscard]] std::uint64_t CompositeCount() const noexcept
     {
         return _compositeCount;
+    }
+    [[nodiscard]] std::uint64_t AdjustmentTextureCreates() const noexcept
+    {
+        return _adjustmentTextureCreates;
+    }
+    [[nodiscard]] std::uint64_t AdjustmentTextureUpdates() const noexcept
+    {
+        return _adjustmentTextureUpdates;
     }
     // Working textures adopted by EndStroke so far (tests prove a commit drew from the texture, not an upload).
     [[nodiscard]] std::uint64_t AdoptionCount() const noexcept
@@ -322,6 +341,9 @@ class CanvasRenderer final
     // reworked through the layer's tables, blend mode, opacity, mask and folder coverage.
     HRESULT FillAdjustConstants(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept;
     HRESULT AdjustmentInputs(const ImageLayer& layer, LayerConstants& constants, PassInputs& inputs) noexcept;
+    HRESULT AdjustmentInputs(Guid id, const LayerAdjustment& adjustment, LayerConstants& constants, PassInputs& inputs,
+                             const AdjustmentLookup* lookup) noexcept;
+    HRESULT LayerAdjustmentView(TextureView& view) noexcept;
     HRESULT DrawAdjustPass(const ImageLayer& layer, std::uint32_t pass, ID3D11ShaderResourceView* destSrv,
                            ID3D11RenderTargetView* destRtv, int folderCoverage) noexcept;
     [[nodiscard]] const ImageLayer* Find(const Guid& id) const noexcept;
@@ -344,6 +366,9 @@ class CanvasRenderer final
     std::unordered_map<const void*, GpuTexture> _rasters;
     std::vector<GpuTexture> _regions;
     std::unordered_map<Guid, AdjustTextures> _adjustments;
+    std::optional<AdjustmentPreview> _adjustmentPreview;
+    Surface _adjustmentPreviewSurface;
+    bool _adjustmentPreviewDirty = true;
     std::optional<StrokePreview> _stroke;
     GpuTexture _strokeTexture;
     std::unordered_map<Guid, const ImageLayer*> _byId;
@@ -367,6 +392,8 @@ class CanvasRenderer final
     int _front = 0;
     int _stackFront = 0;
     std::uint64_t _compositeCount = 0;
+    std::uint64_t _adjustmentTextureCreates = 0;
+    std::uint64_t _adjustmentTextureUpdates = 0;
     std::uint64_t _adoptionCount = 0;
     std::uint64_t _composeSerial = 0;
     std::uint64_t _composeId = 0;

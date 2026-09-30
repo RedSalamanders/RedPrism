@@ -576,8 +576,24 @@ obsolete results cannot publish partial images or histograms.
 Preview off, identity settings, refused growth, Cancel, reopening, document replacement and shutdown invalidate
 the appropriate mailbox/tickets. Completions apply outside message/control dispatch and then invalidate the frame.
 The host never waits for these jobs in a production command. Shutdown invalidates inputs before stopping and joining
-the scheduler. An adjustment-layer panel still uses its composition path for live parameters; its opening composite
+the scheduler. An adjustment-layer panel uses worker-prepared lookup values for live parameters; its opening composite
 readback remains the P1.3 migration.
+
+### GPU adjustment previews (P1.2)
+
+For Hue/Saturation, Levels, Curves, Exposure, Gradient Map and Grain, the Application requests immutable
+`AdjustmentLookup` values from the preview worker instead of a filtered CPU raster. Destructive previews retain
+their prepared source and placement and an optional Gray8 selection coverage on that source grid. Compatible
+source/coverage handles are reused across settings ticks; only the lookup is rebuilt. The reservation includes
+lookup construction, downscale preparation and any uncached selection coverage, without reserving a nonexistent
+CPU filtered output. The direct inline API remains the scalar pixel reference.
+
+`previewSequence` names either a CPU raster or a GPU lookup result. Only a complete CPU raster at the exact current
+full-resolution grid can be reused for commit. A GPU preview always commits through the existing CPU worker graph.
+An adjustment-layer job builds only lookup metadata; it does not filter its opening composite. While that job is
+pending the composition retains the last completed lookup or the opening adjustment. Preview off immediately uses
+the opening adjustment, even if a previously requested lookup completes. Cancel/reopen and target validation remain
+the same epoch barriers. LUT/cube updates and all graphics ownership stay on the UI thread, outside worker bodies.
 
 Destructive OK and dependent file/close requests use the ordered worker engine and owning continuations below.
 Earlier tool settlement, GPU composite sampling, file IO and other P1 operations remain blocking paths until their

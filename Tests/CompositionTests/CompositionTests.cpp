@@ -1142,6 +1142,96 @@ void TestAdjustmentLayers(Harness& h)
             Expect(PixelsClose(pixels, reference, slop, AdjustmentLabel(adjustment.kind)), "adjust.gpu-matches-cpu");
         }
     }
+    // Reuse lookup textures for settings ticks on one layer; compare every composition with the scalar reference.
+    {
+        const Raster base = Pixels2x2({{10, 60, 200, 255}, {120, 30, 90, 255}, {200, 200, 40, 255}, {0, 32, 16, 128}});
+        LayerAdjustment levels = AdjustmentOf(AdjustmentKind::Levels);
+        Adjust::SetLevelsCurrent(levels.levels, LevelRange{0, 1.25, 255, 0, 255});
+
+        CanvasDocument document = Document2x2();
+        document.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base"));
+        document.layers.push_back(AdjustmentLayer(levels, L"Reusable adjustment"));
+        const Guid adjustmentId = document.layers[1].id;
+        const std::uint64_t createsBefore = h.composition.AdjustmentTextureCreates();
+        const std::uint64_t updatesBefore = h.composition.AdjustmentTextureUpdates();
+
+        const auto renderAndCheck =
+            [&](const char* step, int slop, std::uint64_t createDelta, std::uint64_t updateDelta)
+        {
+            const std::vector<std::uint8_t> pixels = h.Render(document);
+            const LayerAdjustment& current = document.layers[1].adjustment.value();
+            const std::vector<std::uint8_t> reference = RasterBytes(Adjust::ApplyAdjustment(current, base));
+            char label[96]{};
+            std::snprintf(label, sizeof(label), "adjust.reuse.%s.pixel", step);
+            Expect(PixelsClose(pixels, reference, slop, label), label);
+            std::snprintf(label, sizeof(label), "adjust.reuse.%s.alpha", step);
+            Expect(AlphasClose(pixels, {255, 255, 255, 128}, 0), label);
+            std::snprintf(label, sizeof(label), "adjust.reuse.%s.same-guid", step);
+            Expect(document.layers[1].id == adjustmentId, label);
+            std::snprintf(label, sizeof(label), "adjust.reuse.%s.creates", step);
+            Expect(h.composition.AdjustmentTextureCreates() == createsBefore + createDelta, label);
+            std::snprintf(label, sizeof(label), "adjust.reuse.%s.updates", step);
+            Expect(h.composition.AdjustmentTextureUpdates() == updatesBefore + updateDelta, label);
+        };
+
+        renderAndCheck("levels-warm", 1, 1, 1);
+        const std::uint64_t lutBytes = 256ull * 16ull;
+        const std::uint64_t cubeBytes = static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
+                                        Adjust::kCubeDimension * 16ull;
+        std::uint64_t bytesBeforeSwitch = h.composition.CanvasSurfaceBytes();
+        Expect(bytesBeforeSwitch >= lutBytes, "adjust.reuse.lut-counted");
+
+        renderAndCheck("unchanged-invalidated", 1, 1, 1);
+        levels.levels.ranges[0].gamma = 1.75;
+        document.layers[1].adjustment = levels;
+        renderAndCheck("levels-gamma", 1, 1, 2);
+
+        LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
+        curves.curves.channels[0] = {CurvePoint{0, 10}, CurvePoint{128, 170}, CurvePoint{255, 245}};
+        document.layers[1].adjustment = curves;
+        renderAndCheck("curves", 1, 1, 3);
+
+        LayerAdjustment exposure = AdjustmentOf(AdjustmentKind::Exposure);
+        exposure.exposureSettings = ExposureSettings{1, 0.05, 1.5};
+        document.layers[1].adjustment = exposure;
+        renderAndCheck("exposure", 1, 1, 4);
+
+        LayerAdjustment map = AdjustmentOf(AdjustmentKind::GradientMap);
+        map.gradientMapSettings =
+            GradientMapSettings{AdjustmentColor{0.9, 0.1, 0.2}, AdjustmentColor{0.1, 0.3, 1}, false};
+        document.layers[1].adjustment = map;
+        renderAndCheck("gradient-map", 1, 1, 5);
+
+        LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
+        hsv.hsvSettings = Adjust::HsvSettings(45, 25, 5);
+        document.layers[1].adjustment = hsv;
+        renderAndCheck("hsv-warm", 4, 2, 6);
+        renderAndCheck("unchanged-cube-invalidated", 4, 2, 6);
+        Expect(h.composition.CanvasSurfaceBytes() - bytesBeforeSwitch == cubeBytes - lutBytes,
+               "adjust.reuse.switch-lut-to-cube-releases-lut");
+        bytesBeforeSwitch = h.composition.CanvasSurfaceBytes();
+
+        hsv.hsvSettings = Adjust::HsvSettings(115, -10, 15);
+        document.layers[1].adjustment = hsv;
+        renderAndCheck("hsv-settings", 4, 2, 7);
+
+        exposure.exposureSettings = ExposureSettings{1.5, 0.02, 1.2};
+        document.layers[1].adjustment = exposure;
+        renderAndCheck("switch-back-to-lut", 1, 3, 8);
+        Expect(bytesBeforeSwitch - h.composition.CanvasSurfaceBytes() == cubeBytes - lutBytes,
+               "adjust.reuse.switch-cube-to-lut-releases-cube");
+
+        hsv.hsvSettings = Adjust::HsvSettings(75, 35, -5);
+        document.layers[1].adjustment = hsv;
+        renderAndCheck("cube-recreated-after-kind-switch", 4, 4, 9);
+        h.composition.ReleaseDocumentSurfaces();
+        Expect(h.composition.CanvasSurfaceBytes() == 0, "adjust.reuse.hidden-surfaces-released");
+        renderAndCheck("cube-rebuilt-after-hidden-release", 4, 5, 10);
+
+        exposure.exposureSettings = ExposureSettings{0.75, 0.01, 1.3};
+        document.layers[1].adjustment = exposure;
+        renderAndCheck("lut-rebuilt-after-hidden-release", 1, 6, 11);
+    }
     // The tables and the cube are released with the document surfaces.
     Expect(h.composition.CanvasSurfaceBytes() > 0, "adjust.textures-counted");
     h.composition.ReleaseDocumentSurfaces();
@@ -1511,6 +1601,251 @@ void TestReadbackIgnoresPreview(Harness& h)
     h.composition.EndStroke();
 }
 
+void TestLayerAdjustmentPreview(Harness& h)
+{
+    // P1.2: the selected layer alone is adjusted, then follows its ordinary clipping, mask, folder, and upper passes.
+    CanvasDocument document = DocumentOf(6, 2);
+    document.layers.push_back(LayerFrom(Solid(6, 2, 40, 20, 10, 255), LayerBlendMode::Normal, L"Background"));
+
+    ImageLayer folder = ImageLayer::Blank(L"Masked folder", Vec2{6, 2});
+    folder.isGroup = true;
+    folder.mask = MaskOf(Gray(6, 2, {255, 255, 160, 255, 200, 255, 255, 192, 128, 255, 160, 255}));
+    document.layers.push_back(folder);
+
+    std::vector<std::uint8_t> baseBytes(6u * 2u * 4u, 0);
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 1; x <= 4; ++x)
+        {
+            const std::uint8_t alpha = static_cast<std::uint8_t>(x == 2 ? 160 : (x == 4 ? 192 : 255));
+            std::uint8_t* pixel = baseBytes.data() + (static_cast<std::size_t>(y) * 6u + x) * 4u;
+            pixel[0] = static_cast<std::uint8_t>(alpha / 3);
+            pixel[1] = static_cast<std::uint8_t>(alpha / 2);
+            pixel[2] = alpha;
+            pixel[3] = alpha;
+        }
+    }
+    const Raster baseRaster = Raster::Make(6, 2, RasterFormat::Bgra8888, baseBytes.data(), baseBytes.size());
+    ImageLayer base = LayerFrom(baseRaster, LayerBlendMode::Normal, L"Clipping base");
+    base.parentID = folder.id;
+    document.layers.push_back(base);
+
+    const Raster source = Pixels2x2({{20, 40, 200, 255}, {30, 10, 120, 160}, {80, 100, 180, 192}, {10, 60, 100, 128}});
+    ImageLayer target = LayerFrom(source, LayerBlendMode::Normal, L"Preview target");
+    target.parentID = folder.id;
+    target.maskSourceID = base.id;
+    target.transform.origin = Vec2{1, 0};
+    target.transform.size = Vec2{4, 2}; // translated one pixel and scaled 2x horizontally
+    target.transform.sampling = LayerSampling::Nearest;
+    target.opacity = 0.75;
+    target.mask = MaskOf(Gray(2, 2, {255, 192, 128, 64}));
+    document.layers.push_back(target);
+    const std::size_t targetIndex = document.layers.size() - 1;
+
+    std::vector<std::uint8_t> upperBytes(6u * 2u * 4u, 0);
+    const auto setUpper = [&](int x, int y, std::array<std::uint8_t, 4> bgra)
+    {
+        std::copy(bgra.begin(), bgra.end(),
+                  upperBytes.begin() + (static_cast<std::size_t>(y) * 6u + static_cast<std::size_t>(x)) * 4u);
+    };
+    setUpper(2, 0, {20, 240, 20, 255});
+    setUpper(4, 1, {20, 20, 120, 160});
+    ImageLayer upper = LayerFrom(Raster::Make(6, 2, RasterFormat::Bgra8888, upperBytes.data(), upperBytes.size()),
+                                 LayerBlendMode::Normal, L"Upper layer");
+    document.layers.push_back(upper);
+
+    const std::vector<std::uint8_t> committedBaseline = h.Render(document);
+    Expect(committedBaseline.size() == 6u * 2u * 4u, "adjust-preview.committed-baseline-rendered");
+    std::vector<std::uint8_t> committedReadback;
+    UINT readbackWidth = 0;
+    UINT readbackHeight = 0;
+    const bool initialReadback =
+        SUCCEEDED(h.composition.ComposeReadback(document, committedReadback, readbackWidth, readbackHeight));
+    Expect(initialReadback && readbackWidth == 6 && readbackHeight == 2 && committedReadback == committedBaseline,
+           "adjust-preview.committed-baseline");
+
+    struct Case
+    {
+        LayerAdjustment adjustment;
+        FilterKind filter;
+        int tolerance;
+        const char* name;
+    };
+    LayerAdjustment levels = AdjustmentOf(AdjustmentKind::Levels);
+    Adjust::SetLevelsCurrent(levels.levels, LevelRange{8, 1.35, 245, 4, 250});
+    LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
+    curves.curves.channels[0] = {CurvePoint{0, 12}, CurvePoint{96, 150}, CurvePoint{255, 240}};
+    curves.curves.channels[3] = {CurvePoint{0, 28}, CurvePoint{255, 210}};
+    LayerAdjustment exposure = AdjustmentOf(AdjustmentKind::Exposure);
+    exposure.exposureSettings = ExposureSettings{0.8, 0.04, 1.35};
+    LayerAdjustment gradient = AdjustmentOf(AdjustmentKind::GradientMap);
+    gradient.gradientMapSettings =
+        GradientMapSettings{AdjustmentColor{0.85, 0.08, 0.18}, AdjustmentColor{0.12, 0.35, 0.95}, false};
+    LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
+    HueSaturationSettings hsvSettings = Adjust::HsvSettings(72, 28, -8);
+    hsvSettings.adjustments[static_cast<std::size_t>(ColorRange::Blues)] = RangeAdjustment{-32, 18, 9};
+    hsv.hsvSettings = hsvSettings;
+    LayerAdjustment grain = AdjustmentOf(AdjustmentKind::Grain);
+    grain.grainSettings = GrainSettings{58, 1.75, 42, 0x51a7u};
+    const std::array<Case, 6> cases{{{levels, FilterKind::Levels, 1, "levels"},
+                                     {curves, FilterKind::Curves, 1, "curves"},
+                                     {exposure, FilterKind::Exposure, 1, "exposure"},
+                                     {gradient, FilterKind::GradientMap, 1, "gradient-map"},
+                                     {hsv, FilterKind::HueSaturation, 4, "hsv"},
+                                     {grain, FilterKind::Grain, 2, "grain"}}};
+
+    const Raster coverage = Gray(2, 2, {255, 128, 0, 192});
+    std::optional<CanvasRenderer::AdjustmentPreview> lastPreview;
+    std::vector<std::uint8_t> lastExpectedDisplay;
+    int lastTolerance = 1;
+    for (const Case& test : cases)
+    {
+        const Raster adjusted = Adjust::RunFilter(test.filter, source, Adjust::AdjustmentSettings(test.adjustment), 1.0,
+                                                  test.adjustment.Grain().seed);
+        const Raster blended = Adjust::BlendThrough(adjusted, source, coverage);
+        const std::shared_ptr<const AdjustmentLookup> lookup = Adjust::BuildAdjustmentLookup(test.adjustment);
+        char label[96]{};
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.cpu-reference-ready", test.name);
+        Expect(adjusted.HasStorage() && blended.HasStorage() && lookup != nullptr, label);
+        if (!adjusted.HasStorage() || !blended.HasStorage() || !lookup)
+        {
+            continue;
+        }
+
+        CanvasRenderer::AdjustmentPreview preview;
+        preview.layerId = document.layers[targetIndex].id;
+        preview.source = source;
+        preview.coverage = coverage;
+        preview.lookup = lookup;
+        preview.previewScale = 1.0;
+        lastPreview = preview;
+        lastTolerance = test.tolerance;
+        h.composition.SetAdjustmentPreview(preview);
+        const std::vector<std::uint8_t> shown = h.Render(document);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.cpu-composite", test.name);
+
+        CanvasDocument expectedDocument = document;
+        expectedDocument.layers[targetIndex].asset->image = blended;
+        expectedDocument.layers[targetIndex].asset->thumbnail = blended;
+        h.composition.SetAdjustmentPreview(std::nullopt);
+        lastExpectedDisplay = h.Render(expectedDocument);
+        Expect(PixelsClose(shown, lastExpectedDisplay, test.tolerance, label), label);
+
+        const auto samePixel =
+            [](const std::vector<std::uint8_t>& left, const std::vector<std::uint8_t>& right, int x, int y)
+        {
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                if (At(left, 6, x, y, channel) != At(right, 6, x, y, channel))
+                    return false;
+            }
+            return true;
+        };
+        const bool unaffected = samePixel(shown, committedBaseline, 0, 0) &&
+                                samePixel(shown, committedBaseline, 5, 1) && samePixel(shown, committedBaseline, 2, 0);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.other-layers-unchanged", test.name);
+        Expect(unaffected, label);
+
+        std::vector<std::uint8_t> readback;
+        UINT width = 0;
+        UINT height = 0;
+        h.composition.SetAdjustmentPreview(preview);
+        const HRESULT readbackResult = h.composition.ComposeReadback(document, readback, width, height);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.readback-bypasses-preview", test.name);
+        Expect(SUCCEEDED(readbackResult) && width == 6 && height == 2 && readback == committedBaseline, label);
+    }
+
+    if (lastPreview && !lastExpectedDisplay.empty())
+    {
+        h.composition.SetAdjustmentPreview(lastPreview);
+        const std::vector<std::uint8_t> shown = h.Render(document);
+        const std::uint64_t settledCount = h.composition.CompositeCount();
+        const bool settled = SUCCEEDED(h.composition.Compose(document)) && h.composition.CompositeCount() == settledCount;
+        std::vector<std::uint8_t> settledPixels;
+        UINT width = 0;
+        UINT height = 0;
+        const bool settledReadback = SUCCEEDED(h.composition.Readback(settledPixels, width, height));
+        Expect(settled && settledReadback && settledPixels == shown, "adjust-preview.settled-no-extra-composition");
+
+        h.composition.ReleaseDocumentSurfaces();
+        Expect(h.composition.CanvasSurfaceBytes() == 0, "adjust-preview.hidden-surfaces-released");
+        const std::vector<std::uint8_t> afterHidden = h.Render(document);
+        Expect(PixelsClose(afterHidden, lastExpectedDisplay, lastTolerance, "adjust-preview.hidden-rebuild"),
+               "adjust-preview.hidden-rebuilds-preview");
+
+        wil::com_ptr_nothrow<ID3D11Device> reboundDevice;
+        wil::com_ptr_nothrow<ID3D11DeviceContext> reboundContext;
+        const HRESULT deviceResult = MakeWarp(reboundDevice, reboundContext);
+        const HRESULT rebindResult = SUCCEEDED(deviceResult)
+                                         ? h.composition.CreateDeviceResources(reboundDevice.get(), reboundContext.get())
+                                         : deviceResult;
+        if (SUCCEEDED(rebindResult))
+        {
+            h.device = std::move(reboundDevice);
+            h.context = std::move(reboundContext);
+        }
+        const std::vector<std::uint8_t> afterRebind =
+            SUCCEEDED(rebindResult) ? h.Render(document) : std::vector<std::uint8_t>{};
+        Expect(SUCCEEDED(rebindResult) &&
+                   PixelsClose(afterRebind, lastExpectedDisplay, lastTolerance, "adjust-preview.device-rebuild"),
+               "adjust-preview.device-rebind-rebuilds-preview");
+
+        h.composition.SetAdjustmentPreview(std::nullopt);
+        const std::vector<std::uint8_t> cleared = h.Render(document);
+        Expect(cleared == committedBaseline, "adjust-preview.clear-restores-committed-layer");
+    }
+
+    // A pure layer keeps its own alpha, including transparent pixels; grain uses layer-center coordinates at scale 2.
+    const Raster alphaSource = Pixels2x2({{20, 40, 200, 255}, {30, 10, 120, 160}, {0, 0, 0, 0}, {10, 60, 100, 128}});
+    CanvasDocument pureDocument = Document2x2();
+    pureDocument.layers.push_back(LayerFrom(alphaSource, LayerBlendMode::Normal, L"Alpha preview"));
+    const Raster alphaCoverage = Gray(2, 2, {255, 128, 255, 192});
+    char label[96]{};
+    for (const Case& test : cases)
+    {
+        const double previewScale = test.filter == FilterKind::Grain ? 0.5 : 1.0;
+        const Raster adjusted = Adjust::RunFilter(test.filter, alphaSource, Adjust::AdjustmentSettings(test.adjustment),
+                                                  previewScale, test.adjustment.Grain().seed);
+        const Raster blended = Adjust::BlendThrough(adjusted, alphaSource, alphaCoverage);
+        const std::shared_ptr<const AdjustmentLookup> lookup = Adjust::BuildAdjustmentLookup(test.adjustment);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.alpha-reference-ready", test.name);
+        Expect(adjusted.HasStorage() && blended.HasStorage() && lookup != nullptr, label);
+        if (!adjusted.HasStorage() || !blended.HasStorage() || !lookup)
+        {
+            continue;
+        }
+
+        CanvasRenderer::AdjustmentPreview preview;
+        preview.layerId = pureDocument.layers[0].id;
+        preview.source = alphaSource;
+        preview.coverage = alphaCoverage;
+        preview.lookup = lookup;
+        preview.previewScale = previewScale;
+        h.composition.SetAdjustmentPreview(preview);
+        const std::vector<std::uint8_t> shown = h.Render(pureDocument);
+
+        CanvasDocument expectedDocument = pureDocument;
+        expectedDocument.layers[0].asset->image = blended;
+        expectedDocument.layers[0].asset->thumbnail = blended;
+        h.composition.SetAdjustmentPreview(std::nullopt);
+        const std::vector<std::uint8_t> expected = h.Render(expectedDocument);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.alpha-only-composite", test.name);
+        Expect(PixelsClose(shown, expected, test.tolerance, label), label);
+        std::snprintf(label, sizeof(label), "adjust-preview.%s.alpha-exact", test.name);
+        Expect(AlphasClose(shown, {255, 160, 0, 128}, 0), label);
+
+        if (test.filter == FilterKind::Grain)
+        {
+            const Raster wrongScale =
+                Adjust::RunFilter(test.filter, alphaSource, Adjust::AdjustmentSettings(test.adjustment), 1.0,
+                                  test.adjustment.Grain().seed);
+            Expect(wrongScale.HasStorage() && RasterBytes(wrongScale) != RasterBytes(adjusted),
+                   "adjust-preview.grain-scale-changes-layer-coordinate-key");
+        }
+    }
+    h.composition.SetAdjustmentPreview(std::nullopt);
+}
+
 void TestStrokePreviewMask(Harness& h)
 {
     // RF-406: a preview whose grid grew past the layer keeps an unplaced mask on the layer's own pixels and reveals
@@ -1624,6 +1959,7 @@ int wmain()
         TestStrokePreview(harness);
         TestGpuBrushCoverage(harness);
         TestAdjustmentLayers(harness);
+        TestLayerAdjustmentPreview(harness);
         TestHslBlends(harness);
         TestBlit(harness);
         TestOversize(harness);

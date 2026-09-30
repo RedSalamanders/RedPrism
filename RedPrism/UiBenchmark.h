@@ -41,6 +41,7 @@ struct UiBenchmarkState final
     Guid previousRevision;
     Raster previousImage;
     Raster previousPreview;
+    std::uint64_t previousPreviewSequence = 0;
     double previousZoom = 1;
     Vec2 previousPan{};
     bool complete = false;

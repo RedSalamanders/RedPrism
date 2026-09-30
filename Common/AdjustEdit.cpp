@@ -73,11 +73,14 @@ bool DocumentSession::CanAdjustColors() const noexcept
 
 DocumentSession::PreviewLayer DocumentSession::PreviewedLayer() const noexcept
 {
-    if (_adjustmentEditingID.has_value() || !_colorEdit.has_value() || !_colorEdit->previewRaster.HasStorage())
+    if (_adjustmentEditingID.has_value() || !_colorEdit.has_value() ||
+        (!_colorEdit->previewRaster.HasStorage() && !_colorEdit->previewLookup))
     {
         return {};
     }
-    return PreviewLayer{_colorEdit->layerID, _colorEdit->previewRaster, _colorEdit->previewTransform};
+    return PreviewLayer{_colorEdit->layerID,
+                        _colorEdit->previewLookup ? _colorEdit->previewSource : _colorEdit->previewRaster,
+                        _colorEdit->previewTransform};
 }
 
 ColorEdit* DocumentSession::OpenColorEdit(FilterKind kind) noexcept
@@ -261,6 +264,8 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
     {
         edit.previewRaster = {};
+        edit.previewLookup.reset();
+        edit.previewCoverage = {};
         edit.previewSequence = 0;
         edit.previewInvalidatedSequence = _colorEditSequence;
         ++_editRevision;
@@ -273,6 +278,8 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
         edit.previewRaster = {};
+        edit.previewLookup.reset();
+        edit.previewCoverage = {};
         edit.previewSequence = 0;
         edit.previewFailed = false;
         edit.previewInvalidatedSequence = _colorEditSequence;

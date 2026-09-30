@@ -34,6 +34,12 @@ Read `Specs/Rendering/Rendering_Composition.md` first; it is the contract and th
   cube) built by `CanvasRenderer::AdjustmentInputs` from `Common/Adjust.cpp`, Grain procedural in the shader;
   the CPU `Adjust::ApplyAdjustment` is the golden (1/255 for tables, 4 for the cube, 2 for grain). A function with
   several returns can trip FXC's X4000 with warnings as errors; keep one return per pass function.
+- Destructive GPU previews use pass 8 (`LayerAdjust`) on the prepared layer grid before the ordinary layer pass.
+  Keep source alpha, round the filtered premultiplied bytes before mixing through edit selection coverage, and key
+  grain by `(pixel + 0.5) / previewScale` in layer pixels. Pass 6 adjusts the composite beneath an adjustment layer
+  and cannot implement this operation. LUT/cube values come from the preview worker; reusable DYNAMIC LUT / DEFAULT
+  cube textures and the transient target remain UI-owned. Prove parity against `RunFilter` plus `BlendThrough`,
+  with the ordinary transform/mask/opacity/clipping/folder passes and the existing per-kind tolerances.
 
 ## Coverage and stacks
 

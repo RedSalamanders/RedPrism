@@ -20,6 +20,7 @@ REDPRISM_SHARED_UINT kCompositionPassLayerCoverage = 4; // a live source's cover
 REDPRISM_SHARED_UINT kCompositionPassMaskCoverage = 5;  // a folder mask's coverage (R8)
 REDPRISM_SHARED_UINT kCompositionPassAdjust = 6;        // an adjustment layer over the canvas beneath it
 REDPRISM_SHARED_UINT kCompositionPassStackAdjust = 7;   // a clipped adjustment over the stack's base color
+REDPRISM_SHARED_UINT kCompositionPassLayerAdjust = 8;   // destructive preview on the layer's own pixel grid
 
 // Layer flags (`flags`).
 REDPRISM_SHARED_UINT kCompositionFlagHasMask = 1u;

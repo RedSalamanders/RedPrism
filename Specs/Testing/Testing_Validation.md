@@ -121,6 +121,16 @@ reopened; that result cannot enter the new panel. All gate waits are harness fai
 or production waits. The real UI benchmark smoke verifies the command/result/frame ordering in the outer host loop.
 Busy Commit controls and file/close continuations remain separate P1.1c.3 gates.
 
+P1.2 extends `coloreditdeferred.*` with immutable GPU lookup/source publication, selection coverage reuse,
+pre-cancellation, preview off/identity/Cancel/reopen and stale selection checks. Its CPU commit uses independent
+literal Levels pixels and must not reuse the GPU preview as a CPU result. Live adjustment lookup publication may
+display an intermediate result without rolling controls back. `CompositionTests` compares pass 8 against CPU
+filter/selection mix and ordinary composition for every kind, including partial alpha, layer-space grain,
+translated/scaled placement, masks, opacity, clipping, folders and unrelated layers. Lookup counters prove reuse;
+hidden release/device recreation, settled zero-pass frames and committed readback bypass are explicit gates.
+The real host event gates additionally prove live worker lookup publication, the final GPU pixels, immediate
+preview off while the worker is held and cancellation of late lookup work.
+
 ### CPU dispatch and instruction boundary (P0.8)
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
