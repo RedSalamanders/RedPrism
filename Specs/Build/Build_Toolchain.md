@@ -199,6 +199,18 @@ unproved table stays gated. Other code in the function remains gated.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 
+The observed DxUi typography form permits exactly one contiguous `MOVZX EAX,DL` between LEA RCX of image base
+and the DWORD EAX table load. RCX stays unchanged. This form requires the exact same-owner anonymous 16-byte
+untyped `S_LDATA32` at the aligned table start, even if RET/alignment precede it; decoded targets and full bounds
+still apply. A changed byte register, opcode, repeated move, intervening instruction or invalid PDB symbol gets
+no exemption. Real instructions next to the table remain gated, and the runtime allowlist is unchanged.
+
+The observed WIC orientation dispatch permits exactly `LEA RDX,imagebase; MOV ECX,[RDX+4*RAX+table];
+ADD RCX,RDX; JMP RCX`, contiguous and without optional index loads. This form also requires the exact anonymous
+same-owner untyped 16-byte `S_LDATA32` record at the table start. Contribution, alignment, PE-entry and decoded
+target bounds remain required; malformed registers, extra instructions, invalid symbols or adjacent real
+vector instructions remain violations. Seven DWORD entries in the observed Release image are data, not EVEX code.
+
 The observed Debug `std::variant` RAX-base form requires exactly LEA RAX of image base,
 one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, and JMP RCX. It additionally requires
 the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned table start; all existing
