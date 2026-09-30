@@ -2,6 +2,7 @@
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
+#include "ZipOwner.h"
 
 #include <cmath>
 #include <crtdbg.h>
@@ -16,6 +17,7 @@
 #include <vector>
 #include <wincodec.h>
 #include <windows.h>
+#include <zip.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -100,6 +102,130 @@ void WriteText(const std::filesystem::path& path, const std::string& text)
 {
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     file.write(text.data(), static_cast<std::streamsize>(text.size()));
+}
+
+[[nodiscard]] int ZipCompressionMethod(const std::wstring& path, const char* name)
+{
+    zip_error_t error{};
+    zip_error_init(&error);
+    zip_source_t* source = zip_source_win32w_create(path.c_str(), 0, -1, &error);
+    zip_t* raw = source == nullptr ? nullptr : zip_open_from_source(source, ZIP_RDONLY, &error);
+    if (raw == nullptr && source != nullptr)
+    {
+        zip_source_free(source);
+    }
+    zip_error_fini(&error);
+    unique_zip archive{raw};
+    if (!archive)
+    {
+        return -1;
+    }
+    const zip_int64_t index = zip_name_locate(archive.get(), name, 0);
+    zip_stat_t stat{};
+    zip_stat_init(&stat);
+    return index < 0 || zip_stat_index(archive.get(), static_cast<zip_uint64_t>(index), 0, &stat) != 0 ||
+                   (stat.valid & ZIP_STAT_COMP_METHOD) == 0
+               ? -1
+               : stat.comp_method;
+}
+
+[[nodiscard]] bool RewriteZipDeflated(const std::wstring& sourcePath, const std::wstring& destinationPath)
+{
+    zip_error_t inputError{};
+    zip_error_init(&inputError);
+    zip_source_t* inputSource = zip_source_win32w_create(sourcePath.c_str(), 0, -1, &inputError);
+    zip_t* inputRaw = inputSource == nullptr ? nullptr : zip_open_from_source(inputSource, ZIP_RDONLY, &inputError);
+    if (inputRaw == nullptr && inputSource != nullptr)
+    {
+        zip_source_free(inputSource);
+    }
+    zip_error_fini(&inputError);
+    unique_zip input{inputRaw};
+    if (!input)
+    {
+        return false;
+    }
+    struct Entry
+    {
+        std::string name;
+        std::vector<std::uint8_t> bytes;
+    };
+    std::vector<Entry> entries;
+    const zip_int64_t count = zip_get_num_entries(input.get(), 0);
+    if (count < 0)
+    {
+        return false;
+    }
+    entries.reserve(static_cast<std::size_t>(count));
+    for (zip_uint64_t index = 0; index < static_cast<zip_uint64_t>(count); ++index)
+    {
+        zip_stat_t stat{};
+        zip_stat_init(&stat);
+        if (zip_stat_index(input.get(), index, 0, &stat) != 0 || (stat.valid & ZIP_STAT_SIZE) == 0 ||
+            (stat.valid & ZIP_STAT_NAME) == 0 || stat.size > SIZE_MAX)
+        {
+            return false;
+        }
+        Entry entry;
+        entry.name = stat.name;
+        entry.bytes.resize(static_cast<std::size_t>(stat.size));
+        unique_zip_file file{zip_fopen_index(input.get(), index, 0)};
+        if (!file)
+        {
+            return false;
+        }
+        zip_uint64_t offset = 0;
+        while (offset < stat.size)
+        {
+            const zip_int64_t read =
+                zip_fread(file.get(), entry.bytes.data() + static_cast<std::size_t>(offset), stat.size - offset);
+            if (read <= 0)
+            {
+                return false;
+            }
+            offset += static_cast<zip_uint64_t>(read);
+        }
+        if (zip_fclose(file.release()) != 0)
+        {
+            return false;
+        }
+        entries.push_back(std::move(entry));
+    }
+
+    zip_error_t outputError{};
+    zip_error_init(&outputError);
+    zip_source_t* outputSource = zip_source_win32w_create(destinationPath.c_str(), 0, -1, &outputError);
+    zip_t* outputRaw =
+        outputSource == nullptr ? nullptr : zip_open_from_source(outputSource, ZIP_CREATE | ZIP_EXCL, &outputError);
+    if (outputRaw == nullptr && outputSource != nullptr)
+    {
+        zip_source_free(outputSource);
+    }
+    zip_error_fini(&outputError);
+    unique_zip output{outputRaw};
+    if (!output)
+    {
+        return false;
+    }
+    for (Entry& entry : entries)
+    {
+        zip_source_t* buffer = zip_source_buffer(output.get(), entry.bytes.data(), entry.bytes.size(), 0);
+        if (buffer == nullptr)
+        {
+            return false;
+        }
+        const zip_int64_t index = zip_file_add(output.get(), entry.name.c_str(), buffer, ZIP_FL_ENC_UTF_8);
+        if (index < 0)
+        {
+            zip_source_free(buffer);
+            return false;
+        }
+        if (zip_set_file_compression(output.get(), static_cast<zip_uint64_t>(index), ZIP_CM_DEFLATE, 6) != 0)
+        {
+            return false;
+        }
+    }
+    return ZipCommit(output);
 }
 
 [[nodiscard]] std::string ReadText(const std::filesystem::path& path)
@@ -829,12 +955,21 @@ void TestExplodedGolden()
     Expect(SaveProject(zipPath.c_str(), loaded.document, loaded.activeLayerID, true) == ProjectIoStatus::Ok,
            "v7.save-zip");
     Expect(PathLooksLikeZipProject(zipPath.c_str()), "v7.zip-path");
+    const std::string redEntry = "images/" + loaded.document.layers.front().id.ToUtf8() + ".png";
+    Expect(ZipCompressionMethod(zipPath, "manifest.json") == ZIP_CM_DEFLATE, "v7.zip-manifest-deflated");
+    Expect(ZipCompressionMethod(zipPath, redEntry.c_str()) == ZIP_CM_STORE, "v7.zip-png-stored");
     const ProjectLoadResult zipAgain = LoadProject(zipPath.c_str());
     Expect(zipAgain.status == ProjectIoStatus::Ok, "v7.load-zip");
     if (zipAgain.status == ProjectIoStatus::Ok)
     {
         ExpectFixtureSemantics(zipAgain.document, "zip round trip");
     }
+    const std::wstring deflatedPath = ScratchRoot() + L"\\legacy-deflated.prism";
+    Expect(RewriteZipDeflated(zipPath, deflatedPath), "v7.legacy-deflate-fixture-created");
+    Expect(ZipCompressionMethod(deflatedPath, redEntry.c_str()) == ZIP_CM_DEFLATE, "v7.legacy-deflate-fixture-method");
+    const ProjectLoadResult deflatedAgain = LoadProject(deflatedPath.c_str());
+    Expect(deflatedAgain.status == ProjectIoStatus::Ok && deflatedAgain.document.layers.size() == 5,
+           "v7.legacy-deflated-project-loads");
     // Overwriting a saved package drops assets that are no longer referenced.
     CanvasDocument trimmed = loaded.document;
     trimmed.layers.erase(trimmed.layers.begin());
@@ -881,8 +1016,11 @@ void TestTransformArrayShape()
            "transform.array-shape-mask-placement-values");
 
     const std::wstring roundTrip = ScratchRoot() + L"\\v7-arrays-roundtrip";
-    Expect(SaveProject(roundTrip.c_str(), loaded.document, loaded.activeLayerID, false) == ProjectIoStatus::Ok,
-           "transform.writer-saves");
+    const auto saved = SaveProject(roundTrip.c_str(), loaded.document, loaded.activeLayerID, false);
+    if (saved != ProjectIoStatus::Ok)
+        std::fprintf(stderr, "Array writer status=%u win32=%lu path=%ls\n", static_cast<unsigned int>(saved),
+                     GetLastError(), roundTrip.c_str());
+    Expect(saved == ProjectIoStatus::Ok, "transform.writer-saves");
     const std::string json = ReadText(std::filesystem::path(roundTrip) / L"manifest.json");
     Expect(json.find("\"origin\": [") != std::string::npos && json.find("\"size\": [") != std::string::npos &&
                json.find("\"origin\": {") == std::string::npos && json.find("\"size\": {") == std::string::npos,
@@ -1246,6 +1384,88 @@ void TestSaveRejectsInvalidDocument()
     Expect(SaveProject(path.c_str(), bad, std::nullopt, true) == ProjectIoStatus::Invalid, "save.failed-overwrite");
     Expect(LoadProject(path.c_str()).status == ProjectIoStatus::Ok, "save.previous-archive-kept");
 }
+
+void TestProjectSaveDurability()
+{
+    CanvasDocument document;
+    document.width = 2;
+    document.height = 2;
+    document.id = Guid::Generate();
+    ImageLayer layer = ImageLayer::Blank(L"Durability", Vec2{2, 2});
+    const Raster pixels = SolidBgra(2, 2, 7, 19, 31, 255);
+    layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+    document.layers.push_back(layer);
+
+    const std::wstring zipPath = ScratchRoot() + L"\\durability.prism";
+    const std::wstring zipSentinel = zipPath + L".~sentinel";
+    WriteText(zipSentinel, "keep this unrelated file");
+    Expect(SaveProject(zipPath.c_str(), document, std::nullopt, true) == ProjectIoStatus::Ok,
+           "save-durability.zip-first-save");
+    Expect(SaveProject(zipPath.c_str(), document, std::nullopt, true) == ProjectIoStatus::Ok,
+           "save-durability.zip-overwrite");
+    Expect(ReadText(zipSentinel) == "keep this unrelated file", "save-durability.zip-keeps-unowned-temp");
+    Expect(ZipCompressionMethod(zipPath, "manifest.json") == ZIP_CM_DEFLATE &&
+               ZipCompressionMethod(zipPath, ("images/" + layer.id.ToUtf8() + ".png").c_str()) == ZIP_CM_STORE,
+           "save-durability.zip-compression-policy");
+
+    const std::wstring folderPath = ScratchRoot() + L"\\durability-folder";
+    const std::filesystem::path folderSentinel = folderPath + L".~sentinel";
+    std::error_code error;
+    std::filesystem::create_directories(folderSentinel, error);
+    WriteText(folderSentinel / L"keep.txt", "keep this unrelated directory");
+    Expect(SaveProject(folderPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
+           "save-durability.folder-first-save");
+    Expect(SaveProject(folderPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
+           "save-durability.folder-rotation");
+    Expect(ReadText(folderSentinel / L"keep.txt") == "keep this unrelated directory",
+           "save-durability.folder-keeps-unowned-staging");
+    const ProjectLoadResult folderReloaded = LoadProject(folderPath.c_str());
+    Expect(folderReloaded.status == ProjectIoStatus::Ok && folderReloaded.document.id == document.id,
+           "save-durability.folder-round-trip");
+
+    bool unexpectedTemporary = false;
+    const std::filesystem::path scratch = ScratchRoot();
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(scratch, error))
+    {
+        const std::wstring name = entry.path().filename().wstring();
+        if ((name.starts_with(L"durability.prism.~") && name != L"durability.prism.~sentinel") ||
+            (name.starts_with(L"durability-folder.~") && name != L"durability-folder.~sentinel"))
+        {
+            unexpectedTemporary = true;
+        }
+    }
+    Expect(!unexpectedTemporary, "save-durability.owned-temporaries-cleaned");
+
+    const std::string savedArchive = ReadText(zipPath);
+    document.resolution = 144; // a successful replacement would observably change the previous package
+    HANDLE lockedRaw = CreateFileW(zipPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr);
+    wil::unique_hfile locked{lockedRaw};
+    Expect(static_cast<bool>(locked), "save-durability.lock-existing-archive");
+    ProjectIoStatus blockedSave = ProjectIoStatus::Ok;
+    if (locked)
+    {
+        blockedSave = SaveProject(zipPath.c_str(), document, std::nullopt, true);
+    }
+    locked.reset();
+    Expect(blockedSave == ProjectIoStatus::Encode, "save-durability.replace-failure-reported");
+    const ProjectLoadResult preserved = LoadProject(zipPath.c_str());
+    Expect(preserved.status == ProjectIoStatus::Ok && preserved.document.id == document.id &&
+               preserved.document.resolution != document.resolution && ReadText(zipPath) == savedArchive,
+           "save-durability.replace-failure-preserves-destination");
+    Expect(ReadText(zipSentinel) == "keep this unrelated file", "save-durability.failure-keeps-unowned-temp");
+    bool failedTempLeft = false;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(scratch, error))
+    {
+        const std::wstring name = entry.path().filename().wstring();
+        failedTempLeft =
+            failedTempLeft || (name.starts_with(L"durability.prism.~") && name != L"durability.prism.~sentinel");
+    }
+    Expect(!failedTempLeft, "save-durability.failed-owned-temporary-cleaned");
+
+    std::filesystem::remove(zipSentinel, error);
+    std::filesystem::remove_all(folderSentinel, error);
+}
 } // namespace
 
 // ── Settings store (C14) ──────────────────────────────────────
@@ -1500,6 +1720,7 @@ int wmain()
     TestVersionGatesAndRejects();
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
+    TestProjectSaveDurability();
     TestSettingsStore();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {

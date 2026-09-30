@@ -26,10 +26,13 @@ asset or `manifest.json` is rejected when any path component after the project r
 (`ExplodedMemberPathAllowed`, `ProjectIoStatus::Invalid`). A missing file is `MissingImage`, not a reparse failure.
 A truncated, empty, or non-ZIP `.prism` is `Invalid` or `MissingImage` and yields no layers.
 
-Atomic save: exploded projects write into `dest.saving`, then rotate `dest` → `dest.old` and `dest.saving` → `dest`.
-ZIP projects write `path.tmp` then `ReplaceFileW`. Every manifest and asset file is flushed to disk before it is
-renamed or replaces another file, so a crash never leaves `dest` pointing at an unflushed write. A save that fails
-validation writes nothing and leaves the previous package intact.
+Atomic save: exploded projects write into an exclusively created, unique same-directory `dest.~<guid>` staging
+directory, then rotate `dest` → `dest.old` and the staging directory → `dest`. ZIP projects write into a unique
+same-directory `dest.~<guid>` file opened with `ZIP_CREATE | ZIP_EXCL`, then `ReplaceFileW` (with the existing
+`MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed successfully before publication;
+ZIP close, flush, and handle close must all succeed before replacement. A failed staging or durability step leaves
+the previous destination intact and removes only the temporary file or directory owned by that save. Existing ZIP
+readers accept both stored and deflated entries. Writers store already encoded PNG assets and deflate the manifest.
 
 ## Manifest
 
@@ -132,4 +135,6 @@ reject version 0 and 42, corrupt JSON, wrong format/colorSpace, v1 groups, v2 bl
 mask, v6 adjustment, invalid/unknown adjustment payloads, adjustment on group, group opacity, mask metadata without
 a file, missing parent, self clip, blank name, zero-size transform, missing active layer, bad resolution; report a
 missing image as `MissingImage`; import PNG/JPEG onto a document; and prove a failed save leaves the previous
-archive intact. ASan Debug is required for this parser.
+archive intact; prove saved PNG ZIP entries use STORE and the manifest uses DEFLATE; load an older DEFLATE-encoded
+project; prove unique save staging preserves unrelated `dest.~*` entries and cleans up its own staging; and prove a
+replacement failure leaves an existing archive intact. ASan Debug is required for this parser.

@@ -132,23 +132,48 @@ struct Manifest
     return ProjectIoStatus::Ok;
 }
 
-// Shares ImageCodecs' file-write primitive (CreateFile/WriteFile/FlushFileBuffers) so there is one implementation
-// of "write these bytes durably" in the codebase; this wrapper just keeps ProjectStore's own status enum.
+// Project assets are staged beside their destination and must be fully written, flushed, and closed before the
+// directory rotation can publish them. Keep the close result observable here; the shared codec helper only reports
+// write/flush status because its callers replace through their own path.
 [[nodiscard]] ProjectIoStatus WriteFileBytes(const wchar_t* path, const std::uint8_t* bytes, std::size_t size)
 {
-    return WriteFileBytesToDisk(path, bytes, size) ? ProjectIoStatus::Ok : ProjectIoStatus::Encode;
+    if (path == nullptr || size > MAXDWORD)
+    {
+        return ProjectIoStatus::Encode;
+    }
+    wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    if (!file)
+    {
+        return ProjectIoStatus::Encode;
+    }
+    DWORD written = 0;
+    if ((size != 0 &&
+         (!WriteFile(file.get(), bytes, static_cast<DWORD>(size), &written, nullptr) || written != size)) ||
+        !FlushFileBuffers(file.get()))
+    {
+        return ProjectIoStatus::Encode;
+    }
+    HANDLE raw = file.release();
+    return CloseHandle(raw) ? ProjectIoStatus::Ok : ProjectIoStatus::Encode;
 }
 
-// Flushes an already-closed file to disk (libzip closes its own handle internally, so this reopens the path
-// briefly) before the caller renames or replaces another file with it.
-void FlushFileToDisk(const wchar_t* path) noexcept
+// libzip closes its own handle internally; reopen the completed archive and require both flush and close to succeed
+// before the caller can publish it over the current destination.
+[[nodiscard]] bool FlushFileToDisk(const wchar_t* path) noexcept
 {
     wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL, nullptr)};
-    if (file)
+    if (!file || !FlushFileBuffers(file.get()))
     {
-        FlushFileBuffers(file.get());
+        return false;
     }
+    HANDLE raw = file.release();
+    return CloseHandle(raw) != 0;
+}
+
+[[nodiscard]] std::wstring UniqueSiblingPath(const std::wstring& destination)
+{
+    return destination + L".~" + Utf8ToWide(Guid::Generate().ToUtf8());
 }
 
 // Thin names over Common/JsonRead.h kept so the call sites below (and their `required` argument, matching the
@@ -1355,24 +1380,22 @@ void DeleteTree(const std::wstring& path)
     {
         return ProjectIoStatus::Encode;
     }
-    const std::wstring staging = dest + L".saving";
+    const std::wstring staging = UniqueSiblingPath(dest);
     const std::wstring backup = dest + L".old";
-    DeleteTree(staging);
     DeleteTree(backup);
     if (!CreateDirectoryW(staging.c_str(), nullptr))
     {
         return ProjectIoStatus::Encode;
     }
+    auto cleanupStaging = wil::scope_exit([&]() noexcept { DeleteTree(staging); });
     const std::wstring images = staging + L"\\images";
     if (!CreateDirectoryW(images.c_str(), nullptr))
     {
-        DeleteTree(staging);
         return ProjectIoStatus::Encode;
     }
     if (WriteFileBytes((staging + L"\\manifest.json").c_str(), reinterpret_cast<const std::uint8_t*>(json.data()),
                        json.size()) != ProjectIoStatus::Ok)
     {
-        DeleteTree(staging);
         return ProjectIoStatus::Encode;
     }
     for (const auto& file : files)
@@ -1380,13 +1403,11 @@ void DeleteTree(const std::wstring& path)
         const std::wstring name = images + L"\\" + Utf8ToWide(file.first);
         if (WriteFileBytes(name.c_str(), file.second.data(), file.second.size()) != ProjectIoStatus::Ok)
         {
-            DeleteTree(staging);
             return ProjectIoStatus::Encode;
         }
     }
     if (IsDirectory(dest.c_str()) && !MoveFileW(dest.c_str(), backup.c_str()))
     {
-        DeleteTree(staging);
         return ProjectIoStatus::Encode;
     }
     if (!MoveFileW(staging.c_str(), dest.c_str()))
@@ -1395,9 +1416,9 @@ void DeleteTree(const std::wstring& path)
         {
             (void)MoveFileW(backup.c_str(), dest.c_str());
         }
-        DeleteTree(staging);
         return ProjectIoStatus::Encode;
     }
+    cleanupStaging.release();
     DeleteTree(backup);
     return ProjectIoStatus::Ok;
 }
@@ -1406,27 +1427,40 @@ void DeleteTree(const std::wstring& path)
                                       const std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& files)
 {
     const std::wstring dest = FullPath(path);
-    const std::wstring temp = dest + L".tmp";
     if (dest.empty())
     {
         return ProjectIoStatus::Encode;
     }
-    DeleteFileW(temp.c_str());
-    unique_zip zip = OpenZipArchive(temp.c_str(), ZIP_CREATE | ZIP_TRUNCATE);
+    const std::wstring temp = UniqueSiblingPath(dest);
+    bool ownsTemp = false;
+    auto cleanupTemp = wil::scope_exit(
+        [&]() noexcept
+        {
+            if (ownsTemp)
+                (void)DeleteFileW(temp.c_str());
+        });
+    unique_zip zip = OpenZipArchive(temp.c_str(), ZIP_CREATE | ZIP_EXCL);
     if (!zip)
     {
         return ProjectIoStatus::Encode;
     }
+    ownsTemp = true; // archive ownership is destroyed before the cleanup guard on every early return
     zip_source_t* manifestSource = zip_source_buffer(zip.get(), const_cast<char*>(json.data()), json.size(), 0);
     if (manifestSource == nullptr)
     {
         return ProjectIoStatus::Encode;
     }
-    if (zip_file_add(zip.get(), "manifest.json", manifestSource, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+    const zip_int64_t manifestIndex =
+        zip_file_add(zip.get(), "manifest.json", manifestSource, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE);
+    if (manifestIndex < 0)
     {
         // zip_file_add only takes ownership of the source on success; on failure it is still ours to free
         // (OpenZipArchive frees zip_source_win32w_create's source the same way on its own failure path).
         zip_source_free(manifestSource);
+        return ProjectIoStatus::Encode;
+    }
+    if (zip_set_file_compression(zip.get(), static_cast<zip_uint64_t>(manifestIndex), ZIP_CM_DEFLATE, 6) != 0)
+    {
         return ProjectIoStatus::Encode;
     }
     for (const auto& file : files)
@@ -1438,35 +1472,42 @@ void DeleteTree(const std::wstring& path)
         {
             return ProjectIoStatus::Encode;
         }
-        if (zip_file_add(zip.get(), entry.c_str(), source, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE) < 0)
+        const zip_int64_t index = zip_file_add(zip.get(), entry.c_str(), source, ZIP_FL_ENC_UTF_8 | ZIP_FL_OVERWRITE);
+        if (index < 0)
         {
             zip_source_free(source);
+            return ProjectIoStatus::Encode;
+        }
+        if (zip_set_file_compression(zip.get(), static_cast<zip_uint64_t>(index), ZIP_CM_STORE, 0) != 0)
+        {
             return ProjectIoStatus::Encode;
         }
     }
     if (!ZipCommit(zip))
     {
-        DeleteFileW(temp.c_str());
         return ProjectIoStatus::Encode;
     }
     // libzip has already closed its own handle to `temp`; flush it to disk before it is renamed or replaces
-    // another file, so a crash right after a save can never leave `dest` pointing at an unflushed file.
-    FlushFileToDisk(temp.c_str());
+    // another file. Publication is refused when that flush or its transferred handle close fails.
+    if (!FlushFileToDisk(temp.c_str()))
+    {
+        return ProjectIoStatus::Encode;
+    }
     if (IsFile(dest.c_str()) &&
         !ReplaceFileW(dest.c_str(), temp.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr))
     {
         if (!MoveFileExW(temp.c_str(), dest.c_str(), MOVEFILE_REPLACE_EXISTING))
         {
-            DeleteFileW(temp.c_str());
             return ProjectIoStatus::Encode;
         }
+        cleanupTemp.release();
         return ProjectIoStatus::Ok;
     }
     if (!IsFile(dest.c_str()) && !MoveFileW(temp.c_str(), dest.c_str()))
     {
-        DeleteFileW(temp.c_str());
         return ProjectIoStatus::Encode;
     }
+    cleanupTemp.release();
     return ProjectIoStatus::Ok;
 }
 } // namespace
