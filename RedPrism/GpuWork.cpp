@@ -43,6 +43,7 @@ struct GpuWorkQueue::Impl final
         std::uint64_t bytes = 0;
         JobTicket ticket;
         GpuReadbackReceiver* receiver = nullptr;
+        GpuReadbackProducer* producer = nullptr;
     };
 
     DWORD ownerThread = GetCurrentThreadId();
@@ -86,6 +87,7 @@ struct GpuWorkQueue::Impl final
         slot.source.reset();
         slot.completionFence.reset();
         slot.receiver = nullptr;
+        slot.producer = nullptr;
         slot.state = State::Free;
         if (slot.retired)
             DropStorage(slot);
@@ -166,6 +168,19 @@ struct GpuWorkQueue::Impl final
         HRESULT result = PrepareStorage(slot);
         if (FAILED(result))
             return result;
+        if (slot.producer)
+        {
+            ID3D11Texture2D* source = nullptr;
+            D3D11_BOX box{};
+            result = slot.producer->RecordReadbackSource(source, box);
+            if (FAILED(result))
+                return result;
+            result = ValidateSource(source, box);
+            if (FAILED(result) || box.right - box.left != slot.width || box.bottom - box.top != slot.height)
+                return FAILED(result) ? result : E_INVALIDARG;
+            slot.source = source;
+            slot.box = box;
+        }
         slot.context = context;
         slot.completionFence = fence; // an old-generation event registration retains its fence until delivery
         slot.ready.store(false, std::memory_order_relaxed);
@@ -191,6 +206,48 @@ struct GpuWorkQueue::Impl final
             ++inFlight;
         }
         return result;
+    }
+
+    HRESULT ValidateSource(ID3D11Texture2D* source, const D3D11_BOX& box) const noexcept
+    {
+        if (!source || box.front != 0 || box.back != 1 || box.right <= box.left || box.bottom <= box.top ||
+            box.right - box.left > kMaxReadbackSide || box.bottom - box.top > kMaxReadbackSide)
+            return E_INVALIDARG;
+        D3D11_TEXTURE2D_DESC desc{};
+        source->GetDesc(&desc);
+        if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM || desc.SampleDesc.Count != 1 || box.right > desc.Width ||
+            box.bottom > desc.Height || desc.ArraySize != 1 || desc.MipLevels == 0)
+            return E_INVALIDARG;
+        wil::com_ptr_nothrow<ID3D11Device> sourceDevice;
+        source->GetDevice(sourceDevice.put());
+        return sourceDevice.get() == device.get() ? S_OK : E_INVALIDARG;
+    }
+
+    HRESULT Admit(unsigned int width, unsigned int height, JobTicket ticket, GpuReadbackReceiver& receiver,
+                  ID3D11Texture2D* source, const D3D11_BOX& box, GpuReadbackProducer* producer) noexcept
+    {
+        if (width == 0 || height == 0 || width > kMaxReadbackSide || height > kMaxReadbackSide ||
+            ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0)
+            return E_INVALIDARG;
+        for (auto& slot : slots)
+        {
+            if (slot.state != State::Free)
+                continue;
+            slot.source = source;
+            slot.box = box;
+            slot.width = width;
+            slot.height = height;
+            slot.ticket = ticket;
+            slot.receiver = &receiver;
+            slot.producer = producer;
+            slot.retired = false;
+            slot.deviceGeneration = deviceGeneration;
+            ++slot.generation;
+            slot.state = State::Pending;
+            scheduler->NotifyOwnerWork();
+            return S_OK;
+        }
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
     }
 };
 
@@ -238,7 +295,7 @@ HRESULT GpuWorkQueue::Initialize(JobScheduler& scheduler) noexcept
     return S_OK;
 }
 
-HRESULT GpuWorkQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context) noexcept
+HRESULT GpuWorkQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context, bool forceEventForTest) noexcept
 {
     if (!_impl || _impl->stopped)
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
@@ -248,7 +305,10 @@ HRESULT GpuWorkQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context) n
     HRESULT result = GpuCapabilities::Probe(device, context, report);
     if (FAILED(result))
         return result;
-    const auto route = GpuCapabilities::SelectCompletionRoute(report);
+    const auto route = forceEventForTest && report.dxgiDevice2Available && SUCCEEDED(report.dxgiDevice2QueryResult)
+                           ? GpuCapabilities::CompletionRoute::EnqueueSetEvent
+                       : forceEventForTest ? GpuCapabilities::CompletionRoute::None
+                                           : GpuCapabilities::SelectCompletionRoute(report);
     if (route == GpuCapabilities::CompletionRoute::None)
         return E_NOINTERFACE;
     wil::com_ptr_nothrow<ID3D11DeviceContext4> context4;
@@ -286,37 +346,19 @@ HRESULT GpuWorkQueue::EnqueueReadback(ID3D11Texture2D* source, const D3D11_BOX& 
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     auto& self = *_impl;
     self.CheckOwner();
-    if (!source || box.front != 0 || box.back != 1 || box.right <= box.left || box.bottom <= box.top ||
-        box.right - box.left > kMaxReadbackSide || box.bottom - box.top > kMaxReadbackSide ||
-        ticket.slot >= JobScheduler::kCapacity || ticket.generation == 0)
-        return E_INVALIDARG;
-    D3D11_TEXTURE2D_DESC desc{};
-    source->GetDesc(&desc);
-    if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM || desc.SampleDesc.Count != 1 || box.right > desc.Width ||
-        box.bottom > desc.Height || desc.ArraySize != 1)
-        return E_INVALIDARG;
-    wil::com_ptr_nothrow<ID3D11Device> sourceDevice;
-    source->GetDevice(sourceDevice.put());
-    if (sourceDevice.get() != self.device.get())
-        return E_INVALIDARG;
-    for (auto& slot : self.slots)
-    {
-        if (slot.state != Impl::State::Free)
-            continue;
-        slot.source = source;
-        slot.box = box;
-        slot.width = box.right - box.left;
-        slot.height = box.bottom - box.top;
-        slot.ticket = ticket;
-        slot.receiver = &receiver;
-        slot.retired = false;
-        slot.deviceGeneration = self.deviceGeneration;
-        ++slot.generation;
-        slot.state = Impl::State::Pending;
-        self.scheduler->NotifyOwnerWork();
-        return S_OK;
-    }
-    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+    const HRESULT result = self.ValidateSource(source, box);
+    return FAILED(result)
+               ? result
+               : self.Admit(box.right - box.left, box.bottom - box.top, ticket, receiver, source, box, nullptr);
+}
+
+HRESULT GpuWorkQueue::EnqueueProducedReadback(unsigned int width, unsigned int height, JobTicket ticket,
+                                              GpuReadbackReceiver& receiver, GpuReadbackProducer& producer) noexcept
+{
+    if (!_impl || _impl->stopped || !_impl->device)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    _impl->CheckOwner();
+    return _impl->Admit(width, height, ticket, receiver, nullptr, {}, &producer);
 }
 
 bool GpuWorkQueue::ReleaseMapped(GpuReadbackLease lease) noexcept
@@ -384,6 +426,7 @@ void GpuWorkQueue::CloseAfterWorkers() noexcept
         slot.source.reset();
         slot.completionFence.reset();
         slot.receiver = nullptr;
+        slot.producer = nullptr;
         self.DropStorage(slot);
     }
     if (self.registered)

@@ -42,6 +42,9 @@ struct RedPrismCommandLineSwitch final
 
 struct RedPrismCommandLine final
 {
+    static constexpr size_t kMaximumInputPathCount = 256;
+    static constexpr size_t kMaximumPathLength = 32767;
+
     bool warp = false;
     bool selfTest = false;
     const wchar_t* screenshotPath = nullptr;
@@ -51,6 +54,8 @@ struct RedPrismCommandLine final
     const wchar_t* crashProbeDirectory = nullptr;
     bool crashProbeWorker = false;
     KernelIsa isa = KernelIsa::Auto;
+    std::array<std::wstring_view, kMaximumInputPathCount> inputPaths{};
+    size_t inputPathCount = 0;
 };
 
 inline constexpr std::array<const wchar_t*, 4> kRedPrismHelpArguments{L"--help", L"-h", L"/?", L"-?"};
@@ -134,6 +139,20 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     return false;
 }
 
+[[nodiscard]] inline size_t RedPrismBoundedWideLength(const wchar_t* text, size_t limit) noexcept
+{
+    if (!text)
+    {
+        return limit;
+    }
+    size_t length = 0;
+    while (length < limit && text[length] != L'\0')
+    {
+        ++length;
+    }
+    return length;
+}
+
 [[nodiscard]] inline const RedPrismCommandLineSwitch* RedPrismFindSwitch(std::wstring_view argument) noexcept
 {
     if (RedPrismIsHelpArgument(argument))
@@ -150,55 +169,201 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
     return nullptr;
 }
 
-[[nodiscard]] inline const wchar_t* RedPrismFindUnknownArgument(wchar_t* const* arguments, int argumentCount) noexcept
+[[nodiscard]] inline const RedPrismCommandLineSwitch* RedPrismFindSwitch(const wchar_t* argument) noexcept
 {
+    constexpr size_t kMaximumArgumentLength = RedPrismCommandLine::kMaximumPathLength;
+    if (!argument)
+    {
+        return nullptr;
+    }
+    const size_t length = RedPrismBoundedWideLength(argument, kMaximumArgumentLength + 1);
+    if (length > kMaximumArgumentLength)
+    {
+        return nullptr;
+    }
+    return RedPrismFindSwitch(std::wstring_view{argument, length});
+}
+
+[[nodiscard]] inline bool RedPrismIsHarnessArgument(RedPrismSwitch id) noexcept
+{
+    return id == RedPrismSwitch::SelfTest || id == RedPrismSwitch::Screenshot || id == RedPrismSwitch::Dpi ||
+           id == RedPrismSwitch::Demo || id == RedPrismSwitch::Bench || id == RedPrismSwitch::CrashProbe ||
+           id == RedPrismSwitch::CrashProbeWorker;
+}
+
+struct RedPrismCommandLineScan final
+{
+    bool help = false;
+    bool selfTest = false;
+    bool harnessMode = false;
+};
+
+[[nodiscard]] inline RedPrismCommandLineScan RedPrismScanCommandLine(wchar_t* const* arguments,
+                                                                     int argumentCount) noexcept
+{
+    RedPrismCommandLineScan scan{};
+    bool positionalOnly = false;
+    if (!arguments || argumentCount < 0)
+    {
+        return scan;
+    }
     for (int index = 1; index < argumentCount; ++index)
     {
-        const RedPrismCommandLineSwitch* entry = RedPrismFindSwitch(arguments[index]);
+        const wchar_t* const argument = arguments[index];
+        if (!argument || RedPrismBoundedWideLength(argument, RedPrismCommandLine::kMaximumPathLength + 1) >
+                             RedPrismCommandLine::kMaximumPathLength)
+        {
+            return scan;
+        }
+        const size_t length = RedPrismBoundedWideLength(argument, RedPrismCommandLine::kMaximumPathLength + 1);
+        const std::wstring_view text{argument, length};
+        if (!positionalOnly && text == L"--")
+        {
+            positionalOnly = true;
+            continue;
+        }
+        if (positionalOnly)
+        {
+            continue;
+        }
+        const RedPrismCommandLineSwitch* const entry = RedPrismFindSwitch(text);
         if (!entry)
         {
-            return arguments[index];
+            continue;
         }
+        scan.help = scan.help || entry->id == RedPrismSwitch::Help;
+        scan.selfTest = scan.selfTest || entry->id == RedPrismSwitch::SelfTest;
+        scan.harnessMode = scan.harnessMode || RedPrismIsHarnessArgument(entry->id);
         if (entry->valueKind == RedPrismSwitchValue::Separate && index + 1 < argumentCount)
         {
             ++index;
         }
     }
-    return nullptr;
+    return scan;
+}
+
+[[nodiscard]] inline const wchar_t* RedPrismFindInvalidArgumentShape(wchar_t* const* arguments,
+                                                                     int argumentCount) noexcept
+{
+    constexpr size_t kMaximumInputPathCount = RedPrismCommandLine::kMaximumInputPathCount;
+    constexpr size_t kMaximumPathLength = RedPrismCommandLine::kMaximumPathLength;
+    size_t pathCount = 0;
+    const wchar_t* firstPath = nullptr;
+    bool harnessMode = false;
+    bool positionalOnly = false;
+    if (!arguments || argumentCount < 0)
+    {
+        return L"";
+    }
+    for (int index = 1; index < argumentCount; ++index)
+    {
+        const wchar_t* const argument = arguments[index];
+        if (!argument)
+        {
+            return L"";
+        }
+        const size_t argumentLength = RedPrismBoundedWideLength(argument, kMaximumPathLength + 1);
+        if (argumentLength > kMaximumPathLength)
+        {
+            return argument;
+        }
+        const std::wstring_view argumentView{argument, argumentLength};
+        if (!positionalOnly && argumentView == L"--")
+        {
+            positionalOnly = true;
+            continue;
+        }
+
+        const RedPrismCommandLineSwitch* entry = positionalOnly ? nullptr : RedPrismFindSwitch(argumentView);
+        if (entry)
+        {
+            harnessMode = harnessMode || RedPrismIsHarnessArgument(entry->id);
+            if (entry->valueKind == RedPrismSwitchValue::Separate && index + 1 < argumentCount)
+            {
+                const wchar_t* const value = arguments[index + 1];
+                if (!value)
+                {
+                    return L"";
+                }
+                if (RedPrismBoundedWideLength(value, kMaximumPathLength + 1) > kMaximumPathLength)
+                {
+                    return value;
+                }
+                ++index;
+            }
+            continue;
+        }
+
+        if (!positionalOnly && argument[0] == L'-')
+        {
+            return argument;
+        }
+
+        if (argumentLength == 0)
+        {
+            return argument;
+        }
+        if (!firstPath)
+        {
+            firstPath = argument;
+        }
+        if (++pathCount > kMaximumInputPathCount)
+        {
+            return argument;
+        }
+    }
+    return harnessMode ? firstPath : nullptr;
+}
+
+[[nodiscard]] inline const wchar_t* RedPrismFindUnknownArgument(wchar_t* const* arguments, int argumentCount) noexcept
+{
+    return RedPrismFindInvalidArgumentShape(arguments, argumentCount);
 }
 
 [[nodiscard]] inline bool RedPrismParseCommandLine(wchar_t* const* arguments, int argumentCount,
                                                    RedPrismCommandLine& parsed, const wchar_t** errorToken) noexcept
 {
-    parsed = {};
     if (errorToken)
     {
         *errorToken = nullptr;
     }
+    if (const wchar_t* invalidArgument = RedPrismFindInvalidArgumentShape(arguments, argumentCount))
+    {
+        if (errorToken)
+        {
+            *errorToken = invalidArgument;
+        }
+        return false;
+    }
+
+    RedPrismCommandLine candidate{};
     bool isaSpecified = false;
+    bool positionalOnly = false;
     for (int index = 1; index < argumentCount; ++index)
     {
-        const RedPrismCommandLineSwitch* entry = RedPrismFindSwitch(arguments[index]);
+        if (!positionalOnly && std::wstring_view{arguments[index]} == L"--")
+        {
+            positionalOnly = true;
+            continue;
+        }
+        const RedPrismCommandLineSwitch* entry = positionalOnly ? nullptr : RedPrismFindSwitch(arguments[index]);
         if (!entry)
         {
-            if (errorToken)
-            {
-                *errorToken = arguments[index];
-            }
-            return false;
+            candidate.inputPaths[candidate.inputPathCount++] = std::wstring_view{arguments[index]};
+            continue;
         }
         switch (entry->id)
         {
         case RedPrismSwitch::Help:
             break;
         case RedPrismSwitch::Warp:
-            parsed.warp = true;
+            candidate.warp = true;
             break;
         case RedPrismSwitch::SelfTest:
-            parsed.selfTest = true;
+            candidate.selfTest = true;
             break;
         case RedPrismSwitch::Screenshot:
-            if (parsed.screenshotPath || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
+            if (candidate.screenshotPath || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
             {
                 if (errorToken)
                 {
@@ -206,7 +371,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 }
                 return false;
             }
-            parsed.screenshotPath = arguments[++index];
+            candidate.screenshotPath = arguments[++index];
             break;
         case RedPrismSwitch::Demo:
             if (index + 1 >= argumentCount || (std::wstring_view{arguments[index + 1]} != L"transform" &&
@@ -223,7 +388,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 }
                 return false;
             }
-            parsed.demo = arguments[++index];
+            candidate.demo = arguments[++index];
             break;
         case RedPrismSwitch::Bench:
             if (index + 1 >= argumentCount || (std::wstring_view{arguments[index + 1]} != L"brush" &&
@@ -243,10 +408,10 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 }
                 return false;
             }
-            parsed.bench = arguments[++index];
+            candidate.bench = arguments[++index];
             break;
         case RedPrismSwitch::CrashProbe:
-            if (parsed.crashProbeDirectory || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
+            if (candidate.crashProbeDirectory || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
             {
                 if (errorToken)
                 {
@@ -254,10 +419,10 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 }
                 return false;
             }
-            parsed.crashProbeDirectory = arguments[++index];
+            candidate.crashProbeDirectory = arguments[++index];
             break;
         case RedPrismSwitch::CrashProbeWorker:
-            parsed.crashProbeWorker = true;
+            candidate.crashProbeWorker = true;
             break;
         case RedPrismSwitch::Isa:
             if (isaSpecified || index + 1 >= argumentCount || arguments[index + 1][0] == L'\0')
@@ -278,7 +443,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                     }
                     return false;
                 }
-                parsed.isa = isa.value();
+                candidate.isa = isa.value();
                 isaSpecified = true;
                 ++index;
             }
@@ -296,11 +461,11 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
                 const std::wstring_view text{arguments[++index]};
                 if (text == L"96")
                 {
-                    parsed.screenshotDpi = 96;
+                    candidate.screenshotDpi = 96;
                 }
                 else if (text == L"144")
                 {
-                    parsed.screenshotDpi = 144;
+                    candidate.screenshotDpi = 144;
                 }
                 else
                 {
@@ -316,7 +481,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
             break;
         }
     }
-    if (parsed.crashProbeWorker && !parsed.crashProbeDirectory)
+    if (candidate.crashProbeWorker && !candidate.crashProbeDirectory)
     {
         if (errorToken)
         {
@@ -324,6 +489,7 @@ inline constexpr std::array<const wchar_t*, 2> kRedPrismCommandLineGroups{L"Gene
         }
         return false;
     }
+    parsed = candidate;
     return true;
 }
 

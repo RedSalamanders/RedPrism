@@ -35,6 +35,16 @@ class GpuReadbackReceiver
     virtual void ReadbackReady(JobTicket ticket, GpuReadbackRows rows, HRESULT result) noexcept = 0;
 };
 
+class GpuReadbackProducer
+{
+  public:
+    virtual ~GpuReadbackProducer() = default;
+    // Owner pump only. The borrowed texture remains valid through the immediately following staging copy.
+    // Width/height must match admission. Recording the source here prevents a reusable utility target from
+    // being overwritten by another request between composition and its copy. The job owns this producer.
+    [[nodiscard]] virtual HRESULT RecordReadbackSource(ID3D11Texture2D*& source, D3D11_BOX& box) noexcept = 0;
+};
+
 class GpuWorkQueue final : public OwnerWorkPump
 {
   public:
@@ -48,11 +58,16 @@ class GpuWorkQueue final : public OwnerWorkPump
     GpuWorkQueue(const GpuWorkQueue&) = delete;
     GpuWorkQueue& operator=(const GpuWorkQueue&) = delete;
     [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler) noexcept;
-    [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context) noexcept;
+    // The test override exercises the supported event fallback even when this device also supports fences.
+    [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context,
+                               bool forceEventForTest = false) noexcept;
     // Owner thread. The source and request are retained without waiting; box is a BGRA8 mip-0 region of at
     // most 2048 squared. Larger callers traverse tiles under their original job reservation.
     [[nodiscard]] HRESULT EnqueueReadback(ID3D11Texture2D* source, const D3D11_BOX& box, JobTicket ticket,
                                           GpuReadbackReceiver& receiver) noexcept;
+    [[nodiscard]] HRESULT EnqueueProducedReadback(unsigned int width, unsigned int height, JobTicket ticket,
+                                                  GpuReadbackReceiver& receiver,
+                                                  GpuReadbackProducer& producer) noexcept;
     [[nodiscard]] bool ReleaseMapped(GpuReadbackLease lease) noexcept;
     // Device loss/adapter change retires lent owners. No commands are recorded on a retired context.
     void RetireDevice() noexcept;

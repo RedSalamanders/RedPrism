@@ -1519,6 +1519,7 @@ int Application::RunKeyboardSelfTest() noexcept
     {
         OnTool(EditorTool::Move);
         OnCommand(ChromeHost::kCommandNewLevelsAdjustment);
+        settle(); // harness observes the acknowledged asynchronous opening
         _chrome->SetCanvasFocused(true);
         const bool panelOpen = _session.HasColorEdit();
         const double start = opacity();

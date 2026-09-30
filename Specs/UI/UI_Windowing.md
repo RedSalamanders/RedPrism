@@ -131,10 +131,21 @@ reasons, save-before-close continuations and file-job cancellation land with P1.
 
 Every switch is declared once in `RedPrism/CommandLine.h`. `--help`, `-h`, `/?`, and `-?` print the catalog and exit 0
 before any other switch is applied: to the parent console (a GUI process attaches), to redirected stdout as UTF-8, or,
-without either, a message box. `--self-test` suppresses the message box (debugger output only).
+without either, a message box. `--self-test` suppresses the message box (debugger output only). Preflight recognizes
+switches only before `--` and skips separate switch values, so a path/value named `--help` or `--self-test` is not
+a switch.
 
 The first unknown token is a command-line error (exit 2, `Unknown argument "<token>". Run RedPrism.exe --help for the
 command line.`) shown the same way.
+
+Ordinary runs accept up to 256 positional paths of at most 32767 UTF-16 units each. Order is preserved;
+leading `-` requires `--`, after which every token is positional. Empty/null/overlong arguments, excessive
+path counts, invalid switches and positional paths mixed with diagnostic/harness modes are refused before
+Application construction. Parsing is atomic: failure preserves the previous output value. The parser probes
+no filesystem. Startup copies all path views into a request admitted under the host input byte budget, then
+queues it only after the initial document exists, binding that document serial before normal interaction.
+It follows the ordered OpenPaths flow. Owned paths are released on admission failure or shutdown; failure to
+own/admit startup paths fails startup locally.
 
 | Switch | Behavior |
 | --- | --- |

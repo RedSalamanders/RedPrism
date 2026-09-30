@@ -112,6 +112,9 @@ class Renderer final
     [[nodiscard]] bool IsWarp() const noexcept;
     // Self-test seam: the same rebuild Present runs after a device-removed result.
     HRESULT RecoverDeviceForTest() noexcept;
+    // Utility work can detect removal without a frame/Present, including while hidden. Rebuild only for a
+    // device-lost result or a removed current device; the host rebinds its borrowers afterwards.
+    HRESULT RecoverDeviceForUtility(HRESULT result) noexcept;
     // Self-test seam: the next time `stage` runs it reports `result` instead of its own (a device-lost code makes
     // the stage look like a removed device).
     void FailNextStageForTest(Stage stage, HRESULT result) noexcept

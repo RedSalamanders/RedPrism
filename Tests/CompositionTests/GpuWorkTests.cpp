@@ -27,6 +27,14 @@ void Expect(bool condition, const char* name) noexcept
     gFailures += condition ? 0 : 1;
 }
 
+bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
+{
+    // Isolate GPU readiness from unrelated system memory-pressure notifications.
+    constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
+    snapshot = {available, available};
+    return true;
+}
+
 struct Device final
 {
     wil::com_ptr_nothrow<ID3D11Device> device;
@@ -190,7 +198,7 @@ class CopyJob final : public Job, public GpuReadbackReceiver
     bool _submitted = false;
 };
 
-void TestCopy(bool cancel, bool rebind, bool singlePixel)
+void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false)
 {
     Device device, replacement;
     Expect(SUCCEEDED(device.Create()), "copy.device");
@@ -200,8 +208,12 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel)
         Expect(SUCCEEDED(replacement.Create()), "copy.replacement-device");
     JobScheduler scheduler;
     GpuWorkQueue queue;
-    Expect(scheduler.Initialize(1) == S_OK && SUCCEEDED(queue.Initialize(scheduler)), "copy.initialize");
-    Expect(SUCCEEDED(queue.Bind(device.device.get(), device.context.get())), "copy.bind");
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)),
+           "copy.initialize");
+    Expect(SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), forceEvent)), "copy.bind");
+    if (forceEvent)
+        Expect(queue.CompletionRoute() == GpuCapabilities::CompletionRoute::EnqueueSetEvent,
+               "copy.real-enqueue-event-route-selected");
     Expect(!scheduler.HasUiWork() && scheduler.IsIdle(), "copy.idle-registration-no-work");
     auto texture = Texture(device, 11, 7);
     const D3D11_BOX box = singlePixel ? D3D11_BOX{5, 3, 0, 6, 4, 1} : D3D11_BOX{2, 1, 0, 9, 6, 1};
@@ -298,7 +310,7 @@ void TestCapacity()
         return;
     JobScheduler scheduler;
     GpuWorkQueue queue;
-    Expect(scheduler.Initialize(1) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
                SUCCEEDED(queue.Bind(device.device.get(), device.context.get())),
            "cap.initialize");
     MSG message{};
@@ -354,7 +366,7 @@ void TestShutdownWhileCopying()
         return;
     JobScheduler scheduler;
     GpuWorkQueue queue;
-    Expect(scheduler.Initialize(1) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
                SUCCEEDED(queue.Bind(device.device.get(), device.context.get())),
            "shutdown.initialize");
     MSG message{};
@@ -383,6 +395,9 @@ int RunGpuWorkTests()
     TestCopy(false, false, true);
     TestCopy(true, false, false);
     TestCopy(false, true, false);
+    TestCopy(false, false, true, true);
+    TestCopy(true, false, false, true);
+    TestCopy(false, true, false, true);
     TestCapacity();
     TestShutdownWhileCopying();
     return gFailures;

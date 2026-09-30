@@ -1,6 +1,7 @@
 #include "CanvasRenderer.h"
 
 #include "Adjust.h"
+#include "Jobs.h"
 #include "Shaders/CompositionShared.h"
 
 #include "CompositionBlitPixelShader.h"
@@ -9,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -144,9 +146,18 @@ void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 {
     _adjustmentPreviewSurface = {};
     _adjustmentPreviewDirty = true;
-    _rasters.clear();
-    _regions.clear();
-    _adjustments.clear();
+    for (auto& [id, texture] : _rasters)
+        texture.displayResident = false;
+    for (auto& texture : _regions)
+        texture.displayResident = false;
+    for (auto& [id, texture] : _adjustments)
+        texture.displayResident = false;
+    const auto unused = [this](const auto& entry) noexcept
+    { return _utilityUsers == 0 || entry.second.lastUse != _lastUtilityComposeId; };
+    std::erase_if(_rasters, unused);
+    std::erase_if(_regions, [this](const GpuTexture& entry) noexcept
+                  { return _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId; });
+    std::erase_if(_adjustments, unused);
     _strokeTexture = {};
     _canvas[0] = {};
     _canvas[1] = {};
@@ -175,6 +186,7 @@ void CanvasRenderer::ReleaseDocumentSurfaces() noexcept
 void CanvasRenderer::ReleaseDeviceResources() noexcept
 {
     ReleaseDocumentSurfaces();
+    ReleaseUtilitySurfaces();
     _layerConstants.reset();
     _blitConstants.reset();
     _rasterizer.reset();
@@ -192,6 +204,100 @@ void CanvasRenderer::SetTextureLimitForTest(int limit) noexcept
     _textureLimit = std::clamp(limit, 1, static_cast<int>(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
     // Every texture was sized for the old limit.
     ReleaseDocumentSurfaces();
+    ReleaseUtilitySurfaces();
+}
+
+bool CanvasRenderer::AcquireUtility() noexcept
+{
+    if (_utilityUsers >= JobScheduler::kCapacity)
+        return false;
+    ++_utilityUsers;
+    return true;
+}
+
+void CanvasRenderer::ReleaseUtility() noexcept
+{
+    assert(_utilityUsers != 0 && !_utilityRecording);
+    if (_utilityUsers != 0 && --_utilityUsers == 0)
+        ReleaseUtilitySurfaces();
+}
+
+void CanvasRenderer::ReleaseUtilitySurfaces() noexcept
+{
+    assert(!_utilityRecording);
+    _utilityView = {};
+    _lastUtilityComposeId = 0;
+    std::erase_if(_rasters, [](const auto& entry) noexcept { return !entry.second.displayResident; });
+    std::erase_if(_regions, [](const GpuTexture& entry) noexcept { return !entry.displayResident; });
+    std::erase_if(_adjustments, [](const auto& entry) noexcept { return !entry.second.displayResident; });
+}
+
+void CanvasRenderer::SwapUtilityView() noexcept
+{
+    using std::swap;
+    swap(_canvas, _utilityView.canvas);
+    swap(_stack, _utilityView.stack);
+    swap(_coverage, _utilityView.coverage);
+    swap(_coverageUsed, _utilityView.coverageUsed);
+    swap(_byId, _utilityView.byId);
+    swap(_liveCoverageIndex, _utilityView.liveCoverageIndex);
+    swap(_groupCoverageIndex, _utilityView.groupCoverageIndex);
+    swap(_renderIds, _utilityView.renderIds);
+    swap(_consumed, _utilityView.consumed);
+    swap(_canvasWidth, _utilityView.canvasWidth);
+    swap(_canvasHeight, _utilityView.canvasHeight);
+    swap(_canvasHasMips, _utilityView.canvasHasMips);
+    swap(_canvasMipsStale, _utilityView.canvasMipsStale);
+    swap(_viewOriginX, _utilityView.viewOriginX);
+    swap(_viewOriginY, _utilityView.viewOriginY);
+    swap(_viewScale, _utilityView.viewScale);
+    swap(_displayScale, _utilityView.displayScale);
+    swap(_documentWidth, _utilityView.documentWidth);
+    swap(_documentHeight, _utilityView.documentHeight);
+    swap(_front, _utilityView.front);
+    swap(_stackFront, _utilityView.stackFront);
+    swap(_documentDirty, _utilityView.documentDirty);
+}
+
+HRESULT CanvasRenderer::ComposeUtilityTile(const CanvasDocument& document, const D3D11_BOX& documentRegion,
+                                             wil::com_ptr_nothrow<ID3D11Texture2D>& texture) noexcept
+{
+    texture.reset();
+    if (!_device || !_context || _utilityUsers == 0 || _utilityRecording)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+    if (document.width < 1 || document.height < 1 || document.width > kMaxCanvasSide ||
+        document.height > kMaxCanvasSide || documentRegion.front != 0 || documentRegion.back != 1 ||
+        documentRegion.right <= documentRegion.left || documentRegion.bottom <= documentRegion.top ||
+        documentRegion.right > static_cast<UINT>(document.width) ||
+        documentRegion.bottom > static_cast<UINT>(document.height) ||
+        documentRegion.right - documentRegion.left > static_cast<UINT>(_textureLimit) ||
+        documentRegion.bottom - documentRegion.top > static_cast<UINT>(_textureLimit))
+        return E_INVALIDARG;
+    const bool previousIgnoreStroke = _ignoreStroke;
+    _ignoreStroke = true;
+    _utilityRecording = true;
+    SwapUtilityView();
+    const auto restore = wil::scope_exit(
+        [&]() noexcept
+        {
+            SwapUtilityView();
+            _utilityRecording = false;
+            _ignoreStroke = previousIgnoreStroke;
+        });
+    _documentWidth = document.width;
+    _documentHeight = document.height;
+    _displayScale = 1;
+    HRESULT result =
+        PrepareView(static_cast<int>(documentRegion.left), static_cast<int>(documentRegion.top), 1,
+                    documentRegion.right - documentRegion.left, documentRegion.bottom - documentRegion.top);
+    if (SUCCEEDED(result))
+        result = ComposeView(document);
+    if (FAILED(result))
+        return result;
+    texture = _canvas[_front].texture.texture;
+    _lastUtilityComposeId = _composeId;
+    ++_utilityCompositeCount;
+    return S_OK;
 }
 
 HRESULT CanvasRenderer::CreateDeviceResources(ID3D11Device* device, ID3D11DeviceContext* context) noexcept
@@ -343,12 +449,12 @@ HRESULT CanvasRenderer::CreateCanvas(UINT width, UINT height) noexcept
         return S_OK;
     }
     // The canvases carry mips so a zoomed-out blit reduces sharply instead of aliasing (RF-412).
-    HRESULT result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, true, _canvas[0]);
+    HRESULT result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, !_utilityRecording, _canvas[0]);
     if (FAILED(result))
     {
         return result;
     }
-    result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, true, _canvas[1]);
+    result = CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, !_utilityRecording, _canvas[1]);
     if (FAILED(result))
     {
         _canvas[0] = {};
@@ -726,6 +832,8 @@ HRESULT CanvasRenderer::TextureFor(const Raster& raster, bool gray, GpuTexture*&
         }
     }
     found->second.lastUse = _composeId;
+    if (!_utilityRecording)
+        found->second.displayResident = true;
     texture = &found->second;
     return S_OK;
 }
@@ -815,6 +923,8 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
             entry.scale == scale)
         {
             entry.lastUse = _composeId;
+            if (!_utilityRecording)
+                entry.displayResident = true;
             texture = &entry;
             return S_OK;
         }
@@ -847,6 +957,7 @@ HRESULT CanvasRenderer::RegionTextureFor(const Raster& raster, bool gray, const 
     GenerateMipsFor(gpu);
     gpu.keepAlive = raster;
     gpu.lastUse = _composeId;
+    gpu.displayResident = !_utilityRecording;
     try
     {
         _regions.push_back(std::move(gpu));
@@ -1082,6 +1193,7 @@ void CanvasRenderer::EndStroke(const Raster* committed, int cropX, int cropY, co
                 GenerateMipsFor(adopted);
                 adopted.keepAlive = *committed;
                 adopted.lastUse = _composeId;
+                adopted.displayResident = true;
                 try
                 {
                     _rasters[committed->Identity()] = std::move(adopted);
@@ -1512,7 +1624,10 @@ HRESULT CanvasRenderer::LayerAdjustmentView(TextureView& view) noexcept
         // This target may be a live clipping source; keep its lookup alive through every composition sweep.
         const auto found = _adjustments.find(preview.layerId);
         if (found != _adjustments.end())
+        {
             found->second.lastUse = _composeId;
+            found->second.displayResident = true;
+        }
     }
     view.srv = _adjustmentPreviewSurface.texture.srv.get();
     view.rect = {0, 0, 1, 1};
@@ -1686,6 +1801,8 @@ HRESULT CanvasRenderer::AdjustmentInputs(Guid id, const LayerAdjustment& adjustm
         entry->value = adjustment; // publish the cache key only after every required resource update succeeded
     }
     entry->lastUse = _composeId;
+    if (!_utilityRecording)
+        entry->displayResident = true;
     constants.adjustKind = kernel;
     if (kernel == kCompositionAdjustGrain)
     {
@@ -1868,6 +1985,15 @@ HRESULT CanvasRenderer::Compose(const CanvasDocument& document) noexcept
 HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
 {
     _composeId = ++_composeSerial;
+    if (!_utilityRecording)
+    {
+        for (auto& [id, texture] : _rasters)
+            texture.displayResident = false;
+        for (auto& texture : _regions)
+            texture.displayResident = false;
+        for (auto& [id, texture] : _adjustments)
+            texture.displayResident = false;
+    }
     _coverageUsed = 0;
     _byId.clear();
     _liveCoverageIndex.clear();
@@ -1991,7 +2117,8 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
     // Rasters this composition did not touch belong to a previous document state: release their textures.
     for (auto entry = _rasters.begin(); entry != _rasters.end();)
     {
-        if (entry->second.lastUse != _composeId)
+        if (entry->second.lastUse != _composeId && !entry->second.displayResident &&
+            (_utilityRecording || _utilityUsers == 0 || entry->second.lastUse != _lastUtilityComposeId))
         {
             entry = _rasters.erase(entry);
         }
@@ -2000,10 +2127,16 @@ HRESULT CanvasRenderer::ComposeView(const CanvasDocument& document) noexcept
             ++entry;
         }
     }
-    std::erase_if(_regions, [this](const GpuTexture& entry) { return entry.lastUse != _composeId; });
+    std::erase_if(_regions,
+                  [this](const GpuTexture& entry) noexcept
+                  {
+                      return entry.lastUse != _composeId && !entry.displayResident &&
+                             (_utilityRecording || _utilityUsers == 0 || entry.lastUse != _lastUtilityComposeId);
+                  });
     for (auto entry = _adjustments.begin(); entry != _adjustments.end();)
     {
-        if (entry->second.lastUse != _composeId)
+        if (entry->second.lastUse != _composeId && !entry->second.displayResident &&
+            (_utilityRecording || _utilityUsers == 0 || entry->second.lastUse != _lastUtilityComposeId))
         {
             entry = _adjustments.erase(entry);
         }
@@ -2282,6 +2415,8 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
     bytes += static_cast<std::uint64_t>(_coverage.size()) * pixels;
     for (const auto& [id, textures] : _adjustments)
     {
+        if (!textures.displayResident)
+            continue;
         bytes += textures.lut.texture ? 256ull * 16ull : 0ull;
         bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
                                             Adjust::kCubeDimension * 16ull
@@ -2302,6 +2437,26 @@ std::uint64_t CanvasRenderer::CanvasSurfaceBytes() const noexcept
         bytes += (texture.mipped ? MipChainTexels(texture.width, texture.height)
                                  : static_cast<std::uint64_t>(texture.width) * texture.height) *
                  4;
+    }
+    return bytes;
+}
+
+std::uint64_t CanvasRenderer::UtilitySurfaceBytes() const noexcept
+{
+    const auto& view = _utilityView;
+    const std::uint64_t pixels = static_cast<std::uint64_t>(view.canvasWidth) * view.canvasHeight;
+    std::uint64_t bytes = 2 * pixels * 4;
+    if (view.stack[0].texture.texture)
+        bytes += 2 * pixels * 4;
+    bytes += static_cast<std::uint64_t>(view.coverage.size()) * pixels;
+    for (const auto& [id, textures] : _adjustments)
+    {
+        if (textures.displayResident || textures.lastUse != _lastUtilityComposeId)
+            continue;
+        bytes += textures.lut.texture ? 256ULL * 16 : 0;
+        bytes += textures.cubeTexture ? static_cast<std::uint64_t>(Adjust::kCubeDimension) * Adjust::kCubeDimension *
+                                            Adjust::kCubeDimension * 16
+                                      : 0;
     }
     return bytes;
 }

@@ -211,6 +211,12 @@ unchanged. This avoids outline traversal when opening a panel or reserving a har
   composite)` takes the document-sized composite the host rendered, trims it to its pixels (`TrimmedToAlpha`),
   places the result at the anchor's slot with clips onto merged layers re-targeted, validates the hierarchy and
   the clip graph, and records one entry named by the plan; a plan whose layers are gone is refused.
+  The asynchronous host uses worker-safe `PrepareMerge(plan, composite, cancellation)` to create the trimmed image and eager
+  thumbnail. Cancellation reaches the trim scan and crop; a cancelled preparation publishes no result.
+  Its privately constructed `PreparedMerge` owns the source plan and canvas dimensions.
+  `ApplyPreparedMerge` checks those dimensions, plan metadata, live ids, pixel budget and resulting graphs before
+  the same history insertion/clip repair. It refuses an unsettled gradient; the selected host continuation
+  settles earlier edits before taking the snapshot and validates its complete document token before apply.
 - `ClearDocument` drops the document, the active layer and selection, the collapsed set, every draft and pending
   edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
   `ReplaceDocument(document, active)` (File › Open, a new project from images) drops what `ClearDocument` drops and

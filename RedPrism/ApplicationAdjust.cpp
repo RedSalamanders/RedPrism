@@ -209,19 +209,11 @@ void Application::OpenAdjustmentEditor() noexcept
         DocumentChanged();
         return;
     }
-    const std::optional<Raster> below = CompositeBelow(id.value());
-    if (!below.has_value() || !_session.BeginAdjustmentEditing(id.value(), below.value(), true))
+    if (!_session.Document())
     {
         _session.SetAdjustmentEditingID(std::nullopt);
-    }
-    DocumentChanged();
-}
-
-std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
-{
-    if (!_session.Document().has_value())
-    {
-        return std::nullopt;
+        DocumentChanged();
+        return;
     }
     // Keep records for live-mask references and folder ancestry, but leave the adjustment itself and everything
     // above it out of the sampling image.
@@ -230,7 +222,7 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
     bool above = false;
     for (const Guid& layerId : RenderLayerIds(copy))
     {
-        if (layerId == id)
+        if (layerId == id.value())
         {
             above = true;
         }
@@ -241,17 +233,19 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
     }
     for (ImageLayer& layer : copy.layers)
     {
-        if (!layer.isGroup && (layer.id == id || hidden.contains(layer.id)))
+        if (!layer.isGroup && (layer.id == id.value() || hidden.contains(layer.id)))
         {
             layer.visible = false;
         }
     }
-    const std::optional<Raster> raster = ComposeDocumentReadback(copy);
-    if (raster.has_value() && raster->HasStorage())
+    _hostExecutionError =
+        StartUtilityReadback(std::move(copy), UtilityReadbackKind::AdjustmentOpening, std::nullopt, id);
+    if (FAILED(_hostExecutionError))
     {
-        return raster;
+        _session.SetAdjustmentEditingID(std::nullopt);
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_FLATTEN);
     }
-    return std::nullopt;
+    DocumentChanged();
 }
 
 void Application::ApplyColorEdit() noexcept

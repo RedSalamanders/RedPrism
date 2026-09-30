@@ -26,8 +26,11 @@ state change is pending. Operating-system scheduling noise is outside this contr
 - `Renderer::Render` MUST NOT run from `WM_PAINT`.
 - Hidden, minimized, or zero-size client: no `Present`, no render-target create. The swap chain MAY remain allocated
   at the last non-zero size until a later resize; a zero-size `WM_SIZE` suspends Present and MUST NOT call
-  `ResizeBuffers` to 0×0 as a way to keep presenting. Hidden documents MUST drop canvas GPU surfaces
+  `ResizeBuffers` to 0×0 as a way to keep presenting. Hidden documents MUST drop display canvas GPU surfaces
   (`CanvasRenderer::CanvasSurfaceBytes() == 0`).
+  Accepted utility jobs may retain their separate bounded off-screen targets and shared raster residents until
+  completion; they never call Present. The last utility owner releases those targets. No utility allocation
+  is kept merely to keep a hidden window active.
 - After `Present` reports `DXGI_STATUS_OCCLUDED`, stop content presents, wait for the DXGI factory occlusion-status
   window message, and recover with `DXGI_PRESENT_TEST` only. Occlusion polling is prohibited.
 - The swap chain MUST be created with `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` and maximum frame latency 1.
@@ -94,9 +97,9 @@ that makes them impossible.
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | Visible DxUi surfaces (C2) | Library cap (64 MiB visible, 0 when hidden) |
-| Hidden document GPU (C6) | 0 canvas surface bytes; no Prepare/Composite |
+| Hidden document GPU (C6/P1.3) | 0 display canvas surface bytes; no display Prepare/Composite/Present. Accepted utility work uses separate bounded targets and releases them at its last owner |
 | Composition (C6) | Only when the document changed or surfaces were rebuilt; a settled document composites 0 times per frame (`--self-test` proves it) |
-| GPU raster residency (C6) | Bounded to the rasters the last composition used; entries keep their `Raster` alive so identities never alias |
+| GPU raster residency (C6/P1.3) | Bounded to the union of settled display rasters and the latest accepted utility tile's residents; entries keep their `Raster` alive so identities never alias |
 | Compose/Present after warmup (C6) | No heap on the blit/Present path; composition may allocate transient CPU bookkeeping only when the document changed |
 | Dirty DxUi prep (C2) | Stay within DxUi Release ≤ 64 allocs/frame |
 | Brush (C10) | Tile 256²; mouse-up MUST NOT materialize a contiguous bitmap; changed tiles only per pointer update; history retains only the tiles a stroke replaced; measured per run under `Specs/TestRuns/` ([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)) |

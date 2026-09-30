@@ -141,6 +141,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _activeHostRequest.reset();
     _pendingPanelOpening.reset();
     _hostCommitStamp.reset();
+    _hostFinishedStamp.reset();
     _hostPrerequisite = {HostOutcome::Pending, 0};
     _hostStage = HostStage::Begin;
     _hostPathIndex = 0;
@@ -373,11 +374,15 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
-            if (!ExecuteHostInput())
+            _hostExecutionError = S_OK;
+            if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {
-                FinishHostContinuation({HostOutcome::Failed, E_FAIL});
+                FinishHostContinuation(
+                    {HostOutcome::Failed, FAILED(_hostExecutionError) ? _hostExecutionError : E_FAIL});
                 return;
             }
+            if (_hostCommitStamp || _historyWork.Busy())
+                return; // a utility graph retains this input and its ordinal through final apply/drop
             if (paths && _hostPathIndex < paths->paths.size())
             {
                 ++_hostPathIndex;
@@ -388,6 +393,9 @@ void Application::RunHostContinuation() noexcept
             }
             FinishHostContinuation(
                 {_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded, _hostBatchFailed ? E_FAIL : S_OK});
+            return;
+        case HostStage::Complete:
+            FinishHostContinuation({HostOutcome::Succeeded, S_OK});
             return;
         }
     }
@@ -405,6 +413,7 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
     }
     if (_activeHostRequest && _hostCommitStamp == stamp)
     {
+        _hostFinishedStamp = stamp;
         _hostCommitStamp.reset();
         _hostPrerequisite = {outcome, error};
     }
@@ -422,7 +431,13 @@ void Application::CancelHostContinuations() noexcept
     _pendingPanelOpening.reset();
     if (_hostCommitStamp)
     {
-        CancelColorCommit(); // keep the active receipt/input Pending until apply/drop acknowledges cancellation
+        if (_utilityTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_utilityTicket.value());
+        }
+        else
+            CancelColorCommit(); // retain the active receipt until apply/drop acknowledges cancellation
     }
     else
     {
@@ -441,6 +456,7 @@ void Application::CancelHostContinuations() noexcept
 
 void Application::StopHostContinuations() noexcept
 {
+    _startupPaths.reset();
     if (_hostSourceRegistered)
     {
         (void)_jobs.UnregisterUiActionSource(_continuationAction);

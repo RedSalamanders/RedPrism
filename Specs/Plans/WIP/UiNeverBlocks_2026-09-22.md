@@ -90,12 +90,15 @@
     - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
       - [x] P1.3a–c foundation — Capability route selection, resumable reservations/FIFO, shared event waits and bounded staging with native monitored-fence/lent-device/shutdown qualification; all x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuCompletionFoundation_2026-09-30.md)). Explicit fallback runtime coverage remains in the child plan.
       - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
+        - [x] Qualify separate utility targets, tiled adopted worker outputs, bounded rebind restart, explicit EnqueueSetEvent fallback, and Merge/adjustment-opening continuations. All x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuUtilityReadback_2026-09-30.md)).
+        - [ ] Migrate export, Copy Merged, wand, clone and sampler callers; measure the real loop before P1.3 closeout.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
     - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
     - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
+      - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
     - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.

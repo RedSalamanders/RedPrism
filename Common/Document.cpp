@@ -2242,40 +2242,80 @@ std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
     return plan;
 }
 
-bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
+std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(const MergePlan& plan,
+                                                                            const Raster& composite)
 {
-    ResolveGradient();
-    if (!_document.has_value() || !composite.HasStorage() || composite.Width() != _document.value().width ||
-        composite.Height() != _document.value().height || plan.ids.empty())
+    return PrepareMerge(plan, composite, {});
+}
+
+std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(const MergePlan& plan,
+                                                                            const Raster& composite,
+                                                                            const CancelToken& cancellation)
+{
+    if (cancellation.IsCancelled() || !composite.HasStorage() || composite.Format() != RasterFormat::Bgra8888 ||
+        plan.ids.empty())
     {
-        return false;
-    }
-    const std::vector<ImageLayer>& layers = _document.value().layers;
-    for (const Guid& id : plan.ids)
-    {
-        if (LayerById(layers, id) == nullptr)
-        {
-            return false;
-        }
+        return std::nullopt;
     }
     LayerTransform canvas;
-    canvas.size = Vec2{static_cast<double>(_document.value().width), static_cast<double>(_document.value().height)};
-    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas);
+    canvas.size = Vec2{static_cast<double>(composite.Width()), static_cast<double>(composite.Height())};
+    const Adjust::Trimmed trimmed = Adjust::TrimmedToAlpha(composite, canvas, cancellation);
     if (!trimmed.image.HasStorage())
     {
-        return false;
-    }
-    // Decision D7: the merged pixels fit the document's budget once the merged layers are gone (layers far apart
-    // merge into their whole bounding box).
-    if (static_cast<std::int64_t>(trimmed.image.PixelCount()) > PixelBudgetLeft(false, plan.removed))
-    {
-        _budgetRefused = true;
-        return false;
+        return std::nullopt;
     }
     ImageLayer merged = ImageLayer::Blank(plan.name, trimmed.transform.size);
     merged.transform = trimmed.transform;
     merged.asset = RasterAsset{trimmed.image, Raster::MakeThumbnail(trimmed.image), plan.name};
     merged.parentID = plan.parent;
+    if (cancellation.IsCancelled())
+        return std::nullopt;
+    return PreparedMerge{std::move(merged), composite.Width(), composite.Height(), plan};
+}
+
+bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared)
+{
+    if (_gradient)
+        return false; // owner apply cannot settle a raster kernel; the caller prepares after settlement
+    const ImageLayer& preparedLayer = prepared._layer;
+    if (!_document.has_value() || plan.ids.empty() || prepared._canvasWidth != _document.value().width ||
+        prepared._canvasHeight != _document.value().height || prepared._plan.ids != plan.ids ||
+        prepared._plan.removed != plan.removed || prepared._plan.name != plan.name ||
+        prepared._plan.parent != plan.parent || prepared._plan.anchor != plan.anchor ||
+        prepared._plan.action != plan.action || preparedLayer.name != plan.name ||
+        preparedLayer.parentID != plan.parent || preparedLayer.isGroup || !preparedLayer.asset.has_value() ||
+        !preparedLayer.asset.value().image.HasStorage() ||
+        preparedLayer.asset.value().image.Format() != RasterFormat::Bgra8888 ||
+        preparedLayer.asset.value().name != plan.name || !preparedLayer.visible || preparedLayer.opacity != 1.0 ||
+        preparedLayer.blendMode != LayerBlendMode::Normal || preparedLayer.maskSourceID.has_value() ||
+        preparedLayer.mask.has_value() || preparedLayer.adjustment.has_value() || preparedLayer.shape.has_value() ||
+        preparedLayer.shapeImage.HasStorage() || !preparedLayer.transform.IsValid())
+    {
+        return false;
+    }
+    const std::vector<ImageLayer>& layers = _document.value().layers;
+    std::unordered_set<Guid> planIds;
+    planIds.reserve(plan.ids.size());
+    for (const Guid& id : plan.ids)
+    {
+        if (!plan.removed.contains(id) || !planIds.insert(id).second || LayerById(layers, id) == nullptr)
+        {
+            return false;
+        }
+    }
+    if (plan.removed.size() != planIds.size() || !plan.removed.contains(plan.anchor))
+    {
+        return false;
+    }
+    // Decision D7: the merged pixels fit the document's budget once the merged layers are gone (layers far apart
+    // merge into their whole bounding box).
+    if (static_cast<std::int64_t>(preparedLayer.asset.value().image.PixelCount()) >
+        PixelBudgetLeft(false, plan.removed))
+    {
+        _budgetRefused = true;
+        return false;
+    }
+    ImageLayer merged = preparedLayer;
     std::vector<ImageLayer> next;
     for (const ImageLayer& layer : layers)
     {
@@ -2315,6 +2355,13 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
     SetActiveLayerID(merged.id);
     EndEdit();
     return true;
+}
+
+bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
+{
+    ResolveGradient();
+    const std::optional<PreparedMerge> prepared = PrepareMerge(plan, composite);
+    return prepared.has_value() && ApplyPreparedMerge(plan, prepared.value());
 }
 
 void DocumentSession::SetCropFrame(std::optional<CropRect> rect) noexcept

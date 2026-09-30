@@ -241,26 +241,9 @@ void Application::MergeLayersCommand() noexcept
         }
         flat.layers.push_back(std::move(copy));
     }
-    const std::optional<Raster> composite = ComposeDocumentReadback(flat);
-    if (!composite.has_value())
-    {
-        ShowError(IDS_ERROR_FLATTEN);
-        return;
-    }
-    if (!composite->HasStorage() || !_session.MergeLayers(plan.value(), composite.value()))
-    {
-        // A merge whose pixels would not fit the document's budget (Decision D7) says that, not that it failed.
-        if (_session.TakeBudgetRefusal())
-        {
-            ReportBudgetRefusal();
-        }
-        else
-        {
-            ShowError(IDS_ERROR_FLATTEN);
-        }
-        return;
-    }
-    DocumentChanged();
+    _hostExecutionError = StartUtilityReadback(std::move(flat), UtilityReadbackKind::Merge, plan);
+    if (FAILED(_hostExecutionError))
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_FLATTEN);
 }
 
 int Application::RunLayerEditsSelfTest() noexcept
@@ -339,6 +322,7 @@ int Application::RunLayerEditsSelfTest() noexcept
         return 5;
     }
     OnCommand(ChromeHost::kCommandMergeDown);
+    settle(); // observe the asynchronous result before inspecting committed pixels
     const ImageLayer* merged = _session.ActiveLayer();
     const Raster* pixels = merged != nullptr && merged->asset.has_value() ? &merged->asset->image : nullptr;
     const auto pixelAt = [&](int x, int y, int channel) -> int
@@ -552,6 +536,7 @@ int Application::RunLayerEditsSelfTest() noexcept
         EndGradientDrag();
         const bool pending = _session.PendingGradient() != nullptr;
         OnCommand(ChromeHost::kCommandMergeDown);
+        settle();
         const ImageLayer* result = _session.ActiveLayer();
         std::array<std::uint8_t, 4> start{};
         if (result != nullptr && result->asset.has_value())

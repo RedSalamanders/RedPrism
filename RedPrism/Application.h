@@ -11,6 +11,7 @@
 #include "Crop.h"
 #include "Document.h"
 #include "EditorTool.h"
+#include "GpuWork.h"
 #include "HistoryWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
@@ -38,6 +39,7 @@
 class ChromeHost;
 struct UiBenchmarkState;
 struct ColorWorkTestGate;
+struct UtilityWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -77,6 +79,7 @@ class Application final : public ChromeEvents
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
+    [[nodiscard]] bool OpenCommandLinePaths(std::span<const std::wstring_view> paths) noexcept;
     void Shutdown() noexcept;
     // Settings (Specs/Core/Core_Settings.md): the file to read, watch and write; empty for a run without one.
     void UseSettings(std::wstring path, const AppSettings& settings) noexcept;
@@ -246,7 +249,6 @@ class Application final : public ChromeEvents
     void AddAdjustmentLayer(int command) noexcept;
     void EditActiveAdjustment() noexcept;
     void OpenAdjustmentEditor() noexcept;
-    [[nodiscard]] std::optional<Raster> CompositeBelow(const Guid& id) noexcept;
     void ApplyColorEdit() noexcept;
     using HostOutcome = ContinuationOutcome;
     class ColorCommitJob;
@@ -300,6 +302,17 @@ class Application final : public ChromeEvents
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
+    class UtilityReadbackJob;
+    enum class UtilityReadbackKind
+    {
+        Merge,
+        AdjustmentOpening
+    };
+    [[nodiscard]] HRESULT PrepareUtilityDevice(HRESULT reason) noexcept;
+    [[nodiscard]] HRESULT StartUtilityReadback(CanvasDocument document, UtilityReadbackKind kind,
+                                               std::optional<DocumentSession::MergePlan> merge = std::nullopt,
+                                               std::optional<Guid> adjustment = std::nullopt) noexcept;
+    int RunUtilityReadbackSelfTest() noexcept;
     void RefreshColorJobs() noexcept;
     void ConfigureColorLookupPreview(ColorEditJobInput& input) const;
     void SyncColorLookupPreview() noexcept;
@@ -536,12 +549,20 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     JobScheduler _jobs;
+    GpuWorkQueue _gpuWork;
+    bool _gpuWorkInitialized = false;
+    HRESULT _gpuBindingError = E_PENDING;
     HistoryWork _historyWork;
     ContinuationAction _continuationAction{*this}; // stable borrowed source; unregister before joining jobs
     HostInputBudget _hostInputBudget;              // outlives queued and active request reservations
+    std::optional<HostRequest> _startupPaths;      // owned until Run initializes the document and can bind its serial
     HostRequestQueue _hostRequests;
     std::optional<HostRequestQueue::Entry> _activeHostRequest;
     std::optional<HistoryWorkStamp> _hostCommitStamp;
+    std::optional<HistoryWorkStamp> _hostFinishedStamp;
+    std::optional<HistoryWorkStamp> _utilityStamp;
+    std::optional<JobTicket> _utilityTicket;
+    std::shared_ptr<UtilityWorkTestGate> _utilityWorkTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;
@@ -554,7 +575,8 @@ class Application final : public ChromeEvents
         Output,
         Settle,
         Write,
-        Execute
+        Execute,
+        Complete
     };
     HostStage _hostStage = HostStage::Begin;
     HostStage _hostAfterPrerequisite = HostStage::Execute;
@@ -565,6 +587,7 @@ class Application final : public ChromeEvents
     bool _hostSaveBeforeAction = false;
     bool _hostBatchFailed = false;
     bool _hostExecuting = false; // only the selected runner can enter an already approved action
+    HRESULT _hostExecutionError = S_OK;
     std::uint64_t _sizeInvocation = 0;
     std::uint64_t _endSessionGeneration = 0;
     std::optional<Prompts::Answer> _forcedDiscardAnswer;

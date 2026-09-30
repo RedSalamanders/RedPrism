@@ -17,6 +17,7 @@
 #include <new>
 #include <optional>
 #include <shellapi.h>
+#include <span>
 #include <string>
 #include <string_view>
 #include <windows.h>
@@ -69,18 +70,6 @@ int __cdecl HarnessCrtReportHook(int reportType, char* message, int* returnValue
     std::_Exit(3);
 }
 #endif
-
-bool HasArgument(wchar_t* const* arguments, int argumentCount, std::wstring_view expected) noexcept
-{
-    for (int index = 1; index < argumentCount; ++index)
-    {
-        if (expected == arguments[index])
-        {
-            return true;
-        }
-    }
-    return false;
-}
 
 void EmitCommandLineText(const std::wstring& text, bool error, bool quiet) noexcept
 {
@@ -181,14 +170,12 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         return 1;
     }
 
-    const bool selfTest = HasArgument(arguments.get(), argumentCount, RedPrismSwitchName(RedPrismSwitch::SelfTest));
-    for (int index = 1; index < argumentCount; ++index)
+    const RedPrismCommandLineScan commandLineScan = RedPrismScanCommandLine(arguments.get(), argumentCount);
+    const bool selfTest = commandLineScan.selfTest;
+    if (commandLineScan.help)
     {
-        if (RedPrismIsHelpArgument(arguments.get()[index]))
-        {
-            EmitCommandLineText(RedPrismFormatCommandLineHelp(), false, selfTest);
-            return 0;
-        }
+        EmitCommandLineText(RedPrismFormatCommandLineHelp(), false, selfTest);
+        return 0;
     }
     if (const wchar_t* unknown = RedPrismFindUnknownArgument(arguments.get(), argumentCount))
     {
@@ -315,10 +302,27 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     application->UseSettings(std::move(settingsPath), settings);
 
     const HRESULT processing = application->InitializeProcessing();
-    const int exitCode = FAILED(processing)        ? 1
-                         : parsed.selfTest         ? application->RunSelfTest()
-                         : parsed.bench != nullptr ? application->RunBenchmark()
-                                                   : application->Run(showCommand);
+    int exitCode = 1;
+    if (SUCCEEDED(processing))
+    {
+        const std::span<const std::wstring_view> inputPaths{parsed.inputPaths.data(), parsed.inputPathCount};
+        if (parsed.inputPathCount != 0 && !application->OpenCommandLinePaths(inputPaths))
+        {
+            OutputDebugStringW(L"Command-line paths could not be queued.\n");
+        }
+        else if (parsed.selfTest)
+        {
+            exitCode = application->RunSelfTest();
+        }
+        else if (parsed.bench != nullptr)
+        {
+            exitCode = application->RunBenchmark();
+        }
+        else
+        {
+            exitCode = application->Run(showCommand);
+        }
+    }
     // All modes, including early self-test/bench failures, join before UIA/device/satellite/STA teardown.
     application->Shutdown();
     if (exitCode != 0 && !parsed.selfTest && parsed.bench == nullptr && parsed.screenshotPath == nullptr)

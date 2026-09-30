@@ -204,6 +204,8 @@
     <ClCompile Include="CanvasRenderer.cpp" />
     <ClCompile Include="GpuCapabilities.cpp" />
     <ClCompile Include="GpuWork.cpp" />
+    <ClCompile Include="DocumentReadbackJob.cpp" />
+    <ClCompile Include="ApplicationReadbackJobs.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />
     <ClCompile Include="ChromeHost.cpp" />

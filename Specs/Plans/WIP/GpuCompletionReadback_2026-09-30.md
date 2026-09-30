@@ -9,16 +9,21 @@
   - [x] Implement suspension/resume with delayed promotion after hooks and retained graph/FIFO ownership.
   - [x] Review stage tests, remove a blocking test hook and correct failed/younger-stage expectations; initial Debug HostTests pass.
 - [x] P1.3b — Add an owner pump shared by the production loop and SettleJobs; distinguish ready work from waiting work.
-- [ ] P1.3c — Add the bounded readback ring, one-shot event waits, UI mapping after completion and worker copying.
+- [x] P1.3c — Add the bounded readback ring, one-shot event waits, UI mapping after completion and worker copying.
   - [x] Implement eight slots, two in-flight copies, power-of-two staging classes, 64 MiB texel accounting and capacity waits.
   - [x] Share the scheduler's existing event wait pool; no second wait pool/thread.
   - [x] Qualify cropped/single-pixel copies, map cancellation, rebind retention and full-ring acknowledgement on the reported native monitored-fence route.
-  - [ ] Execute the EnqueueSetEvent fallback explicitly on a supported device; keep production selection conservative.
+  - [x] Execute the EnqueueSetEvent fallback explicitly on a supported device; keep production selection conservative. All x64 gates and ARM64 cross-builds pass.
 - [x] P1.3c — Retain mapped slots through device retirement and shutdown until the copying worker has joined.
-- [ ] P1.3d — Add separate off-screen utility composition, tiled full-image readback and region/1-pixel sampling.
+- [x] P1.3d — Add separate off-screen utility composition, tiled full-image readback and region/1-pixel request infrastructure.
+  - [x] Qualify separate targets/shared raster cache and atomic producer-compose/copy recording.
+  - [x] Qualify the single-reservation tiled worker job, adopted output, cancellation and bounded restart.
 - [ ] P1.3e — Migrate merge, opening adjustment composites, export/Copy Merged and wand/clone/sampler callers.
+  - [x] Qualify Merge and adjustment-opening continuations, worker crop/thumbnail, cancellation and exact apply tokens.
+  - [ ] Migrate remaining export, clipboard, wand, clone and sampler consumers.
 - [ ] P1.3f — Prove hidden completion, cancellation, stale generation, device loss, saturation and shutdown with owned event gates.
-- [ ] P1.3f — Run all configuration gates, record real-loop measurements, reconcile domain specs and commit/push.
+- [ ] P1.3f — Complete caller qualification and real-loop measurements; reconcile domain specs and commit/push each slice.
+  - [x] Utility/Merge/opening slice: all x64 gates and ARM64 cross-builds pass; specifications and evidence reconciled.
 - [ ] Move this plan to Done after all P1.3 callers and validation are complete.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.3.
@@ -103,8 +108,12 @@ longer in use.
    only after acknowledgement, preserves pixels/history and never authorizes a later write or replacement.
    Keep the synchronous ComposeReadback overload only for diagnostic numeric references/harnesses.
 
-This sequence is still open. It is the next implementation work after foundation qualification/commit, not a
-claim that current production callers or G1 have passed.
+Qualified utility slice: separate utility targets and produced-source recording are wired to a tiled worker
+job. The host owns the queue, binds it on renderer generations, and stops event producers before worker join.
+Merge and adjustment-editor opening now use retained continuation/history acquisitions; Merge crop/thumbnail
+preparation moves to the worker. All x64 gates and ARM64 cross-builds pass; see
+[GpuUtilityReadback_2026-09-30.md](../../TestRuns/GpuUtilityReadback_2026-09-30.md).
+Remaining caller migrations, physical device-removal qualification and G1 remain open.
 
 ## Validation
 
@@ -116,12 +125,13 @@ zero Present while hidden, zero polling, storage/slot bounds and exactly one fin
 Record Release dispatch/apply distributions separately from fence/copy/end-to-end time; timing is not asserted in
 ordinary tests. ARM64 cross-builds do not establish native runtime qualification.
 
-Progress: P1.2 is committed/pushed as `faf3cbf`. The foundation passes x64 Debug/Release/ASan tests and all three
+Foundation record: P1.2 is committed/pushed as `faf3cbf`. The foundation passes x64 Debug/Release/ASan tests and all three
 ARM64 cross-builds on the frozen source. Capability and stage sidecars were reviewed, corrected and integrated;
 the primary agent implemented scheduler stages and queue ownership. WARP reports monitored-fence support and
-executes that native route; explicit EnqueueSetEvent runtime coverage remains open. The queue currently has no
-production command consumers. Utility composition, host callers, real-loop/restart policy and P1.3 completion
-remain open. Evidence: [GpuCompletionFoundation_2026-09-30.md](../../TestRuns/GpuCompletionFoundation_2026-09-30.md).
+executes that native route. At that foundation commit, explicit fallback runtime and production consumers remained
+open. The utility slice above adds those fallback tests, Merge/opening consumers and bounded restart. Remaining
+callers, real-loop measurements and P1.3 completion remain open.
+Foundation evidence: [GpuCompletionFoundation_2026-09-30.md](../../TestRuns/GpuCompletionFoundation_2026-09-30.md).
 
 The staging cap counts power-of-two texture texel storage, including cached, lent and retiring slots. Driver
 allocation/row-padding overhead is not exposed as an exact resource size and remains within global memory

@@ -196,6 +196,12 @@ verified DWORD span are counted separately as `inlineTableVectorData`; other cod
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 
+The observed Debug `std::variant` RAX-base form requires exactly LEA RAX of image base,
+one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, and JMP RCX. It additionally requires
+the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned table start; all existing
+decoded-target and table-bound checks apply. Corrupted registers, sequences, symbols, targets, and real vector
+instructions beside the table remain refused. This adds no object/function runtime exemption.
+
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
 LEA EAX with disp8, compare EAX with imm8, then forward JA. Every instruction preserves R8. Both branch destinations

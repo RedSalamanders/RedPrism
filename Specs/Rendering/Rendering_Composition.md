@@ -199,12 +199,13 @@ never the display composite, a panel's preview raster or the stroke preview (`En
 for its layer only in the display). It marks the display dirty, so the next frame composes the display document
 again (legacy `sampleCompositeColor` draws the document itself).
 
-The host takes the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
+Remaining synchronous host callers take the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
 `PixelBuffer` and adopted directly as BGRA8888, with no second full-image CPU copy. The vector overload remains for
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
-are never published. Readback is still synchronous at this stage; fenced completion belongs to pipeline slice P1.3.
+are never published. Merge and adjustment opening use the asynchronous utility path below; export, clipboard,
+wand and sampling callers still require migration in P1.3.
 
-## GPU readback queue foundation (P1.3)
+## GPU readback queue and utility composition (P1.3)
 
 `GpuCapabilities::Probe` borrows a device and its immediate context, verifies their COM identity and rejects
 null, deferred or mismatched contexts. Optional feature/interface queries retain both availability and HRESULT;
@@ -230,9 +231,33 @@ their old context/texture/fence alive until worker acknowledgement, and their by
 same staging cap. No command is recorded on a retired context. Consumers validate returned device generations
 before publication. Shutdown disarms/joins wait producers, joins copying workers, then unmaps/releases leftovers.
 
-This foundation is exercised without a window or Present. Production readback callers still use the synchronous
-path above until P1.3's utility-composition and host migrations land; it does not establish application-wide
-nonblocking readbacks or automatic restart after device loss.
+`Application` owns this queue and binds it when the renderer's exact generation changes. Stop event producers
+before joining scheduler workers, then release queue owners before composition/device teardown.
+
+Utility composition has separate two-canvas, stack and coverage targets. It shares the owning raster/region and
+adjustment caches with display composition; residency is the union of the latest utility tile and settled display.
+Utility recording saves/restores view bookkeeping without invalidating the display or incrementing its compose
+count. It ignores stroke and color-panel previews and records no mips. `AcquireUtility` retains those targets;
+the last matching release drops utility-only owners. Hidden display release still reports zero display surface
+bytes and never presents, while accepted utility jobs may finish with their separate targets.
+
+`EnqueueProducedReadback` invokes a job-owned producer inside the owner recording stage, immediately followed by
+the staging copy. Another request cannot overwrite the reusable utility target between those commands. The
+producer returns a borrowed source only for that call; all pending/waiting COM owners stay in the queue.
+
+`DocumentReadbackJob` owns one immutable document/region and reservation through its complete tiled graph. Worker
+stages allocate an aligned output, copy rows using the validated pitch, check cancellation per row and adopt only
+the finished raster. Owner stages acknowledge each lease before the next tile and publish once. Full-image,
+region and 1×1 requests compose only their requested bounds, in tiles at most 2048 or half the lower device/test
+texture limit, retaining the synchronous traversal's guard room for transformed sampling footprints.
+An optional final worker step prepares Merge's trim/thumbnail under the same reservation. A generation/device
+failure restarts the whole graph at most twice, releasing the previous attempt on a worker; it never publishes
+partial pixels. Unsupported completion, capacity, memory or persistent device failures fail locally.
+
+Merge and adjustment-editor opening use this path, retain their selected history acquisition through apply/drop,
+and validate complete snapshot and device generations before use. Remaining export/clipboard/wand/clone/sampler
+consumers still migrate in P1.3. Synchronous readback remains their current path and the diagnostic numeric
+reference; application-wide nonblocking readbacks and G1 are not yet established.
 
 ## Failures
 

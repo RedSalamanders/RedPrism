@@ -4,6 +4,7 @@
 #include "CanvasRenderer.h"
 #include "CanvasViewport.h"
 #include "Document.h"
+#include "DocumentReadbackTests.h"
 #include "FrameScheduler.h"
 #include "GpuCapabilityTests.h"
 #include "GpuWorkTests.h"
@@ -1947,6 +1948,7 @@ int wmain()
     TestViewport();
     gFailures += RunGpuCapabilityTests();
     gFailures += RunGpuWorkTests();
+    gFailures += RunDocumentReadbackTests();
     TestFrameLoop();
     Harness harness;
     if (harness.Ready())

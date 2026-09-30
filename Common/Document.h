@@ -1424,10 +1424,45 @@ class DocumentSession
         Guid anchor;
         std::wstring action; // Merge Down, Merge Group or Merge Layers
     };
+    // Worker-safe pixel preparation. The layer and plan snapshot are immutable after construction; the raster
+    // handles they own refer to immutable storage. Canvas dimensions let the UI thread reject stale results.
+    class PreparedMerge
+    {
+      public:
+        [[nodiscard]] const ImageLayer& Layer() const noexcept
+        {
+            return _layer;
+        }
+        [[nodiscard]] int CanvasWidth() const noexcept
+        {
+            return _canvasWidth;
+        }
+        [[nodiscard]] int CanvasHeight() const noexcept
+        {
+            return _canvasHeight;
+        }
+
+      private:
+        PreparedMerge(ImageLayer mergedLayer, int width, int height, MergePlan sourcePlan)
+            : _layer(std::move(mergedLayer)), _canvasWidth(width), _canvasHeight(height), _plan(std::move(sourcePlan))
+        {
+        }
+        ImageLayer _layer;
+        int _canvasWidth;
+        int _canvasHeight;
+        MergePlan _plan;
+        friend class DocumentSession;
+    };
     [[nodiscard]] std::optional<MergePlan> PlanMerge() const;
+    // PrepareMerge is worker-safe and owns all pixel trimming and thumbnail work. ApplyPreparedMerge is the
+    // session-owned validation/history step; MergeLayers remains the synchronous compatibility wrapper.
+    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite);
+    [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite,
+                                                                   const class CancelToken& cancellation);
+    [[nodiscard]] bool ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared);
     // `composite`: the plan's layers flattened as the canvas shows them (document-sized BGRA from the composition).
-    // Trimmed to its pixels it replaces them in their place, layers clipped to any of them clip to it, as one entry
-    // named by the plan; false when the plan does not fit the document any more.
+    // The trimmed result replaces them in their place, layers clipped to any of them clip to it, as one entry named
+    // by the plan; false when the plan does not fit the document any more.
     [[nodiscard]] bool MergeLayers(const MergePlan& plan, const Raster& composite);
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);

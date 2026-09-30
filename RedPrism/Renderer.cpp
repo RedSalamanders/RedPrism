@@ -486,6 +486,11 @@ HRESULT Renderer::RecoverFromStage() noexcept
     return SUCCEEDED(recoveryResult) ? S_FALSE : recoveryResult;
 }
 
+HRESULT Renderer::RecoverDeviceForUtility(HRESULT result) noexcept
+{
+    return DeviceLostAfter(result) ? RecoverDevice() : S_OK;
+}
+
 HRESULT Renderer::Render(ChromeHost* chrome, CanvasRenderer* composition, const CanvasViewport* viewport,
                          const CanvasDocument* document) noexcept
 {

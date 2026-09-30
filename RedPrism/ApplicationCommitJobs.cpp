@@ -97,6 +97,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
             return _colorCommitOutcome;
         }
         _session.CommitColorEdit();
+        _hostFinishedStamp = _colorCommitStamp;
         (void)_historyWork.Finish(_colorCommitStamp.value());
         _colorCommitStamp.reset();
         _colorCommitOutcome = _session.HasColorEdit() ? HostOutcome::Failed : HostOutcome::Succeeded;

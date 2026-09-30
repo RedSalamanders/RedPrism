@@ -48,6 +48,19 @@ class CanvasRenderer final
     }
     // The display composite (with the stroke preview in place of its layer), at the proxy scale the document needs.
     HRESULT Compose(const CanvasDocument& document) noexcept;
+    // Owner-only utility lifetime. Targets are separate from the display; shared raster residents are retained
+    // by both uses. The last release drops utility surfaces/cache usage. No utility operation dirties the display.
+    [[nodiscard]] bool AcquireUtility() noexcept;
+    void ReleaseUtility() noexcept;
+    // Record a committed document region at full resolution. The caller must record its staging Copy in this
+    // same owner call: the reusable target can be overwritten by the next utility region. Never waits/readbacks.
+    HRESULT ComposeUtilityTile(const CanvasDocument& document, const D3D11_BOX& region,
+                               wil::com_ptr_nothrow<ID3D11Texture2D>& texture) noexcept;
+    [[nodiscard]] std::uint64_t UtilitySurfaceBytes() const noexcept;
+    [[nodiscard]] std::uint64_t UtilityCompositeCount() const noexcept
+    {
+        return _utilityCompositeCount;
+    }
     struct AdjustmentPreview final
     {
         Guid layerId;
@@ -173,6 +186,7 @@ class CanvasRenderer final
         // last composition did not use are released, which bounds residency to the current document.
         Raster keepAlive;
         std::uint64_t lastUse = 0;
+        bool displayResident = false;
         int width = 0; // texels
         int height = 0;
         // The part of the raster (or stroke grid) the texels hold, in its pixels, and the reduction: each texel is
@@ -266,6 +280,7 @@ class CanvasRenderer final
         wil::com_ptr_nothrow<ID3D11Texture3D> cubeTexture;
         wil::com_ptr_nothrow<ID3D11ShaderResourceView> cubeSrv;
         std::uint64_t lastUse = 0;
+        bool displayResident = false;
     };
 
     // A rectangle of a raster's (or grid's) pixels.
@@ -293,6 +308,8 @@ class CanvasRenderer final
 
     HRESULT PrepareView(int originX, int originY, int scale, UINT width, UINT height) noexcept;
     HRESULT ComposeView(const CanvasDocument& document) noexcept;
+    void SwapUtilityView() noexcept;
+    void ReleaseUtilitySurfaces() noexcept;
     HRESULT ReadCanvas(std::uint8_t* out, std::size_t outStride, UINT width, UINT height) noexcept;
     HRESULT ComposeReadbackRows(const CanvasDocument& document, std::uint8_t* out) noexcept;
     [[nodiscard]] int ScaleToFit(int width, int height) const noexcept;
@@ -399,4 +416,34 @@ class CanvasRenderer final
     std::uint64_t _composeId = 0;
     bool _documentDirty = true;
     bool _ignoreStroke = false; // a readback composes the committed document, never the preview
+    struct UtilityView final
+    {
+        Surface canvas[2];
+        Surface stack[2];
+        std::vector<Surface> coverage;
+        std::size_t coverageUsed = 0;
+        std::unordered_map<Guid, const ImageLayer*> byId;
+        std::unordered_map<Guid, int> liveCoverageIndex;
+        std::unordered_map<Guid, int> groupCoverageIndex;
+        std::vector<Guid> renderIds;
+        std::vector<std::uint8_t> consumed;
+        UINT canvasWidth = 0;
+        UINT canvasHeight = 0;
+        bool canvasHasMips = false;
+        bool canvasMipsStale = false;
+        int viewOriginX = 0;
+        int viewOriginY = 0;
+        int viewScale = 1;
+        int displayScale = 1;
+        int documentWidth = 0;
+        int documentHeight = 0;
+        int front = 0;
+        int stackFront = 0;
+        bool documentDirty = true;
+    };
+    UtilityView _utilityView;
+    std::size_t _utilityUsers = 0;
+    std::uint64_t _utilityCompositeCount = 0;
+    std::uint64_t _lastUtilityComposeId = 0;
+    bool _utilityRecording = false;
 };

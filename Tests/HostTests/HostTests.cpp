@@ -189,6 +189,33 @@ void TestCommandLine() noexcept
     Expect(RedPrismFindSwitch(L"--crash-probe-worker") != nullptr, "cli.crash-probe-worker");
     Expect(RedPrismFindSwitch(L"--no-such") == nullptr, "cli.unknown-switch");
 
+    wchar_t scanMarker[] = L"--";
+    wchar_t scanHelp[] = L"--help";
+    wchar_t scanSelfTest[] = L"--self-test";
+    wchar_t* literalSwitchArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanMarker, scanHelp, scanSelfTest};
+    const RedPrismCommandLineScan literalSwitchScan = RedPrismScanCommandLine(literalSwitchArgs, 4);
+    Expect(!literalSwitchScan.help && !literalSwitchScan.selfTest && !literalSwitchScan.harnessMode,
+           "cli.preflight-switches-after-marker-are-positional");
+    RedPrismCommandLine literalSwitchParsed{};
+    const wchar_t* literalSwitchError = nullptr;
+    Expect(RedPrismParseCommandLine(literalSwitchArgs, 4, literalSwitchParsed, &literalSwitchError) &&
+               literalSwitchParsed.inputPathCount == 2 &&
+               literalSwitchParsed.inputPaths[0] == std::wstring_view{scanHelp} &&
+               literalSwitchParsed.inputPaths[1] == std::wstring_view{scanSelfTest},
+           "cli.help-and-self-test-after-marker-remain-positional");
+
+    wchar_t scanBench[] = L"--bench";
+    wchar_t* benchHelpValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanBench, scanHelp};
+    const RedPrismCommandLineScan benchHelpValueScan = RedPrismScanCommandLine(benchHelpValueArgs, 3);
+    Expect(!benchHelpValueScan.help && !benchHelpValueScan.selfTest && benchHelpValueScan.harnessMode,
+           "cli.preflight-switch-value-is-not-help");
+
+    wchar_t scanDemo[] = L"--demo";
+    wchar_t* demoSelfTestValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanDemo, scanSelfTest};
+    const RedPrismCommandLineScan demoSelfTestValueScan = RedPrismScanCommandLine(demoSelfTestValueArgs, 3);
+    Expect(!demoSelfTestValueScan.help && !demoSelfTestValueScan.selfTest && demoSelfTestValueScan.harnessMode,
+           "cli.preflight-switch-value-is-not-self-test");
+
     wchar_t unknown[] = L"--no-such";
     wchar_t* args[] = {const_cast<wchar_t*>(L"RedPrism.exe"), unknown};
     Expect(std::wstring_view{RedPrismFindUnknownArgument(args, 2)} == L"--no-such", "cli.unknown-scan");
@@ -203,6 +230,149 @@ void TestCommandLine() noexcept
     Expect(RedPrismParseCommandLine(shotArgs, 3, parsed, &error) && parsed.screenshotPath != nullptr &&
                parsed.screenshotPath == std::wstring_view{png},
            "cli.screenshot-parse");
+
+    wchar_t* missingScreenshotValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot};
+    Expect(!RedPrismParseCommandLine(missingScreenshotValueArgs, 2, parsed, &error) && error == screenshot,
+           "cli.screenshot-missing-value");
+
+    wchar_t firstPath[] = L"C:\\art\\雪.png";
+    wchar_t secondPath[] = L"D:\\素材\\é.png";
+    wchar_t warpSwitch[] = L"--warp";
+    wchar_t isaSwitch[] = L"--isa";
+    wchar_t isaValue[] = L"scalar";
+    wchar_t* positionalArgs[] = {
+        const_cast<wchar_t*>(L"RedPrism.exe"), firstPath, warpSwitch, isaSwitch, isaValue, secondPath};
+    parsed = {};
+    Expect(RedPrismFindUnknownArgument(positionalArgs, 6) == nullptr &&
+               RedPrismParseCommandLine(positionalArgs, 6, parsed, &error) && parsed.warp &&
+               parsed.isa == KernelIsa::Scalar && parsed.inputPathCount == 2 &&
+               parsed.inputPaths[0] == std::wstring_view{firstPath} &&
+               parsed.inputPaths[1] == std::wstring_view{secondPath},
+           "cli.positional-unicode-order-and-known-value");
+    firstPath[0] = L'X';
+    Expect(parsed.inputPaths[0].data() == firstPath && parsed.inputPaths[0][0] == L'X',
+           "cli.positional-borrowed-lifetime");
+
+    wchar_t endMarker[] = L"--";
+    wchar_t dashPath[] = L"-literal-name.png";
+    wchar_t* markedArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), warpSwitch, endMarker, dashPath};
+    parsed = {};
+    Expect(RedPrismFindUnknownArgument(markedArgs, 4) == nullptr &&
+               RedPrismParseCommandLine(markedArgs, 4, parsed, &error) && parsed.warp && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0] == std::wstring_view{dashPath},
+           "cli.positional-end-marker");
+    wchar_t* bareDashPath[] = {const_cast<wchar_t*>(L"RedPrism.exe"), dashPath};
+    Expect(RedPrismFindUnknownArgument(bareDashPath, 2) == dashPath &&
+               !RedPrismParseCommandLine(bareDashPath, 2, parsed, &error) && error == dashPath,
+           "cli.positional-leading-dash-requires-marker");
+
+    wchar_t emptyPath[] = L"";
+    wchar_t* emptyPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), emptyPath};
+    Expect(RedPrismFindUnknownArgument(emptyPathArgs, 2) == emptyPath &&
+               !RedPrismParseCommandLine(emptyPathArgs, 2, parsed, &error) && error == emptyPath,
+           "cli.positional-empty-rejected");
+
+    wchar_t* nullPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), nullptr};
+    Expect(RedPrismFindUnknownArgument(nullPathArgs, 2) != nullptr &&
+               !RedPrismParseCommandLine(nullPathArgs, 2, parsed, &error) && error != nullptr,
+           "cli.positional-null-rejected");
+
+    std::array<wchar_t, RedPrismCommandLine::kMaximumPathLength + 2> pathBoundary{};
+    pathBoundary.fill(L'a');
+    pathBoundary[RedPrismCommandLine::kMaximumPathLength] = L'\0';
+    wchar_t* maxPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), pathBoundary.data()};
+    parsed = {};
+    Expect(RedPrismParseCommandLine(maxPathArgs, 2, parsed, &error) && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0].size() == RedPrismCommandLine::kMaximumPathLength,
+           "cli.positional-maximum-length-accepted");
+    pathBoundary[RedPrismCommandLine::kMaximumPathLength] = L'b';
+    pathBoundary[RedPrismCommandLine::kMaximumPathLength + 1] = L'\0';
+    Expect(RedPrismFindSwitch(pathBoundary.data()) == nullptr, "cli.overlong-switch-rejected-with-bounded-scan");
+    parsed.warp = true;
+    Expect(RedPrismFindUnknownArgument(maxPathArgs, 2) == pathBoundary.data() &&
+               !RedPrismParseCommandLine(maxPathArgs, 2, parsed, &error) && error == pathBoundary.data() &&
+               parsed.warp && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0].size() == RedPrismCommandLine::kMaximumPathLength,
+           "cli.positional-overlong-rejected-before-output-mutation");
+
+    wchar_t* overlongScreenshotValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, pathBoundary.data()};
+    Expect(RedPrismFindUnknownArgument(overlongScreenshotValueArgs, 3) == pathBoundary.data() &&
+               !RedPrismParseCommandLine(overlongScreenshotValueArgs, 3, parsed, &error) &&
+               error == pathBoundary.data() && parsed.warp,
+           "cli.overlong-switch-value-rejected-before-view-construction");
+
+    wchar_t* nullScreenshotValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, nullptr};
+    Expect(RedPrismFindUnknownArgument(nullScreenshotValueArgs, 3) != nullptr &&
+               !RedPrismParseCommandLine(nullScreenshotValueArgs, 3, parsed, &error) && error != nullptr && parsed.warp,
+           "cli.null-switch-value-rejected");
+
+    std::array<std::array<wchar_t, 2>, RedPrismCommandLine::kMaximumInputPathCount + 1> pathTokens{};
+    std::array<wchar_t*, RedPrismCommandLine::kMaximumInputPathCount + 2> manyPathArgs{};
+    manyPathArgs[0] = const_cast<wchar_t*>(L"RedPrism.exe");
+    for (size_t index = 0; index < pathTokens.size(); ++index)
+    {
+        pathTokens[index][0] = L'p';
+        manyPathArgs[index + 1] = pathTokens[index].data();
+    }
+    parsed = {};
+    Expect(RedPrismParseCommandLine(manyPathArgs.data(),
+                                    static_cast<int>(RedPrismCommandLine::kMaximumInputPathCount + 1), parsed,
+                                    &error) &&
+               parsed.inputPathCount == RedPrismCommandLine::kMaximumInputPathCount,
+           "cli.positional-maximum-count-accepted");
+    parsed.warp = true;
+    Expect(RedPrismFindUnknownArgument(manyPathArgs.data(), static_cast<int>(manyPathArgs.size())) ==
+                   pathTokens.back().data() &&
+               !RedPrismParseCommandLine(manyPathArgs.data(), static_cast<int>(manyPathArgs.size()), parsed, &error) &&
+               error == pathTokens.back().data() && parsed.warp &&
+               parsed.inputPathCount == RedPrismCommandLine::kMaximumInputPathCount,
+           "cli.positional-excess-count-rejected-before-output-mutation");
+
+    wchar_t selfTestSwitch[] = L"--self-test";
+    wchar_t* harnessPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), firstPath, selfTestSwitch};
+    Expect(RedPrismFindUnknownArgument(harnessPathArgs, 3) == firstPath &&
+               !RedPrismParseCommandLine(harnessPathArgs, 3, parsed, &error) && error == firstPath,
+           "cli.positional-rejected-in-harness-mode");
+    wchar_t* screenshotPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, png, firstPath};
+    Expect(RedPrismFindUnknownArgument(screenshotPathArgs, 4) == firstPath &&
+               !RedPrismParseCommandLine(screenshotPathArgs, 4, parsed, &error) && error == firstPath,
+           "cli.positional-rejected-in-screenshot-mode");
+    wchar_t* benchPathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), const_cast<wchar_t*>(L"--bench"),
+                                const_cast<wchar_t*>(L"brush"), firstPath};
+    Expect(RedPrismFindUnknownArgument(benchPathArgs, 4) == firstPath &&
+               !RedPrismParseCommandLine(benchPathArgs, 4, parsed, &error) && error == firstPath,
+           "cli.positional-rejected-in-benchmark-mode");
+    wchar_t* crashProbePathArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), const_cast<wchar_t*>(L"--crash-probe"),
+                                     const_cast<wchar_t*>(L"C:\\dumps"), firstPath};
+    Expect(RedPrismFindUnknownArgument(crashProbePathArgs, 4) == firstPath &&
+               !RedPrismParseCommandLine(crashProbePathArgs, 4, parsed, &error) && error == firstPath,
+           "cli.positional-rejected-in-crash-probe-mode");
+    wchar_t* warpIsaPaths[] = {const_cast<wchar_t*>(L"RedPrism.exe"), firstPath, warpSwitch, isaSwitch, isaValue};
+    parsed = {};
+    Expect(RedPrismFindUnknownArgument(warpIsaPaths, 5) == nullptr &&
+               RedPrismParseCommandLine(warpIsaPaths, 5, parsed, &error) && parsed.inputPathCount == 1,
+           "cli.positional-allowed-with-warp-isa");
+
+    wchar_t resetPath[] = L"reset.png";
+    wchar_t* resetArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), resetPath};
+    Expect(RedPrismParseCommandLine(resetArgs, 2, parsed, &error) && !parsed.warp && parsed.isa == KernelIsa::Auto &&
+               parsed.inputPathCount == 1 && parsed.inputPaths[0] == std::wstring_view{resetPath},
+           "cli.repeated-parse-resets-state");
+
+    parsed.warp = true;
+    parsed.screenshotPath = png;
+    parsed.inputPaths[0] = std::wstring_view{firstPath};
+    parsed.inputPathCount = 1;
+    wchar_t* missingDemoValueArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), scanDemo};
+    Expect(!RedPrismParseCommandLine(missingDemoValueArgs, 2, parsed, &error) && error == scanDemo && parsed.warp &&
+               parsed.screenshotPath == png && parsed.inputPathCount == 1 &&
+               parsed.inputPaths[0] == std::wstring_view{firstPath},
+           "cli.failure-keeps-previous-output-atomic");
+
+    wchar_t emptyScreenshotPath[] = L"";
+    wchar_t* emptyScreenshotArgs[] = {const_cast<wchar_t*>(L"RedPrism.exe"), screenshot, emptyScreenshotPath};
+    Expect(!RedPrismParseCommandLine(emptyScreenshotArgs, 3, parsed, &error) && error == screenshot,
+           "cli.screenshot-empty-value-rejected");
 
     wchar_t dpiSwitch[] = L"--dpi";
     wchar_t dpiValue[] = L"144";

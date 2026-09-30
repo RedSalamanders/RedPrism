@@ -220,8 +220,24 @@ cancel after mapping, a device rebind while rows remain lent, duplicate lease re
 two-copy in-flight bounds and 64 MiB staging saturation that waits for an owned acknowledgement message.
 Shutdown holds an actual mapped copy stage until the shared shutdown event, checks that its pointer remains valid
 while the scheduler joins, drops its final callback, and releases the mapping/reservation only after join.
-The queue runs without an HWND or Present. These tests qualify the foundation only; production utility
-composition, restart policy and migrated readback callers remain P1.3 requirements.
+The queue runs without an HWND or Present. On a supported WARP device, additional copies explicitly select
+the EnqueueSetEvent fallback, including cropped rows, cancellation and lent-device lifetime.
+
+`document-readback.*` exercises the actual tiled worker graph and distinct utility targets, with a serial BGRA
+coordinate formula for full, cropped and single-pixel output. It verifies one reservation, immutable input,
+owner-only recording/mapping, worker-only copying, adopted output, hidden display release and settled display
+pixel preservation. A folder/clipping/mask/adjustment fixture compares the asynchronous result with the committed
+synchronous traversal at tile seams. Actual replacement WARP devices prove whole-graph restart, no partial
+publication and failure after two restarts. These are deliberate rebind tests, not physical device-removal tests.
+
+The application WARP self-test holds a real Merge readback worker with owned events. A younger Invert must apply
+after exactly one merge history entry. Cancel stays pending until acknowledgement; injected failure, stale
+opacity and device replacement prove exact receipts, unchanged pixels on drop, hidden completion without Present,
+and release of utility, staging and scheduler ownership. Remaining readback callers and G1 timing remain open.
+
+`HostTests` command-line cases additionally prove bounded positional paths, `--` leading-dash paths, empty/null/
+overlong/count refusal, harness mode conflicts, marker-aware help/self-test preflight and atomic parse output.
+Accepted startup paths are copied into an owning request before the argv storage can be released.
 
 The registered UI-action-source gates cover a full ordinary action queue, retained ownership on refusal,
 coalesced readiness, source/ordinary fairness, self-rearm on a later pass, event/idle state, refused reentrant

@@ -6135,7 +6135,7 @@ void TestMerge()
                plan->ids == std::vector<Guid>{red.id, blue.id} && plan->removed.size() == 2 &&
                !plan->parent.has_value(),
            "merge.down-plan");
-    // A composite the composition would give: red at (0,0)–(1,1), blue at (2,2)–(3,3), the rest clear.
+    // A composite the composition would give: red at (1,1), blue at (2,2), with transparent canvas margins.
     std::vector<std::uint8_t> bytes(4u * 4u * 4u, 0);
     const auto paint = [&](int x, int y, std::uint8_t b, std::uint8_t g, std::uint8_t r)
     {
@@ -6145,22 +6145,75 @@ void TestMerge()
         pixel[2] = r;
         pixel[3] = 255;
     };
-    paint(0, 0, 0, 0, 255);
     paint(1, 1, 0, 0, 255);
     paint(2, 2, 255, 0, 0);
-    paint(3, 3, 255, 0, 0);
     const Raster composite = Raster::Make(4, 4, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     const std::optional<CanvasDocument> before = session.Document();
+    DocumentSession preparedSession;
+    preparedSession.ReplaceDocument(before.value(), blue.id);
+    const std::optional<DocumentSession::MergePlan> preparedPlan = preparedSession.PlanMerge();
+    Expect(preparedPlan.has_value(), "merge.prepared-plan-exists");
+    if (!preparedPlan)
+        return;
+    CancelSource cancelledMerge;
+    (void)cancelledMerge.Cancel();
+    Expect(!DocumentSession::PrepareMerge(preparedPlan.value(), composite, cancelledMerge.Token()) &&
+               preparedSession.Document() == before,
+           "merge.cancelled-preparation-publishes-no-result-or-mutation");
+    const std::optional<DocumentSession::PreparedMerge> prepared =
+        DocumentSession::PrepareMerge(preparedPlan.value(), composite);
+    Expect(prepared.has_value() && prepared->CanvasWidth() == 4 && prepared->CanvasHeight() == 4 &&
+               prepared->Layer().name == L"Red" && prepared->Layer().parentID == preparedPlan->parent &&
+               prepared->Layer().asset.has_value() && prepared->Layer().asset->image.Width() == 2 &&
+               prepared->Layer().asset->image.Height() == 2 && prepared->Layer().transform.origin == Vec2{1, 1} &&
+               prepared->Layer().asset->thumbnail.HasStorage(),
+           "merge.prepare-complete-result");
+    if (!prepared)
+        return;
+    DocumentSession::MergePlan mismatchedPlan = preparedPlan.value();
+    mismatchedPlan.action = L"Other Action";
+    Expect(!preparedSession.ApplyPreparedMerge(mismatchedPlan, prepared.value()) &&
+               preparedSession.history.UndoName() != L"Other Action",
+           "merge.prepared-plan-mismatch-refused");
+    mismatchedPlan = preparedPlan.value();
+    mismatchedPlan.name = L"Other Name";
+    mismatchedPlan.parent = Guid::Generate();
+    Expect(!preparedSession.ApplyPreparedMerge(mismatchedPlan, prepared.value()),
+           "merge.prepared-name-parent-mismatch-refused");
+    DocumentSession wrongCanvas;
+    wrongCanvas.CreateDocument(5, 4);
+    Expect(!wrongCanvas.ApplyPreparedMerge(preparedPlan.value(), prepared.value()),
+           "merge.prepared-canvas-mismatch-refused");
+    DocumentSession staleSession;
+    staleSession.ReplaceDocument(before.value(), blue.id);
+    staleSession.DeleteLayer(red.id);
+    Expect(!staleSession.ApplyPreparedMerge(preparedPlan.value(), prepared.value()),
+           "merge.prepared-missing-layer-refused");
+    Expect(preparedSession.ApplyPreparedMerge(preparedPlan.value(), prepared.value()), "merge.prepared-applies");
     Expect(session.MergeLayers(plan.value(), composite), "merge.down-applies");
     const std::vector<ImageLayer>& layers = session.Document().value().layers;
     const ImageLayer* merged = session.ActiveLayer();
+    const ImageLayer* preparedMerged = preparedSession.ActiveLayer();
     // The blank clipped layer sits above the bottom one, so the merged layer lands at the top, in Blue's slot.
     Expect(layers.size() == 3 && merged != nullptr && merged->name == L"Red" && merged->id != red.id &&
                layers[2].id == merged->id && session.history.UndoName() == L"Merge Down",
            "merge.down-result-in-place");
-    Expect(merged != nullptr && merged->asset.has_value() && merged->asset->image.Width() == 4 &&
-               merged->transform.origin == Vec2{0, 0} && merged->transform.size == Vec2{4, 4},
+    Expect(merged != nullptr && merged->asset.has_value() && merged->asset->image.Width() == 2 &&
+               merged->transform.origin == Vec2{1, 1} && merged->transform.size == Vec2{2, 2},
            "merge.down-trimmed-to-pixels");
+    const std::uint8_t* wrapperPixels =
+        merged != nullptr && merged->asset.has_value() ? merged->asset->image.Data() : nullptr;
+    const std::uint8_t* preparedPixels =
+        preparedMerged != nullptr && preparedMerged->asset.has_value() ? preparedMerged->asset->image.Data() : nullptr;
+    Expect(
+        merged != nullptr && preparedMerged != nullptr && merged->name == preparedMerged->name &&
+            merged->transform == preparedMerged->transform && merged->asset.has_value() &&
+            preparedMerged->asset.has_value() && merged->asset->image.Width() == preparedMerged->asset->image.Width() &&
+            merged->asset->image.Height() == preparedMerged->asset->image.Height() && wrapperPixels != nullptr &&
+            preparedPixels != nullptr && merged->asset->image.ByteSize() == preparedMerged->asset->image.ByteSize() &&
+            std::memcmp(wrapperPixels, preparedPixels, merged->asset->image.ByteSize()) == 0 &&
+            session.history.UndoName() == preparedSession.history.UndoName(),
+        "merge.prepared-equivalent-to-wrapper");
     const ImageLayer* clip = Find(session.Document(), clipped);
     Expect(clip != nullptr && clip->maskSourceID == merged->id, "merge.clips-follow-the-result");
     session.Undo();

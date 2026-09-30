@@ -168,6 +168,8 @@ HRESULT Application::InitializeProcessing() noexcept
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    RETURN_IF_FAILED(_gpuWork.Initialize(_jobs));
+    _gpuWorkInitialized = true;
     if (!InitializeHostContinuations())
     {
         return E_UNEXPECTED;
@@ -177,6 +179,23 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_OUTOFMEMORY;
     }
     return S_OK;
+}
+
+bool Application::OpenCommandLinePaths(std::span<const std::wstring_view> paths) noexcept
+{
+    if (paths.empty())
+        return true;
+    if (_startupPaths || _rendererReady || _shutdownStarted)
+        return false;
+    try
+    {
+        _startupPaths = HostRequest::TryCopyPaths(paths, HostPathAction::OpenPaths, std::nullopt, _hostInputBudget);
+        return _startupPaths.has_value();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false; // explicit owning startup boundary; Main aborts startup on failure
+    }
 }
 
 void Application::DispatchMessageThunk(void* context, void* message) noexcept
@@ -230,6 +249,14 @@ int Application::Run(int showCommand) noexcept
         return 5;
     }
     ApplySettings(_settings);
+
+    if (_startupPaths)
+    {
+        const auto receipt = QueueHostRequest(std::move(_startupPaths.value()));
+        _startupPaths.reset();
+        if (receipt.Read().outcome == HostOutcome::Failed)
+            return 1;
+    }
 
     if (_uiBenchmark && FAILED(InitializeUiBenchmark()))
     {
@@ -2132,6 +2159,10 @@ int Application::RunSelfTest() noexcept
         return edits;
     }
     // The adjustment panel's live controls (review fixes wave 1b: RF-1107).
+    if (const int utility = RunUtilityReadbackSelfTest(); utility != 0)
+    {
+        return utility;
+    }
     if (const int adjust = RunAdjustSelfTest(); adjust != 0)
     {
         return adjust;
@@ -2900,6 +2931,8 @@ void Application::BindCompositionDevice() noexcept
     ID3D11DeviceContext* context = _renderer.Context();
     if (!device || !context)
     {
+        _gpuWork.RetireDevice();
+        _gpuBindingError = E_UNEXPECTED;
         _composition.ReleaseDeviceResources();
         DropBrushEngine();
         _boundDeviceGeneration = 0;
@@ -2909,7 +2942,13 @@ void Application::BindCompositionDevice() noexcept
     if (_composition.Device() != device || _boundDeviceGeneration != _renderer.DeviceGeneration())
     {
         _boundDeviceGeneration = _renderer.DeviceGeneration();
-        (void)_composition.CreateDeviceResources(device, context);
+        _gpuBindingError = _composition.CreateDeviceResources(device, context);
+        if (_gpuWorkInitialized)
+        {
+            _gpuWork.RetireDevice();
+            if (SUCCEEDED(_gpuBindingError))
+                _gpuBindingError = _gpuWork.Bind(device, context);
+        }
         // The brush computes coverage on the same device; without it the CPU kernel paints. A stroke in
         // flight on the old device is dropped with it.
         DropBrushEngine();
@@ -2946,6 +2985,7 @@ void Application::Shutdown() noexcept
     StopHostContinuations();
     CancelColorJobs();
     _jobs.RequestStop();
+    _gpuWork.StopNotifications();
     if (_window)
     {
         ShowWindow(_window.get(), SW_HIDE);
@@ -2953,6 +2993,8 @@ void Application::Shutdown() noexcept
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
     _jobs.Close();
+    _gpuWork.CloseAfterWorkers();
+    _gpuWorkInitialized = false;
     _jobActivity.Clear();
     _jobIndicatorTimer.reset();
     SaveSettings();
@@ -7352,6 +7394,11 @@ int Application::RunRefusalSelfTest() noexcept
         _session.SelectLayer(b);
         SyncChrome();
         OnCommand(ChromeHost::kCommandMergeDown);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The refused merge did not acknowledge its readback work.\n");
+            return 5;
+        }
         const bool mergeRefused = layerCount() == layers && _budgetNotices == notices + 4 && _errorsShown == errors;
         fresh();
         if (!duplicateRefused || !once || !copyRefused || !blurRefused || !mergeRefused)
