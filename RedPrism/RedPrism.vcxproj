@@ -124,6 +124,8 @@
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\CodecFileStream.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
+    <ClInclude Include="..\Common\ProjectLoadWork.h" />
+    <ClInclude Include="..\Common\ImageImportWork.h" />
     <ClInclude Include="..\Common\ProjectSaveWork.h" />
     <ClInclude Include="ProjectSaveTestGate.h" />
     <ClInclude Include="..\Common\ExportWork.h" />
@@ -187,6 +189,7 @@
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\CodecFileStream.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />
+    <ClCompile Include="..\Common\ImageImportWork.cpp" />
     <ClCompile Include="..\Common\SettingsStore.cpp" />
     <ClCompile Include="..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\Common\WorkerPool.cpp" />

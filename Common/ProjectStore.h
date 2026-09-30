@@ -3,6 +3,7 @@
 #include "Document.h"
 #include "ImageCodecs.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -18,12 +19,26 @@ enum class ProjectIoStatus
     Cancelled,
 };
 
-// Optional per-load ceilings support constrained callers and deterministic aggregate-budget tests. Values are
-// clamped to the format hard limits; callers can lower, never raise, the accepted aggregate pixel count.
-struct ProjectLoadPixelLimits
+inline constexpr std::size_t kMaxProjectManifestBytes = 4u * 1024u * 1024u;
+inline constexpr std::size_t kMaxProjectEncodedAssetBytes = 512u * 1024u * 1024u;
+
+// Caller ceilings are checked before corresponding input/output allocations. Clamp to hard format limits;
+// adaptive worker probes can lower them but cannot authorize larger inputs or outputs.
+struct ProjectLoadLimits
 {
     int imagePixels = kMaxLayerPixels;
     int maskPixels = kMaxMaskPixels;
+    std::size_t layerCount = kMaxLayerCount;
+    std::size_t manifestBytes = kMaxProjectManifestBytes;
+    std::size_t encodedAssetBytes = kMaxProjectEncodedAssetBytes;
+};
+using ProjectLoadPixelLimits = ProjectLoadLimits;
+
+struct ProjectLoadProbeResult
+{
+    ProjectIoStatus status = ProjectIoStatus::Invalid;
+    ProjectLoadLimits limits{0, 0, 0, 0, 0};
+    int formatVersion = 0;
 };
 
 struct ProjectLoadResult
@@ -38,6 +53,7 @@ enum class ProjectIoStage
 {
     ManifestReady,
     AssetDecoded,
+    AssetInspected,
     AssetEncoded,
     ArchiveWriting,
     Staged,
@@ -138,7 +154,11 @@ template <typename AttributeFn>
 
 [[nodiscard]] bool PathLooksLikeZipProject(const wchar_t* path) noexcept;
 [[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation = {},
-                                            ProjectIoObserver observer = {}, ProjectLoadPixelLimits pixelLimits = {});
+                                            ProjectIoObserver observer = {}, ProjectLoadLimits limits = {});
+// Worker-only manifest and fixed PNG-header inspection. No pixel decoding or retained asset-sized vector.
+// Reapply returned limits with LoadProject; they bound a reopened source even if its contents have changed.
+[[nodiscard]] ProjectLoadProbeResult ProbeProjectLoad(const wchar_t* path, CancelToken cancellation = {},
+                                                      ProjectIoObserver observer = {});
 [[nodiscard]] ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID, bool zipArchive,
                                           CancelToken cancellation = {}, ProjectIoObserver observer = {});

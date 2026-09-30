@@ -36,7 +36,8 @@ struct JpegExportOptions
                                                 int remainingPixels, DecodedImage& decoded,
                                                 CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remainingPixels,
-                                                    DecodedImage& decoded, CancelToken cancellation = {});
+                                                    DecodedImage& decoded, CancelToken cancellation = {},
+                                                    std::size_t maximumEncodedBytes = 512u * 1024u * 1024u);
 [[nodiscard]] ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, DecodedImage& decoded,
                                                CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus EncodePng(const Raster& image, double resolution, std::vector<std::uint8_t>& bytes,

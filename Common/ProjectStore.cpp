@@ -8,6 +8,8 @@
 #include <array>
 #include <climits>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
@@ -30,7 +32,7 @@ using unique_yyjson_text = wil::unique_any<char*, decltype(&free), free>;
 namespace
 {
 constexpr char kFormatId[] = "com.redprism.project";
-constexpr std::size_t kMaxManifestBytes = 4u * 1024u * 1024u;
+constexpr std::size_t kMaxManifestBytes = kMaxProjectManifestBytes;
 constexpr DWORD kInvalidAttributes = INVALID_FILE_ATTRIBUTES;
 
 void Report(ProjectIoObserver observer, ProjectIoStage stage, unsigned int value = 0) noexcept
@@ -807,7 +809,7 @@ template <typename T, typename Parser>
 }
 
 [[nodiscard]] ProjectIoStatus ParseManifest(const std::vector<std::uint8_t>& bytes, Manifest& manifest,
-                                            CancelToken cancellation)
+                                            CancelToken cancellation, std::size_t maximumLayers = kMaxLayerCount)
 {
     manifest = {};
     if (cancellation.IsCancelled())
@@ -873,7 +875,7 @@ template <typename T, typename Parser>
         return ProjectIoStatus::Invalid;
     }
     const std::size_t count = yyjson_arr_size(layers);
-    if (count > static_cast<std::size_t>(kMaxLayerCount))
+    if (count > maximumLayers)
     {
         return ProjectIoStatus::TooLarge;
     }
@@ -1345,12 +1347,12 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         return ProjectIoStatus::Invalid;
     }
     std::vector<std::uint8_t> bytes;
-    ProjectIoStatus status = ReadFileBytes(metadata.c_str(), kMaxManifestBytes, bytes, cancellation);
+    ProjectIoStatus status = ReadFileBytes(metadata.c_str(), pixelLimits.manifestBytes, bytes, cancellation);
     if (status != ProjectIoStatus::Ok)
     {
         return status;
     }
-    status = ParseManifest(bytes, manifest, cancellation);
+    status = ParseManifest(bytes, manifest, cancellation, pixelLimits.layerCount);
     if (status != ProjectIoStatus::Ok)
     {
         return status;
@@ -1365,8 +1367,8 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
             {
                 return ProjectIoStatus::Invalid;
             }
-            const ImageCodecStatus codec =
-                DecodeProjectPngFile(full.c_str(), mask, remainingPixels, decoded, cancellation);
+            const ImageCodecStatus codec = DecodeProjectPngFile(full.c_str(), mask, remainingPixels, decoded,
+                                                                cancellation, pixelLimits.encodedAssetBytes);
             if (codec == ImageCodecStatus::Cancelled)
                 return ProjectIoStatus::Cancelled;
             if (codec == ImageCodecStatus::TooLarge)
@@ -1390,12 +1392,12 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         return ProjectIoStatus::Invalid;
     }
     std::vector<std::uint8_t> bytes;
-    ProjectIoStatus status = ReadZipEntry(zip.get(), "manifest.json", kMaxManifestBytes, bytes, cancellation);
+    ProjectIoStatus status = ReadZipEntry(zip.get(), "manifest.json", pixelLimits.manifestBytes, bytes, cancellation);
     if (status != ProjectIoStatus::Ok)
     {
         return status == ProjectIoStatus::MissingImage ? ProjectIoStatus::Invalid : status;
     }
-    status = ParseManifest(bytes, manifest, cancellation);
+    status = ParseManifest(bytes, manifest, cancellation, pixelLimits.layerCount);
     if (status != ProjectIoStatus::Ok)
     {
         return status;
@@ -1407,7 +1409,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
             const std::string entry = std::string("images/") + file;
             std::vector<std::uint8_t> png;
             const ProjectIoStatus read =
-                ReadZipEntry(zip.get(), entry.c_str(), 512u * 1024u * 1024u, png, cancellation);
+                ReadZipEntry(zip.get(), entry.c_str(), pixelLimits.encodedAssetBytes, png, cancellation);
             if (read != ProjectIoStatus::Ok)
             {
                 return read;
@@ -1693,6 +1695,9 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
     }
     pixelLimits.imagePixels = std::min(pixelLimits.imagePixels, kMaxLayerPixels);
     pixelLimits.maskPixels = std::min(pixelLimits.maskPixels, kMaxMaskPixels);
+    pixelLimits.layerCount = (std::min)(pixelLimits.layerCount, static_cast<std::size_t>(kMaxLayerCount));
+    pixelLimits.manifestBytes = (std::min)(pixelLimits.manifestBytes, kMaxProjectManifestBytes);
+    pixelLimits.encodedAssetBytes = (std::min)(pixelLimits.encodedAssetBytes, kMaxProjectEncodedAssetBytes);
     Manifest manifest{};
     const ProjectIoStatus status = IsDirectory(path)
                                        ? LoadExploded(FullPath(path), manifest, cancellation, observer, pixelLimits)
@@ -1711,6 +1716,175 @@ ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation, Pro
         result.activeLayerID = manifest.activeLayerID;
         result.formatVersion = manifest.version;
     }
+    return result;
+}
+
+namespace
+{
+[[nodiscard]] ProjectIoStatus ReadProjectAssetHeader(const std::wstring& root, const std::string& name, zip_t* archive,
+                                                     std::array<std::uint8_t, 33>& header, std::size_t& encodedBytes,
+                                                     CancelToken cancellation)
+{
+    if (cancellation.IsCancelled())
+        return ProjectIoStatus::Cancelled;
+    if (archive != nullptr)
+    {
+        const std::string entry = "images/" + name;
+        zip_stat_t info{};
+        zip_stat_init(&info);
+        if (zip_stat(archive, entry.c_str(), 0, &info) != 0 || (info.valid & ZIP_STAT_SIZE) == 0)
+            return ProjectIoStatus::MissingImage;
+        if (info.size > kMaxProjectEncodedAssetBytes)
+            return ProjectIoStatus::TooLarge;
+        if (info.size < header.size())
+            return ProjectIoStatus::MissingImage;
+        unique_zip_file file{zip_fopen(archive, entry.c_str(), 0)};
+        if (!file)
+            return ProjectIoStatus::MissingImage;
+        for (std::size_t offset = 0; offset < header.size();)
+        {
+            if (cancellation.IsCancelled())
+                return ProjectIoStatus::Cancelled;
+            const auto read = zip_fread(file.get(), header.data() + offset, header.size() - offset);
+            if (read <= 0 || static_cast<std::uint64_t>(read) > header.size() - offset)
+                return ProjectIoStatus::MissingImage;
+            offset += static_cast<std::size_t>(read);
+        }
+        encodedBytes = static_cast<std::size_t>(info.size);
+    }
+    else
+    {
+        const std::wstring path = FullPath((root + L"\\images\\" + Utf8ToWide(name)).c_str());
+        const auto attributes = [](const std::wstring& value) -> std::uint32_t
+        { return GetFileAttributesW(value.c_str()); };
+        if (!ExplodedMemberPathAllowed(root, path, attributes))
+            return ProjectIoStatus::Invalid;
+        wil::unique_hfile file{CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                           FILE_FLAG_OPEN_REPARSE_POINT | FILE_ATTRIBUTE_NORMAL, nullptr)};
+        if (!file)
+            return ProjectIoStatus::MissingImage;
+        BY_HANDLE_FILE_INFORMATION info{};
+        LARGE_INTEGER size{};
+        if (!GetFileInformationByHandle(file.get(), &info) ||
+            (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) != 0 ||
+            !GetFileSizeEx(file.get(), &size) || size.QuadPart < static_cast<LONGLONG>(header.size()))
+            return ProjectIoStatus::MissingImage;
+        if (static_cast<ULONGLONG>(size.QuadPart) > kMaxProjectEncodedAssetBytes)
+            return ProjectIoStatus::TooLarge;
+        DWORD read = 0;
+        if (!ReadFile(file.get(), header.data(), static_cast<DWORD>(header.size()), &read, nullptr) ||
+            read != header.size())
+            return ProjectIoStatus::MissingImage;
+        encodedBytes = static_cast<std::size_t>(size.QuadPart);
+    }
+    return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Ok;
+}
+
+[[nodiscard]] ProjectIoStatus ProjectHeaderPixels(const std::array<std::uint8_t, 33>& header, bool mask,
+                                                  int& pixels) noexcept
+{
+    constexpr std::array<std::uint8_t, 16> prefix{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82};
+    if (!std::equal(prefix.begin(), prefix.end(), header.begin()) || (mask && (header[24] != 8 || header[25] != 0)))
+        return ProjectIoStatus::MissingImage;
+    const auto be32 = [&](std::size_t index) noexcept
+    {
+        return static_cast<std::uint32_t>(header[index]) << 24 | static_cast<std::uint32_t>(header[index + 1]) << 16 |
+               static_cast<std::uint32_t>(header[index + 2]) << 8 | header[index + 3];
+    };
+    const auto width = be32(16);
+    const auto height = be32(20);
+    if (width == 0 || height == 0)
+        return ProjectIoStatus::MissingImage;
+    const auto count = static_cast<std::uint64_t>(width) * height;
+    if (width > static_cast<std::uint32_t>(kMaxCanvasSide) || height > static_cast<std::uint32_t>(kMaxCanvasSide) ||
+        count > kMaxLayerPixels)
+        return ProjectIoStatus::TooLarge;
+    pixels = static_cast<int>(count);
+    return ProjectIoStatus::Ok;
+}
+} // namespace
+
+ProjectLoadProbeResult ProbeProjectLoad(const wchar_t* path, CancelToken cancellation, ProjectIoObserver observer)
+{
+    ProjectLoadProbeResult result{};
+    if (cancellation.IsCancelled())
+    {
+        result.status = ProjectIoStatus::Cancelled;
+        return result;
+    }
+    if (path == nullptr || path[0] == L'\0')
+        return result;
+    const bool folder = IsDirectory(path);
+    const auto root = folder ? FullPath(path) : std::wstring{};
+    unique_zip archive;
+    std::vector<std::uint8_t> bytes;
+    if (folder)
+    {
+        const auto metadata = FullPath((root + L"\\manifest.json").c_str());
+        const auto attributes = [](const std::wstring& value) -> std::uint32_t
+        { return GetFileAttributesW(value.c_str()); };
+        if (!ExplodedMemberPathAllowed(root, metadata, attributes))
+            return result;
+        result.status = ReadFileBytes(metadata.c_str(), kMaxProjectManifestBytes, bytes, cancellation);
+    }
+    else
+    {
+        archive = OpenZipArchive(path, ZIP_RDONLY);
+        if (!archive)
+            return result;
+        result.status = ReadZipEntry(archive.get(), "manifest.json", kMaxProjectManifestBytes, bytes, cancellation);
+        if (result.status == ProjectIoStatus::MissingImage)
+            result.status = ProjectIoStatus::Invalid;
+    }
+    if (result.status != ProjectIoStatus::Ok)
+        return result;
+    Manifest manifest;
+    result.status = ParseManifest(bytes, manifest, cancellation);
+    result.formatVersion = manifest.version;
+    if (result.status != ProjectIoStatus::Ok)
+        return result;
+    ProjectLoadLimits limits{0, 0, manifest.records.size(), bytes.size(), 0};
+    Report(observer, ProjectIoStage::ManifestReady);
+    unsigned int inspected = 0;
+    for (const auto& record : manifest.records)
+    {
+        if (cancellation.IsCancelled())
+        {
+            result.status = ProjectIoStatus::Cancelled;
+            return result;
+        }
+        const auto inspect = [&](const std::string& file, bool mask) -> ProjectIoStatus
+        {
+            if (file.empty())
+                return ProjectIoStatus::Ok;
+            std::array<std::uint8_t, 33> header{};
+            std::size_t encoded = 0;
+            auto status = ReadProjectAssetHeader(root, file, archive.get(), header, encoded, cancellation);
+            if (status != ProjectIoStatus::Ok)
+                return status;
+            int pixels = 0;
+            status = ProjectHeaderPixels(header, mask, pixels);
+            if (status != ProjectIoStatus::Ok)
+                return status;
+            auto& total = mask ? limits.maskPixels : limits.imagePixels;
+            const auto maximum = mask ? kMaxMaskPixels : kMaxLayerPixels;
+            if (pixels > maximum - total)
+                return ProjectIoStatus::TooLarge;
+            total += pixels;
+            limits.encodedAssetBytes = (std::max)(limits.encodedAssetBytes, encoded);
+            Report(observer, ProjectIoStage::AssetInspected, ++inspected);
+            return ProjectIoStatus::Ok;
+        };
+        result.status = inspect(record.imageFile, false);
+        if (result.status == ProjectIoStatus::Ok)
+            result.status = inspect(record.maskFile, true);
+        if (result.status != ProjectIoStatus::Ok)
+            return result;
+    }
+    if (cancellation.IsCancelled())
+        result.status = ProjectIoStatus::Cancelled;
+    else
+        result.limits = limits;
     return result;
 }
 
@@ -1770,8 +1944,39 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
 ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, std::optional<Guid>& activeLayerID,
                                 std::optional<Vec2> center, CancelToken cancellation, ProjectIoObserver observer)
 {
+    if (cancellation.IsCancelled())
+        return ProjectIoStatus::Cancelled;
+    if (document.layers.size() >= static_cast<std::size_t>(kMaxLayerCount))
+        return ProjectIoStatus::TooLarge;
+
+    // Match the aggregate image limit before WIC allocates output. Validate dimensions before multiplying;
+    // malformed source records cannot wrap the count or increase the available allowance.
+    std::int64_t usedImagePixels = 0;
+    for (const ImageLayer& layer : document.layers)
+    {
+        if (cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled;
+        if (layer.asset.has_value())
+        {
+            const Raster& image = layer.asset.value().image;
+            const std::int64_t width = image.Width();
+            const std::int64_t height = image.Height();
+            if (width <= 0 || height <= 0)
+                return ProjectIoStatus::Invalid;
+            if (width > kMaxCanvasSide || height > kMaxCanvasSide)
+                return ProjectIoStatus::TooLarge;
+            const std::int64_t pixels = width * height;
+            if (pixels > static_cast<std::int64_t>(kMaxLayerPixels) - usedImagePixels)
+                return ProjectIoStatus::TooLarge;
+            usedImagePixels += pixels;
+        }
+    }
+    const int remainingPixels = static_cast<int>(static_cast<std::int64_t>(kMaxLayerPixels) - usedImagePixels);
+    if (remainingPixels <= 0)
+        return ProjectIoStatus::TooLarge;
+
     DecodedImage decoded{};
-    const ImageCodecStatus status = ImportImageFile(path, kMaxLayerPixels, decoded, cancellation);
+    const ImageCodecStatus status = ImportImageFile(path, remainingPixels, decoded, cancellation);
     if (status == ImageCodecStatus::Cancelled || cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     if (status == ImageCodecStatus::HeifUnavailable || status == ImageCodecStatus::Unsupported)
@@ -1786,13 +1991,14 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
     {
         return ProjectIoStatus::MissingImage;
     }
+    const std::int64_t decodedPixels = static_cast<std::int64_t>(decoded.image.Width()) * decoded.image.Height();
+    if (decodedPixels <= 0)
+        return ProjectIoStatus::Invalid;
+    if (decodedPixels > remainingPixels)
+        return ProjectIoStatus::TooLarge;
     Report(observer, ProjectIoStage::AssetDecoded, 1);
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    if (static_cast<int>(document.layers.size()) >= kMaxLayerCount)
-    {
-        return ProjectIoStatus::TooLarge;
-    }
     ImageLayer layer = ImageLayer::Blank(
         decoded.name.empty() ? L"Layer" : decoded.name,
         Vec2{static_cast<double>(decoded.image.Width()), static_cast<double>(decoded.image.Height())});

@@ -80,11 +80,34 @@ The manifest is parsed and validated (`ValidateDocument`) before any asset is de
 costs an image decode. Mask records exist at that point without pixels; the Gray8 format check applies when the
 mask PNG is attached (the decoder rejects anything but 8-bit gray). Pixel budgets (100 M image + 100 M mask) are
 independent aggregate limits: each decoder receives the remaining count for its asset kind and rejects from frame
-dimensions before output-pixel allocation. Attachment retains a defensive post-decode check. `ProjectLoadPixelLimits`
-can lower either total, never raise the hard limits; negative limits are `Invalid`, and a zero limit refuses any
+dimensions before output-pixel allocation. Attachment retains a defensive post-decode check. `ProjectLoadLimits`
+(`ProjectLoadPixelLimits` remains an alias) can lower either total, never raise the hard limits; negative limits are `Invalid`, and a zero limit refuses any
 asset of that kind. A later oversized asset returns `TooLarge` with no document or active id published. Both ZIP
 and exploded projects follow this rule. A missing or undecodable asset is `MissingImage`; the current document is never replaced
 by a partial load.
+
+### Adaptive decode ceilings
+
+`ProbeProjectLoad` validates the manifest and inspects only each asset's fixed 33-byte PNG header and encoded
+length on its calling worker. It returns standard values: aggregate image/mask pixels, layer count, manifest
+bytes, largest encoded asset and format version. It creates no WIC decoder, raster or asset-sized vector. A
+failed/cancelled probe exposes zero limits; `UnsupportedVersion` retains the file's version for its notice.
+`ManifestReady` and counted `AssetInspected` observations describe this phase; they are not `AssetDecoded`.
+
+The PNG decoder remains authoritative for complete asset validity. Header inspection checks the mandatory PNG
+signature/IHDR shape, nonzero bounded dimensions and Gray8 mask header; it does not validate CRCs or image data.
+
+Passing these limits into `LoadProject` also bounds manifest input bytes before reading, layer count before
+record allocation, and encoded asset length before a ZIP vector or file decoder. Source changes between probe
+and decode may succeed within all ceilings or return a local failure; they cannot increase declared output or
+caller-retained input allocations. This is resource planning, not a claim that reopening the path snapshots its
+identity/content. Accepted PNG conversions, schema, ordered attachment and semantic mask thumbnails are unchanged.
+
+`ProjectLoadMetadataMemoryBytes` / `ProjectLoadMemoryBytes` declare separate metadata-probe and complete decode
+peaks. The metadata allowance includes manifest bytes, parser/string copies, record/vector growth, curve copies
+and validation. Decode adds bounded rounded outputs, transient thumbnails and one maximum encoded ZIP buffer.
+Opaque codec/library allocations remain in process admission headroom. Host activation and its real-loop tests
+remain F3b.3; these helpers alone do not move interactive open off the UI.
 
 ## Layer record
 

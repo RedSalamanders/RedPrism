@@ -4,8 +4,10 @@
 #include "Document.h"
 #include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
+#include "ImageImportWorkTests.h"
 #include "PathClassificationWorkTests.h"
 #include "ProjectCancellationTests.h"
+#include "ProjectLoadWorkTests.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
 #include "ZipOwner.h"
@@ -1873,6 +1875,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunImageCodecWorkTests();
     gFailures += RunCodecFileStreamTests();
     gFailures += RunProjectCancellationTests();
+    gFailures += RunImageImportWorkTests();
+    gFailures += RunProjectLoadWorkTests();
     TestSettingsStore();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {

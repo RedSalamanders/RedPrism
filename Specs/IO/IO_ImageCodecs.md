@@ -23,6 +23,9 @@ returns, not what was requested, and un-premultiplies premultiplied raster bytes
 brightness. Masks (`Gray8`, no alpha) are unaffected.
 
 Encoded assets larger than **512 MiB** are `TooLarge`.
+The project-file decoder additionally accepts a lower caller encoded-byte ceiling, checked before constructing
+WIC decode interfaces. Project attachment passes the current remaining per-kind aggregate pixel ceiling;
+frame dimensions must fit before output allocation. A lower ceiling does not change accepted pixel conversion.
 
 ## Import
 
@@ -38,6 +41,18 @@ in document pixels, legacy `insert(_:centeredAt:)`) or else on the canvas, and a
 folder (`Document/Document_Model.md`'s session-edit insertion rule); into an empty document the image becomes the
 canvas and the point does not apply. A budget failure restores the previous active layer and reports `TooLarge`,
 not `Invalid`.
+
+Before starting a decoder, import checks available layer capacity and subtracts every existing image raster from
+the aggregate image budget using checked wide arithmetic. It passes only the remainder to WIC's frame-dimension
+guard; a full document cannot decode one extra full image and reject it afterward.
+
+`RunImageImportBatch` is detached CPU/codec work over a value snapshot and counted paths. A new canvas retains
+its first successful image as a separate saved-baseline result; further successes produce one named import result.
+The new canvas ignores the batch drop point for all images. Existing-canvas imports retain grouping and placement.
+Failed files before the first success do not stop later files; other file failures retain prepared successes and
+report batch failure, with the history name based on attempted remaining path count. Cancellation clears both
+prepared documents/active ids. Preparation never mutates the source document or shared raster bytes. Host-job
+admission and application remain separately tracked at P1.7 F3b.3.
 
 ## Export
 

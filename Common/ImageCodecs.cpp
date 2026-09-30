@@ -691,7 +691,7 @@ ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCou
 }
 
 ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remainingPixels, DecodedImage& decoded,
-                                      CancelToken cancellation)
+                                      CancelToken cancellation, std::size_t maximumEncodedBytes)
 {
     decoded = {};
     if (cancellation.IsCancelled())
@@ -714,7 +714,7 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     ULARGE_INTEGER size{};
     size.HighPart = info.nFileSizeHigh;
     size.LowPart = info.nFileSizeLow;
-    if (size.QuadPart > kMaxEncodedBytes)
+    if (size.QuadPart > (std::min)(static_cast<std::uint64_t>(maximumEncodedBytes), kMaxEncodedBytes))
     {
         return ImageCodecStatus::TooLarge;
     }
