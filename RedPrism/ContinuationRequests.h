@@ -64,6 +64,11 @@ struct HostToolInput final
 {
     EditorTool tool;
 };
+struct HostShapeFinishInput final
+{
+    ShapeDraft draft;
+    std::uint32_t foregroundArgb;
+};
 struct HostLayerSelectInput final
 {
     Guid id;
@@ -136,7 +141,7 @@ using HostRequestInput =
     std::variant<HostCommandInput, HostToolInput, HostLayerSelectInput, HostLayerTargetInput, HostLayerInvokeInput,
                  HostLayerReorderInput, HostLayerRenameInput, HostLayerOpacityInput, HostWriteInput, HostPathsInput,
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
-                 HostEndSessionInput>;
+                 HostEndSessionInput, HostShapeFinishInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);
@@ -268,6 +273,13 @@ enum class HostCopyFailureForTest : std::uint8_t
     None,
     Input,
     Receipt
+};
+
+enum class HostPathReadFailure : std::uint8_t
+{
+    None,
+    Quota,
+    Read
 };
 
 [[nodiscard]] inline bool HostAddStorageBytes(std::size_t& bytes, std::size_t count, std::size_t unit) noexcept
@@ -487,6 +499,65 @@ class HostRequest final
         HostInputBudget& budget, HostCopyFailureForTest failure = HostCopyFailureForTest::None)
     {
         return TryCopy(HostPathsView{paths, action, dropPoint}, budget, failure);
+    }
+    // Query lengths before calling this factory. The immediate reader fills admitted storage while the source
+    // remains alive; no reader, source pointer or temporary uncharged string batch survives admission.
+    template <typename Reader>
+    [[nodiscard]] static std::optional<HostRequest> TryReadPaths(
+        std::span<const std::size_t> lengths, HostPathAction action, std::optional<Vec2> dropPoint,
+        HostInputBudget& budget, Reader&& reader, HostPathReadFailure& failure,
+        HostCopyFailureForTest fault = HostCopyFailureForTest::None)
+    {
+        static_assert(std::is_nothrow_invocable_r_v<bool, Reader&, std::size_t, std::span<wchar_t>>);
+        failure = HostPathReadFailure::Quota;
+        std::size_t bytes = sizeof(HostRequestInput) + 256;
+        if (lengths.size() > HostInputBudget::kMaxPaths ||
+            !HostAddStorageBytes(bytes, lengths.size(), sizeof(std::wstring)) || !HostAddStorageBytes(bytes, 64, 1))
+        {
+            return std::nullopt;
+        }
+        for (const auto length : lengths)
+        {
+            if (length > HostInputBudget::kMaxPathUnits || !HostAddStorageBytes(bytes, length + 32, sizeof(wchar_t)) ||
+                !HostAddStorageBytes(bytes, 64, 1))
+            {
+                return std::nullopt;
+            }
+        }
+        auto reservation = budget.TryReserve(bytes);
+        if (!reservation)
+        {
+            return std::nullopt;
+        }
+        HostPathsInput paths{{}, action, dropPoint};
+        paths.paths.reserve(lengths.size());
+        for (std::size_t index = 0; index < lengths.size(); ++index)
+        {
+            paths.paths.emplace_back(lengths[index], L'\0');
+            auto& path = paths.paths.back();
+            if (!reader(index, std::span<wchar_t>(path.data(), path.size() + 1)))
+            {
+                failure = HostPathReadFailure::Read;
+                return std::nullopt;
+            }
+            if (fault == HostCopyFailureForTest::Input)
+            {
+                throw std::bad_alloc{};
+            }
+        }
+        HostRequestInput input = std::move(paths);
+        const auto actualBytes = HostInputStorageBytes(input);
+        if (!actualBytes || !reservation.value().ReduceTo(actualBytes.value()))
+        {
+            return std::nullopt;
+        }
+        if (fault == HostCopyFailureForTest::Receipt)
+        {
+            throw std::bad_alloc{};
+        }
+        auto completion = ContinuationCompletion::Create();
+        failure = HostPathReadFailure::None;
+        return HostRequest(std::move(input), std::move(completion), std::move(reservation.value()));
     }
     [[nodiscard]] static std::optional<HostRequest> TryCopyWrite(
         HostWriteFormat format, bool saveAs, std::optional<std::wstring_view> path, HostInputBudget& budget,

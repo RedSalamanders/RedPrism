@@ -525,8 +525,8 @@ to reach the owning computation boundary.
 `ColorEditJobMemoryBytes` declares the complete commit graph's additional allocation peak before submission.
 It accounts for rounded pixel buffers, private sparse reads, coverage, kernel scratch, blending, crop, masks,
 thumbnails and metadata. An exact resident preview avoids another filter/coverage reservation. Geometry producers
-cache selection point counts; querying the estimate does not traverse selection points or loops. The host's
-asynchronous dispatch and continuation migration remains P1.1c work.
+cache selection point counts; querying the estimate does not traverse selection points or loops. The host submits
+this graph through the ordered commit engine and selected continuation described below.
 
 ### Deferred panel computation (P1.1c.1)
 
@@ -579,14 +579,19 @@ The host never waits for these jobs in a production command. Shutdown invalidate
 the scheduler. An adjustment-layer panel still uses its composition path for live parameters; its opening composite
 readback remains the P1.3 migration.
 
-Destructive OK is still inline until P1.1c.3 migrates ordered commit and every dependent file/close continuation
-together. Earlier tool settlement, commit, GPU composite sampling and other P1 operations remain blocking paths;
-this slice does not establish whole-application G1.
+Destructive OK and dependent file/close requests use the ordered worker engine and owning continuations below.
+Earlier tool settlement, GPU composite sampling, file IO and other P1 operations remain blocking paths until their
+owning migration; this slice does not establish whole-application G1.
 
-### Ordered commit engine (P1.1c.3 preparation)
+### Ordered commit engine (P1.1c.3)
 
-`ApplicationCommitJobs.cpp` implements the commit engine used by the event-gated harness. Its production
-activation remains paired with the owned write/discard continuations; normal OK is still inline at this boundary.
+A Shape pointer release or ordinary pointer leave during admitted history work captures its draft and foreground
+color in the same bounded host queue, then removes the live gesture without writing history. Its layer is added
+only after preceding work finishes, using those captured values. Lost-pointer cancellation still drops a draft.
+Worker rasterization of this owned Shape action remains P1.5.
+
+`ApplicationCommitJobs.cpp` implements the production commit engine. Normal OK and dependent write/discard
+requests enter it through the owned continuation source.
 The caller supplies the oldest accepted input's ordinal from the shared `HistoryWork`. Admission acquires that
 barrier before capturing immutable work. `Pending` means this particular ordinal owns an admitted job; a
 competing ordinal cannot attach itself to another request's completion.
@@ -601,8 +606,10 @@ Completion distinguishes `Succeeded`, `Cancelled`, `Failed` and `Stale`. It vali
 settings sequence, document lifetime and complete target before interpreting even `Unchanged` as success.
 Validation, apply/drop and its history transaction precede release of the barrier. Cancel requests cancellation
 and retains the barrier until the old completion drops, including a worker that already finished pixels.
-No failure dialog runs inside completion; feedback uses deferred UI work. These checks qualify the engine,
-not the pending Save/Close/import activation or whole-application responsiveness.
+No failure dialog runs inside completion; feedback uses deferred UI work. Pending, failed, cancelled or stale
+settlement MUST NOT authorize Save/export/import/resize/replacement/close. Explicit panel Cancel retires queued
+inputs; document replacement instead drops old-document inputs as stale. Whole-application responsiveness still
+requires the remaining GPU, IO, tool and history migrations.
 
 Adjustment-layer settlement uses the same ordinal/barrier but only commits live metadata. A missing target or
 changed adjustment kind returns `Stale`, retains the panel for explicit resolution and records no engine entry.

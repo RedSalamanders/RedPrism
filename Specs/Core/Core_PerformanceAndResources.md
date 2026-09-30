@@ -145,7 +145,7 @@ lock, start no worker and signal no event. A unique publisher retires a pending 
 destruction or move-overwrite. Externally retained observers own only that result, never input paths or pixels.
 The owning construction/admission boundary MUST fail the whole request on `std::bad_alloc`, returning the
 allocation-free immediate `ContinuationReceipt::Failure(E_OUTOFMEMORY)` value. Full/invalid queue admission
-retains the input for explicit failed publication. The future production admission path bounds and accounts for
+retains the input for explicit failed publication. Production admission bounds and accounts for
 path/name bytes; a fixed eight-entry ring alone does not bound variable-length payloads.
 
 `HostInputBudget` now bounds the combined declared request storage of queued and active host inputs to 1 MiB.
@@ -160,7 +160,7 @@ success, and returns the ticket on construction failure. A refused request prese
 must return an immediate failure. Tickets follow queue-to-active and move transfers; retirement publishes before
 input destruction, then returns the charge. Receipt observers retain neither input bytes nor budget tickets.
 Admitted payloads expose only const access, so their charged capacities cannot grow after admission. The budget
-outlives all request owners. The numeric Application bridge uses this path; bare model construction is confined
+outlives all request owners. Typed Application producers use this path; bare model construction is confined
 to tests.
 
 Borrowed-input builders now accept non-owning path/name views and fixed event parameters. Preflight checks the
@@ -182,16 +182,19 @@ preserves the old output on refusal or allocation failure. The request owns the 
 so queue/active moves and retirement keep publication before input/output destruction and charge return. No new
 receipt, worker, event, timer or polling belongs to selection. Fixed request state fits within its charged allowance,
 as enforced by a compile-time size check. Future variable-size staged state requires its own admission.
-Production shell/dialog/drop/rename producers MUST adopt these preflight builders before activation; the helpers
-alone do not bound existing inline producer copies. All dependent producer migrations remain in the child plan.
+Production shell/dialog/drop/rename producers use these preflight builders at their first host-owned copy.
+Drop sources query the whole batch's lengths and reserve before filling admitted buffers while the HDROP lives.
+Shell-owned strings remain alive through bounded preflight and copy; any enumeration/read failure refuses the
+whole request. Rename passes a borrowed field view through an immediate callback before the field closes.
 
-The first Application source bridge admits fixed numeric panel inputs only: at most eight pending entries plus
+The Application source admits typed panel, file, close, size and command inputs: at most eight pending entries plus
 one active request, with one small shared result per observed input. An empty registration costs no wakeup or
 worker. A waiting active commit and queued inputs behind earlier history consume readiness without rearming;
 the common history completion hook signals their next UI action after apply/drop. The current color finisher uses
 it; future history migrations MUST also notify it after barrier release. Cancellation keeps the active input
-until worker acknowledgement; shutdown unregisters before join. Other variable-length payload producers remain
-inactive and MUST gain explicit byte admission before activation.
+until worker acknowledgement; shutdown unregisters before join. Fixed stage state reuses the active request and
+cannot grow outside its charged allowance. Path selection precedes pixel settlement/readback. The selected
+request advances only after successful acknowledgement; synchronous file/GPU work remains for P1.3/P1.7.
 
 `JobActivity` uses 128 fixed records and updates only on scheduler notices. The oldest foreground operation owns
 the global progress indicator; Background, Refinement and InteractivePreview do not. A single deadline timer shows

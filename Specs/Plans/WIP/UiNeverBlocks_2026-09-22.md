@@ -70,24 +70,33 @@
     - [x] P1.1c.1 — Split panel metadata/grid planning from pixel preparation; keep the direct API inline over the same worker graph. Full x64 gates and all ARM64 cross-builds passed.
     - [x] P1.1c.1 — Add distinct panel-lifetime and settings stamps, cancellable preview/histogram work and complete preview/prepare allocation estimates. All 43 deferred-state checks pass in each x64 configuration.
     - [x] P1.1c.2 — Wire one-active/latest-pending previews and once-per-opening histograms; prove real worker coalescing, Cancel/reopen and view input during computation. Full x64 gates and all ARM64 cross-builds passed.
-    - [ ] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
+    - [x] P1.1c.3 — Wire ordered commits with a busy panel and working Cancel, together with all dependent action continuations.
       - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
       - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
-      - [ ] P1.1c.3c — Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
+      - [x] P1.1c.3c — Production migration qualified in all x64 test configurations and ARM64 cross-builds. Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
         - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration and its initial bridge are tracked below; production caller activation remains open.
         - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
         - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
         - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
         - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
         - [x] Qualify capacity-based request admission and a combined queued/active byte budget, with immutable retained input and release after publication. Full x64 gates and all ARM64 cross-builds passed; actual production producer activation remains open.
-        - [ ] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
+        - [x] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
           - [x] Qualify borrowed-input builders and request-owned selected paths: all x64 gates and ARM64 cross-builds passed, with 77 request checks per normal run and 154 with ASan stress; producer/staged-runner migration remains open.
-      - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
-    - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
-    - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
+      - [x] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
+    - [x] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
+    - [x] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency; all six configurations passed and all 15 Release 4K operations completed. Residual costs keep P1/G1 open.
   - [ ] P1.2–P1.3 — Add per-layer GPU adjustment previews and asynchronous GPU completion/readback.
+    - [ ] P1.2 — Per-layer adjustment target with selection coverage and layer-space grain; reusable LUT/cube textures; worker-built lookup inputs and WARP parity.
+    - [ ] P1.3 — Device capability probe, event-driven fences, bounded readback slots, off-screen composition/sampling, hidden completion and device-loss lifetime tests; migrate all readback callers.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
+    - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
+    - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
+    - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
+    - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
+    - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
+    - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
+    - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
 - [ ] P4 — Implement RAW v1 decode, develop, panel and measurements.
@@ -240,9 +249,16 @@ A cheaper agent supplied bounded embedded-host input tests; the primary reviewed
 engine changes, strengthened restored-input/prerequisite checks, and implemented the commit engine and its event
 gates directly. Production OK/write callers remain inline until their owned continuations activate together;
 P1.1c.3 is not complete. No G1 or Photoshop speed claim follows from this preparation.
-The indexed [continuation child plan](ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
+The indexed [completed continuation child plan](../Done/ColorCommitContinuations_2026-09-30.md) records the concrete source wake-up,
 request ownership, staged settlement, caller inventory, repeated history acquisitions and activation gates for
 P1.1c.3c–d. Its later stroke resolution remains integrated with P1.4; it does not claim that replay is implemented.
+
+P1.1c.3 activation, 2026-09-30: the full typed production runner and caller migration passed all x64 test
+configurations and ARM64 cross-builds. [Activation evidence](../../TestRuns/HostContinuationActivation_2026-09-30.md)
+records the 84 caller outcome cases, owned Shape release, bounded direct input readers and session-end message
+controls. Release's real 4K loop completed all 15 operations; Levels commit dispatch max was 0.083 ms, apply max
+3.658 ms and action max 5.898 ms. Invert/Fill/Clear still block for 187/243/270 ms in this run. P1.2–P1.9 and
+G1 remain open. The primitive notes below record the state before activation.
 
 P1.1c.3c primitive progress, 2026-09-30: the stable UI-action source and repeated history acquisitions passed the
 full x64 gates and all ARM64 cross-builds. Final review strengthened independent owner/document stamp tests.

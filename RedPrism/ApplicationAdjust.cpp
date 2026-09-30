@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <string>
 #include <unordered_set>
@@ -255,26 +256,21 @@ std::optional<Raster> Application::CompositeBelow(const Guid& id) noexcept
 
 void Application::ApplyColorEdit() noexcept
 {
-    if (ColorCommitBusy() || !_session.HasColorEdit())
+    if (ColorControlsFrozen() || !_session.HasColorEdit())
     {
         return;
     }
     DropDrag<HueTargetDrag>();
-    _session.CommitColorEdit();
-    if (_session.TakeBudgetRefusal())
-    {
-        ReportBudgetRefusal();
-    }
-    else if (_session.PendingColorEdit().has_value() && _session.PendingColorEdit()->commitFailed)
-    {
-        ShowError(IDS_ERROR_FILTER);
-    }
-    DocumentChanged();
+    ReportHostAdmission(QueuePanelCommit(_session.PendingColorEdit()->openingSequence));
 }
 
-void Application::CancelColorEdit() noexcept
+void Application::CancelColorEdit(bool cancelQueued) noexcept
 {
-    CancelColorCommit();
+    if (cancelQueued && !_hostExecuting)
+    {
+        CancelHostContinuations();
+    }
+    CancelColorCommit(); // includes direct engine/harness acquisitions without an active host request
     if (!_session.HasColorEdit())
     {
         return;
@@ -286,7 +282,7 @@ void Application::CancelColorEdit() noexcept
 
 void Application::OnAdjustAction(AdjustAction action, double value) noexcept
 {
-    if (ColorCommitBusy() && action != AdjustAction::Cancel)
+    if (ColorControlsFrozen() && action != AdjustAction::Cancel)
     {
         return;
     }
@@ -466,7 +462,7 @@ void Application::OnAdjustAction(AdjustAction action, double value) noexcept
 
 void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
 {
-    if (ColorCommitBusy())
+    if (ColorControlsFrozen())
     {
         return;
     }
@@ -487,7 +483,7 @@ void Application::OnCurveChanged(std::vector<CurvePoint> points) noexcept
 
 void Application::OnBandChanged(int index, double degrees) noexcept
 {
-    if (ColorCommitBusy())
+    if (ColorControlsFrozen())
     {
         return;
     }
@@ -507,7 +503,7 @@ void Application::OnBandChanged(int index, double degrees) noexcept
 
 void Application::OnAdjustColor(ChromeEditPhase phase, uint32_t argb, bool highlights) noexcept
 {
-    if (ColorCommitBusy())
+    if (ColorControlsFrozen())
     {
         return;
     }
@@ -541,7 +537,7 @@ void Application::SyncAdjustPanel() noexcept
         return;
     }
     AdjustInspectorState state;
-    state.busy = ColorCommitBusy();
+    state.busy = ColorControlsFrozen();
     state.editsAdjustment = _session.AdjustmentEditingID().has_value() && _session.AdjustmentOriginal().has_value();
     if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit(); edit.has_value())
     {
@@ -565,7 +561,7 @@ void Application::SyncAdjustPanel() noexcept
 
 bool Application::AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept
 {
-    if (ColorCommitBusy())
+    if (ColorControlsFrozen())
     {
         return false;
     }
@@ -635,6 +631,11 @@ int Application::RunAdjustSelfTest() noexcept
     // A user sees frames between inputs: the chrome lays out and renders, and DxUi takes keys only after that.
     const auto settle = [this]() noexcept
     {
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The adjustment harness could not settle admitted work.\n");
+            std::_Exit(5);
+        }
         (void)_chrome->AdvanceAnimation(GetTickCount64());
         SyncChrome();
         (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
@@ -649,6 +650,7 @@ int Application::RunAdjustSelfTest() noexcept
         (void)_chrome->DispatchPointer(pointer);
         pointer.action = DxUi::PointerAction::Up;
         (void)_chrome->DispatchPointer(pointer);
+        settle();
     };
     // Whether the window's UI Automation root reaches a Button of that name through the chrome's tree.
     const auto reachable = [&](UINT nameId) noexcept
@@ -664,6 +666,7 @@ int Application::RunAdjustSelfTest() noexcept
     // A fresh document with one painted layer for the panels.
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    settle();
     _forcedDiscard.reset();
     {
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(64 * 64 * 4), 0);

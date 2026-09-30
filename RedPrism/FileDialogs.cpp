@@ -3,6 +3,7 @@
 #include "Resources.h"
 #include "resource.h"
 
+#include <array>
 #include <iterator>
 
 #pragma warning(push)
@@ -14,20 +15,54 @@ namespace
 {
 constexpr wchar_t kImagePatterns[] = L"*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.heic;*.heif";
 
-[[nodiscard]] bool ReadDialogResult(IFileDialog* dialog, std::wstring& path) noexcept
+constexpr HRESULT kInvalidDialogInput = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+constexpr HRESULT kDialogCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+
+[[nodiscard]] HRESULT ReadShellPath(IShellItem* item, wil::unique_cotaskmem_string& path) noexcept
+{
+    if (!item)
+    {
+        return E_UNEXPECTED;
+    }
+    const HRESULT result = item->GetDisplayName(SIGDN_FILESYSPATH, path.put());
+    if (FAILED(result))
+    {
+        return result;
+    }
+    return path ? S_OK : E_UNEXPECTED;
+}
+
+[[nodiscard]] HRESULT ReadDialogShellPath(IFileDialog* dialog, wil::unique_cotaskmem_string& path) noexcept
 {
     wil::com_ptr_nothrow<IShellItem> item;
-    if (FAILED(dialog->GetResult(item.put())) || !item)
+    const HRESULT result = dialog->GetResult(item.put());
+    if (FAILED(result))
     {
-        return false;
+        return result;
     }
-    wil::unique_cotaskmem_string file;
-    if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, file.put())))
+    return ReadShellPath(item.get(), path);
+}
+
+[[nodiscard]] HRESULT ConfigureOpenDialog(IFileOpenDialog* dialog, const COMDLG_FILTERSPEC* filters, UINT filterCount,
+                                          bool multiSelect) noexcept
+{
+    HRESULT result = dialog->SetFileTypes(filterCount, filters);
+    if (FAILED(result))
     {
-        return false;
+        return result;
     }
-    path = file.get();
-    return !path.empty();
+    FILEOPENDIALOGOPTIONS options = 0;
+    result = dialog->GetOptions(&options);
+    if (FAILED(result))
+    {
+        return result;
+    }
+    options |= FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
+    if (multiSelect)
+    {
+        options |= FOS_ALLOWMULTISELECT;
+    }
+    return dialog->SetOptions(options);
 }
 } // namespace
 
@@ -67,112 +102,248 @@ bool LooksLikeProjectPath(const wchar_t* path) noexcept
     return directory || EndsWithNoCase(path, L".prism") || PathLooksLikeZipProject(path);
 }
 
-bool PickOpenPath(HWND owner, std::wstring& path) noexcept
+HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget, std::optional<HostRequest>& request) noexcept
 {
-    wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
+    try
     {
-        return false;
+        wil::com_ptr_nothrow<IFileOpenDialog> dialog;
+        HRESULT result =
+            CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        if (FAILED(result))
+        {
+            return result;
+        }
+        if (!dialog)
+        {
+            return E_UNEXPECTED;
+        }
+        const FilterStrings strings = LoadFilterStrings();
+        const COMDLG_FILTERSPEC filters[] = {
+            {strings.project.c_str(), L"*.prism"},
+            {strings.images.c_str(), kImagePatterns},
+            {strings.all.c_str(), L"*.*"},
+        };
+        result = ConfigureOpenDialog(dialog.get(), filters, static_cast<UINT>(std::size(filters)), false);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        result = dialog->Show(owner);
+        if (result == kDialogCancelled)
+        {
+            return kDialogCancelled;
+        }
+        if (FAILED(result))
+        {
+            return result;
+        }
+
+        std::array<wil::unique_cotaskmem_string, 1> shellPaths{};
+        std::array<std::wstring_view, 1> pathViews{};
+        result = ReadDialogShellPath(dialog.get(), shellPaths[0]);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        const auto path = HostBoundedPathView(shellPaths[0].get());
+        if (!path || path->empty())
+        {
+            return kInvalidDialogInput;
+        }
+        pathViews[0] = path.value();
+        auto admitted = HostRequest::TryCopyPaths(std::span<const std::wstring_view>(pathViews.data(), 1),
+                                                  HostPathAction::OpenPaths, std::nullopt, budget);
+        if (!admitted)
+        {
+            return kInvalidDialogInput;
+        }
+        request = std::move(admitted);
+        return S_OK;
     }
-    const FilterStrings strings = LoadFilterStrings();
-    const COMDLG_FILTERSPEC filters[] = {
-        {strings.project.c_str(), L"*.prism"},
-        {strings.images.c_str(), kImagePatterns},
-        {strings.all.c_str(), L"*.*"},
-    };
-    (void)dialog->SetFileTypes(static_cast<UINT>(std::size(filters)), filters);
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
+    catch (const std::bad_alloc&)
     {
-        return false;
+        return E_OUTOFMEMORY;
     }
-    return ReadDialogResult(dialog.get(), path);
 }
 
-bool PickImagePaths(HWND owner, std::vector<std::wstring>& paths) noexcept
+HRESULT PickImageRequest(HWND owner, HostInputBudget& budget, std::optional<HostRequest>& request) noexcept
 {
-    paths.clear();
-    wil::com_ptr_nothrow<IFileOpenDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
+    try
     {
-        return false;
-    }
-    const FilterStrings strings = LoadFilterStrings();
-    const COMDLG_FILTERSPEC filters[] = {
-        {strings.images.c_str(), kImagePatterns},
-        {strings.all.c_str(), L"*.*"},
-    };
-    (void)dialog->SetFileTypes(static_cast<UINT>(std::size(filters)), filters);
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM |
-                             FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
-    {
-        return false;
-    }
-    wil::com_ptr_nothrow<IShellItemArray> items;
-    if (FAILED(dialog->GetResults(items.put())) || !items)
-    {
-        return false;
-    }
-    DWORD count = 0;
-    if (FAILED(items->GetCount(&count)))
-    {
-        return false;
-    }
-    for (DWORD index = 0; index < count; ++index)
-    {
-        wil::com_ptr_nothrow<IShellItem> item;
-        if (FAILED(items->GetItemAt(index, item.put())) || !item)
+        wil::com_ptr_nothrow<IFileOpenDialog> dialog;
+        HRESULT result =
+            CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        if (FAILED(result))
         {
-            continue;
+            return result;
         }
-        wil::unique_cotaskmem_string file;
-        if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, file.put())) && file && file.get()[0] != L'\0')
+        if (!dialog)
         {
-            paths.emplace_back(file.get());
+            return E_UNEXPECTED;
         }
+        const FilterStrings strings = LoadFilterStrings();
+        const COMDLG_FILTERSPEC filters[] = {
+            {strings.images.c_str(), kImagePatterns},
+            {strings.all.c_str(), L"*.*"},
+        };
+        result = ConfigureOpenDialog(dialog.get(), filters, static_cast<UINT>(std::size(filters)), true);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        result = dialog->Show(owner);
+        if (result == kDialogCancelled)
+        {
+            return kDialogCancelled;
+        }
+        if (FAILED(result))
+        {
+            return result;
+        }
+
+        wil::com_ptr_nothrow<IShellItemArray> items;
+        result = dialog->GetResults(items.put());
+        if (FAILED(result))
+        {
+            return result;
+        }
+        if (!items)
+        {
+            return E_UNEXPECTED;
+        }
+        DWORD count = 0;
+        result = items->GetCount(&count);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        if (count == 0 || count > HostInputBudget::kMaxPaths)
+        {
+            return kInvalidDialogInput;
+        }
+
+        std::array<wil::unique_cotaskmem_string, HostInputBudget::kMaxPaths> shellPaths{};
+        std::array<std::wstring_view, HostInputBudget::kMaxPaths> pathViews{};
+        for (DWORD index = 0; index < count; ++index)
+        {
+            wil::com_ptr_nothrow<IShellItem> item;
+            result = items->GetItemAt(index, item.put());
+            if (FAILED(result))
+            {
+                return result;
+            }
+            if (!item)
+            {
+                return E_UNEXPECTED;
+            }
+            result = ReadShellPath(item.get(), shellPaths[index]);
+            if (FAILED(result))
+            {
+                return result;
+            }
+            const auto path = HostBoundedPathView(shellPaths[index].get());
+            if (!path || path->empty())
+            {
+                return kInvalidDialogInput;
+            }
+            pathViews[index] = path.value();
+        }
+
+        auto admitted = HostRequest::TryCopyPaths(
+            std::span<const std::wstring_view>(pathViews.data(), static_cast<std::size_t>(count)),
+            HostPathAction::ImportImages, std::nullopt, budget);
+        if (!admitted)
+        {
+            return kInvalidDialogInput;
+        }
+        request = std::move(admitted);
+        return S_OK;
     }
-    return !paths.empty();
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY;
+    }
 }
 
-bool PickSavePath(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt, const COMDLG_FILTERSPEC* filters,
-                  UINT filterCount, std::wstring& path) noexcept
+HRESULT PickOutputForRequest(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
+                             const COMDLG_FILTERSPEC* filters, UINT filterCount, HostRequest& request,
+                             HostInputBudget& budget) noexcept
 {
-    wil::com_ptr_nothrow<IFileSaveDialog> dialog;
-    HRESULT result = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
-    if (FAILED(result) || !dialog)
+    try
     {
-        return false;
+        wil::com_ptr_nothrow<IFileSaveDialog> dialog;
+        HRESULT result =
+            CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
+        if (FAILED(result))
+        {
+            return result;
+        }
+        if (!dialog)
+        {
+            return E_UNEXPECTED;
+        }
+        if (filters && filterCount != 0)
+        {
+            result = dialog->SetFileTypes(filterCount, filters);
+            if (FAILED(result))
+            {
+                return result;
+            }
+        }
+        if (defaultExt)
+        {
+            result = dialog->SetDefaultExtension(defaultExt);
+            if (FAILED(result))
+            {
+                return result;
+            }
+        }
+        if (defaultName)
+        {
+            result = dialog->SetFileName(defaultName);
+            if (FAILED(result))
+            {
+                return result;
+            }
+        }
+        FILEOPENDIALOGOPTIONS options = 0;
+        result = dialog->GetOptions(&options);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        result = dialog->SetOptions(options | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        result = dialog->Show(owner);
+        if (result == kDialogCancelled)
+        {
+            return kDialogCancelled;
+        }
+        if (FAILED(result))
+        {
+            return result;
+        }
+
+        wil::unique_cotaskmem_string shellPath;
+        result = ReadDialogShellPath(dialog.get(), shellPath);
+        if (FAILED(result))
+        {
+            return result;
+        }
+        const auto path = HostBoundedPathView(shellPath.get());
+        if (!path || path->empty())
+        {
+            return kInvalidDialogInput;
+        }
+        return request.TrySelectOutput(path.value(), budget) ? S_OK : kInvalidDialogInput;
     }
-    if (filters && filterCount != 0)
+    catch (const std::bad_alloc&)
     {
-        (void)dialog->SetFileTypes(filterCount, filters);
+        return E_OUTOFMEMORY;
     }
-    if (defaultExt)
-    {
-        (void)dialog->SetDefaultExtension(defaultExt);
-    }
-    if (defaultName)
-    {
-        (void)dialog->SetFileName(defaultName);
-    }
-    FILEOPENDIALOGOPTIONS options = 0;
-    (void)dialog->GetOptions(&options);
-    (void)dialog->SetOptions(options | FOS_OVERWRITEPROMPT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    result = dialog->Show(owner);
-    if (FAILED(result))
-    {
-        return false;
-    }
-    return ReadDialogResult(dialog.get(), path);
 }
 
 UINT LoadErrorStringId(ProjectIoStatus status) noexcept

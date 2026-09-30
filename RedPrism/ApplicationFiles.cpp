@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <new>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -301,29 +302,245 @@ bool Application::SettleForWrite() noexcept
     return !_session.HasColorEdit();
 }
 
-bool Application::ConfirmDiscardChanges() noexcept
+Prompts::Answer Application::AskDiscardChanges() noexcept
 {
-    // Nothing settles before the answer: Cancel leaves every panel, card, crop frame, draft and live stroke as it
-    // was. Save settles what it writes; the caller settles the rest once the answer lets the document go. A pending
-    // edit Save would record (a live stroke, a pending gradient, a changed transform, a typed opacity) counts as a
-    // change, so a clean document with one still asks.
-    if (!_session.Document().has_value() || !HasUnsavedWork())
+    if (!_session.Document() || !HasUnsavedWork())
     {
-        return true;
+        return Prompts::Answer::Second;
     }
-    const std::wstring title = FormatStringResource(nullptr, IDS_CONFIRM_SAVE_TITLE, FileTitle(_documentPath));
-    switch (_prompts->AskThreeWay(_window.get(), title, LoadStringResource(nullptr, IDS_CONFIRM_SAVE_TEXT),
-                                  LoadStringResource(nullptr, IDS_CONFIRM_SAVE_SAVE),
-                                  LoadStringResource(nullptr, IDS_CONFIRM_SAVE_DISCARD), true,
-                                  _forcedDiscard.value_or(true) ? Prompts::Answer::Second : Prompts::Answer::Cancel))
+    const auto forced = _forcedDiscardAnswer.value_or(_forcedDiscard.value_or(true) ? Prompts::Answer::Second
+                                                                                    : Prompts::Answer::Cancel);
+    return _prompts->AskThreeWay(
+        _window.get(), FormatStringResource(nullptr, IDS_CONFIRM_SAVE_TITLE, FileTitle(_documentPath)),
+        LoadStringResource(nullptr, IDS_CONFIRM_SAVE_TEXT), LoadStringResource(nullptr, IDS_CONFIRM_SAVE_SAVE),
+        LoadStringResource(nullptr, IDS_CONFIRM_SAVE_DISCARD), true, forced);
+}
+
+HRESULT Application::SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept
+{
+    if (!_activeHostRequest || !_session.Document())
     {
-    case Prompts::Answer::First:
-        return SaveDocument(false);
-    case Prompts::Answer::Second:
-        return true;
-    default:
+        return E_UNEXPECTED;
+    }
+    auto& request = _activeHostRequest->input;
+    try
+    {
+        if (const auto* write = std::get_if<HostWriteInput>(&request.Input()); write && write->path)
+        {
+            return request.TrySelectOutput(write->path.value(), _hostInputBudget)
+                       ? S_OK
+                       : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        }
+        if (format == HostWriteFormat::Project && !saveAs && !_documentPath.empty())
+        {
+            return request.TrySelectOutput(_documentPath, _hostInputBudget)
+                       ? S_OK
+                       : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+        }
+        if (_quietUi || !_window)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        const auto strings = LoadFilterStrings();
+        const COMDLG_FILTERSPEC filters[] = {{format == HostWriteFormat::Project ? strings.project.c_str()
+                                              : format == HostWriteFormat::Jpeg  ? strings.jpeg.c_str()
+                                                                                 : strings.png.c_str(),
+                                              format == HostWriteFormat::Project ? L"*.prism"
+                                              : format == HostWriteFormat::Jpeg  ? L"*.jpg;*.jpeg"
+                                                                                 : L"*.png"},
+                                             {strings.exploded.c_str(), L"*.*"}};
+        const auto name = LoadStringResource(nullptr, format == HostWriteFormat::Project ? IDS_DEFAULT_PROJECT_NAME
+                                                      : format == HostWriteFormat::Jpeg  ? IDS_DEFAULT_EXPORT_JPEG
+                                                                                         : IDS_DEFAULT_EXPORT_PNG);
+        return PickOutputForRequest(_window.get(), name.c_str(),
+                                    format == HostWriteFormat::Project ? L"prism"
+                                    : format == HostWriteFormat::Jpeg  ? L"jpg"
+                                                                       : L"png",
+                                    filters, format == HostWriteFormat::Project ? 2u : 1u, request, _hostInputBudget);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY;
+    }
+}
+
+HRESULT Application::WriteHostOutput(HostWriteFormat format) noexcept
+{
+    if (!_activeHostRequest || !_session.Document() || _session.HasColorEdit())
+    {
+        return E_UNEXPECTED;
+    }
+    const auto path = _activeHostRequest->input.SelectedOutputPath();
+    if (!path)
+    {
+        return E_UNEXPECTED;
+    }
+    _hostExecuting = true;
+    const auto leave = wil::scope_exit([this] { _hostExecuting = false; });
+    if (!SettleForWrite() || !_session.Document())
+    {
+        return E_FAIL;
+    }
+    const auto revision = _session.history.CurrentRevision();
+    ProjectIoStatus status;
+    if (format == HostWriteFormat::Project)
+    {
+        const auto attributes = GetFileAttributesW(path->data());
+        const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool zip = !folder && (PathLooksLikeZipProject(path->data()) || EndsWithNoCase(path.value(), L".prism"));
+        status = SaveProject(path->data(), _session.Document().value(), _session.ActiveLayerID(), zip);
+        if (status == ProjectIoStatus::Ok)
+        {
+            _documentPath.assign(path.value());
+            _session.history.MarkSaved(revision);
+        }
+    }
+    else
+    {
+        const auto raster = ComposeDocumentReadback(_session.Document().value());
+        if (!raster)
+        {
+            ShowError(IDS_ERROR_FLATTEN);
+            return E_FAIL;
+        }
+        status = format == HostWriteFormat::Jpeg
+                     ? ExportDocumentJpeg(raster.value(),
+                                          JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
+                                          path->data())
+                     : ExportDocumentPng(raster.value(), _session.Document()->resolution, path->data());
+    }
+    if (status != ProjectIoStatus::Ok)
+    {
+        ShowError(status == ProjectIoStatus::TooLarge  ? IDS_ERROR_TOO_LARGE
+                  : format == HostWriteFormat::Project ? IDS_ERROR_SAVE_PROJECT
+                  : format == HostWriteFormat::Jpeg    ? IDS_ERROR_EXPORT_JPEG
+                                                       : IDS_ERROR_EXPORT_PNG);
+        return E_FAIL;
+    }
+    SyncChrome();
+    _frameInvalidated = true;
+    return S_OK;
+}
+
+bool Application::ExecuteHostInput() noexcept
+{
+    if (!_activeHostRequest)
+    {
         return false;
     }
+    _hostExecuting = true;
+    const auto leave = wil::scope_exit([this] { _hostExecuting = false; });
+    const auto& input = _activeHostRequest->input.Input();
+    return std::visit(
+        [this](const auto& value) noexcept -> bool
+        {
+            using Input = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<Input, HostPanelOkInput>)
+            {
+                return !_session.HasColorEdit();
+            }
+            else if constexpr (std::is_same_v<Input, HostPathsInput>)
+            {
+                if (_hostPathIndex < value.paths.size())
+                {
+                    _hostBatchFailed = !OpenProjectPath(value.paths[_hostPathIndex].c_str()) || _hostBatchFailed;
+                    return true; // report a failed load, preserving the document, then process the remaining batch
+                }
+                std::array<std::wstring_view, HostInputBudget::kMaxPaths> paths{};
+                std::size_t count = 0;
+                for (const auto& path : value.paths)
+                {
+                    if (!path.empty() &&
+                        (value.action != HostPathAction::OpenPaths || !LooksLikeProjectPath(path.c_str())))
+                    {
+                        paths[count++] = path;
+                    }
+                }
+                return ImportImagePathViews(std::span<const std::wstring_view>(paths.data(), count),
+                                            _hostImportNewProject, _hostSawProject ? std::nullopt : value.dropPoint);
+            }
+            else if constexpr (std::is_same_v<Input, HostNewInput>)
+            {
+                NewDocument();
+            }
+            else if constexpr (std::is_same_v<Input, HostCloseProjectInput>)
+            {
+                CloseProject();
+            }
+            else if constexpr (std::is_same_v<Input, HostCloseWindowInput> ||
+                               std::is_same_v<Input, HostEndSessionInput>)
+            {
+                if constexpr (std::is_same_v<Input, HostEndSessionInput>)
+                {
+                    if (!_endSessionPending || value.generation != _endSessionGeneration)
+                        return false;
+                    _endSessionPending = false;
+                    if (_window)
+                        (void)ShutdownBlockReasonDestroy(_window.get());
+                }
+                _closeConfirmed = true;
+                if (_window)
+                    (void)PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+            }
+            else if constexpr (std::is_same_v<Input, HostSizeApplyInput>)
+            {
+                if (value.invocation != _sizeInvocation || !SizeCardOpen())
+                    return false;
+                _sizeDialog = value.draft;
+                ApplySizeCard();
+            }
+            else if constexpr (std::is_same_v<Input, HostCommandInput>)
+            {
+                OnCommand(value.command);
+            }
+            else if constexpr (std::is_same_v<Input, HostToolInput>)
+            {
+                OnTool(value.tool);
+            }
+            else if constexpr (std::is_same_v<Input, HostShapeFinishInput>)
+            {
+                _session.CommitShape(value.draft, value.foregroundArgb);
+                DocumentChanged();
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerSelectInput>)
+            {
+                OnLayerSelected(value.id);
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerTargetInput>)
+            {
+                TargetLayer(value.id, value.mask, value.toggleMask);
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerInvokeInput>)
+            {
+                OnLayerInvoked(value.id);
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerReorderInput>)
+            {
+                OnLayerReordered(value.source, value.target, value.parent, value.place);
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerRenameInput>)
+            {
+                if (value.name)
+                    _session.RenameLayer(value.id, value.name.value());
+                DocumentChanged();
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerOpacityInput>)
+            {
+                if (_session.ActiveLayerID() != value.id)
+                    return false;
+                OnLayerOpacity(value.opacity, value.phase);
+            }
+            else
+            {
+                return false;
+            }
+            if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostPathsInput> &&
+                          !std::is_same_v<Input, HostWriteInput>)
+            {
+                return true;
+            }
+        },
+        input);
 }
 
 void Application::OpenPath(const wchar_t* path) noexcept
@@ -332,48 +549,38 @@ void Application::OpenPath(const wchar_t* path) noexcept
     {
         return;
     }
-    OpenPaths(std::vector<std::wstring>{std::wstring(path)});
+    const auto view = HostBoundedPathView(path);
+    if (!view)
+    {
+        ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
+        return;
+    }
+    const std::array<std::wstring_view, 1> paths{view.value()};
+    ReportHostAdmission(QueueHostPaths(paths, HostPathAction::OpenPaths));
 }
 
 void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint) noexcept
 {
-    // Projects first, each one replacing the document; then one question for every image in the batch.
-    std::vector<std::wstring> images;
-    bool projects = false;
+    if (paths.size() > HostInputBudget::kMaxPaths)
+    {
+        ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
+        return;
+    }
+    std::array<std::wstring_view, HostInputBudget::kMaxPaths> views{};
+    std::size_t count = 0;
     for (const std::wstring& path : paths)
     {
-        if (path.empty())
-        {
-            continue;
-        }
-        if (LooksLikeProjectPath(path.c_str()))
-        {
-            projects = true;
-            (void)OpenProjectPath(path.c_str());
-        }
-        else
-        {
-            images.push_back(path);
-        }
+        views[count++] = path;
     }
-    if (images.empty())
-    {
-        return;
-    }
-    const ImageOpenChoice choice = PromptImageOpen(FileTitle(images.front()), images.size());
-    if (choice == ImageOpenChoice::Cancel)
-    {
-        return;
-    }
-    // A drop point belongs to the document it landed on: images dropped with a project center on the canvas
-    // (legacy ProjectController.receive), and so does a new project.
-    (void)ImportImagePaths(images, choice == ImageOpenChoice::NewProject, projects ? std::nullopt : dropPoint);
+    ReportHostAdmission(
+        QueueHostPaths(std::span<const std::wstring_view>(views.data(), count), HostPathAction::OpenPaths, dropPoint));
 }
 
 bool Application::OpenProjectPath(const wchar_t* path) noexcept
 {
-    if (!ConfirmDiscardChanges())
+    if (!_hostExecuting)
     {
+        OpenPath(path);
         return false;
     }
     const ProjectLoadResult loaded = LoadProject(path);
@@ -416,8 +623,8 @@ void Application::ReplaceDocument(CanvasDocument document, const std::optional<G
 // layer above the active one, all in one `Import Images` entry (`Import Image` for a single file), centered on
 // `center` when the images join the document it was taken on (legacy drainImports: the images of a batch that
 // starts the document center on its canvas, whatever the drop point).
-bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject,
-                                   std::optional<Vec2> center) noexcept
+bool Application::ImportImagePathViews(std::span<const std::wstring_view> paths, bool newProject,
+                                       std::optional<Vec2> center) noexcept
 {
     if (paths.empty())
     {
@@ -433,10 +640,6 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
     std::size_t next = 0;
     if (newProject || !_session.Document().has_value())
     {
-        if (!ConfirmDiscardChanges())
-        {
-            return false;
-        }
         // The first image that loads determines the canvas (legacy importImages); one that fails before it is
         // reported with the batch and the next one is tried.
         std::optional<CanvasDocument> created;
@@ -445,7 +648,7 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
         {
             CanvasDocument document;
             document.id = Guid::Generate();
-            const ProjectIoStatus status = ImportImageOnto(document, paths[next].c_str(), active);
+            const ProjectIoStatus status = ImportImageOnto(document, paths[next].data(), active);
             if (status == ProjectIoStatus::Ok)
             {
                 created = std::move(document);
@@ -477,7 +680,7 @@ bool Application::ImportImagePaths(const std::vector<std::wstring>& paths, bool 
         bool imported = false;
         for (; next < paths.size(); ++next)
         {
-            const ProjectIoStatus status = ImportImageOnto(document, paths[next].c_str(), active, center);
+            const ProjectIoStatus status = ImportImageOnto(document, paths[next].data(), active, center);
             if (status != ProjectIoStatus::Ok)
             {
                 noteFailure(status);
@@ -511,17 +714,25 @@ void Application::ImportImages() noexcept
     {
         return;
     }
-    std::vector<std::wstring> paths;
-    if (!PickImagePaths(_window.get(), paths))
+    std::optional<HostRequest> request;
+    const auto result = PickImageRequest(_window.get(), _hostInputBudget, request);
+    if (FAILED(result))
     {
+        if (result != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            ReportHostAdmission(ContinuationReceipt::Failure(result));
         return;
     }
-    (void)ImportImagePaths(paths, false);
+    ReportHostAdmission(QueueHostRequest(std::move(request.value())));
 }
 
 void Application::CloseProject() noexcept
 {
-    if (!_session.Document().has_value() || !ConfirmDiscardChanges())
+    if (!_hostExecuting)
+    {
+        ReportHostAdmission(QueueHostInput(HostCloseProjectInput{}));
+        return;
+    }
+    if (!_session.Document().has_value())
     {
         return;
     }
@@ -556,7 +767,7 @@ void Application::ReleaseDeferredClose() noexcept
     // Posted, not run here: the queue delivers them once this message has returned.
     if (std::exchange(_endSessionPromptDeferred, false))
     {
-        (void)PostMessageW(_window.get(), kEndSessionMessage, 0, 0);
+        (void)PostMessageW(_window.get(), kEndSessionMessage, static_cast<WPARAM>(_endSessionGeneration), 0);
     }
     if (std::exchange(_closeDeferred, false))
     {
@@ -566,14 +777,17 @@ void Application::ReleaseDeferredClose() noexcept
 
 bool Application::OnQueryEndSession(LPARAM reasons) noexcept
 {
+    if ((reasons & ENDSESSION_CRITICAL) != 0)
+    {
+        return true;
+    }
     if (_endSessionPending)
     {
         // The prompt for an earlier request has not been answered.
         return false;
     }
     // A critical end cannot wait; nothing unsaved (or a quiet run the self-test does not answer) has nothing to ask.
-    if ((reasons & ENDSESSION_CRITICAL) != 0 || !_window || !HasUnsavedWork() ||
-        (_quietUi && !_forcedDiscard.has_value()))
+    if (!_window || !HasUnsavedWork() || (_quietUi && !_forcedDiscard.has_value()))
     {
         return true;
     }
@@ -581,7 +795,14 @@ bool Application::OnQueryEndSession(LPARAM reasons) noexcept
     const std::wstring reason = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
     (void)ShutdownBlockReasonCreate(_window.get(), reason.c_str());
     _endSessionPending = true;
-    (void)PostMessageW(_window.get(), kEndSessionMessage, 0, 0);
+    if (_endSessionGeneration == UINT64_MAX)
+    {
+        _endSessionPending = false;
+        (void)ShutdownBlockReasonDestroy(_window.get());
+        return false;
+    }
+    ++_endSessionGeneration;
+    (void)PostMessageW(_window.get(), kEndSessionMessage, static_cast<WPARAM>(_endSessionGeneration), 0);
     return false;
 }
 
@@ -612,18 +833,12 @@ void Application::RunEndSessionPrompt() noexcept
         _endSessionPromptDeferred = true;
         return;
     }
-    const bool proceed = ConfirmDiscardChanges();
-    const bool ending = std::exchange(_endSessionPending, false);
-    if (!_window)
+    const ContinuationReceipt receipt = QueueHostInput(HostEndSessionInput{_endSessionGeneration, 0});
+    ReportHostAdmission(receipt);
+    if (receipt.Read().outcome == HostOutcome::Failed)
     {
-        return;
-    }
-    (void)ShutdownBlockReasonDestroy(_window.get());
-    if (proceed && ending)
-    {
-        // Saved or discarded: the window closes without asking again and Windows goes on ending the session.
-        _closeConfirmed = true;
-        (void)PostMessageW(_window.get(), WM_CLOSE, 0, 0);
+        _endSessionPending = false;
+        (void)ShutdownBlockReasonDestroy(_window.get());
     }
 }
 
@@ -679,6 +894,55 @@ int Application::RunFilesSelfTest() noexcept
     { return _session.Document().has_value() ? _session.Document().value().layers.size() : std::size_t{0}; };
     const auto documentWidth = [&]() noexcept
     { return _session.Document().has_value() ? _session.Document().value().width : 0; };
+    const auto settle = [&]() noexcept
+    {
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The files self-test could not settle admitted work.\n");
+            return false;
+        }
+        return true;
+    };
+    const auto command = [&](int id) noexcept
+    {
+        OnCommand(id);
+        return settle();
+    };
+    const auto openPath = [&](const wchar_t* path) noexcept
+    {
+        OpenPath(path);
+        return settle();
+    };
+    const auto queuePaths = [&](const std::vector<std::wstring>& paths,
+                                HostPathAction action) -> std::optional<ContinuationReceipt::Result>
+    {
+        std::array<std::wstring_view, HostInputBudget::kMaxPaths> views{};
+        if (paths.size() > views.size())
+        {
+            return ContinuationReceipt::Result{HostOutcome::Failed, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)};
+        }
+        std::size_t count = 0;
+        for (const std::wstring& path : paths)
+        {
+            views[count++] = path;
+        }
+        const ContinuationReceipt receipt =
+            QueueHostPaths(std::span<const std::wstring_view>(views.data(), count), action);
+        if (!settle())
+        {
+            return std::nullopt;
+        }
+        return receipt.Read();
+    };
+    const auto queueWrite = [&](HostWriteFormat format) noexcept
+    {
+        const ContinuationReceipt receipt = QueueHostWrite(format, false);
+        if (!settle())
+        {
+            return std::optional<ContinuationReceipt::Result>{};
+        }
+        return std::optional<ContinuationReceipt::Result>{receipt.Read()};
+    };
 
     // A 6×3 opaque red PNG of the self-test's own. Every scratch name carries the process id, so concurrent runs (the
     // review-fix worktrees, CI) never share or delete each other's files.
@@ -709,11 +973,17 @@ int Application::RunFilesSelfTest() noexcept
     const auto removeFixture = wil::scope_exit([&]() noexcept { cleanup(); });
 
     // Add as Layer: the document keeps its size and gains one layer as one Import Image entry.
-    OnCommand(ChromeHost::kCommandNew);
+    if (!command(ChromeHost::kCommandNew))
+        return 5;
     const std::size_t layersBefore = layerCount();
     const int widthBefore = documentWidth();
     _forcedImageOpen = ImageOpenChoice::AddLayer;
-    OpenPath(fixture.c_str());
+    if (!openPath(fixture.c_str()))
+    {
+        _forcedImageOpen.reset();
+        cleanup();
+        return 5;
+    }
     const ImageLayer* imported = _session.ActiveLayer();
     if (layerCount() != layersBefore + 1 || documentWidth() != widthBefore ||
         _session.history.UndoName() != L"Import Image" || imported == nullptr || !imported->asset.has_value() ||
@@ -727,8 +997,13 @@ int Application::RunFilesSelfTest() noexcept
     }
     // New Project: an unmodified, untitled document of the image's size with nothing to undo.
     _forcedImageOpen = ImageOpenChoice::NewProject;
-    OpenPath(fixture.c_str());
+    const bool openedAsProject = openPath(fixture.c_str());
     _forcedImageOpen.reset();
+    if (!openedAsProject)
+    {
+        cleanup();
+        return 5;
+    }
     if (documentWidth() != 6 || (_session.Document().has_value() && _session.Document().value().height != 3) ||
         layerCount() != 1 || _session.history.IsModified() || _session.history.CanUndo() || !_documentPath.empty())
     {
@@ -743,10 +1018,12 @@ int Application::RunFilesSelfTest() noexcept
     // The save prompt: a modified document survives New under Cancel and is replaced under Don't Save.
     _session.AddBlankLayer();
     _forcedDiscard = false;
-    OnCommand(ChromeHost::kCommandNew);
+    if (!command(ChromeHost::kCommandNew))
+        return 5;
     const bool survived = documentWidth() == 6 && layerCount() == 2 && _session.history.IsModified();
     _forcedDiscard = true;
-    OnCommand(ChromeHost::kCommandNew);
+    if (!command(ChromeHost::kCommandNew))
+        return 5;
     _forcedDiscard.reset();
     if (!survived || documentWidth() != 1280 || layerCount() != 1 || _session.history.IsModified())
     {
@@ -757,12 +1034,14 @@ int Application::RunFilesSelfTest() noexcept
         return 5;
     }
     // Close Project empties the shell, a frame still renders, and New brings a document back.
-    OnCommand(ChromeHost::kCommandCloseProject);
+    if (!command(ChromeHost::kCommandCloseProject))
+        return 5;
     const bool closed = !_session.Document().has_value() && _session.DisplayDocument() == nullptr &&
                         _session.LayerRows().empty() && !_session.history.IsModified();
     SyncChrome();
     const HRESULT emptyFrame = _renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
-    OnCommand(ChromeHost::kCommandNew);
+    if (!command(ChromeHost::kCommandNew))
+        return 5;
     if (!closed || FAILED(emptyFrame) || !_session.Document().has_value() || layerCount() != 1)
     {
         cleanup();
@@ -772,7 +1051,9 @@ int Application::RunFilesSelfTest() noexcept
         return 5;
     }
     // Import Images: two files as one Import Images entry.
-    if (!ImportImagePaths(std::vector<std::wstring>{fixture, fixture}, false) || layerCount() != 3 ||
+    const std::optional<ContinuationReceipt::Result> importedImages =
+        queuePaths(std::vector<std::wstring>{fixture, fixture}, HostPathAction::ImagesAsLayers);
+    if (!importedImages.has_value() || importedImages.value().outcome != HostOutcome::Succeeded || layerCount() != 3 ||
         _session.history.UndoName() != L"Import Images")
     {
         cleanup();
@@ -795,16 +1076,19 @@ int Application::RunFilesSelfTest() noexcept
         }
         return -1;
     };
-    OnCommand(ChromeHost::kCommandMoveLayerDown);
+    if (!command(ChromeHost::kCommandMoveLayerDown))
+        return 5;
     const bool movedDown = indexOf(top) == 1 && _session.history.UndoName() == L"Reorder Layers";
-    OnCommand(ChromeHost::kCommandMoveLayerUp);
+    if (!command(ChromeHost::kCommandMoveLayerUp))
+        return 5;
     if (!movedDown || indexOf(top) != 2 || _session.ActiveLayerID() != top)
     {
         SelfTestFailure(std::format(L"Move Layer Down / Up did not swap siblings (index {}).\n", indexOf(top)));
         return 5;
     }
     // Group Selected Layers wraps the active layer in a folder; undo restores.
-    OnCommand(ChromeHost::kCommandGroupLayers);
+    if (!command(ChromeHost::kCommandGroupLayers))
+        return 5;
     const ImageLayer* folder = _session.ActiveLayer();
     const ImageLayer* wrapped = nullptr;
     for (const ImageLayer& layer : _session.Document().value().layers)
@@ -826,10 +1110,12 @@ int Application::RunFilesSelfTest() noexcept
     const Guid base = _session.Document().value().layers[0].id;
     const Guid middle = _session.Document().value().layers[1].id;
     _session.SelectLayer(middle);
-    OnCommand(ChromeHost::kCommandClipToggle);
+    if (!command(ChromeHost::kCommandClipToggle))
+        return 5;
     const bool clipped = _session.ActiveLayer() != nullptr && _session.ActiveLayer()->maskSourceID == base &&
                          _session.history.UndoName() == L"Create Clipping Mask";
-    OnCommand(ChromeHost::kCommandClipToggle);
+    if (!command(ChromeHost::kCommandClipToggle))
+        return 5;
     if (!clipped || _session.ActiveLayer() == nullptr || _session.ActiveLayer()->maskSourceID.has_value() ||
         _session.history.UndoName() != L"Release Clipping Mask")
     {
@@ -855,9 +1141,11 @@ int Application::RunFilesSelfTest() noexcept
         const std::wstring missing = scratch + L"missing.png";
         (void)DeleteFileW(missing.c_str());
         _forcedDiscard = true;
-        const bool complete = ImportImagePaths(std::vector<std::wstring>{missing, fixture, fixture}, true);
+        const std::optional<ContinuationReceipt::Result> complete =
+            queuePaths(std::vector<std::wstring>{missing, fixture, fixture}, HostPathAction::ImagesAsProject);
         _forcedDiscard.reset();
-        if (complete || documentWidth() != 6 || layerCount() != 2 || _session.history.UndoName() != L"Import Image")
+        if (!complete.has_value() || complete.value().outcome != HostOutcome::Failed || documentWidth() != 6 ||
+            layerCount() != 2 || _session.history.UndoName() != L"Import Image")
         {
             SelfTestFailure(std::format(L"A new project from a batch whose first image fails did not open "
                                         L"the next one ({} layers, width {}).\n",
@@ -877,33 +1165,42 @@ int Application::RunFilesSelfTest() noexcept
     // a shape draft and a pending transform stay as they were.
     {
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         const Guid red = insertRed(40, 30);
         _forcedDiscard = false;
-        OnCommand(ChromeHost::kCommandLevels);
+        if (!command(ChromeHost::kCommandLevels))
+            return 5;
         const bool panelOpen = _session.HasColorEdit(FilterKind::Levels);
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         const bool panelKept = _session.HasColorEdit(FilterKind::Levels) && layerCount() == 2;
         CancelColorEdit();
-        OnCommand(ChromeHost::kCommandCanvasSize);
-        OnCommand(ChromeHost::kCommandCloseProject);
+        if (!command(ChromeHost::kCommandCanvasSize))
+            return 5;
+        if (!command(ChromeHost::kCommandCloseProject))
+            return 5;
         const bool cardKept = SizeCardOpen() && _session.Document().has_value();
         CancelSizeCard();
         OnTool(EditorTool::Crop);
         const std::optional<CropRect> frame = _session.CropFrame();
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         const bool frameKept = frame.has_value() && _session.CropFrame() == frame;
         OnTool(EditorTool::Shape);
         _session.BeginShape(Vec2{10, 10});
         _session.DragShape(Vec2{50, 40}, false, false);
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         const bool draftKept = _session.PendingShape().has_value();
         _session.CancelShape();
         OnTool(EditorTool::Move);
         _session.SelectLayer(red);
-        OnCommand(ChromeHost::kCommandFreeTransform);
+        if (!command(ChromeHost::kCommandFreeTransform))
+            return 5;
         OnTransformAction(TransformAction::SetX, 25.0);
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         const bool transformKept =
             _session.PendingTransformEdit().has_value() && _session.PendingTransformEdit()->draft.origin.x == 25.0;
         OnTransformAction(TransformAction::Cancel, 0.0);
@@ -923,14 +1220,17 @@ int Application::RunFilesSelfTest() noexcept
         const std::wstring saved = scratch + L"save.prism";
         (void)DeleteFileW(saved.c_str());
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         _forcedDiscard.reset();
         (void)insertRed(40, 30);
-        OnCommand(ChromeHost::kCommandNewLevelsAdjustment);
+        if (!command(ChromeHost::kCommandNewLevelsAdjustment))
+            return 5;
         const std::optional<Guid> adjustment = _session.AdjustmentEditingID();
         OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
         _documentPath = saved;
-        OnCommand(ChromeHost::kCommandSave);
+        if (!command(ChromeHost::kCommandSave))
+            return 5;
         const bool applied = !_session.HasColorEdit() && !_session.history.IsModified() &&
                              _session.history.UndoName() == L"Edit Levels Adjustment";
         // What the panel's Cancel would do, were it still open.
@@ -966,7 +1266,8 @@ int Application::RunFilesSelfTest() noexcept
         const std::wstring pathBefore = _documentPath;
         const std::optional<bool> forcedDiscardBefore = _forcedDiscard;
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         _forcedDiscard = false;
         (void)insertRed(12, 8);
         _session.history.MarkSaved();
@@ -974,13 +1275,14 @@ int Application::RunFilesSelfTest() noexcept
         const Guid revisionBefore = _session.history.CurrentRevision();
         const int undoCountBefore = _session.history.UndoCount();
         const bool cleanBefore = !_session.history.IsModified();
-        OnCommand(ChromeHost::kCommandLevels);
+        if (!command(ChromeHost::kCommandLevels))
+            return 5;
         OnAdjustAction(AdjustAction::SetOutputBlack, 24.0);
         const bool changedPanel =
             _session.PendingColorEdit().has_value() && _session.PendingColorEdit()->kind == FilterKind::Levels &&
             Adjust::LevelsCurrent(_session.PendingColorEdit()->settings.levels).outputBlack == 24.0;
         const bool unsaved = HasUnsavedWork();
-        const bool cancelKept = !_forcedDiscard.value() && !ConfirmDiscardChanges();
+        const bool cancelKept = !_forcedDiscard.value() && AskDiscardChanges() == Prompts::Answer::Cancel;
         const bool panelKept = _session.HasColorEdit(FilterKind::Levels) && _session.PendingColorEdit().has_value() &&
                                Adjust::LevelsCurrent(_session.PendingColorEdit()->settings.levels).outputBlack == 24.0;
         const bool documentKept = _session.Document() == documentBefore;
@@ -1008,7 +1310,8 @@ int Application::RunFilesSelfTest() noexcept
         const std::optional<bool> forcedDiscardBefore = _forcedDiscard;
         (void)DeleteFileW(fillPath.c_str());
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         _forcedDiscard.reset();
         (void)insertRed(4, 4);
         _session.ApplySelection(SelectionGeometry::Rect(0, 0, 4, 4), SelectionMode::New, L"Select");
@@ -1017,13 +1320,13 @@ int Application::RunFilesSelfTest() noexcept
         const std::optional<CanvasDocument> documentBefore = _session.Document();
         const Guid revisionBefore = _session.history.CurrentRevision();
         const int undoCountBefore = _session.history.UndoCount();
-        OnCommand(ChromeHost::kCommandContentAwareFill);
-        const bool failedPreview = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
-                                   _session.PendingColorEdit().has_value() &&
+        if (!command(ChromeHost::kCommandContentAwareFill))
+            return 5;
+        const bool failedPreview = settle() && _session.PendingColorEdit().has_value() &&
                                    _session.PendingColorEdit()->kind == FilterKind::ContentAwareFill &&
                                    _session.PendingColorEdit()->previewFailed;
         _documentPath = fillPath;
-        const bool saved = SaveDocument(false);
+        const std::optional<ContinuationReceipt::Result> saved = queueWrite(HostWriteFormat::Project);
         const DWORD attributes = GetFileAttributesW(fillPath.c_str());
         const DWORD attributesError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
         const bool noFile = attributes == INVALID_FILE_ATTRIBUTES &&
@@ -1039,13 +1342,15 @@ int Application::RunFilesSelfTest() noexcept
         (void)DeleteFileW(fillPath.c_str());
         _documentPath = pathBefore;
         _forcedDiscard = forcedDiscardBefore;
-        if (!cleanBefore || !failedPreview || saved || !noFile || !panelKept || !documentKept || !historyKept)
+        if (!cleanBefore || !failedPreview || !saved.has_value() || saved.value().outcome != HostOutcome::Failed ||
+            !noFile || !panelKept || !documentKept || !historyKept)
         {
             SelfTestFailure(std::format(L"Saving with donorless Content-Aware Fill did not fail without changing "
                                         L"state (clean {}, preview failed {}, saved {}, no file {}, panel {}, "
                                         L"document {}, history {}).\n",
-                                        cleanBefore, failedPreview, saved, noFile, panelKept, documentKept,
-                                        historyKept));
+                                        cleanBefore, failedPreview,
+                                        saved.has_value() && saved.value().outcome == HostOutcome::Succeeded, noFile,
+                                        panelKept, documentKept, historyKept));
             return 5;
         }
     }
@@ -1058,22 +1363,31 @@ int Application::RunFilesSelfTest() noexcept
             _session.Document().has_value() && SaveProject(exploded.c_str(), _session.Document().value(),
                                                            _session.ActiveLayerID(), false) == ProjectIoStatus::Ok;
         _forcedDiscard = true;
-        const bool opened = written && OpenProjectPath(exploded.c_str());
+        const std::optional<ContinuationReceipt::Result> opened =
+            written
+                ? queuePaths(std::vector<std::wstring>{exploded}, HostPathAction::OpenPaths)
+                : std::optional<ContinuationReceipt::Result>{ContinuationReceipt::Result{HostOutcome::Failed, E_ABORT}};
         _forcedDiscard.reset();
-        OnCommand(ChromeHost::kCommandNewLayer);
+        if (!command(ChromeHost::kCommandNewLayer))
+            return 5;
         const std::size_t layers = layerCount();
-        const bool savedInPlace = SaveDocument(false);
+        const std::optional<ContinuationReceipt::Result> savedInPlace = queueWrite(HostWriteFormat::Project);
         const DWORD attributes = GetFileAttributesW(exploded.c_str());
         const bool stillFolder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         const ProjectLoadResult reloaded = LoadProject(exploded.c_str());
         const bool complete = reloaded.status == ProjectIoStatus::Ok && reloaded.document.layers.size() == layers;
         std::filesystem::remove_all(exploded, error);
         _documentPath.clear();
-        if (!written || !opened || !savedInPlace || !stillFolder || !complete || _session.history.IsModified())
+        if (!written || !opened.has_value() || opened.value().outcome != HostOutcome::Succeeded ||
+            !savedInPlace.has_value() || savedInPlace.value().outcome != HostOutcome::Succeeded || !stillFolder ||
+            !complete || _session.history.IsModified())
         {
-            SelfTestFailure(std::format(L"Saving a project opened from a folder did not save it in place "
-                                        L"(written {}, opened {}, saved {}, folder {}, reloaded {}).\n",
-                                        written, opened, savedInPlace, stillFolder, complete));
+            SelfTestFailure(
+                std::format(L"Saving a project opened from a folder did not save it in place "
+                            L"(written {}, opened {}, saved {}, folder {}, reloaded {}).\n",
+                            written, opened.has_value() && opened.value().outcome == HostOutcome::Succeeded,
+                            savedInPlace.has_value() && savedInPlace.value().outcome == HostOutcome::Succeeded,
+                            stillFolder, complete));
             return 5;
         }
     }
@@ -1083,19 +1397,25 @@ int Application::RunFilesSelfTest() noexcept
         const std::wstring reopened = scratch + L"reopen.prism";
         (void)DeleteFileW(reopened.c_str());
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         _forcedDiscard.reset();
         const Guid masked = insertRed(60, 40);
-        OnCommand(ChromeHost::kCommandAddMask);
+        if (!command(ChromeHost::kCommandAddMask))
+            return 5;
         const bool targeted = _session.IsMaskSelected() && _session.ActiveLayerID() == masked;
         const bool written = targeted && SaveProject(reopened.c_str(), _session.Document().value(),
                                                      _session.ActiveLayerID(), true) == ProjectIoStatus::Ok;
         _forcedDiscard = true;
-        const bool opened = written && OpenProjectPath(reopened.c_str());
+        const std::optional<ContinuationReceipt::Result> opened =
+            written
+                ? queuePaths(std::vector<std::wstring>{reopened}, HostPathAction::OpenPaths)
+                : std::optional<ContinuationReceipt::Result>{ContinuationReceipt::Result{HostOutcome::Failed, E_ABORT}};
         _forcedDiscard.reset();
         (void)DeleteFileW(reopened.c_str());
         _documentPath.clear();
-        const bool imageTargeted = opened && _session.ActiveLayerID() == masked && _session.ActiveLayer() != nullptr &&
+        const bool imageTargeted = opened.has_value() && opened.value().outcome == HostOutcome::Succeeded &&
+                                   _session.ActiveLayerID() == masked && _session.ActiveLayer() != nullptr &&
                                    _session.ActiveLayer()->mask.has_value() && !_session.IsMaskSelected();
         OnTool(EditorTool::Brush);
         _session.brushSettings = BrushSettings{8, 1, 1, 0, 0, 1};
@@ -1103,12 +1423,15 @@ int Application::RunFilesSelfTest() noexcept
         FinishBrushStroke();
         const std::wstring painted = _session.history.UndoName();
         OnTool(EditorTool::Move);
-        if (!targeted || !written || !opened || !imageTargeted || painted != L"Brush Stroke")
+        if (!targeted || !written || !opened.has_value() || opened.value().outcome != HostOutcome::Succeeded ||
+            !imageTargeted || painted != L"Brush Stroke")
         {
             SelfTestFailure(std::format(L"Reopening a project kept the mask target of the document it "
                                         L"replaced (targeted {}, written {}, opened {}, image targeted {}, "
                                         L"stroke '{}').\n",
-                                        targeted, written, opened, imageTargeted, painted));
+                                        targeted, written,
+                                        opened.has_value() && opened.value().outcome == HostOutcome::Succeeded,
+                                        imageTargeted, painted));
             return 5;
         }
     }
@@ -1116,7 +1439,8 @@ int Application::RunFilesSelfTest() noexcept
     // dropped on the chrome it centers on the canvas. The drop goes through the window procedure with a real HDROP.
     {
         _forcedDiscard = true;
-        OnCommand(ChromeHost::kCommandNew);
+        if (!command(ChromeHost::kCommandNew))
+            return 5;
         _forcedDiscard.reset();
         const auto dropAt = [&](POINT client) -> std::optional<Vec2>
         {
@@ -1138,6 +1462,8 @@ int Application::RunFilesSelfTest() noexcept
             _forcedImageOpen = ImageOpenChoice::AddLayer;
             // The window procedure's DragFinish frees the handle.
             (void)SendMessageW(_window.get(), WM_DROPFILES, reinterpret_cast<WPARAM>(memory.release()), 0);
+            if (!settle())
+                return std::nullopt;
             _forcedImageOpen.reset();
             const ImageLayer* layer = _session.ActiveLayer();
             if (layerCount() != before + 1 || layer == nullptr || _session.history.UndoName() != L"Import Image")
@@ -1195,6 +1521,11 @@ int Application::RunClipboardSelfTest() noexcept
         wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The New command did not settle in the harness.\n");
+        std::_Exit(5);
+    }
     _forcedDiscard.reset();
     {
         const Raster raster = SolidRaster(100, 100, 0xFFFF0000u);
@@ -1348,6 +1679,11 @@ int Application::RunSessionSelfTest() noexcept
     // A document with a painted layer for the pointer checks.
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The New command did not settle in the harness.\n");
+        std::_Exit(5);
+    }
     _forcedDiscard.reset();
     {
         const Raster raster = SolidRaster(200, 150, 0xFF2F6FB0u);
@@ -1528,38 +1864,86 @@ int Application::RunSessionSelfTest() noexcept
             return 5;
         }
     }
-    // Session end: a modified document refuses with a block reason and asks through the posted prompt; Cancel keeps
-    // the window, Don't Save closes it without asking again, a critical end is never refused, and the session's end
-    // saves the settings.
+    // Session end: an older cancelled generation cannot enqueue a continuation or consume the current block reason;
+    // typed queue-full admission releases its reason and preserves the document. Cancel keeps the window; Don't Save
+    // closes it without asking again. A critical end is never refused, and the session's end saves the settings.
     {
         _session.AddBlankLayer();
         DocumentChanged();
+        MSG oldMessage{};
         MSG message{};
         _forcedDiscard = false;
         const LRESULT refused = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, ENDSESSION_LOGOFF);
+        const std::uint64_t oldGeneration = _endSessionGeneration;
         std::array<wchar_t, 256> reason{};
         DWORD length = static_cast<DWORD>(reason.size());
         const std::wstring expected = FormatStringResource(nullptr, IDS_SHUTDOWN_UNSAVED, FileTitle(_documentPath));
         const bool reasonShown = ShutdownBlockReasonQuery(_window.get(), reason.data(), &length) != FALSE &&
                                  std::wstring(reason.data()) == expected;
-        const bool promptQueued =
+        const bool earlierOrdinaryPending = _endSessionPending && _endSessionGeneration == oldGeneration;
+        const LRESULT critical = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, ENDSESSION_CRITICAL);
+        const bool oldPromptQueued =
+            PeekMessageW(&oldMessage, _window.get(), kEndSessionMessage, kEndSessionMessage, PM_REMOVE) != FALSE;
+        const bool oldMessageTagged = oldPromptQueued && oldMessage.wParam == static_cast<WPARAM>(oldGeneration);
+        (void)SendMessageW(_window.get(), WM_ENDSESSION, FALSE, ENDSESSION_LOGOFF);
+        length = static_cast<DWORD>(reason.size());
+        const bool oldReasonRemoved = ShutdownBlockReasonQuery(_window.get(), reason.data(), &length) == FALSE;
+        const LRESULT refusedAgain = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, 0);
+        const std::uint64_t currentGeneration = _endSessionGeneration;
+        const bool currentPromptQueued =
             PeekMessageW(&message, _window.get(), kEndSessionMessage, kEndSessionMessage, PM_REMOVE) != FALSE;
-        if (promptQueued)
+        if (oldPromptQueued)
+        {
+            (void)DispatchMessageW(&oldMessage);
+        }
+        length = static_cast<DWORD>(reason.size());
+        const bool staleMessageIgnored =
+            _endSessionPending && currentGeneration != oldGeneration && _endSessionGeneration == currentGeneration &&
+            _hostRequests.Size() == 0 && !_activeHostRequest &&
+            ShutdownBlockReasonQuery(_window.get(), reason.data(), &length) != FALSE &&
+            std::wstring(reason.data()) == expected &&
+            PeekMessageW(&message, _window.get(), WM_CLOSE, WM_CLOSE, PM_NOREMOVE) == FALSE;
+        if (currentPromptQueued)
         {
             (void)DispatchMessageW(&message);
+            (void)RunUiActions(_jobs);
         }
         length = static_cast<DWORD>(reason.size());
         const bool keptOpen = _window && !_endSessionPending && _session.history.IsModified() &&
                               PeekMessageW(&message, _window.get(), WM_CLOSE, WM_CLOSE, PM_NOREMOVE) == FALSE &&
                               ShutdownBlockReasonQuery(_window.get(), reason.data(), &length) == FALSE;
-        const LRESULT critical = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, ENDSESSION_CRITICAL);
+
+        bool queueFilled = _hostRequests.Size() == 0 && !_activeHostRequest;
+        for (std::size_t i = 0; queueFilled && i < HostRequestQueue::kCapacity; ++i)
+        {
+            const ContinuationReceipt queued = QueueHostInput(HostCloseWindowInput{});
+            queueFilled = queued.Read().outcome == HostOutcome::Pending;
+        }
+        const std::size_t fullQueueSize = _hostRequests.Size();
+        const LRESULT refusedAtCapacity = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, ENDSESSION_LOGOFF);
+        const bool fullPromptQueued =
+            PeekMessageW(&message, _window.get(), kEndSessionMessage, kEndSessionMessage, PM_REMOVE) != FALSE;
+        if (fullPromptQueued)
+        {
+            (void)DispatchMessageW(&message);
+        }
+        length = static_cast<DWORD>(reason.size());
+        const bool fullAdmissionReleasedBlock =
+            !_endSessionPending && ShutdownBlockReasonQuery(_window.get(), reason.data(), &length) == FALSE;
+        const bool queueFullPreservedDocument =
+            _session.history.IsModified() && _session.Document().has_value() && _hostRequests.Size() == fullQueueSize;
+        (void)_hostRequests.Clear(RetireHostContinuation);
+        const bool drainedQueue =
+            RunUiActions(_jobs) && _hostRequests.Size() == 0 && !_activeHostRequest && _hostInputBudget.Used() == 0;
+
         _forcedDiscard = true;
-        const LRESULT refusedAgain = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, 0);
+        const LRESULT refusedAfterCapacity = SendMessageW(_window.get(), WM_QUERYENDSESSION, 0, 0);
         const bool promptAgain =
             PeekMessageW(&message, _window.get(), kEndSessionMessage, kEndSessionMessage, PM_REMOVE) != FALSE;
         if (promptAgain)
         {
             (void)DispatchMessageW(&message);
+            (void)RunUiActions(_jobs);
         }
         const bool closePosted =
             PeekMessageW(&message, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE) != FALSE && _closeConfirmed;
@@ -1575,15 +1959,24 @@ int Application::RunSessionSelfTest() noexcept
         const bool settingsSaved = std::filesystem::exists(_settingsPath, error);
         _settingsPath.clear();
         std::filesystem::remove_all(scratch, error);
-        if (refused != FALSE || !reasonShown || !promptQueued || !keptOpen || critical == FALSE ||
-            refusedAgain != FALSE || !promptAgain || !closePosted || !settingsSaved)
+        if (refused != FALSE || !reasonShown || !earlierOrdinaryPending || critical == FALSE || !oldMessageTagged ||
+            !oldReasonRemoved || refusedAgain != FALSE || !currentPromptQueued || !staleMessageIgnored || !keptOpen ||
+            !queueFilled || refusedAtCapacity != FALSE || !fullPromptQueued || !fullAdmissionReleasedBlock ||
+            !queueFullPreservedDocument || !drainedQueue || refusedAfterCapacity != FALSE || !promptAgain ||
+            !closePosted || !settingsSaved)
         {
             SelfTestFailure(std::format(
-                L"The session end did not ask for the unsaved document (refused {}, reason {} '{}', prompt {}, kept "
-                L"open {}, critical allowed {}, refused again {}, prompt again {}, close posted {}, settings "
-                L"saved {}).\n",
-                refused == FALSE, reasonShown, std::wstring(reason.data()), promptQueued, keptOpen, critical != FALSE,
-                refusedAgain == FALSE, promptAgain, closePosted, settingsSaved));
+                L"Session-end generation or admission behavior failed (refused {}, reason {} '{}', earlier pending "
+                L"{}, critical {}, old tagged {}, old reason removed {}, second refused {}, new prompt {}, stale "
+                L"ignored {}, Cancel kept "
+                L"open {}, queue filled {}, capacity refused {}, capacity prompt {}, failed admission released block "
+                L"{}, document preserved {}, queue drained {}, final refused {}, final prompt {}, close posted {}, "
+                L"settings saved {}).\n",
+                refused == FALSE, reasonShown, std::wstring(reason.data()), earlierOrdinaryPending, critical != FALSE,
+                oldMessageTagged, oldReasonRemoved, refusedAgain == FALSE, currentPromptQueued, staleMessageIgnored,
+                keptOpen, queueFilled, refusedAtCapacity == FALSE, fullPromptQueued, fullAdmissionReleasedBlock,
+                queueFullPreservedDocument, drainedQueue, refusedAfterCapacity == FALSE, promptAgain, closePosted,
+                settingsSaved));
             return 5;
         }
     }

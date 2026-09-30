@@ -15,6 +15,7 @@
 #include "FilterWorkBenchmark.h"
 #include "FrameScheduler.h"
 #include "HistoryWorkTests.h"
+#include "HostPathReadTests.h"
 #include "JobActivityTests.h"
 #include "JobBenchmark.h"
 #include "JobMemoryTests.h"
@@ -1650,6 +1651,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunContinuationQueueTests();
     gFailures += RunContinuationReceiptTests();
     gFailures += RunContinuationRequestTests();
+    gFailures += RunHostPathReadTests();
     gFailures += RunHistoryWorkHostTests();
     TestAdapterSelection();
     TestFrameScheduler();

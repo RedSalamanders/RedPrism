@@ -352,8 +352,8 @@ requires an interior selected point, Hue/Saturation's range remains disabled whi
 donorless fill keeps OK disabled. Busy suppresses late mutation callbacks, including a disabled stepper's focus-loss
 commit. Numeric text follows the existing focus rule: partial text stays while editing, focus loss formats its
 parsed value, and a complete decimal such as `2.5` keeps that value. This control contract is
-prepared by P1.1c.3a; normal OK/write callers retain inline commit until the ordered engine and their owned
-continuations activate together in P1.1c.3c.
+used by normal OK/write callers through the ordered engine and their owned continuations. An accepted OK freezes
+mutation callbacks immediately, before the source admits its worker snapshot. Cancel stays available.
 
 - **Curves**: the channel choice, a `CurveEditor` (the 256² map with a grid, the channel's Hermite curve and its
   points; a click adds a point, a drag moves one with its x kept between its neighbors and the ends fixed, the
@@ -804,12 +804,21 @@ pending transform applies, and an open color panel applies as its OK does. An ad
 inside the document, so a file written under it would hold a value the panel's Cancel later takes back while the
 document shows clean; applying first leaves nothing to take back. If applying the color panel fails or finds no
 Content-Aware Fill donors, Save, Save As and Export MUST stop before writing. Save-before-proceed returns failure,
-keeps the document and panel, and cannot continue a close or replacement. The panel remains available for retry
+keeps the document and panel, and cannot continue a close or replacement. These actions are owned, staged
+continuations: accepting a request is Pending, not successful execution. Output selection and admission happen
+before settlement and export readback. Cancel before output selection or discard approval preserves every draft.
+The panel remains available for retry
 or Cancel, with the filter failure or no-source feedback. A crop frame, a shape draft, a lifted-pixel drag
 and the size card are not document edits and stay. (The legacy app refuses file operations while a stroke, a panel
 or an adjustment edit is open; RedPrism applies instead.) Save writes a ZIP `.prism` for a `.prism` name or a ZIP
 file; a project opened from a folder — an exploded project, whatever its name, `*.prism` included — saves in place as
 a folder, and Save As with the folder filter writes a folder.
+
+Ordered file batches, complete size drafts and layer/tool inputs retain their event-time arguments until execution.
+They share the eight-entry pending ring plus one active request and 1 MiB combined host-input budget. A refused
+input reports the busy/budget notice; earlier entries keep their order. View and chrome input remain available
+while color commits run. File decode/encode and composition readback remain synchronous until their later P1 slices;
+the continuation itself does not make those operations nonblocking.
 
 When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
 work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")

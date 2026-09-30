@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <string>
 
@@ -107,6 +108,11 @@ void Application::CancelCropFrame() noexcept
 
 void Application::OnCropAction(CropAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     if (!std::isfinite(value))
     {
         return;
@@ -219,6 +225,11 @@ int Application::RunCropSelfTest() noexcept
     const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The New command did not settle in the harness.\n");
+        std::_Exit(5);
+    }
     _forcedDiscard.reset();
     OnTool(EditorTool::Crop);
     SyncChrome();

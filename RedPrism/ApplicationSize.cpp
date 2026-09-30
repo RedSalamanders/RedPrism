@@ -45,6 +45,12 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
         return;
     }
     CancelColorEdit();
+    if (_sizeInvocation == UINT64_MAX)
+    {
+        ReportBudgetRefusal();
+        return;
+    }
+    ++_sizeInvocation;
     _sizeDialog.kind = kind;
     if (kind == SizeCardKind::NewCanvas)
     {
@@ -88,6 +94,11 @@ void Application::ApplySizeCard() noexcept
     {
         return;
     }
+    if (!_hostExecuting)
+    {
+        ReportHostAdmission(QueueHostInput(HostSizeApplyInput{_sizeDialog, _sizeInvocation}));
+        return;
+    }
     const SizeCardKind kind = _sizeDialog.kind;
     if (kind == SizeCardKind::NewCanvas)
     {
@@ -95,10 +106,6 @@ void Application::ApplySizeCard() noexcept
         const int height = static_cast<int>(std::round(_sizeDialog.newHeight));
         if (!std::isfinite(_sizeDialog.newWidth) || !std::isfinite(_sizeDialog.newHeight) || width < 1 ||
             width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
-        {
-            return;
-        }
-        if (!ConfirmDiscardChanges())
         {
             return;
         }
@@ -396,9 +403,34 @@ int Application::RunSizeSelfTest() noexcept
         return 5;
     }
     const auto document = [&]() -> const CanvasDocument* { return _session.DisplayDocument(); };
+    const auto settle = [&]() noexcept
+    {
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The size self-test could not settle admitted work.\n");
+            return false;
+        }
+        return true;
+    };
+    const auto command = [&](int id) noexcept
+    {
+        OnCommand(id);
+        return settle();
+    };
+    const auto sizeAction = [&](SizeAction action, double value) noexcept
+    {
+        OnSizeAction(action, value);
+        return settle();
+    };
+    const auto key = [&](unsigned int virtualKey) noexcept
+    {
+        const bool handled = HandleAccelerator(virtualKey, 0);
+        return settle() && handled;
+    };
     // A fresh default document with a small red layer at the top-left corner.
     _forcedDiscard = true;
-    OnCommand(ChromeHost::kCommandNew);
+    if (!command(ChromeHost::kCommandNew))
+        return 5;
     _forcedDiscard.reset();
     {
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(6 * 3 * 4), 0);
@@ -418,19 +450,25 @@ int Application::RunSizeSelfTest() noexcept
     }
     const Guid red = _session.ActiveLayerID().value();
     // Canvas Size: half the size in percent with the ratio locked, anchored top-left, applied with Enter.
-    OnCommand(ChromeHost::kCommandCanvasSize);
+    if (!command(ChromeHost::kCommandCanvasSize))
+        return 5;
     if (!SizeCardOpen() || !_chrome->SizeCardOpen())
     {
         SelfTestFailure(L"Canvas Size did not open its card.\n");
         return 5;
     }
-    OnSizeAction(SizeAction::SetUnit, 1.0);
-    OnSizeAction(SizeAction::SetLocked, 1.0);
-    OnSizeAction(SizeAction::SetWidth, 50.0);
-    OnSizeAction(SizeAction::SetAnchor, 0.0);
-    OnSizeAction(SizeAction::SetExtension, 4.0);
+    if (!sizeAction(SizeAction::SetUnit, 1.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetLocked, 1.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 50.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetAnchor, 0.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetExtension, 4.0))
+        return 5;
     _chrome->SetCanvasFocused(true);
-    if (!HandleAccelerator(VK_RETURN, 0) || SizeCardOpen() || document() == nullptr || document()->width != 640 ||
+    if (!key(VK_RETURN) || SizeCardOpen() || document() == nullptr || document()->width != 640 ||
         document()->height != 400 || _session.history.UndoName() != L"Canvas Size" || document()->layers.size() != 2 ||
         _session.ActiveLayerID() != red || _session.ActiveLayer()->transform.origin != Vec2{0, 0})
     {
@@ -441,13 +479,20 @@ int Application::RunSizeSelfTest() noexcept
         return 5;
     }
     // Growing with a white extension adds the bottom layer with the old canvas cut out.
-    OnCommand(ChromeHost::kCommandCanvasSize);
-    OnSizeAction(SizeAction::SetRelative, 1.0);
-    OnSizeAction(SizeAction::SetWidth, 10.0);
-    OnSizeAction(SizeAction::SetHeight, 10.0);
-    OnSizeAction(SizeAction::SetAnchor, 8.0);
-    OnSizeAction(SizeAction::SetExtension, 4.0);
-    OnSizeAction(SizeAction::Apply, 0.0);
+    if (!command(ChromeHost::kCommandCanvasSize))
+        return 5;
+    if (!sizeAction(SizeAction::SetRelative, 1.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 10.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetHeight, 10.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetAnchor, 8.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetExtension, 4.0))
+        return 5;
+    if (!sizeAction(SizeAction::Apply, 0.0))
+        return 5;
     const ImageLayer* extension = document() && !document()->layers.empty() ? &document()->layers.front() : nullptr;
     if (document() == nullptr || document()->width != 650 || document()->height != 410 || extension == nullptr ||
         extension->name != L"Canvas Extension" || !extension->asset.has_value() ||
@@ -459,20 +504,27 @@ int Application::RunSizeSelfTest() noexcept
         return 5;
     }
     // Escape drops a pending edit.
-    OnCommand(ChromeHost::kCommandCanvasSize);
-    OnSizeAction(SizeAction::SetWidth, 100.0);
+    if (!command(ChromeHost::kCommandCanvasSize))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 100.0))
+        return 5;
     _chrome->SetCanvasFocused(true);
-    if (!HandleAccelerator(VK_ESCAPE, 0) || SizeCardOpen() || document() == nullptr || document()->width != 650)
+    if (!key(VK_ESCAPE) || SizeCardOpen() || document() == nullptr || document()->width != 650)
     {
         SelfTestFailure(L"Escape did not cancel the Canvas Size card.\n");
         return 5;
     }
     // Image Size: 325 × 205 at 300 ppi with nearest sampling; the red layer's pixels scale with the canvas.
-    OnCommand(ChromeHost::kCommandImageSize);
-    OnSizeAction(SizeAction::SetWidth, 325.0);
-    OnSizeAction(SizeAction::SetResolution, 300.0);
-    OnSizeAction(SizeAction::SetSampling, 0.0);
-    OnSizeAction(SizeAction::Apply, 0.0);
+    if (!command(ChromeHost::kCommandImageSize))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 325.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetResolution, 300.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetSampling, 0.0))
+        return 5;
+    if (!sizeAction(SizeAction::Apply, 0.0))
+        return 5;
     const ImageLayer* scaled = nullptr;
     if (document() != nullptr)
     {
@@ -509,8 +561,10 @@ int Application::RunSizeSelfTest() noexcept
     // Without resampling Image Size lists Inches and Centimeters only, and a pick reports the unit, not its place in
     // the list (RF-502): Down on the focused combo picks Centimeters and the draft stores Centimeters.
     {
-        OnCommand(ChromeHost::kCommandImageSize);
-        OnSizeAction(SizeAction::SetResample, 0.0);
+        if (!command(ChromeHost::kCommandImageSize))
+            return 5;
+        if (!sizeAction(SizeAction::SetResample, 0.0))
+            return 5;
         const bool inches = _sizeDialog.image.unit == CanvasUnit::Inches;
         (void)_chrome->AdvanceAnimation(GetTickCount64());
         SyncChrome();
@@ -530,10 +584,14 @@ int Application::RunSizeSelfTest() noexcept
         }
     }
     // New Canvas: a fresh unmodified document of the typed size.
-    OnCommand(ChromeHost::kCommandNewCanvas);
-    OnSizeAction(SizeAction::SetWidth, 300.0);
-    OnSizeAction(SizeAction::SetHeight, 200.0);
-    OnSizeAction(SizeAction::Apply, 0.0);
+    if (!command(ChromeHost::kCommandNewCanvas))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 300.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetHeight, 200.0))
+        return 5;
+    if (!sizeAction(SizeAction::Apply, 0.0))
+        return 5;
     if (SizeCardOpen() || document() == nullptr || document()->width != 300 || document()->height != 200 ||
         document()->layers.size() != 1 || _session.history.IsModified())
     {
@@ -556,11 +614,16 @@ int Application::RunSizeSelfTest() noexcept
     _session.EndGradientDrag();
     SyncChrome();
     const bool pending = _session.PendingGradient() != nullptr;
-    OnCommand(ChromeHost::kCommandCanvasSize);
-    OnSizeAction(SizeAction::SetRelative, 1.0);
-    OnSizeAction(SizeAction::SetWidth, 20.0);
-    OnSizeAction(SizeAction::SetHeight, 20.0);
-    OnSizeAction(SizeAction::Apply, 0.0);
+    if (!command(ChromeHost::kCommandCanvasSize))
+        return 5;
+    if (!sizeAction(SizeAction::SetRelative, 1.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetWidth, 20.0))
+        return 5;
+    if (!sizeAction(SizeAction::SetHeight, 20.0))
+        return 5;
+    if (!sizeAction(SizeAction::Apply, 0.0))
+        return 5;
     std::array<std::uint8_t, 4> center{};
     bool painted = false;
     if (document() != nullptr)

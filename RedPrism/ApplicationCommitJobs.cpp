@@ -11,8 +11,8 @@
 #include <new>
 #include <utility>
 
-// This engine is qualified before activation by ApplyColorEdit. The production OK/write callers switch to it
-// together with owned continuations in P1.1c.3c; acceptance can never be mistaken for a completed operation.
+// Production OK/write callers enter this engine through the owned continuation source. Admission is Pending;
+// only validated apply/drop releases its shared history barrier and authorizes a dependent action.
 class Application::ColorCommitJob final : public Job
 {
   public:

@@ -92,10 +92,11 @@ void ChromeHost::CloseRenameCard(bool commit) noexcept
     {
         return;
     }
-    const std::wstring name(_renameField->GetText());
+    // The immediate callback copies/adopts this borrowed field text before PopCard can change focus or reuse it.
+    const std::wstring_view name(_renameField->GetText());
+    _events.OnRename(commit ? std::optional<std::wstring_view>(name) : std::nullopt);
     // The keyboard goes back where it was: the layers panel after a double-click on a row, the canvas after F2.
     PopCard(ModalCard::Rename);
     _renameCard->SetVisible(false);
     _view.MarkDirty();
-    _events.OnRename(commit ? std::optional<std::wstring>(name) : std::nullopt);
 }

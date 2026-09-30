@@ -41,7 +41,7 @@ class Prompts
         Cancel,
     };
     // A two-choice question with Cancel; `first` is the default button. Shared by the save prompt
-    // (Application::ConfirmDiscardChanges) and the image-open prompt (Application::PromptImageOpen), as the two
+    // (Application::AskDiscardChanges) and the image-open prompt (Application::PromptImageOpen), as the two
     // already shared the TaskDialog helper that answers it. A quiet run answers `forced` instead of asking.
     [[nodiscard]] virtual Answer AskThreeWay(HWND window, const std::wstring& title, const std::wstring& text,
                                              const std::wstring& first, const std::wstring& second, bool warning,

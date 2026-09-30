@@ -330,7 +330,16 @@ retain their panel/original image and release their barrier. Ten-second bounds d
 Replacement deliberately reuses persisted document/layer IDs after the old pixels finish and proves session serials
 prevent publication. Adjustment-layer metadata settles once without destructive pixels; a removed target returns
 `Stale` without an engine history entry.
-Production OK/write activation and dependent caller checks remain in P1.1c.3c–d.
+Production OK/write activation uses the typed continuation source. The hidden WARP `host-flow.*` matrix gates
+21 selected inputs across actual donorless-fill failure, successful Gamma 2 settlement, active cancellation and
+stale document/session-end lifetimes (84 cases). It checks output absence before acknowledgement, saved Gamma 2
+pixels, surviving failure/cancel panels and history, distinct layer selection/reorder/rename/opacity effects, view
+input during work and complete receipt/input-budget retirement. Header mutation callbacks cannot edit beneath
+admitted work. File/drop/size/key harness observations pump only after their real producer returns.
+`host-flow.shape-release-after-commit-with-owned-color` releases a real Shape draft behind a gated color commit,
+changes the palette before execution and checks the captured red pixels and two separately ordered undo entries.
+Session-end message tests cover generation-tagged deferred prompts, cancelled and critical queries, reason
+ownership and callback-safe close. Remaining GPU/IO/history costs belong to the later P1 migration gates.
 
 Host request admission checks the 1 MiB aggregate declared-storage boundary, overflow refusal, retained capacity
 of small logical strings/vectors, 256/257 path counts and 32,768-unit path refusal. Receipt-allocation fault
@@ -347,7 +356,10 @@ reservations and borrowed values and return all temporary charges. Successful ad
 retained capacities. Later selected output tests cover the same budget, pending-owner restriction, immutable
 copied value, old/new replacement peak, failure preservation, queue/active transfer, terminal publication while
 storage remains charged, and move-overwrite/destruction with independently retained receipts.
-These model checks do not qualify future shell/dialog/drop producer migration or the staged write/discard runner.
+`host-path-read.*` additionally proves direct admitted population after whole-batch length preflight: refusal
+before reader invocation, reader failure after a partial batch, partial input/receipt allocation faults, owning
+Unicode order, maximum counts/lengths, queue/active transfer and terminal-publication charge lifetime. Shell/drop
+producers retain their source owners through this immediate copy boundary; no reader survives in a queued input.
 
 Offline corpus controls assert the real default manifest covers all nine planned v1 extensions, the extension
 allowlist, role selection, traversal/schema/license/ownership rejection and preservation of mismatched images.

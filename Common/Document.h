@@ -1690,6 +1690,7 @@ class DocumentSession
     void CancelShape() noexcept;
     void ToggleShapeKind();
     void FinishShape();
+    void CommitShape(const ShapeDraft& draft, std::uint32_t foregroundArgb);
     [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
     {
         return _shapeDraft;

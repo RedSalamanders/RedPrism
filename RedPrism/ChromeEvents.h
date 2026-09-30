@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // The chrome's vocabulary (defined in ChromeHost.h; opaque here so the Application can implement ChromeEvents without
@@ -51,7 +52,7 @@ class ChromeEvents
     virtual void OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                   DxUi::TreeDropPlace place) noexcept = 0;
     // The Rename Layer card closed: the committed name, nullopt on cancel.
-    virtual void OnRename(std::optional<std::wstring> name) noexcept = 0;
+    virtual void OnRename(std::optional<std::wstring_view> name) noexcept = 0;
     // The active layer's opacity in 0…1 from the layers panel's stepper: typing previews, Enter, focus loss and the
     // buttons commit, Escape cancels.
     virtual void OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept = 0;

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <initializer_list>
 #include <string>
@@ -441,6 +442,11 @@ bool Application::HandleEditGesture(const KeyPress& press) noexcept
 
 bool Application::HandleCanvasKey(const KeyPress& press) noexcept
 {
+    if (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size())
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return true;
+    }
     const UINT key = press.virtualKey;
     const bool plain = !press.ctrl && !press.alt && !press.shift;
     if (plain && key >= '0' && key <= '9' &&
@@ -585,6 +591,11 @@ int Application::RunKeyboardSelfTest() noexcept
     // waits for its preparation), then the key goes through the window procedure.
     const auto settle = [this]()
     {
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The keyboard harness could not settle admitted work.\n");
+            std::_Exit(5);
+        }
         (void)_chrome->AdvanceAnimation(GetTickCount64());
         SyncChrome();
         (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
@@ -592,7 +603,9 @@ int Application::RunKeyboardSelfTest() noexcept
     const auto key = [this, &settle](UINT virtualKey, UINT modifiers, bool repeat = false)
     {
         settle();
-        return HandleAccelerator(virtualKey, modifiers, repeat);
+        const bool handled = HandleAccelerator(virtualKey, modifiers, repeat);
+        settle();
+        return handled;
     };
     const AppSettings original = _settings;
     const auto replace = [this, &original](std::initializer_list<ShortcutBinding> bindings)

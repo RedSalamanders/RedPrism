@@ -2109,6 +2109,11 @@ void DocumentSession::FinishShape()
     }
     const ShapeDraft draft = _shapeDraft.value();
     _shapeDraft.reset();
+    CommitShape(draft, _foregroundArgb);
+}
+
+void DocumentSession::CommitShape(const ShapeDraft& draft, std::uint32_t foregroundArgb)
+{
     const double width = draft.rect.maxX - draft.rect.minX;
     const double height = draft.rect.maxY - draft.rect.minY;
     if (!_document.has_value() || _transformEdit.has_value() || width < 1.0 || height < 1.0)
@@ -2121,12 +2126,12 @@ void DocumentSession::FinishShape()
     {
         return;
     }
-    const Raster image = ShapeImage(draft.kind, pixelWidth, pixelHeight, _foregroundArgb, draft.cornerRadius);
+    const Raster image = ShapeImage(draft.kind, pixelWidth, pixelHeight, foregroundArgb, draft.cornerRadius);
     if (!image.HasStorage())
     {
         return;
     }
-    const std::array<double, 4> color = StraightColor(_foregroundArgb, 1.0);
+    const std::array<double, 4> color = StraightColor(foregroundArgb, 1.0);
     const LayerShapeStyle style{draft.kind, color[0], color[1], color[2], draft.cornerRadius};
     AddPixelLayer(image, Vec2{draft.rect.minX, draft.rect.minY}, NextShapeName(draft.kind),
                   draft.kind == ShapeKind::Rectangle ? L"Rectangle" : L"Ellipse", false, style);

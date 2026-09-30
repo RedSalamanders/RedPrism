@@ -518,6 +518,27 @@ void SelfTestFailure(const wchar_t* message) noexcept
 
 int Application::RunSelfTest() noexcept
 {
+    const auto hostKey = [this](UINT key, UINT modifiers, bool repeat = false) noexcept
+    {
+        const bool handled = HandleAccelerator(key, modifiers, repeat);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The host key harness could not settle admitted work.\n");
+            std::_Exit(5);
+        }
+        return handled;
+    };
+
+    const auto hostCommand = [this](int command) noexcept
+    {
+        OnCommand(command);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The host command harness could not settle admitted work.\n");
+            std::_Exit(5);
+        }
+    };
+
     if (const int failed = RunJobShutdownSelfTest(); failed != 0)
     {
         return failed;
@@ -877,13 +898,13 @@ int Application::RunSelfTest() noexcept
         }
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
-        if (!HandleAccelerator('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
+        if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||
             _session.BackgroundColor() != 0xFF336699u)
         {
             SelfTestFailure(L"X did not swap the palette.\n");
             return 5;
         }
-        if (!HandleAccelerator('D', 0) || _chrome->ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
+        if (!hostKey('D', 0) || _chrome->ForegroundColor() != DocumentSession::kDefaultForegroundArgb ||
             _chrome->BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
         {
             SelfTestFailure(L"D did not reset the palette into the wells.\n");
@@ -1046,7 +1067,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Dragging with the Move tool did not move the layer as one history entry.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandFreeTransform);
+        hostCommand(ChromeHost::kCommandFreeTransform);
         OnTransformAction(TransformAction::SetRotation, 30.0);
         if (!_session.PendingTransformEdit().has_value() || _session.PendingTransformEdit()->draft.rotation != 30.0 ||
             _session.ActiveLayer()->transform.rotation != 0.0)
@@ -1060,28 +1081,28 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Apply did not commit the typed rotation.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandFreeTransform);
+        hostCommand(ChromeHost::kCommandFreeTransform);
         OnTransformAction(TransformAction::SetX, 999.0);
         _chrome->SetCanvasFocused(true);
-        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
+        if (!hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
             _session.ActiveLayer()->transform.origin.x == 999.0)
         {
             SelfTestFailure(L"Escape did not cancel the pending transform.\n");
             return 5;
         }
         const double x = _session.ActiveLayer()->transform.origin.x;
-        if (!HandleAccelerator(VK_RIGHT, MK_SHIFT) || _session.ActiveLayer()->transform.origin.x != x + 10.0)
+        if (!hostKey(VK_RIGHT, MK_SHIFT) || _session.ActiveLayer()->transform.origin.x != x + 10.0)
         {
             SelfTestFailure(L"Shift+Right did not nudge the layer by ten pixels.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandFlipCanvasHorizontal);
+        hostCommand(ChromeHost::kCommandFlipCanvasHorizontal);
         if (!_session.ActiveLayer()->transform.flipX || _session.history.UndoName() != L"Flip Canvas Horizontal")
         {
             SelfTestFailure(L"Flip Canvas Horizontal did not mirror the layer.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandFlipLayerVertical);
+        hostCommand(ChromeHost::kCommandFlipLayerVertical);
         if (!_session.ActiveLayer()->transform.flipY || _session.history.UndoName() != L"Flip Vertical")
         {
             SelfTestFailure(L"Flip Layer Vertical did not mirror the layer.\n");
@@ -1130,9 +1151,9 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Shift-dragging the Marquee did not add a second rectangle.\n");
             return 5;
         }
-        if (!HandleAccelerator('M', 0, false) || _session.marqueeKind != LassoKind::Ellipse ||
-            !HandleAccelerator('M', 0, true) || _session.marqueeKind != LassoKind::Ellipse ||
-            !HandleAccelerator('M', 0, false) || _session.marqueeKind != LassoKind::Rectangle)
+        if (!hostKey('M', 0, false) || _session.marqueeKind != LassoKind::Ellipse || !hostKey('M', 0, true) ||
+            _session.marqueeKind != LassoKind::Ellipse || !hostKey('M', 0, false) ||
+            _session.marqueeKind != LassoKind::Rectangle)
         {
             SelfTestFailure(L"M did not switch the Marquee's shape exactly once per press.\n");
             return 5;
@@ -1158,7 +1179,7 @@ int Application::RunSelfTest() noexcept
                 pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
                 pointer(WM_MOUSEMOVE, MK_LBUTTON, 130.0, 90.0);
                 const bool dragged = _session.IsMovingSelection() && bounds() != placed;
-                const bool taken = HandleAccelerator(key, modifiers);
+                const bool taken = hostKey(key, modifiers);
                 const bool restored = !_session.IsMovingSelection() && bounds() == placed &&
                                       _session.history.UndoCount() == entries && _session.history.CanUndo();
                 pointer(WM_MOUSEMOVE, MK_LBUTTON, 150.0, 100.0);
@@ -1195,11 +1216,10 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The Magic Wand did not select the painted layer's pixels exactly.\n");
             return 5;
         }
-        if (!HandleAccelerator('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
-            !HandleAccelerator('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
-            bounds() != SelectionBounds{0.0, 0.0, DocumentSize().x, DocumentSize().y} ||
-            !HandleAccelerator('D', MK_CONTROL) || _session.Selection().has_value() ||
-            _session.history.UndoName() != L"Deselect")
+        if (!hostKey('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
+            !hostKey('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
+            bounds() != SelectionBounds{0.0, 0.0, DocumentSize().x, DocumentSize().y} || !hostKey('D', MK_CONTROL) ||
+            _session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
         {
             SelfTestFailure(L"Ctrl+Shift+I, Ctrl+A and Ctrl+D did not drive the Select menu.\n");
             return 5;
@@ -1213,7 +1233,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 400.0, 400.0);
         pointer(WM_LBUTTONUP, 0, 400.0, 400.0);
         if (!_session.PendingLasso().has_value() || _session.PendingLasso()->points.size() != 3 ||
-            !HandleAccelerator(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
+            !hostKey(VK_RETURN, 0) || _session.PendingLasso().has_value() ||
             _session.history.UndoName() != L"Polygonal Lasso")
         {
             SelfTestFailure(L"Polygonal lasso clicks and Enter did not close an outline.\n");
@@ -1229,8 +1249,7 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
         pointer(WM_LBUTTONUP, 0, 500.0, 500.0);
-        if (!_session.PendingLasso().has_value() || !HandleAccelerator(VK_ESCAPE, 0) ||
-            _session.PendingLasso().has_value())
+        if (!_session.PendingLasso().has_value() || !hostKey(VK_ESCAPE, 0) || _session.PendingLasso().has_value())
         {
             SelfTestFailure(L"Escape did not cancel the lasso outline in progress.\n");
             return 5;
@@ -1244,8 +1263,8 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Brush);
         _chrome->SetCanvasFocused(true);
         // The selection block leaves a lasso outline behind, and strokes are clipped to the selection.
-        OnCommand(ChromeHost::kCommandDeselect);
-        OnCommand(ChromeHost::kCommandNewLayer);
+        hostCommand(ChromeHost::kCommandDeselect);
+        hostCommand(ChromeHost::kCommandNewLayer);
         _session.brushSettings = BrushSettings{30, 1, 1, 0, 0, 1};
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         SyncChrome();
@@ -1325,16 +1344,15 @@ int Application::RunSelfTest() noexcept
         }
         OnTool(EditorTool::Brush);
         _session.brushSettings.diameter = 30;
-        if (!HandleAccelerator(VK_OEM_6, 0) || _session.brushSettings.diameter != 36 ||
-            !HandleAccelerator(VK_OEM_4, MK_SHIFT) || _session.brushSettings.hardness != 0.75 ||
-            !HandleAccelerator('5', 0) || _session.brushSettings.opacity != 0.5)
+        if (!hostKey(VK_OEM_6, 0) || _session.brushSettings.diameter != 36 || !hostKey(VK_OEM_4, MK_SHIFT) ||
+            _session.brushSettings.hardness != 0.75 || !hostKey('5', 0) || _session.brushSettings.opacity != 0.5)
         {
             SelfTestFailure(L"The bracket and digit keys did not change the brush tip.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 500.0, 500.0);
-        if (_session.PendingBrush() == nullptr || !HandleAccelerator(VK_ESCAPE, 0) ||
-            _session.PendingBrush() != nullptr || _composition.HasStroke() || _session.history.UndoName() != L"Erase")
+        if (_session.PendingBrush() == nullptr || !hostKey(VK_ESCAPE, 0) || _session.PendingBrush() != nullptr ||
+            _composition.HasStroke() || _session.history.UndoName() != L"Erase")
         {
             SelfTestFailure(L"Escape did not drop the stroke in progress.\n");
             return 5;
@@ -1346,7 +1364,7 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         const int undoBeforeStroke = _session.history.UndoCount();
-        if (!HandleAccelerator('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
+        if (!hostKey('Z', MK_CONTROL) || _session.PendingBrush() != nullptr || _composition.HasStroke() ||
             _session.history.UndoCount() != undoBeforeStroke)
         {
             SelfTestFailure(L"Ctrl+Z did not drop the stroke without moving history.\n");
@@ -1364,7 +1382,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 520.0, 500.0);
         _forcedDiscard = false;
         const int beforePrompt = _session.history.UndoCount();
-        const bool stayed = !ConfirmDiscardChanges();
+        const bool stayed = AskDiscardChanges() == Prompts::Answer::Cancel;
         _forcedDiscard.reset();
         const bool strokeLive = _session.PendingBrush() != nullptr;
         pointer(WM_LBUTTONUP, 0, 520.0, 500.0);
@@ -1511,12 +1529,12 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Dragging the Gradient did not show a pending line on the canvas.\n");
             return 5;
         }
-        if (!HandleAccelerator('5', 0) || _session.gradientSettings.opacity != 0.5)
+        if (!hostKey('5', 0) || _session.gradientSettings.opacity != 0.5)
         {
             SelfTestFailure(L"The digit keys did not set the gradient opacity.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingGradient() != nullptr || _composition.HasStroke() ||
+        if (!hostKey(VK_RETURN, 0) || _session.PendingGradient() != nullptr || _composition.HasStroke() ||
             _session.history.UndoCount() != beforeGradient + 1 || _session.history.UndoName() != L"Gradient")
         {
             SelfTestFailure(L"Enter did not apply the gradient as one entry.\n");
@@ -1532,7 +1550,7 @@ int Application::RunSelfTest() noexcept
         // A targeted mask has its own black/white palette (RF-1105): a pending mask gradient follows the brush
         // header's Paint choice (maskPaintWhite), and X flips and D resets that choice, leaving the colors alone.
         {
-            OnCommand(ChromeHost::kCommandAddMask);
+            hostCommand(ChromeHost::kCommandAddMask);
             _session.maskPaintWhite = false;
             const std::uint32_t foreground = _session.ForegroundColor();
             const std::uint32_t background = _session.BackgroundColor();
@@ -1542,7 +1560,7 @@ int Application::RunSelfTest() noexcept
             const bool maskLine = _session.IsMaskSelected() && _session.PendingGradient() != nullptr &&
                                   _session.PendingGradient()->raster->IsMask();
             OnBrushAction(BrushAction::SetMaskPaint, 1.0);
-            const bool applied = HandleAccelerator(VK_RETURN, 0) && _session.history.UndoName() == L"Gradient Mask";
+            const bool applied = hostKey(VK_RETURN, 0) && _session.history.UndoName() == L"Gradient Mask";
             std::uint8_t start = 0;
             if (const ImageLayer* masked = _session.ActiveLayer(); masked != nullptr && masked->mask.has_value())
             {
@@ -1552,9 +1570,9 @@ int Application::RunSelfTest() noexcept
                 mask.ReadRegion(static_cast<int>(std::floor(cell.x)), static_cast<int>(std::floor(cell.y)), 1, 1,
                                 &start, 1, 0);
             }
-            const bool swapped = HandleAccelerator('X', 0) && !_session.maskPaintWhite;
-            const bool swappedBack = HandleAccelerator('X', 0) && _session.maskPaintWhite;
-            const bool reset = HandleAccelerator('D', 0) && !_session.maskPaintWhite;
+            const bool swapped = hostKey('X', 0) && !_session.maskPaintWhite;
+            const bool swappedBack = hostKey('X', 0) && _session.maskPaintWhite;
+            const bool reset = hostKey('D', 0) && !_session.maskPaintWhite;
             if (!maskLine || !applied || start < 240 || !swapped || !swappedBack || !reset ||
                 _session.ForegroundColor() != foreground || _session.BackgroundColor() != background)
             {
@@ -1587,8 +1605,8 @@ int Application::RunSelfTest() noexcept
                 return _chrome->ForegroundWellForTest() == foreground && _chrome->BackgroundWellForTest() == background;
             };
             const bool blackWhite = _session.IsMaskSelected() && wells(kBlack, kWhite);
-            const bool swapped = HandleAccelerator('X', 0) && wells(kWhite, kBlack);
-            const bool reset = HandleAccelerator('D', 0) && wells(kBlack, kWhite);
+            const bool swapped = hostKey('X', 0) && wells(kWhite, kBlack);
+            const bool reset = hostKey('D', 0) && wells(kBlack, kWhite);
             const float wellScale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
             const auto clickWell = [&](bool background)
             {
@@ -1643,14 +1661,14 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Releasing the Shape did not add a Rectangle layer in the foreground color.\n");
             return 5;
         }
-        if (!HandleAccelerator('U', MK_SHIFT) || _session.shapeKind != ShapeKind::Ellipse)
+        if (!hostKey('U', MK_SHIFT) || _session.shapeKind != ShapeKind::Ellipse)
         {
             SelfTestFailure(L"Shift-U did not switch the shape kind.\n");
             return 5;
         }
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 140.0, 140.0);
-        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingShape().has_value())
+        if (!hostKey(VK_ESCAPE, 0) || _session.PendingShape().has_value())
         {
             SelfTestFailure(L"Escape did not drop the shape draft.\n");
             return 5;
@@ -1773,7 +1791,7 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 60.0, 60.0);
         pointer(WM_LBUTTONUP, 0, 60.0, 60.0);
         _session.SetForegroundColor(0xFFFF0000u);
-        OnCommand(ChromeHost::kCommandFillForeground);
+        hostCommand(ChromeHost::kCommandFillForeground);
         std::array<int, 4> pixel{};
         if (_session.history.UndoName() != L"Fill" || !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
         {
@@ -1783,13 +1801,13 @@ int Application::RunSelfTest() noexcept
         const std::size_t layersBefore = _session.Document()->layers.size();
         // A user's copy waits only briefly for the clipboard: let the listeners of the last change finish first.
         (void)SystemClipboard::WaitUntilFree(_window.get());
-        if (!HandleAccelerator('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
+        if (!hostKey('X', MK_CONTROL) || _session.history.UndoName() != L"Clear" || !_session.CanPaste() ||
             !pixelAt(40, 40, pixel) || pixel[2] > 250 || !mirrorsClip())
         {
             SelfTestFailure(L"Ctrl+X did not cut the selection to the clipboard and mirror it to the system.\n");
             return 5;
         }
-        if (!HandleAccelerator('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" ||
+        if (!hostKey('V', MK_CONTROL) || _session.history.UndoName() != L"Paste" ||
             _session.Document()->layers.size() != layersBefore + 1 || _session.Selection().has_value() ||
             _session.ActiveLayer() == nullptr || _session.ActiveLayer()->transform.origin != Vec2{20, 20} ||
             !pixelAt(40, 40, pixel) || pixel[2] < 250 || pixel[0] > 5)
@@ -1797,8 +1815,8 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Ctrl+V did not paste the cut pixels in place as a new layer.\n");
             return 5;
         }
-        if (!HandleAccelerator('I', MK_CONTROL) || _session.history.UndoName() != L"Invert" ||
-            !pixelAt(40, 40, pixel) || pixel[2] > 5 || pixel[1] < 250 || pixel[0] < 250)
+        if (!hostKey('I', MK_CONTROL) || _session.history.UndoName() != L"Invert" || !pixelAt(40, 40, pixel) ||
+            pixel[2] > 5 || pixel[1] < 250 || pixel[0] < 250)
         {
             SelfTestFailure(L"Ctrl+I did not invert the pasted layer.\n");
             return 5;
@@ -1847,20 +1865,20 @@ int Application::RunSelfTest() noexcept
         }
         // The Marquee landed on whole pixels near 20; the nudge is exact relative to where the drag left the outline.
         const double beforeNudge = box.has_value() ? box->minX : 0.0;
-        if (!HandleAccelerator(VK_RIGHT, MK_CONTROL) || _session.history.UndoName() != L"Move Pixels" ||
-            !bounds().has_value() || std::fabs(bounds()->minX - (beforeNudge + 1.0)) > 0.01)
+        if (!hostKey(VK_RIGHT, MK_CONTROL) || _session.history.UndoName() != L"Move Pixels" || !bounds().has_value() ||
+            std::fabs(bounds()->minX - (beforeNudge + 1.0)) > 0.01)
         {
             SelfTestFailure(L"Ctrl+Right did not nudge the selected pixels by one.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_DELETE, 0) || _session.history.UndoName() != L"Clear" || !pixelAt(141, 40, pixel) ||
+        if (!hostKey(VK_DELETE, 0) || _session.history.UndoName() != L"Clear" || !pixelAt(141, 40, pixel) ||
             pixel[1] > 250)
         {
             SelfTestFailure(L"Delete did not clear the selected pixels.\n");
             return 5;
         }
         // Ctrl+T on a selection floats the pixels: Escape restores exactly, Enter merges one entry.
-        OnCommand(ChromeHost::kCommandDeselect);
+        hostCommand(ChromeHost::kCommandDeselect);
         _session.SelectLayer(sheet);
         OnTool(EditorTool::Marquee);
         pointer(WM_LBUTTONDOWN, 0, 100.0, 100.0);
@@ -1868,21 +1886,21 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 140.0, 140.0);
         const std::wstring entryBefore = _session.history.UndoName();
         const std::size_t layersFloating = _session.Document()->layers.size();
-        if (!HandleAccelerator('T', MK_CONTROL) || _tool != EditorTool::Move ||
-            !_session.PendingTransformEdit().has_value() || !_session.PendingTransformEdit()->floating.has_value() ||
+        if (!hostKey('T', MK_CONTROL) || _tool != EditorTool::Move || !_session.PendingTransformEdit().has_value() ||
+            !_session.PendingTransformEdit()->floating.has_value() ||
             _session.Document()->layers.size() != layersFloating + 1)
         {
             SelfTestFailure(L"Ctrl+T with a selection did not float the selected pixels.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
+        if (!hostKey(VK_ESCAPE, 0) || _session.PendingTransformEdit().has_value() ||
             _session.Document()->layers.size() != layersFloating || _session.history.UndoName() != entryBefore ||
             _session.ActiveLayerID() != sheet)
         {
             SelfTestFailure(L"Escape did not restore the floating selection exactly.\n");
             return 5;
         }
-        if (!HandleAccelerator('T', MK_CONTROL) || !_session.PendingTransformEdit().has_value())
+        if (!hostKey('T', MK_CONTROL) || !_session.PendingTransformEdit().has_value())
         {
             SelfTestFailure(L"Ctrl+T did not float the selection a second time.\n");
             return 5;
@@ -1899,7 +1917,7 @@ int Application::RunSelfTest() noexcept
         }
         std::array<std::uint8_t, 4> cleared{};
         std::array<std::uint8_t, 4> landed{};
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.PendingTransformEdit().has_value() ||
+        if (!hostKey(VK_RETURN, 0) || _session.PendingTransformEdit().has_value() ||
             _session.history.UndoName() != L"Transform Selection" ||
             _session.Document()->layers.size() != layersFloating || _session.ActiveLayerID() != sheet ||
             !closeTo(bounds()->minX, 150.0) || !layerPixel(120, 120, cleared) || cleared[3] != 0 ||
@@ -1909,14 +1927,14 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         // Layer via Copy and Add Mask use the selection; Copy Merged takes the composite.
-        if (!HandleAccelerator('J', MK_CONTROL) || _session.history.UndoName() != L"Layer via Copy" ||
+        if (!hostKey('J', MK_CONTROL) || _session.history.UndoName() != L"Layer via Copy" ||
             _session.Document()->layers.size() != layersFloating + 1 || _session.Selection().has_value())
         {
             SelfTestFailure(L"Ctrl+J did not copy the selection to a new layer.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandUndo);
-        OnCommand(ChromeHost::kCommandAddMask);
+        hostCommand(ChromeHost::kCommandUndo);
+        hostCommand(ChromeHost::kCommandAddMask);
         if (_session.history.UndoName() != L"Add Mask from Selection" || !_session.IsMaskSelected() ||
             _session.Selection().has_value() || _session.ActiveLayer() == nullptr ||
             !_session.ActiveLayer()->mask.has_value())
@@ -1924,16 +1942,16 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Add Mask did not make a mask from the selection.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandSelectAll);
+        hostCommand(ChromeHost::kCommandSelectAll);
         (void)SystemClipboard::WaitUntilFree(_window.get());
-        if (!HandleAccelerator('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
+        if (!hostKey('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
             _session.Clipboard()->image.Width() != _session.Document()->width ||
             _session.Clipboard()->image.Height() != _session.Document()->height || !mirrorsClip())
         {
             SelfTestFailure(L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandDeselect);
+        hostCommand(ChromeHost::kCommandDeselect);
         OnTool(EditorTool::Move);
     }
 
@@ -1969,8 +1987,7 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Move);
         _chrome->SetCanvasFocused(true);
         std::array<int, 4> pixel{};
-        if (!HandleAccelerator('L', MK_CONTROL) || !_session.HasColorEdit(FilterKind::Levels) ||
-            !_chrome->AdjustPanelOpen())
+        if (!hostKey('L', MK_CONTROL) || !_session.HasColorEdit(FilterKind::Levels) || !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Ctrl+L did not open the Levels panel.\n");
             return 5;
@@ -1981,35 +1998,35 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The Levels preview did not show through the canvas.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit(FilterKind::Levels) ||
-            _chrome->AdjustPanelOpen() || !pixelAt(50, 50, pixel) || pixel[0] < 120)
+        if (!hostKey(VK_ESCAPE, 0) || _session.HasColorEdit(FilterKind::Levels) || _chrome->AdjustPanelOpen() ||
+            !pixelAt(50, 50, pixel) || pixel[0] < 120)
         {
             SelfTestFailure(L"Escape did not cancel the Levels edit.\n");
             return 5;
         }
         // RF-809: choosing the Red channel only switches to it; the input black set on RGB stays on RGB.
-        static_cast<void>(HandleAccelerator('L', MK_CONTROL));
+        static_cast<void>(hostKey('L', MK_CONTROL));
         OnAdjustAction(AdjustAction::SetInputBlack, 40.0);
         OnAdjustAction(AdjustAction::SetChannel, 1.0);
         if (const std::optional<ColorEdit>& edit = _session.PendingColorEdit();
             !edit.has_value() || edit->settings.levels.channel != LevelsChannel::Red ||
             edit->settings.levels.ranges[0].black != 40.0 || !(edit->settings.levels.ranges[1] == LevelRange{}) ||
-            !HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit())
+            !hostKey(VK_ESCAPE, 0) || _session.HasColorEdit())
         {
             SelfTestFailure(L"Choosing the Red channel in Levels copied the RGB range onto it.\n");
             return 5;
         }
         const int levelsCount = _session.history.UndoCount();
-        static_cast<void>(HandleAccelerator('L', MK_CONTROL));
+        static_cast<void>(hostKey('L', MK_CONTROL));
         OnAdjustAction(AdjustAction::SetInputWhite, 128.0);
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::Levels) ||
+        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::Levels) ||
             _session.history.UndoCount() != levelsCount + 1 || _session.history.UndoName() != L"Levels" ||
             !pixelAt(50, 50, pixel) || pixel[0] < 250)
         {
             SelfTestFailure(L"Enter did not apply the Levels edit as one entry.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandGaussianBlur);
+        hostCommand(ChromeHost::kCommandGaussianBlur);
         if (!_session.HasColorEdit(FilterKind::GaussianBlur) || !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"The Filter menu did not open Gaussian Blur.\n");
@@ -2017,6 +2034,11 @@ int Application::RunSelfTest() noexcept
         }
         OnAdjustAction(AdjustAction::SetRadius, 2.0);
         OnAdjustAction(AdjustAction::Apply, 0.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The Gaussian Apply receipt did not settle in the harness.\n");
+            return 5;
+        }
         if (_session.HasColorEdit() || _session.history.UndoName() != L"Gaussian Blur")
         {
             SelfTestFailure(L"Applying Gaussian Blur did not record one entry.\n");
@@ -2027,37 +2049,36 @@ int Application::RunSelfTest() noexcept
         // refuses and Escape closes the panel.
         _session.ApplySelection(SelectionGeometry::Rect(40.0, 40.0, 20.0, 20.0), SelectionMode::New, L"Select");
         _session.SetForegroundColor(0xFFFF0000u);
-        OnCommand(ChromeHost::kCommandFillForeground);
+        hostCommand(ChromeHost::kCommandFillForeground);
         const int fillCount = _session.history.UndoCount();
-        if (!pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || !HandleAccelerator(VK_DELETE, MK_SHIFT) ||
+        if (!pixelAt(50, 50, pixel) || pixel[2] < 250 || pixel[0] > 5 || !hostKey(VK_DELETE, MK_SHIFT) ||
             !_session.HasColorEdit(FilterKind::ContentAwareFill) || _session.PendingColorEdit()->previewFailed ||
             !_chrome->AdjustPanelOpen())
         {
             SelfTestFailure(L"Shift+Delete did not open Content-Aware Fill on the selection.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit() ||
-            _session.history.UndoCount() != fillCount + 1 || _session.history.UndoName() != L"Content-Aware Fill" ||
-            !pixelAt(50, 50, pixel) || pixel[0] < 240 || pixel[1] < 240 || pixel[2] < 240)
+        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit() || _session.history.UndoCount() != fillCount + 1 ||
+            _session.history.UndoName() != L"Content-Aware Fill" || !pixelAt(50, 50, pixel) || pixel[0] < 240 ||
+            pixel[1] < 240 || pixel[2] < 240)
         {
             SelfTestFailure(L"Enter did not apply Content-Aware Fill as one entry.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandSelectAll);
-        if (!HandleAccelerator(VK_DELETE, MK_SHIFT) || !_session.HasColorEdit() ||
+        hostCommand(ChromeHost::kCommandSelectAll);
+        if (!hostKey(VK_DELETE, MK_SHIFT) || !_session.HasColorEdit() ||
             SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
-            !_session.PendingColorEdit()->previewFailed || !HandleAccelerator(VK_RETURN, 0) ||
-            !_session.HasColorEdit() || !HandleAccelerator(VK_ESCAPE, 0) || _session.HasColorEdit() ||
-            _chrome->AdjustPanelOpen())
+            !_session.PendingColorEdit()->previewFailed || !hostKey(VK_RETURN, 0) || !_session.HasColorEdit() ||
+            !hostKey(VK_ESCAPE, 0) || _session.HasColorEdit() || _chrome->AdjustPanelOpen())
         {
             SelfTestFailure(
                 L"Content-Aware Fill with nothing to copy from did not refuse Enter and close on Escape.\n");
             return 5;
         }
-        OnCommand(ChromeHost::kCommandDeselect);
+        hostCommand(ChromeHost::kCommandDeselect);
         InsertPaintedLayer(_session, L"Red", 120, 120, Vec2{0, 0}, 0.0, 0xFFFF0000u);
         const std::size_t layersBefore = _session.Document()->layers.size();
-        OnCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
+        hostCommand(ChromeHost::kCommandNewHueSaturationAdjustment);
         if (_session.Document()->layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
             !_session.ActiveLayer()->adjustment.has_value() || !_session.HasColorEdit(FilterKind::HueSaturation) ||
             !_chrome->AdjustPanelOpen())
@@ -2071,7 +2092,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The adjustment layer did not rotate the red beneath it live.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::HueSaturation) ||
+        if (!hostKey(VK_RETURN, 0) || _session.HasColorEdit(FilterKind::HueSaturation) ||
             _session.history.UndoName() != L"Edit Hue/Saturation Adjustment" ||
             std::fabs(Adjust::RangeOf(_session.ActiveLayer()->adjustment->ResolvedHsv()).hue - 120.0) > 0.01 ||
             !pixelAt(50, 50, pixel) || pixel[1] < 200)
@@ -2079,8 +2100,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Enter did not keep the adjustment layer's settings.\n");
             return 5;
         }
-        if (!HandleAccelerator(VK_OEM_PLUS, MK_SHIFT) ||
-            _session.ActiveLayer()->blendMode != LayerBlendMode::Multiply ||
+        if (!hostKey(VK_OEM_PLUS, MK_SHIFT) || _session.ActiveLayer()->blendMode != LayerBlendMode::Multiply ||
             _session.history.UndoName() != L"Layer Blend Mode")
         {
             SelfTestFailure(L"Shift+= did not step the blend mode.\n");
@@ -2131,6 +2151,10 @@ int Application::RunSelfTest() noexcept
     if (const int continuations = RunHostContinuationSelfTest(); continuations != 0)
     {
         return continuations;
+    }
+    if (const int flows = RunHostFlowSelfTest(); flows != 0)
+    {
+        return flows;
     }
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
@@ -2324,6 +2348,12 @@ HRESULT Application::InitializeChrome() noexcept
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
+        return;
+    }
     // A typed opacity belongs to the layer it started on: it records its entry before another is active.
     CloseOpacityEdit();
     _session.SelectLayer(id);
@@ -2333,6 +2363,12 @@ void Application::OnLayerSelected(Guid id) noexcept
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
+        return;
+    }
     // A stroke or warp in progress keeps its target (legacy selectLayerTarget waits for it).
     if (_session.PendingBrush() != nullptr || _session.PendingWarp() != nullptr)
     {
@@ -2367,6 +2403,12 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                    DxUi::TreeDropPlace place) noexcept
 {
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
+        return;
+    }
     CloseOpacityEdit();
     bool moved = false;
     if (place == DxUi::TreeDropPlace::Inside)
@@ -3224,6 +3266,11 @@ void Application::PressCanvas(const DxUi::PointerEvent& event, UINT message, Vec
     {
         return;
     }
+    if ((_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) && _tool != EditorTool::Zoom)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     const bool left = message == WM_LBUTTONDOWN;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     if (left && SamplesColor())
@@ -3319,8 +3366,7 @@ bool Application::DragPointer(const DxUi::PointerEvent& event, Vec2 view) noexce
                            KeyboardState::Held(VK_MENU));
         if (release)
         {
-            _session.FinishShape();
-            DocumentChanged();
+            FinishShapeDraft();
         }
         else
         {
@@ -3483,8 +3529,7 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
         }
         else
         {
-            _session.FinishShape();
-            DocumentChanged();
+            FinishShapeDraft();
         }
     }
     if (const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag); move != nullptr && lost)
@@ -3593,8 +3638,67 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    // View/chrome commands keep pumping. Every document mutation waits behind admitted history/input, preserving
+    // its event-time command instead of settling a panel inline and falling through on failure.
+    const bool view = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual ||
+                      command == ChromeHost::kCommandZoomIn || command == ChromeHost::kCommandZoomOut ||
+                      command == ChromeHost::kCommandAbout || command == ChromeHost::kCommandSampleRing ||
+                      command == ChromeHost::kCommandKeyboardShortcuts;
+    const bool file = command == ChromeHost::kCommandNew || command == ChromeHost::kCommandOpen ||
+                      command == ChromeHost::kCommandImportImages || command == ChromeHost::kCommandSave ||
+                      command == ChromeHost::kCommandSaveAs || command == ChromeHost::kCommandExportPng ||
+                      command == ChromeHost::kCommandExportJpeg || command == ChromeHost::kCommandCloseProject ||
+                      command == ChromeHost::kCommandExit;
+    if (!_hostExecuting && file)
+    {
+        switch (command)
+        {
+        case ChromeHost::kCommandNew:
+            NewDocument();
+            break;
+        case ChromeHost::kCommandOpen:
+            OpenDocument();
+            break;
+        case ChromeHost::kCommandImportImages:
+            ImportImages();
+            break;
+        case ChromeHost::kCommandSave:
+            (void)SaveDocument(false);
+            break;
+        case ChromeHost::kCommandSaveAs:
+            (void)SaveDocument(true);
+            break;
+        case ChromeHost::kCommandExportPng:
+            ExportFlattened(false);
+            break;
+        case ChromeHost::kCommandExportJpeg:
+            ExportFlattened(true);
+            break;
+        case ChromeHost::kCommandCloseProject:
+            CloseProject();
+            break;
+        case ChromeHost::kCommandExit:
+            ReportHostAdmission(QueueHostInput(HostCloseWindowInput{}));
+            break;
+        }
+        return;
+    }
+    if (!_hostExecuting && !_historyWork.Busy() && !_activeHostRequest && _hostRequests.Size() == 0 &&
+        _session.HasColorEdit() && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
+    {
+        return; // an open, uncommitted panel owns history until OK/Cancel
+    }
+    if (!_hostExecuting && !view && !file &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+        return;
+    }
     // A typed opacity edit records its entry before any command runs, so nothing folds into it or bakes it in.
-    CloseOpacityEdit();
+    if (!view)
+    {
+        CloseOpacityEdit();
+    }
     // Commands that change layers or files settle a pending transform first, as Enter would; view, history and About
     // do not.
     if (!SkipsTransformSettle(command))
@@ -3661,16 +3765,10 @@ void Application::OnCommand(int command) noexcept
         (void)SaveDocument(true);
         break;
     case ChromeHost::kCommandExportPng:
-        if (SettleForWrite())
-        {
-            ExportFlattened(false);
-        }
+        ExportFlattened(false);
         break;
     case ChromeHost::kCommandExportJpeg:
-        if (SettleForWrite())
-        {
-            ExportFlattened(true);
-        }
+        ExportFlattened(true);
         break;
     case ChromeHost::kCommandExit:
         if (_window)
@@ -4119,11 +4217,10 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         {
             ApplyColorEdit();
         }
-        if (end == EditEnd::Escape || end == EditEnd::DocumentGoes ||
-            (end == EditEnd::ToolSwitch && _session.HasColorEdit()))
+        if (end == EditEnd::Escape || end == EditEnd::DocumentGoes)
         {
-            // A fill with nothing to copy from cannot apply: a tool switch drops it rather than trapping the panel.
-            CancelColorEdit();
+            // Explicit discard/cancel is independent of a failed required commit.
+            CancelColorEdit(end != EditEnd::DocumentGoes);
         }
         return true;
     case CanvasEdit::PixelMove:
@@ -4273,6 +4370,12 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 
 void Application::OnTool(EditorTool tool) noexcept
 {
+    if (!_hostExecuting && tool != _tool &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
+        return;
+    }
     if (tool != _tool)
     {
         // Switching tools settles a pending transform, as selecting another layer does.
@@ -4297,8 +4400,9 @@ void Application::OnTool(EditorTool tool) noexcept
 
 void Application::NewDocument() noexcept
 {
-    if (!ConfirmDiscardChanges())
+    if (!_hostExecuting)
     {
+        ReportHostAdmission(QueueHostInput(HostNewInput{}));
         return;
     }
     SettleInteractions(false);
@@ -4318,12 +4422,15 @@ void Application::OpenDocument() noexcept
     {
         return;
     }
-    std::wstring path;
-    if (!PickOpenPath(_window.get(), path))
+    std::optional<HostRequest> request;
+    const auto result = PickOpenRequest(_window.get(), _hostInputBudget, request);
+    if (FAILED(result))
     {
+        if (result != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            ReportHostAdmission(ContinuationReceipt::Failure(result));
         return;
     }
-    OpenPath(path.c_str());
+    ReportHostAdmission(QueueHostRequest(std::move(request.value())));
 }
 
 void Application::ShowError(UINT stringId) noexcept
@@ -4342,51 +4449,9 @@ void Application::ReportBudgetRefusal() noexcept
     _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_TOO_LARGE);
 }
 
-bool Application::SaveDocument(bool saveAs) noexcept
+void Application::SaveDocument(bool saveAs) noexcept
 {
-    if (!_session.Document().has_value())
-    {
-        return false;
-    }
-    std::wstring path = _documentPath;
-    if (saveAs || path.empty())
-    {
-        if (_quietUi || !_window)
-        {
-            return false;
-        }
-        const FilterStrings strings = LoadFilterStrings();
-        const COMDLG_FILTERSPEC filters[] = {
-            {strings.project.c_str(), L"*.prism"},
-            {strings.exploded.c_str(), L"*.*"},
-        };
-        const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_PROJECT_NAME);
-        if (!PickSavePath(_window.get(), defaultName.c_str(), L"prism", filters, 2, path))
-        {
-            return false;
-        }
-    }
-    // The file holds what the canvas shows, and a panel's Cancel can no longer restore a value the file already has.
-    if (!SettleForWrite() || !_session.Document().has_value())
-    {
-        return false;
-    }
-    // A folder (an exploded project, whatever its name) saves in place as a folder; a `.prism` file or a ZIP as ZIP.
-    const DWORD attributes = GetFileAttributesW(path.c_str());
-    const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    const bool zip = !folder && (PathLooksLikeZipProject(path.c_str()) || EndsWithNoCase(path, L".prism"));
-    const ProjectIoStatus status =
-        SaveProject(path.c_str(), _session.Document().value(), _session.ActiveLayerID(), zip);
-    if (status != ProjectIoStatus::Ok)
-    {
-        ShowError(status == ProjectIoStatus::TooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT);
-        return false;
-    }
-    _documentPath = std::move(path);
-    _session.history.MarkSaved();
-    SyncChrome();
-    _frameInvalidated = true;
-    return true;
+    ReportHostAdmission(QueueHostWrite(HostWriteFormat::Project, saveAs));
 }
 
 std::optional<Raster> Application::ComposeDocumentReadback(const CanvasDocument& document) noexcept
@@ -4402,44 +4467,7 @@ std::optional<Raster> Application::ComposeDocumentReadback(const CanvasDocument&
 
 void Application::ExportFlattened(bool jpeg) noexcept
 {
-    if (!_session.Document().has_value() || _quietUi || !_window)
-    {
-        return;
-    }
-    const std::optional<Raster> raster = ComposeDocumentReadback(_session.Document().value());
-    if (!raster.has_value())
-    {
-        ShowError(IDS_ERROR_FLATTEN);
-        return;
-    }
-    const FilterStrings strings = LoadFilterStrings();
-    std::wstring path;
-    if (jpeg)
-    {
-        const COMDLG_FILTERSPEC filters[] = {{strings.jpeg.c_str(), L"*.jpg;*.jpeg"}};
-        const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_EXPORT_JPEG);
-        if (!PickSavePath(_window.get(), defaultName.c_str(), L"jpg", filters, 1, path))
-        {
-            return;
-        }
-        if (ExportDocumentJpeg(raster.value(),
-                               JpegExportOptions{_settings.jpegQuality, _session.Document().value().resolution},
-                               path.c_str()) != ProjectIoStatus::Ok)
-        {
-            ShowError(IDS_ERROR_EXPORT_JPEG);
-        }
-        return;
-    }
-    const COMDLG_FILTERSPEC filters[] = {{strings.png.c_str(), L"*.png"}};
-    const std::wstring defaultName = LoadStringResource(nullptr, IDS_DEFAULT_EXPORT_PNG);
-    if (!PickSavePath(_window.get(), defaultName.c_str(), L"png", filters, 1, path))
-    {
-        return;
-    }
-    if (ExportDocumentPng(raster.value(), _session.Document().value().resolution, path.c_str()) != ProjectIoStatus::Ok)
-    {
-        ShowError(IDS_ERROR_EXPORT_PNG);
-    }
+    ReportHostAdmission(QueueHostWrite(jpeg ? HostWriteFormat::Jpeg : HostWriteFormat::Png, false));
 }
 
 LRESULT CALLBACK Application::WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -4546,7 +4574,10 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         OnEndSession(wParam != FALSE);
         return 0;
     case kEndSessionMessage:
-        RunEndSessionPrompt();
+        if (static_cast<std::uint64_t>(wParam) == _endSessionGeneration)
+        {
+            RunEndSessionPrompt();
+        }
         return 0;
     case WM_SETTINGCHANGE:
     case WM_THEMECHANGED:
@@ -4578,21 +4609,25 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
     case WM_DROPFILES:
     {
         const HDROP drop = reinterpret_cast<HDROP>(wParam);
-        std::vector<std::wstring> paths;
+        const auto release = wil::scope_exit([drop] { DragFinish(drop); });
         const UINT count = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0);
+        if (count == 0)
+            return 0;
+        if (count > HostInputBudget::kMaxPaths)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
+            return 0;
+        }
+        std::array<std::size_t, HostInputBudget::kMaxPaths> lengths{};
         for (UINT index = 0; index < count; ++index)
         {
             const UINT length = DragQueryFileW(drop, index, nullptr, 0);
-            if (length == 0)
+            if (length == 0 || length > HostInputBudget::kMaxPathUnits)
             {
-                continue;
+                ReportHostAdmission(ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)));
+                return 0;
             }
-            std::wstring path(static_cast<std::size_t>(length) + 1, L'\0');
-            if (DragQueryFileW(drop, index, path.data(), length + 1) != 0)
-            {
-                path.resize(length);
-                paths.push_back(std::move(path));
-            }
+            lengths[index] = length;
         }
         // Images added as layers center on the drop point when it lands on the canvas (legacy ContentView.onDrop),
         // anywhere else on the canvas's middle.
@@ -4606,8 +4641,28 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
                 Vec2{static_cast<double>(client.x) - hole.left, static_cast<double>(client.y) - hole.top},
                 DocumentSize());
         }
-        DragFinish(drop);
-        OpenPaths(paths, dropPoint);
+        try
+        {
+            HostPathReadFailure failure;
+            auto request = HostRequest::TryReadPaths(
+                std::span<const std::size_t>(lengths.data(), count), HostPathAction::OpenPaths, dropPoint,
+                _hostInputBudget,
+                [drop](std::size_t index, std::span<wchar_t> destination) noexcept
+                {
+                    return DragQueryFileW(drop, static_cast<UINT>(index), destination.data(),
+                                          static_cast<UINT>(destination.size())) == destination.size() - 1 &&
+                           destination.back() == L'\0';
+                },
+                failure);
+            ReportHostAdmission(
+                request ? QueueHostRequest(std::move(request.value()))
+                        : ContinuationReceipt::Failure(HRESULT_FROM_WIN32(
+                              failure == HostPathReadFailure::Quota ? ERROR_NOT_ENOUGH_QUOTA : ERROR_INVALID_DATA)));
+        }
+        catch (const std::bad_alloc&)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(E_OUTOFMEMORY));
+        }
         return 0;
     }
     case WM_MOUSEMOVE:
@@ -4726,8 +4781,9 @@ LRESULT Application::HandleMessage(HWND window, UINT message, WPARAM wParam, LPA
         }
         // A modified document asks first; a failure on its way out and a quiet run never ask, and neither does the
         // close the answered session-end prompt posted.
-        if (!std::exchange(_closeConfirmed, false) && _runtimeFailure == S_OK && !_quietUi && !ConfirmDiscardChanges())
+        if (!std::exchange(_closeConfirmed, false) && _runtimeFailure == S_OK && !_quietUi)
         {
+            ReportHostAdmission(QueueHostInput(HostCloseWindowInput{}));
             return 0;
         }
         CloseMainWindow();
@@ -4966,6 +5022,13 @@ void Application::ApplyDemo() noexcept
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) &&
+        action != TransformAction::AutoSelect && action != TransformAction::ShowControls &&
+        action != TransformAction::LockRatio)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     switch (action)
     {
     case TransformAction::Apply:
@@ -5495,6 +5558,11 @@ bool Application::CursorOverSelection(Vec2 pixel) noexcept
 
 void Application::OnSelectionAction(SelectionAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     const auto whole = [value](int minimum, int maximum)
     { return std::clamp(static_cast<int>(std::lround(value)), minimum, maximum); };
     switch (action)
@@ -6462,6 +6530,11 @@ void Application::CancelWarpStroke() noexcept
 
 void Application::OnGradientAction(GradientAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     switch (action)
     {
     case GradientAction::SetShape:
@@ -7176,6 +7249,11 @@ int Application::RunRefusalSelfTest() noexcept
     {
         _forcedDiscard = true;
         OnCommand(ChromeHost::kCommandNew);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The New command did not settle in the harness.\n");
+            std::_Exit(5);
+        }
         _forcedDiscard.reset();
     };
     const auto layerCount = [&]()
@@ -7291,6 +7369,11 @@ int Application::RunRefusalSelfTest() noexcept
 
 void Application::OnShapeAction(ShapeAction action, double value) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
     switch (action)
     {
     case ShapeAction::SetKind:
@@ -7324,6 +7407,27 @@ void Application::CancelShapeDraft() noexcept
     _session.CancelShape();
     SyncToolOverlays();
     _frameInvalidated = true;
+}
+
+void Application::FinishShapeDraft() noexcept
+{
+    if (!_session.PendingShape())
+    {
+        return;
+    }
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        const auto receipt =
+            QueueHostInput(HostShapeFinishInput{_session.PendingShape().value(), _session.ForegroundColor()});
+        ReportHostAdmission(receipt);
+        if (receipt.Read().outcome == HostOutcome::Pending)
+        {
+            CancelShapeDraft(); // the queued owned draft replaces the live gesture, without recording history
+        }
+        return;
+    }
+    _session.FinishShape();
+    DocumentChanged();
 }
 
 bool Application::SamplesColor() const noexcept

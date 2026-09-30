@@ -118,8 +118,8 @@ authorizes dependent work.
 write parameters, a full size-card draft, layer/tool parameters and panel/session-end lifetime keys. Inputs retain
 no session/pixel snapshot, worker state, host pointer or callable. The selected runner obtains a snapshot only
 after prerequisite history has applied/dropped. Request move-overwrite/destruction retires publication before
-owned input storage releases. This defines the request model; production producers and the staged runner remain
-tracked in `ColorCommitContinuations_2026-09-30.md`.
+owned input storage releases. Production producers use this model; the staged runner's qualification is tracked
+in `ColorCommitContinuations_2026-09-30.md`.
 
 Budgeted host construction reserves declared retained storage before allocating the result publisher. An
 allocation failure returns the reservation and leaves the input owned by its caller. The ticket moves with the
@@ -129,15 +129,19 @@ construction. Borrowed path batches, write paths and layer names use the length/
 builders before any owned input copy. Terminated Win32 paths first use a bounded scan. The builders reserve the
 complete declared copy peak before construction and reconcile it to retained capacities before publishing a
 request; a partial input or result allocation failure releases storage and returns its reservation.
+Length-query/fill sources use `TryReadPaths`: bound every count/length and reserve the whole batch before filling
+its owned buffers. Readers are immediate, non-throwing callbacks, never retained with the request. Any read failure
+drops the complete batch. File dialogs retain WIL-owned shell strings through preflight/copy and propagate read
+errors instead of silently skipping selected files. Rename borrows the live field through its immediate callback.
 Later selected output paths belong to the same request and budget. Selection is allowed only while the budgeted
 request is pending; replacing an output holds the old and new charges until the replacement is complete. Failure
 preserves the previous output. Request publication precedes destruction of both event input and selected output.
-Other later-stage variable storage still requires separate admission before production activation. See
+Other later-stage variable storage still requires separate admission before allocation. See
 `Core_PerformanceAndResources.md` for the storage/count/length limits and production activation boundary.
 
 `Application` now registers its stable continuation source during processing initialization and unregisters it
-before scheduler stop/join. The initial bridge admits only numeric panel requests through an owning construction
-boundary; production UI producers remain inactive until the dependent caller migration. It selects one owned
+before scheduler stop/join. It admits typed production requests through an owning construction
+boundary. It selects one owned
 entry outside message/control/completion dispatch, validates document serial and panel opening, and starts the
 immutable commit under that entry's ordinal. Waiting consumes source readiness; exact acquisition completion
 stores the prerequisite outcome/error and requests a later UI action. Apply/drop finishes history before terminal
@@ -147,9 +151,15 @@ kind. The current color finisher is wired; the remaining operation migrations mu
 apply/drop boundaries. Cancel retires queued inputs immediately and retains active ownership/barrier through acknowledged drop.
 After a panel commit has acknowledged its terminal result, a later Cancel preserves that result and its already
 applied pixels/history. It cannot relabel Succeeded or a known Failed as Cancelled during deferred publication.
-Later multi-stage actions require a separate overall cancellation policy for their remaining stages.
+Cancel of a multi-stage request suppresses its remaining write/replacement/close stages; successfully applied
+prerequisite pixels remain committed. Discard confirmation precedes settlement, output selection precedes pixels
+and readback, and the written document/revision is captured only after successful settlement. A path batch alone
+may rebind its session serial after its own successful project replacement; younger inputs retain their old serial.
+Size Apply owns its complete event-time draft and card invocation. Session end owns a separate request generation;
+`WM_ENDSESSION(FALSE)` invalidates a late close even when the color worker completed successfully.
 Shutdown retires requests and unregisters the borrowed source before joining their independently owned worker
-inputs. The remaining settlement/write/discard stages and all producer activation remain P1.1c.3c work.
+inputs. GPU readback, IO and residual canvas/history work still migrate in later P1 slices. Current staged writes
+and imports do not establish whole-application responsiveness.
 
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
 specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in

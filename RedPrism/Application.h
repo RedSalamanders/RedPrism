@@ -255,6 +255,11 @@ class Application final : public ChromeEvents
     {
         return _colorCommitStamp.has_value();
     }
+    [[nodiscard]] bool ColorControlsFrozen() const noexcept
+    {
+        return ColorCommitBusy() || (_pendingPanelOpening && _session.PendingColorEdit() &&
+                                     _pendingPanelOpening.value() == _session.PendingColorEdit()->openingSequence);
+    }
     void CancelColorCommit() noexcept;
     void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
                              JobResult completion) noexcept;
@@ -271,6 +276,12 @@ class Application final : public ChromeEvents
     };
     [[nodiscard]] bool InitializeHostContinuations() noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
+                                                     std::optional<Vec2> point = {}) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueHostWrite(HostWriteFormat format, bool saveAs) noexcept;
+    void ReportHostAdmission(const ContinuationReceipt& receipt) noexcept;
     void RunHostContinuation() noexcept;
     void FinishHostContinuation(ContinuationReceipt::Result result) noexcept;
     // Every asynchronous history finisher calls this after apply/drop and HistoryWork::Finish.
@@ -279,6 +290,13 @@ class Application final : public ChromeEvents
     void StopHostContinuations() noexcept;
     static void RetireHostContinuation(HostRequestQueue::Entry&& entry, ContinuationRetirement reason) noexcept;
     int RunHostContinuationSelfTest() noexcept;
+    int RunHostFlowSelfTest() noexcept;
+    [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
+    [[nodiscard]] HRESULT SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept;
+    [[nodiscard]] HRESULT WriteHostOutput(HostWriteFormat format) noexcept;
+    [[nodiscard]] bool ExecuteHostInput() noexcept;
+    [[nodiscard]] bool ImportImagePathViews(std::span<const std::wstring_view> paths, bool newProject,
+                                            std::optional<Vec2> center) noexcept;
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
@@ -292,7 +310,7 @@ class Application final : public ChromeEvents
     void CompleteColorHistogram(ColorEditHistogramResult& result, JobResult completion) noexcept;
     void QueueColorFailure() noexcept;
     int RunColorJobsSelfTest() noexcept;
-    void CancelColorEdit() noexcept;
+    void CancelColorEdit(bool cancelQueued = true) noexcept;
     void OnAdjustAction(AdjustAction action, double value) noexcept override;
     void OnCurveChanged(std::vector<CurvePoint> points) noexcept override;
     void OnBandChanged(int index, double degrees) noexcept override;
@@ -348,6 +366,7 @@ class Application final : public ChromeEvents
     void CancelGradient() noexcept;
     void OnShapeAction(ShapeAction action, double value) noexcept override;
     void CancelShapeDraft() noexcept;
+    void FinishShapeDraft() noexcept;
     // ApplicationCrop.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Crop tool"): the frame's drags, the header's
     // actions, Enter / Escape, the cursor and the self-test.
     void BeginCropDrag(Vec2 view) noexcept;
@@ -362,7 +381,7 @@ class Application final : public ChromeEvents
     // ApplicationLayerEdits.cpp (C16): the Rename Layer card and Merge Down through the composition.
     void RenameActiveLayer() noexcept;
     void OnLayerInvoked(Guid id) noexcept override;
-    void OnRename(std::optional<std::wstring> name) noexcept override;
+    void OnRename(std::optional<std::wstring_view> name) noexcept override;
     // The card closes without renaming: its layer or the document went away, or an interaction settled.
     void CloseRenameCard() noexcept;
     void MergeLayersCommand() noexcept;
@@ -405,7 +424,7 @@ class Application final : public ChromeEvents
     int RunKeyboardSelfTest() noexcept;
     void NewDocument() noexcept;
     void OpenDocument() noexcept;
-    [[nodiscard]] bool SaveDocument(bool saveAs) noexcept;
+    void SaveDocument(bool saveAs) noexcept;
     void ExportFlattened(bool jpeg) noexcept;
     void OpenPath(const wchar_t* path) noexcept;
     // ApplicationFiles.cpp (C16, Specs/UI/UI_ApplicationChrome.md "Files" and "Unimplemented functions"): images
@@ -415,7 +434,6 @@ class Application final : public ChromeEvents
     static constexpr UINT kEndSessionMessage = WM_APP + 8; // the save prompt a refused session end posts
     static constexpr UINT kNoticeMessage = WM_APP + 9;     // a notice card to show (wParam: its string id)
     [[nodiscard]] ImageOpenChoice PromptImageOpen(const std::wstring& firstName, std::size_t count) noexcept;
-    [[nodiscard]] bool ConfirmDiscardChanges() noexcept;
     // Modified history, or a pending edit that Save would record (a live stroke or warp, a pending gradient, a
     // changed transform, a typed opacity).
     [[nodiscard]] bool HasUnsavedWork() const noexcept;
@@ -440,8 +458,6 @@ class Application final : public ChromeEvents
     void OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint = std::nullopt) noexcept;
     [[nodiscard]] bool OpenProjectPath(const wchar_t* path) noexcept;
     void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
-    [[nodiscard]] bool ImportImagePaths(const std::vector<std::wstring>& paths, bool newProject,
-                                        std::optional<Vec2> center = std::nullopt) noexcept;
     void ImportImages() noexcept;
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).
@@ -527,7 +543,31 @@ class Application final : public ChromeEvents
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;
+    enum class HostStage : std::uint8_t
+    {
+        Begin,
+        PathProject,
+        PathImages,
+        Confirm,
+        Output,
+        Settle,
+        Write,
+        Execute
+    };
+    HostStage _hostStage = HostStage::Begin;
+    HostStage _hostAfterPrerequisite = HostStage::Execute;
+    HostWriteFormat _hostWriteFormat = HostWriteFormat::Project;
+    std::size_t _hostPathIndex = 0;
+    bool _hostSawProject = false;
+    bool _hostImportNewProject = false;
+    bool _hostSaveBeforeAction = false;
+    bool _hostBatchFailed = false;
+    bool _hostExecuting = false; // only the selected runner can enter an already approved action
+    std::uint64_t _sizeInvocation = 0;
+    std::uint64_t _endSessionGeneration = 0;
+    std::optional<Prompts::Answer> _forcedDiscardAnswer;
     std::optional<HistoryWorkStamp> _colorCommitStamp;
+    std::optional<std::uint64_t> _pendingPanelOpening;
     std::optional<JobTicket> _colorCommitTicket;
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
     std::int32_t _colorCommitError = 0;

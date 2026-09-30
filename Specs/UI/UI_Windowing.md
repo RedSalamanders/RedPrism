@@ -54,8 +54,13 @@ not chrome.
   returns FALSE and posts the save prompt (`kEndSessionMessage`), which runs like a close (after any modal loop has
   unwound). A second request while the prompt waits is refused again without a second prompt. Quiet runs never ask
   unless the self-test answers.
+- The posted prompt carries the session-end generation. An old message cannot prompt for a later request.
+  Failed continuation admission destroys this request's reason and preserves the document. A critical query
+  returns TRUE even while a previous ordinary request remains pending.
 - Save (when it saved) or Don't Save destroys the reason and closes the window without asking again, and Windows goes
   on ending the session; Cancel destroys the reason and keeps the window.
+- Save before close waits for successful color settlement and write completion. Failed, cancelled or stale
+  prerequisites suppress the close; `WM_ENDSESSION(FALSE)` invalidates this generation's late continuation.
 - `WM_ENDSESSION(TRUE)` saves the settings as a close does ([`Core_Settings.md`](../Core/Core_Settings.md)): the
   process may end as soon as it returns. `WM_ENDSESSION(FALSE)` (the end was cancelled) destroys the reason, and a
   prompt still waiting or showing no longer closes the window.

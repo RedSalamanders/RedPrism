@@ -6,6 +6,7 @@
 #include "resource.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <string>
 #include <vector>
@@ -175,6 +176,11 @@ int Application::RunChromeSyncSelfTest() noexcept
     // A fresh document with one painted layer, shown whole.
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The New command did not settle in the harness.\n");
+        std::_Exit(5);
+    }
     _forcedDiscard.reset();
     (void)InsertPaintedLayer(_session, L"Measured", 200, 150, Vec2{300, 200}, 0.0, 0xFF2F6FB0u);
     OnTool(EditorTool::Move);
@@ -372,6 +378,11 @@ int Application::RunChromeSyncSelfTest() noexcept
     {
         _forcedDiscard = true;
         OnCommand(ChromeHost::kCommandNew);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The New command did not settle in the harness.\n");
+            std::_Exit(5);
+        }
         _forcedDiscard.reset();
         // 1000 small layers, then "Target" on top: 100 x 100 at (500, 300), active.
         const Raster tile = SolidRaster(8, 8, 0xFF3366AAu);
@@ -579,6 +590,11 @@ int Application::RunChromeSyncSelfTest() noexcept
     }
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+    {
+        SelfTestFailure(L"The New command did not settle in the harness.\n");
+        std::_Exit(5);
+    }
     _forcedDiscard.reset();
     OnTool(EditorTool::Move);
     return 0;

@@ -2,6 +2,9 @@
 
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
+#include "FileDialogs.h"
+#include "ImageCodecs.h"
+#include "ProjectStore.h"
 #include "resource.h"
 
 #include <array>
@@ -9,11 +12,12 @@
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <string>
 #include <utility>
 #include <variant>
 
-// This first host bridge admits numeric Panel OK inputs only. Production entry points remain inline until the
-// whole settlement/write/discard migration activates; the harness calls the same registered source and engine.
+// The source owns the selected input across prompts, settlement, writes and dependent actions. Each callback
+// only admits event-time arguments. Pixel/IO snapshots are acquired after preceding history work has finished.
 void Application::ContinuationAction::Run() noexcept
 {
     _owner.RunHostContinuation();
@@ -36,45 +40,86 @@ void Application::RetireHostContinuation(HostRequestQueue::Entry&& entry, Contin
 
 ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcept
 {
+    const auto receipt = QueueHostInput(HostPanelOkInput{opening});
+    if (receipt.Read().outcome == HostOutcome::Pending)
+    {
+        _pendingPanelOpening = opening;
+        SyncAdjustPanel();
+        _frameInvalidated = true;
+    }
+    return receipt;
+}
+
+ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
+{
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return ContinuationReceipt::Failure(E_ABORT);
     }
     try
     {
-        const auto ordinal = _historyWork.NextOrdinal();
-        if (!ordinal)
-        {
-            return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW));
-        }
-        HostRequestInput input = HostPanelOkInput{opening};
         auto owned = HostRequest::TryCreate(input, _hostInputBudget, _hostAdmissionAllocationFailureForTest);
         if (!owned)
         {
             return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
         }
-        HostRequest request = std::move(owned.value());
-        const auto receipt = request.Receipt();
-        const auto admission = _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(),
-                                                     ContinuationKind::Command, request, RetireHostContinuation);
-        if (admission != ContinuationAdmission::Queued)
-        {
-            (void)request.Finish(HostOutcome::Failed, admission == ContinuationAdmission::Full
-                                                          ? HRESULT_FROM_WIN32(ERROR_BUSY)
-                                                          : E_UNEXPECTED);
-            return receipt;
-        }
-        if (!_jobs.RequestUiActionSource(_continuationAction))
-        {
-            // An initialized, registered owner cannot refuse except during stop. Retire every accepted input.
-            (void)_hostRequests.Clear(RetireHostContinuation);
-        }
-        return receipt;
+        return QueueHostRequest(std::move(owned.value()));
     }
     catch (const std::bad_alloc&)
     {
         // No request was admitted. Fail the entire construction without allocating a replacement result.
         return ContinuationReceipt::Failure(E_OUTOFMEMORY);
+    }
+}
+
+ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
+{
+    const auto receipt = request.Receipt();
+    const auto ordinal = _historyWork.NextOrdinal();
+    if (_shutdownStarted || !_hostSourceRegistered || !ordinal)
+    {
+        (void)request.Finish(HostOutcome::Failed, !ordinal ? HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW) : E_ABORT);
+        return receipt;
+    }
+    const auto admission = _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), ContinuationKind::Command,
+                                                 request, RetireHostContinuation);
+    if (admission != ContinuationAdmission::Queued)
+    {
+        (void)request.Finish(HostOutcome::Failed,
+                             admission == ContinuationAdmission::Full ? HRESULT_FROM_WIN32(ERROR_BUSY) : E_UNEXPECTED);
+    }
+    else if (!_jobs.RequestUiActionSource(_continuationAction))
+    {
+        (void)_hostRequests.Clear(RetireHostContinuation);
+    }
+    return receipt;
+}
+
+ContinuationReceipt Application::QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
+                                                std::optional<Vec2> point) noexcept
+{
+    try
+    {
+        auto owned = HostRequest::TryCopyPaths(paths, action, point, _hostInputBudget);
+        return owned ? QueueHostRequest(std::move(owned.value()))
+                     : ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
+    }
+    catch (const std::bad_alloc&)
+    {
+        return ContinuationReceipt::Failure(E_OUTOFMEMORY);
+    }
+}
+
+ContinuationReceipt Application::QueueHostWrite(HostWriteFormat format, bool saveAs) noexcept
+{
+    return QueueHostInput(HostWriteInput{format, saveAs, std::nullopt});
+}
+
+void Application::ReportHostAdmission(const ContinuationReceipt& receipt) noexcept
+{
+    if (receipt.Read().outcome == HostOutcome::Failed)
+    {
+        _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
     }
 }
 
@@ -84,10 +129,25 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     {
         return;
     }
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&_activeHostRequest->input.Input());
+        ending && ending->generation == _endSessionGeneration)
+    {
+        _endSessionPending = false;
+        _endSessionPromptDeferred = false;
+        if (_window)
+            (void)ShutdownBlockReasonDestroy(_window.get());
+    }
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
     _activeHostRequest.reset();
+    _pendingPanelOpening.reset();
     _hostCommitStamp.reset();
     _hostPrerequisite = {HostOutcome::Pending, 0};
+    _hostStage = HostStage::Begin;
+    _hostPathIndex = 0;
+    _hostSawProject = false;
+    _hostImportNewProject = false;
+    _hostSaveBeforeAction = false;
+    _hostBatchFailed = false;
     if (!_shutdownStarted && _hostRequests.Size() != 0)
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
@@ -117,31 +177,224 @@ void Application::RunHostContinuation() noexcept
             return;
         }
     }
-    const auto& active = _activeHostRequest.value();
+    auto& active = _activeHostRequest.value();
     if (active.documentSerial != _session.DocumentSerial())
+    {
+        FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+        return;
+    }
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&active.input.Input());
+        ending && (!_endSessionPending || ending->generation != _endSessionGeneration))
     {
         FinishHostContinuation({HostOutcome::Stale, E_ABORT});
         return;
     }
     if (_hostPrerequisite.outcome != HostOutcome::Pending)
     {
-        FinishHostContinuation(_hostPrerequisite);
-        return;
+        if (_hostPrerequisite.outcome != HostOutcome::Succeeded)
+        {
+            FinishHostContinuation(_hostPrerequisite);
+            return;
+        }
+        _hostPrerequisite = {HostOutcome::Pending, 0};
+        _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
+                         ? HostStage::Write
+                         : _hostAfterPrerequisite;
     }
-    const auto* panel = std::get_if<HostPanelOkInput>(&active.input.Input());
-    const auto& edit = _session.PendingColorEdit();
-    if (!panel || !edit || panel->opening != edit->openingSequence)
+    // One source dispatch advances a bounded number of fixed stages. Each project in a batch returns to the outer
+    // pump so errors/prompts and a younger Windows cancellation cannot destroy owners inside a callback stack.
+    for (int transitions = 0; transitions < 8 && _activeHostRequest; ++transitions)
     {
-        FinishHostContinuation({HostOutcome::Stale, E_ABORT});
-        return;
+        const auto& input = active.input.Input();
+        const auto* paths = std::get_if<HostPathsInput>(&input);
+        switch (_hostStage)
+        {
+        case HostStage::Begin:
+            _hostAfterPrerequisite = HostStage::Execute;
+            if (const auto* panel = std::get_if<HostPanelOkInput>(&input))
+            {
+                const auto& edit = _session.PendingColorEdit();
+                if (!edit || panel->opening != edit->openingSequence)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Settle;
+            }
+            else if (const auto* write = std::get_if<HostWriteInput>(&input))
+            {
+                _hostWriteFormat = write->format;
+                _hostStage = HostStage::Output;
+            }
+            else if (paths)
+            {
+                _hostStage =
+                    paths->action == HostPathAction::OpenPaths ? HostStage::PathProject : HostStage::PathImages;
+            }
+            else if (std::holds_alternative<HostNewInput>(input) ||
+                     std::holds_alternative<HostCloseProjectInput>(input) ||
+                     std::holds_alternative<HostCloseWindowInput>(input) ||
+                     std::holds_alternative<HostEndSessionInput>(input) ||
+                     (std::get_if<HostSizeApplyInput>(&input) &&
+                      std::get<HostSizeApplyInput>(input).draft.kind == SizeCardKind::NewCanvas))
+            {
+                _hostStage = HostStage::Confirm;
+            }
+            else if (const auto* command = std::get_if<HostCommandInput>(&input);
+                     command && (command->command == ChromeHost::kCommandCanvasSize ||
+                                 command->command == ChromeHost::kCommandImageSize ||
+                                 command->command == ChromeHost::kCommandNewCanvas))
+            {
+                _hostStage = HostStage::Execute; // opening these cards deliberately dismisses the live panel
+            }
+            else
+            {
+                _hostStage = HostStage::Settle;
+            }
+            break;
+        case HostStage::PathProject:
+            while (
+                _hostPathIndex < paths->paths.size() &&
+                (paths->paths[_hostPathIndex].empty() || !LooksLikeProjectPath(paths->paths[_hostPathIndex].c_str())))
+            {
+                ++_hostPathIndex;
+            }
+            if (_hostPathIndex == paths->paths.size())
+            {
+                _hostStage = HostStage::PathImages;
+            }
+            else
+            {
+                _hostSawProject = true;
+                _hostAfterPrerequisite = HostStage::Execute;
+                _hostStage = HostStage::Confirm;
+            }
+            break;
+        case HostStage::PathImages:
+        {
+            std::size_t count = 0;
+            const std::wstring* first = nullptr;
+            for (const auto& path : paths->paths)
+            {
+                if (!path.empty() &&
+                    (paths->action != HostPathAction::OpenPaths || !LooksLikeProjectPath(path.c_str())))
+                {
+                    if (!first)
+                        first = &path;
+                    ++count;
+                }
+            }
+            if (!first)
+            {
+                FinishHostContinuation({_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded,
+                                        _hostBatchFailed ? E_FAIL : S_OK});
+                return;
+            }
+            const auto choice = paths->action == HostPathAction::OpenPaths ? PromptImageOpen(FileTitle(*first), count)
+                                : paths->action == HostPathAction::ImagesAsProject ? ImageOpenChoice::NewProject
+                                                                                   : ImageOpenChoice::AddLayer;
+            if (choice == ImageOpenChoice::Cancel)
+            {
+                FinishHostContinuation({HostOutcome::Cancelled, HRESULT_FROM_WIN32(ERROR_CANCELLED)});
+                return;
+            }
+            _hostImportNewProject = choice == ImageOpenChoice::NewProject || !_session.Document();
+            _hostPathIndex = paths->paths.size(); // execute the image group, rather than another project
+            _hostStage = _hostImportNewProject ? HostStage::Confirm : HostStage::Settle;
+            break;
+        }
+        case HostStage::Confirm:
+        {
+            const auto answer = AskDiscardChanges();
+            // A modal prompt can receive WM_ENDSESSION(FALSE); its answer belongs only to the same generation.
+            if (const auto* ending = std::get_if<HostEndSessionInput>(&input);
+                ending && (!_endSessionPending || ending->generation != _endSessionGeneration))
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            if (answer == Prompts::Answer::Cancel)
+            {
+                FinishHostContinuation({HostOutcome::Cancelled, HRESULT_FROM_WIN32(ERROR_CANCELLED)});
+                return;
+            }
+            _hostSaveBeforeAction = answer == Prompts::Answer::First;
+            _hostWriteFormat = HostWriteFormat::Project;
+            _hostStage = _hostSaveBeforeAction ? HostStage::Output : HostStage::Execute;
+            break;
+        }
+        case HostStage::Output:
+        {
+            const auto* write = std::get_if<HostWriteInput>(&input);
+            const auto result = SelectHostOutput(_hostWriteFormat, write && write->saveAs);
+            if (FAILED(result))
+            {
+                FinishHostContinuation(
+                    {result == HRESULT_FROM_WIN32(ERROR_CANCELLED) ? HostOutcome::Cancelled : HostOutcome::Failed,
+                     result});
+                return;
+            }
+            _hostStage = HostStage::Settle;
+            break;
+        }
+        case HostStage::Settle:
+        {
+            const auto outcome = StartColorCommit(active.ordinal);
+            if (outcome == HostOutcome::Pending)
+            {
+                _hostCommitStamp = _colorCommitStamp;
+                return;
+            }
+            if (outcome != HostOutcome::Succeeded)
+            {
+                FinishHostContinuation({outcome, _colorCommitError});
+                return;
+            }
+            _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
+                             ? HostStage::Write
+                             : _hostAfterPrerequisite;
+            break;
+        }
+        case HostStage::Write:
+        {
+            const auto result = WriteHostOutput(_hostWriteFormat);
+            if (FAILED(result))
+            {
+                FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (!_hostSaveBeforeAction)
+            {
+                FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                return;
+            }
+            _hostSaveBeforeAction = false;
+            _hostStage = _hostAfterPrerequisite;
+            break;
+        }
+        case HostStage::Execute:
+            if (!ExecuteHostInput())
+            {
+                FinishHostContinuation({HostOutcome::Failed, E_FAIL});
+                return;
+            }
+            if (paths && _hostPathIndex < paths->paths.size())
+            {
+                ++_hostPathIndex;
+                active.documentSerial = _session.DocumentSerial(); // only this batch can rebind after replacement
+                _hostStage = HostStage::PathProject;
+                (void)_jobs.RequestUiActionSource(_continuationAction);
+                return;
+            }
+            FinishHostContinuation(
+                {_hostBatchFailed ? HostOutcome::Failed : HostOutcome::Succeeded, _hostBatchFailed ? E_FAIL : S_OK});
+            return;
+        }
     }
-    const auto outcome = StartColorCommit(active.ordinal);
-    if (outcome == HostOutcome::Pending)
+    if (_activeHostRequest)
     {
-        _hostCommitStamp = _colorCommitStamp;
-        return;
+        (void)_jobs.RequestUiActionSource(_continuationAction);
     }
-    FinishHostContinuation({outcome, _colorCommitError});
 }
 
 void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error) noexcept
@@ -166,18 +419,20 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
 void Application::CancelHostContinuations() noexcept
 {
     (void)_hostRequests.Clear(RetireHostContinuation);
+    _pendingPanelOpening.reset();
     if (_hostCommitStamp)
     {
         CancelColorCommit(); // keep the active receipt/input Pending until apply/drop acknowledges cancellation
     }
     else
     {
-        // This bridge's panel request has no remaining stage after acknowledged apply/drop. A later Cancel
-        // cannot relabel already applied pixels or replace a known failure. Multi-stage actions need their own
-        // overall cancellation policy when the staged write/discard runner is introduced.
+        // A panel's acknowledged pixels retain their result. Cancel suppresses any remaining write/replacement
+        // stage of a multi-stage input, even if its prerequisite has already applied successfully.
         const auto result = _activeHostRequest && _activeHostRequest->documentSerial != _session.DocumentSerial()
                                 ? ContinuationReceipt::Result{HostOutcome::Stale, E_ABORT}
-                            : _hostPrerequisite.outcome != HostOutcome::Pending
+                            : _activeHostRequest &&
+                                    std::holds_alternative<HostPanelOkInput>(_activeHostRequest->input.Input()) &&
+                                    _hostPrerequisite.outcome != HostOutcome::Pending
                                 ? _hostPrerequisite
                                 : ContinuationReceipt::Result{HostOutcome::Cancelled, E_ABORT};
         FinishHostContinuation(result);
@@ -607,7 +862,8 @@ int Application::RunHostContinuationSelfTest() noexcept
         return fail(L"Could not prepare the stale panel host request.\n");
     }
     const auto stalePanel = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
-    CancelColorEdit();
+    // External lifetime invalidation is distinct from the UI's explicit Cancel, which retires the queue.
+    _session.CancelColorEdit();
     if (!BeginColorEdit(ChromeHost::kCommandLevels) || !settled() || stalePanel.Read().outcome != HostOutcome::Stale ||
         !_session.HasColorEdit() || _session.history.UndoCount() != 0)
     {
@@ -674,5 +930,293 @@ int Application::RunHostContinuationSelfTest() noexcept
         return fail(L"Host shutdown did not unregister readiness and retire each retained observer.\n");
     }
     std::printf("PASS continuation-host.shutdown-unregister-retirement-and-refusal\n");
+    return 0;
+}
+
+int Application::RunHostFlowSelfTest() noexcept
+{
+    const auto fail = [](const wchar_t* message) noexcept
+    {
+        SelfTestFailure(message);
+        return 5;
+    };
+    const auto settle = [this]() noexcept
+    { return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled; };
+    wchar_t temporary[MAX_PATH]{};
+    if (!GetTempPathW(MAX_PATH, temporary))
+        return fail(L"Host flow temporary directory unavailable.\n");
+    const auto prefix = std::wstring(temporary) + L"RedPrism.host-flow-" + std::to_wstring(GetCurrentProcessId());
+    const auto project = prefix + L"-source.prism";
+    const auto imagePath = prefix + L"-source.png";
+    const auto output = prefix + L"-output.prism";
+    const auto cleanup = wil::scope_exit(
+        [&]() noexcept
+        {
+            if (_colorWorkTestGate)
+                (void)SetEvent(_colorWorkTestGate->release.get());
+            CancelHostContinuations();
+            CancelColorEdit();
+            _colorWorkTestGate.reset();
+            _forcedDiscardAnswer.reset();
+            _endSessionPending = false;
+            _closeConfirmed = false;
+            if (_window)
+                (void)ShutdownBlockReasonDestroy(_window.get());
+            if (!settle())
+                std::_Exit(5);
+            (void)DeleteFileW(project.c_str());
+            (void)DeleteFileW(imagePath.c_str());
+            (void)DeleteFileW(output.c_str());
+        });
+    const auto source = SolidRaster(4, 1, 0xFF404040u);
+    CanvasDocument fixture;
+    fixture.id = Guid::Generate();
+    fixture.width = 4;
+    fixture.height = 1;
+    ImageLayer layer = ImageLayer::Blank(L"Host flow", Vec2{4, 1});
+    const auto id = layer.id;
+    layer.asset = RasterAsset{source, source, layer.name};
+    fixture.layers.push_back(std::move(layer));
+    ImageLayer other = ImageLayer::Blank(L"Other host target", Vec2{4, 1});
+    const auto otherId = other.id;
+    other.asset = RasterAsset{source, source, other.name};
+    other.visible = false;
+    fixture.layers.push_back(std::move(other));
+    if (SaveProject(project.c_str(), fixture, id, true) != ProjectIoStatus::Ok ||
+        ExportDocumentPng(source, 72, imagePath.c_str()) != ProjectIoStatus::Ok)
+        return fail(L"Host flow fixtures failed to encode.\n");
+    const auto prepare = [&](bool failed) noexcept
+    {
+        CancelColorEdit();
+        if (!settle())
+            return false;
+        _colorWorkTestGate.reset();
+        ReplaceDocument(fixture, id, output);
+        if (failed)
+            _session.SelectAll();
+        if (!BeginColorEdit(failed ? ChromeHost::kCommandContentAwareFill : ChromeHost::kCommandLevels))
+            return false;
+        if (!failed)
+            OnAdjustAction(AdjustAction::SetInputGamma, 2);
+        if (!settle())
+            return false;
+        _forcedDiscardAnswer = Prompts::Answer::First;
+        _colorWorkTestGate = std::make_shared<ColorWorkTestGate>();
+        _colorWorkTestGate->kind = ColorWorkTestKind::Commit;
+        return _colorWorkTestGate->entered && _colorWorkTestGate->release && _colorWorkTestGate->computed;
+    };
+    const auto pumpReceipt = [&](const ContinuationReceipt& receipt) noexcept
+    {
+        for (int step = 0; step < 64 && receipt.Read().outcome == HostOutcome::Pending; ++step)
+        {
+            (void)DrainCompletions(_jobs);
+            (void)RunUiActions(_jobs);
+            // The actual close producer posts a callback-safe close. Observe and remove it before it can end the
+            // parent harness; ordinary application pumping dispatches this message after the source returns.
+            MSG close{};
+            while (PeekMessageW(&close, _window.get(), WM_CLOSE, WM_CLOSE, PM_REMOVE))
+            {
+            }
+            if (receipt.Read().outcome == HostOutcome::Pending && !_jobs.HasUiWork() &&
+                WaitForSingleObject(_jobs.WakeHandle(), 10000) != WAIT_OBJECT_0)
+                return false;
+        }
+        return receipt.Read().outcome != HostOutcome::Pending;
+    };
+    constexpr std::array<const char*, 21> names{"save",         "png",           "jpeg",
+                                                "new",          "close-project", "close-window",
+                                                "end-session",  "open-project",  "image-new-project",
+                                                "image-layers", "canvas-size",   "image-size",
+                                                "new-canvas",   "tool",          "select-layer",
+                                                "target-layer", "invoke-layer",  "reorder-layer",
+                                                "rename-layer", "opacity",       "command"};
+    for (std::size_t index = 0; index < names.size(); ++index)
+    {
+        for (int mode = 0; mode < 4; ++mode)
+        {
+            const bool failure = mode == 0;
+            (void)DeleteFileW(output.c_str());
+            if (!prepare(failure))
+                return fail(L"Could not prepare a staged host caller.\n");
+            const auto serial = _session.DocumentSerial();
+            const auto history = _session.history.UndoCount();
+            HostRequestInput input = HostCommandInput{ChromeHost::kCommandNewLayer};
+            switch (index)
+            {
+            case 0:
+                input = HostWriteInput{HostWriteFormat::Project, false, output};
+                break;
+            case 1:
+                input = HostWriteInput{HostWriteFormat::Png, false, output};
+                break;
+            case 2:
+                input = HostWriteInput{HostWriteFormat::Jpeg, false, output};
+                break;
+            case 3:
+                input = HostNewInput{};
+                break;
+            case 4:
+                input = HostCloseProjectInput{};
+                break;
+            case 5:
+                input = HostCloseWindowInput{};
+                break;
+            case 6:
+                _endSessionPending = true;
+                ++_endSessionGeneration;
+                input = HostEndSessionInput{_endSessionGeneration, 0};
+                break;
+            case 7:
+                input = HostPathsInput{{project}, HostPathAction::OpenPaths, {}};
+                break;
+            case 8:
+                input = HostPathsInput{{imagePath}, HostPathAction::ImagesAsProject, {}};
+                break;
+            case 9:
+                input = HostPathsInput{{imagePath}, HostPathAction::ImagesAsLayers, Vec2{2, .5}};
+                break;
+            case 10:
+            case 11:
+            case 12:
+                _sizeDialog.kind = index == 10   ? SizeCardKind::CanvasSize
+                                   : index == 11 ? SizeCardKind::ImageSize
+                                                 : SizeCardKind::NewCanvas;
+                _sizeDialog.canvas = CanvasSizeDraft(4, 1, 72);
+                _sizeDialog.canvas.Set(8, true);
+                _sizeDialog.image = ImageSizeDraft(4, 1, 72);
+                _sizeDialog.image.Set(8, true);
+                _sizeDialog.newWidth = 8;
+                _sizeDialog.newHeight = 2;
+                ++_sizeInvocation;
+                input = HostSizeApplyInput{_sizeDialog, _sizeInvocation};
+                break;
+            case 13:
+                input = HostToolInput{EditorTool::Hand};
+                break;
+            case 14:
+                input = HostLayerSelectInput{otherId};
+                break;
+            case 15:
+                input = HostLayerTargetInput{otherId, false, false};
+                break;
+            case 16:
+                input = HostLayerInvokeInput{otherId};
+                break;
+            case 17:
+                input = HostLayerReorderInput{otherId, id, {}, DxUi::TreeDropPlace::After};
+                break;
+            case 18:
+                input = HostLayerRenameInput{id, L"Owned rename"};
+                break;
+            case 19:
+                input = HostLayerOpacityInput{id, .5, ChromeEditPhase::Commit};
+                break;
+            }
+            const auto receipt = QueueHostInput(std::move(input));
+            for (int start = 0; start < 4 && !ColorCommitBusy(); ++start)
+                (void)RunUiActions(_jobs);
+            if (!ColorCommitBusy() || receipt.Read().outcome != HostOutcome::Pending ||
+                WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 ||
+                _session.DocumentSerial() != serial || _session.ActiveLayer()->asset->image != source ||
+                GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
+                return fail(L"A dependent host action ran before its commit acknowledgement.\n");
+            OnCommand(ChromeHost::kCommandZoomActual);
+            OnTransformAction(TransformAction::FlipHorizontal, 1);
+            OnSelectionAction(SelectionAction::SetMode, 2);
+            OnGradientAction(GradientAction::Apply, 0);
+            OnShapeAction(ShapeAction::SetKind, 1);
+            OnCropAction(CropAction::Apply, 0);
+            if (_session.Document()->layers.front() != fixture.layers.front() ||
+                _session.history.UndoCount() != history)
+                return fail(L"A header callback mutated the document beneath admitted history work.\n");
+            if (!_window || !_historyWork.Busy())
+                return fail(L"View input did not survive a pending host flow.\n");
+            if (mode == 2)
+                CancelHostContinuations();
+            if (mode == 3)
+            {
+                if (index == 6)
+                    OnEndSession(false);
+                else
+                    ReplaceDocument(fixture, id, {}); // reuse persisted document and layer IDs
+            }
+            (void)SetEvent(_colorWorkTestGate->release.get());
+            if (!pumpReceipt(receipt))
+                return fail(L"A staged host receipt did not terminate.\n");
+            _closeConfirmed = false;
+            if (mode == 0 || mode == 2)
+            {
+                if (receipt.Read().outcome != (mode == 0 ? HostOutcome::Failed : HostOutcome::Cancelled) ||
+                    _session.DocumentSerial() != serial || !_session.HasColorEdit() ||
+                    _session.ActiveLayer()->asset->image != source || _session.history.UndoCount() != history ||
+                    GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
+                    return fail(L"Failed/cancelled settlement authorized its dependent action or lost the panel.\n");
+            }
+            else if (mode == 3)
+            {
+                if (receipt.Read().outcome != HostOutcome::Stale ||
+                    GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
+                    return fail(L"A stale document/session-end flow authorized a write or dependent action.\n");
+            }
+            else
+            {
+                if (receipt.Read().outcome != HostOutcome::Succeeded || _session.HasColorEdit())
+                    return fail(L"A successful host settlement failed to execute its dependent action.\n");
+                if ((index >= 14 && index <= 16 && _session.ActiveLayerID() != otherId) ||
+                    (index == 16 && (!_chrome->RenameCardOpen() || _renameLayer != otherId)) ||
+                    (index == 17 && _session.Document()->layers.front().id != otherId) ||
+                    (index == 18 && _session.ActiveLayer()->name != L"Owned rename") ||
+                    (index == 19 && _session.ActiveLayer()->opacity != .5) ||
+                    (index == 20 && _session.Document()->layers.size() != 3))
+                {
+                    SelfTestFailure(
+                        std::format(L"Successful host caller '{}' did not apply its retained arguments.\n", index));
+                    return 5;
+                }
+                if (index < 3)
+                {
+                    if (GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES)
+                        return fail(L"A successful write receipt preceded actual output.\n");
+                    if (index == 0)
+                    {
+                        const auto saved = LoadProject(output.c_str());
+                        if (saved.status != ProjectIoStatus::Ok ||
+                            saved.document.layers.front().asset->image.Data()[0] != 128)
+                            return fail(L"Save captured pixels before successful gamma settlement.\n");
+                    }
+                }
+            }
+            if (!settle() || _historyWork.Busy() || _activeHostRequest || _hostInputBudget.Used())
+                return fail(L"A completed staged host flow retained work, input or its byte reservation.\n");
+            std::printf("PASS host-flow.%s.%s\n", names[index],
+                        mode == 0   ? "failed-fill"
+                        : mode == 1 ? "success"
+                        : mode == 2 ? "cancel"
+                                    : "stale");
+        }
+    }
+    if (!prepare(false))
+        return fail(L"Could not prepare Shape release behind a color commit.\n");
+    _session.shapeKind = ShapeKind::Rectangle;
+    _session.shapeCornerRadius = 0;
+    _session.SetForegroundColor(0xFFFF0000u);
+    _session.BeginShape(Vec2{0, 0});
+    const auto color = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
+    if (!RunUiActions(_jobs) || !ColorCommitBusy() ||
+        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        return fail(L"Shape release did not reach its preceding color gate.\n");
+    DxUi::PointerEvent release{};
+    release.action = DxUi::PointerAction::Up;
+    if (!DragPointer(release, _viewport.ViewFromDocument(Vec2{2, 1}, DocumentSize())) || _session.PendingShape() ||
+        _session.Document()->layers.size() != 2 || _session.history.UndoCount() != 0 || _hostRequests.Size() != 1)
+        return fail(L"Shape release recorded history beneath a pending color commit.\n");
+    _session.SetForegroundColor(0xFF00FF00u); // execution must use the event-time red, not this later palette value
+    (void)SetEvent(_colorWorkTestGate->release.get());
+    if (!pumpReceipt(color) || !settle() || _session.Document()->layers.size() != 3 ||
+        _session.history.UndoCount() != 2 || _session.ActiveLayer()->asset->image.Width() != 2 ||
+        _session.ActiveLayer()->asset->image.Data()[2] != 255 || _session.ActiveLayer()->asset->image.Data()[1] != 0 ||
+        _hostInputBudget.Used())
+        return fail(L"Shape release lost its captured draft/color or ordered history.\n");
+    std::printf("PASS host-flow.shape-release-after-commit-with-owned-color\n");
     return 0;
 }

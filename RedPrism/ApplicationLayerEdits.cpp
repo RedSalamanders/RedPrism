@@ -9,7 +9,9 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <format>
+#include <new>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -33,6 +35,12 @@ void Application::RenameActiveLayer() noexcept
 
 void Application::OnLayerInvoked(Guid id) noexcept
 {
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        ReportHostAdmission(QueueHostInput(HostLayerInvokeInput{id}));
+        return;
+    }
     // A double-click on a row renames that layer (legacy: the inline editor of the layer list).
     CloseOpacityEdit();
     _session.SelectLayer(id);
@@ -40,7 +48,7 @@ void Application::OnLayerInvoked(Guid id) noexcept
     RenameActiveLayer();
 }
 
-void Application::OnRename(std::optional<std::wstring> name) noexcept
+void Application::OnRename(std::optional<std::wstring_view> name) noexcept
 {
     const std::optional<Guid> layer = std::exchange(_renameLayer, std::nullopt);
     if (!layer.has_value())
@@ -50,7 +58,16 @@ void Application::OnRename(std::optional<std::wstring> name) noexcept
     }
     if (name.has_value())
     {
-        _session.RenameLayer(layer.value(), name.value());
+        try
+        {
+            auto request = HostRequest::TryCopyRename(layer.value(), name, _hostInputBudget);
+            ReportHostAdmission(request ? QueueHostRequest(std::move(request.value()))
+                                        : ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)));
+        }
+        catch (const std::bad_alloc&)
+        {
+            ReportHostAdmission(ContinuationReceipt::Failure(E_OUTOFMEMORY));
+        }
     }
     DocumentChanged();
 }
@@ -91,6 +108,10 @@ const ImageLayer* Application::OpacityEditLayer() noexcept
 
 void Application::CloseOpacityEdit() noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        return; // the selected continuation settles it after the admitted predecessor finishes
+    }
     const ImageLayer* layer = OpacityEditLayer();
     if (layer == nullptr)
     {
@@ -117,6 +138,12 @@ void Application::CloseOpacityEdit() noexcept
 
 void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
 {
+    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    {
+        if (const auto id = _session.ActiveLayerID())
+            ReportHostAdmission(QueueHostInput(HostLayerOpacityInput{id.value(), opacity, phase}));
+        return;
+    }
     // An open panel owns the document (the stepper is disabled then): a typed opacity would fold into its entry.
     if (!std::isfinite(opacity) || (_session.HasColorEdit() && phase != ChromeEditPhase::Cancel))
     {
@@ -245,10 +272,17 @@ int Application::RunLayerEditsSelfTest() noexcept
     }
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        return 5;
     _forcedDiscard.reset();
     // A user sees frames between opening the card and typing: the chrome lays out and renders in between.
     const auto settle = [&]() noexcept
     {
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The layer harness could not settle admitted work.\n");
+            std::_Exit(5);
+        }
         (void)_chrome->AdvanceAnimation(GetTickCount64());
         SyncChrome();
         (void)_renderer.Render(_chrome.get(), &_composition, &_viewport, _session.DisplayDocument());
@@ -394,6 +428,8 @@ int Application::RunLayerEditsSelfTest() noexcept
     const bool openedAgain = _chrome->RenameCardOpen();
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        return 5;
     _forcedDiscard.reset();
     settle();
     if (!openedOnNewLayer || !closedWithLayer || !openedAgain || _chrome->RenameCardOpen())
@@ -462,6 +498,8 @@ int Application::RunLayerEditsSelfTest() noexcept
     OnLayerOpacity(0.3, ChromeEditPhase::Preview);
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        return 5;
     _forcedDiscard.reset();
     OnLayerOpacity(0.3, ChromeEditPhase::Commit);
     const ImageLayer* fresh = _session.ActiveLayer();
@@ -499,6 +537,8 @@ int Application::RunLayerEditsSelfTest() noexcept
     {
         _forcedDiscard = true;
         OnCommand(ChromeHost::kCommandNew);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         _forcedDiscard.reset();
         insert(L"Base", 40, 20, Vec2{0, 0}, 0xFFFF0000u);
         insert(L"Top", 40, 20, Vec2{0, 0}, 0xFF0000FFu);
@@ -545,6 +585,8 @@ int Application::RunLayerEditsSelfTest() noexcept
     {
         _forcedDiscard = true;
         OnCommand(ChromeHost::kCommandNew);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         _forcedDiscard.reset();
         const Guid masked = insert(L"Masked", 40, 20, Vec2{0, 0}, 0xFFFF0000u);
         OnCommand(ChromeHost::kCommandAddMask);

@@ -9,30 +9,41 @@
 - [x] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
   - [x] Qualify the owning observer/publisher model and typed event-time paths, full size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer/runner activation remains open.
   - [x] Qualify capacity-based request admission, the combined queued/active byte budget, immutable retained payloads and reservation retirement. All x64 gates and ARM64 cross-builds passed; borrowed-input preflight and staged-state admission remain open.
-  - [ ] Bound borrowed path/name values before copying them and reserve later selected output/state before activating production producers.
+  - [x] Bound borrowed path/name values before copying them and reserve later selected output/state before activating production producers.
     - [x] Add bounded, allocation-free borrowed-input preflight and copy only after whole-input admission; preserve ordered Unicode batches and optional values. All x64 gates and ARM64 cross-builds passed.
     - [x] Own later selected output paths under the same combined budget, including replacement peak and publication/destruction ordering. All x64 gates and ARM64 cross-builds passed.
     - [x] Qualify refusal before copying, partial-copy/receipt allocation failures, queue/active moves and later-path replacement; run all x64 gates and ARM64 cross-builds. 77 request checks per normal run, 154 with ASan stress.
-    - [ ] Adopt preflight at each producer's first copy, add direct bounded population for drop/read sources, and admit any new variable stage state as part of the atomic runner/producer migration.
-- [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
+    - [x] Adopt preflight at each producer's first copy, add direct bounded population for drop/read sources, and admit any new variable stage state as part of the atomic runner/producer migration.
+      - [x] Direct admitted path-buffer population and bounded dialog adapters: qualified in all x64 tests and ARM64 cross-builds.
+      - [x] Staged production runner and all required producer activation: qualified: 84 event cases plus owned Shape release; full six-configuration matrix passed.
+- [x] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
   - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
-- [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
+- [x] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
   - [x] Qualify the Application source bridge with numeric panel requests, deferred terminal publication, exact acquisition wake-up, full queue, failure, cancellation and shutdown. All x64 configurations and ARM64 cross-builds passed; production producers remain inactive.
-- [ ] Migrate Save, Save As, PNG/JPEG export and every replacement/close caller together with production OK.
-- [ ] Migrate ordered file batches, copied size drafts, panel/tool/layer interactions and busy callback guards.
-- [ ] Prove each caller's success, failure, cancellation, stale result and queue refusal with actual event gates.
-- [ ] Run the complete x64 gates and ARM64 cross-builds; record the remaining GPU/IO/history blocking paths.
-- [ ] Update domain contracts and the parent checklist, commit/push, and move this child plan to Done.
+- [x] Migrate Save, Save As, PNG/JPEG export and every replacement/close caller together with production OK.
+- [x] Migrate ordered file batches, copied size drafts, panel/tool/layer interactions and busy callback guards.
+- [x] Prove each caller's success, failure, cancellation, stale result and queue refusal with actual event gates.
+- [x] Run the complete x64 gates and ARM64 cross-builds; record the remaining GPU/IO/history blocking paths.
+- [x] Update domain contracts and the parent checklist, commit/push, and move this child plan to Done.
 
-Status: ACTIVE. Parent: [`UiNeverBlocks_2026-09-22.md`](UiNeverBlocks_2026-09-22.md), P1.1c.3c–d.
+Status: COMPLETE. Parent: [`UiNeverBlocks_2026-09-22.md`](../WIP/UiNeverBlocks_2026-09-22.md), P1.1c.3c–d.
 The user authorized implementation through P6 and commit/push at verified steps. This child records the concrete
-host migration; the domain contracts remain authority. Production OK and file callers are still inline until
-this atomic migration activates. GPU readback, file encoding/decoding and size kernels move in later P1 slices.
+host migration; the domain contracts remain authority. The staged production runner and typed producers are
+implemented and qualified in all six configurations. GPU readback, file encoding/decoding and size kernels move in later
+P1 slices.
 
 Owners: `Application*`, `RedPrism/ContinuationRequests.h`, `Common/ContinuationReceipt.h`, `Common/Jobs.*`,
 `Common/HistoryWork.h`, `Common/ContinuationQueue.h`.
 Contracts: `Core_Architecture`, `Core_PerformanceAndResources`, `Document_Tools`, `Document_History`, `UI_ApplicationChrome`,
 `UI_Windowing`, `IO_ProjectFormat`, `IO_ImageCodecs`, `Testing_Validation`.
+
+## Production activation, 2026-09-30
+
+The runner and all listed production producers passed all x64 test configurations and ARM64 cross-builds.
+[Activation evidence](../../TestRuns/HostContinuationActivation_2026-09-30.md) records 14 direct-read checks per
+normal run, 84 caller outcome cases, the owned Shape-release gate and session-end message tests. Release's real
+4K loop completed all 15 operations; remaining raster/history/GPU/IO stalls keep P1 and G1 open. Source qualification
+was frozen. The model/primitive notes below describe historical checkpoints before this activation.
 
 Progress, 2026-09-30: busy controls and the ordered commit engine are qualified in the
 [engine record](../../TestRuns/OrderedColorCommit_2026-09-30.md). Scheduler/source and repeated-acquisition

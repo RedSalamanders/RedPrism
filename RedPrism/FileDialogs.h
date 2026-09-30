@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ContinuationRequests.h"
 #include "ProjectStore.h"
 
 #include <shobjidl.h>
@@ -28,10 +29,13 @@ struct FilterStrings
 // A directory (an exploded project), a `.prism` name or a ZIP signature opens as a project, anything else as an image.
 [[nodiscard]] bool LooksLikeProjectPath(const wchar_t* path) noexcept;
 // File › Open: one project or image.
-[[nodiscard]] bool PickOpenPath(HWND owner, std::wstring& path) noexcept;
+[[nodiscard]] HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget,
+                                      std::optional<HostRequest>& request) noexcept;
 // File › Import Images…: any number of images, in the order the dialog lists them.
-[[nodiscard]] bool PickImagePaths(HWND owner, std::vector<std::wstring>& paths) noexcept;
-[[nodiscard]] bool PickSavePath(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
-                                const COMDLG_FILTERSPEC* filters, UINT filterCount, std::wstring& path) noexcept;
+[[nodiscard]] HRESULT PickImageRequest(HWND owner, HostInputBudget& budget,
+                                       std::optional<HostRequest>& request) noexcept;
+[[nodiscard]] HRESULT PickOutputForRequest(HWND owner, const wchar_t* defaultName, const wchar_t* defaultExt,
+                                           const COMDLG_FILTERSPEC* filters, UINT filterCount, HostRequest& request,
+                                           HostInputBudget& budget) noexcept;
 // The message for a failed project load.
 [[nodiscard]] UINT LoadErrorStringId(ProjectIoStatus status) noexcept;

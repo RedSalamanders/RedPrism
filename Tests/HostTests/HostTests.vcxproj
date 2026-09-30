@@ -134,6 +134,7 @@
     <ClCompile Include="ContinuationQueueTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />
     <ClCompile Include="ContinuationRequestTests.cpp" />
+    <ClCompile Include="HostPathReadTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="ExecutorTests.cpp" />
     <ClCompile Include="..\..\Common\Localization.cpp" />
