@@ -376,6 +376,22 @@ falls from 78.856 to 5.718 ms, while its commit rises from 8.661 to 83.861 ms be
 exists. CPU commit stays off the UI thread; exact commit optimization remains P2/P3. Residual apply/history and
 other raster operations keep G1 open.
 
+## File work foundation (P1.7 F1/F2)
+
+Open-batch classification is one bounded Io job per selected request, with at most 256 paths and 32,767 UTF-16
+units per path. Admission charges the independent path snapshot and 96 KiB worker scratch allowance; the host
+request retains its separate input charge. The owner caches the fixed result and performs no classification
+filesystem calls. Cancellation keeps the active request/reservation until acknowledgement, including a late
+Finished result. Stop callbacks perform only event signaling; synchronous attribute/open calls and the initial
+acknowledged header wait occur on a worker. The wait still occupies a compute lane and remains F6 work for
+shared event-pool migration. No timing guarantee for OS/driver calls is implied.
+
+WIC decode/encode checkpoints bound pixel bands to 64 KiB or one wider row. Shared sparse rasters are read
+privately without `Data()` assembly, and output is published only when complete. Codec calls and external
+flush/rename are not interruptible in flight. Export staging uses unique exclusive siblings and owned cleanup.
+Host IO processing, parallel asset scheduling, complete admission and measured cancellation remain separate
+P1.7 work; this foundation does not establish G1.
+
 ## CPU instruction dispatch
 
 `Common/Kernels.h` is a standard-only boundary. Startup selects an immutable `KernelTable` before workers start;

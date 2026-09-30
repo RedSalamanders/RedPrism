@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-30
 Owner: `Common/ImageCodecs.*`
 
 ## Scope
@@ -45,18 +45,42 @@ not `Invalid`.
 - JPEG: 24 bpp BGR, quality in (0, 1], default 0.8, document resolution. A transparent pixel is flattened onto an
   opaque white matte (legacy `ImageExporter.jpeg`'s default `JPEGOptions()`), not dropped to black. Live JPEG
   preview may use the GPU later; CPU WIC is sufficient for C5/C7 export.
-- Both write a temp file beside the destination, flush it, then replace the destination atomically (`ReplaceFileW`,
+- Both write a uniquely named, exclusively created temp file beside the destination, check exact writes,
+  flush and close it, then replace the destination atomically (`ReplaceFileW`,
   falling back to `MoveFileExW`), so a crash mid-export never leaves a truncated file at the destination path.
 
 ## Status
 
-`Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`.
+`Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`.
+
+## Worker preparation and cancellation
+
+Decode, import and encode accept an optional `CancelToken`. Cancelled decode/import clears the entire
+`DecodedImage`; cancelled memory encode leaves its output byte vector empty. Detached pixels and thumbnails
+are published only after successful preparation and a final cancellation check. Allocating codec routines
+propagate `std::bad_alloc` to the owning worker runner; their public interfaces are not `noexcept`.
+
+WIC pixel decode and encode operate in bands of at most 64 KiB, or one row when a row is larger. Decode fills
+the final adopted `PixelBuffer` directly. Encode reads each band through `ReadRasterRegionForWork`, including
+sparse rasters, and MUST NOT materialize shared storage. Conversion to PNG straight alpha and JPEG white matte
+preserves the existing integer rounding. The granted WIC pixel format is checked before writing.
+
+Cancellation is checked between bands, before and after codec commits and before destination publication.
+A WIC COM call, metadata/profile/orientation preparation, file open, flush, close or rename already in progress
+cannot be interrupted by these checkpoints; band size is a structural work bound, not a wall-clock guarantee.
+Export writes use 64 KiB chunks and clean up only their own temporary. Cancellation acknowledged before
+replacement preserves the previous destination. Successful replacement is the external publication boundary:
+the operation reports success once published, even if a stop arrives afterward. Parallel asset IO and host
+worker migration remain tracked separately by P1.7.
 
 ## Validation
 
 `Tests/IoTests` covers PNG pixel round-trip (including the premultiplied/straight-alpha conversion across a range
 of alphas), 96 px thumbnails, JPEG encode (including the white-matte flatten and the legacy quality golden), mask
-format rejection, and the missing-HEIF clean error path under ASan Debug.
+format rejection, and the missing-HEIF clean error path under ASan Debug. `ImageCodecWorkTests` adds independent
+literal premultiplied PNG pixels, sparse Gray/BGRA multi-band round trips, sparse JPEG bands crossing an alpha
+stripe (quality 1, 12/255 RGB tolerance away from color edges), unchanged sparse source storage, precancelled
+output clearing, distinct existing export preservation and owned-temp cleanup after replacement failure.
 
 Decoded frame pixels are written by `IWICBitmapSource::CopyPixels` into a `PixelBuffer` and published through
 `Raster::Adopt`. Conversion, orientation, color management, tight row strides and eager mask thumbnails are

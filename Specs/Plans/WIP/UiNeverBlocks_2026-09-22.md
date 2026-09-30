@@ -98,6 +98,7 @@
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
+      - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.
       - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
       - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
@@ -105,6 +106,7 @@
       - [ ] Meet the measured 2 ms apply target; history/chrome/first-upload work remains P1.9.
     - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
       - [x] P1.9a — Explicit unsigned 64-bit session limit min(physical RAM / 4, 2 GiB), 256 MiB query fallback/class default, retained legacy trim golden and machine host wiring. Full matrix passes; the previously failed 45 MP sizing benchmark now retains its undo and completes.
+      - [ ] P1.9b — Count retained immutable selection capacity and move pending/restore snapshots safely; [history child](HistoryStorageAccounting_2026-09-30.md) is in progress. Incremental accounting, thumbnails and uploads remain open.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

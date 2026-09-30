@@ -278,6 +278,22 @@ rewritten legacy DEFLATE archive, exercise ZIP and folder overwrite, preserve un
 require owned staging cleanup and refuse a locked destination while preserving its distinct previous bytes and
 resolution. The folder's second-rename rollback and injected flush/close faults are not covered by these controls.
 
+### File classification and banded codecs (P1.7 F1/F2)
+
+`pathclasswork.*` IO tests independently cover directories, case-insensitive `.prism`, all three ZIP signatures,
+short/missing/unreadable headers, counted nonterminated views, max/beyond-max counts and path lengths,
+embedded NUL, invalid empty entries, empty batches and precancelled empty/nonempty results. `executor.*`
+checks independent local/shutdown stop registrations, already-requested stops and retained local identity.
+The WARP `path-classification-host.case=*` event gates exercise copied caller input, skipped empty entries,
+queued younger mutation, before/after cancellation, returned failure, actual allocation failure, document
+replacement, hidden completion and reservation/receipt retirement. These gates surround preparation;
+pending driver IO and cancellation inside a WIC call are not fault-injected here.
+
+`imagecodecwork.*` checks literal alpha PNG bytes, sparse Gray/BGRA multi-band round trips and sparse JPEG
+quality-1 white-matte stripes straddling a band boundary (12/255 RGB tolerance away from edges). They require
+the shared source to remain unmaterialized, complete precancelled output clearing, preserved distinct previous
+destination bytes on cancelled/failed export, unrelated temp preservation and owned-temp cleanup.
+
 ### UI timing foundations (P0.1a)
 
 HostTests runs `ui-timing-histogram.*` and `ui-timing.*` numeric and state checks. Independent expectations cover bucket

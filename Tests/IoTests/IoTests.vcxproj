@@ -88,6 +88,9 @@
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
+    <ClInclude Include="..\..\Common\PathClassificationWork.h" />
+    <ClInclude Include="PathClassificationWorkTests.h" />
+    <ClInclude Include="ImageCodecWorkTests.h" />
     <ClInclude Include="..\..\Common\Utf8.h" />
     <ClInclude Include="..\..\Common\ZipOwner.h" />
   </ItemGroup>
@@ -114,6 +117,9 @@
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />
+    <ClCompile Include="..\..\Common\PathClassificationWork.cpp" />
+    <ClCompile Include="PathClassificationWorkTests.cpp" />
+    <ClCompile Include="ImageCodecWorkTests.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>
 

@@ -95,13 +95,6 @@ bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept
                                 static_cast<int>(suffix.size()), TRUE) == CSTR_EQUAL;
 }
 
-bool LooksLikeProjectPath(const wchar_t* path) noexcept
-{
-    const DWORD attributes = GetFileAttributesW(path);
-    const bool directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    return directory || EndsWithNoCase(path, L".prism") || PathLooksLikeZipProject(path);
-}
-
 HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget, std::optional<HostRequest>& request) noexcept
 {
     try

@@ -15,6 +15,7 @@
 #include "HistoryWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
+#include "PathClassificationWork.h"
 #include "PreviewMailbox.h"
 #include "Prompts.h"
 #include "Renderer.h"
@@ -41,6 +42,7 @@ struct UiBenchmarkState;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
+struct FileWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -294,6 +296,10 @@ class Application final : public ChromeEvents
     static void RetireHostContinuation(HostRequestQueue::Entry&& entry, ContinuationRetirement reason) noexcept;
     int RunHostContinuationSelfTest() noexcept;
     int RunHostFlowSelfTest() noexcept;
+    class PathClassificationJob;
+    [[nodiscard]] HRESULT StartPathClassification(const HostPathsInput& input) noexcept;
+    [[nodiscard]] bool HostPathIsProject(std::size_t index) const noexcept;
+    int RunPathClassificationSelfTest() noexcept;
     [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
     [[nodiscard]] HRESULT SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept;
     [[nodiscard]] HRESULT WriteHostOutput(HostWriteFormat format) noexcept;
@@ -570,6 +576,10 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _sizingStamp;
     std::optional<JobTicket> _sizingTicket;
     std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
+    std::optional<JobTicket> _pathClassificationTicket;
+    PathClassificationBatch _pathClassifications;
+    bool _pathClassificationCancelled = false;
+    std::shared_ptr<FileWorkTestGate> _fileWorkTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;

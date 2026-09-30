@@ -149,6 +149,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostImportNewProject = false;
     _hostSaveBeforeAction = false;
     _hostBatchFailed = false;
+    _pathClassifications = {};
     if (!_shutdownStarted && _hostRequests.Size() != 0)
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
@@ -161,7 +162,7 @@ void Application::RunHostContinuation() noexcept
     {
         return;
     }
-    if (_hostCommitStamp || _historyWork.Busy())
+    if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {
         return; // consumed readiness stays disarmed until this prerequisite's exact UI completion
     }
@@ -229,8 +230,16 @@ void Application::RunHostContinuation() noexcept
             }
             else if (paths)
             {
+                const auto classified = StartPathClassification(*paths);
+                if (FAILED(classified))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, classified});
+                    return;
+                }
                 _hostStage =
                     paths->action == HostPathAction::OpenPaths ? HostStage::PathProject : HostStage::PathImages;
+                if (_pathClassificationTicket)
+                    return; // completion rearms this same owned request; no filesystem call runs in this source
             }
             else if (std::holds_alternative<HostNewInput>(input) ||
                      std::holds_alternative<HostCloseProjectInput>(input) ||
@@ -254,9 +263,8 @@ void Application::RunHostContinuation() noexcept
             }
             break;
         case HostStage::PathProject:
-            while (
-                _hostPathIndex < paths->paths.size() &&
-                (paths->paths[_hostPathIndex].empty() || !LooksLikeProjectPath(paths->paths[_hostPathIndex].c_str())))
+            while (_hostPathIndex < paths->paths.size() &&
+                   (paths->paths[_hostPathIndex].empty() || !HostPathIsProject(_hostPathIndex)))
             {
                 ++_hostPathIndex;
             }
@@ -275,10 +283,10 @@ void Application::RunHostContinuation() noexcept
         {
             std::size_t count = 0;
             const std::wstring* first = nullptr;
-            for (const auto& path : paths->paths)
+            for (std::size_t index = 0; index < paths->paths.size(); ++index)
             {
-                if (!path.empty() &&
-                    (paths->action != HostPathAction::OpenPaths || !LooksLikeProjectPath(path.c_str())))
+                const auto& path = paths->paths[index];
+                if (!path.empty() && (paths->action != HostPathAction::OpenPaths || !HostPathIsProject(index)))
                 {
                     if (!first)
                         first = &path;
@@ -429,7 +437,13 @@ void Application::CancelHostContinuations() noexcept
 {
     (void)_hostRequests.Clear(RetireHostContinuation);
     _pendingPanelOpening.reset();
-    if (_hostCommitStamp)
+    if (_pathClassificationTicket)
+    {
+        _pathClassificationCancelled = true;
+        (void)_jobs.Cancel(_pathClassificationTicket.value());
+        // The selected request and its receipt survive until the outstanding worker acknowledges cancellation.
+    }
+    else if (_hostCommitStamp)
     {
         if (_utilityTicket)
         {
@@ -1134,13 +1148,32 @@ int Application::RunHostFlowSelfTest() noexcept
                 break;
             }
             const auto receipt = QueueHostInput(std::move(input));
-            for (int start = 0; start < 4 && !ColorCommitBusy(); ++start)
+            // Classification is a nonmutating prerequisite before an Open request can select its color settle.
+            // Pump its acknowledgement without releasing the actual color-worker gate or assuming a worker
+            // finishes between a fixed number of UI actions. Every wait below is a deadlock failure bound.
+            const auto startDeadline = GetTickCount64() + 10000;
+            while (!ColorCommitBusy() && receipt.Read().outcome == HostOutcome::Pending)
+            {
+                (void)DrainCompletions(_jobs);
                 (void)RunUiActions(_jobs);
+                if (ColorCommitBusy())
+                    break;
+                const auto now = GetTickCount64();
+                if (now >= startDeadline ||
+                    (!_jobs.HasUiWork() &&
+                     WaitForSingleObject(_jobs.WakeHandle(), static_cast<DWORD>(startDeadline - now)) != WAIT_OBJECT_0))
+                    return fail(L"A host prerequisite did not acknowledge before the color-worker gate.\n");
+            }
             if (!ColorCommitBusy() || receipt.Read().outcome != HostOutcome::Pending ||
                 WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 ||
                 _session.DocumentSerial() != serial || _session.ActiveLayer()->asset->image != source ||
                 GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
+            {
+                std::fprintf(stderr, "Host flow index=%zu mode=%d colorBusy=%u receipt=%u classifier=%u\n", index, mode,
+                             ColorCommitBusy() ? 1U : 0U, static_cast<unsigned int>(receipt.Read().outcome),
+                             _pathClassificationTicket ? 1U : 0U);
                 return fail(L"A dependent host action ran before its commit acknowledgement.\n");
+            }
             OnCommand(ChromeHost::kCommandZoomActual);
             OnTransformAction(TransformAction::FlipHorizontal, 1);
             OnSelectionAction(SelectionAction::SetMode, 2);

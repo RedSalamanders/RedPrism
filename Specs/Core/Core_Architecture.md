@@ -280,6 +280,13 @@ the same change.
 
 ## Document and chrome
 
+`ApplicationFileJobs.cpp` owns the nonmutating Open-batch classification job and its owner completion. The job
+owns its immutable paths and fixed result; it reads no session or UI state. `Common/PathClassificationWork.*`
+has a standard-only public interface and private Win32/WIL IO. Local and shutdown stop registrations signal
+an owned event; the worker alone cancels and acknowledges its overlapped header read before destroying the
+file, events, buffer or `OVERLAPPED`. The selected host request outlives acknowledgement and uses one cached
+result for project/image routing. This foundation does not yet move project/image/clipboard processing.
+
 C4 owns `CanvasDocument` / `ImageLayer` / `DocumentHistory` as C++ value types with shared immutable `Raster`
 storage. `Application` owns `CanvasRenderer` (borrowed device). DxUi `EmbeddedHost` composites chrome into the same
 back buffer; the composition then blits the document into the chrome hole. Those types MUST NOT own the swap chain.

@@ -20,6 +20,16 @@ class CancelToken final
     {
         return _local.stop_requested() || _shutdown.stop_requested();
     }
+    // Worker-side IO registers both stop states after issuing overlapped work. The registration and IO owners
+    // must outlive acknowledgement; a requested stop alone never permits destroying pending buffers/handles.
+    [[nodiscard]] std::stop_token LocalToken() const noexcept
+    {
+        return _local;
+    }
+    [[nodiscard]] std::stop_token ShutdownToken() const noexcept
+    {
+        return _shutdown;
+    }
     [[nodiscard]] CancelToken WithShutdown(std::stop_token shutdown) const noexcept
     {
         return shutdown.stop_possible() ? CancelToken{_local, shutdown} : *this;

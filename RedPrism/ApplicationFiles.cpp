@@ -448,10 +448,10 @@ bool Application::ExecuteHostInput() noexcept
                 }
                 std::array<std::wstring_view, HostInputBudget::kMaxPaths> paths{};
                 std::size_t count = 0;
-                for (const auto& path : value.paths)
+                for (std::size_t index = 0; index < value.paths.size(); ++index)
                 {
-                    if (!path.empty() &&
-                        (value.action != HostPathAction::OpenPaths || !LooksLikeProjectPath(path.c_str())))
+                    const auto& path = value.paths[index];
+                    if (!path.empty() && (value.action != HostPathAction::OpenPaths || !HostPathIsProject(index)))
                     {
                         paths[count++] = path;
                     }

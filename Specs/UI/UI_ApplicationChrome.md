@@ -771,6 +771,15 @@ request; subsequent draft/palette changes cannot alter that work. New Canvas kee
 
 ## Files
 
+An owned Open/drop/startup batch is classified once on an Io worker before project/image routing. Directories,
+case-insensitive `.prism` names and the existing ZIP signatures retain their routing rules; unreadable/short
+headers retain best-effort image routing. Explicit Images As Project/Layer requests retain their explicit action.
+The owner consumes a fixed cached classification instead of inspecting files in continuation actions. Empty
+host entries are skipped. The selected request remains pending and prevents younger mutations until worker
+acknowledgement, including Escape, late cancellation and document replacement. Classification completion
+posts an existing localized notice on failure; it never opens a modal from the completion drain. Project load,
+image import, save, export and clipboard processing still await their P1.7 worker migration.
+
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
 layer above the active one, in one `Import Images` history entry (`Import Image` for a single file); with no

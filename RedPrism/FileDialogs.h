@@ -26,8 +26,6 @@ struct FilterStrings
 // The file name of `path`, or the localized Untitled for an empty path.
 [[nodiscard]] std::wstring FileTitle(const std::wstring& path);
 [[nodiscard]] bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept;
-// A directory (an exploded project), a `.prism` name or a ZIP signature opens as a project, anything else as an image.
-[[nodiscard]] bool LooksLikeProjectPath(const wchar_t* path) noexcept;
 // File › Open: one project or image.
 [[nodiscard]] HRESULT PickOpenRequest(HWND owner, HostInputBudget& budget,
                                       std::optional<HostRequest>& request) noexcept;

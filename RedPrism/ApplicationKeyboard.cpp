@@ -383,9 +383,9 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     {
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && _sizingTicket)
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && (_sizingTicket || _pathClassificationTicket))
     {
-        CancelHostContinuations(); // acknowledgement retains the active size request and history barrier
+        CancelHostContinuations(); // retain the selected request until worker acknowledgement
         return true;
     }
     const KeyState state = CurrentKeyState();

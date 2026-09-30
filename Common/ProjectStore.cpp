@@ -1601,7 +1601,7 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
 }
 
 ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, std::optional<Guid>& activeLayerID,
-                                std::optional<Vec2> center) noexcept
+                                std::optional<Vec2> center)
 {
     DecodedImage decoded{};
     const ImageCodecStatus status = ImportImageFile(path, kMaxLayerPixels, decoded);
@@ -1672,14 +1672,13 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
     return ProjectIoStatus::Ok;
 }
 
-ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path) noexcept
+ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path)
 {
     return EncodePngFile(flattened, resolution, path) == ImageCodecStatus::Ok ? ProjectIoStatus::Ok
                                                                               : ProjectIoStatus::Encode;
 }
 
-ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options,
-                                   const wchar_t* path) noexcept
+ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options, const wchar_t* path)
 {
     return EncodeJpegFile(flattened, options, path) == ImageCodecStatus::Ok ? ProjectIoStatus::Ok
                                                                             : ProjectIoStatus::Encode;

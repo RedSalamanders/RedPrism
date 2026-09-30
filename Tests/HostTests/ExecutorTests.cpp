@@ -176,6 +176,43 @@ int RunExecutorValueTests()
     Expect(!completedWithCancelledSecondary && cancelledSecondaryVisits == 0,
            "executor.cancelled-secondary-token-survives-inline-shutdown-token");
 
+    CancelSource localCallbackSource;
+    std::stop_source shutdownCallbackSource;
+    const CancelToken callbackToken{localCallbackSource.Token().LocalToken(), shutdownCallbackSource.get_token()};
+    bool localCallbackInvoked = false;
+    bool shutdownCallbackInvoked = false;
+    const std::stop_callback localCallback(callbackToken.LocalToken(), [&]() noexcept { localCallbackInvoked = true; });
+    const std::stop_callback shutdownCallback(callbackToken.ShutdownToken(),
+                                              [&]() noexcept { shutdownCallbackInvoked = true; });
+    (void)localCallbackSource.Cancel();
+    Expect(localCallbackInvoked && !shutdownCallbackInvoked, "executor.local-stop-callback-is-independent");
+    (void)shutdownCallbackSource.request_stop();
+    Expect(shutdownCallbackInvoked, "executor.shutdown-stop-callback-is-independent");
+
+    CancelSource alreadyStoppedLocalSource;
+    (void)alreadyStoppedLocalSource.Cancel();
+    bool alreadyStoppedLocalObserved = false;
+    const std::stop_callback alreadyStoppedLocalCallback(alreadyStoppedLocalSource.Token().LocalToken(),
+                                                         [&]() noexcept { alreadyStoppedLocalObserved = true; });
+    std::stop_source alreadyStoppedShutdownSource;
+    (void)alreadyStoppedShutdownSource.request_stop();
+    bool alreadyStoppedShutdownObserved = false;
+    const std::stop_callback alreadyStoppedShutdownCallback(alreadyStoppedShutdownSource.get_token(),
+                                                            [&]() noexcept { alreadyStoppedShutdownObserved = true; });
+    Expect(alreadyStoppedLocalObserved, "executor.local-stop-callback-observes-prior-stop");
+    Expect(alreadyStoppedShutdownObserved, "executor.shutdown-stop-callback-observes-prior-stop");
+
+    CancelSource retainedLocalSource;
+    std::stop_source retainedShutdownSource;
+    const CancelToken retainedLocalToken = retainedLocalSource.Token();
+    const CancelToken combinedToken = retainedLocalToken.WithShutdown(retainedShutdownSource.get_token());
+    (void)retainedShutdownSource.request_stop();
+    Expect(combinedToken.IsCancelled() && !combinedToken.LocalToken().stop_requested() &&
+               combinedToken.ShutdownToken().stop_requested(),
+           "executor.with-shutdown-exposes-independent-shutdown-state");
+    (void)retainedLocalSource.Cancel();
+    Expect(combinedToken.LocalToken().stop_requested(), "executor.with-shutdown-retains-local-state");
+
     constexpr std::uint32_t kWidth = 23;
     constexpr std::uint32_t kHeight = 13;
     const TileGrid fillGrid{kWidth, kHeight, 6, 4};

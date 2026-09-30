@@ -110,8 +110,7 @@ template <typename AttributeFn>
 // in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
                                               std::optional<Guid>& activeLayerID,
-                                              std::optional<Vec2> center = std::nullopt) noexcept;
-[[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution,
-                                                const wchar_t* path) noexcept;
+                                              std::optional<Vec2> center = std::nullopt);
+[[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path);
 [[nodiscard]] ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options,
-                                                 const wchar_t* path) noexcept;
+                                                 const wchar_t* path);

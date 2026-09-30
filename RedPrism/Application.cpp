@@ -2200,6 +2200,10 @@ int Application::RunSelfTest() noexcept
     {
         return flows;
     }
+    if (const int classification = RunPathClassificationSelfTest(); classification != 0)
+    {
+        return classification;
+    }
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {

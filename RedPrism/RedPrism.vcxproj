@@ -116,6 +116,8 @@
     <ClInclude Include="..\Common\BrushStroke.h" />
     <ClInclude Include="..\Common\Adjust.h" />
     <ClInclude Include="..\Common\CanvasSize.h" />
+    <ClInclude Include="..\Common\PathClassificationWork.h" />
+    <ClInclude Include="FileWorkTestGate.h" />
     <ClInclude Include="..\Common\Crop.h" />
     <ClInclude Include="BrushCompute.h" />
     <ClInclude Include="KernelBenchmark.h" />
@@ -170,6 +172,8 @@
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
+    <ClCompile Include="..\Common\PathClassificationWork.cpp" />
+    <ClCompile Include="ApplicationFileJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />

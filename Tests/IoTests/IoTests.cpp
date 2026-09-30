@@ -1,5 +1,7 @@
 #include "Document.h"
+#include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
+#include "PathClassificationWorkTests.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
 #include "ZipOwner.h"
@@ -1721,6 +1723,8 @@ int wmain()
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
+    gFailures += RunPathClassificationWorkTests();
+    gFailures += RunImageCodecWorkTests();
     TestSettingsStore();
     if (gFailures != 0 || gCrtReportFailures != 0)
     {
