@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <new>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -407,6 +409,450 @@ void TestInputBudgetPublicationLifetime()
     Expect(movedOwnership && movedFromStayedEmpty && budget.Used() == 0,
            "move-assignment-and-moved-from-destruction-transfer-ticket-and-release-charge");
 }
+
+void TestBorrowedInputCopies()
+{
+    HostInputBudget budget;
+    std::array<std::wstring, 3> source{L"C:\\photos\\été.arw", L"C:\\photos\\δεύτερο.cr3", L"C:\\photos\\第三.raf"};
+    std::array<std::wstring_view, 3> views{source[0], source[1], source[2]};
+    const Vec2 dropPoint{19.25, -7.5};
+    auto copied = HostRequest::TryCopyPaths(views, HostPathAction::ImagesAsLayers, dropPoint, budget);
+    const auto copiedCharge = copied ? HostInputStorageBytes(copied->Input()) : std::nullopt;
+    source[0] = L"changed-0";
+    source[1] = L"changed-1";
+    source[2] = L"changed-2";
+    const auto* paths = copied ? std::get_if<HostPathsInput>(&copied->Input()) : nullptr;
+    Expect(paths &&
+               paths->paths == std::vector<std::wstring>{L"C:\\photos\\été.arw", L"C:\\photos\\δεύτερο.cr3",
+                                                         L"C:\\photos\\第三.raf"} &&
+               paths->action == HostPathAction::ImagesAsLayers && paths->dropPoint == dropPoint,
+           "borrowed-path-copy-preserves-unicode-order-and-drop-point-after-source-edit");
+    Expect(copied && copiedCharge && budget.Used() == copiedCharge.value(),
+           "borrowed-path-copy-charges-actual-owned-capacities");
+    copied.reset();
+    Expect(budget.Used() == 0, "borrowed-path-copy-releases-charge-on-destruction");
+
+    HostInputBudget writeBudget;
+    std::wstring output = L"D:\\exports\\résultat.png";
+    auto copiedWrite = HostRequest::TryCopyWrite(HostWriteFormat::Png, true, std::wstring_view(output), writeBudget);
+    output.assign(L"reused source");
+    const auto* write = copiedWrite ? std::get_if<HostWriteInput>(&copiedWrite->Input()) : nullptr;
+    Expect(write && write->format == HostWriteFormat::Png && write->saveAs &&
+               write->path == std::optional<std::wstring>(L"D:\\exports\\résultat.png"),
+           "borrowed-write-copy-owns-selected-unicode-path");
+    Expect(copiedWrite && HostInputStorageBytes(copiedWrite->Input()) == writeBudget.Used(),
+           "borrowed-write-copy-charges-actual-capacity");
+
+    HostInputBudget renameBudget;
+    Guid id;
+    id.bytes[0] = 73;
+    std::wstring name = L"名前 — couche élève";
+    auto copiedRename = HostRequest::TryCopyRename(id, std::wstring_view(name), renameBudget);
+    name.clear();
+    const auto* rename = copiedRename ? std::get_if<HostLayerRenameInput>(&copiedRename->Input()) : nullptr;
+    Expect(rename && rename->id.bytes[0] == 73 && rename->name == std::optional<std::wstring>(L"名前 — couche élève"),
+           "borrowed-rename-copy-owns-unicode-name-and-target");
+    Expect(copiedRename && HostInputStorageBytes(copiedRename->Input()) == renameBudget.Used(),
+           "borrowed-rename-copy-charges-actual-capacity");
+
+    HostInputBudget optionalBudget;
+    auto absentPath = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, optionalBudget);
+    auto emptyPath = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::wstring_view{}, optionalBudget);
+    auto absentName = HostRequest::TryCopyRename(Guid{}, std::nullopt, optionalBudget);
+    auto emptyName = HostRequest::TryCopyRename(Guid{}, std::wstring_view{}, optionalBudget);
+    const auto* absentWrite = absentPath ? std::get_if<HostWriteInput>(&absentPath->Input()) : nullptr;
+    const auto* emptyWrite = emptyPath ? std::get_if<HostWriteInput>(&emptyPath->Input()) : nullptr;
+    const auto* absentRename = absentName ? std::get_if<HostLayerRenameInput>(&absentName->Input()) : nullptr;
+    const auto* emptyRename = emptyName ? std::get_if<HostLayerRenameInput>(&emptyName->Input()) : nullptr;
+    Expect(absentWrite && !absentWrite->path && emptyWrite && emptyWrite->path && emptyWrite->path->empty() &&
+               absentRename && !absentRename->name && emptyRename && emptyRename->name && emptyRename->name->empty(),
+           "borrowed-copy-preserves-absent-versus-empty-optional-values");
+
+    HostInputBudget longNameBudget;
+    const std::wstring longName(HostInputBudget::kMaxPathUnits + 1, L'n');
+    auto longRename = HostRequest::TryCopyRename(Guid{}, std::wstring_view(longName), longNameBudget);
+    Expect(longRename && std::get<HostLayerRenameInput>(longRename->Input()).name->size() == longName.size() &&
+               longNameBudget.Used() == HostInputStorageBytes(longRename->Input()),
+           "borrowed-rename-copy-is-bounded-by-byte-budget-not-path-unit-limit");
+}
+
+void TestBoundedPathViews()
+{
+    const auto absent = HostBoundedPathView(nullptr);
+    std::wstring empty;
+    const auto emptyView = HostBoundedPathView(empty.c_str());
+    std::wstring unicode = L"D:\\Images\\été\\第三.png";
+    const auto unicodeView = HostBoundedPathView(unicode.c_str());
+    Expect(!absent && emptyView && emptyView->empty() && unicodeView && unicodeView.value() == unicode,
+           "bounded-path-view-preserves-null-empty-and-unicode-pointer-inputs");
+    HostInputBudget copyBudget;
+    const std::array<std::wstring_view, 1> borrowed{unicodeView.value()};
+    auto copied = HostRequest::TryCopyPaths(borrowed, HostPathAction::OpenPaths, std::nullopt, copyBudget);
+    unicode.assign(L"source reused after bounded view copy");
+    Expect(copied && std::get<HostPathsInput>(copied->Input()).paths.front() == L"D:\\Images\\été\\第三.png",
+           "bounded-pointer-view-feeds-owned-copy-before-source-reuse");
+
+    const std::wstring exact(HostInputBudget::kMaxPathUnits, L'x');
+    const std::wstring tooLong(HostInputBudget::kMaxPathUnits + 1, L'y');
+    const auto exactView = HostBoundedPathView(exact.c_str());
+    const auto tooLongView = HostBoundedPathView(tooLong.c_str());
+    Expect(exactView && exactView->size() == HostInputBudget::kMaxPathUnits && exactView.value() == exact &&
+               !tooLongView,
+           "bounded-path-view-accepts-32767-and-rejects-32768-units");
+}
+
+void TestBorrowedInputPreflightAndFailures()
+{
+    HostInputBudget budget;
+    std::vector<std::wstring> maximumBatch;
+    maximumBatch.reserve(HostInputBudget::kMaxPaths + 1);
+    maximumBatch.resize(HostInputBudget::kMaxPaths, L"x");
+    std::vector<std::wstring_view> maximumViews;
+    maximumViews.reserve(maximumBatch.size());
+    for (const auto& path : maximumBatch)
+    {
+        maximumViews.emplace_back(path);
+    }
+    auto acceptedBatch = HostRequest::TryCopyPaths(maximumViews, HostPathAction::OpenPaths, std::nullopt, budget);
+    Expect(acceptedBatch && std::get<HostPathsInput>(acceptedBatch->Input()).paths.size() == 256 && budget.Used() > 0,
+           "borrowed-path-preflight-accepts-256-paths");
+    acceptedBatch.reset();
+    Expect(budget.Used() == 0, "maximum-borrowed-batch-releases-actual-charge");
+
+    maximumBatch.emplace_back(L"257th path");
+    maximumViews.emplace_back(maximumBatch.back());
+    const std::size_t priorUsed = budget.Used();
+    bool overCountThrew = false;
+    std::optional<HostRequest> overCount;
+    try
+    {
+        overCount = HostRequest::TryCopyPaths(maximumViews, HostPathAction::OpenPaths, std::nullopt, budget,
+                                              HostCopyFailureForTest::Input);
+    }
+    catch (const std::bad_alloc&)
+    {
+        overCountThrew = true;
+    }
+    Expect(!overCount && !overCountThrew && budget.Used() == priorUsed && maximumBatch.back() == L"257th path",
+           "257-path-preflight-refuses-before-copy-even-with-input-fault-enabled");
+
+    const std::wstring exactPath(HostInputBudget::kMaxPathUnits, L'p');
+    const std::wstring tooLongPath(HostInputBudget::kMaxPathUnits + 1, L'q');
+    const std::array<std::wstring_view, 1> exactView{exactPath};
+    const std::array<std::wstring_view, 1> tooLongView{tooLongPath};
+    auto acceptedLength = HostRequest::TryCopyPaths(exactView, HostPathAction::OpenPaths, std::nullopt, budget);
+    bool overLengthThrew = false;
+    std::optional<HostRequest> overLength;
+    try
+    {
+        overLength = HostRequest::TryCopyPaths(tooLongView, HostPathAction::OpenPaths, std::nullopt, budget,
+                                               HostCopyFailureForTest::Input);
+    }
+    catch (const std::bad_alloc&)
+    {
+        overLengthThrew = true;
+    }
+    Expect(acceptedLength && std::get<HostPathsInput>(acceptedLength->Input()).paths.front().size() == 32767 &&
+               !overLength && !overLengthThrew && budget.Used() == HostInputStorageBytes(acceptedLength->Input()),
+           "borrowed-path-preflight-accepts-32767-and-refuses-32768-before-copy");
+    acceptedLength.reset();
+    Expect(budget.Used() == 0, "path-length-boundary-charge-released");
+
+    std::vector<std::wstring> largeBatch(33, std::wstring(HostInputBudget::kMaxPathUnits, L'a'));
+    std::vector<std::wstring_view> largeViews;
+    largeViews.reserve(largeBatch.size());
+    for (const auto& path : largeBatch)
+    {
+        largeViews.emplace_back(path);
+    }
+    bool aggregateThrew = false;
+    std::optional<HostRequest> aggregate;
+    try
+    {
+        aggregate = HostRequest::TryCopyPaths(largeViews, HostPathAction::OpenPaths, std::nullopt, budget,
+                                              HostCopyFailureForTest::Input);
+    }
+    catch (const std::bad_alloc&)
+    {
+        aggregateThrew = true;
+    }
+    Expect(!aggregate && !aggregateThrew && budget.Used() == 0 && largeBatch.front().size() == 32767,
+           "aggregate-over-budget-preflight-refuses-before-copy-even-with-input-fault-enabled");
+
+    auto fullBudget = budget.TryReserve(HostInputBudget::kStorageLimit);
+    const std::array<std::wstring_view, 1> smallView{L"still borrowed"};
+    bool quotaThrew = false;
+    std::optional<HostRequest> quotaRefused;
+    try
+    {
+        quotaRefused = HostRequest::TryCopyPaths(smallView, HostPathAction::OpenPaths, std::nullopt, budget,
+                                                 HostCopyFailureForTest::Input);
+    }
+    catch (const std::bad_alloc&)
+    {
+        quotaThrew = true;
+    }
+    Expect(fullBudget && !quotaRefused && !quotaThrew && budget.Used() == HostInputBudget::kStorageLimit,
+           "quota-refusal-precedes-copy-and-does-not-trigger-input-fault");
+    fullBudget.reset();
+
+    HostInputBudget failureBudget;
+    auto preceding = failureBudget.TryReserve(128);
+    const std::array<std::wstring, 2> faultSources{L"first path remains", L"second path remains"};
+    const std::array<std::wstring_view, 2> faultViews{faultSources[0], faultSources[1]};
+    bool inputFaultThrown = false;
+    try
+    {
+        auto failed = HostRequest::TryCopyPaths(faultViews, HostPathAction::OpenPaths, std::nullopt, failureBudget,
+                                                HostCopyFailureForTest::Input);
+        (void)failed;
+    }
+    catch (const std::bad_alloc&)
+    {
+        inputFaultThrown = true;
+    }
+    Expect(preceding && inputFaultThrown && failureBudget.Used() == 128 && faultSources[0] == L"first path remains" &&
+               faultSources[1] == L"second path remains",
+           "partial-path-copy-fault-releases-new-charge-and-preserves-borrowed-sources");
+
+    bool receiptFaultThrown = false;
+    try
+    {
+        auto failed = HostRequest::TryCopyPaths(faultViews, HostPathAction::OpenPaths, std::nullopt, failureBudget,
+                                                HostCopyFailureForTest::Receipt);
+        (void)failed;
+    }
+    catch (const std::bad_alloc&)
+    {
+        receiptFaultThrown = true;
+    }
+    Expect(receiptFaultThrown && failureBudget.Used() == 128 && faultSources[0] == L"first path remains" &&
+               faultSources[1] == L"second path remains",
+           "receipt-copy-fault-releases-owned-input-charge-and-preserves-borrowed-sources");
+
+    const std::wstring borrowedWrite = L"C:\\exports\\selected.prism";
+    bool writeInputFaultThrown = false;
+    try
+    {
+        auto failed = HostRequest::TryCopyWrite(HostWriteFormat::Project, true, std::wstring_view(borrowedWrite),
+                                                failureBudget, HostCopyFailureForTest::Input);
+        (void)failed;
+    }
+    catch (const std::bad_alloc&)
+    {
+        writeInputFaultThrown = true;
+    }
+    Expect(writeInputFaultThrown && failureBudget.Used() == 128 && borrowedWrite == L"C:\\exports\\selected.prism",
+           "scalar-string-copy-fault-releases-charge-and-preserves-borrowed-write-path");
+
+    std::wstring borrowedName = L"borrowed name";
+    bool renameReceiptFaultThrown = false;
+    try
+    {
+        auto failed = HostRequest::TryCopyRename(Guid{}, std::wstring_view(borrowedName), failureBudget,
+                                                 HostCopyFailureForTest::Receipt);
+        (void)failed;
+    }
+    catch (const std::bad_alloc&)
+    {
+        renameReceiptFaultThrown = true;
+    }
+    Expect(renameReceiptFaultThrown && failureBudget.Used() == 128 && borrowedName == L"borrowed name",
+           "rename-receipt-fault-releases-charge-and-preserves-borrowed-name");
+}
+
+void TestSelectedOutputLifetimeAndReplacement()
+{
+    HostInputBudget budget;
+    auto created = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, budget);
+    if (!created)
+    {
+        Expect(false, "budgeted-write-request-created-for-output-selection");
+        return;
+    }
+    HostRequest request = std::move(created.value());
+    const std::size_t inputCharge = budget.Used();
+    std::wstring source = L"C:\\exports\\été.prism";
+    Expect(request.TrySelectOutput(source, budget) &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(source),
+           "pending-budgeted-request-selects-and-owns-output-path");
+    const std::size_t selectedCharge = budget.Used();
+    source.assign(L"caller changed output");
+    Expect(request.SelectedOutputPath() == std::optional<std::wstring_view>(L"C:\\exports\\été.prism") &&
+               selectedCharge > inputCharge,
+           "selected-output-is-independent-of-later-caller-mutation");
+
+    HostInputBudget otherBudget;
+    const std::wstring alternate = L"C:\\exports\\alternate.prism";
+    Expect(!request.TrySelectOutput(alternate, otherBudget) && budget.Used() == selectedCharge &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(L"C:\\exports\\été.prism"),
+           "output-selection-rejects-a-different-budget-and-retains-old-path");
+
+    auto filler = budget.TryReserve(HostInputBudget::kStorageLimit - selectedCharge);
+    const std::wstring refusedReplacement = L"C:\\exports\\refused.prism";
+    Expect(filler && !request.TrySelectOutput(refusedReplacement, budget) &&
+               budget.Used() == HostInputBudget::kStorageLimit &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(L"C:\\exports\\été.prism"),
+           "output-replacement-quota-refusal-preserves-old-path-and-charge");
+    filler.reset();
+
+    bool outputFaultThrown = false;
+    try
+    {
+        (void)request.TrySelectOutput(alternate, budget, true);
+    }
+    catch (const std::bad_alloc&)
+    {
+        outputFaultThrown = true;
+    }
+    Expect(outputFaultThrown && budget.Used() == selectedCharge &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(L"C:\\exports\\été.prism"),
+           "output-copy-allocation-fault-preserves-old-path-and-charge");
+
+    const std::wstring oversizedOutput(HostInputBudget::kMaxPathUnits + 1, L'p');
+    bool oversizedOutputThrew = false;
+    bool oversizedOutputSelected = false;
+    try
+    {
+        oversizedOutputSelected = request.TrySelectOutput(oversizedOutput, budget, true);
+    }
+    catch (const std::bad_alloc&)
+    {
+        oversizedOutputThrew = true;
+    }
+    Expect(!oversizedOutputSelected && !oversizedOutputThrew && budget.Used() == selectedCharge &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(L"C:\\exports\\été.prism"),
+           "oversized-output-refuses-before-copy-and-keeps-original-output-charge");
+
+    HostInputBudget probeBudget;
+    auto probe = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, probeBudget);
+    const std::wstring oldOutput(4096, L'o');
+    const std::wstring newOutput(6000, L'n');
+    const bool probeReady = probe && probe->TrySelectOutput(oldOutput, probeBudget);
+    const std::size_t oldOutputCharge =
+        probeReady ? probeBudget.Used() - HostInputStorageBytes(probe->Input()).value() : 0;
+    auto newProbe = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, probeBudget);
+    const bool newProbeReady = probeReady && newProbe && newProbe->TrySelectOutput(newOutput, probeBudget);
+    const std::size_t newOutputCharge = newProbeReady
+                                            ? probeBudget.Used() - HostInputStorageBytes(probe->Input()).value() -
+                                                  oldOutputCharge - HostInputStorageBytes(newProbe->Input()).value()
+                                            : 0;
+    HostInputBudget peakBudget;
+    auto peakCreated = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, peakBudget);
+    bool peakRefused = false;
+    std::size_t peakCharge = 0;
+    std::size_t peakAfterReplacementCharge = 0;
+    bool replacementFitsOnlyAfterOldRelease = false;
+    std::size_t priorPeakCharge = 0;
+    if (peakCreated && oldOutputCharge > 0 && newOutputCharge > oldOutputCharge &&
+        newOutputCharge - oldOutputCharge < HostInputBudget::kStorageLimit)
+    {
+        HostRequest peakRequest = std::move(peakCreated.value());
+        const std::size_t peakInputCharge = peakBudget.Used();
+        const bool selectedOld = peakRequest.TrySelectOutput(oldOutput, peakBudget);
+        priorPeakCharge = peakBudget.Used();
+        const std::size_t freeDuringReplacement = newOutputCharge - oldOutputCharge;
+        auto peakFiller =
+            peakBudget.TryReserve(HostInputBudget::kStorageLimit - priorPeakCharge - freeDuringReplacement);
+        peakCharge = peakBudget.Used();
+        replacementFitsOnlyAfterOldRelease =
+            HostInputBudget::kStorageLimit - peakCharge < newOutputCharge &&
+            HostInputBudget::kStorageLimit - peakCharge + oldOutputCharge >= newOutputCharge;
+        peakRefused = selectedOld && peakFiller && peakInputCharge + oldOutputCharge == priorPeakCharge &&
+                      replacementFitsOnlyAfterOldRelease && !peakRequest.TrySelectOutput(newOutput, peakBudget);
+        peakAfterReplacementCharge = peakBudget.Used();
+        peakRefused = peakRefused && peakAfterReplacementCharge == peakCharge &&
+                      peakRequest.SelectedOutputPath() == std::optional<std::wstring_view>(oldOutput);
+    }
+    Expect(probeReady && newProbeReady && newOutputCharge > oldOutputCharge && peakRefused &&
+               peakAfterReplacementCharge == peakCharge && replacementFitsOnlyAfterOldRelease,
+           "output-replacement-reserves-old-and-new-at-peak-before-releasing-old");
+
+    HostRequestInput unbudgetedInput = HostWriteInput{HostWriteFormat::Project, false, std::nullopt};
+    HostRequest unbudgeted = HostRequest::Create(std::move(unbudgetedInput));
+    HostInputBudget unbudgetedBudget;
+    const auto unbudgetedReceipt = unbudgeted.Receipt();
+    Expect(!unbudgeted.TrySelectOutput(alternate, unbudgetedBudget) && !unbudgeted.SelectedOutputPath() &&
+               unbudgetedReceipt.Read().outcome == ContinuationOutcome::Pending,
+           "pending-bare-model-without-output-cannot-select-budgeted-output");
+
+    HostInputBudget replacementReferenceBudget;
+    auto replacementReference =
+        HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, replacementReferenceBudget);
+    const bool referenceSelected =
+        replacementReference && replacementReference.value().TrySelectOutput(alternate, replacementReferenceBudget);
+    Expect(referenceSelected && request.TrySelectOutput(alternate, budget) &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(alternate) &&
+               budget.Used() == replacementReferenceBudget.Used(),
+           "successful-output-replacement-releases-old-charge-and-matches-fresh-owner");
+    Expect(request.Finish(ContinuationOutcome::Succeeded) && !request.TrySelectOutput(alternate, budget) &&
+               request.SelectedOutputPath() == std::optional<std::wstring_view>(alternate) &&
+               budget.Used() == replacementReferenceBudget.Used(),
+           "terminal-request-cannot-replace-selected-output");
+
+    request = std::move(unbudgeted);
+    Expect(budget.Used() == 0 && request.SelectedOutputPath() == std::nullopt,
+           "move-overwrite-releases-input-and-output-reservations");
+
+    HostInputBudget moveBudget;
+    auto oldCreated = HostRequest::TryCopyWrite(HostWriteFormat::Project, false, std::nullopt, moveBudget);
+    auto newCreated = HostRequest::TryCopyWrite(HostWriteFormat::Jpeg, true, std::nullopt, moveBudget);
+    if (!oldCreated || !newCreated)
+    {
+        Expect(false, "budgeted-move-overwrite-requests-created");
+        return;
+    }
+    HostRequest oldRequest = std::move(oldCreated.value());
+    HostRequest newRequest = std::move(newCreated.value());
+    const auto oldReceipt = oldRequest.Receipt();
+    const auto newReceipt = newRequest.Receipt();
+    const bool oldSelected = oldRequest.TrySelectOutput(oldOutput, moveBudget);
+    const bool newSelected = newRequest.TrySelectOutput(newOutput, moveBudget);
+    const std::size_t newRequestCharge = HostInputStorageBytes(newRequest.Input()).value() + newOutputCharge;
+    oldRequest = std::move(newRequest);
+    Expect(oldSelected && newSelected && oldReceipt.Read().outcome == ContinuationOutcome::Cancelled &&
+               newReceipt.Read().outcome == ContinuationOutcome::Pending && moveBudget.Used() == newRequestCharge &&
+               oldRequest.SelectedOutputPath() == std::optional<std::wstring_view>(newOutput),
+           "move-overwrite-cancels-observer-before-transferring-input-and-output-charges");
+    Expect(oldRequest.Finish(ContinuationOutcome::Succeeded), "moved-budgeted-output-publishes-success");
+    oldRequest = HostRequest::Create(HostRequestInput{HostNewInput{}});
+    Expect(moveBudget.Used() == 0 && newReceipt.Read().outcome == ContinuationOutcome::Succeeded,
+           "move-overwrite-destroys-transferred-budgeted-output-after-publication");
+}
+
+void TestSelectedOutputQueueLifetime()
+{
+    HostInputBudget budget;
+    Queue queue;
+    auto created = HostRequest::TryCopyWrite(HostWriteFormat::Jpeg, true, std::nullopt, budget);
+    if (!created)
+    {
+        Expect(false, "budgeted-export-request-created");
+        return;
+    }
+    HostRequest request = std::move(created.value());
+    const std::wstring path = L"C:\\exports\\final.jpg";
+    if (!request.TrySelectOutput(path, budget))
+    {
+        Expect(false, "export-output-selected-before-queue");
+        return;
+    }
+    const auto receipt = request.Receipt();
+    const std::size_t charge = budget.Used();
+    Expect(queue.Enqueue(211, 1, ContinuationKind::Command, request, Retire) == ContinuationAdmission::Queued &&
+               budget.Used() == charge,
+           "queued-selected-output-retains-combined-charge");
+    auto taken = queue.TakeReady(211, false, Retire);
+    const auto selected = taken.ready ? taken.ready->input.SelectedOutputPath() : std::nullopt;
+    const bool active = taken.ready && selected == std::optional<std::wstring_view>(path) && budget.Used() == charge &&
+                        receipt.Read().outcome == ContinuationOutcome::Pending;
+    const bool finished = taken.ready && taken.ready->input.Finish(ContinuationOutcome::Failed, -19) &&
+                          budget.Used() == charge &&
+                          receipt.Read() == ContinuationReceipt::Result{ContinuationOutcome::Failed, -19};
+    taken.ready.reset();
+    Expect(active && finished && budget.Used() == 0,
+           "active-output-charge-survives-publication-until-request-destruction");
+}
 } // namespace
 
 int RunContinuationRequestTests()
@@ -417,5 +863,10 @@ int RunContinuationRequestTests()
     TestRetirementAndMoveOwnership();
     TestInputBudgetBoundaries();
     TestInputBudgetPublicationLifetime();
+    TestBorrowedInputCopies();
+    TestBoundedPathViews();
+    TestBorrowedInputPreflightAndFailures();
+    TestSelectedOutputLifetimeAndReplacement();
+    TestSelectedOutputQueueLifetime();
     return gFailures;
 }

@@ -161,8 +161,29 @@ must return an immediate failure. Tickets follow queue-to-active and move transf
 input destruction, then returns the charge. Receipt observers retain neither input bytes nor budget tickets.
 Admitted payloads expose only const access, so their charged capacities cannot grow after admission. The budget
 outlives all request owners. The numeric Application bridge uses this path; bare model construction is confined
-to tests. Future path/name producers MUST preflight borrowed arguments before copying them and separately reserve
-any output selected later by a staged runner; those production producers remain inactive.
+to tests.
+
+Borrowed-input builders now accept non-owning path/name views and fixed event parameters. Preflight checks the
+256-path count, 32,767-unit per-path length and aggregate declared copy peak without constructing an owned
+container, string or result. A terminated Win32 path is scanned only through its maximum permitted terminator
+position before becoming a view. Names are bounded by the aggregate byte charge here; the document's existing
+trim and UTF-8 name validity still apply when executing a rename.
+
+The owner reserves the complete declared copy peak before constructing the vector/strings or result. Exact
+vector reservation and direct string construction avoid growth/reallocation. The v145 string-rounding allowance
+is 32 code units per string, including inline storage and terminator; retained capacities are checked against the
+reservation, and unused allowance is returned before publishing the request. A partial input or receipt allocation
+failure destroys copied storage before returning its ticket. On quota/length/count refusal, no owned copy occurs.
+Global allocator headroom remains separate from the declared charge.
+
+Later selected output paths use `HostRequest::TrySelectOutput` under this same combined budget, only on a pending
+budgeted owner. Path selection reserves before copying; replacement reserves the simultaneous old/new peak and
+preserves the old output on refusal or allocation failure. The request owns the selected path and its reservation,
+so queue/active moves and retirement keep publication before input/output destruction and charge return. No new
+receipt, worker, event, timer or polling belongs to selection. Fixed request state fits within its charged allowance,
+as enforced by a compile-time size check. Future variable-size staged state requires its own admission.
+Production shell/dialog/drop/rename producers MUST adopt these preflight builders before activation; the helpers
+alone do not bound existing inline producer copies. All dependent producer migrations remain in the child plan.
 
 The first Application source bridge admits fixed numeric panel inputs only: at most eight pending entries plus
 one active request, with one small shared result per observed input. An empty registration costs no wakeup or

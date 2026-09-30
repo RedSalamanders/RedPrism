@@ -339,6 +339,16 @@ Queue/active transfer, clear, stale retirement and move overwrite preserve charg
 them after input destruction. The hidden bridge independently proves quota/OOM refusal leaves its panel, queue,
 history and wake state untouched and cancellation returns the charge. These checks do not activate file producers.
 
+Borrowed-input request tests additionally prove original Unicode values/order after caller edits, absent versus
+present-empty optional values, bounded terminated-pointer scans, maximum path/batch acceptance and whole-batch
+aggregate refusal. Enabling the copy-allocation failure control during quota/length/count refusal must not throw:
+refusal precedes copying. Faults after a partial batch/string copy and before receipt allocation preserve prior
+reservations and borrowed values and return all temporary charges. Successful admission reconciles to actual
+retained capacities. Later selected output tests cover the same budget, pending-owner restriction, immutable
+copied value, old/new replacement peak, failure preservation, queue/active transfer, terminal publication while
+storage remains charged, and move-overwrite/destruction with independently retained receipts.
+These model checks do not qualify future shell/dialog/drop producer migration or the staged write/discard runner.
+
 Offline corpus controls assert the real default manifest covers all nine planned v1 extensions, the extension
 allowlist, role selection, traversal/schema/license/ownership rejection and preservation of mismatched images.
 When all local selected files exist, they verify every size/hash and the byte-identical local CC0 text and exact

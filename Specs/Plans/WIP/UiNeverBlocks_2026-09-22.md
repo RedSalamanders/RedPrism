@@ -81,6 +81,7 @@
         - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
         - [x] Qualify capacity-based request admission and a combined queued/active byte budget, with immutable retained input and release after publication. Full x64 gates and all ARM64 cross-builds passed; actual production producer activation remains open.
         - [ ] Preflight borrowed path/name values and reserve later selected output/staged state before production activation.
+          - [x] Qualify borrowed-input builders and request-owned selected paths: all x64 gates and ARM64 cross-builds passed, with 77 request checks per normal run and 154 with ASan stress; producer/staged-runner migration remains open.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.

@@ -125,7 +125,14 @@ Budgeted host construction reserves declared retained storage before allocating 
 allocation failure returns the reservation and leaves the input owned by its caller. The ticket moves with the
 request across queued/active ownership and returns only after publication and input destruction. The budget is
 an owner-thread member declared before queued/active requests so it outlives them. Payload access is const after
-construction; selected paths and other later-stage state require separate admission. See
+construction. Borrowed path batches, write paths and layer names use the length/count preflight and copy
+builders before any owned input copy. Terminated Win32 paths first use a bounded scan. The builders reserve the
+complete declared copy peak before construction and reconcile it to retained capacities before publishing a
+request; a partial input or result allocation failure releases storage and returns its reservation.
+Later selected output paths belong to the same request and budget. Selection is allowed only while the budgeted
+request is pending; replacing an output holds the old and new charges until the replacement is complete. Failure
+preserves the previous output. Request publication precedes destruction of both event input and selected output.
+Other later-stage variable storage still requires separate admission before production activation. See
 `Core_PerformanceAndResources.md` for the storage/count/length limits and production activation boundary.
 
 `Application` now registers its stable continuation source during processing initialization and unregisters it

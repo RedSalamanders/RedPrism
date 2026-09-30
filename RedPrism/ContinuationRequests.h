@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <new>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -175,7 +177,19 @@ class HostInputBudget final
 
       private:
         friend class HostInputBudget;
+        friend class HostRequest;
+        friend class HostSelectedOutput;
         Reservation(HostInputBudget& owner, std::size_t bytes) noexcept : _owner(&owner), _bytes(bytes) {}
+        [[nodiscard]] bool ReduceTo(std::size_t bytes) noexcept
+        {
+            if (!_owner || bytes > _bytes)
+            {
+                return false;
+            }
+            _owner->_used -= _bytes - bytes;
+            _bytes = bytes;
+            return true;
+        }
         void Reset() noexcept
         {
             if (_owner)
@@ -210,6 +224,110 @@ class HostInputBudget final
   private:
     std::size_t _used = 0;
 };
+
+struct HostPathsView final
+{
+    std::span<const std::wstring_view> paths;
+    HostPathAction action;
+    std::optional<Vec2> dropPoint;
+};
+struct HostWriteView final
+{
+    HostWriteFormat format;
+    bool saveAs;
+    std::optional<std::wstring_view> path;
+};
+struct HostLayerRenameView final
+{
+    Guid id;
+    std::optional<std::wstring_view> name;
+};
+using HostBorrowedRequestInput = std::variant<HostPathsView, HostWriteView, HostLayerRenameView>;
+static_assert(std::is_nothrow_copy_constructible_v<HostBorrowedRequestInput>);
+
+// Shell/Win32 paths may provide only a terminated pointer. Bound the scan before constructing a length-bearing
+// view; never call an unbounded string length routine as part of event admission. The caller retains the buffer.
+[[nodiscard]] inline std::optional<std::wstring_view> HostBoundedPathView(const wchar_t* path) noexcept
+{
+    if (!path)
+    {
+        return std::nullopt;
+    }
+    for (std::size_t length = 0; length <= HostInputBudget::kMaxPathUnits; ++length)
+    {
+        if (path[length] == L'\0')
+        {
+            return std::wstring_view(path, length);
+        }
+    }
+    return std::nullopt;
+}
+
+enum class HostCopyFailureForTest : std::uint8_t
+{
+    None,
+    Input,
+    Receipt
+};
+
+[[nodiscard]] inline bool HostAddStorageBytes(std::size_t& bytes, std::size_t count, std::size_t unit) noexcept
+{
+    if (unit == 0 || bytes > HostInputBudget::kStorageLimit || count > (HostInputBudget::kStorageLimit - bytes) / unit)
+    {
+        return false;
+    }
+    bytes += count * unit;
+    return true;
+}
+
+// MSVC v145 reserves exact vector slots and rounds a directly constructed wchar string's capacity. Thirty-two
+// extra code units cover that rounding and inline storage. Reconcile with actual capacities before publication;
+// never retain an allocation exceeding the preflight charge. No owned text/container is constructed here.
+[[nodiscard]] inline bool HostAddCopiedTextBytes(std::size_t& bytes, std::wstring_view value) noexcept
+{
+    return value.size() <= HostInputBudget::kStorageLimit / sizeof(wchar_t) &&
+           HostAddStorageBytes(bytes, value.size() + 32, sizeof(wchar_t)) && HostAddStorageBytes(bytes, 64, 1);
+}
+
+[[nodiscard]] inline std::optional<std::size_t> HostBorrowedInputStorageBytes(
+    const HostBorrowedRequestInput& input) noexcept
+{
+    std::size_t bytes = sizeof(HostRequestInput) + 256;
+    const bool valid = std::visit(
+        [&](const auto& value) noexcept
+        {
+            using Input = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<Input, HostPathsView>)
+            {
+                if (value.paths.size() > HostInputBudget::kMaxPaths ||
+                    !HostAddStorageBytes(bytes, value.paths.size(), sizeof(std::wstring)) ||
+                    !HostAddStorageBytes(bytes, 64, 1))
+                {
+                    return false;
+                }
+                for (const auto path : value.paths)
+                {
+                    if (path.size() > HostInputBudget::kMaxPathUnits || !HostAddCopiedTextBytes(bytes, path))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            else if constexpr (std::is_same_v<Input, HostWriteView>)
+            {
+                return !value.path || (value.path->size() <= HostInputBudget::kMaxPathUnits &&
+                                       HostAddCopiedTextBytes(bytes, value.path.value()));
+            }
+            else
+            {
+                // Name trimming/UTF-8 validity belongs to the document operation, not event retention.
+                return !value.name || HostAddCopiedTextBytes(bytes, value.name.value());
+            }
+        },
+        input);
+    return valid ? std::optional<std::size_t>(bytes) : std::nullopt;
+}
 
 // Charge retained capacities, not just live lengths: an almost-empty moved string/vector can retain a large
 // allocation. Fixed state/receipt and 64 bytes per container conservatively cover ordinary allocation metadata;
@@ -274,6 +392,65 @@ class HostInputBudget final
     return valid ? std::optional<std::size_t>(bytes) : std::nullopt;
 }
 
+// A path selected after request admission is charged against the same host budget. Destroy its owned string
+// before returning the ticket; moves release an old string before releasing its corresponding charge.
+class HostSelectedOutput final
+{
+  public:
+    HostSelectedOutput(const HostSelectedOutput&) = delete;
+    HostSelectedOutput& operator=(const HostSelectedOutput&) = delete;
+    HostSelectedOutput(HostSelectedOutput&&) noexcept = default;
+    HostSelectedOutput& operator=(HostSelectedOutput&& other) noexcept
+    {
+        if (this != &other)
+        {
+            _path = std::move(other._path);
+            _reservation = std::move(other._reservation);
+        }
+        return *this;
+    }
+    [[nodiscard]] std::wstring_view Path() const noexcept
+    {
+        return _path;
+    }
+
+  private:
+    friend class HostRequest;
+    [[nodiscard]] static std::optional<HostSelectedOutput> TryCreate(std::wstring_view value, HostInputBudget& budget,
+                                                                     bool failCopyAllocationForTest)
+    {
+        std::size_t bytes = sizeof(HostSelectedOutput) + 64;
+        if (value.size() > HostInputBudget::kMaxPathUnits || !HostAddCopiedTextBytes(bytes, value))
+        {
+            return std::nullopt;
+        }
+        auto reservation = budget.TryReserve(bytes);
+        if (!reservation)
+        {
+            return std::nullopt;
+        }
+        std::wstring path(value);
+        if (failCopyAllocationForTest)
+        {
+            throw std::bad_alloc{}; // new path exists, but the active request's old output remains untouched
+        }
+        std::size_t actualBytes = sizeof(HostSelectedOutput) + 64;
+        if (path.capacity() >= HostInputBudget::kStorageLimit / sizeof(wchar_t) ||
+            !HostAddStorageBytes(actualBytes, path.capacity() + 1, sizeof(wchar_t)) ||
+            !HostAddStorageBytes(actualBytes, 64, 1) || !reservation.value().ReduceTo(actualBytes))
+        {
+            return std::nullopt;
+        }
+        return HostSelectedOutput(std::move(path), std::move(reservation.value()));
+    }
+    HostSelectedOutput(std::wstring path, HostInputBudget::Reservation reservation) noexcept
+        : _reservation(std::move(reservation)), _path(std::move(path))
+    {
+    }
+    HostInputBudget::Reservation _reservation;
+    std::wstring _path;
+};
+
 // UI-owned input only: no pixel/session snapshot, worker state, HWND, host pointer or captured callable.
 // Queue metadata supplies document serial and the shared input ordinal. The runner snapshots only when selected.
 class HostRequest final
@@ -305,6 +482,24 @@ class HostRequest final
         auto completion = ContinuationCompletion::Create(); // throwing here returns the ticket without moving input
         return HostRequest(std::move(input), std::move(completion), std::move(reservation.value()));
     }
+    [[nodiscard]] static std::optional<HostRequest> TryCopyPaths(
+        std::span<const std::wstring_view> paths, HostPathAction action, std::optional<Vec2> dropPoint,
+        HostInputBudget& budget, HostCopyFailureForTest failure = HostCopyFailureForTest::None)
+    {
+        return TryCopy(HostPathsView{paths, action, dropPoint}, budget, failure);
+    }
+    [[nodiscard]] static std::optional<HostRequest> TryCopyWrite(
+        HostWriteFormat format, bool saveAs, std::optional<std::wstring_view> path, HostInputBudget& budget,
+        HostCopyFailureForTest failure = HostCopyFailureForTest::None)
+    {
+        return TryCopy(HostWriteView{format, saveAs, path}, budget, failure);
+    }
+    [[nodiscard]] static std::optional<HostRequest> TryCopyRename(
+        Guid id, std::optional<std::wstring_view> name, HostInputBudget& budget,
+        HostCopyFailureForTest failure = HostCopyFailureForTest::None)
+    {
+        return TryCopy(HostLayerRenameView{id, name}, budget, failure);
+    }
     HostRequest(const HostRequest&) = delete;
     HostRequest& operator=(const HostRequest&) = delete;
     HostRequest(HostRequest&&) noexcept = default;
@@ -315,6 +510,7 @@ class HostRequest final
             // Retire old publication before its input can release owned paths/name storage.
             (void)_completion.Publish(ContinuationOutcome::Cancelled);
             _input = std::move(other._input);
+            _selectedOutput = std::move(other._selectedOutput);
             _completion = std::move(other._completion);
             _reservation = std::move(other._reservation); // old input is gone before returning its charge
         }
@@ -329,6 +525,27 @@ class HostRequest final
     {
         return _input;
     }
+    // Selection is an active-stage operation. On refusal or allocation failure preserve the old output; the
+    // replacement's reservation must coexist with it. The returned view is borrowed only while this owner lives.
+    [[nodiscard]] bool TrySelectOutput(std::wstring_view path, HostInputBudget& budget,
+                                       bool failCopyAllocationForTest = false)
+    {
+        if (_reservation._owner != &budget || Receipt().Read().outcome != ContinuationOutcome::Pending)
+        {
+            return false;
+        }
+        auto output = HostSelectedOutput::TryCreate(path, budget, failCopyAllocationForTest);
+        if (!output)
+        {
+            return false;
+        }
+        _selectedOutput = std::move(output);
+        return true;
+    }
+    [[nodiscard]] std::optional<std::wstring_view> SelectedOutputPath() const noexcept
+    {
+        return _selectedOutput ? std::optional<std::wstring_view>(_selectedOutput.value().Path()) : std::nullopt;
+    }
     [[nodiscard]] bool Finish(ContinuationOutcome outcome, std::int32_t error = 0) noexcept
     {
         return _completion.Publish(outcome, error);
@@ -340,9 +557,69 @@ class HostRequest final
     }
 
   private:
+    [[nodiscard]] static std::optional<HostRequest> TryCopy(const HostBorrowedRequestInput& borrowed,
+                                                            HostInputBudget& budget, HostCopyFailureForTest failure)
+    {
+        const auto bytes = HostBorrowedInputStorageBytes(borrowed);
+        if (!bytes)
+        {
+            return std::nullopt;
+        }
+        auto reservation = budget.TryReserve(bytes.value());
+        if (!reservation)
+        {
+            return std::nullopt;
+        }
+        HostRequestInput input = std::visit(
+            [failure](const auto& value) -> HostRequestInput
+            {
+                using Input = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<Input, HostPathsView>)
+                {
+                    HostPathsInput owned{{}, value.action, value.dropPoint};
+                    owned.paths.reserve(value.paths.size());
+                    for (const auto path : value.paths)
+                    {
+                        owned.paths.emplace_back(path);
+                        if (failure == HostCopyFailureForTest::Input)
+                        {
+                            throw std::bad_alloc{}; // exercise retirement with a partially copied ordered batch
+                        }
+                    }
+                    return owned;
+                }
+                else if constexpr (std::is_same_v<Input, HostWriteView>)
+                {
+                    return HostWriteInput{value.format, value.saveAs,
+                                          value.path ? std::optional<std::wstring>(value.path.value()) : std::nullopt};
+                }
+                else
+                {
+                    return HostLayerRenameInput{value.id, value.name ? std::optional<std::wstring>(value.name.value())
+                                                                     : std::nullopt};
+                }
+            },
+            borrowed);
+        if (failure == HostCopyFailureForTest::Input)
+        {
+            throw std::bad_alloc{};
+        }
+        const auto actualBytes = HostInputStorageBytes(input);
+        if (!actualBytes || !reservation.value().ReduceTo(actualBytes.value()))
+        {
+            return std::nullopt;
+        }
+        if (failure == HostCopyFailureForTest::Receipt)
+        {
+            throw std::bad_alloc{};
+        }
+        auto completion = ContinuationCompletion::Create();
+        return HostRequest(std::move(input), std::move(completion), std::move(reservation.value()));
+    }
     // Destruction publishes first, then releases the owned input, and only then returns its charge.
     HostInputBudget::Reservation _reservation;
 
+    std::optional<HostSelectedOutput> _selectedOutput;
     HostRequestInput _input;
     HostRequest(HostRequestInput ownedInput, ContinuationCompletion completion,
                 HostInputBudget::Reservation reservation = {}) noexcept
@@ -351,3 +628,5 @@ class HostRequest final
     }
     ContinuationCompletion _completion;
 };
+
+static_assert(sizeof(HostRequest) <= sizeof(HostRequestInput) + 256);

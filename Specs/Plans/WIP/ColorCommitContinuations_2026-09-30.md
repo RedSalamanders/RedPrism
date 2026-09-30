@@ -10,6 +10,10 @@
   - [x] Qualify the owning observer/publisher model and typed event-time paths, full size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer/runner activation remains open.
   - [x] Qualify capacity-based request admission, the combined queued/active byte budget, immutable retained payloads and reservation retirement. All x64 gates and ARM64 cross-builds passed; borrowed-input preflight and staged-state admission remain open.
   - [ ] Bound borrowed path/name values before copying them and reserve later selected output/state before activating production producers.
+    - [x] Add bounded, allocation-free borrowed-input preflight and copy only after whole-input admission; preserve ordered Unicode batches and optional values. All x64 gates and ARM64 cross-builds passed.
+    - [x] Own later selected output paths under the same combined budget, including replacement peak and publication/destruction ordering. All x64 gates and ARM64 cross-builds passed.
+    - [x] Qualify refusal before copying, partial-copy/receipt allocation failures, queue/active moves and later-path replacement; run all x64 gates and ARM64 cross-builds. 77 request checks per normal run, 154 with ASan stress.
+    - [ ] Adopt preflight at each producer's first copy, add direct bounded population for drop/read sources, and admit any new variable stage state as part of the atomic runner/producer migration.
 - [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
   - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
@@ -51,6 +55,13 @@ write/discard actions need an explicit policy for cancelling their remaining sta
 Request admission is qualified in [HostInputAdmission_2026-09-30.md](../../TestRuns/HostInputAdmission_2026-09-30.md):
 38 checks per normal HostTests invocation, 76 with ASan stress, actual host quota/receipt-allocation controls,
 full x64 Debug/Release/ASan gates and all three ARM64 cross-builds. This does not activate production file callers.
+
+Borrowed-input implementation, 2026-09-30: the builders and request-owned later output paths are implemented;
+all x64 gates and ARM64 cross-builds passed in [BorrowedHostInputs_2026-09-30.md](../../TestRuns/BorrowedHostInputs_2026-09-30.md).
+Preflight inspects bounded lengths/counts without copying, reserves before payload/result allocation and returns
+every partial-construction charge on failure. Later output replacement retains the previous path until the new
+path is fully admitted and owned. The staged runner and atomic production caller migration remain open; §4.1
+names each first-copy boundary and the direct-population requirement for drop/read sources.
 
 ## 1. Outcomes and ownership
 
@@ -144,6 +155,25 @@ This slice fixes ordering/ownership; P1.3/P1.7 replace those waits. Do not claim
 Opening a size card deliberately dismisses a panel today. Keep that decision explicit in its contract and test;
 an Apply request must not reinterpret a failed required commit as consent to resize. Window resize/DPI and view
 commands do not settle edits. There is no Recent/Revert or positional-file-open command to invent in this slice.
+
+### 4.1. Producer migration order after the borrowed-input gate
+
+The next runner/producer change must address the first allocating copy, not only its Application endpoint:
+
+| Existing source | Concrete boundary to migrate | Admission/result requirement |
+| --- | --- | --- |
+| `OpenPath(const wchar_t*)` | Bound the terminated scan, form one borrowed view on the stack, and construct the owned batch through admission | Null/empty policy stays explicit; overlong input fails before `wstring`/vector construction |
+| `WM_DROPFILES` | Check `DragQueryFileW` count and all lengths before allocating path buffers; retain the drop owner through bounded reads | Whole-batch admission before copying; exact queried/read lengths; no truncation or partial queue entry |
+| `ReadDialogResult` / `PickImagePaths` | Keep shell-owned strings alive while preflighting, and bound result count before constructing host strings | Distinguish cancellation, read failure and quota/OOM; avoid a duplicate uncharged Application copy |
+| `ChromeHost::CloseRenameCard` / `OnRename` | Pass a borrowed text view through the immediate callback and copy it into an admitted request before closing/reusing the field | Capture the rename target/card lifetime at the event; keep the existing document trim/UTF-8 name checks at apply |
+| `SaveDocument` / `ExportFlattened` | Select/retain the output through the active request before settlement or readback, then snapshot the post-settlement revision | Quota/OOM/cancel performs no write/readback; publish success only after the requested file operation succeeds |
+| Discard/replacement/window/session end | Carry the prompt answer and lifetime as bounded stage state; perform Save as a prerequisite on the same selected ordinal | A pending/failed/stale write cannot authorize replacement or destruction; cancelled session end invalidates its late close |
+
+The view-copy builders handle already readable borrowed buffers. A producer such as `WM_DROPFILES`, whose names
+require a length query and a fill into a destination, also needs reservation transfer/direct bounded population
+under the admitted ticket; creating a temporary uncharged string batch first is not an implementation of that
+producer's gate. Keep immediate borrowed readers/callbacks out of queued payloads. Any new variable stage state
+must gain admission at its first allocating copy. The runner and producer activation matrix remain one migration.
 
 ## 5. Cancellation, replacement and later stroke integration
 
