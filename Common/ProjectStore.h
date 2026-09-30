@@ -18,6 +18,14 @@ enum class ProjectIoStatus
     Cancelled,
 };
 
+// Optional per-load ceilings support constrained callers and deterministic aggregate-budget tests. Values are
+// clamped to the format hard limits; callers can lower, never raise, the accepted aggregate pixel count.
+struct ProjectLoadPixelLimits
+{
+    int imagePixels = kMaxLayerPixels;
+    int maskPixels = kMaxMaskPixels;
+};
+
 struct ProjectLoadResult
 {
     ProjectIoStatus status = ProjectIoStatus::Invalid;
@@ -130,7 +138,7 @@ template <typename AttributeFn>
 
 [[nodiscard]] bool PathLooksLikeZipProject(const wchar_t* path) noexcept;
 [[nodiscard]] ProjectLoadResult LoadProject(const wchar_t* path, CancelToken cancellation = {},
-                                            ProjectIoObserver observer = {});
+                                            ProjectIoObserver observer = {}, ProjectLoadPixelLimits pixelLimits = {});
 [[nodiscard]] ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID, bool zipArchive,
                                           CancelToken cancellation = {}, ProjectIoObserver observer = {});

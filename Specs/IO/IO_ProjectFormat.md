@@ -79,7 +79,11 @@ metadata (`maskEnabled`, `maskPlacement`, `maskLinked`) without `maskFile` is `I
 The manifest is parsed and validated (`ValidateDocument`) before any asset is decoded, so a damaged manifest never
 costs an image decode. Mask records exist at that point without pixels; the Gray8 format check applies when the
 mask PNG is attached (the decoder rejects anything but 8-bit gray). Pixel budgets (100 M image + 100 M mask) are
-enforced while attaching. A missing or undecodable asset is `MissingImage`; the current document is never replaced
+independent aggregate limits: each decoder receives the remaining count for its asset kind and rejects from frame
+dimensions before output-pixel allocation. Attachment retains a defensive post-decode check. `ProjectLoadPixelLimits`
+can lower either total, never raise the hard limits; negative limits are `Invalid`, and a zero limit refuses any
+asset of that kind. A later oversized asset returns `TooLarge` with no document or active id published. Both ZIP
+and exploded projects follow this rule. A missing or undecodable asset is `MissingImage`; the current document is never replaced
 by a partial load.
 
 ## Layer record

@@ -364,8 +364,9 @@ void TestPngRoundTrip()
            "png.mask-decode");
     Expect(RastersEqual(mask, decodedMask.image) && decodedMask.image.Format() == RasterFormat::Gray8,
            "png.mask-pixels");
-    Expect(DecodeProjectPng(png.data(), png.size(), false, 3, decoded) == ImageCodecStatus::TooLarge,
-           "png.remaining-pixel-budget");
+    Expect(DecodeProjectPng(png.data(), png.size(), false, 3, decoded) == ImageCodecStatus::TooLarge &&
+               !decoded.image.HasStorage() && !decoded.thumbnail.HasStorage(),
+           "png.remaining-pixel-budget-rejected-before-output-allocation");
 
     const Raster large = SolidBgra(300, 100, 1, 2, 3, 255);
     Expect(Raster::MakeThumbnail(large).Width() == 96 && Raster::MakeThumbnail(large).Height() == 32,
@@ -916,6 +917,118 @@ void ExpectFixtureSemantics(const CanvasDocument& document, const char* stage)
     }
 }
 
+void TestProjectAggregatePixelBudget()
+{
+    const std::wstring root = EmptyProjectRoot(L"aggregate-pixel-budget");
+    const std::string id1 = "00000000-0000-4000-8000-000000000002";
+    const std::string id2 = "00000000-0000-4000-8000-000000000003";
+    const auto layer = [](const std::string& id, const std::string& file, const char* name)
+    {
+        return "{\"id\":\"" + id + "\",\"imageFile\":\"" + file + "\",\"maskFile\":\"" + id +
+               ".mask.png\",\"isVisible\":true,\"name\":\"" + name +
+               "\",\"transform\":{\"flipX\":false,\"flipY\":false,"
+               "\"origin\":{\"x\":0,\"y\":0},\"rotation\":0,\"sampling\":\"Nearest\","
+               "\"size\":{\"height\":1,\"width\":2}}}";
+    };
+    const std::string file1 = id1 + ".png";
+    const std::string file2 = id2 + ".png";
+    const std::string manifest =
+        "{\"activeLayerID\":\"" + id1 +
+        "\",\"colorSpace\":\"sRGB\","
+        "\"documentID\":\"00000000-0000-4000-8000-000000000001\",\"format\":\"com.redprism.project\","
+        "\"height\":1,\"layers\":[" +
+        layer(id1, file1, "First") + "," + layer(id2, file2, "Second") + "],\"version\":7,\"width\":2}";
+    WriteText(std::filesystem::path(root) / L"manifest.json", manifest);
+
+    const Raster first = SolidBgra(2, 1, 10, 20, 30, 255);
+    const Raster second = SolidBgra(2, 1, 40, 50, 60, 255);
+    const std::filesystem::path images = std::filesystem::path(root) / L"images";
+    const Raster firstMask = Gray(2, 1, {0, 255});
+    const Raster secondMask = Gray(2, 1, {64, 192});
+    Expect(EncodePngFile(first, 72, (images / (id1 + ".png")).wstring().c_str()) == ImageCodecStatus::Ok &&
+               EncodePngFile(second, 72, (images / (id2 + ".png")).wstring().c_str()) == ImageCodecStatus::Ok &&
+               EncodePngFile(firstMask, 72, (images / (id1 + ".mask.png")).wstring().c_str()) == ImageCodecStatus::Ok &&
+               EncodePngFile(secondMask, 72, (images / (id2 + ".mask.png")).wstring().c_str()) == ImageCodecStatus::Ok,
+           "project-budget.assets-created");
+
+    struct AssetEvents
+    {
+        unsigned int decoded = 0;
+    } rejectedEvents;
+    const ProjectIoObserver rejectedObserver{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+                                             {
+                                                 if (stage == ProjectIoStage::AssetDecoded)
+                                                     ++static_cast<AssetEvents*>(context)->decoded;
+                                             },
+                                             &rejectedEvents};
+    const ProjectLoadPixelLimits threePixels{3, kMaxMaskPixels};
+    const ProjectLoadResult rejected = LoadProject(root.c_str(), {}, rejectedObserver, threePixels);
+    Expect(rejected.status == ProjectIoStatus::TooLarge, "project-budget.second-image-refused");
+    Expect(rejectedEvents.decoded == 2, "project-budget-second-refused-before-decode-completes");
+    Expect(rejected.document.layers.empty() && !rejected.activeLayerID.has_value(),
+           "project-budget-failure-publishes-no-partial-document");
+
+    AssetEvents maskEvents{};
+    const ProjectIoObserver maskObserver{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+                                         {
+                                             if (stage == ProjectIoStage::AssetDecoded)
+                                                 ++static_cast<AssetEvents*>(context)->decoded;
+                                         },
+                                         &maskEvents};
+    const ProjectLoadResult maskRejected =
+        LoadProject(root.c_str(), {}, maskObserver, ProjectLoadPixelLimits{kMaxLayerPixels, 3});
+    Expect(maskRejected.status == ProjectIoStatus::TooLarge && maskEvents.decoded == 3 &&
+               maskRejected.document.layers.empty(),
+           "project-budget-mask-remaining-is-independent-and-preallocation");
+
+    const ProjectLoadResult accepted = LoadProject(root.c_str(), {}, {}, ProjectLoadPixelLimits{4, 4});
+    Expect(accepted.status == ProjectIoStatus::Ok && accepted.document.layers.size() == 2,
+           "project-budget.exact-aggregate-limit-accepted");
+    if (accepted.status == ProjectIoStatus::Ok && accepted.document.layers.size() == 2)
+    {
+        Expect(accepted.document.layers[0].asset.has_value() && accepted.document.layers[1].asset.has_value() &&
+                   RastersEqual(first, accepted.document.layers[0].asset.value().image) &&
+                   RastersEqual(second, accepted.document.layers[1].asset.value().image) &&
+                   accepted.document.layers[0].mask.has_value() && accepted.document.layers[1].mask.has_value() &&
+                   RastersEqual(firstMask, accepted.document.layers[0].mask.value().asset.image) &&
+                   RastersEqual(secondMask, accepted.document.layers[1].mask.value().asset.image),
+               "project-budget.success-preserves-exact-image-and-mask-pixels");
+    }
+
+    AssetEvents zeroEvents{};
+    const ProjectIoObserver zeroObserver{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+                                         {
+                                             if (stage == ProjectIoStage::AssetDecoded)
+                                                 ++static_cast<AssetEvents*>(context)->decoded;
+                                         },
+                                         &zeroEvents};
+    const ProjectLoadResult zero = LoadProject(root.c_str(), {}, zeroObserver, ProjectLoadPixelLimits{0, 4});
+    Expect(zero.status == ProjectIoStatus::TooLarge && zeroEvents.decoded == 0 && zero.document.layers.empty() &&
+               !zero.activeLayerID.has_value(),
+           "project-budget.zero-image-budget-refuses-first-output");
+    const ProjectLoadResult negativeImage = LoadProject(root.c_str(), {}, {}, ProjectLoadPixelLimits{-1, 4});
+    const ProjectLoadResult negativeMask = LoadProject(root.c_str(), {}, {}, ProjectLoadPixelLimits{4, -1});
+    Expect(negativeImage.status == ProjectIoStatus::Invalid && negativeMask.status == ProjectIoStatus::Invalid &&
+               negativeImage.document.layers.empty() && negativeMask.document.layers.empty(),
+           "project-budget.negative-budgets-invalid");
+
+    // Both storage shapes share attachment accounting but use separate decoder callbacks.
+    const std::wstring archive = ScratchRoot() + L"\\aggregate-pixel-budget.prism";
+    Expect(accepted.status == ProjectIoStatus::Ok &&
+               SaveProject(archive.c_str(), accepted.document, accepted.activeLayerID, true) == ProjectIoStatus::Ok,
+           "project-budget.zip-fixture-created");
+    AssetEvents zipEvents{};
+    const ProjectIoObserver zipObserver{[](void* context, ProjectIoStage stage, unsigned int) noexcept
+                                        {
+                                            if (stage == ProjectIoStage::AssetDecoded)
+                                                ++static_cast<AssetEvents*>(context)->decoded;
+                                        },
+                                        &zipEvents};
+    const ProjectLoadResult zipRejected = LoadProject(archive.c_str(), {}, zipObserver, threePixels);
+    Expect(zipRejected.status == ProjectIoStatus::TooLarge && zipEvents.decoded == 2 &&
+               zipRejected.document.layers.empty(),
+           "project-budget.zip-rejects-before-second-decode-and-publishes-nothing");
+}
 void TestExplodedGolden()
 {
     const std::wstring fixture = MaterializeV7Fixture();
@@ -1745,6 +1858,7 @@ int wmain(int argc, wchar_t** argv)
     TestHeifMissing();
     TestImportOrientationAndColor();
     TestImportAllOrientations();
+    TestProjectAggregatePixelBudget();
     TestExplodedGolden();
     TestTransformArrayShape();
     TestShapeLiveness();
