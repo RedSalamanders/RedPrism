@@ -553,6 +553,40 @@ void TestPrepareFailure(Fixture& fixture)
     ExpectNoLeaks(fixture, "failure.reservation-and-utility-resources-released");
 }
 
+void TestLaterTileMapFailure(Fixture& fixture)
+{
+    // One complete tile is copied before a persistent driver-busy second tile. No prefix of the requested
+    // document may be delivered as a successful Raster.
+    CanvasDocument document = PatternDocument(17, 1);
+    CanvasDocument displayDocument = PatternDocument(4, 3);
+    fixture.composition.SetTextureLimitForTest(16);
+    fixture.queue.SetMapBusyForTest(2, 1);
+    const auto before = fixture.queue.Statistics();
+    const D3D11_BOX region{0, 0, 0, 17, 1, 1};
+    CaptureState state{fixture, displayDocument};
+    state.expectedReservation = DocumentReadbackJob::RequiredMemory(region);
+    std::unique_ptr<Job> job = std::make_unique<ReadbackProbe>(fixture, state, document, region);
+    JobTicket ticket{};
+    Expect(fixture.scheduler.Submit(job, {JobClass::Commit, 0, state.expectedReservation}, ticket) == S_OK,
+           "later-tile-failure.submit");
+    state.ticket = ticket;
+    const auto settled = SettleJobs(fixture.scheduler, 15000, DispatchReadbackMessage, &state);
+    Expect(settled == SettleResult::Settled, "later-tile-failure.settle");
+    if (settled != SettleResult::Settled)
+    {
+        fixture.usable = false;
+        return;
+    }
+    const auto after = fixture.queue.Statistics();
+    Expect(state.completionCalls == 1 && state.result.status == JobStatus::Failed &&
+               state.result.error == DXGI_ERROR_WAS_STILL_DRAWING && !state.image.HasStorage() &&
+               after.copies - before.copies == 2 && after.maps - before.maps == 3 &&
+               after.readinessBarriers - before.readinessBarriers == 1 && after.busyFailures - before.busyFailures == 1,
+           "later-tile-failure.one-acknowledged-prefix-no-partial-publication-or-restart");
+    ExpectNoLeaks(fixture, "later-tile-failure.reservation-mappings-and-utility-released");
+    fixture.queue.SetMapBusyForTest(0);
+}
+
 void TestGenerationRebind(Fixture& fixture, unsigned int requestedRebinds)
 {
     CanvasDocument document = PatternDocument(19, 13);
@@ -667,6 +701,12 @@ int RunDocumentReadbackTests()
         return gFailures;
     }
     TestPrepareFailure(fixture);
+    if (!fixture.usable)
+    {
+        fixture.Close();
+        return gFailures;
+    }
+    TestLaterTileMapFailure(fixture);
     if (!fixture.usable)
     {
         fixture.Close();

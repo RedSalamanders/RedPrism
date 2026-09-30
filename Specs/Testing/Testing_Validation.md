@@ -142,6 +142,19 @@ preview off while the worker is held and cancellation of late lookup work.
 
 ### CPU dispatch and instruction boundary (P0.8)
 
+The synthetic ISA parser controls cover DxUi typography's exact `LEA RCX,imagebase; MOVZX EAX,DL; DWORD load;
+ADD; JMP` form. They require the anonymous same-owner untyped PDB start and retain negative controls for wrong
+register/opcode, extra or missing instructions, invalid symbols, contribution/decoded-target bounds and real
+vector code beside the valid table. This proves data recognition; it does not grant the containing object or
+function an instruction exemption.
+
+The exact WIC RDX-base/RCX-target dispatch additionally has seven-DWORD fixtures with required anonymous PDB
+start, malformed dispatch/symbol/target/bounds negatives and adjacent real-vector rejection. The standalone
+parser suite has 202 controls including 29 RDX-form cases and 45 exact Menu R9-base/R8-target cases. The latter
+requires its byte-index load, unchanged base/indices/targets, anonymous PDB start and decoded-target bounds;
+missing/changed operands, noncontiguity, malformed PDB evidence, truncation and adjacent real VEX remain rejected.
+[Original forms record](../TestRuns/IsaTableForms_2026-09-30.md).
+
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
 It checks the actual six scalar function entries and padded, odd-width alpha/transparent adjustment inputs.
@@ -231,6 +244,13 @@ Shutdown holds an actual mapped copy stage until the shared shutdown event, chec
 while the scheduler joins, drops its final callback, and releases the mapping/reservation only after join.
 The queue runs without an HWND or Present. On a supported WARP device, additional copies explicitly select
 the EnqueueSetEvent fallback, including cropped rows, cancellation and lent-device lifetime.
+Full 2048 squared copies additionally inject first-map busy and persistent busy on both completion routes.
+One additional real DXGI event permits one further nonblocking Map; persistent busy has one failed delivery and
+no lease or partial pixels. Holding owner consumption of the recovery event proves cancellation, replacement
+and shutdown while that stage remains pending. Negative rearm/enqueue/removal seams prove exact errors and
+released ownership. Reusing the queue for a full then cropped copy proves each admission gets a fresh recovery
+allowance, with independent coordinate-formula bytes and bounded storage. These are injected lifecycle failures,
+not claims of physical device removal or a maximum GPU-event delay.
 
 `document-readback.*` exercises the actual tiled worker graph and distinct utility targets, with a serial BGRA
 coordinate formula for full, cropped and single-pixel output. It verifies one reservation, immutable input,
@@ -238,6 +258,8 @@ owner-only recording/mapping, worker-only copying, adopted output, hidden displa
 pixel preservation. A folder/clipping/mask/adjustment fixture compares the asynchronous result with the committed
 synchronous traversal at tile seams. Actual replacement WARP devices prove whole-graph restart, no partial
 publication and failure after two restarts. These are deliberate rebind tests, not physical device-removal tests.
+An injected persistent busy second tile proves that an acknowledged first tile is never published as a partial
+Raster: exactly two copies, three Map attempts, one readiness barrier and one terminal failure, with no restart.
 
 The application WARP self-test holds a real Merge readback worker with owned events. A younger Invert must apply
 after exactly one merge history entry. Cancel stays pending until acknowledgement; injected failure, stale
@@ -287,6 +309,36 @@ rewritten legacy DEFLATE archive, exercise ZIP and folder overwrite, preserve un
 require owned staging cleanup and refuse a locked destination while preserving its distinct previous bytes and
 resolution. The folder's second-rename rollback and injected flush/close faults are not covered by these controls.
 
+`project-save-memory.*` independently checks refusal of zero/overlong paths, invalid canvas dimensions and excess
+layers; acceptance at path/canvas/layer bounds; name/path-sensitive charges; BGRA/Gray8 frame accounting; shared
+raster references without charging a frame per asset; sparse-source identity without materialization; and invalid
+curve limits. The production WARP `project-save-host.case=*` suite covers thirteen scenarios. Worker cases use owned events:
+ordinary successful publication; a younger command held behind the save ordinal and then resumed; cancellation
+before publication; cancellation after publication; cancelled close after publication; returned writer failure;
+actual worker `bad_alloc`; stale document lineage; a later edit made after publication; pending transform settlement;
+pending typed-opacity settlement; allocation failure at owning admission, before Run; and path suffix-space
+refusal before Run. It checks pending
+receipt/history ownership, reservation retention and retirement, caller-path copying, no destination before
+publication, the independently loaded saved pixel/active layer, old path and revision preservation on prepublish
+failure, captured revision marking without erasing a later edit, close suppression after late cancellation, younger
+command success only after the save stage, persisted transform/opacity with their own history entry before the
+captured saved revision, localized failure reporting and full terminal cleanup. These event gates
+have bounded deadlock deadlines, not performance assertions. They provide evidence for project save ownership and
+ordering; F4b.1 remains pending full qualification, and project open/import/clipboard remain synchronous.
+
+`export-readback-memory.*` adds nineteen checks for 4K/45 MP/100 MP admission, monotonic/path/metadata charges,
+invalid side/count/curve/path limits, rounded full-canvas readback and shared sparse identity without materialization.
+The fifteen `export-host.case=*` WARP scenarios cover PNG/JPEG literal output, younger mutation ordering, pre/post
+publication cancellation, returned failure, worker/admission allocation failure, stale document, device changes
+before encoding and after publication, captured quality/resolution, oversized output refusal before allocation,
+path suffix-space refusal before Run, and a persistent second-tile Map failure after the first tile copied.
+The latter requires no encode visit and no output file, exactly one failure receipt/notice and unchanged history.
+Worker gates prove the request/barrier/reservation remain held with zero lent mappings/utility bytes; hidden
+completion makes no Present. Device-change cases require one encode attempt. Failure notices occur exactly once;
+terminal paths leave no barrier, reserved bytes, slot or utility target. PNG is exact opaque 191; JPEG RGB is within
+3/255 and opaque. Export leaves project path/saved revision unchanged. Full qualification is separate from these
+structural assertions; no event deadline is a performance threshold.
+
 ### File classification and banded codecs (P1.7 F1/F2)
 
 `pathclasswork.*` IO tests independently cover directories, case-insensitive `.prism`, all three ZIP signatures,
@@ -320,6 +372,7 @@ are interpretable. This is instrumentation overhead only; operation baselines an
 
 `RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
 [`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
+its 21 operation rows include production project-save and PNG/JPEG export workers.
 normal test runs never download the RAW corpus.
 
 Smoke may render with the session display off, while full measurements refuse that state. It validates ordered

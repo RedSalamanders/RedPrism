@@ -12,6 +12,7 @@
 #include <format>
 #include <new>
 #include <string_view>
+#include <utility>
 
 namespace
 {
@@ -22,7 +23,10 @@ enum class Expected
     Panel,
     Pixels,
     Size,
-    Refusal
+    Refusal,
+    Saved,
+    PngExported,
+    JpegExported
 };
 
 struct Operation final
@@ -36,7 +40,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 18> kOperations{{
+constexpr std::array<Operation, 21> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -55,6 +59,9 @@ constexpr std::array<Operation, 18> kOperations{{
     {"canvas-size-fill", ChromeHost::kCommandCanvasSize, 0, {}, 0, Expected::Size, true},
     {"image-size-nearest", ChromeHost::kCommandImageSize, 0, {}, 0, Expected::Size, true},
     {"image-size-resolution", ChromeHost::kCommandImageSize, 0, {}, 300, Expected::Size, true},
+    {"project-save", 0, 0, {}, 0, Expected::Saved},
+    {"png-export", 0, 0, {}, 0, Expected::PngExported},
+    {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
 }};
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
@@ -158,6 +165,18 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         const int height = smoke ? 48 : ceiling ? 10000 : mode == L"ui45" ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
+        std::array<wchar_t, 32768> temporary{};
+        const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
+        if (units == 0 || units >= temporary.size())
+            return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+        next->saveDirectory =
+            std::wstring(temporary.data(), units) + L"RedPrism.UiBench." + Guid::Generate().ToString();
+        if (!CreateDirectoryW(next->saveDirectory.c_str(), nullptr))
+            return HRESULT_FROM_WIN32(GetLastError());
+        next->ownsSaveDirectory = true;
+        next->savePath = next->saveDirectory + L"\\saved.prism";
+        next->pngExportPath = next->saveDirectory + L"\\export.png";
+        next->jpegExportPath = next->saveDirectory + L"\\export.jpg";
         next->fixture.id = Guid::Generate();
         next->fixture.width = width;
         next->fixture.height = height;
@@ -254,10 +273,15 @@ void Report(const UiBenchmarkState& state)
 {
     std::array<std::uint64_t, 10> elapsed{};
     std::uint64_t frames = 0;
+    GpuReadbackStatistics readback;
     for (unsigned int run = 0; run < state.runs; ++run)
     {
         elapsed[run] = state.samples[run].elapsedUs;
         frames += state.samples[run].frames;
+        readback.copies += state.samples[run].readback.copies;
+        readback.maps += state.samples[run].readback.maps;
+        readback.readinessBarriers += state.samples[run].readback.readinessBarriers;
+        readback.busyFailures += state.samples[run].readback.busyFailures;
     }
     std::sort(elapsed.begin(), elapsed.begin() + state.runs);
     const auto dispatch = Summarize(state, UiTimingKind::MessageDispatch);
@@ -268,20 +292,40 @@ void Report(const UiBenchmarkState& state)
     const auto frame = Summarize(state, UiTimingKind::Frame);
     const double median =
         static_cast<double>(elapsed[(state.runs - 1) / 2]) * 0.5 + static_cast<double>(elapsed[state.runs / 2]) * 0.5;
-    std::printf("%s\n", std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
-                                    "elapsedP95Us={} elapsedMaxUs={} "
-                                    "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
-                                    "drainP99UpperUs={} drainMaxUs={} "
-                                    "applyMaxUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={}",
-                                    CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs,
-                                    median, elapsed[(state.runs * 95 + 99) / 100 - 1], elapsed[state.runs - 1],
-                                    dispatch.p99UpperUs, dispatch.maximumUs, message.p99UpperUs, message.maximumUs,
-                                    drain.p99UpperUs, drain.maximumUs, apply.maximumUs, action.maximumUs,
-                                    frame.p99UpperUs, frame.maximumUs, frames)
-                            .c_str());
+    std::printf("%s\n",
+                std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
+                            "elapsedP95Us={} elapsedMaxUs={} "
+                            "dispatchP99UpperUs={} dispatchMaxUs={} messageP99UpperUs={} messageMaxUs={} "
+                            "drainP99UpperUs={} drainMaxUs={} "
+                            "applyMaxUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
+                            "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
+                            CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
+                            elapsed[(state.runs * 95 + 99) / 100 - 1], elapsed[state.runs - 1], dispatch.p99UpperUs,
+                            dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs,
+                            drain.maximumUs, apply.maximumUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs,
+                            frames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
+                    .c_str());
     std::fflush(stdout);
 }
 } // namespace
+
+UiBenchmarkState::~UiBenchmarkState()
+{
+    // Application shutdown has already joined every writer. This opt-in harness owns the exclusively created
+    // directory and only these three result paths; never recursively remove unexpected contents or a caller's
+    // destination. The directory is removed only after those known files are gone.
+    if (ownsSaveDirectory)
+    {
+        if (!savePath.empty())
+            (void)DeleteFileW(savePath.c_str());
+        if (!pngExportPath.empty())
+            (void)DeleteFileW(pngExportPath.c_str());
+        if (!jpegExportPath.empty())
+            (void)DeleteFileW(jpegExportPath.c_str());
+        if (!RemoveDirectoryW(saveDirectory.c_str()))
+            std::fprintf(stderr, "UI BENCH cleanup failed win32=%lu\n", GetLastError());
+    }
+}
 
 int Application::RunUiBenchmark() noexcept
 {
@@ -362,6 +406,19 @@ void Application::FailUiBenchmark(const char* reason) noexcept
 {
     if (_uiBenchmark && !_uiBenchmark->failed)
     {
+        if (_uiBenchmark->exportReceipt)
+        {
+            const auto result = _uiBenchmark->exportReceipt->Read();
+            const auto* layer = _session.ActiveLayer();
+            std::printf("UI BENCH DETAIL writerOutcome=%u writerError=0x%08x pathSame=%d revisionSame=%d "
+                        "modifiedSame=%d imageSame=%d errorId=%u\n",
+                        static_cast<unsigned int>(result.outcome), static_cast<unsigned int>(result.error),
+                        std::wstring_view(_documentPath) == std::wstring_view(_uiBenchmark->previousDocumentPath.data(),
+                                                                              _uiBenchmark->previousDocumentPathUnits),
+                        _session.history.CurrentRevision() == _uiBenchmark->previousRevision,
+                        _session.history.IsModified() == _uiBenchmark->previousModified,
+                        layer && layer->asset && layer->asset->image == _uiBenchmark->previousImage, _lastErrorId);
+        }
         _uiBenchmark->failed = true;
         _uiBenchmark->phase = UiBenchmarkState::Phase::Done;
         std::printf("UI BENCH REPORT status=failed reason=%s operation=%zu name=%s trial=%u "
@@ -390,6 +447,9 @@ void Application::PrepareUiBenchmarkStep() noexcept
     OnTool(EditorTool::Move);
     _viewport.Fit(DocumentSize());
     const auto operation = CurrentOperation(state);
+    state.saveReceipt.reset();
+    state.exportReceipt.reset();
+    _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
         OnCommand(operation.prepareCommand);
@@ -439,7 +499,20 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.sizeAction)
+    if (operation.expected == Expected::Saved)
+    {
+        _uiBenchmark->saveReceipt = QueueHostWrite(HostWriteFormat::Project, false);
+        ReportHostAdmission(_uiBenchmark->saveReceipt.value());
+    }
+    else if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
+    {
+        const auto format = operation.expected == Expected::PngExported ? HostWriteFormat::Png : HostWriteFormat::Jpeg;
+        const auto& path = format == HostWriteFormat::Png ? _uiBenchmark->pngExportPath : _uiBenchmark->jpegExportPath;
+        HostWriteInput input{format, false, path}; // QueueHostInput takes an owned copy for the continuation.
+        _uiBenchmark->exportReceipt = QueueHostInput(std::move(input));
+        ReportHostAdmission(_uiBenchmark->exportReceipt.value());
+    }
+    else if (operation.sizeAction)
         OnSizeAction(SizeAction::Apply, 0);
     else if (operation.command)
     {
@@ -479,6 +552,15 @@ void Application::AdvanceUiBenchmark() noexcept
     if (state.phase == UiBenchmarkState::Phase::Preparing)
     {
         state.previousRevision = _session.history.CurrentRevision();
+        if (_documentPath.size() >= state.previousDocumentPath.size())
+        {
+            FailUiBenchmark("document-path-too-long");
+            return;
+        }
+        std::copy(_documentPath.begin(), _documentPath.end(), state.previousDocumentPath.begin());
+        state.previousDocumentPathUnits = _documentPath.size();
+        state.previousModified = _session.history.IsModified();
+        state.previousReadback = _gpuWork.Statistics();
         const auto* layer = _session.ActiveLayer();
         if (!layer || !layer->asset.has_value())
         {
@@ -524,6 +606,22 @@ void Application::AdvanceUiBenchmark() noexcept
                          _session.history.CurrentRevision() == state.previousRevision;
     const auto operation = CurrentOperation(state);
     const auto& document = _session.Document();
+    // Successful writer receipts require the captured backend publication fact. Timing validation never reads or
+    // decodes output files synchronously; separate codec and continuation tests validate the written bytes.
+    const bool saved = expected == Expected::Saved && state.saveReceipt &&
+                       state.saveReceipt->Read().outcome == HostOutcome::Succeeded && _documentPath == state.savePath &&
+                       !edit && !_session.history.IsModified() &&
+                       _session.history.CurrentRevision() == state.previousRevision && layer && layer->asset &&
+                       layer->asset->image == state.previousImage;
+    const bool exportUnchanged =
+        state.exportReceipt && state.exportReceipt->Read().outcome == HostOutcome::Succeeded &&
+        std::wstring_view(_documentPath) ==
+            std::wstring_view(state.previousDocumentPath.data(), state.previousDocumentPathUnits) &&
+        _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.IsModified() == state.previousModified && layer && layer->asset &&
+        layer->asset->image == state.previousImage && !edit;
+    const bool pngExported = expected == Expected::PngExported && exportUnchanged;
+    const bool jpegExported = expected == Expected::JpegExported && exportUnchanged;
     const bool sizeReady =
         expected == Expected::Size && document && !SizeCardOpen() &&
         _session.history.CurrentRevision() != state.previousRevision &&
@@ -537,16 +635,22 @@ void Application::AdvanceUiBenchmark() noexcept
                    layer->asset && layer->asset->image != state.previousImage &&
                    _session.history.UndoName() == L"Image Size");
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
-        !(viewReady || refused || sizeReady || histogramReady || (expected == Expected::Panel && panelReady) ||
-          (expected == Expected::Pixels && changedPixels)))
+        !(viewReady || refused || saved || pngExported || jpegExported || sizeReady || histogramReady ||
+          (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
         return;
     }
     if (state.trial != 0)
     {
-        state.samples[state.trial - 1] = {state.timing, duration.value(),
-                                          _renderer.PresentCount() - state.previousPresents};
+        const auto readback = _gpuWork.Statistics();
+        state.samples[state.trial - 1] = {state.timing,
+                                          duration.value(),
+                                          _renderer.PresentCount() - state.previousPresents,
+                                          {readback.copies - state.previousReadback.copies,
+                                           readback.maps - state.previousReadback.maps,
+                                           readback.readinessBarriers - state.previousReadback.readinessBarriers,
+                                           readback.busyFailures - state.previousReadback.busyFailures}};
     }
     if (++state.trial > state.runs)
     {

@@ -295,10 +295,17 @@ bool Application::SettleForWrite() noexcept
 {
     // An adjustment layer's panel previews inside the document: the file must not hold a value Cancel would undo. A
     // live stroke or warp, a pending gradient and a pending transform record their entries (EditEnd::Write).
+    const auto generation = _session.Generation();
     CloseOpacityEdit();
     EndCanvasEdits(EditEnd::Write);
     _session.ClearSnapGuides();
-    DocumentChanged();
+    if (_session.Generation() != generation)
+        DocumentChanged();
+    else
+    {
+        SyncChrome();
+        _frameInvalidated = true; // cleared guides/chrome do not require recomposing settled pixels
+    }
     return !_session.HasColorEdit();
 }
 
@@ -370,56 +377,15 @@ HRESULT Application::WriteHostOutput(HostWriteFormat format) noexcept
     {
         return E_UNEXPECTED;
     }
-    const auto path = _activeHostRequest->input.SelectedOutputPath();
-    if (!path)
-    {
-        return E_UNEXPECTED;
-    }
     _hostExecuting = true;
     const auto leave = wil::scope_exit([this] { _hostExecuting = false; });
     if (!SettleForWrite() || !_session.Document())
     {
         return E_FAIL;
     }
-    const auto revision = _session.history.CurrentRevision();
-    ProjectIoStatus status;
     if (format == HostWriteFormat::Project)
-    {
-        const auto attributes = GetFileAttributesW(path->data());
-        const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const bool zip = !folder && (PathLooksLikeZipProject(path->data()) || EndsWithNoCase(path.value(), L".prism"));
-        status = SaveProject(path->data(), _session.Document().value(), _session.ActiveLayerID(), zip);
-        if (status == ProjectIoStatus::Ok)
-        {
-            _documentPath.assign(path.value());
-            _session.history.MarkSaved(revision);
-        }
-    }
-    else
-    {
-        const auto raster = ComposeDocumentReadback(_session.Document().value());
-        if (!raster)
-        {
-            ShowError(IDS_ERROR_FLATTEN);
-            return E_FAIL;
-        }
-        status = format == HostWriteFormat::Jpeg
-                     ? ExportDocumentJpeg(raster.value(),
-                                          JpegExportOptions{_settings.jpegQuality, _session.Document()->resolution},
-                                          path->data())
-                     : ExportDocumentPng(raster.value(), _session.Document()->resolution, path->data());
-    }
-    if (status != ProjectIoStatus::Ok)
-    {
-        ShowError(status == ProjectIoStatus::TooLarge  ? IDS_ERROR_TOO_LARGE
-                  : format == HostWriteFormat::Project ? IDS_ERROR_SAVE_PROJECT
-                  : format == HostWriteFormat::Jpeg    ? IDS_ERROR_EXPORT_JPEG
-                                                       : IDS_ERROR_EXPORT_PNG);
-        return E_FAIL;
-    }
-    SyncChrome();
-    _frameInvalidated = true;
-    return S_OK;
+        return StartProjectSave();
+    return StartExportReadback(format);
 }
 
 bool Application::ExecuteHostInput() noexcept

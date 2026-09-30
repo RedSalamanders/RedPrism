@@ -546,6 +546,111 @@ function Invoke-Control($Case, [bool]$ExpectedPass, [int]$ExpectedInline = -1, [
     Write-Host "PASS isa-inline-table.$($Case.Name)"
 }
 
+function New-R9R8DispatchCase([string]$Name, [string]$Fault = '', [switch]$RealVex) {
+    # Reuse the checked PE/PDB/table fixture, replacing only the dispatch bytes and their listing.
+    # The accepted sequence is exactly LEA R9,imagebase; MOVZX EAX,byte [R9+RAX+disp32];
+    # MOV R8D,[R9+RAX*4+disp32]; ADD R8,R9; JMP R8. PDB record size remains 16.
+    $baseFault = switch ($Fault) {
+        { $_ -in @('MissingDataSymbol','WrongDataOwner','WrongDataStart','WrongDataRecordSize',
+            'NamedDataSymbol','TypedDataSymbol','CrossContribution','ContributionBounds',
+            'TargetBeforeDispatch','TargetAtTable','TargetPastTable') } { $_; break }
+        'R9TargetMiddle' { 'RdxTargetMiddle'; break }
+        'R9TargetMissing' { 'RdxTargetMissing'; break }
+        'R9TargetInvalid' { 'RdxTargetInvalid'; break }
+        default { '' }
+    }
+    $case = if ($RealVex) {
+        New-SyntheticCase $Name -RdxBase -PdbData -RealVex -Fault $baseFault
+    } else {
+        New-SyntheticCase $Name -RdxBase -PdbData -Fault $baseFault
+    }
+    $pe = [IO.File]::ReadAllBytes($case.Binary)
+    $dispatch = [UInt32]$script:dispatchRva
+    $table = [UInt32]$case.TableRva
+    $raw = 0x400 + $dispatch - $case.SectionRva
+    $cursor = $dispatch
+    [byte[]]$lea = [byte[]]@(0x4c,0x8d,0x0d,0,0,0,0)
+    $leaDisp = [Int32](-[Int64]$dispatch - $lea.Length)
+    if ($Fault -eq 'R9WrongImageBase') { $leaDisp++ }
+    if ($Fault -eq 'R9WrongLeaOpcode') { $lea[1] = 0x89 }
+    if ($Fault -eq 'R9WrongLeaDestination') { $lea[0] = 0x48 }
+    if ($Fault -eq 'R9WrongLeaPrefix') { $lea[0] = 0x4d }
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes($leaDisp))
+    $sequence = [Collections.Generic.List[object]]::new()
+    $sequence.Add(@{ Bytes=$lea; Text='lea r9, [rip+imagebase]' })
+
+    [byte[]]$index = [byte[]]@(0x41,0x0f,0xb6,0x84,0x01,0,0,0,0)
+    Put-Bytes $index 5 ([BitConverter]::GetBytes([UInt32]0x1234))
+    switch ($Fault) {
+        'R9WrongIndexOpcode' { $index[2] = 0xb7 }
+        'R9WrongIndexDestination' { $index[3] = 0x8c }
+        'R9WrongIndexBase' { $index[4] = 0x00 }
+        'R9WrongIndexRegister' { $index[4] = 0x09 }
+        'R9WrongIndexScale' { $index[4] = 0x41 }
+        'R9WrongIndexPrefix' { $index[0] = 0x49 }
+    }
+    if ($Fault -eq 'R9NoncontiguousAfterLea') { $sequence.Add(@{ Bytes=[byte[]]@(0x90); Text='nop' }) }
+    if ($Fault -eq 'R9MissingByteIndex') { $index = [byte[]]::new(0) }
+    if ($index.Length -ne 0) { $sequence.Add(@{ Bytes=$index; Text='movzx eax, byte ptr [r9+rax+1234h]' }) }
+
+    [byte[]]$load = [byte[]]@(0x45,0x8b,0x84,0x81,0,0,0,0)
+    Put-Bytes $load 4 ([BitConverter]::GetBytes($table))
+    switch ($Fault) {
+        'R9WrongLoadOpcode' { $load[1] = 0x89 }
+        'R9WrongLoadDestination' { $load[2] = 0x8c }
+        'R9WrongLoadBase' { $load[3] = 0x80 }
+        'R9WrongLoadIndex' { $load[3] = 0x89 }
+        'R9WrongLoadScale' { $load[3] = 0x41 }
+        'R9WrongLoadPrefix' { $load[0] = 0x4d }
+    }
+    if ($Fault -eq 'R9NoncontiguousAfterIndex') { $sequence.Add(@{ Bytes=[byte[]]@(0x90); Text='nop' }) }
+    $sequence.Add(@{ Bytes=$load; Text='mov r8d, dword ptr [r9+rax*4+table]' })
+
+    [byte[]]$add = [byte[]]@(0x4d,0x03,0xc1)
+    switch ($Fault) {
+        'R9WrongAddOpcode' { $add[1] = 0x01 }
+        'R9WrongAddDestination' { $add[2] = 0xc9 }
+        'R9WrongAddSource' { $add[2] = 0xc0 }
+        'R9WrongAddPrefix' { $add[0] = 0x49 }
+    }
+    if ($Fault -eq 'R9NoncontiguousAfterLoad') { $sequence.Add(@{ Bytes=[byte[]]@(0x90); Text='nop' }) }
+    $sequence.Add(@{ Bytes=$add; Text='add r8, r9' })
+
+    [byte[]]$jump = [byte[]]@(0x41,0xff,0xe0)
+    if ($Fault -eq 'R9WrongJumpOpcode') { $jump[1] = 0xfe }
+    if ($Fault -eq 'R9WrongJumpTarget') { $jump[2] = 0xe1 }
+    if ($Fault -eq 'R9WrongJumpPrefix') { $jump[0] = 0x49 }
+    if ($Fault -eq 'R9NoncontiguousAfterAdd') { $sequence.Add(@{ Bytes=[byte[]]@(0x90); Text='nop' }) }
+    $sequence.Add(@{ Bytes=$jump; Text='jmp r8' })
+
+    $instructionRows = [Collections.Generic.List[string]]::new()
+    foreach ($item in $sequence) {
+        if ($item.Bytes.Length -ne 0) {
+            Put-Bytes $pe (0x400+$cursor-$case.SectionRva) $item.Bytes
+            $instructionRows.Add(('{0:x}: {1} {2}' -f ($case.ImageBase+$cursor), (Hex-Bytes $item.Bytes), $item.Text))
+            $cursor += $item.Bytes.Length
+        }
+    }
+    if ($Fault -eq 'R9TruncatedTable') {
+        # Make the second DWORD terminate table discovery, leaving fewer than two proved entries.
+        $tableRaw = 0x400 + $table - $case.SectionRva
+        Put-Bytes $pe ($tableRaw+4) ([BitConverter]::GetBytes([UInt32]$table))
+    }
+    $disassemblyRows = [Collections.Generic.List[string]]::new()
+    foreach ($line in [IO.File]::ReadAllLines($case.Disassembly)) {
+        $address = [UInt64]::Parse(($line -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
+        if ($address -lt ($case.ImageBase+$dispatch) -or $address -ge ($case.ImageBase+$cursor)) {
+            $disassemblyRows.Add($line)
+        }
+    }
+    foreach ($line in $instructionRows) { $disassemblyRows.Add($line) }
+    Set-Content -LiteralPath $case.Disassembly -Value (@($disassemblyRows | Sort-Object {
+        [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
+    }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary, $pe)
+    return $case
+}
+
 function Assert-DlCombinationRejected([string]$Name, [hashtable]$Options) {
     $rejected = $false
     try {
@@ -590,6 +695,25 @@ Assert-RdxCombinationRejected RdxBaseWithSignedByteIndex @{ SignedByteIndex=$tru
 Assert-RdxCombinationRejected RdxBaseWithR8Base @{ R8Base=$true }
 Assert-RdxCombinationRejected RdxBaseWithHoistedR8Base @{ R8Base=$true; HoistedR8Base=$true }
 Assert-RdxCombinationRejected RdxBaseWithRaxBase @{ RaxBase=$true }
+
+$case = New-R9R8DispatchCase R9R8Dispatch
+Invoke-Control $case $true 7 0
+$case = New-R9R8DispatchCase R9R8DispatchWithAdjacentRealVex -RealVex
+Invoke-Control $case $false 7 1
+foreach ($fault in @(
+        'R9WrongLeaDestination','R9WrongLeaOpcode','R9WrongLeaPrefix','R9WrongImageBase',
+        'R9WrongIndexOpcode','R9WrongIndexDestination','R9WrongIndexBase','R9WrongIndexRegister',
+        'R9WrongIndexScale','R9WrongIndexPrefix','R9MissingByteIndex',
+        'R9WrongLoadOpcode','R9WrongLoadDestination','R9WrongLoadBase','R9WrongLoadIndex',
+        'R9WrongLoadScale','R9WrongLoadPrefix','R9WrongAddOpcode','R9WrongAddDestination',
+        'R9WrongAddSource','R9WrongAddPrefix','R9WrongJumpOpcode','R9WrongJumpTarget','R9WrongJumpPrefix',
+        'R9NoncontiguousAfterLea','R9NoncontiguousAfterIndex','R9NoncontiguousAfterLoad','R9NoncontiguousAfterAdd',
+        'MissingDataSymbol','WrongDataOwner','WrongDataStart','WrongDataRecordSize','NamedDataSymbol','TypedDataSymbol',
+        'CrossContribution','ContributionBounds','TargetBeforeDispatch','TargetAtTable','TargetPastTable',
+        'R9TargetMiddle','R9TargetMissing','R9TargetInvalid','R9TruncatedTable')) {
+    $case = New-R9R8DispatchCase "R9R8Dispatch$fault" -Fault $fault
+    Invoke-Control $case $false
+}
 
 $dlByteIndex = New-SyntheticCase DlByteIndex -DlByteIndex
 Invoke-Control $dlByteIndex $true 4 0

@@ -43,6 +43,8 @@ struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct FileWorkTestGate;
+struct ProjectSaveTestGate;
+struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
 namespace DxUi
@@ -303,6 +305,12 @@ class Application final : public ChromeEvents
     [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
     [[nodiscard]] HRESULT SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept;
     [[nodiscard]] HRESULT WriteHostOutput(HostWriteFormat format) noexcept;
+    class ProjectSaveJob;
+    [[nodiscard]] HRESULT StartProjectSave() noexcept;
+    int RunProjectSaveSelfTest() noexcept;
+    class ExportReadbackJob;
+    [[nodiscard]] HRESULT StartExportReadback(HostWriteFormat format) noexcept;
+    int RunExportReadbackSelfTest() noexcept;
     [[nodiscard]] bool ExecuteHostInput() noexcept;
     [[nodiscard]] bool ImportImagePathViews(std::span<const std::wstring_view> paths, bool newProject,
                                             std::optional<Vec2> center) noexcept;
@@ -580,6 +588,12 @@ class Application final : public ChromeEvents
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;
     std::shared_ptr<FileWorkTestGate> _fileWorkTestGate;
+    std::optional<HistoryWorkStamp> _projectSaveStamp;
+    std::optional<JobTicket> _projectSaveTicket;
+    std::shared_ptr<ProjectSaveTestGate> _projectSaveTestGate;
+    std::optional<HistoryWorkStamp> _exportStamp;
+    std::optional<JobTicket> _exportTicket;
+    std::shared_ptr<ExportWorkTestGate> _exportWorkTestGate;
     ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
     bool _hostSourceRegistered = false;
     bool _hostAdmissionAllocationFailureForTest = false;
@@ -602,6 +616,7 @@ class Application final : public ChromeEvents
     bool _hostSawProject = false;
     bool _hostImportNewProject = false;
     bool _hostSaveBeforeAction = false;
+    bool _hostWriteInFlight = false;
     bool _hostBatchFailed = false;
     bool _hostExecuting = false; // only the selected runner can enter an already approved action
     HRESULT _hostExecutionError = S_OK;

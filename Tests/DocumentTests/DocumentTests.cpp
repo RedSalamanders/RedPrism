@@ -6,11 +6,13 @@
 #include "Crop.h"
 #include "Document.h"
 #include "DocumentSizingWorkTests.h"
+#include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
 #include "HistoryAccountingTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
+#include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterWorkTests.h"
 #include "Selection.h"
@@ -7339,6 +7341,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunSelectionStorageTests();
     gFailures += RunHistoryAccountingTests();
+    gFailures += RunProjectSaveMemoryTests();
+    gFailures += RunExportMemoryTests();
     TestBrushKernel();
     TestBrushStroke();
     TestBrushSoftAndCancel();

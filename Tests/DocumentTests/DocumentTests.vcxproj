@@ -90,6 +90,11 @@
     <ClInclude Include="DocumentSizingWorkTests.h" />
     <ClInclude Include="SelectionStorageTests.h" />
     <ClInclude Include="HistoryAccountingTests.h" />
+    <ClInclude Include="ProjectSaveMemoryTests.h" />
+    <ClInclude Include="ExportMemoryTests.h" />
+    <ClInclude Include="..\..\Common\ExportWork.h" />
+    <ClInclude Include="..\..\Common\OutputPathLimits.h" />
+    <ClInclude Include="..\..\Common\ProjectSaveWork.h" />
     <ClInclude Include="RasterWorkTests.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
@@ -104,6 +109,8 @@
     <ClCompile Include="DocumentSizingWorkTests.cpp" />
     <ClCompile Include="SelectionStorageTests.cpp" />
     <ClCompile Include="HistoryAccountingTests.cpp" />
+    <ClCompile Include="ProjectSaveMemoryTests.cpp" />
+    <ClCompile Include="ExportMemoryTests.cpp" />
     <ClCompile Include="RasterWorkTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />

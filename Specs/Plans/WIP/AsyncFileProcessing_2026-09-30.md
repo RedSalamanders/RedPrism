@@ -11,19 +11,24 @@
   - [x] F4a — Cancellable asset encoding/staged writes/libzip close preserve the external publication boundary; full configuration matrix passes.
   - [x] F4a.1 — Direct bounded PNG/JPEG file streams and staged ZIP asset-file sources remove whole-archive encoded-buffer retention. Three serial Release runs per mode at 4K/45 MP and the full matrix pass.
   - [ ] F4b — Admit and run owned project/save/export graphs with exact saved-revision and destination ordering tests.
-    - [ ] F4b.1 — Production project save worker owns document/path/revision and one whole-graph reservation; retain the input ordinal through publication/cancel acknowledgement, mark the published revision, and resume a dependent action only on success.
-    - [ ] F4b.2 — Asynchronous export readback/encoding graph; prevent device restart after external publication and preserve captured options/destination ordering.
+    - [x] F4b.1 — Production project save worker owns document/path/revision and one whole-graph reservation; captured revision, publication/cancel acknowledgement and dependent action ordering pass the complete configuration matrix and real-loop measurements.
+    - [x] F4b.2 — Asynchronous export readback/encoding graph; captured options/destination ordering, detached GPU lifetime and bounded additional-event recovery pass the complete configuration matrix and hardware/WARP measurements.
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
+  - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
+  - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
 
 Status: ACTIVE, executable P1.7 child; no completion claim.
-Owner: `ApplicationFileJobs.cpp`, file continuations, `Common/PathClassificationWork.*`, codecs/project store and clipboard.
+Owner: `RedPrism/ApplicationFileJobs.cpp`, `ApplicationProjectSaveJobs.cpp`, file continuations,
+`Common/PathClassificationWork.*`, `ProjectSaveWork.h`, codecs/project store and clipboard.
 
 F1/F2 qualification: [FileFoundation_2026-09-30.md](../../TestRuns/FileFoundation_2026-09-30.md).
 These bounded foundations leave F3–F6 and overall P1.7 active.
 
 F3a/F4a/F4a.1 qualification: [ProjectStreams_2026-09-30.md](../../TestRuns/ProjectStreams_2026-09-30.md).
-The completed helper/stream slice leaves production open/import/save/export graphs at F3b/F4b.
+The completed helper/stream slice leaves production open/import at F3b. Project-save and utility-export workers
+are qualified at F4b.1/F4b.2 ([ProjectWriters_2026-10-01.md](../../TestRuns/ProjectWriters_2026-10-01.md)); F4, F6,
+overall P1.7 and G1 remain open for IO faults, remaining callers and measured scope overruns.
 
 ## Ownership and ordering
 
@@ -66,16 +71,49 @@ entry, preserving placement, grouping, active id, reported batch failure and the
 Cancellation/staleness publishes no partial prepared document. Prepare both the initial new document and the
 additional import result off-thread so the owner need not perform any per-image decoding or thumbnail work.
 
-Save captures the immutable document, active id, chosen output path, format/options and exact saved revision
-after settle. Mark only that revision saved after checked publication; never mark a later edit saved. Export
-uses the asynchronous document readback graph, then worker encode/write. Queue destination work using a
-collision-free path key. Use unique exclusive sibling temporary outputs, checked write/flush/close and rename;
-cancel before publication leaves the destination intact. Define the publication boundary so a late cancellation
-cannot report that an already committed external file was rolled back.
+The production project-save worker captures the immutable settled document, active id, resolved output path and
+exact saved revision. It marks only that revision after checked publication; it never marks a later edit saved.
+Utility export uses asynchronous document readback followed by worker encode/write under the selected global
+host ordinal, unique exclusive sibling temporary outputs and checked write/flush/close/replacement. The last
+GPU mapping and utility targets are released before the detached CPU-only encoding stage. After that boundary,
+device changes cannot repeat encoding or external publication. Cancellation before publication preserves the
+destination; late cancellation records the independent publication fact and suppresses dependent actions.
+
+The production project-save worker now owns the settled document snapshot (with selection removed), active id,
+resolved path and revision, and submits one complete memory reservation with its Io job. The reservation includes
+the worker and resolved path, fixed 16 MiB manifest/JSON/codec allowance, per-layer/per-asset metadata, one
+largest-asset frame allowance, and path-derived source/staging/member names. It refuses invalid limits or overflow
+before submission, does not multiply the frame allowance per asset, and does not materialize sparse inputs.
+Its host request keeps the input ordinal, receipt and input charge until acknowledged completion; current lineage
+records the published path and captured revision, while stale lineage cannot update either. A published file is
+recorded even if cancellation changes the generic job result, but a dependent close/replacement proceeds only on
+success. Project open, image import and clipboard file processing remain synchronous until their
+later slices.
 
 Retain an independent published flag in writer results. The scheduler may classify a job Cancelled after its
 worker published successfully; owner completion still records the actual captured saved revision/path, while
 cancellation suppresses a dependent replacement/close. Never infer external rollback from the generic job status.
+
+F4b.1 implementation evidence is the thirteen-case `project-save-host.case=*` matrix: success, younger
+mutation ordering, cancellation before publication, cancellation after publication, cancelled close after
+publication, returned failure, actual allocation failure, stale document lineage, and a post-publication later
+edit, pending transform settlement, pending typed-opacity settlement, owning admission allocation failure and
+resolved path refusal before Run when nested staging/codec suffixes would exceed the owned buffer.
+The worker cases use owned events; admission fails before Run. `project-save-memory.*` covers reservation bounds,
+limits, shared and sparse raster accounting. The 21-row
+UI smoke now includes `project-save`, `png-export` and `jpeg-export`. F4b.1/F4b.2 gates and 21-row hardware
+4K/45 MP and WARP 4K measurements pass; keep F4b/F4/P1.7 open for the remaining fault/IO qualification.
+
+F4b.2 adds nineteen `export-readback-memory.*` arithmetic/metadata/sparse-source checks and fifteen
+`export-host.case=*` scenarios: PNG/JPEG literal output, younger edit ordering, cancellation before/after
+publication, returned failure, worker/admission allocation failure, stale lineage, device changes before encoding
+and after publication, captured encoder options, output-pixel refusal before any readback allocation, and
+resolved path refusal before Run when the exclusive codec sibling suffix would exceed the owned buffer.
+The fifteenth case fails the second readback tile persistently after one tile copied and requires no encode visit,
+no published output, one exact failure receipt/notice and unchanged document/history.
+Worker gates require zero lent GPU mappings and zero utility-surface bytes before encoding; recovery cases
+require one encode attempt. All current failure cases require exactly one localized notice. These tests need
+full configuration qualification and real-loop measurements, now recorded in the writer evidence above.
 
 ## Required evidence
 

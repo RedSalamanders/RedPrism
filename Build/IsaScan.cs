@@ -152,7 +152,9 @@ namespace RedPrismBuild
         // not a procedure/object exemption: a decoded LEA of the image base, optional byte-index load,
         // DWORD indexed load, ADD and JMP must be contiguous; intervening forms are R8Prelude above and the exact
         // MOVZX EAX,DL in DxUi typography's dispatch. The latter and the RDX-base/RCX-target form in WIC
-        // orientation dispatch require the anonymous same-owner PDB data start.
+        // orientation dispatch require the anonymous same-owner PDB data start. The observed Menu form uses
+        // R9 as image base, one EAX byte-index load, an R8D DWORD load, ADD R8,R9 and JMP R8; it requires that
+        // same PDB proof too. No other R9 sequence or intervening instruction is accepted.
         // That form also proves both branch targets and requires an exact PDB data start. The table follows RET plus at most three
         // alignment bytes, belongs to that contribution, and every entry targets a later decoded instruction
         // between the dispatch and the table. A matching anonymous PDB data symbol can prove a table start
@@ -337,6 +339,7 @@ namespace RedPrismBuild
             bool r8Base = false;
             bool raxBase = false;
             bool rdxBase = false;
+            bool r9Base = false;
             int indexRegister = 0, targetRegister = 0;
             int preludeStep = 0;
             ulong firstPreludeTarget = 0, secondPreludeTarget = 0;
@@ -357,7 +360,7 @@ namespace RedPrismBuild
                 // ordinary instruction scan cheap even for multi-million-instruction Debug images.
                 if (dispatchStage != 0 || (bytes.Length == 7 && bytes[1] == "8d" &&
                     ((bytes[0] == "48" && (bytes[2] == "0d" || bytes[2] == "05" || bytes[2] == "15")) ||
-                     (bytes[0] == "4c" && bytes[2] == "05"))))
+                     (bytes[0] == "4c" && (bytes[2] == "05" || bytes[2] == "0d")))))
                 {
                     byte[] encoded = Array.ConvertAll(bytes, b => Byte.Parse(b, NumberStyles.HexNumber));
                     if (address != precedingEnd) dispatchStage = 0;
@@ -371,10 +374,12 @@ namespace RedPrismBuild
                     }
                     else if (raxBase && dispatchStage == 1 && encoded.Length == 7 && StartsWith(encoded, 0x48, 0x8b, 0x8d))
                         dispatchStage = 2; // one frame-relative RCX index load; RAX image base remains unchanged
-                    else if (!r8Base && !raxBase && !rdxBase && !signedByteIndex && dispatchStage == 1 && encoded.Length == 3 &&
+                    else if (!r8Base && !raxBase && !rdxBase && !r9Base && !signedByteIndex && dispatchStage == 1 && encoded.Length == 3 &&
                              StartsWith(encoded, 0x0f, 0xb6, 0xc2))
                     { dlByteIndex = true; dispatchStage = 2; } // MOVZX EAX,DL preserves the RCX image base
-                    else if (!r8Base && !raxBase && !rdxBase && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
+                    else if (!r8Base && !raxBase && !rdxBase && !r9Base && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
+                        dispatchStage = 2;
+                    else if (r9Base && dispatchStage == 1 && encoded.Length == 9 && StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x84, 0x01))
                         dispatchStage = 2;
                     else if (r8Base && dispatchStage == 1 && preludeStep == 0 && encoded.Length == 9 &&
                         (StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x84, 0x00) || StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x8c, 0x08)))
@@ -383,7 +388,9 @@ namespace RedPrismBuild
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 1; dispatchStage = 3; }
                     else if (rdxBase && dispatchStage == 1 && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x8c, 0x82))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 1; dispatchStage = 3; }
-                    else if (!r8Base && !raxBase && !rdxBase && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
+                    else if (r9Base && dispatchStage == 2 && encoded.Length == 8 && StartsWith(encoded, 0x45, 0x8b, 0x84, 0x81))
+                    { tableRva = BitConverter.ToUInt32(encoded, 4); targetRegister = 8; dispatchStage = 3; }
+                    else if (!r8Base && !raxBase && !rdxBase && !r9Base && (dispatchStage == 1 || dispatchStage == 2) && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x84, 0x81))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 0; dispatchStage = 3; }
                     else if (r8Base && (dispatchStage == 1 || dispatchStage == 2) &&
                         (preludeStep == 0 || preludeStep == 8) && encoded.Length == 8 &&
@@ -392,15 +399,18 @@ namespace RedPrismBuild
                          (indexRegister == 1 && encoded[2] == 0x94 && encoded[3] == 0x88)))
                     { tableRva = BitConverter.ToUInt32(encoded, 4); targetRegister = (encoded[2] >> 3) & 7; dispatchStage = 3; }
                     else if (dispatchStage == 3 && encoded.Length == 3 &&
-                        ((!r8Base && !raxBase && !rdxBase && StartsWith(encoded, 0x48, 0x03, 0xc1)) ||
+                        ((!r8Base && !raxBase && !rdxBase && !r9Base && StartsWith(encoded, 0x48, 0x03, 0xc1)) ||
                          (raxBase && StartsWith(encoded, 0x48, 0x03, 0xc8)) ||
                          (rdxBase && StartsWith(encoded, 0x48, 0x03, 0xca)) ||
+                         (r9Base && StartsWith(encoded, 0x4d, 0x03, 0xc1)) ||
                          (r8Base && encoded[0] == 0x49 && encoded[1] == 0x03 && encoded[2] == 0xc0 + 8 * targetRegister)))
                         dispatchStage = 4;
-                    else if (dispatchStage == 4 && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)
+                    else if (dispatchStage == 4 &&
+                        ((r9Base && encoded.Length == 3 && StartsWith(encoded, 0x41, 0xff, 0xe0)) ||
+                         (!r9Base && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)))
                     {
                         InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, imageBase, dispatchBegin,
-                            checked(address + 2), tableRva, preludeStep != 0 || raxBase || rdxBase || dlByteIndex, signedByteIndex);
+                            checked(address + (ulong)encoded.Length), tableRva, preludeStep != 0 || raxBase || rdxBase || r9Base || dlByteIndex, signedByteIndex);
                         if (table != null && preludeStep != 0)
                         {
                             ulong afterJump = checked(address + 2);
@@ -417,13 +427,14 @@ namespace RedPrismBuild
                         dispatchStage = 0;
                     }
                     else dispatchStage = 0;
-                    if (encoded.Length == 7 && (StartsWith(encoded, 0x48, 0x8d, 0x0d) || StartsWith(encoded, 0x4c, 0x8d, 0x05) ||
+                    if (encoded.Length == 7 && (StartsWith(encoded, 0x48, 0x8d, 0x0d) || StartsWith(encoded, 0x4c, 0x8d, 0x05) || StartsWith(encoded, 0x4c, 0x8d, 0x0d) ||
                         StartsWith(encoded, 0x48, 0x8d, 0x05) || StartsWith(encoded, 0x48, 0x8d, 0x15)) &&
                         checked((long)address + 7 + BitConverter.ToInt32(encoded, 3)) == (long)imageBase)
-                    { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c;
+                    { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c && encoded[2] == 0x05;
                       raxBase = encoded[0] == 0x48 && encoded[2] == 0x05; indexRegister = 0;
                       rdxBase = encoded[0] == 0x48 && encoded[2] == 0x15;
-                      signedByteIndex = !r8Base && !raxBase && !rdxBase && previousSignedByteIndex && address == precedingEnd;
+                      r9Base = encoded[0] == 0x4c && encoded[2] == 0x0d;
+                      signedByteIndex = !r8Base && !raxBase && !rdxBase && !r9Base && previousSignedByteIndex && address == precedingEnd;
                       dlByteIndex = false;
                       preludeStep = 0; firstPreludeTarget = 0; secondPreludeTarget = 0; }
                 }

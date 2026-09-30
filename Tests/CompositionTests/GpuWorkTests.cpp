@@ -198,7 +198,7 @@ class CopyJob final : public Job, public GpuReadbackReceiver
     bool _submitted = false;
 };
 
-void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false)
+void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false, unsigned int busyMaps = 0)
 {
     Device device, replacement;
     Expect(SUCCEEDED(device.Create()), "copy.device");
@@ -215,8 +215,11 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
         Expect(queue.CompletionRoute() == GpuCapabilities::CompletionRoute::EnqueueSetEvent,
                "copy.real-enqueue-event-route-selected");
     Expect(!scheduler.HasUiWork() && scheduler.IsIdle(), "copy.idle-registration-no-work");
-    auto texture = Texture(device, 11, 7);
-    const D3D11_BOX box = singlePixel ? D3D11_BOX{5, 3, 0, 6, 4, 1} : D3D11_BOX{2, 1, 0, 9, 6, 1};
+    queue.SetMapBusyForTest(busyMaps);
+    auto texture = Texture(device, busyMaps != 0 ? 2048 : 11, busyMaps != 0 ? 2048 : 7);
+    const D3D11_BOX box = singlePixel     ? D3D11_BOX{5, 3, 0, 6, 4, 1}
+                          : busyMaps != 0 ? D3D11_BOX{0, 0, 0, 2048, 2048, 1}
+                                          : D3D11_BOX{2, 1, 0, 9, 6, 1};
     CopyState state;
     state.cancelBeforeResume = cancel;
     state.replacement = rebind ? &replacement : nullptr;
@@ -226,9 +229,14 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
         PixelBuffer::RequiredBytes(static_cast<std::size_t>(box.right - box.left) * (box.bottom - box.top) * 4);
     Expect(scheduler.Submit(job, {JobClass::Commit, 1, bytes}, ticket) == S_OK, "copy.submit");
     Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "copy.settle-without-window-or-present");
-    Expect(state.deliveries == 1 && state.callbacks == 1 && state.resumeAccepted && state.releaseAccepted,
+    Expect(state.deliveries == 1 && state.callbacks == 1 && state.resumeAccepted &&
+               (busyMaps < 2 ? state.releaseAccepted : !state.releaseAccepted),
            "copy.one-delivery-final-apply-and-ack");
-    if (cancel)
+    if (busyMaps >= 2)
+        Expect(state.runs == 2 && !state.workerCopied && !state.correctRows && state.status == JobStatus::Failed &&
+                   state.error == DXGI_ERROR_WAS_STILL_DRAWING && queue.MapAttemptsForTest() == 2,
+               "copy.persistent-busy-fails-once-without-partial-pixels-or-polling");
+    else if (cancel)
         Expect(state.runs == 1 && !state.workerCopied && state.status == JobStatus::Cancelled,
                "copy.cancel-after-map-skips-copy-and-unmaps");
     else
@@ -241,8 +249,10 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
                "copy.retired-mapping-retained-until-worker-ack");
         Expect(state.status == JobStatus::Cancelled, "copy.retired-generation-not-published");
     }
-    else if (!cancel)
+    else if (!cancel && busyMaps < 2)
         Expect(state.status == JobStatus::Finished, "copy.finished");
+    if (busyMaps == 1)
+        Expect(queue.MapAttemptsForTest() == 2, "copy.one-busy-map-one-real-event-one-successful-map");
     if (singlePixel)
         Expect(state.stagingAtDelivery == 4, "copy.one-pixel-uses-four-texel-bytes");
     Expect(queue.LentCount() == 0 && queue.InFlightCount() == 0 && !queue.HasPending() &&
@@ -386,6 +396,197 @@ void TestShutdownWhileCopying()
            "shutdown.joins-copy-before-unmap-and-drops-callback");
     Expect(queue.StagingBytes() == 0 && scheduler.ReservedMemoryBytes() == 0, "shutdown.releases-after-join");
 }
+
+enum class HeldAction
+{
+    Cancel,
+    Rebind
+};
+
+// Advances the same owner completion pump as the host, then blocks on the scheduler wake event. The timeout is a
+// deadlock bound only; it is not a latency assertion. The held recovery slot is intentionally absent from HasReady.
+bool WaitForHeldMapRecovery(JobScheduler& scheduler, GpuWorkQueue& queue, std::uint32_t timeoutMs) noexcept
+{
+    const std::uint64_t start = GetTickCount64();
+    for (;;)
+    {
+        (void)DrainCompletions(scheduler);
+        (void)RunUiActions(scheduler);
+        if (queue.MapAttemptsForTest() == 1 && queue.InFlightCount() == 1 && queue.LentCount() == 0)
+            return !queue.HasReady();
+
+        const std::uint64_t elapsed = GetTickCount64() - start;
+        if (elapsed >= timeoutMs)
+            return false;
+        void* const wake = scheduler.WakeHandle();
+        if (!wake)
+            return false;
+        const DWORD waited = WaitForSingleObject(static_cast<HANDLE>(wake), static_cast<DWORD>(timeoutMs - elapsed));
+        if (waited != WAIT_OBJECT_0)
+            return false;
+    }
+}
+
+void TestHeldRecovery(HeldAction action)
+{
+    Device device, replacement;
+    Expect(SUCCEEDED(device.Create()), "recovery.device");
+    if (!device.device)
+        return;
+    if (action == HeldAction::Rebind)
+        Expect(SUCCEEDED(replacement.Create()), "recovery.replacement-device");
+
+    JobScheduler scheduler;
+    GpuWorkQueue queue;
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+               SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), true)),
+           "recovery.initialize-event-route");
+    queue.SetMapBusyForTest(1);
+    queue.HoldMapRecoveryForTest(true);
+    auto texture = Texture(device, 2048, 2048);
+    CopyState state;
+    std::unique_ptr<Job> job =
+        std::make_unique<CopyJob>(scheduler, queue, texture.get(), D3D11_BOX{0, 0, 0, 2048, 2048, 1}, state);
+    JobTicket ticket;
+    constexpr std::uint64_t bytes = 2048ULL * 2048ULL * 4ULL;
+    Expect(scheduler.Submit(job, {JobClass::Commit, 1, bytes}, ticket) == S_OK, "recovery.submit-full-tile");
+    Expect(WaitForHeldMapRecovery(scheduler, queue, 10000), "recovery.first-busy-map-held-with-charge");
+
+    if (action == HeldAction::Cancel)
+        Expect(scheduler.Cancel(ticket), "recovery.cancel-while-barrier-held");
+    else if (action == HeldAction::Rebind)
+    {
+        Expect(SUCCEEDED(queue.Bind(replacement.device.get(), replacement.context.get(), true)),
+               "recovery.rebind-while-barrier-held");
+    }
+    queue.HoldMapRecoveryForTest(false);
+    Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "recovery.release-held-event-and-settle");
+
+    Expect(state.callbacks == 1 && state.deliveries == 1 && !state.correctRows && !state.workerCopied,
+           "recovery.cancel-or-retire-never-publishes-copied-rows");
+    if (action == HeldAction::Cancel)
+        Expect(state.status == JobStatus::Cancelled && queue.MapAttemptsForTest() == 2,
+               "recovery.cancelled-after-single-recovery-map");
+    else
+        Expect(state.status == JobStatus::Failed && state.error == E_ABORT && queue.MapAttemptsForTest() == 1,
+               "recovery.retired-generation-fails-with-abort-without-second-map");
+    Expect(queue.LentCount() == 0 && queue.InFlightCount() == 0 && !queue.HasPending() &&
+               scheduler.ReservedMemoryBytes() == 0,
+           "recovery.cancel-or-retire-releases-all-charges");
+    queue.StopNotifications();
+    scheduler.Close();
+    queue.CloseAfterWorkers();
+}
+
+void TestRecoveryFailure(HRESULT rearm, HRESULT enqueue, HRESULT removed, HRESULT expected, unsigned int attempts,
+                         const char* label)
+{
+    Device device;
+    Expect(SUCCEEDED(device.Create()), "recovery-failure.device");
+    if (!device.device)
+        return;
+    JobScheduler scheduler;
+    GpuWorkQueue queue;
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+               SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), true)),
+           "recovery-failure.initialize-event-route");
+    queue.SetMapBusyForTest(1);
+    queue.SetMapRecoveryFailuresForTest(rearm, enqueue, removed);
+    auto texture = Texture(device, 2048, 2048);
+    CopyState state;
+    std::unique_ptr<Job> job =
+        std::make_unique<CopyJob>(scheduler, queue, texture.get(), D3D11_BOX{0, 0, 0, 2048, 2048, 1}, state);
+    JobTicket ticket;
+    constexpr std::uint64_t bytes = 2048ULL * 2048ULL * 4ULL;
+    Expect(scheduler.Submit(job, {JobClass::Commit, 1, bytes}, ticket) == S_OK, "recovery-failure.submit");
+    Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "recovery-failure.settle-bounded");
+    Expect(state.callbacks == 1 && state.deliveries == 1 && state.status == JobStatus::Failed &&
+               state.error == expected && !state.correctRows && !state.workerCopied && !state.releaseAccepted,
+           label);
+    Expect(queue.MapAttemptsForTest() == attempts && queue.InFlightCount() == 0 && queue.LentCount() == 0 &&
+               !queue.HasPending() && scheduler.ReservedMemoryBytes() == 0,
+           "recovery-failure-one-terminal-delivery-no-lease-or-charges");
+    queue.StopNotifications();
+    scheduler.Close();
+    queue.CloseAfterWorkers();
+}
+
+void TestShutdownWhileRecoveryHeld()
+{
+    Device device;
+    Expect(SUCCEEDED(device.Create()), "recovery-shutdown.device");
+    if (!device.device)
+        return;
+    JobScheduler scheduler;
+    GpuWorkQueue queue;
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+               SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), true)),
+           "recovery-shutdown.initialize-event-route");
+    queue.SetMapBusyForTest(1);
+    queue.HoldMapRecoveryForTest(true);
+    auto texture = Texture(device, 2048, 2048);
+    CopyState state;
+    std::unique_ptr<Job> job =
+        std::make_unique<CopyJob>(scheduler, queue, texture.get(), D3D11_BOX{0, 0, 0, 2048, 2048, 1}, state);
+    JobTicket ticket;
+    constexpr std::uint64_t bytes = 2048ULL * 2048ULL * 4ULL;
+    Expect(scheduler.Submit(job, {JobClass::Commit, 1, bytes}, ticket) == S_OK, "recovery-shutdown.submit");
+    Expect(WaitForHeldMapRecovery(scheduler, queue, 10000), "recovery-shutdown.barrier-held-before-close");
+
+    queue.StopNotifications();
+    scheduler.Close(); // joins the event wait producer before the queue drops its retained slot/context.
+    queue.CloseAfterWorkers();
+    Expect(state.callbacks == 0 && state.deliveries == 0, "recovery-shutdown.drops-completion-after-join");
+    Expect(queue.StagingBytes() == 0 && queue.LentCount() == 0 && queue.InFlightCount() == 0 &&
+               scheduler.ReservedMemoryBytes() == 0,
+           "recovery-shutdown.releases-slot-and-reservation");
+}
+
+void TestRecoverySlotReuseFullThenCropped()
+{
+    Device device;
+    Expect(SUCCEEDED(device.Create()), "reuse.device");
+    if (!device.device)
+        return;
+    JobScheduler scheduler;
+    GpuWorkQueue queue;
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)) &&
+               SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), true)),
+           "reuse.initialize-event-route");
+    queue.SetMapBusyForTest(1);
+
+    auto fullTexture = Texture(device, 2048, 2048);
+    CopyState full;
+    std::unique_ptr<Job> fullJob =
+        std::make_unique<CopyJob>(scheduler, queue, fullTexture.get(), D3D11_BOX{0, 0, 0, 2048, 2048, 1}, full);
+    JobTicket fullTicket;
+    constexpr std::uint64_t fullBytes = 2048ULL * 2048ULL * 4ULL;
+    Expect(scheduler.Submit(fullJob, {JobClass::Commit, 1, fullBytes}, fullTicket) == S_OK, "reuse.submit-full-tile");
+    Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "reuse.full-tile-settled");
+    Expect(full.correctRows && full.status == JobStatus::Finished && queue.MapAttemptsForTest() == 2 &&
+               queue.LentCount() == 0 && queue.InFlightCount() == 0,
+           "reuse.full-tile-literal-coordinate-formula");
+
+    queue.SetMapBusyForTest(1);
+    auto croppedTexture = Texture(device, 11, 7);
+    CopyState cropped;
+    std::unique_ptr<Job> croppedJob =
+        std::make_unique<CopyJob>(scheduler, queue, croppedTexture.get(), D3D11_BOX{2, 1, 0, 9, 6, 1}, cropped);
+    JobTicket croppedTicket;
+    constexpr std::uint64_t croppedBytes = 7ULL * 5ULL * 4ULL;
+    Expect(scheduler.Submit(croppedJob, {JobClass::Commit, 1, croppedBytes}, croppedTicket) == S_OK,
+           "reuse.submit-cropped-after-full");
+    Expect(SettleJobs(scheduler, 10000) == SettleResult::Settled, "reuse.cropped-tile-settled");
+    Expect(cropped.correctRows && cropped.status == JobStatus::Finished && queue.MapAttemptsForTest() == 2 &&
+               cropped.stagingAtDelivery >= croppedBytes,
+           "reuse.cropped-independent-source-coordinate-formula");
+    Expect(queue.LentCount() == 0 && queue.InFlightCount() == 0 && !queue.HasPending() &&
+               queue.StagingBytes() <= GpuWorkQueue::kStagingCapBytes && scheduler.ReservedMemoryBytes() == 0,
+           "reuse.same-queue-retains-bounded-storage-with-no-live-charge");
+    queue.StopNotifications();
+    scheduler.Close();
+    queue.CloseAfterWorkers();
+}
 } // namespace
 
 int RunGpuWorkTests()
@@ -398,7 +599,21 @@ int RunGpuWorkTests()
     TestCopy(false, false, true, true);
     TestCopy(true, false, false, true);
     TestCopy(false, true, false, true);
+    TestCopy(false, false, false, false, 1);
+    TestCopy(false, false, false, true, 1);
+    TestCopy(false, false, false, false, 2);
+    TestCopy(false, false, false, true, 2);
+    TestCopy(true, false, false, false, 1);
+    TestCopy(false, true, false, false, 1);
     TestCapacity();
     TestShutdownWhileCopying();
+    TestHeldRecovery(HeldAction::Cancel);
+    TestHeldRecovery(HeldAction::Rebind);
+    TestRecoveryFailure(E_ACCESSDENIED, S_OK, S_OK, E_ACCESSDENIED, 1, "recovery-failure.rearm-access-denied-no-lease");
+    TestRecoveryFailure(S_OK, E_OUTOFMEMORY, S_OK, E_OUTOFMEMORY, 1, "recovery-failure.enqueue-out-of-memory-no-lease");
+    TestRecoveryFailure(S_OK, S_OK, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_REMOVED, 1,
+                        "recovery-failure.removed-after-barrier-no-lease");
+    TestShutdownWhileRecoveryHeld();
+    TestRecoverySlotReuseFullThenCropped();
     return gFailures;
 }

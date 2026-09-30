@@ -29,6 +29,7 @@ struct GpuWorkQueue::Impl final
         State state = State::Free;
         std::uint64_t generation = 0;
         std::uint64_t deviceGeneration = 0;
+        bool mapDeferred = false;
         bool retired = false;
         std::atomic<bool> ready{false};
         wil::unique_handle event;
@@ -61,6 +62,14 @@ struct GpuWorkQueue::Impl final
     std::size_t inFlight = 0;
     bool registered = false;
     bool stopped = false;
+    unsigned int testBusyMaps = 0;
+    unsigned int testSkipSuccessfulMaps = 0;
+    unsigned int testMapAttempts = 0;
+    bool testHoldMapRecovery = false;
+    HRESULT testRearmFailure = S_OK;
+    HRESULT testEnqueueFailure = S_OK;
+    HRESULT testRemovedFailure = S_OK;
+    GpuReadbackStatistics statistics;
 
     void CheckOwner() const noexcept
     {
@@ -204,6 +213,7 @@ struct GpuWorkQueue::Impl final
             slot.state = State::Waiting;
             slot.source.reset();
             ++inFlight;
+            ++statistics.copies;
         }
         return result;
     }
@@ -241,6 +251,7 @@ struct GpuWorkQueue::Impl final
             slot.receiver = &receiver;
             slot.producer = producer;
             slot.retired = false;
+            slot.mapDeferred = false;
             slot.deviceGeneration = deviceGeneration;
             ++slot.generation;
             slot.state = State::Pending;
@@ -328,6 +339,10 @@ HRESULT GpuWorkQueue::Bind(ID3D11Device* device, ID3D11DeviceContext* context, b
     if (FAILED(result))
         return result;
     RetireDevice();
+    // Fence completion can precede driver staging-map readiness. Keep the optional DXGI route for one
+    // additional event barrier. An unsupported recovery route still fails the operation locally.
+    if (!dxgiDevice2)
+        (void)device->QueryInterface(IID_PPV_ARGS(dxgiDevice2.put()));
     self.device = device;
     self.context = context;
     self.context4 = std::move(context4);
@@ -452,7 +467,8 @@ bool GpuWorkQueue::HasReady() const noexcept
     {
         if ((slot.state == Impl::State::Pending &&
              (slot.retired || (_impl->inFlight < kMaxInFlight && _impl->CanRecord(slot)))) ||
-            (slot.state == Impl::State::Waiting && slot.ready.load(std::memory_order_acquire)))
+            (slot.state == Impl::State::Waiting && !(slot.mapDeferred && _impl->testHoldMapRecovery) &&
+             slot.ready.load(std::memory_order_acquire)))
             return true;
     }
     return false;
@@ -467,27 +483,66 @@ void GpuWorkQueue::Pump() noexcept
     for (std::size_t index = 0; index < self.slots.size(); ++index)
     {
         auto& slot = self.slots[index];
-        if (slot.state != Impl::State::Waiting || !slot.ready.exchange(false, std::memory_order_acquire))
+        if (slot.state != Impl::State::Waiting || (slot.mapDeferred && self.testHoldMapRecovery) ||
+            !slot.ready.exchange(false, std::memory_order_acquire))
             continue;
-        --self.inFlight;
         if (slot.retired)
         {
+            --self.inFlight;
             self.DeliverFailure(slot, E_ABORT);
             continue;
         }
-        const HRESULT removed = self.device->GetDeviceRemovedReason();
+        const HRESULT removed = slot.mapDeferred && FAILED(self.testRemovedFailure)
+                                    ? self.testRemovedFailure
+                                    : self.device->GetDeviceRemovedReason();
         if (FAILED(removed))
         {
+            --self.inFlight;
             self.DeliverFailure(slot, removed);
             continue;
         }
         D3D11_MAPPED_SUBRESOURCE mapped{};
-        HRESULT result = slot.context->Map(slot.staging.get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+        if (self.testMapAttempts != (std::numeric_limits<unsigned int>::max)())
+            ++self.testMapAttempts;
+        ++self.statistics.maps;
+        HRESULT result = DXGI_ERROR_WAS_STILL_DRAWING;
+        if (self.testBusyMaps != 0 && self.testSkipSuccessfulMaps == 0)
+            --self.testBusyMaps;
+        else
+        {
+            result = slot.context->Map(slot.staging.get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+            if (SUCCEEDED(result) && self.testSkipSuccessfulMaps != 0)
+                --self.testSkipSuccessfulMaps;
+        }
+        if (result == DXGI_ERROR_WAS_STILL_DRAWING && !slot.mapDeferred && self.dxgiDevice2)
+        {
+            // Retain the original copy and in-flight charge through one new driver event. There is no recopy,
+            // timer or polling loop; a second busy Map fails the operation.
+            slot.mapDeferred = true;
+            const HRESULT rearmed = FAILED(self.testRearmFailure) ? self.testRearmFailure
+                                    : self.scheduler->RearmEventWait(slot.wait)
+                                        ? S_OK
+                                        : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+            const HRESULT barrier = FAILED(rearmed) ? rearmed
+                                    : FAILED(self.testEnqueueFailure)
+                                        ? self.testEnqueueFailure
+                                        : self.dxgiDevice2->EnqueueSetEvent(slot.event.get());
+            if (SUCCEEDED(barrier))
+            {
+                ++self.statistics.readinessBarriers;
+                continue;
+            }
+            result = barrier;
+        }
+        --self.inFlight;
         if (FAILED(result))
         {
-            // WAS_STILL_DRAWING after completion is a diagnostic failure, never a retry/poll path.
+            // Persistent driver busy remains a local failure after the single allowed event barrier.
             if (result == DXGI_ERROR_WAS_STILL_DRAWING)
-                OutputDebugStringW(L"RedPrism: staging readback was still drawing after its completion event.\n");
+            {
+                ++self.statistics.busyFailures;
+                OutputDebugStringW(L"RedPrism: staging readback remained busy after its bounded readiness barrier.\n");
+            }
             self.DeliverFailure(slot, result);
             continue;
         }
@@ -543,4 +598,47 @@ std::uint64_t GpuWorkQueue::DeviceGeneration() const noexcept
 GpuCapabilities::CompletionRoute GpuWorkQueue::CompletionRoute() const noexcept
 {
     return _impl ? _impl->route : GpuCapabilities::CompletionRoute::None;
+}
+
+void GpuWorkQueue::SetMapBusyForTest(unsigned int attempts, unsigned int afterSuccessfulMaps) noexcept
+{
+    if (_impl)
+    {
+        _impl->CheckOwner();
+        _impl->testBusyMaps = attempts;
+        _impl->testSkipSuccessfulMaps = afterSuccessfulMaps;
+        _impl->testMapAttempts = 0;
+    }
+}
+
+unsigned int GpuWorkQueue::MapAttemptsForTest() const noexcept
+{
+    return _impl ? _impl->testMapAttempts : 0;
+}
+
+void GpuWorkQueue::HoldMapRecoveryForTest(bool hold) noexcept
+{
+    if (_impl)
+    {
+        _impl->CheckOwner();
+        _impl->testHoldMapRecovery = hold;
+        if (!hold)
+            _impl->scheduler->NotifyOwnerWork();
+    }
+}
+
+void GpuWorkQueue::SetMapRecoveryFailuresForTest(HRESULT rearm, HRESULT enqueue, HRESULT removed) noexcept
+{
+    if (_impl)
+    {
+        _impl->CheckOwner();
+        _impl->testRearmFailure = rearm;
+        _impl->testEnqueueFailure = enqueue;
+        _impl->testRemovedFailure = removed;
+    }
+}
+
+GpuReadbackStatistics GpuWorkQueue::Statistics() const noexcept
+{
+    return _impl ? _impl->statistics : GpuReadbackStatistics{};
 }

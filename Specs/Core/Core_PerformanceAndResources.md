@@ -393,6 +393,48 @@ flush/rename are not interruptible in flight. Export staging uses unique exclusi
 Host IO processing, parallel asset scheduling, complete admission and measured cancellation remain separate
 P1.7 work; this foundation does not establish G1.
 
+### Project save graph admission (P1.7 F4b.1)
+
+Production project Save/Save As submits one Io job after settle, owning a document snapshot, active layer, resolved
+path and captured history revision. `ProjectSaveMemoryBytes` declares the additional whole-graph peak before job
+construction/submission: a 16 MiB fixed manifest/JSON/codec allowance; per-layer nodes, names and adjustment
+payload allowance; per-asset names/source metadata; one largest-asset frame allowance; path-sized source, staging
+and member names; worker object; and resolved path. This frame allowance is not repeated for every asset, and
+sparse sources are not materialized. Encoded PNGs go through
+bounded staging files; they are not retained as one encoded vector per asset. Invalid limits and arithmetic
+overflow refuse admission without submitting work. The scheduler's one complete-graph reservation remains held
+through worker completion and owner apply/drop, while immutable raster/selection storage already resident is not charged
+again. Global available-memory admission still uses the physical/commit ceiling less 1 GiB headroom and existing
+reservations. Project open, image import and clipboard worker graphs remain later P1.7 work; this
+save slice does not establish G1 or a hardware timing result.
+
+### Utility export graph (P1.7 F4b.2)
+
+PNG/JPEG export owns a settled committed-document snapshot without selection outline data, resolved destination,
+format, JPEG quality/resolution, document token, history-work stamp and host ordinal. Submission reserves one
+complete graph: the conservative project-save snapshot/metadata/one-codec allowance, rounded full-canvas BGRA
+readback, worker and path. Bounds and overflow refuse work before readback allocation; canvas output retains
+the codec's 100 M pixel limit. Sparse source rasters remain shared and unmaterialized. This is a declared allowance,
+not a measured exact process peak; opaque library allocations remain covered by global admission headroom.
+
+Only owner stages compose/enqueue/acknowledge GPU tiles. Workers copy mapped rows into the reserved CPU buffer
+with row cancellation checks. After the final tile's generation check and mapping acknowledgement, the owner
+releases utility targets and resumes the same record/reservation in its detached CPU-only encoding stage.
+No mapped-row lease or utility surface survives into encoding. Device recovery may restart bounded GPU work
+before that boundary; once detached, a new device cannot invalidate copied pixels or repeat encoding/publication.
+Worker file encoding uses exclusive sibling temporaries and checked flush/close/atomic replacement.
+
+Resolved destinations reserve room within the owned 32,767-unit buffer for every writer suffix and the final
+terminator: image export permits at most 32,728 units, project save 32,637 including its staged mask asset's
+own codec temporary. Larger destinations return filename-range failure before Run. These lexical bounds do
+not replace OS component/path validation; the worker still reports other file-system errors normally.
+
+Cancellation retains the selected request, barrier and reservation until acknowledgement. The writer's independent
+publication fact records external-file truth even if a later stop changes the receipt to Cancelled. Completion
+revalidates token, lineage, stamp and ordinal; exports never change project path or saved revision. A current failure
+posts one localized notice; a cancelled/stale prerequisite cannot proceed to a dependent close/replacement.
+Open/import/clipboard migrations, fault injection and measured G1 costs remain required.
+
 ## CPU instruction dispatch
 
 `Common/Kernels.h` is a standard-only boundary. Startup selects an immutable `KernelTable` before workers start;

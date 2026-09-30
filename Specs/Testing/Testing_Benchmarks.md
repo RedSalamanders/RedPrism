@@ -55,7 +55,14 @@ The operation rows cover Zoom Actual and Zoom Fit view changes; opening Levels; 
 committing at that value; Hue/Saturation saturation +20; Exposure +0.5; Gaussian Blur radius 10; Add Noise amount
 20; Grain amount 40; Lens Correction distortion 20; Invert; Fill with foreground; Clear Pixels; Undo; Canvas Size
 with a foreground-colored extension by 16 pixels on each side dimension at bottom-right anchor; Image Size nearest
-at half each dimension; and Image Size resolution-only at 300 ppi. Size cases require the expected dimensions,
+at half each dimension; Image Size resolution-only at 300 ppi; project save; PNG export; and JPEG export to an
+exclusively owned temporary directory. Save requires a successful publication receipt, the captured path/revision marked saved, unchanged
+image storage and a presented completion frame. Pixel/schema content is independently verified by the host and
+IO suites, outside timed UI work. Subsequent save trials replace the same file atomically; cleanup follows worker
+join and removes only the three known harness-owned results and empty directory. Export rows include utility
+readback, detached encoding/publication, owner completion and a presented frame. They require successful receipts
+and unchanged document path, revision, modified state and active raster identity. Output content is checked by
+host/codec tests; no synchronous output decode or file read enters timed UI verification. Size cases require the expected dimensions,
 resolution and named history entry after asynchronous completion, with no open size card. Opening
 Levels is valid when its histogram is ready for the captured opening image; identity settings intentionally have no
 preview raster and do not require an unused downscaled source. Adjustment updates must produce a new preview raster. Zoom operations must change the actual view.
@@ -64,8 +71,11 @@ Clear Pixels is preceded by Select All during untimed preparation. At 100 MP, Ga
 refusal without a document or history change. It does not report that refusal as successful image processing.
 The colored Canvas Size extension is likewise `canvas-size-fill-refused-pixel-budget` wherever the fixture's
 existing layers plus the requested extension exceed the pixel ceiling (the current 45 MP and 100 MP fixtures), with the unchanged
-document/history required. The smoke gate covers all 18 operation rows; historical 15-row reports remain evidence
-of their recorded version.
+document/history required. The smoke gate covers all 21 operation rows, including `project-save`, which measures
+the production project-save continuation through worker completion and a presented frame, plus `png-export`
+and `jpeg-export` through their production graph. The saved result must
+reach its expected state. This row is a harness measurement only; no hardware timing result or threshold follows
+from smoke. Historical 18-row and 15-row reports remain evidence of their recorded version.
 
 Each timed operation begins after its fixture and command setup have idle jobs and a submitted frame. The outer interval starts immediately
 before the command is posted and ends after worker jobs are idle and a subsequent frame has reached the renderer's
@@ -75,6 +85,11 @@ verifying the command's result. It measures response through Present submission;
 it does not measure display scanout or time until pixels are visible on the monitor. Nested UI timing rows report
 message dispatch, window-message handling, completion draining, result application, UI actions, and frame work as
 inclusive wall time on the owning thread.
+
+Each row also reports GPU readback copies, nonblocking Map attempts, additional readiness barriers and terminal
+busy failures summed over recorded trials (warmup excluded). A successful graph has one Map per copy plus at
+most one extra Map/barrier per copy. These counters distinguish actual driver recovery from injected correctness
+tests; they do not measure GPU time or guarantee a driver's completion deadline.
 
 Setup does not fence the GPU. The elapsed interval may therefore include waiting for GPU work submitted by the
 preceding setup frame; this particularly affects WARP and the view-only rows. Dispatch and frame scopes exclude

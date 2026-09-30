@@ -60,6 +60,8 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
     _cancellation = context.cancellation;
     if (_phase == Phase::Error)
         return {JobStatus::Failed, _error};
+    if (_phase == Phase::ProcessDetached)
+        return ProcessReadback(_image, context);
     if (_phase == Phase::Prepare)
     {
         if (!ValidRegion())
@@ -104,7 +106,7 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
                           static_cast<int>(_region.bottom - _region.top), RasterFormat::Bgra8888, std::move(_pixels));
         if (!_image.HasStorage())
             return {JobStatus::Failed, E_UNEXPECTED};
-        return ProcessReadback(_image, context);
+        return ProcessReadbackDetached() ? JobResult{} : ProcessReadback(_image, context);
     }
     return {};
 }
@@ -144,6 +146,8 @@ void DocumentReadbackJob::RequestTile(JobTicket ticket) noexcept
 bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
 {
     Acknowledge();
+    if (_phase == Phase::ProcessDetached)
+        return false; // all GPU rows were acknowledged before this CPU-only stage started
     if (_phase == Phase::Copy)
     {
         const HRESULT failure = FAILED(_error)                                   ? _error
@@ -172,7 +176,20 @@ bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
             return true;
         }
         if (LastTile())
-            return false;
+        {
+            if (!ProcessReadbackDetached())
+                return false;
+            if (_utilityAcquired)
+            {
+                _composition.ReleaseUtility();
+                _utilityAcquired = false;
+            }
+            _phase = Phase::ProcessDetached;
+            const bool resumed = _scheduler.Resume(ticket);
+            assert(resumed);
+            (void)resumed;
+            return true;
+        }
         _x += _tileWidth;
         if (_x == _region.right - _region.left)
         {
@@ -239,7 +256,8 @@ void DocumentReadbackJob::Completed(JobResult result) noexcept
         _composition.ReleaseUtility();
         _utilityAcquired = false;
     }
-    if (result.status == JobStatus::Finished && _deviceGeneration != _queue.DeviceGeneration())
+    if (result.status == JobStatus::Finished && _phase != Phase::ProcessDetached &&
+        _deviceGeneration != _queue.DeviceGeneration())
         result = {JobStatus::Cancelled};
     ReadbackCompleted(result, result.status == JobStatus::Finished ? std::move(_image) : Raster{}, _deviceGeneration);
 }

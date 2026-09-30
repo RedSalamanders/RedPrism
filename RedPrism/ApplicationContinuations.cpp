@@ -148,6 +148,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostSawProject = false;
     _hostImportNewProject = false;
     _hostSaveBeforeAction = false;
+    _hostWriteInFlight = false;
     _hostBatchFailed = false;
     _pathClassifications = {};
     if (!_shutdownStarted && _hostRequests.Size() != 0)
@@ -199,9 +200,21 @@ void Application::RunHostContinuation() noexcept
             return;
         }
         _hostPrerequisite = {HostOutcome::Pending, 0};
-        _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
-                         ? HostStage::Write
-                         : _hostAfterPrerequisite;
+        if (_hostWriteInFlight)
+        {
+            _hostWriteInFlight = false;
+            if (!_hostSaveBeforeAction)
+            {
+                FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                return;
+            }
+            _hostSaveBeforeAction = false;
+            _hostStage = _hostAfterPrerequisite;
+        }
+        else
+            _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
+                             ? HostStage::Write
+                             : _hostAfterPrerequisite;
     }
     // One source dispatch advances a bounded number of fixed stages. Each project in a batch returns to the outer
     // pump so errors/prompts and a younger Windows cancellation cannot destroy owners inside a callback stack.
@@ -369,9 +382,18 @@ void Application::RunHostContinuation() noexcept
             const auto result = WriteHostOutput(_hostWriteFormat);
             if (FAILED(result))
             {
+                const auto stringId = result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
+                                      : _hostWriteFormat == HostWriteFormat::Project     ? IDS_ERROR_SAVE_PROJECT
+                                      : _hostWriteFormat == HostWriteFormat::Jpeg        ? IDS_ERROR_EXPORT_JPEG
+                                                                                         : IDS_ERROR_EXPORT_PNG;
+                ++_errorsShown;
+                _lastErrorId = stringId;
+                _prompts->PostNotice(_window.get(), kNoticeMessage, stringId);
                 FinishHostContinuation({HostOutcome::Failed, result});
                 return;
             }
+            if (_hostCommitStamp)
+                return; // the writer retains request/path/revision until publication or acknowledged cancellation
             if (!_hostSaveBeforeAction)
             {
                 FinishHostContinuation({HostOutcome::Succeeded, S_OK});
@@ -445,7 +467,17 @@ void Application::CancelHostContinuations() noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_utilityTicket)
+        if (_projectSaveTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_projectSaveTicket.value());
+        }
+        else if (_exportTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_exportTicket.value());
+        }
+        else if (_utilityTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_utilityTicket.value());

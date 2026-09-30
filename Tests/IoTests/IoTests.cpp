@@ -1420,12 +1420,29 @@ void TestProjectSaveDurability()
     std::error_code error;
     std::filesystem::create_directories(folderSentinel, error);
     WriteText(folderSentinel / L"keep.txt", "keep this unrelated directory");
-    Expect(SaveProject(folderPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
-           "save-durability.folder-first-save");
-    const auto rotated = SaveProject(folderPath.c_str(), document, std::nullopt, false);
-    if (rotated != ProjectIoStatus::Ok)
-        std::fprintf(stderr, "Folder rotation status=%u win32=%lu path=%ls\n", static_cast<unsigned int>(rotated),
-                     GetLastError(), folderPath.c_str());
+    const auto saveFolder = [&]()
+    {
+        struct Observation
+        {
+            ProjectIoStage stage = ProjectIoStage::ManifestReady;
+            unsigned int value = 0;
+            bool reported = false;
+        } observation;
+        const ProjectIoObserver observer{[](void* context, ProjectIoStage stage, unsigned int value) noexcept
+                                         {
+                                             auto& observed = *static_cast<Observation*>(context);
+                                             observed = {stage, value, true};
+                                         },
+                                         &observation};
+        const auto status = SaveProject(folderPath.c_str(), document, std::nullopt, false, {}, observer);
+        if (status != ProjectIoStatus::Ok)
+            std::fprintf(stderr, "Folder save status=%u reported=%u stage=%u value=%u path=%ls\n",
+                         static_cast<unsigned int>(status), static_cast<unsigned int>(observation.reported),
+                         static_cast<unsigned int>(observation.stage), observation.value, folderPath.c_str());
+        return status;
+    };
+    Expect(saveFolder() == ProjectIoStatus::Ok, "save-durability.folder-first-save");
+    const auto rotated = saveFolder();
     Expect(rotated == ProjectIoStatus::Ok, "save-durability.folder-rotation");
     Expect(ReadText(folderSentinel / L"keep.txt") == "keep this unrelated directory",
            "save-durability.folder-keeps-unowned-staging");

@@ -777,8 +777,11 @@ headers retain best-effort image routing. Explicit Images As Project/Layer reque
 The owner consumes a fixed cached classification instead of inspecting files in continuation actions. Empty
 host entries are skipped. The selected request remains pending and prevents younger mutations until worker
 acknowledgement, including Escape, late cancellation and document replacement. Classification completion
-posts an existing localized notice on failure; it never opens a modal from the completion drain. Project load,
-image import, save, export and clipboard processing still await their P1.7 worker migration.
+posts an existing localized notice on failure; it never opens a modal from the completion drain. Project save now
+runs as an owned Io worker after file selection and document settlement; its receipt, ordinal and memory
+reservation remain held through publication and cancellation acknowledgement. PNG/JPEG export uses asynchronous
+utility readback and detached worker encoding under the same owned continuation. Project open, image import
+and clipboard processing still perform their file work synchronously and await their later P1.7 slices.
 
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
@@ -833,8 +836,19 @@ a folder, and Save As with the folder filter writes a folder.
 Ordered file batches, complete size drafts and layer/tool inputs retain their event-time arguments until execution.
 They share the eight-entry pending ring plus one active request and 1 MiB combined host-input budget. A refused
 input reports the busy/budget notice; earlier entries keep their order. View and chrome input remain available
-while color commits run. File decode/encode and composition readback remain synchronous until their later P1 slices;
-the continuation itself does not make those operations nonblocking.
+while color commits or project saves run. The write stage first settles typed opacity and live canvas edits under
+the selected ordinal; a settled write changes chrome without forcing a new document composition. A project save snapshots the settled document, active layer, output path
+and exact history revision before submission; edits and view input cannot change the saved snapshot. Only checked
+publication updates the document path and marks that captured revision saved. Cancellation before publication
+preserves the previous destination. If cancellation arrives after publication, the file and captured path/revision
+are recorded while a dependent close or replacement is suppressed. A failure leaves the prior path/revision state
+and destination intact and reports a localized notice. The selected input ordinal blocks younger mutations until
+the worker acknowledges and the owner applies or drops its result. PNG/JPEG export captures its destination,
+quality and resolution, reads the committed whole document asynchronously and releases the last mapped tile
+and utility GPU targets before worker encoding. Later device changes cannot repeat encoding/publication.
+Export never changes the project path or saved revision. Cancellation before publication preserves the destination;
+after publication the receipt can be cancelled while the written file remains. Failure posts one localized notice.
+Project open, image import, clipboard, wand/clone and other readback callers remain later P1.7/P1 work.
 
 When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved
 work asks too: the window refuses the end with the reason `IDS_SHUTDOWN_UNSAVED` ("<name> has unsaved changes.")

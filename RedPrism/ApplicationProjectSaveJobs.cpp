@@ -1,0 +1,432 @@
+#include "Application.h"
+
+#include "ChromeHost.h"
+#include "ProjectSaveTestGate.h"
+#include "ProjectSaveWork.h"
+#include "ProjectStore.h"
+#include "resource.h"
+
+#include <array>
+#include <cstdio>
+#include <cstdlib>
+#include <cwctype>
+#include <filesystem>
+#include <limits>
+#include <memory>
+#include <new>
+#include <string>
+#include <utility>
+
+class Application::ProjectSaveJob final : public Job
+{
+  public:
+    ProjectSaveJob(Application& owner, HistoryWorkStamp stamp, CanvasDocument document, std::optional<Guid> active,
+                   Guid revision, std::wstring path)
+        : _owner(owner), _stamp(stamp), _document(std::move(document)), _active(active), _revision(revision),
+          _path(std::move(path)), _gate(owner._projectSaveTestGate), _ownerThread(GetCurrentThreadId())
+    {
+        for (const auto& layer : _document.layers)
+            _assets +=
+                static_cast<unsigned int>(layer.asset.has_value()) + static_cast<unsigned int>(layer.mask.has_value());
+    }
+
+    JobResult Run(JobContext& context) override
+    {
+        if (_gate && !_gate->afterPublication)
+        {
+            const auto result = PassGate(context);
+            if (result.status != JobStatus::Finished)
+                return result;
+        }
+        if (_gate && _gate->throwAllocationFailure)
+            throw std::bad_alloc{};
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        const auto attributes = GetFileAttributesW(_path.c_str());
+        const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool zip = !folder && PathLooksLikeZipProject(_path.c_str());
+        struct Progress final
+        {
+            ProjectSaveJob& job;
+            JobContext& context;
+        } progress{*this, context};
+        const ProjectIoObserver observer{[](void* state, ProjectIoStage stage, unsigned int value) noexcept
+                                         {
+                                             auto& stateValue = *static_cast<Progress*>(state);
+                                             auto& job = stateValue.job;
+                                             if (stage == ProjectIoStage::Published)
+                                             {
+                                                 // Independent external truth survives a generic Cancelled/Failed
+                                                 // scheduler outcome.
+                                                 job._published = true;
+                                                 stateValue.context.ReportProgress(100);
+                                             }
+                                             else if (stage == ProjectIoStage::AssetEncoded)
+                                                 stateValue.context.ReportProgress(
+                                                     job._assets == 0 ? 80 : value * 80 / job._assets);
+                                             else if (stage == ProjectIoStage::ArchiveWriting)
+                                                 stateValue.context.ReportProgress(80 + value / 5);
+                                             else if (stage == ProjectIoStage::Staged)
+                                                 stateValue.context.ReportProgress(99);
+                                         },
+                                         &progress};
+        _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer);
+        if (_gate && _gate->afterPublication)
+        {
+            const auto result = PassGate(context);
+            if (result.status != JobStatus::Finished)
+                return result;
+        }
+        return _status == ProjectIoStatus::Cancelled ? JobResult{JobStatus::Cancelled} : JobResult{};
+    }
+
+    void Completed(JobResult result) noexcept override
+    {
+        const bool current = _owner._projectSaveStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+                             _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
+                             _owner._session.DocumentSerial() == _stamp.documentSerial;
+        HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
+                              : result.status == JobStatus::Failed  ? HostOutcome::Failed
+                                                                    : HostOutcome::Succeeded;
+        std::int32_t error = result.error;
+        if (_published && current)
+        {
+            _owner._documentPath = std::move(_path);
+            _owner._session.history.MarkSaved(_revision);
+            outcome = result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
+                          ? HostOutcome::Cancelled
+                          : HostOutcome::Succeeded;
+            error = outcome == HostOutcome::Cancelled ? E_ABORT : S_OK;
+            _owner.SyncChrome();
+            _owner._frameInvalidated = true; // save changes chrome, never document composition
+        }
+        else if (!current)
+        {
+            outcome = HostOutcome::Stale;
+            error = E_ABORT;
+        }
+        else if (_owner._historyWork.CancelRequested(_stamp))
+        {
+            outcome = HostOutcome::Cancelled;
+            error = E_ABORT;
+        }
+        else if (outcome == HostOutcome::Succeeded && (_status != ProjectIoStatus::Ok || !_published))
+        {
+            outcome = _status == ProjectIoStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
+            error = _status == ProjectIoStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                    : outcome == HostOutcome::Cancelled  ? E_ABORT
+                                                         : E_FAIL;
+        }
+        if (outcome == HostOutcome::Failed)
+        {
+            const auto stringId =
+                error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT;
+            ++_owner._errorsShown;
+            _owner._lastErrorId = stringId;
+            _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);
+        }
+        _owner._projectSaveTicket.reset();
+        _owner._projectSaveStamp.reset();
+        (void)_owner._historyWork.Finish(_stamp);
+        _owner.ResumeHostHistory(_stamp, outcome, error);
+    }
+
+  private:
+    JobResult PassGate(JobContext& context) noexcept
+    {
+        _gate->visits.fetch_add(1);
+        if (!PostThreadMessageW(_ownerThread, ProjectSaveTestGate::kMessage, 0, 0))
+            return {JobStatus::Failed, HRESULT_FROM_WIN32(GetLastError())};
+        const HANDLE handles[]{_gate->release.get(), context.shutdownEvent};
+        const auto waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
+        if (context.cancellation.IsCancelled() || waited == WAIT_OBJECT_0 + 1)
+            return {JobStatus::Cancelled};
+        return waited == WAIT_OBJECT_0 ? _gate->result
+                                       : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
+    }
+    Application& _owner; // owner completion only
+    const HistoryWorkStamp _stamp;
+    const CanvasDocument _document;
+    const std::optional<Guid> _active;
+    const Guid _revision;
+    std::wstring _path;
+    const std::shared_ptr<ProjectSaveTestGate> _gate;
+    const DWORD _ownerThread;
+    unsigned int _assets = 0;
+    ProjectIoStatus _status = ProjectIoStatus::Encode;
+    bool _published = false; // worker-only writes, owner reads only after final acknowledged completion
+};
+
+HRESULT Application::StartProjectSave() noexcept
+{
+    if (!_activeHostRequest || !_session.Document() || _session.HasColorEdit() || _projectSaveTicket)
+        return E_UNEXPECTED;
+    const auto path = _activeHostRequest->input.SelectedOutputPath();
+    if (!path)
+        return E_UNEXPECTED;
+    // Lexical absolute-path preparation performs no filesystem classification. Charge the resolved path,
+    // including the process directory for relative arguments, before any per-source libzip path is created.
+    std::array<wchar_t, 32768> resolved{};
+    const DWORD units = GetFullPathNameW(path->data(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
+    if (units == 0)
+        return HRESULT_FROM_WIN32(GetLastError());
+    if (units >= resolved.size() || units > kMaxProjectOutputPathUnits)
+        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    const auto ordinal = _activeHostRequest->ordinal;
+    _projectSaveStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
+    if (!_projectSaveStamp && _hostFinishedStamp && _hostFinishedStamp->ordinal == ordinal)
+        _projectSaveStamp =
+            _historyWork.Continue(_hostFinishedStamp.value(), _session.DocumentSerial(), HistoryWorkKind::Commit);
+    if (!_projectSaveStamp)
+        return E_UNEXPECTED;
+    HRESULT result = E_INVALIDARG;
+    try
+    {
+        const auto memory = ProjectSaveMemoryBytes(_session.Document().value(), units);
+        if (memory != 0 && memory <= (std::numeric_limits<std::uint64_t>::max)() - sizeof(ProjectSaveJob))
+        {
+            if (_projectSaveTestGate && _projectSaveTestGate->throwAdmissionFailure)
+                throw std::bad_alloc{};
+            CanvasDocument snapshot = _session.Document().value();
+            snapshot.selection.reset(); // selection is not a project manifest field; no worker needs its outline
+            std::unique_ptr<Job> job = std::make_unique<ProjectSaveJob>(
+                *this, _projectSaveStamp.value(), std::move(snapshot), _session.ActiveLayerID(),
+                _session.history.CurrentRevision(), std::wstring(resolved.data(), units));
+            JobTicket ticket;
+            result = static_cast<HRESULT>(
+                _jobs.Submit(job, {JobClass::Io, _session.DocumentSerial(), memory + sizeof(ProjectSaveJob)}, ticket));
+            if (SUCCEEDED(result))
+                _projectSaveTicket = ticket;
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        result = E_OUTOFMEMORY; // complete owning admission failure; no writer was accepted
+    }
+    if (FAILED(result))
+    {
+        (void)_historyWork.Finish(_projectSaveStamp.value());
+        _hostFinishedStamp = _projectSaveStamp;
+        _projectSaveStamp.reset();
+        return result;
+    }
+    _hostCommitStamp = _projectSaveStamp;
+    _hostWriteInFlight = true;
+    return S_OK;
+}
+
+int Application::RunProjectSaveSelfTest() noexcept
+{
+    enum class Mode
+    {
+        Save,
+        Ordered,
+        CancelBefore,
+        CancelPublished,
+        CancelClosePublished,
+        Failure,
+        Allocation,
+        Stale,
+        EditedPublished,
+        PendingTransform,
+        PendingOpacity,
+        Admission,
+        PathBudget
+    };
+    struct State final
+    {
+        Application& owner;
+        Mode mode;
+        ContinuationReceipt receipt;
+        Guid revision;
+        std::wstring output;
+        bool visited = false, held = false, cancelPending = false;
+        std::optional<Guid> laterRevision;
+        std::optional<Guid> settledRevision;
+    };
+    const auto dispatch = [](void* context, void* native) noexcept
+    {
+        auto& state = *static_cast<State*>(context);
+        auto& owner = state.owner;
+        auto& message = *static_cast<MSG*>(native);
+        if (message.message != ProjectSaveTestGate::kMessage)
+        {
+            owner.DispatchQueuedMessage(message);
+            return;
+        }
+        state.visited = true;
+        const bool pendingEdit = state.mode == Mode::PendingTransform || state.mode == Mode::PendingOpacity;
+        if (pendingEdit)
+            state.settledRevision = owner._session.history.CurrentRevision();
+        state.held = owner._projectSaveTicket && owner._projectSaveStamp && owner._historyWork.Busy() &&
+                     owner._hostWriteInFlight && owner._activeHostRequest &&
+                     state.receipt.Read().outcome == HostOutcome::Pending && owner._jobs.ReservedMemoryBytes() != 0 &&
+                     (pendingEdit ? state.settledRevision != state.revision && !owner._session.PendingTransformEdit() &&
+                                        !owner._opacityEdit
+                                  : owner._session.history.CurrentRevision() == state.revision) &&
+                     owner._session.history.IsModified();
+        const bool afterPublication = owner._projectSaveTestGate->afterPublication;
+        state.held =
+            state.held && ((GetFileAttributesW(state.output.c_str()) != INVALID_FILE_ATTRIBUTES) == afterPublication);
+        owner.OnCommand(ChromeHost::kCommandZoomActual);
+        state.held =
+            state.held && owner._session.history.CurrentRevision() == state.settledRevision.value_or(state.revision);
+        if (state.mode == Mode::CancelBefore || state.mode == Mode::CancelPublished ||
+            state.mode == Mode::CancelClosePublished)
+        {
+            owner.CancelHostContinuations();
+            state.cancelPending = owner._activeHostRequest && owner._projectSaveTicket &&
+                                  state.receipt.Read().outcome == HostOutcome::Pending;
+        }
+        else if (state.mode == Mode::Stale)
+        {
+            owner._session.CreateDocument(3, 2); // deliberately bypass production ordering to test lineage refusal
+            state.laterRevision = owner._session.history.CurrentRevision();
+        }
+        else if (state.mode == Mode::EditedPublished)
+        {
+            owner._session.InvertPixels(); // test only: save must mark the captured revision, never this later edit
+            state.laterRevision = owner._session.history.CurrentRevision();
+        }
+        (void)SetEvent(owner._projectSaveTestGate->release.get());
+    };
+    std::array<wchar_t, 32768> temporary{};
+    const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
+    if (units == 0 || units >= temporary.size())
+        return 5;
+    const std::filesystem::path root =
+        std::filesystem::path(temporary.data()) / (L"RedPrism.ProjectSaveHost." + Guid::Generate().ToString());
+    if (!CreateDirectoryW(root.c_str(), nullptr))
+        return 5;
+    const auto oldForcedAnswer = _forcedDiscardAnswer;
+    const auto cleanup = wil::scope_exit(
+        [&]() noexcept
+        {
+            if (_projectSaveTestGate)
+                (void)SetEvent(_projectSaveTestGate->release.get());
+            CancelHostContinuations();
+            if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+                std::_Exit(5); // no borrowed test state survives a failed join
+            _projectSaveTestGate.reset();
+            _forcedDiscardAnswer = oldForcedAnswer;
+            std::error_code error;
+            const auto target = std::filesystem::weakly_canonical(root, error);
+            const auto base = std::filesystem::weakly_canonical(std::filesystem::path(temporary.data()), error);
+            if (!error && target.parent_path() == base)
+                std::filesystem::remove_all(target, error);
+        });
+    for (const auto mode :
+         {Mode::Save, Mode::Ordered, Mode::CancelBefore, Mode::CancelPublished, Mode::CancelClosePublished,
+          Mode::Failure, Mode::Allocation, Mode::Stale, Mode::EditedPublished, Mode::PendingTransform,
+          Mode::PendingOpacity, Mode::Admission, Mode::PathBudget})
+    {
+        _session.CreateDocument(2, 1);
+        const auto id = InsertPaintedLayer(_session, L"Save snapshot", 2, 1, {}, 0, 0xFF404040);
+        _session.history.MarkSaved();
+        _session.InvertPixels(); // independent captured literal is 191/255 in every color channel
+        const auto revision = _session.history.CurrentRevision();
+        const auto historyCount = _session.history.UndoCount();
+        if (mode == Mode::PendingTransform)
+        {
+            _session.BeginTransform();
+            auto draft = _session.ActiveLayer()->transform;
+            draft.origin.x = 1;
+            _session.PreviewTransform(draft);
+        }
+        else if (mode == Mode::PendingOpacity)
+            OnLayerOpacity(0.5, ChromeEditPhase::Preview);
+        const auto errors = _errorsShown;
+        _projectSaveTestGate = std::make_shared<ProjectSaveTestGate>();
+        if (!_projectSaveTestGate->release || id == Guid{})
+            return 5;
+        _projectSaveTestGate->afterPublication =
+            mode == Mode::CancelPublished || mode == Mode::CancelClosePublished || mode == Mode::EditedPublished;
+        if (mode == Mode::Failure)
+            _projectSaveTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
+        _projectSaveTestGate->throwAllocationFailure = mode == Mode::Allocation;
+        _projectSaveTestGate->throwAdmissionFailure = mode == Mode::Admission;
+        const std::wstring output =
+            mode == Mode::PathBudget ? L"C:\\" + std::wstring(32635, L'a')
+                                     : (root / (std::to_wstring(static_cast<unsigned int>(mode)) + L".prism")).wstring();
+        const bool close = mode == Mode::CancelClosePublished;
+        _documentPath = close ? output : L"before-save.prism";
+        _forcedDiscardAnswer = Prompts::Answer::First;
+        DocumentChanged();
+        std::wstring callerPath = output;
+        const auto receipt = close ? QueueHostInput(HostCloseProjectInput{})
+                                   : QueueHostInput(HostWriteInput{HostWriteFormat::Project, true, callerPath});
+        callerPath = L"changed-after-admission.prism";
+        std::optional<ContinuationReceipt> younger;
+        if (mode == Mode::Ordered)
+            younger = QueueHostInput(HostCommandInput{ChromeHost::kCommandInvert});
+        State state{*this, mode, receipt, revision, output};
+        const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
+        const auto actual = receipt.Read();
+        const bool cancelled = mode == Mode::CancelBefore || mode == Mode::CancelPublished || close;
+        const auto expected =
+            mode == Mode::Stale ? HostOutcome::Stale
+            : cancelled         ? HostOutcome::Cancelled
+            : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget
+                ? HostOutcome::Failed
+                : HostOutcome::Succeeded;
+        bool correct = settled == SettleResult::Settled &&
+                       (mode == Mode::Admission || mode == Mode::PathBudget
+                            ? !state.visited && _projectSaveTestGate->visits.load() == 0
+                            : state.visited && state.held) &&
+                       actual.outcome == expected && !_activeHostRequest && !_hostWriteInFlight &&
+                       !_projectSaveTicket && !_projectSaveStamp && !_historyWork.Busy() &&
+                       _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
+                       _session.Document().has_value();
+        if (cancelled)
+            correct = correct && state.cancelPending;
+        const bool published = mode != Mode::CancelBefore && mode != Mode::Failure && mode != Mode::Allocation &&
+                               mode != Mode::Admission && mode != Mode::PathBudget;
+        if (published)
+        {
+            const auto loaded = LoadProject(output.c_str());
+            correct = correct && loaded.status == ProjectIoStatus::Ok && loaded.document.width == 2 &&
+                      loaded.document.height == 1 && loaded.document.layers.size() == 1 && loaded.activeLayerID == id &&
+                      loaded.document.layers.front().asset &&
+                      loaded.document.layers.front().asset->image.Data()[0] == 191 &&
+                      loaded.document.layers.front().asset->image.Data()[1] == 191 &&
+                      loaded.document.layers.front().asset->image.Data()[2] == 191 &&
+                      loaded.document.layers.front().asset->image.Data()[3] == 255;
+        }
+        else
+            correct = correct && GetFileAttributesW(output.c_str()) == INVALID_FILE_ATTRIBUTES &&
+                      _documentPath == L"before-save.prism" && _session.history.CurrentRevision() == revision &&
+                      _session.history.IsModified();
+        if (mode == Mode::Stale)
+            correct = correct && _documentPath == L"before-save.prism" && _session.Document()->width == 3 &&
+                      _session.Document()->height == 2 && _session.history.CurrentRevision() == state.laterRevision;
+        else if (mode == Mode::EditedPublished || mode == Mode::Ordered)
+            correct = correct && _documentPath == output && _session.history.IsModified() &&
+                      _session.history.UndoCount() == historyCount + 1 &&
+                      _session.Document()->layers.front().asset->image.Data()[0] == 64;
+        else if (published)
+            correct = correct && _documentPath == output && !_session.history.IsModified() &&
+                      _session.history.CurrentRevision() == state.settledRevision.value_or(revision) &&
+                      _session.history.UndoCount() == historyCount + (state.settledRevision ? 1 : 0);
+        if (mode == Mode::PendingTransform || mode == Mode::PendingOpacity)
+        {
+            const auto loaded = LoadProject(output.c_str());
+            const auto* layer = loaded.document.layers.empty() ? nullptr : &loaded.document.layers.front();
+            correct = correct && loaded.status == ProjectIoStatus::Ok && layer &&
+                      (mode == Mode::PendingTransform ? layer->transform.origin.x == 1 : layer->opacity == 0.5);
+        }
+        if (younger)
+            correct = correct && younger->Read().outcome == HostOutcome::Succeeded;
+        if (mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget)
+            correct = correct && _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SAVE_PROJECT &&
+                      actual.error == (mode == Mode::Failure      ? E_ACCESSDENIED
+                                       : mode == Mode::PathBudget ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
+                                                                  : E_OUTOFMEMORY);
+        else
+            correct = correct && _errorsShown == errors;
+        std::fprintf(stderr, "%s project-save-host.case=%u\n", correct ? "PASS" : "FAIL",
+                     static_cast<unsigned int>(mode));
+        if (!correct)
+            return 5;
+    }
+    return 0;
+}

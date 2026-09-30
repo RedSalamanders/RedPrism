@@ -211,6 +211,13 @@ same-owner untyped 16-byte `S_LDATA32` record at the table start. Contribution, 
 target bounds remain required; malformed registers, extra instructions, invalid symbols or adjacent real
 vector instructions remain violations. Seven DWORD entries in the observed Release image are data, not EVEX code.
 
+The observed DxUi Menu dispatch permits exactly contiguous `LEA R9,imagebase; MOVZX EAX,[R9+RAX+byteTable];
+MOV R8D,[R9+4*RAX+table]; ADD R8,R9; JMP R8`. Both indexed loads must have the observed byte encodings;
+the byte-index load is mandatory and no prelude is allowed. The aligned DWORD table requires the exact
+anonymous same-owner untyped 16-byte PDB data record and the same contribution/decoded-target proof as above.
+Other bases, indices, targets, opcodes, intervening instructions or invalid PDB evidence receive no exemption.
+Adjacent executable vector code remains gated; the runtime allowlist is unchanged.
+
 The observed Debug `std::variant` RAX-base form requires exactly LEA RAX of image base,
 one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, and JMP RCX. It additionally requires
 the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned table start; all existing

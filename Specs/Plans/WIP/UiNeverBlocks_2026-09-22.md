@@ -91,7 +91,8 @@
       - [x] P1.3a–c foundation — Capability route selection, resumable reservations/FIFO, shared event waits and bounded staging with native monitored-fence/lent-device/shutdown qualification; all x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuCompletionFoundation_2026-09-30.md)). Explicit fallback runtime coverage remains in the child plan.
       - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
         - [x] Qualify separate utility targets, tiled adopted worker outputs, bounded rebind restart, explicit EnqueueSetEvent fallback, and Merge/adjustment-opening continuations. All x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuUtilityReadback_2026-09-30.md)).
-        - [ ] Migrate export, Copy Merged, wand, clone and sampler callers; measure the real loop before P1.3 closeout.
+        - [x] Migrate PNG/JPEG export through detached worker encoding and qualify bounded additional-event recovery on actual hardware and both completion routes; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md).
+        - [ ] Migrate Copy Merged, wand, clone and sampler callers; measure the real loop before P1.3 closeout.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
     - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
     - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
@@ -100,6 +101,7 @@
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
       - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.
       - [x] F3a/F4a/F4a.1 — Cancellable project helpers and direct bounded file/ZIP asset streams pass all x64 suites and ARM64 cross-builds; [evidence](../../TestRuns/ProjectStreams_2026-09-30.md). Three 4K/45 MP Release observations per mode quantify memory retention and staging IO; production host graphs remain open.
+      - [x] F4b.1/F4b.2 — Project-save and PNG/JPEG export graphs pass all x64 suites, ARM64 cross-builds and 21-row hardware 4K/45 MP and WARP 4K measurements; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md). Save retains captured revision/publication truth; export detaches GPU resources before encoding and cannot replay writes after device changes. Remaining IO faults and measured 2 ms overruns keep F4/P1/G1 open.
       - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
       - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
@@ -984,7 +986,9 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 - **Completion**: `Signal(fence, n)`, `Flush`, `SetEventOnCompletion(n, event)`, then the thread-pool wait of §4.3.
   Without monitored fences, the fallback is `IDXGIDevice2::EnqueueSetEvent`, with one event per batch. `Map` uses
   `D3D11_MAP_FLAG_DO_NOT_WAIT` only after the fence has signaled, so it cannot stall.
-  `DXGI_ERROR_WAS_STILL_DRAWING` there is a logged bug, not a retry loop.
+  A driver-busy Map permits one additional `EnqueueSetEvent` readiness barrier retaining the original copy,
+  slot and in-flight charge. Its event permits one further nonblocking Map; persistent busy or barrier failure
+  fails locally. There is no recopy, timer, polling loop or blocking Map. This bounds attempts, not driver latency.
 - **Readback ring**: staging textures pooled per size class, capped at 64 MiB, with a tiled readback beyond that.
   1. The UI thread copies into staging and signals.
   2. On completion, it maps with `DO_NOT_WAIT` and lends the slot to the requesting job's copy stage: an Interactive

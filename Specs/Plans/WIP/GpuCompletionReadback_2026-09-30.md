@@ -20,7 +20,8 @@
   - [x] Qualify the single-reservation tiled worker job, adopted output, cancellation and bounded restart.
 - [ ] P1.3e — Migrate merge, opening adjustment composites, export/Copy Merged and wand/clone/sampler callers.
   - [x] Qualify Merge and adjustment-opening continuations, worker crop/thumbnail, cancellation and exact apply tokens.
-  - [ ] Migrate remaining export, clipboard, wand, clone and sampler consumers.
+  - [x] Migrate PNG/JPEG export with detached CPU encoding and qualify bounded Map-busy recovery, later-tile failure and actual hardware/WARP measurements ([evidence](../../TestRuns/ProjectWriters_2026-10-01.md)).
+  - [ ] Migrate clipboard, wand, clone and sampler consumers.
 - [ ] P1.3f — Prove hidden completion, cancellation, stale generation, device loss, saturation and shutdown with owned event gates.
 - [ ] P1.3f — Complete caller qualification and real-loop measurements; reconcile domain specs and commit/push each slice.
   - [x] Utility/Merge/opening slice: all x64 gates and ARM64 cross-builds pass; specifications and evidence reconciled.
@@ -72,8 +73,11 @@ Do not infer capabilities from a hardware name or a feature level.
 After recording a bounded batch, arm its completion event and submit/flush as the chosen API requires. EnqueueSetEvent
 already flushes outstanding commands and signals after completion or device removal; do not add a redundant Flush.
 Fence registration uses a real event handle, never the blocking null-handle variant. Only after
-completion may the UI Map staging with DO_NOT_WAIT. WAS_STILL_DRAWING is an operation failure and diagnostic,
-never a polling retry. The worker receives only a read-only pointer, row pitch and bounds backed by an owning slot.
+completion may the UI Map staging with DO_NOT_WAIT. A driver-busy result permits exactly one additional
+EnqueueSetEvent barrier, retaining the original copy, slot/generation and in-flight charge. Its event permits one
+further nonblocking Map; persistent busy or barrier failure is local failure. No recopy, timer, polling or blocking
+Map is permitted, and retirement is checked before either attempt. The worker receives only a read-only pointer,
+row pitch and bounds backed by an owning slot.
 Its completed stage returns to the UI to Unmap before the slot can be reused. Large reads traverse tiles under the
 64 MiB total staging cap; a 1-pixel sampler does not read back a full document. No slot is reused while lent.
 

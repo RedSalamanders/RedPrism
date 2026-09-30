@@ -194,15 +194,16 @@ once when it starts and its commit uploads once; a readback of such a document c
 ## Readbacks
 
 Export PNG/JPEG, Copy Merged, the wand's All Layers, Clone Stamp's All Layers and the eyedroppers read
-`ComposeReadback(document)`: the committed document (`DocumentSession::Document()`) flattened at full resolution,
+the committed document (`DocumentSession::Document()`) flattened at full resolution,
 never the display composite, a panel's preview raster or the stroke preview (`EndStroke`'s working texture stands in
-for its layer only in the display). It marks the display dirty, so the next frame composes the display document
-again (legacy `sampleCompositeColor` draws the document itself).
+for its layer only in the display). The remaining synchronous `ComposeReadback` callers mark the display dirty,
+so the next frame composes the display document again (legacy `sampleCompositeColor` draws the document itself).
+The separate utility path below preserves the settled display composite.
 
 Remaining synchronous host callers take the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
 `PixelBuffer` and adopted directly as BGRA8888, with no second full-image CPU copy. The vector overload remains for
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
-are never published. Merge and adjustment opening use the asynchronous utility path below; export, clipboard,
+are never published. Merge, adjustment opening and PNG/JPEG export use the asynchronous utility path below; clipboard,
 wand and sampling callers still require migration in P1.3.
 
 ## GPU readback queue and utility composition (P1.3)
@@ -224,7 +225,11 @@ without claiming readiness or polling. A 1×1 sampler stages one texel.
 
 Only the owner records Copy, fence Signal/event registration/Flush or EnqueueSetEvent, Map READ DO_NOT_WAIT and
 Unmap. EnqueueSetEvent already flushes. Registered waits publish an atomic ready flag and wake the shared job event.
-Map occurs once after completion; WAS_STILL_DRAWING is a reported failure, never a retry. Successful delivery
+Map is nonblocking after completion. If it returns WAS_STILL_DRAWING, the queue may retain the original copy,
+slot, generation and in-flight charge through exactly one additional EnqueueSetEvent barrier when supported.
+Only that new event permits a second nonblocking Map; a second busy result or barrier failure is a local failure.
+There is no recopy, timer, polling loop or blocking Map. Device retirement is checked before either attempt.
+Successful delivery
 lends immutable rows with an exact lease generation. Workers may copy them, and the owner unmaps exactly once on
 acknowledgement. Duplicate/stale releases fail. A device rebind retires old pending/in-flight work; lent rows keep
 their old context/texture/fence alive until worker acknowledgement, and their bytes remain charged against the
@@ -250,12 +255,14 @@ stages allocate an aligned output, copy rows using the validated pitch, check ca
 the finished raster. Owner stages acknowledge each lease before the next tile and publish once. Full-image,
 region and 1×1 requests compose only their requested bounds, in tiles at most 2048 or half the lower device/test
 texture limit, retaining the synchronous traversal's guard room for transformed sampling footprints.
-An optional final worker step prepares Merge's trim/thumbnail under the same reservation. A generation/device
+An optional final worker step prepares Merge's trim/thumbnail under the same reservation. Export detaches the final
+mapping and utility targets before its worker encoding stage, which cannot restart after external publication.
+A generation/device
 failure restarts the whole graph at most twice, releasing the previous attempt on a worker; it never publishes
 partial pixels. Unsupported completion, capacity, memory or persistent device failures fail locally.
 
-Merge and adjustment-editor opening use this path, retain their selected history acquisition through apply/drop,
-and validate complete snapshot and device generations before use. Remaining export/clipboard/wand/clone/sampler
+Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
+through apply/drop, and validate complete snapshot and device generations before use. Remaining clipboard/wand/clone/sampler
 consumers still migrate in P1.3. Synchronous readback remains their current path and the diagnostic numeric
 reference; application-wide nonblocking readbacks and G1 are not yet established.
 

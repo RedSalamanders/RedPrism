@@ -27,6 +27,13 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     {
         return {};
     }
+    // Optional CPU-only follow-up under the same graph reservation. The owner validates the final GPU tile,
+    // acknowledges its mapping and releases utility targets before this worker stage. Device changes after
+    // that boundary cannot invalidate already copied bytes or restart an external writer.
+    [[nodiscard]] virtual bool ProcessReadbackDetached() const noexcept
+    {
+        return false;
+    }
     virtual void ResetReadback() noexcept {} // worker-only release of a previous attempt's prepared result
     // Owner thread. Ensure the composition and queue use the current device, recovering on a device-lost reason.
     // No waits, modal or message pump. At most two whole-graph restarts; no partial result is published.
@@ -38,6 +45,7 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     {
         Prepare,
         Copy,
+        ProcessDetached,
         Error
     };
     [[nodiscard]] bool ValidRegion() const noexcept;

@@ -45,6 +45,14 @@ class GpuReadbackProducer
     [[nodiscard]] virtual HRESULT RecordReadbackSource(ID3D11Texture2D*& source, D3D11_BOX& box) noexcept = 0;
 };
 
+struct GpuReadbackStatistics final
+{
+    std::uint64_t copies = 0;
+    std::uint64_t maps = 0;
+    std::uint64_t readinessBarriers = 0;
+    std::uint64_t busyFailures = 0;
+};
+
 class GpuWorkQueue final : public OwnerWorkPump
 {
   public:
@@ -82,6 +90,12 @@ class GpuWorkQueue final : public OwnerWorkPump
     [[nodiscard]] std::size_t LentCount() const noexcept;
     [[nodiscard]] std::uint64_t DeviceGeneration() const noexcept;
     [[nodiscard]] GpuCapabilities::CompletionRoute CompletionRoute() const noexcept;
+    // Inject only failed nonblocking maps; the following successful map always uses the real context.
+    void SetMapBusyForTest(unsigned int attempts, unsigned int afterSuccessfulMaps = 0) noexcept;
+    [[nodiscard]] unsigned int MapAttemptsForTest() const noexcept;
+    void HoldMapRecoveryForTest(bool hold) noexcept;
+    void SetMapRecoveryFailuresForTest(HRESULT rearm, HRESULT enqueue, HRESULT removed) noexcept;
+    [[nodiscard]] GpuReadbackStatistics Statistics() const noexcept;
 
   private:
     struct Impl;

@@ -147,6 +147,58 @@ rollback. Successful file replacement/directory publication reports Ok even when
 Host writer jobs must separately retain this external publication fact, because scheduler cancellation can
 still override their generic Finished outcome. Mark only the revision actually published.
 
+### Production project save worker (P1.7 F4b.1)
+
+The host project-save route snapshots the settled immutable document (without selection outline data), active layer,
+resolved output path and exact history revision before submitting one Io job. The job owns those values through
+completion and calls the existing `SaveProject` publication path off the UI thread. It never borrows the session,
+window, chrome or GPU state. The host receipt and input ordinal remain pending, and younger document mutations
+remain ordered behind the selected save, through worker acknowledgement and owner completion. Completion revalidates
+the history-work stamp, document serial and active ordinal before applying its result.
+
+The worker reports publication independently from its scheduler result. On current published completion, the owner
+records the captured path and marks only the captured revision saved; a later edit therefore remains modified.
+Publication followed by cancellation still records the external file and captured saved revision, but cancellation
+suppresses a dependent close/replacement. Cancellation before publication and failed publication preserve the old
+destination and document path/revision. Returned failure and worker `bad_alloc` fail the receipt and show the save
+notice. A stale lineage cannot update the path or saved revision. Project open, image import and clipboard processing remain synchronous pending
+their later P1.7 slices.
+
+Preflight declares one whole-graph peak before owning job construction; submission reserves it before any worker
+decode/encode or staged output allocation. The resolved path and worker object are
+included, as are 16 MiB fixed manifest/JSON/codec scratch, per-layer records and names, per-asset names and source
+metadata, one largest-asset frame allowance, and path-dependent libzip/staging names and bookkeeping. The frame
+allowance is not multiplied by asset count; sparse rasters remain shared and encoded PNG vectors are streamed to
+staging files rather than retained per asset. Zero, overflow, out-of-range canvas/layer/asset/path/curve inputs
+refuse admission before submission. Snapshot metadata and the owned path are constructed at the explicit
+recoverable admission boundary; their UI copy/release costs remain part of P1.9 measurements. The reservation survives Run and owner apply/drop; workers do not reserve
+incrementally or wait for more memory. Scheduler availability remains subject to its global physical/commit
+ceiling and 1 GiB headroom.
+
+### Production utility export worker (P1.7 F4b.2)
+
+PNG/JPEG export captures the settled immutable whole document, current token, resolved path and encoder options
+under the selected input ordinal and history barrier. Selection outline data is excluded; no worker borrows the
+session or chrome. `ExportReadbackMemoryBytes` adds the rounded full-canvas BGRA output to the conservative
+project-save allowance. Metadata/path/curve limits and arithmetic overflow refuse admission; a canvas exceeding
+the existing 100 M output pixel limit returns the Too Large notice before allocating readback pixels.
+Resolved export destinations reserve 38 units for the exclusive codec sibling suffix and one terminator;
+32,728 units is the maximum destination. Project save reserves its nested asset and codec suffixes too,
+permitting 32,637 units. Larger resolved destinations fail before submitting or running either worker.
+
+Owner stages prepare utility composition and acknowledge mapped tiles. Workers copy rows, then the owner
+validates the last tile, acknowledges its mapping, releases utility GPU targets and resumes the same reserved
+job in a detached CPU-only stage. Encoding and checked atomic publication run there. Device changes after
+detachment MUST NOT restart encoding or repeat external writes. Before detachment the shared bounded GPU
+restart policy applies, and no partial pixel result is published.
+
+The worker independently retains successful publication. Cancellation before publication preserves the old
+destination; cancellation afterward reports Cancelled without claiming the published file was rolled back.
+The pending request, receipt, memory and barrier survive until acknowledgement. Completion checks token,
+lineage, stamp and ordinal. Export leaves project path and saved revision unchanged, preserves captured
+quality/resolution and destination, posts one current failure notice, and suppresses cancelled/stale dependent
+actions. Open/import/clipboard and additional fault/cancellation measurements remain P1.7 work.
+
 ## Validation
 
 `Tests/IoTests` MUST: round-trip the hand-made exploded v7 fixture (Multiply/opacity, a placed unlinked mask, group

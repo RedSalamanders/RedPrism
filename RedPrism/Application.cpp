@@ -2204,6 +2204,10 @@ int Application::RunSelfTest() noexcept
     {
         return classification;
     }
+    if (const int projectSave = RunProjectSaveSelfTest(); projectSave != 0)
+        return projectSave;
+    if (const int exported = RunExportReadbackSelfTest(); exported != 0)
+        return exported;
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {

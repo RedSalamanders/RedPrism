@@ -50,6 +50,8 @@ struct StageProbe
     std::stop_source* source = nullptr;
     ProjectIoStage stopAt = ProjectIoStage::ManifestReady;
     std::array<unsigned int, kStages.size()> visits{};
+    ProjectIoStage lastStage = ProjectIoStage::ManifestReady;
+    unsigned int lastValue = 0;
 };
 
 [[nodiscard]] std::size_t StageIndex(ProjectIoStage stage) noexcept
@@ -64,9 +66,11 @@ struct StageProbe
     return kStages.size();
 }
 
-void ObserveStage(void* context, ProjectIoStage stage, unsigned int) noexcept
+void ObserveStage(void* context, ProjectIoStage stage, unsigned int value) noexcept
 {
     auto& probe = *static_cast<StageProbe*>(context);
+    probe.lastStage = stage;
+    probe.lastValue = value;
     const std::size_t index = StageIndex(stage);
     if (index < probe.visits.size() && probe.visits[index] != std::numeric_limits<unsigned int>::max())
     {
@@ -419,6 +423,10 @@ void RunPublishedSave(const std::filesystem::path& root, const CanvasDocument& o
     StageProbe probe{&source, ProjectIoStage::Published};
     const ProjectIoStatus status = SaveProject(destination.c_str(), replacement, replacement.layers.front().id,
                                                zipArchive, TokenFor(source), MakeObserver(probe));
+    if (status != ProjectIoStatus::Ok)
+        std::fprintf(stderr, "%s save status=%u stage=%u value=%u path=%ls\n", caseName,
+                     static_cast<unsigned int>(status), static_cast<unsigned int>(probe.lastStage), probe.lastValue,
+                     destination.c_str());
     const std::string stageName = std::string(caseName) + ".published-stage-visited";
     const std::string statusName = std::string(caseName) + ".returns-ok-after-stop";
     const std::string siblingName = std::string(caseName) + ".preserves-unrelated-sentinel";
