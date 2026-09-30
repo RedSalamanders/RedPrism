@@ -168,6 +168,10 @@ HRESULT Application::InitializeProcessing() noexcept
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    if (!InitializeHostContinuations())
+    {
+        return E_UNEXPECTED;
+    }
     if (!_jobs.EnableDeferredRelease() || !_jobs.EnableMemoryRecycling())
     {
         return E_OUTOFMEMORY;
@@ -2124,6 +2128,10 @@ int Application::RunSelfTest() noexcept
     {
         return colorCommit;
     }
+    if (const int continuations = RunHostContinuationSelfTest(); continuations != 0)
+    {
+        return continuations;
+    }
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
@@ -2892,6 +2900,7 @@ void Application::Shutdown() noexcept
     }
     _shutdownStarted = true;
     _shutdownDeferred = false;
+    StopHostContinuations();
     CancelColorJobs();
     _jobs.RequestStop();
     if (_window)

@@ -96,6 +96,7 @@ void TestCopiedSizeDraftAndLayerParameters()
     draft.canvas.height = 271;
     draft.canvas.resolution = 180;
     draft.canvas.unit = CanvasUnit::Inches;
+    draft.canvas.relative = true;
     draft.canvas.locked = true;
     draft.anchor = 8;
     draft.extension = 5;
@@ -103,7 +104,12 @@ void TestCopiedSizeDraftAndLayerParameters()
     draft.customBefore = 0xFF654321u;
     draft.image.width = 17;
     draft.image.height = 19;
+    draft.image.originalWidth = 53;
+    draft.image.originalHeight = 89;
     draft.image.resolution = 240;
+    draft.image.locked = false;
+    draft.image.unit = CanvasUnit::Centimeters;
+    draft.image.sampling = LayerSampling::Nearest;
     draft.image.resample = false;
     draft.newWidth = 2048;
     draft.newHeight = 1536;
@@ -118,10 +124,14 @@ void TestCopiedSizeDraftAndLayerParameters()
                input->draft.canvas.originalWidth == 640 && input->draft.canvas.originalHeight == 480 &&
                input->draft.canvas.width == 513 && input->draft.canvas.height == 271 &&
                input->draft.canvas.resolution == 180 && input->draft.canvas.unit == CanvasUnit::Inches &&
-               input->draft.canvas.locked && input->draft.anchor == 8 && input->draft.extension == 5 &&
-               input->draft.customArgb == 0xFF123456u && input->draft.customBefore == 0xFF654321u &&
-               input->draft.image.width == 17 && input->draft.image.height == 19 &&
-               input->draft.image.resolution == 240 && !input->draft.image.resample && input->draft.newWidth == 2048 &&
+               input->draft.canvas.relative && input->draft.canvas.locked && input->draft.anchor == 8 &&
+               input->draft.extension == 5 && input->draft.customArgb == 0xFF123456u &&
+               input->draft.customBefore == 0xFF654321u && input->draft.image.width == 17 &&
+               input->draft.image.height == 19 && input->draft.image.originalWidth == 53 &&
+               input->draft.image.originalHeight == 89 && input->draft.image.resolution == 240 &&
+               !input->draft.image.resample && !input->draft.image.locked &&
+               input->draft.image.unit == CanvasUnit::Centimeters &&
+               input->draft.image.sampling == LayerSampling::Nearest && input->draft.newWidth == 2048 &&
                input->draft.newHeight == 1536,
            "later-card-edits-cannot-change-the-accepted-size-draft");
     taken.ready.reset();

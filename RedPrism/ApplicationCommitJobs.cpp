@@ -64,14 +64,18 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
     }
     if (!_session.HasColorEdit())
     {
+        _colorCommitError = 0;
         return HostOutcome::Succeeded;
     }
     // The caller selects the oldest accepted input before snapshotting. An unrelated barrier is not admission.
     _colorCommitStamp = _historyWork.Begin(_session.DocumentSerial(), ordinal, HistoryWorkKind::Commit);
     if (!_colorCommitStamp)
     {
+        _colorCommitOutcome = HostOutcome::Failed;
+        _colorCommitError = E_UNEXPECTED;
         return HostOutcome::Failed;
     }
+    _colorCommitError = 0;
     DropDrag<HueTargetDrag>();
     if (_session.AdjustmentEditingID())
     {
@@ -88,6 +92,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
             (void)_historyWork.Finish(_colorCommitStamp.value());
             _colorCommitStamp.reset();
             _colorCommitOutcome = HostOutcome::Stale;
+            _colorCommitError = E_ABORT;
             DocumentChanged();
             return _colorCommitOutcome;
         }
@@ -95,6 +100,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
         (void)_historyWork.Finish(_colorCommitStamp.value());
         _colorCommitStamp.reset();
         _colorCommitOutcome = _session.HasColorEdit() ? HostOutcome::Failed : HostOutcome::Succeeded;
+        _colorCommitError = _colorCommitOutcome == HostOutcome::Failed ? E_FAIL : 0;
         DocumentChanged();
         return _colorCommitOutcome;
     }
@@ -126,6 +132,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
         (void)_historyWork.Finish(_colorCommitStamp.value());
         _colorCommitStamp.reset();
         _colorCommitOutcome = HostOutcome::Failed;
+        _colorCommitError = status;
         return _colorCommitOutcome;
     }
     _colorCommitOutcome = HostOutcome::Pending;
@@ -190,6 +197,10 @@ void Application::CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t open
     _colorCommitStamp.reset();
     _colorCommitTicket.reset();
     _colorCommitOutcome = outcome;
+    _colorCommitError = outcome == HostOutcome::Failed ? (completion.error < 0 ? completion.error : E_FAIL)
+                        : outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale ? E_ABORT
+                                                                                             : 0;
+    ResumeHostHistory(stamp, outcome, _colorCommitError);
     DocumentChanged();
     if (outcome == HostOutcome::Failed)
     {
@@ -366,9 +377,9 @@ int Application::RunColorCommitSelfTest() noexcept
         return fail(L"The failed runner commit fixture did not start.\n");
     }
     (void)SetEvent(_colorWorkTestGate->release.get());
-    if (!settled() || _colorCommitOutcome != HostOutcome::Failed || _historyWork.Busy() || !_session.HasColorEdit() ||
-        !_session.PendingColorEdit()->commitFailed || _session.ActiveLayer()->asset->image != source ||
-        _session.history.UndoCount() != cancelledHistory)
+    if (!settled() || _colorCommitOutcome != HostOutcome::Failed || _colorCommitError != E_OUTOFMEMORY ||
+        _historyWork.Busy() || !_session.HasColorEdit() || !_session.PendingColorEdit()->commitFailed ||
+        _session.ActiveLayer()->asset->image != source || _session.history.UndoCount() != cancelledHistory)
     {
         return fail(L"A failed runner result lost its request identity or did not retain the panel safely.\n");
     }
@@ -384,9 +395,9 @@ int Application::RunColorCommitSelfTest() noexcept
         return fail(L"The throwing runner commit fixture did not start.\n");
     }
     (void)SetEvent(_colorWorkTestGate->release.get());
-    if (!settled() || _colorCommitOutcome != HostOutcome::Failed || _historyWork.Busy() || !_session.HasColorEdit() ||
-        !_session.PendingColorEdit()->commitFailed || _session.ActiveLayer()->asset->image != source ||
-        _session.history.UndoCount() != cancelledHistory)
+    if (!settled() || _colorCommitOutcome != HostOutcome::Failed || _colorCommitError != E_OUTOFMEMORY ||
+        _historyWork.Busy() || !_session.HasColorEdit() || !_session.PendingColorEdit()->commitFailed ||
+        _session.ActiveLayer()->asset->image != source || _session.history.UndoCount() != cancelledHistory)
     {
         return fail(L"The scheduler's actual bad_alloc translation did not retain the commit request safely.\n");
     }

@@ -32,7 +32,8 @@ observers, unique move ownership, first-terminal preservation, abandonment, stal
 full/invalid admission retaining input, active input surviving Clear and explicit failed publication.
 Existing legacy numeric goldens remain unchanged.
 
-Each x64 configuration passed 85 receipt assertions and 21 typed-input assertions. A separate cheaper-agent RAW
+Each HostTests invocation passed 85 receipt assertions and 21 typed-input assertions; the ASan suite executes
+HostTests twice (normal and stress), so its log contains 170 and 42 passes respectively. A separate cheaper-agent RAW
 matrix review found that P4's old exit did not explicitly require the new real-file matrix. Primary verified the
 gap and made §6.9 mandatory at P4/P5 exit, preserving ordinary-suite missing-corpus SKIP reporting separately.
 

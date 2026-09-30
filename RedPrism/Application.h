@@ -259,6 +259,26 @@ class Application final : public ChromeEvents
     void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
                              JobResult completion) noexcept;
     int RunColorCommitSelfTest() noexcept;
+    using HostRequestQueue = ContinuationQueue<HostRequest>;
+    class ContinuationAction final : public UiAction
+    {
+      public:
+        explicit ContinuationAction(Application& owner) noexcept : _owner(owner) {}
+        void Run() noexcept override;
+
+      private:
+        Application& _owner;
+    };
+    [[nodiscard]] bool InitializeHostContinuations() noexcept;
+    [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
+    void RunHostContinuation() noexcept;
+    void FinishHostContinuation(ContinuationReceipt::Result result) noexcept;
+    // Every asynchronous history finisher calls this after apply/drop and HistoryWork::Finish.
+    void ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error) noexcept;
+    void CancelHostContinuations() noexcept;
+    void StopHostContinuations() noexcept;
+    static void RetireHostContinuation(HostRequestQueue::Entry&& entry, ContinuationRetirement reason) noexcept;
+    int RunHostContinuationSelfTest() noexcept;
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
@@ -499,9 +519,17 @@ class Application final : public ChromeEvents
     DocumentSession _session;
     JobScheduler _jobs;
     HistoryWork _historyWork;
+    ContinuationAction _continuationAction{*this}; // stable borrowed source; unregister before joining jobs
+    HostRequestQueue _hostRequests;
+    std::optional<HostRequestQueue::Entry> _activeHostRequest;
+    std::optional<HistoryWorkStamp> _hostCommitStamp;
+    ContinuationReceipt::Result _hostPrerequisite{HostOutcome::Pending, 0};
+    bool _hostSourceRegistered = false;
+    bool _hostAdmissionAllocationFailureForTest = false;
     std::optional<HistoryWorkStamp> _colorCommitStamp;
     std::optional<JobTicket> _colorCommitTicket;
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
+    std::int32_t _colorCommitError = 0;
     PreviewMailbox<ColorEditJobInput> _colorPreviews;
     bool _colorMailboxOpen = false;
     std::uint64_t _colorDocumentSerial = 0;

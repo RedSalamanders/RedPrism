@@ -73,10 +73,11 @@
       - [x] P1.1c.3a — Qualify the busy-panel control contract independently: captured Curves/Levels/Spectrum drags stop, mutation controls disable, Cancel remains enabled, and idle prerequisites/numeric values survive under the existing focus-loss rule. Full x64 gates and all ARM64 cross-builds passed; this preparation does not activate asynchronous commits.
       - [x] P1.1c.3b — Implement and qualify immutable commits under the shared history ordinal/barrier, keep settings frozen through UI apply/drop, and distinguish pending/succeeded/cancelled/failed/stale outcomes. Full x64 gates and all ARM64 cross-builds passed; activate production OK/write callers atomically with P1.1c.3c.
       - [ ] P1.1c.3c — Route every write/discard caller through owned continuations, including ordered multi-path batches, copied size drafts and session-end generation. No write/replacement follows a failed required commit.
-        - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration remains with the production runner.
+        - [x] Qualify the allocation-free scheduler UI-action source, full-queue wake-up, fairness, reentrancy and borrowed lifetime. Application registration and its initial bridge are tracked below; production caller activation remains open.
         - [x] Qualify sequential operations under one input ordinal with distinct acquisition stamps; prove commit-then-size before younger Undo. Full x64 gates and all ARM64 cross-builds passed.
         - [x] Qualify per-entry continuation retirement before observed request release, including retained observers and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production receipt publication remains with the runner.
         - [x] Qualify owning completion receipts and typed event-time path batches, write arguments, complete size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer admission and runner activation remain open.
+        - [x] Qualify the Application source bridge with real owned panel requests and event-gated worker commits; verify deferred outcome publication, error preservation, acknowledged cancellation, stale inputs and shutdown. All x64 configurations and ARM64 cross-builds passed; all production caller migrations remain open.
       - [ ] P1.1c.3d — Guard all history/mutation entry points, prove the real commit/continuation order with event gates, migrate harness observations, and run the full configuration matrix.
     - [ ] Replace settle/discard booleans with owned continuations across save, export, open/import, new/size, project/window close and session end.
     - [ ] Prove pending/failure/replacement/ordering behavior with event-gated WARP tests, preserve direct numeric goldens and remeasure real-loop latency.
@@ -238,13 +239,21 @@ P1.1c.3c primitive progress, 2026-09-30: the stable UI-action source and repeate
 full x64 gates and all ARM64 cross-builds. Final review strengthened independent owner/document stamp tests.
 Release link-layout changes exposed a switch-table ISA scanner false positive; exact PE/PDB and branch proof now
 recognizes its observed hoisted image-base setup, with positive/negative controls and an unchanged allowlist.
-Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). Application request
-ownership, receipts, write/discard stages and production caller activation remain open; P1 and G1 remain open.
+Evidence is in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md). The ownership and host
+bridge records below extend these primitives; write/discard stages and production caller activation remain open.
+P1 and G1 remain open.
 Per-entry continuation retirement also passed the full x64 gates and all ARM64 cross-builds; the
 [retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md) proves each dropped entry's ownership and
 observable outcome through the callback. The [owned request/receipt record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md)
-also qualifies the actual model in all configurations, with 85 receipt and 21 typed-input assertions per x64 suite.
+also qualifies the actual model in all configurations, with 85 receipt and 21 typed-input assertions per HostTests
+invocation (the ASan suite runs both normal and stress).
 Production producer admission, staged publication and caller activation remain with the runner.
+The [Application bridge record](../../TestRuns/HostContinuationBridge_2026-09-30.md) qualifies real owned numeric
+panel requests, registered source ownership, admission/full refusal, exact completion wake-up, success/failure,
+late cancellation/replacement, metadata settlement and shutdown in all configurations. All asynchronous history
+finishers must notify the common hook after apply/drop; other kinds currently use explicit finisher test seams.
+Cancel after acknowledged panel work preserves its known result. The full multi-stage prompt/write/discard runner,
+variable-length payload admission and production caller activation remain open; P1/G1 and P2–P6 are not complete.
 
 Code drift checked against the current source: the later review already added display proxies and tiled
 full-resolution readback for images beyond the texture-size limit, EXIF orientation and ICC import, atomic
@@ -2043,7 +2052,7 @@ speedup of each tier over scalar.
   of §6.7.
 - **P4.7 CPU SIMD develop engine.**
 - **P4.8 Measurement**: M1–M5 and the §7 G2 filter pairs against Photoshop on R1 (and R2/R3 per D9), in
-  `RawVsPhotoshop_<date>.md` and `Filters_<date>.md`.
+  `RawVsPhotoshop_<date>.md` and `Filters_<date>.md`; execute only after P4.9's correctness qualification passes.
 - **P4.9 File-backed qualification**: §6.9's required five-file decode/reference and editor round-trip matrix,
   verified actual RAF CFA, hostile generated files, cancellation/recovery/admission and mandatory-corpus runner
   mode. Required real-file cases run without SKIP in Release and x64 ASan qualification; ordinary developer

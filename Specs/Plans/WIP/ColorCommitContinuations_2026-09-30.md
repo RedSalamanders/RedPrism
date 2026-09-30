@@ -4,13 +4,14 @@
 
 - [x] Audit the current write, discard, import, size, layer and window entry points against the owning contracts.
 - [x] Finish qualification of the busy controls and ordered commit engine in the parent P1.1c.3a–b record: all x64 test configurations and ARM64 cross-builds passed.
-- [x] Add and qualify the scheduler's allocation-free, coalesced UI-action source with bounded scheduling and borrowed shutdown ownership. Application registration remains part of the runner below.
+- [x] Add and qualify the scheduler's allocation-free, coalesced UI-action source with bounded scheduling and borrowed shutdown ownership. Application registration and its initial bridge are tracked below; production producers remain inactive.
 - [x] Qualify sequential same-ordinal history acquisitions, including late same-kind completions and commit-then-size before queued Undo. Full x64 gates and all ARM64 cross-builds passed.
 - [x] Define owned request payloads, completion receipts and explicit outcomes; preserve relative input order.
   - [x] Qualify the owning observer/publisher model and typed event-time paths, full size drafts and layer/lifetime inputs. All x64 configurations and ARM64 cross-builds passed; producer/runner activation remains open.
 - [ ] Publish outcomes for refused, stale and cleared queue entries before releasing their owned receipts.
   - [x] Qualify per-entry retirement callbacks for superseded, stale and cleared entries, including retained observer state and FIFO ring wrap. Full x64 gates and all ARM64 cross-builds passed; production publication remains part of the runner.
 - [ ] Implement the staged settlement/write/discard runner and document/session-end lifetime checks.
+  - [x] Qualify the Application source bridge with numeric panel requests, deferred terminal publication, exact acquisition wake-up, full queue, failure, cancellation and shutdown. All x64 configurations and ARM64 cross-builds passed; production producers remain inactive.
 - [ ] Migrate Save, Save As, PNG/JPEG export and every replacement/close caller together with production OK.
 - [ ] Migrate ordered file batches, copied size drafts, panel/tool/layer interactions and busy callback guards.
 - [ ] Prove each caller's success, failure, cancellation, stale result and queue refusal with actual event gates.
@@ -22,19 +23,27 @@ The user authorized implementation through P6 and commit/push at verified steps.
 host migration; the domain contracts remain authority. Production OK and file callers are still inline until
 this atomic migration activates. GPU readback, file encoding/decoding and size kernels move in later P1 slices.
 
-Owners: `Application*`, `Common/Jobs.*`, `Common/HistoryWork.h`, `Common/ContinuationQueue.h`.
-Contracts: `Core_PerformanceAndResources`, `Document_Tools`, `Document_History`, `UI_ApplicationChrome`,
+Owners: `Application*`, `RedPrism/ContinuationRequests.h`, `Common/ContinuationReceipt.h`, `Common/Jobs.*`,
+`Common/HistoryWork.h`, `Common/ContinuationQueue.h`.
+Contracts: `Core_Architecture`, `Core_PerformanceAndResources`, `Document_Tools`, `Document_History`, `UI_ApplicationChrome`,
 `UI_Windowing`, `IO_ProjectFormat`, `IO_ImageCodecs`, `Testing_Validation`.
 
 Progress, 2026-09-30: busy controls and the ordered commit engine are qualified in the
 [engine record](../../TestRuns/OrderedColorCommit_2026-09-30.md). Scheduler/source and repeated-acquisition
 primitives are qualified in the [continuation record](../../TestRuns/ContinuationSources_2026-09-30.md).
-The source is not registered by Application yet; owned request/receipt stages and the production caller migration
-remain the next slice. These primitive checks do not qualify the child plan's integrated activation matrix.
+Application registration and the initial owned panel bridge passed all x64 configurations and ARM64 cross-builds below.
+These primitive checks do not qualify the child plan's integrated production activation matrix.
 Per-entry retirement is qualified in the [retirement record](../../TestRuns/ContinuationRetirement_2026-09-30.md).
 The queue supplies every dropped entry before release. The typed host request/receipt model passed all x64
 configurations and ARM64 cross-builds in the [ownership record](../../TestRuns/OwnedContinuationRequests_2026-09-30.md);
 production producer admission and staged publication remain open.
+
+Initial bridge progress is recorded in [HostContinuationBridge_2026-09-30.md](../../TestRuns/HostContinuationBridge_2026-09-30.md).
+It registers the source, bounds numeric requests to eight pending plus one active, preserves real worker errors,
+and publishes after acknowledged apply/drop. Each future asynchronous history finisher must call the common
+`ResumeHostHistory` hook after barrier release. Actual selection/stroke/IO migration and variable-length payload
+admission remain open. Cancel after acknowledged panel success/failure preserves that result; multi-stage
+write/discard actions need an explicit policy for cancelling their remaining stages.
 
 ## 1. Outcomes and ownership
 

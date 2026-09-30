@@ -121,6 +121,22 @@ after prerequisite history has applied/dropped. Request move-overwrite/destructi
 owned input storage releases. This defines the request model; production producers and the staged runner remain
 tracked in `ColorCommitContinuations_2026-09-30.md`.
 
+`Application` now registers its stable continuation source during processing initialization and unregisters it
+before scheduler stop/join. The initial bridge admits only numeric panel requests through an owning construction
+boundary; production UI producers remain inactive until the dependent caller migration. It selects one owned
+entry outside message/control/completion dispatch, validates document serial and panel opening, and starts the
+immutable commit under that entry's ordinal. Waiting consumes source readiness; exact acquisition completion
+stores the prerequisite outcome/error and requests a later UI action. Apply/drop finishes history before terminal
+receipt publication. Every asynchronous history finisher MUST call the common `ResumeHostHistory` hook after
+apply/drop and `HistoryWork::Finish`; it wakes queued inputs even when that earlier operation belongs to another
+kind. The current color finisher is wired; the remaining operation migrations must wire the hook at their own
+apply/drop boundaries. Cancel retires queued inputs immediately and retains active ownership/barrier through acknowledged drop.
+After a panel commit has acknowledged its terminal result, a later Cancel preserves that result and its already
+applied pixels/history. It cannot relabel Succeeded or a known Failed as Cancelled during deferred publication.
+Later multi-stage actions require a separate overall cancellation policy for their remaining stages.
+Shutdown retires requests and unregisters the borrowed source before joining their independently owned worker
+inputs. The remaining settlement/write/discard stages and all producer activation remain P1.1c.3c work.
+
 These foundations do not migrate existing image operations to asynchronous execution. Memory admission is
 specified below; operation-specific input recording, snapshot preparation and worker/apply wiring remain P1 work tracked in
 `UiNeverBlocks_2026-09-22.md`.

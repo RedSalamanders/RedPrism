@@ -158,6 +158,18 @@ all size-draft fields, layer/name ownership, panel/document and session-end keys
 retained outcomes after input release. These qualify owned inputs/results; actual caller effects, bounded payload
 admission and staged runner activation remain P1.1c.3c work.
 
+The hidden WARP `continuation-host.*` checks the Application's actual registered source with owned numeric panel
+inputs and immutable commits. It covers construction `bad_alloc` injection, eight pending plus ninth refusal,
+Clear and idle, an ordinary UI-action queue at capacity, source fairness/disarming, exact acquisition validation,
+real pixel/history apply before later terminal receipt publication, acknowledged active cancellation, scheduler
+`bad_alloc` error preservation, late success before Cancel/replacement, reopened panel/document lifetimes,
+Cancel after acknowledged success/failure preserving that terminal outcome and its effects,
+immediate adjustment metadata settlement and unregister/retirement at shutdown. An independent earlier color
+commit and explicit finisher seams for Selection/Stroke/Open/Import prove waiting-request wake-up through the
+common completion hook; the seam does not qualify those operations' future asynchronous implementations. Its wait
+has a fixed failure bound, not a latency gate; production UI never uses that wait. These tests do not activate Save,
+Close, import or other producers, nor qualify variable-length payload admission or the complete caller matrix.
+
 DocumentTests runs actual direct session operations through the ordering state machines to check that a stroke
 uses the predecessor's applied pixels (or the surviving pixels after failure/cancel), separate undo entries, Undo
 after a pending stroke, and replacement/stale-preview guards. This qualifies ordering foundations, not the P1

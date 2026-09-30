@@ -148,6 +148,14 @@ allocation-free immediate `ContinuationReceipt::Failure(E_OUTOFMEMORY)` value. F
 retains the input for explicit failed publication. The future production admission path bounds and accounts for
 path/name bytes; a fixed eight-entry ring alone does not bound variable-length payloads.
 
+The first Application source bridge admits fixed numeric panel inputs only: at most eight pending entries plus
+one active request, with one small shared result per observed input. An empty registration costs no wakeup or
+worker. A waiting active commit and queued inputs behind earlier history consume readiness without rearming;
+the common history completion hook signals their next UI action after apply/drop. The current color finisher uses
+it; future history migrations MUST also notify it after barrier release. Cancellation keeps the active input
+until worker acknowledgement; shutdown unregisters before join. Other variable-length payload producers remain
+inactive and MUST gain explicit byte admission before activation.
+
 `JobActivity` uses 128 fixed records and updates only on scheduler notices. The oldest foreground operation owns
 the global progress indicator; Background, Refinement and InteractivePreview do not. A single deadline timer shows
 the indicator after 250 ms, is killed before dispatch, and is removed at completion/shutdown. It never polls job
