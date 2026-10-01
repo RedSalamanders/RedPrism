@@ -2163,6 +2163,8 @@ int Application::RunSelfTest() noexcept
     }
     if (const int sizing = RunSizingWorkSelfTest(); sizing != 0)
         return sizing;
+    if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
+        return rasterEdits;
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;
@@ -3717,6 +3719,15 @@ void Application::OnCommand(int command) noexcept
                       command == ChromeHost::kCommandSaveAs || command == ChromeHost::kCommandExportPng ||
                       command == ChromeHost::kCommandExportJpeg || command == ChromeHost::kCommandCloseProject ||
                       command == ChromeHost::kCommandExit;
+    const bool rasterEdit = command == ChromeHost::kCommandFillForeground ||
+                            command == ChromeHost::kCommandFillBackground ||
+                            command == ChromeHost::kCommandClearPixels || command == ChromeHost::kCommandInvert ||
+                            command == ChromeHost::kCommandDeleteKey;
+    if (!_hostExecuting && rasterEdit)
+    {
+        ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+        return;
+    }
     if (!_hostExecuting && file)
     {
         switch (command)
@@ -4012,6 +4023,11 @@ void Application::OnCommand(int command) noexcept
         DocumentChanged();
         break;
     case ChromeHost::kCommandDeleteKey:
+        if (_session.Selection())
+        {
+            ExecuteRasterEditCommand(RasterEditKind::Clear);
+            break;
+        }
         _session.DeleteKeyPressed();
         static_cast<void>(_session.TakeLastBrushCommit());
         DocumentChanged();
@@ -4091,22 +4107,15 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandFillForeground:
     case ChromeHost::kCommandFillBackground:
-        _session.FillSelection(command == ChromeHost::kCommandFillForeground ? FillSource::Foreground
-                                                                             : FillSource::Background);
-        static_cast<void>(_session.TakeLastBrushCommit());
-        DocumentChanged();
+        ExecuteRasterEditCommand(RasterEditKind::Fill, command == ChromeHost::kCommandFillForeground
+                                                           ? FillSource::Foreground
+                                                           : FillSource::Background);
         break;
     case ChromeHost::kCommandClearPixels:
-        _session.ClearSelectedPixels();
-        static_cast<void>(_session.TakeLastBrushCommit());
-        DocumentChanged();
+        ExecuteRasterEditCommand(RasterEditKind::Clear);
         break;
     case ChromeHost::kCommandInvert:
-        _session.InvertPixels();
-        // The invert's own commit: a pending gradient applied under it, and that preview never showed the inverted
-        // pixels, so it ends without adopting its texture (SyncStrokePreview).
-        static_cast<void>(_session.TakeLastBrushCommit());
-        DocumentChanged();
+        ExecuteRasterEditCommand(RasterEditKind::Invert);
         break;
     case ChromeHost::kCommandLayerViaCopy:
         EndSelectionInteraction(false);

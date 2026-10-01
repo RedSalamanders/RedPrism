@@ -111,6 +111,7 @@
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
+    <ClInclude Include="..\Common\RasterEditWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
     <ClInclude Include="..\Common\Selection.h" />
     <ClInclude Include="..\Common\BrushStroke.h" />
@@ -141,6 +142,7 @@
     <ClInclude Include="Application.h" />
     <ClInclude Include="ColorWorkTestGate.h" />
     <ClInclude Include="SizingWorkTestGate.h" />
+    <ClInclude Include="RasterEditTestGate.h" />
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
@@ -182,6 +184,7 @@
     <ClCompile Include="..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
+    <ClCompile Include="..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\Common\PathClassificationWork.cpp" />
     <ClCompile Include="ApplicationFileJobs.cpp" />
@@ -217,6 +220,8 @@
     <ClCompile Include="ApplicationSettings.cpp" />
     <ClCompile Include="ApplicationSize.cpp" />
     <ClCompile Include="ApplicationSizeJobs.cpp" />
+    <ClCompile Include="ApplicationRasterEditJobs.cpp" />
+    <ClCompile Include="ApplicationRasterEditTests.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
     <ClCompile Include="ChromeHostAdjust.cpp" />

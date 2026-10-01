@@ -78,5 +78,5 @@ paints nothing) and `cutfull.*` (Cut on a mask and Clear with a full 100-entry h
 the clear). The WARP self-test covers Ctrl+Z during a stroke, and the save prompt asking for a live stroke on a
 clean document whose Cancel leaves the stroke live for its release to record.
 The WARP self-test also verifies that the application session receives the machine-derived limit. Debug and
-ASan Debug `test.ps1` MUST run `DocumentTests.exe`. Selection storage accounting and incremental accounting remain
-tracked by P1.9; the current retained-byte count covers raster storage only.
+ASan Debug `test.ps1` MUST run `DocumentTests.exe`. Immutable selection capacities are included as specified above;
+incremental raster/history accounting remains tracked by P1.9.

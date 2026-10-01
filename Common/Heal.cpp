@@ -469,7 +469,8 @@ void Solve(float* value, const std::uint8_t* role, Index w, Index h, int depth)
 }
 } // namespace
 
-Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height, std::size_t stride) noexcept
+Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height, std::size_t stride,
+                      const CancelToken& cancellation) noexcept
 {
     Index x0 = static_cast<Index>(width);
     Index y0 = static_cast<Index>(height);
@@ -477,6 +478,8 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
     Index y1 = 0;
     for (std::size_t y = 0; y < height; ++y)
     {
+        if (cancellation.IsCancelled())
+            return {};
         const std::uint8_t* row = gray + y * stride;
         for (std::size_t x = 0; x < width; ++x)
         {
@@ -490,7 +493,7 @@ Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t h
             y1 = std::max(y1, static_cast<Index>(y) + 1);
         }
     }
-    if (x1 <= x0 || y1 <= y0)
+    if (x1 <= x0 || y1 <= y0 || cancellation.IsCancelled())
     {
         return {};
     }

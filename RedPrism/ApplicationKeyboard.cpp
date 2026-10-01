@@ -383,7 +383,8 @@ bool Application::HandleKey(const KeyPress& press) noexcept
     {
         return true;
     }
-    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt && (_sizingTicket || _pathClassificationTicket))
+    if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
+        (_sizingTicket || _pathClassificationTicket || _rasterEditTicket))
     {
         CancelHostContinuations(); // retain the selected request until worker acknowledgement
         return true;
@@ -743,6 +744,7 @@ int Application::RunKeyboardSelfTest() noexcept
     OnCommand(ChromeHost::kCommandNewLayer);
     _session.ApplySelection(SelectionGeometry::Rect(12, 12, 20, 20), SelectionMode::New, L"Select");
     OnCommand(ChromeHost::kCommandFillForeground);
+    settle(); // the Fill command now owns an asynchronous receipt; observe its entry before the next key
     replace({binding(L"cmd/edit/delete", Key('Q'))});
     _chrome->SetCanvasFocused(true);
     const int beforeDelete = _session.history.UndoCount();
@@ -793,6 +795,7 @@ int Application::RunKeyboardSelfTest() noexcept
         OnCommand(ChromeHost::kCommandNewLayer);
         _session.ApplySelection(SelectionGeometry::Rect(12, 12, 20, 20), SelectionMode::New, L"Select");
         OnCommand(ChromeHost::kCommandFillForeground);
+        settle();
         _session.Deselect();
         _chrome->SetCanvasFocused(true);
         const auto originX = [this]()
@@ -1410,16 +1413,18 @@ int Application::RunKeyboardSelfTest() noexcept
         keyMessage(WM_SYSKEYDOWN, VK_BACK, {VK_MENU, VK_LMENU, VK_BACK});
         keyMessage(WM_SYSKEYUP, VK_BACK, {VK_MENU, VK_LMENU});
         keyMessage(WM_KEYUP, VK_MENU, {});
-        const bool filled = _session.history.UndoCount() == beforeFill + 1;
         const bool chordQuiet = !_chrome->MenuKeyboardActive();
+        settle(); // retain the immediate Alt/menu assertion; observe pixels/history after worker acknowledgement
+        const bool filled = _session.history.UndoCount() == beforeFill + 1;
         _chrome->LeaveMenuKeyboard();
         _chrome->SetCanvasFocused(true);
         keyMessage(WM_SYSKEYDOWN, VK_MENU, {VK_MENU, VK_LMENU});
         keyMessage(WM_SYSKEYDOWN, VK_BACK, {VK_MENU, VK_LMENU, VK_BACK});
         keyMessage(WM_KEYUP, VK_MENU, {VK_BACK});
         keyMessage(WM_KEYUP, VK_BACK, {});
-        const bool filledAgain = _session.history.UndoCount() == beforeFill + 2;
         const bool altFirstQuiet = !_chrome->MenuKeyboardActive();
+        settle();
+        const bool filledAgain = _session.history.UndoCount() == beforeFill + 2;
         _chrome->LeaveMenuKeyboard();
         (void)KillTimer(_window.get(), kMenuLoopGuardTimerId);
         if (restore)

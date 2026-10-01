@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DeferredRelease.h"
+#include "Executor.h"
 
 #include "PixelBuffer.h"
 
@@ -144,7 +145,8 @@ class Raster
     // disjoint; the base and untouched tiles are shared, never copied. `fill` is what the crop reads beyond the
     // source; a sparse source keeps its own fill over its own extent (a painted hide-all mask stays hidden).
     [[nodiscard]] static Raster Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles,
-                                          int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill);
+                                          int cropX, int cropY, int cropWidth, int cropHeight, std::uint8_t fill,
+                                          CancelToken cancellation = {});
     // A contiguous copy of the region (pixels outside this raster read `fill`).
     [[nodiscard]] Raster Crop(int x, int y, int width, int height, std::uint8_t fill) const;
     // This raster resampled to `width` × `height` by the nearest pixel (grid pixel x reads x · Width() / width), as
@@ -1346,6 +1348,9 @@ class DocumentHistory
         return static_cast<int>(_past.size());
     }
     [[nodiscard]] std::size_t RetainedBytes(const std::optional<CanvasDocument>& current) const;
+    // Conservative allocation declaration for Begin/End metadata copies, entry growth and trim bookkeeping.
+    // Shared pixel/selection inputs are already resident. Zero refuses overflow or excessive graph depth.
+    [[nodiscard]] std::uint64_t EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept;
     [[nodiscard]] int EntryLimit() const noexcept
     {
         return _entryLimit;
@@ -1780,6 +1785,10 @@ class DocumentSession
     // background color, as in Photoshop.
     // True when the selection was cleared as a history entry. False leaves the document unchanged.
     bool ClearSelectedPixels();
+    // Owner-only publication of a complete worker-prepared target. Refusal leaves prepared ownership with the
+    // caller, so an aggregate release owner can retire a large sparse result off-thread.
+    [[nodiscard]] bool ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask, std::wstring name,
+                                                const JobToken& token);
     // The Delete key: clears the selection when there is one; otherwise deletes the targeted mask, or the layer.
     void DeleteKeyPressed();
     void DeleteLayerOrMask();

@@ -117,6 +117,20 @@ aligned intrusive completion nodes; producers push to an SLIST and signal an aut
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
+Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
+tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing
+storage, stretched/carried masks and thumbnails. A geometry-only planner allocates no pixel buffers; published
+inputs stay shared. Target capture occurs under the complete reservation, followed by same-record resume.
+Aggregate input/result retirement uses worker-computed reachable capacity, including shared sources; this is a
+conservative releasing charge, not a measurement of newly allocated or exclusively owned bytes. Its temporary
+overcount can delay admission until release acknowledgement and MUST be reported separately from preparation
+elapsed time. History/chrome/upload and admission/apply scopes still require G1 measurements.
+The raster-edit charge also includes complete document/history snapshot metadata, entry-vector growth and trim
+set bookkeeping via `DocumentHistory::EditMemoryBytes`. This preflight allocates no storage, counts graph
+occurrences conservatively and refuses overflow/depth beyond 128. Existing shared pixels are not charged as new
+allocations. Incremental preflight/accounting and prepared, allocation-safe history publication remain P1.9;
+current owner Begin/End allocation failure retains the repository's fatal-failure policy.
+
 Suspended worker stages count against the same 128-record capacity and retain their original reservation and
 FIFO key through final apply/drop. Resume consumes no second reservation, container entry or job allocation.
 Successful stage deferral cannot race worker re-entry into its UI hook. Cancellation preserves external mapped

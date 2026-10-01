@@ -512,6 +512,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_sizingTicket.value());
         }
+        else if (_rasterEditTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_rasterEditTicket.value());
+        }
         else
             CancelColorCommit(); // retain the active receipt until apply/drop acknowledges cancellation
     }

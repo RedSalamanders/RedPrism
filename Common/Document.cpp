@@ -599,7 +599,7 @@ namespace
 // The part of `area` outside `inside`, as windows of one shared block of `value` no larger than a brush tile, so
 // padding a grown grid costs one small allocation however much area it adds.
 [[nodiscard]] std::vector<RasterTile> UniformTiles(const IntRect& area, const IntRect& inside, RasterFormat format,
-                                                   std::uint8_t value)
+                                                   std::uint8_t value, const CancelToken& cancellation)
 {
     constexpr int kBlock = 256;
     std::vector<IntRect> pieces;
@@ -633,6 +633,8 @@ namespace
     {
         for (int y = piece.y; y < piece.y + piece.height; y += blockHeight)
         {
+            if (cancellation.IsCancelled())
+                return {};
             for (int x = piece.x; x < piece.x + piece.width; x += blockWidth)
             {
                 tiles.push_back(RasterTile{x, y, block, 0, 0, std::min(blockWidth, piece.x + piece.width - x),
@@ -645,9 +647,9 @@ namespace
 } // namespace
 
 Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::vector<RasterTile> tiles, int cropX,
-                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill)
+                         int cropY, int cropWidth, int cropHeight, std::uint8_t fill, CancelToken cancellation)
 {
-    if (cropWidth < 1 || cropHeight < 1)
+    if (cropWidth < 1 || cropHeight < 1 || cancellation.IsCancelled())
     {
         return {};
     }
@@ -669,11 +671,14 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
         gridFill = source.Fill();
         if (gridFill != fill)
         {
-            older = UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
-                                 IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill);
+            older =
+                UniformTiles(IntRect{cropX, cropY, cropWidth, cropHeight},
+                             IntRect{sourceX, sourceY, source.Width(), source.Height()}, format, fill, cancellation);
         }
         for (RasterTile tile : source.Tiles())
         {
+            if (cancellation.IsCancelled())
+                return {};
             tile.x += sourceX;
             tile.y += sourceY;
             older.push_back(std::move(tile));
@@ -687,13 +692,19 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
     std::vector<RasterTile> result;
     for (const RasterTile& old : older)
     {
+        if (cancellation.IsCancelled())
+            return {};
         std::vector<IntRect> pieces{IntRect{old.x, old.y, old.Width(), old.Height()}};
         for (const RasterTile& fresh : tiles)
         {
+            if (cancellation.IsCancelled())
+                return {};
             const IntRect cover{fresh.x, fresh.y, fresh.Width(), fresh.Height()};
             std::vector<IntRect> next;
             for (const IntRect& piece : pieces)
             {
+                if (cancellation.IsCancelled())
+                    return {};
                 const IntRect overlap = piece.Intersect(cover);
                 if (overlap.Empty())
                 {
@@ -719,14 +730,20 @@ Raster Raster::Replacing(const Raster& source, int sourceX, int sourceY, std::ve
     }
     for (RasterTile& fresh : tiles)
     {
+        if (cancellation.IsCancelled())
+            return {};
         result.push_back(std::move(fresh));
     }
     for (RasterTile& tile : result)
     {
+        if (cancellation.IsCancelled())
+            return {};
         tile.x -= cropX;
         tile.y -= cropY;
     }
-    return MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), gridFill);
+    Raster prepared =
+        MakeSparse(cropWidth, cropHeight, format, base, baseX - cropX, baseY - cropY, std::move(result), gridFill);
+    return cancellation.IsCancelled() ? Raster{} : prepared;
 }
 
 Raster Raster::Stretched(int width, int height) const

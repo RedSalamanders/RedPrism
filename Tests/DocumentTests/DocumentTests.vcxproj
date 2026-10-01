@@ -96,7 +96,9 @@
     <ClInclude Include="..\..\Common\OutputPathLimits.h" />
     <ClInclude Include="..\..\Common\ProjectSaveWork.h" />
     <ClInclude Include="RasterWorkTests.h" />
+    <ClInclude Include="RasterEditWorkTests.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
+    <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\Selection.h" />
     <ClInclude Include="..\..\Common\BrushStroke.h" />
@@ -112,6 +114,7 @@
     <ClCompile Include="ProjectSaveMemoryTests.cpp" />
     <ClCompile Include="ExportMemoryTests.cpp" />
     <ClCompile Include="RasterWorkTests.cpp" />
+    <ClCompile Include="RasterEditWorkTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />
@@ -134,6 +137,7 @@
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
   </ItemGroup>
 

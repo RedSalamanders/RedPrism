@@ -216,6 +216,155 @@ void CopyAndCropOutputs()
     Expect(copyMatches && contiguousMatches && cropMatches && !sparse.IsMaterialized(),
            "copy-and-crop-match-independent-literal-bytes");
 }
+
+void StretchedRasterForWorkCases()
+{
+    constexpr std::array<std::uint8_t, 12> grayPixels{10, 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33};
+    const Raster gray = Gray(4, 3, grayPixels);
+    if (!gray.HasStorage())
+    {
+        Expect(false, "stretch.gray-fixture-created");
+        return;
+    }
+    const Raster grayDown = StretchedRasterForWork(gray, 2, 2);
+    constexpr std::array<std::uint8_t, 4> grayDownExpected{10, 12, 20, 22};
+    Expect(grayDown.HasStorage() && grayDown.Width() == 2 && grayDown.Height() == 2 &&
+               grayDown.Format() == RasterFormat::Gray8 && grayDown.Data() != nullptr &&
+               std::equal(grayDownExpected.begin(), grayDownExpected.end(), grayDown.Data()),
+           "stretch.gray4x3-to2x2-nearest-literal");
+
+    constexpr std::array<std::uint8_t, 16> bgraPixels{1, 2, 3, 4, 11, 12, 13, 14, 21, 22, 23, 24, 31, 32, 33, 34};
+    const Raster bgra = Bgra(2, 2, bgraPixels);
+    if (!bgra.HasStorage())
+    {
+        Expect(false, "stretch.bgra-fixture-created");
+        return;
+    }
+    const Raster bgraUp = StretchedRasterForWork(bgra, 3, 3);
+    constexpr std::array<std::uint8_t, 36> bgraUpExpected{1,  2,  3,  4,  1,  2,  3,  4,  11, 12, 13, 14,
+                                                          1,  2,  3,  4,  1,  2,  3,  4,  11, 12, 13, 14,
+                                                          21, 22, 23, 24, 21, 22, 23, 24, 31, 32, 33, 34};
+    Expect(bgraUp.HasStorage() && bgraUp.Width() == 3 && bgraUp.Height() == 3 &&
+               bgraUp.Format() == RasterFormat::Bgra8888 && bgraUp.Data() != nullptr &&
+               std::equal(bgraUpExpected.begin(), bgraUpExpected.end(), bgraUp.Data()),
+           "stretch.bgra2x2-to3x3-nearest-literal");
+
+    const Raster identity = StretchedRasterForWork(gray, 4, 3);
+    Expect(identity == gray, "stretch.exact-dimensions-share-source");
+
+    constexpr std::array<std::uint8_t, 6> basePixels{1, 2, 3, 4, 5, 6};
+    constexpr std::array<std::uint8_t, 1> leafPixels{99};
+    const Raster base = Gray(3, 2, basePixels);
+    const Raster leaf = Gray(1, 1, leafPixels);
+    if (!base.HasStorage() || !leaf.HasStorage())
+    {
+        Expect(false, "stretch.sparse-fixtures-created");
+        return;
+    }
+    const Raster nested = Raster::MakeSparse(2, 2, RasterFormat::Gray8, Raster{}, 0, 0, {RasterTile{1, 0, leaf}}, 70);
+    if (!nested.HasStorage())
+    {
+        Expect(false, "stretch.nested-sparse-fixture-created");
+        return;
+    }
+    const Raster sparse = Raster::MakeSparse(5, 3, RasterFormat::Gray8, base, 1, 0, {RasterTile{2, 1, nested}}, 9);
+    if (!sparse.HasStorage())
+    {
+        Expect(false, "stretch.outer-sparse-fixture-created");
+        return;
+    }
+    const Raster sparseUp = StretchedRasterForWork(sparse, 3, 2);
+    // Source coordinates are (0,0),(1,0),(3,0) and (0,1),(1,1),(3,1).
+    // The outer fill is 9; the base begins at (1,0); the nested sparse tile contributes 70/99.
+    constexpr std::array<std::uint8_t, 6> sparseExpected{9, 1, 3, 9, 4, 99};
+    Expect(sparseUp.HasStorage() && sparseUp.Data() != nullptr &&
+               std::equal(sparseExpected.begin(), sparseExpected.end(), sparseUp.Data()) && sparse.IsSparse() &&
+               !sparse.IsMaterialized() && nested.IsSparse() && !nested.IsMaterialized(),
+           "stretch.sparse-base-nested-tile-fill-private-read");
+
+    CancelSource cancelled;
+    (void)cancelled.Cancel();
+    Expect(!StretchedRasterForWork(sparse, 3, 2, cancelled.Token()).HasStorage() &&
+               !StretchedRasterForWork(gray, 0, 2).HasStorage() &&
+               !StretchedRasterForWork(gray, 2, kMaxCanvasSide + 1).HasStorage() && !sparse.IsMaterialized() &&
+               !nested.IsMaterialized(),
+           "stretch.precancel-and-invalid-dimensions-publish-nothing");
+}
+
+void ThumbnailRasterForWorkCases()
+{
+    constexpr std::array<std::uint8_t, 6> smallPixels{3, 7, 11, 15, 19, 23};
+    const Raster small = Gray(3, 2, smallPixels);
+    if (!small.HasStorage())
+    {
+        Expect(false, "thumbnail.small-fixture-created");
+        return;
+    }
+    Expect(ThumbnailRasterForWork(small, 3) == small, "thumbnail.max-side-at-dimension-returns-identity");
+
+    constexpr std::array<std::uint8_t, 4> basePixels{11, 12, 21, 22};
+    constexpr std::array<std::uint8_t, 1> leafPixels{99};
+    const Raster base = Gray(2, 2, basePixels);
+    const Raster leaf = Gray(1, 1, leafPixels);
+    if (!base.HasStorage() || !leaf.HasStorage())
+    {
+        Expect(false, "thumbnail.sparse-fixtures-created");
+        return;
+    }
+    const Raster nested = Raster::MakeSparse(2, 2, RasterFormat::Gray8, Raster{}, 0, 0, {RasterTile{1, 0, leaf}}, 70);
+    if (!nested.HasStorage())
+    {
+        Expect(false, "thumbnail.nested-fixture-created");
+        return;
+    }
+    const Raster sparse = Raster::MakeSparse(4, 4, RasterFormat::Gray8, base, 0, 0, {RasterTile{1, 1, nested}}, 7);
+    if (!sparse.HasStorage())
+    {
+        Expect(false, "thumbnail.outer-fixture-created");
+        return;
+    }
+    const Raster thumbnail = ThumbnailRasterForWork(sparse, 2);
+    // 4x4 -> 2x2 samples (0,0),(2,0),(0,2),(2,2): base, outer fill, outer fill, nested fill.
+    constexpr std::array<std::uint8_t, 4> thumbnailExpected{11, 7, 7, 70};
+    Expect(thumbnail.HasStorage() && thumbnail.Width() == 2 && thumbnail.Height() == 2 &&
+               thumbnail.Format() == RasterFormat::Gray8 && thumbnail.Data() != nullptr &&
+               std::equal(thumbnailExpected.begin(), thumbnailExpected.end(), thumbnail.Data()) && sparse.IsSparse() &&
+               !sparse.IsMaterialized() && nested.IsSparse() && !nested.IsMaterialized(),
+           "thumbnail.sparse-rectangle-reduction-literal-private-rows");
+
+    CancelSource cancelled;
+    (void)cancelled.Cancel();
+    Expect(!ThumbnailRasterForWork(sparse, 2, cancelled.Token()).HasStorage() &&
+               !ThumbnailRasterForWork(small, 0).HasStorage() && !sparse.IsMaterialized() && !nested.IsMaterialized(),
+           "thumbnail.precancel-and-invalid-max-side-publish-nothing");
+}
+
+void CarriedLargeSparseMaskUsesSampledRows()
+{
+    constexpr std::array<std::uint8_t, 1> sample{99};
+    const Raster leaf = Gray(1, 1, sample);
+    if (!leaf.HasStorage())
+    {
+        Expect(false, "carried-sparse.fixture");
+        return;
+    }
+    const Raster source = Raster::MakeSparse(10000, 10000, RasterFormat::Gray8, {}, 0, 0, {RasterTile{0, 0, leaf}}, 17);
+    if (!source.HasStorage())
+    {
+        Expect(false, "carried-sparse.large-logical-fixture");
+        return;
+    }
+    const Raster carried = CarriedMaskForWork(source, 2, 2, 1, 1, 4, 3, 255);
+    // The old 2x2 grid samples source (0,0),(5000,0),(0,5000),(5000,5000). Its top left lands at (1,1).
+    constexpr std::array<std::uint8_t, 12> expected{255, 255, 255, 255, 255, 99, 17, 255, 255, 17, 17, 255};
+    Expect(carried.HasStorage() && carried.Data() && std::equal(expected.begin(), expected.end(), carried.Data()),
+           "carried-sparse.large-source-small-grid-literal-coordinate-reference");
+    Expect(!source.IsMaterialized(), "carried-sparse.large-source-remains-unassembled");
+    CancelSource cancelled;
+    (void)cancelled.Cancel();
+    Expect(!CarriedMaskForWork(source, 2, 2, 1, 1, 4, 3, 255, cancelled.Token()).HasStorage(),
+           "carried-sparse.precancel-publishes-nothing");
+}
 } // namespace
 
 int RunRasterWorkTests()
@@ -227,5 +376,8 @@ int RunRasterWorkTests()
     DepthAndPublication();
     CancellationAndInvalidInputs();
     CopyAndCropOutputs();
+    StretchedRasterForWorkCases();
+    ThumbnailRasterForWorkCases();
+    CarriedLargeSparseMaskUsesSampledRows();
     return gFailures;
 }

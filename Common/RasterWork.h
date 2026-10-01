@@ -22,6 +22,8 @@ inline constexpr std::size_t kRasterWorkDepthLimit = 64;
 [[nodiscard]] Raster ContiguousRasterForWork(const Raster& image, CancelToken cancellation = {});
 [[nodiscard]] Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outsideFill,
                                        CancelToken cancellation = {});
+// Exact nearest grid stretch, as Raster::Stretched, with a private source row and adopted output.
+[[nodiscard]] Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation = {});
 // Worker equivalents of Raster::MakeThumbnail and CarriedMask. They check cancellation before returning even
 // shared/no-op results and never publish partially initialized pixels.
 [[nodiscard]] Raster ThumbnailRasterForWork(const Raster& source, int maxSide = 96, CancelToken cancellation = {});

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -20,8 +21,8 @@ struct Bounds
         return x1 <= x0 || y1 <= y0;
     }
 };
-[[nodiscard]] Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height,
-                                    std::size_t stride) noexcept;
+[[nodiscard]] Bounds CoverageBounds(const std::uint8_t* gray, std::size_t width, std::size_t height, std::size_t stride,
+                                    const CancelToken& cancellation = {}) noexcept;
 
 // Heals in place over premultiplied BGRA (4 bytes per pixel, `stride` bytes per row). `coverage` (width × height
 // bytes, 0–255) marks what to heal. Copied texture is blended so it meets the surrounding tone exactly: the

@@ -1,6 +1,7 @@
 #include "Document.h"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
@@ -156,6 +157,68 @@ void AddSnapshotBytes(const std::optional<CanvasDocument>& document, std::unorde
     }
 }
 } // namespace
+
+std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept
+{
+    std::uint64_t bytes = 64 * 1024;
+    const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
+    {
+        if ((size != 0 && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
+            count * size > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += count * size;
+        return true;
+    };
+    const auto references = [&](this const auto& self, const Raster& raster, unsigned int depth) noexcept -> bool
+    {
+        if (!raster.HasStorage())
+            return true;
+        if (depth > 128 || !add(1, 128))
+            return false;
+        // Counting occurrences bounds the deduplicating trim set's entries, buckets and rehash overlap without
+        // allocating an admission set. Every held identity may repeat; conservative overcount is intentional.
+        if (!self(raster.Base(), depth + 1))
+            return false;
+        for (const auto& tile : raster.Tiles())
+            if (!self(tile.pixels, depth + 1))
+                return false;
+        return true;
+    };
+    const auto snapshot = [&](const std::optional<CanvasDocument>& document, bool copies) noexcept
+    {
+        if (!document)
+            return true;
+        for (const auto& layer : document->layers)
+        {
+            if (!references(layer.shapeImage, 0) ||
+                (layer.asset && (!references(layer.asset->image, 0) || !references(layer.asset->thumbnail, 0))) ||
+                (layer.mask &&
+                 (!references(layer.mask->asset.image, 0) || !references(layer.mask->asset.thumbnail, 0))))
+                return false;
+            if (!copies)
+                continue;
+            if (!add(8, sizeof(ImageLayer) + 256) || !add(layer.name.size() + 1, 8 * sizeof(wchar_t)) ||
+                (layer.asset && !add(layer.asset->name.size() + 1, 8 * sizeof(wchar_t))) ||
+                (layer.mask && !add(layer.mask->asset.name.size() + 1, 8 * sizeof(wchar_t))))
+                return false;
+            if (layer.adjustment)
+                for (const auto& channel : layer.adjustment->curves.channels)
+                    if (!add(channel.size(), 8 * sizeof(CurvePoint)))
+                        return false;
+        }
+        return !document->selection || add(1, 128); // retained geometry is shared, only its set entry is new
+    };
+    if (!snapshot(current, true) || (_pending && !snapshot(_pending->document, false)) ||
+        !add(_past.size() + 1, 4 * sizeof(Entry)) || !add(_past.size() + _future.size() + 1, 2 * sizeof(const Entry*)))
+        return 0;
+    for (const auto& entry : _past)
+        if (!snapshot(entry.before.document, false) || !snapshot(entry.after.document, false))
+            return 0;
+    for (const auto& entry : _future)
+        if (!snapshot(entry.before.document, false) || !snapshot(entry.after.document, false))
+            return 0;
+    return bytes;
+}
 
 std::size_t DocumentHistory::RetainedBytes(const std::optional<CanvasDocument>& current) const
 {

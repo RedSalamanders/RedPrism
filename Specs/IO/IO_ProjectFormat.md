@@ -42,6 +42,17 @@ fails; retain `dest.old` as recovery and report its exact cleanup error. Cleanup
 replace the initiating failure status. Cleanup touches only the exact reserved backup or uniquely created staging
 path, never sibling names selected by a wildcard.
 
+Recovery from a **native** rollback rename error `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at
+most three attempts. Between attempts, the calling IO worker blocks on a one-shot waitable timer with nominal
+25 ms then 100 ms delays; each event wait has a 1 s failure bound. There is no busy polling, healthy-save timer
+cost or UI-thread wait. `RollbackRetryScheduled` reports the immediate native error before each wait. Cancellation
+after rotation starts cannot abandon recovery. Other native errors, unavailable/failed timers and injected
+operation failures are final; exhausted recovery preserves the complete `.old` tree and reports `RollbackFailed`.
+These bounds cover attempts and event waits, not interruption of an in-flight filesystem call. NTFS can reject
+a directory rename while any descendant file is open; the independent real-reader fixtures exercise both release
+at a retry observation and a reader retained through all attempts. They do not identify the external reader or
+filter responsible for previously observed transient errors.
+
 Tree cleanup uses a single 64 KiB path buffer allocated before creating staging, and makes no C++ heap
 allocations after it starts, including during bad_alloc unwinding. It removes reparse entries themselves without
 traversing their targets. Paths are bounded to 32,767 UTF-16 units and ordinary directory traversal to 128 levels;

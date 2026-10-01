@@ -5,6 +5,7 @@
 #include <cstring>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -251,6 +252,53 @@ Raster CropRasterForWork(const Raster& image, GridRect region, std::uint8_t outs
     return Raster::Adopt(region.width, region.height, image.Format(), std::move(bytes));
 }
 
+Raster StretchedRasterForWork(const Raster& source, int width, int height, CancelToken cancellation)
+{
+    if (!source.HasStorage() || width < 1 || height < 1 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
+        cancellation.IsCancelled())
+        return {};
+    if (width == source.Width() && height == source.Height())
+        return cancellation.IsCancelled() ? Raster{} : source;
+    const int channels = source.Channels();
+    const int stride = width * channels;
+    PixelBuffer output = PixelBuffer::TryAllocate(static_cast<std::size_t>(stride) * height);
+    if (!output)
+        return {};
+    std::vector<std::uint8_t> row(static_cast<std::size_t>(source.Stride()));
+    const auto columns = std::make_unique_for_overwrite<int[]>(static_cast<std::size_t>(width));
+    for (int x = 0; x < width; ++x)
+    {
+        if (x % 256 == 0 && cancellation.IsCancelled())
+            return {};
+        columns[static_cast<std::size_t>(x)] = static_cast<int>(static_cast<std::int64_t>(x) * source.Width() / width);
+    }
+    int loaded = -1;
+    for (int y = 0; y < height; ++y)
+    {
+        if (cancellation.IsCancelled())
+            return {};
+        const int sourceY = static_cast<int>(static_cast<std::int64_t>(y) * source.Height() / height);
+        if (sourceY != loaded)
+        {
+            if (!ReadRasterRegionForWork(source, {0, sourceY, source.Width(), 1}, row, row.size(), source.Fill(),
+                                         cancellation))
+                return {};
+            loaded = sourceY;
+        }
+        std::uint8_t* const to = output.Data() + static_cast<std::size_t>(y) * stride;
+        for (int x = 0; x < width; ++x)
+        {
+            if (x % 256 == 0 && cancellation.IsCancelled())
+                return {};
+            const std::uint8_t* const from =
+                row.data() + static_cast<std::size_t>(columns[static_cast<std::size_t>(x)]) * channels;
+            for (int channel = 0; channel < channels; ++channel)
+                to[static_cast<std::size_t>(x) * channels + channel] = from[channel];
+        }
+    }
+    return cancellation.IsCancelled() ? Raster{} : Raster::Adopt(width, height, source.Format(), std::move(output));
+}
+
 Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken cancellation)
 {
     if (cancellation.IsCancelled() || !source.HasStorage() || maxSide < 1)
@@ -278,19 +326,18 @@ Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken can
         return {};
     }
 
-    // Read each sparse input only once. The private contiguous copy uses bounded transfers and does not publish
-    // the source's shared sparse cache.
-    const Raster prepared = source.IsMaterialized() ? source : ContiguousRasterForWork(source, cancellation);
-    if (!prepared.HasStorage() || cancellation.IsCancelled())
-    {
+    // At most one source row coexists with the thumbnail, even for an unassembled sparse frame. Sampling
+    // one row per output row scans its tile list at most maxSide times instead of once per output pixel, and
+    // avoids a full-frame private copy just to produce a 96-pixel semantic mask thumbnail.
+    const bool dense = source.IsMaterialized();
+    const std::uint8_t* const input = dense ? source.Data() : nullptr;
+    if (dense && input == nullptr)
         return {};
-    }
-    const std::uint8_t* const input = prepared.Data();
-    if (input == nullptr || cancellation.IsCancelled())
-    {
-        return {};
-    }
-    const std::size_t sourceStride = static_cast<std::size_t>(prepared.Stride());
+    const std::size_t sourceStride = static_cast<std::size_t>(source.Stride());
+    std::vector<std::uint8_t> row;
+    if (!dense)
+        row.resize(sourceStride);
+    int loaded = -1;
     constexpr int kPixelCheckInterval = 256;
     for (int y = 0; y < thumbHeight; ++y)
     {
@@ -299,7 +346,15 @@ Raster ThumbnailRasterForWork(const Raster& source, int maxSide, CancelToken can
             return {};
         }
         const int sourceY = (y * height) / thumbHeight;
-        const std::uint8_t* const inputRow = input + static_cast<std::size_t>(sourceY) * sourceStride;
+        if (!dense && loaded != sourceY)
+        {
+            if (!ReadRasterRegionForWork(source, {0, sourceY, width, 1}, row, sourceStride, source.Fill(),
+                                         cancellation))
+                return {};
+            loaded = sourceY;
+        }
+        const std::uint8_t* const inputRow =
+            dense ? input + static_cast<std::size_t>(sourceY) * sourceStride : row.data();
         std::uint8_t* const outputRow =
             output.Data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(dstStride);
         for (int x = 0; x < thumbWidth; ++x)
@@ -335,14 +390,11 @@ Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x
     }
 
     // CarriedMask is Stretched(oldWidth, oldHeight), followed by Replacing at (x,y) and crop (0,0,width,height).
-    // Materialize an unassembled sparse mask once so nearest sampling does not rescan its tile list per pixel.
-    const Raster prepared = mask.IsMaterialized() ? mask : ContiguousRasterForWork(mask, cancellation);
-    if (!prepared.HasStorage() || cancellation.IsCancelled())
-    {
-        return {};
-    }
-    const std::uint8_t* const input = prepared.Data();
-    if (input == nullptr || cancellation.IsCancelled())
+    // Read one source row per sampled row. A separately sized sparse mask may be much larger than its layer;
+    // carrying it must not allocate its entire original frame just to sample a small destination grid.
+    const bool dense = mask.IsMaterialized();
+    const std::uint8_t* const input = dense ? mask.Data() : nullptr;
+    if ((dense && input == nullptr) || cancellation.IsCancelled())
     {
         return {};
     }
@@ -354,7 +406,11 @@ Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x
     {
         return {};
     }
-    const std::size_t sourceStride = static_cast<std::size_t>(prepared.Stride());
+    const std::size_t sourceStride = static_cast<std::size_t>(mask.Stride());
+    std::vector<std::uint8_t> sourceBytes;
+    if (!dense)
+        sourceBytes.resize(sourceStride);
+    int loaded = -1;
     const int sourceWidth = mask.Width();
     const int sourceHeight = mask.Height();
     constexpr int kPixelCheckInterval = 256;
@@ -387,7 +443,15 @@ Raster CarriedMaskForWork(const Raster& mask, int oldWidth, int oldHeight, int x
             continue;
         }
         const int sourceY = static_cast<int>(stretchedY * sourceHeight / oldHeight);
-        const std::uint8_t* const sourceRow = input + static_cast<std::size_t>(sourceY) * sourceStride;
+        if (!dense && sourceY != loaded)
+        {
+            if (!ReadRasterRegionForWork(mask, {0, sourceY, sourceWidth, 1}, sourceBytes, sourceStride, mask.Fill(),
+                                         cancellation))
+                return {};
+            loaded = sourceY;
+        }
+        const std::uint8_t* const sourceRow =
+            dense ? input + static_cast<std::size_t>(sourceY) * sourceStride : sourceBytes.data();
         for (int destinationX = 0; destinationX < width; ++destinationX)
         {
             if (destinationX % kPixelCheckInterval == 0 && cancellation.IsCancelled())

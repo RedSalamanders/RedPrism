@@ -162,8 +162,11 @@ shown rebuilds nothing, and a new offset rebuilds the tiles the pixels landed on
 hole's tiles on the first update, or when duplicating switches), each from its original content (review fix
 RF-216). The session's `PixelMove` keeps the raster; the host shows it through the stroke preview like a gradient
 (`BeginStroke` from `PreviewFor`, the changed tiles per pointer update) and the commit adopts the working texture,
-so a move never re-uploads the layer per pointer update. The session's other edits (fills, Clear, Invert, nudges)
-commit at once and upload through the sparse path.
+so a move never re-uploads the layer per pointer update. Synchronous session pixel edits upload through the
+sparse path. Production Fill, Clear and Invert use `RasterEditWork`: a detached CPU `BrushStroke` mode with no
+segment/permanent-density/coverage-engine buffers, cancellation between rows/tiles and private sparse reads.
+The pointer brush's compute engine, including the required WARP compute path, is unchanged. Prepared sparse
+handles and eager mask thumbnails publish once through the token-checked owner API in `Document_Tools`.
 
 ## Budgets
 

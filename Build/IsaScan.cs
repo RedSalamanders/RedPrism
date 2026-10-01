@@ -168,7 +168,7 @@ namespace RedPrismBuild
             Contribution owner = contributions[ownerIndex];
             ulong begin = checked(imageBase + tableRva);
             int dataOwner;
-            // Release std::variant uses index -1 for its default case: MOVSX RAX,byte [RBP+disp8] immediately
+            // Release std::variant uses index -1 for its default case: MOVSX RAX,byte [RBP+disp8/disp32] immediately
             // precedes LEA RCX,imagebase, and the DWORD load is biased by exactly one entry. Prove the complete
             // table, default included, from the exact anonymous same-owner PDB symbol; never skip an arbitrary
             // range before a table load or weaken normal dispatch/target bounds.
@@ -438,8 +438,10 @@ namespace RedPrismBuild
                       dlByteIndex = false;
                       preludeStep = 0; firstPreludeTarget = 0; secondPreludeTarget = 0; }
                 }
-                previousSignedByteIndex = bytes.Length == 5 && bytes[0] == "48" && bytes[1] == "0f" &&
-                                          bytes[2] == "be" && bytes[3] == "45";
+                previousSignedByteIndex = (bytes.Length == 5 || bytes.Length == 8) && bytes[0] == "48" &&
+                                          bytes[1] == "0f" && bytes[2] == "be" &&
+                                          ((bytes.Length == 5 && bytes[3] == "45") ||
+                                           (bytes.Length == 8 && bytes[3] == "85"));
                 precedingEnd = checked(address + (ulong)bytes.Length);
                 int prefix = 0;
                 byte opcode = Byte.Parse(bytes[prefix], NumberStyles.HexNumber);

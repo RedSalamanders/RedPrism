@@ -358,8 +358,9 @@ composite)`; the kernels, the tile composition and the warp model live in
 
 The selection edits of the legacy `SelectionEdits.swift`, `FloatingSelection.swift` and `SelectionClipboard.swift`:
 raster edits built on the brush stroke's canvas passes and lifted pixels
-([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)), each one history entry through `CommitStroke` (which can
-apply a moved outline inside the same entry). `CanEditPixels` is `CanPaint`: a paintable active layer or targeted
+([`Rendering_Brush.md`](../Rendering/Rendering_Brush.md)), each one history entry. Synchronous session callers use
+`CommitStroke` (which can apply a moved outline inside the same entry); production basic edits use the detached
+preparation and owner publication below. `CanEditPixels` is `CanPaint`: a paintable active layer or targeted
 mask, no pending transform or stroke, and no explicitly empty selection.
 
 - **Fill** (`FillSelection(source)`; `Fill` / `Fill Mask`): the selection, or the whole canvas without one, takes the
@@ -375,6 +376,40 @@ mask, no pending transform or stroke, and no explicitly empty selection.
   layer (its off-canvas pixels too) without one. Available in every tool: a pending transform commits and a pending
   gradient applies first. A uniform 1×1 mask with a selection expands to the layer grid. Not on a group's pixels, a
   hidden layer, an adjustment layer or a disabled mask.
+### Detached basic raster edits (P1.5)
+
+Production Fill, Clear, Invert and Delete with a selection retain the selected host input ordinal through one
+Commit job. Target acquisition follows earlier accepted history and color-panel settlement. The complete peak
+reservation precedes capture of the layer, selection, palette, mask target, canvas dimensions and pixel budget.
+The admitted record reaches its owner capture hook and resumes without another reservation or FIFO entry.
+
+`RunRasterEdit` reads only owned metadata and immutable raster/selection handles. Its private CPU path preserves
+the `PaintCanvas` formulas, transformed document-center clipping and legacy history names above. It does not
+borrow a session or graphics engine. Coverage, tile bases/results, sparse replacement windows, stretched/carried
+masks and eager semantic mask thumbnails are prepared on the worker. Sparse inputs MUST remain unassembled.
+Cancellation is checked between coverage rows/edges, source rows, edit rows/tiles, sparse-window splits and result
+stages. A partial/failed/canceled preparation returns no layer. Pixel-limit refusal is `TooLarge`, invalid input
+is `Invalid`, allocation refusal is `Memory`, and no painted area is `Unchanged`; none adds a history entry.
+
+`ApplyRasterEditIfCurrent` validates session/document/restore identities, whole mutation generation, retained
+target image/transform/full mask, selection identity, canvas dimensions and active image/mask target. It rejects
+unsettled edits and unrelated layer metadata changes. It validates independent image/mask budgets and moves the
+complete prepared target inside one named transaction. It MUST NOT rasterize coverage, grow masks, compute
+thumbnails or run any pixel kernel. Refusal retains the caller's candidate so its aggregate owner can retire it
+off-thread. A layer-grid nonuniform mask grows atomically with its image; preparation failure fails the edit.
+
+The host suppresses even a Finished result after cancellation of its barrier. A stale completion records no
+entry and does not overwrite newer content. Input/barrier/reservation ownership persists through acknowledgement.
+Workers catch allocation failure only through the shared runner; capture/admission `noexcept` boundaries fail
+the whole request. Failure displays one localized pixel-edit/size notice. No-selection Delete remains the layer
+or mask metadata operation, and Clear without selection changes nothing.
+
+Pending gradient and distortion settlement still use existing synchronous prerequisites until A4/A6 in the
+active raster-edit plan. History, chrome refresh and display upload remain measured P1.9/G1 costs. This contract
+does not claim that these remaining callers or all P1 timing targets are qualified.
+
+### Other selection pixel edits
+
 - **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):
   `BeginPixelMove(duplicate)` cuts the selected image pixels out of the layer through the coverage (false without a
   non-empty selection, with a mask targeted, or over no pixels); `MovePixels(dx, dy)` previews them a whole-pixel

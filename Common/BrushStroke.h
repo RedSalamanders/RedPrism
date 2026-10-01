@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Executor.h"
 
 #include <array>
 #include <cstdint>
@@ -172,6 +173,15 @@ class BrushStroke
     {
         _pixelLimit = pixels;
     }
+    // Private CPU-only Fill/Clear/Invert preparation, before any samples/tiles. It allocates no brush density
+    // buffers, uses cancellable private reads and propagates allocation failure to the worker runner.
+    [[nodiscard]] bool ConfigureWorkerRasterEdit(CancelToken cancellation,
+                                                 void (*progress)(void*, std::size_t, std::size_t) noexcept = nullptr,
+                                                 void* progressContext = nullptr) noexcept;
+    [[nodiscard]] bool PixelLimitRefused() const noexcept
+    {
+        return _pixelLimitRefused;
+    }
     // Gray8 coverage at document resolution that limits the edit (nullopt: the whole canvas).
     void SetSelectionClip(std::optional<Raster> coverage) noexcept
     {
@@ -322,6 +332,11 @@ class BrushStroke
     SpotHealingMode _healingMode = SpotHealingMode::ContentAware;
     bool _valid = false;
     bool _failed = false;
+    bool _workerRasterEdit = false;
+    bool _pixelLimitRefused = false;
+    CancelToken _workCancellation;
+    void (*_workProgress)(void*, std::size_t, std::size_t) noexcept = nullptr;
+    void* _workProgressContext = nullptr;
     std::int64_t _pixelLimit = 100'000'000;
     std::optional<Raster> _selection;
     std::optional<GridRect> _allocated;

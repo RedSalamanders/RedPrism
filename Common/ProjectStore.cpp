@@ -1587,6 +1587,37 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     return true;
 }
 
+[[nodiscard]] bool RestoreDirectory(const std::wstring& backup, const std::wstring& dest, std::uint32_t& failure,
+                                    ProjectSaveFaultPolicy faultPolicy, ProjectIoObserver observer) noexcept
+{
+    failure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::RollbackRename);
+    if (failure != 0)
+        return false; // An injected operation failure is final, preserving the deterministic fault seam.
+    // NTFS can refuse a directory rename while a reader has any child open, including a reader reacting to the
+    // first rename. Recovery alone gets two delayed attempts. No healthy-save overhead, spinning, UI wait or
+    // cancellation-dependent abandonment of the old tree after rotation has started.
+    constexpr std::array<LONGLONG, 2> retryDelays100ns{-25 * 10000ll, -100 * 10000ll};
+    wil::unique_handle retryTimer;
+    for (std::size_t attempt = 0;; ++attempt)
+    {
+        if (MoveFileW(backup.c_str(), dest.c_str()))
+            return true;
+        failure = GetLastError();
+        if ((failure != ERROR_ACCESS_DENIED && failure != ERROR_SHARING_VIOLATION) ||
+            attempt == retryDelays100ns.size())
+            return false;
+        if (!retryTimer)
+            retryTimer.reset(CreateWaitableTimerW(nullptr, FALSE, nullptr));
+        LARGE_INTEGER due{};
+        due.QuadPart = retryDelays100ns[attempt];
+        if (!retryTimer || !SetWaitableTimer(retryTimer.get(), &due, 0, nullptr, nullptr, FALSE))
+            return false; // Preserve the initiating native rename error and the complete recovery backup.
+        Report(observer, ProjectIoStage::RollbackRetryScheduled, failure);
+        if (WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
+            return false;
+    }
+}
+
 [[nodiscard]] ProjectIoStatus SaveExploded(const std::wstring& dest, const std::wstring& staging,
                                            CancelToken cancellation, ProjectIoObserver observer,
                                            ProjectSaveFaultPolicy faultPolicy, TreeCleanupBuffer& cleanupScratch)
@@ -1620,7 +1651,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
         if (IsDirectory(backup.c_str()))
         {
             std::uint32_t rollbackFailure = 0;
-            if (!RenameDirectory(backup, dest, ProjectSaveFaultStage::RollbackRename, rollbackFailure, faultPolicy))
+            if (!RestoreDirectory(backup, dest, rollbackFailure, faultPolicy, observer))
                 Report(observer, ProjectIoStage::RollbackFailed, rollbackFailure);
         }
         return ProjectIoStatus::Encode;

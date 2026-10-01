@@ -86,6 +86,7 @@
 
   <ItemGroup>
     <ClInclude Include="..\..\Common\RasterWork.h" />
+    <ClInclude Include="..\..\Common\RasterEditWork.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CompositionTests.cpp" />
@@ -117,6 +118,7 @@
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\..\Common\Selection.cpp" />
     <ClCompile Include="..\..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\..\Common\Crop.cpp" />

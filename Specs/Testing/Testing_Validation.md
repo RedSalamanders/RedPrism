@@ -11,6 +11,23 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Detached basic raster edits
+
+`DocumentTests` runs `rastereditwork.*` for literal legacy Fill/Clear/Invert bytes, Gray8 masks, transformed
+selection coordinates, sparse fill/base/tile inputs without shared materialization, carried mask growth,
+exact/lower/invalid budgets, memory floors and pre/mid-tile cancellation. `rasterwork.stretch.*` and
+`rasterwork.thumbnail.*` use independent nearest-coordinate literals for dense/nested sparse reads and
+cancellation. Owner publication covers one-entry Undo/Redo and refusals of stale tokens or malformed candidates.
+
+The WARP application self-test runs `rasteredit-host.*` through all five production commands on image and mask
+targets at gates before and after preparation. Held states retain selected input/history/whole reservation while
+view input remains usable. Controls cover early and late cancellation, returned/injected allocation errors,
+capture/admission failure, stale image/transform/full mask/selection/generation/restore/document, younger Undo,
+and aggregate release of a large sparse canceled result on a worker. No-selection Delete remains metadata;
+Clear without selection adds no entry. Terminal states retain no tickets/barriers/host-input or memory charges
+and perform no hidden Present. Gate deadlines detect deadlocks, not performance thresholds. All x64 suites and
+ARM64 cross-builds remain required; pending gradient/distortion callers and real-loop timings stay open in P1.
+
 ### Retained selection and history ownership
 
 `DocumentTests` runs `selectionstorage.*` and `history-accounting.*`: empty/shared/moved geometry, reserved
@@ -150,7 +167,10 @@ function an instruction exemption.
 
 The exact WIC RDX-base/RCX-target dispatch additionally has seven-DWORD fixtures with required anonymous PDB
 start, malformed dispatch/symbol/target/bounds negatives and adjacent real-vector rejection. The standalone
-parser suite has 202 controls including 29 RDX-form cases and 45 exact Menu R9-base/R8-target cases. The latter
+parser suite has 226 controls including 29 RDX-form cases, 45 exact Menu R9-base/R8-target cases and 24
+signed-byte RBP+disp32 cases. The signed form requires the exact MOVSX/LEA/load/ADD/JMP encoding, an anonymous
+same-owner table start including its biased default entry, and decoded target bounds; wrong REX/opcode/frame
+base/SIB, noncontiguity, invalid symbols/targets and adjacent real vector code remain rejected. The Menu form
 requires its byte-index load, unchanged base/indices/targets, anonymous PDB start and decoded-target bounds;
 missing/changed operands, noncontiguity, malformed PDB evidence, truncation and adjacent real VEX remain rejected.
 [Original forms record](../TestRuns/IsaTableForms_2026-09-30.md).
@@ -312,6 +332,12 @@ exact reported errors, compare literal loaded pixels and byte-identical old tree
 Backup-only retries cover repeated failed rollback, successful restoration and successful new publication;
 unrelated siblings survive. Real cleanup cases cover a read-only file, nested files, a mount-point junction with
 an intact external target and the 128-level refusal. Injected flush/close faults remain open.
+Native rollback-reader controls hold a descendant manifest open after rotation. One releases at the first
+`RollbackRetryScheduled` observation and requires exact restoration despite late cancellation; another remains
+open through exactly two event waits/three attempts and requires the exact access-denied error, complete `.old`
+tree, cleaned staging and no false publication. Closing that reader then permits backup-only recovery. Test
+observers control ownership transitions, never sleep or assert nominal timer latency. Read-only attribute reset
+and deep-fixture removal are asserted explicitly.
 
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5

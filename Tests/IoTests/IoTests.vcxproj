@@ -85,6 +85,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\Common\Document.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
+    <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
     <ClInclude Include="..\..\Common\CodecFileStream.h" />
@@ -127,6 +128,7 @@
     <ClCompile Include="..\..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\..\Common\CodecFileStream.cpp" />

@@ -92,6 +92,15 @@ owned `PixelBuffer` results follow the same rule, including unpublished/cancelle
 before joining/draining prevents callbacks into a destroyed scheduler. Sparse bases and tiles retain independent
 shared ownership; dropping a wrapper never frees a still-referenced base or tile.
 
+Basic raster-edit jobs retain input/token/result handles in one aggregate deferred-release owner. A stale or
+canceled sparse frame can consist of many individually small tiles; retirement MUST NOT free that entire graph
+on the UI thread merely because each tile is below the per-storage threshold. Worker accounting deduplicates
+reachable raster identities and includes allocation-rounded contiguous pixel bounds, tile-vector capacities, conservative storage overhead,
+names and retained selection capacity. This retirement bound includes held immutable sources and may overcount
+sources still referenced by the live document; it never copies their pixels. Unaccounted allocation-failure
+paths remain eligible for aggregate deferral. Clearing the sink before shutdown join preserves the existing
+join/drain ownership rule.
+
 `PixelBuffer` uses a separately allocated 64-byte ownership record and aligned CRT pixels. Requested size is
 distinct from rounded capacity; buffers of at least 16 MiB use 16 MiB classes for bounded recycling. Consumers
 see only the requested size. `RequiredBytes` provides the complete allocation estimate for memory admission.

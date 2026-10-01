@@ -20,6 +20,7 @@
 #include "PreviewMailbox.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
+#include "RasterEditWork.h"
 #include "Renderer.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
@@ -48,6 +49,7 @@ struct FileWorkTestGate;
 struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
 struct ImageImportTestGate;
+struct RasterEditTestGate;
 struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
@@ -378,6 +380,10 @@ class Application final : public ChromeEvents
     int RunSizingWorkSelfTest() noexcept;
     class SizingJob;
     [[nodiscard]] HRESULT StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept;
+    class RasterEditJob;
+    [[nodiscard]] HRESULT StartRasterEdit(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
+    void ExecuteRasterEditCommand(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
+    int RunRasterEditSelfTest() noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
@@ -598,6 +604,9 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _sizingStamp;
     std::optional<JobTicket> _sizingTicket;
     std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
+    std::optional<HistoryWorkStamp> _rasterEditStamp;
+    std::optional<JobTicket> _rasterEditTicket;
+    std::shared_ptr<RasterEditTestGate> _rasterEditTestGate;
     std::optional<JobTicket> _pathClassificationTicket;
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;

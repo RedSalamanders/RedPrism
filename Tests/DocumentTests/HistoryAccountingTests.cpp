@@ -175,6 +175,38 @@ void UndoRedoReturnSnapshotsAndRestoreRevisionAndActiveLayer()
                history.CurrentRevision() == afterRevision,
            "redo-returns-after-snapshot-revision-and-active-layer");
 }
+
+void EditAdmissionIncludesWholeDocumentAndExistingHistory()
+{
+    DocumentHistory history;
+    std::optional<CanvasDocument> document{CanvasDocument{}};
+    const auto empty = history.EditMemoryBytes(document);
+    document->layers.push_back(ImageLayer::Blank(L"One", {2, 2}));
+    const auto one = history.EditMemoryBytes(document);
+    // Begin and End each copy the complete layer array, not only the edited target. This independent floor
+    // includes those two arrays; the declared bound also covers growth, names and trim set bookkeeping.
+    document->layers.reserve(10000);
+    for (int index = 1; index < 10000; ++index)
+        document->layers.push_back(ImageLayer::Blank(L"Peer", {2, 2}));
+    const auto many = history.EditMemoryBytes(document);
+    Expect(empty > 0 && one > empty && many >= 2 * document->layers.size() * sizeof(ImageLayer),
+           "edit-admission-whole-document-snapshot-metadata-floor");
+    history.Begin(L"Change", document, {});
+    document->width = 2;
+    history.End(document, {});
+    const auto recorded = history.EditMemoryBytes(document);
+    Expect(recorded > many, "edit-admission-includes-existing-snapshot-bookkeeping");
+    document->layers.back().name.assign(16384, L'A');
+    Expect(history.EditMemoryBytes(document) > recorded,
+           "edit-admission-accounts-long-peer-name-not-only-active-target");
+    const auto pendingBefore = history.CurrentRevision();
+    history.Begin(L"Pending", document, {});
+    const auto pending = history.EditMemoryBytes(document);
+    Expect(pending >= recorded && history.CurrentRevision() == pendingBefore,
+           "edit-admission-open-transaction-is-read-only");
+    history.End(document, {});
+    Expect(history.CurrentRevision() == pendingBefore, "edit-admission-query-leaves-no-op-transaction-unchanged");
+}
 } // namespace
 
 int RunHistoryAccountingTests()
@@ -185,5 +217,6 @@ int RunHistoryAccountingTests()
     SelectionOnlyEntryTrimsToTinyBudget();
     UndoRestoreSurvivesTrimDroppingItsFutureEntry();
     UndoRedoReturnSnapshotsAndRestoreRevisionAndActiveLayer();
+    EditAdmissionIncludesWholeDocumentAndExistingHistory();
     return gFailures;
 }

@@ -14,6 +14,7 @@
 #include "ImageFilters.h"
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
+#include "RasterEditWorkTests.h"
 #include "RasterWorkTests.h"
 #include "Selection.h"
 #include "SelectionStorageTests.h"
@@ -7337,6 +7338,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();
+    gFailures += RunRasterEditWorkTests();
     gFailures += RunFilterCancellationTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunSelectionStorageTests();

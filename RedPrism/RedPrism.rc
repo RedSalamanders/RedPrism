@@ -157,6 +157,7 @@ BEGIN
     IDS_ERROR_WAND_DETAILED         "That selection is too detailed to outline. Try a different Tolerance, or turn on Contiguous."
     IDS_ERROR_WAND_MEMORY           "There is not enough memory to make that selection."
     IDS_ERROR_BRUSH_BUDGET          "That stroke would take the layer past the 100-megapixel limit."
+    IDS_ERROR_PIXEL_EDIT            "The pixel edit could not be completed."
     IDS_ERROR_CLONE_SOURCE          "Alt-click where Clone Stamp should copy from first."
     IDS_ERROR_SMEAR_MASK            "Smudge and Liquify work on a layer's pixels, not its mask."
     IDS_ERROR_SHAPE_SIZE            "That shape is too large. A shape can cover up to 100 megapixels."

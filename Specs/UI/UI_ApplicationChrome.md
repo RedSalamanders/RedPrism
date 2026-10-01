@@ -844,6 +844,11 @@ file; a project opened from a folder — an exploded project, whatever its name,
 a folder, and Save As with the folder filter writes a folder.
 
 Ordered file batches, complete size drafts and layer/tool inputs retain their event-time arguments until execution.
+Fill, Clear, selected Delete and Invert also use this ordered input path. The selected ordinal owns their
+complete worker reservation through token-checked publication or acknowledged cancellation; younger document
+actions wait while view input remains available. Escape cancels the raster-edit barrier without discarding its
+request early. Failed preparation/admission reports one localized pixel-edit or size notice. Pending gradient
+and distortion settlement still follow their existing rules until the tracked P1.5 continuations replace them.
 They share the eight-entry pending ring plus one active request and 1 MiB combined host-input budget. A refused
 input reports the busy/budget notice; earlier entries keep their order. View and chrome input remain available
 while color commits, project opens or project saves run. The write stage first settles typed opacity and live canvas edits under

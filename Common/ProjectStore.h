@@ -70,11 +70,13 @@ enum class ProjectIoStage
     RollbackFailed,
     BackupCleanupFailed,
     StagingCleanupFailed,
+    RollbackRetryScheduled, // Immediate native rename error; a bounded worker timer wait follows.
 };
 
 // Optional bounded observer on the calling worker. It must not touch UI or throw. The context remains borrowed
 // until the operation returns. value is completed assets, percentage for ArchiveWriting, or the immediate
-// Win32 error for a failure stage; otherwise zero. Failure reports precede cleanup that may change LastError.
+// Win32 error for a failure stage or RollbackRetryScheduled; otherwise zero. Failure reports precede cleanup
+// that may change LastError.
 struct ProjectIoObserver
 {
     void (*notify)(void*, ProjectIoStage, unsigned int) noexcept = nullptr;
@@ -83,7 +85,8 @@ struct ProjectIoObserver
 
 // Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
 // value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
-// there is no process-wide test state. ZIP saves do not consult this policy.
+// there is no process-wide test state. Injected errors are final; only native rollback errors get the bounded
+// recovery attempts. ZIP saves do not consult this policy.
 enum class ProjectSaveFaultStage : std::uint8_t
 {
     DestinationToBackupRename,

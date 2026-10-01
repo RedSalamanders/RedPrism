@@ -41,6 +41,7 @@ function New-SyntheticCase {
         [switch]$OptionalByteIndex,
         [switch]$DlByteIndex,
         [switch]$SignedByteIndex,
+        [switch]$SignedWideFrame,
         [switch]$RealVex,
         [switch]$ShortNop,
         [switch]$R8Base,
@@ -87,10 +88,11 @@ function New-SyntheticCase {
     Put-Bytes $pe 0x5a4 $guid.ToByteArray()
     Set-U32 $pe 0x5b4 $age
 
-    if ($RdxBase -and ($OptionalByteIndex -or $DlByteIndex -or $SignedByteIndex -or $R8Base -or $HoistedR8Base -or $RaxBase)) {
+    $SignedIndex = $SignedByteIndex -or $SignedWideFrame
+    if ($RdxBase -and ($OptionalByteIndex -or $DlByteIndex -or $SignedIndex -or $R8Base -or $HoistedR8Base -or $RaxBase)) {
         throw 'RdxBase cannot be combined with another index form or base form.'
     }
-    if ($DlByteIndex -and ($OptionalByteIndex -or $SignedByteIndex -or $R8Base -or $HoistedR8Base -or $RaxBase -or $RdxBase)) {
+    if ($DlByteIndex -and ($OptionalByteIndex -or $SignedIndex -or $R8Base -or $HoistedR8Base -or $RaxBase -or $RdxBase)) {
         throw 'DlByteIndex cannot be combined with another index form or base form.'
     }
     if ($RdxBase -and -not $PdbData) { throw 'RdxBase requires PdbData.' }
@@ -100,34 +102,40 @@ function New-SyntheticCase {
     if ($RaxBase -and (-not $PdbData -or $R8Base -or $HoistedR8Base -or $OptionalByteIndex -or $RdxBase)) {
         throw 'RaxBase requires PdbData and cannot be combined with R8Base, HoistedR8Base, or OptionalByteIndex.'
     }
-    $caseDispatchRva = if ($HoistedR8Base) { [UInt32]($sectionRva + 0x880) } elseif ($SignedByteIndex) { [UInt32]($dispatchRva + $(if ($Fault -in @('SignedNoncontiguous','SignedBadFrame')) { 6 } else { 5 })) } else { $dispatchRva }
+    $signedIndexLength = if ($SignedWideFrame) { if ($Fault -eq 'SignedWideWrongFrameSib') { 9 } else { 8 } } elseif ($Fault -eq 'SignedBadFrame') { 6 } else { 5 }
+    $signedGapLength = if ($Fault -in @('SignedNoncontiguous','SignedWideNoncontiguous')) { 1 } else { 0 }
+    $caseDispatchRva = if ($HoistedR8Base) { [UInt32]($sectionRva + 0x880) } elseif ($SignedIndex) { [UInt32]($dispatchRva + $signedIndexLength + $signedGapLength) } else { $dispatchRva }
     [byte[]]$lea = if ($RaxBase) { [byte[]]@(0x48,0x8d,0x05,0,0,0,0) } elseif ($RdxBase) { [byte[]]@(0x48,0x8d,0x15,0,0,0,0) } else { [byte[]]@(0x48,0x8d,0x0d,0,0,0,0) }
     if ($RdxBase -and $Fault -eq 'RdxWrongLea') { $lea[2] = 0x0d }
     if ($R8Base) { $lea[0] = 0x4c; $lea[2] = 0x05 }
     if ($Fault -eq 'WrongImageBase') { $leaDisp = [Int32]($imageBase - ($imageBase + $caseDispatchRva + 7) + 1) }
     else { $leaDisp = [Int32]($imageBase - ($imageBase + $caseDispatchRva + 7)) }
     Put-Bytes $lea 3 ([BitConverter]::GetBytes($leaDisp))
-    if ($SignedByteIndex) {
-        [byte[]]$signedIndex = if ($Fault -eq 'SignedBadFrame') { [byte[]]@(0x48,0x0f,0xbe,0x44,0x24,0xc0) } else { [byte[]]@(0x48,0x0f,0xbe,0x45,0xc0) }
+    if ($SignedIndex) {
+        [byte[]]$signedIndex = if ($SignedWideFrame) { [byte[]]@(0x48,0x0f,0xbe,0x85,0xc0,0x01,0x00,0x00) } elseif ($Fault -eq 'SignedBadFrame') { [byte[]]@(0x48,0x0f,0xbe,0x44,0x24,0xc0) } else { [byte[]]@(0x48,0x0f,0xbe,0x45,0xc0) }
         switch ($Fault) {
             'SignedBadMovsxDestination' { $signedIndex[0] = 0x49 }
             'SignedBadFrame' { $signedIndex[4] = 0x08 }
             'SignedBadOpcode' { $signedIndex[2] = 0xb6 }
             'SignedBadSize' { $signedIndex = [byte[]]@(0x48,0x0f,0xbf,0x45,0xc0) }
+            'SignedWideWrongRexDestination' { $signedIndex[0] = 0x49 }
+            'SignedWideWrongOpcode' { $signedIndex[2] = 0xb6 }
+            'SignedWideWrongFrameBase' { $signedIndex[3] = 0x87 }
+            'SignedWideWrongFrameSib' { $signedIndex = [byte[]]@(0x48,0x0f,0xbe,0x84,0x05,0xc0,0x01,0x00,0x00) }
         }
         Put-Bytes $pe (0x400+$dispatchRva-$sectionRva) $signedIndex
-        if ($Fault -eq 'SignedNoncontiguous') { $pe[0x400+$dispatchRva-$sectionRva+5] = 0x90 }
+        if ($signedGapLength -ne 0) { $pe[0x400+$dispatchRva-$sectionRva+$signedIndex.Length] = 0x90 }
     }
     Put-Bytes $pe (0x400+$caseDispatchRva-$sectionRva) $lea
     $cursor = [UInt32]($caseDispatchRva + 7)
     $instructions = [Collections.Generic.List[string]]::new()
     $leaText = if ($RaxBase) { 'lea rax, [rip+imagebase]' } elseif ($RdxBase) { 'lea rdx, [rip+imagebase]' } elseif ($R8Base) { 'lea r8, [rip+imagebase]' } else { 'lea rcx, [rip+imagebase]' }
     $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$caseDispatchRva), (Hex-Bytes $lea), $leaText))
-    if ($SignedByteIndex) {
-        $indexText = if ($Fault -eq 'SignedNoncontiguous') { 'nop' } elseif ($Fault -eq 'SignedBadFrame') { 'movsx rax, byte ptr [rsp-40h]' } elseif ($Fault -eq 'SignedBadSize') { 'movsx rax, word ptr [rbp-40h]' } else { 'movsx rax, byte ptr [rbp-40h]' }
+    if ($SignedIndex) {
+        $indexText = if ($Fault -eq 'SignedBadFrame') { 'movsx rax, byte ptr [rsp-40h]' } elseif ($Fault -eq 'SignedBadSize') { 'movsx rax, word ptr [rbp-40h]' } elseif ($Fault -eq 'SignedWideWrongFrameBase') { 'movsx rax, byte ptr [rdi+1c0h]' } elseif ($Fault -eq 'SignedWideWrongFrameSib') { 'movsx rax, byte ptr [rbp+rax+1c0h]' } elseif ($SignedWideFrame) { 'movsx rax, byte ptr [rbp+1c0h]' } else { 'movsx rax, byte ptr [rbp-40h]' }
         $instructions.Insert(0, ('{0:x}: {1} {2}' -f ($imageBase+$dispatchRva), (Hex-Bytes $signedIndex), $indexText))
-        if ($Fault -eq 'SignedNoncontiguous') {
-            $instructions.Insert(1, ('{0:x}: 90 nop' -f ($imageBase+$dispatchRva+5)))
+        if ($signedGapLength -ne 0) {
+            $instructions.Insert(1, ('{0:x}: 90 nop' -f ($imageBase+$dispatchRva+$signedIndex.Length)))
         }
     }
     if ($OptionalByteIndex) {
@@ -269,7 +277,7 @@ function New-SyntheticCase {
             $cursor += $extraLoad.Length
         }
     }
-    $loadDisp = if ($SignedByteIndex) { [UInt32](($actualTableRva + $(if ($Fault -eq 'SignedBiasTwoEntries') { 8 } else { 4 })) -band 0xffffffff) } else { [UInt32]($actualTableRva -band 0xffffffff) }
+    $loadDisp = if ($SignedIndex) { [UInt32](($actualTableRva + $(if ($Fault -eq 'SignedBiasTwoEntries') { 8 } else { 4 })) -band 0xffffffff) } else { [UInt32]($actualTableRva -band 0xffffffff) }
     [byte[]]$tableLoad = if ($RaxBase) { [byte[]]@(0x8b,0x8c,0x88,0,0,0,0) } elseif ($RdxBase) { [byte[]]@(0x8b,0x8c,0x82,0,0,0,0) } else { [byte[]]@(0x8b,0x84,0x81,0,0,0,0) }
     Put-Bytes $tableLoad 3 ([BitConverter]::GetBytes($loadDisp))
     if ($RdxBase -and $Fault -eq 'RdxWrongLoadIndex') { $tableLoad[2] = 0x8a }
@@ -287,7 +295,7 @@ function New-SyntheticCase {
     }
     if ($Fault -eq 'BrokenSequence') { $tableLoad[0] = 0x89 }
     Put-Bytes $pe (0x400+$cursor-$sectionRva) $tableLoad
-    $tableLoadText = if ($RaxBase) { 'mov ecx, dword ptr [rax+rcx*4+table]' } elseif ($RdxBase) { 'mov ecx, dword ptr [rdx+rax*4+table]' } elseif ($HoistedR8Base) { 'mov ecx, dword ptr [r8+rax*4+table]' } elseif ($SignedByteIndex) { 'mov eax, dword ptr [rcx+4*rax+table+4]' } else { 'mov eax, dword ptr [rcx+rax*4+table]' }
+    $tableLoadText = if ($RaxBase) { 'mov ecx, dword ptr [rax+rcx*4+table]' } elseif ($RdxBase) { 'mov ecx, dword ptr [rdx+rax*4+table]' } elseif ($HoistedR8Base) { 'mov ecx, dword ptr [r8+rax*4+table]' } elseif ($SignedIndex) { 'mov eax, dword ptr [rcx+4*rax+table+4]' } else { 'mov eax, dword ptr [rcx+rax*4+table]' }
     $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$cursor), (Hex-Bytes $tableLoad), $tableLoadText))
     $cursor += $tableLoad.Length
     $add = if ($RaxBase) { [byte[]]@(0x48,0x03,0xc8) } elseif ($RdxBase) { [byte[]]@(0x48,0x03,0xca) } else { [byte[]]@(0x48,0x03,0xc1) }
@@ -319,7 +327,7 @@ function New-SyntheticCase {
         $target = [UInt32]($actualTableRva + $pastTableOffset)
     }
     $target2 = if ($HoistedR8Base) { $bodyFirstRva } else { $targetRva }
-    if ($SignedByteIndex) {
+    if ($SignedIndex) {
         switch ($Fault) {
             'TargetBeforeDispatch' { $target = $caseDispatchRva }
             'TargetAtTable' { $target = $actualTableRva }
@@ -329,7 +337,7 @@ function New-SyntheticCase {
             'SignedDefaultPastContribution' { $target = [UInt32]($sectionRva + 0x2000) }
         }
     }
-    [byte[]]$tableBytes = if ($RdxBase) { [byte[]]::new(28) } elseif ($SignedByteIndex -or $DlByteIndex) { [byte[]]::new(16) } else { [byte[]]::new(8) }
+    [byte[]]$tableBytes = if ($RdxBase) { [byte[]]::new(28) } elseif ($SignedIndex -or $DlByteIndex) { [byte[]]::new(16) } else { [byte[]]::new(8) }
     Put-Bytes $tableBytes 0 ([BitConverter]::GetBytes($target))
     Put-Bytes $tableBytes 4 ([BitConverter]::GetBytes($target2))
     if ($RdxBase) {
@@ -342,7 +350,7 @@ function New-SyntheticCase {
             'RdxTargetInvalid' { Put-Bytes $tableBytes 0 ([BitConverter]::GetBytes([UInt32]($targetRva + 0x80))) }
         }
     }
-    if ($SignedByteIndex -or $DlByteIndex) {
+    if ($SignedIndex -or $DlByteIndex) {
         Put-Bytes $tableBytes 8 ([BitConverter]::GetBytes($target2))
         Put-Bytes $tableBytes 12 ([BitConverter]::GetBytes($target2))
         if ($Fault -eq 'SignedLastEntryMiddle') {
@@ -373,13 +381,13 @@ function New-SyntheticCase {
     $metadataText = "  Age: $age`n  GUID: {$guid}`n$moduleHeader`nSection Contributions`n$contributions"
     Set-Content -LiteralPath $metadata -Value $metadataText -Encoding utf8
     $symbolText = ''
-    if (($PdbData -or $SignedByteIndex -or $DlByteIndex -or $RdxBase) -and $Fault -notin @('MissingDataSymbol','MissingDataWithRet')) {
+    if (($PdbData -or $SignedIndex -or $DlByteIndex -or $RdxBase) -and $Fault -notin @('MissingDataSymbol','MissingDataWithRet')) {
         $dataModule = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
         $dataOffset = $actualTableRva - $sectionRva
         if ($Fault -eq 'WrongDataStart') { $dataOffset += 4 }
-        $dataName = if (($RaxBase -or $SignedByteIndex -or $DlByteIndex -or $RdxBase) -and $Fault -eq 'NamedDataSymbol') { 'dispatchTable' } else { '' }
-        $dataType = if (($RaxBase -or $SignedByteIndex -or $DlByteIndex -or $RdxBase) -and $Fault -eq 'TypedDataSymbol') { 'unsigned long' } else { '<no type>' }
-        $dataSize = if (($RdxBase -or $RaxBase -or $SignedByteIndex -or $DlByteIndex) -and $Fault -eq 'WrongDataRecordSize') { 15 } else { 16 }
+        $dataName = if (($RaxBase -or $SignedIndex -or $DlByteIndex -or $RdxBase) -and $Fault -eq 'NamedDataSymbol') { 'dispatchTable' } else { '' }
+        $dataType = if (($RaxBase -or $SignedIndex -or $DlByteIndex -or $RdxBase) -and $Fault -eq 'TypedDataSymbol') { 'unsigned long' } else { '<no type>' }
+        $dataSize = if (($RdxBase -or $RaxBase -or $SignedIndex -or $DlByteIndex) -and $Fault -eq 'WrongDataRecordSize') { 15 } else { 16 }
         $symbolText = "  Mod $dataModule | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = $dataSize] ``$dataName`` `n".TrimEnd() +
             "`n  type = $dataType, addr = 0001:$dataOffset`n"
     }
@@ -390,8 +398,8 @@ function New-SyntheticCase {
     $targetStart = if ($Fault -eq 'MiddleOfInstruction') { $targetRva - 1 } else { $targetRva }
     Put-Bytes $pe (0x400+$targetStart-$sectionRva) $targetInstruction
     if ($Fault -eq 'UnknownTargetInstruction') { $pe[0x400+$targetStart-$sectionRva] = 0x06 }
-    $realVexRva = if ($RdxBase) { [UInt32]($actualTableRva + 28) } elseif ($SignedByteIndex -or $DlByteIndex) { [UInt32]($actualTableRva + 16) } elseif ($HoistedR8Base) { [UInt32]($actualTableRva + 0x20) } else { [UInt32]($caseDispatchRva + 0x20) }
-    [byte[]]$realVexBytes = if ($SignedByteIndex -or $DlByteIndex -or $RdxBase) { [byte[]]@(0xc5,0xf8,0x10,0x40,0x01) } else { [byte[]]@(0xc5,0xf8,0x10,0x00) }
+    $realVexRva = if ($RdxBase) { [UInt32]($actualTableRva + 28) } elseif ($SignedIndex -or $DlByteIndex) { [UInt32]($actualTableRva + 16) } elseif ($HoistedR8Base) { [UInt32]($actualTableRva + 0x20) } else { [UInt32]($caseDispatchRva + 0x20) }
+    [byte[]]$realVexBytes = if ($SignedIndex -or $DlByteIndex -or $RdxBase) { [byte[]]@(0xc5,0xf8,0x10,0x40,0x01) } else { [byte[]]@(0xc5,0xf8,0x10,0x00) }
     if ($RealVex) { Put-Bytes $pe (0x400+$realVexRva-$sectionRva) $realVexBytes }
     $rows = [Collections.Generic.List[string]]::new()
     foreach ($row in $instructions) { $rows.Add($row) }
@@ -403,7 +411,7 @@ function New-SyntheticCase {
         else { $rows.Add(('{0:x}: 90 nop' -f ($imageBase+$bodySecondRva))) }
     }
     if ($RealVex -and -not $HoistedR8Base) {
-        $realVexText = if ($SignedByteIndex -or $DlByteIndex -or $RdxBase) { 'vmovups xmm0, xmmword ptr [rax+1]' } else { 'vmovups xmm0, xmmword ptr [rax]' }
+        $realVexText = if ($SignedIndex -or $DlByteIndex -or $RdxBase) { 'vmovups xmm0, xmmword ptr [rax+1]' } else { 'vmovups xmm0, xmmword ptr [rax]' }
         $rows.Add(('{0:x}: {1} {2}' -f ($imageBase+$realVexRva), (Hex-Bytes $realVexBytes), $realVexText))
     }
     if (-not $HoistedR8Base) {
@@ -430,7 +438,7 @@ function New-SyntheticCase {
         $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$actualTableRva), (Hex-Bytes $tableBytes[0..3])))
         $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$actualTableRva+4), (Hex-Bytes $tableBytes[4..7])))
     }
-    if ($SignedByteIndex -or $DlByteIndex) {
+    if ($SignedIndex -or $DlByteIndex) {
         $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$actualTableRva+8), (Hex-Bytes $tableBytes[8..11])))
         $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$actualTableRva+12), (Hex-Bytes $tableBytes[12..15])))
     }
@@ -448,7 +456,7 @@ function New-SyntheticCase {
             [byte[]]$crossingVex = [byte[]]@(0xc5,0xf8,0x10,0x40,0x01)
             Put-Bytes $pe (0x400+$actualTableRva-$sectionRva+24) $crossingVex
             $rows[$tableRowsStart+6] = ('{0:x}: {1} vmovups xmm0, xmmword ptr [rax+1]' -f ($imageBase+$actualTableRva+24), (Hex-Bytes $crossingVex))
-        } elseif ($SignedByteIndex -or $DlByteIndex) {
+        } elseif ($SignedIndex -or $DlByteIndex) {
             [byte[]]$crossingVex = [byte[]]@(0xc5,0xf8,0x10,0x40,0x01)
             Put-Bytes $pe (0x400+$actualTableRva-$sectionRva+12) $crossingVex
             $rows[$tableRowsStart+3] = ('{0:x}: {1} vmovups xmm0, xmmword ptr [rax+1]' -f ($imageBase+$actualTableRva+12), (Hex-Bytes $crossingVex))
@@ -805,6 +813,22 @@ foreach ($fault in @('SignedBadMovsxDestination','SignedBadFrame','SignedBadOpco
         'TargetBeforeDispatch','TargetAtTable','SignedDefaultMiddle','SignedDefaultMissing',
         'SignedDefaultPastContribution','SignedLastEntryMiddle','InstructionExtendsPastTable')) {
     $case = New-SyntheticCase "SignedByteIndex$fault" -SignedByteIndex -Fault $fault
+    Invoke-Control $case $false
+}
+
+# Observed HostPathReadTests form: movsx rax, byte ptr [rbp+1c0h] with a disp32,
+# followed contiguously by the existing image-base/table-load/add/jump dispatch.
+$case = New-SyntheticCase SignedWidePositiveDisp32WithDefaultBeforeTable -SignedWideFrame
+Invoke-Control $case $true 4 0
+$case = New-SyntheticCase SignedWideFrameWithRealVex -SignedWideFrame -RealVex
+Invoke-Control $case $false 4 1
+foreach ($fault in @('SignedWideWrongRexDestination','SignedWideWrongOpcode','SignedWideWrongFrameBase',
+        'SignedWideWrongFrameSib','SignedWideNoncontiguous','MissingDataSymbol','WrongDataOwner',
+        'WrongDataStart','WrongDataRecordSize','NamedDataSymbol','TypedDataSymbol','CrossContribution',
+        'ContributionBounds','TargetBeforeDispatch','TargetAtTable','TargetPastTable','SignedDefaultMiddle',
+        'SignedDefaultMissing','SignedDefaultPastContribution','SignedLastEntryMiddle','UndecodedTarget',
+        'InstructionExtendsPastTable')) {
+    $case = New-SyntheticCase "SignedWideFrame$fault" -SignedWideFrame -Fault $fault
     Invoke-Control $case $false
 }
 

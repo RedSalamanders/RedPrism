@@ -224,8 +224,10 @@ the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and ali
 decoded-target and table-bound checks apply. Corrupted registers, sequences, symbols, targets, and real vector
 instructions beside the table remain refused. This adds no object/function runtime exemption.
 
-The observed Release variant form loads a signed byte into RAX from RBP+disp8 immediately before LEA RCX of
-image base. Its DWORD load can point exactly one entry after the anonymous PDB table start: index -1 addresses
+The observed Release variant form loads a signed byte into RAX from RBP+disp8 or RBP+disp32 immediately before
+LEA RCX of image base. Only `48 0F BE 45 <disp8>` or `48 0F BE 85 <disp32>` proves that index; a different
+destination, REX prefix, frame base, SIB or load width does not. Its DWORD load can point exactly one entry after
+the anonymous PDB table start: index -1 addresses
 the first/default entry. Only the exact contiguous MOVSX/LEA/load/ADD/JMP form and same-owner anonymous data
 symbol prove that bias. The complete table, including its default entry, must target decoded body instructions
 after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
