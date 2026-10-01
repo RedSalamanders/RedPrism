@@ -39,6 +39,12 @@
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
 
+    Sizing's first frozen ASan run also fails the real host folder save-in-place case after its initial fixture
+    write/open succeed. Preserve `.build/p1-size-history-first-ASan-failure*` and its executable/source hashes.
+    A fixed-capacity trace-only save gate observes the actual asynchronous write rather than only the initial
+    synchronous fixture, and reports receipt/IO/reload status and stage-native values on failure. The rerun passes
+    this scenario without identifying its original cause; F6 stays open and failed evidence is retained.
+
 Status: ACTIVE, executable P1.7 child; no completion claim.
 Owner: `RedPrism/ApplicationFileJobs.cpp`, `ApplicationProjectSaveJobs.cpp`, file continuations,
 `Common/PathClassificationWork.*`, `ProjectSaveWork.h`, codecs/project store and clipboard.

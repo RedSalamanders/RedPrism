@@ -106,23 +106,60 @@ check the actual hook and include an unrelated memory wake while the worker rema
 with changed inputs stopped and is excluded; only the final r3 six-configuration matrix qualifies this slice.
 Adjustment-layer closure, other H1 callers, H2/H3/H4 and measured P1/G1 performance remain open.
 
-### Next H1.4 caller: size-card commits
+### Qualified H1.4 caller: size-card commits
 
-- [ ] Reserve the whole resize/history peak before capturing the source, token, active id and history handles.
-- [ ] Bind the complete resized document to detached history publication; validate full document token and history
+- [x] Reserve the whole resize/history peak before capturing the source, token, active id and history handles.
+- [x] Bind the complete resized document to detached history publication; validate full document token and history
   epoch before nonthrowing document/draft swaps. Preserve active layer, mask target, crop and existing C16 goldens.
-- [ ] Transfer retired document, lasso and selection-move owners into the job's worker-release aggregate, including
+- [x] Transfer retired document, lasso and selection-move owners into the job's worker-release aggregate, including
   failed capture and cancelled/stale preparation. Include retained draft capacity in its pre-capture release bound.
-- [ ] Exercise all five history allocation failures, capture refusal and epoch-only invalidation through the host;
+- [x] Exercise all five history allocation failures, capture refusal and epoch-only invalidation through the host;
   retain seeded redo, literal source pixels, barrier/reservation ownership and off-owner aggregate destruction.
-- [ ] Integrate the draft, pass the frozen native configuration matrix and update the owning C16 contract/evidence.
+- [x] Integrate the draft, pass the frozen native configuration matrix and update the owning C16 contract/evidence.
 
-The size draft lives under `.build/` while the color source remains frozen. Strict host/module syntax and a fresh
-isolated Debug compile pass 48 independent assertions: literal extension/nearest pixels, masks/selection/crop,
+The final frozen x64 suites and ARM64 clean cross-builds pass 50 independent assertions: literal
+extension/nearest pixels, masks/selection/crop and active-only authority,
 Undo/Redo, resolution-only, nested/no-op history, moved/foreign authority, five allocation and five cancellation
-stages, and lasso capacity/owner transfer. This is preparation evidence only; the production size path is unchanged.
+stages, and lasso capacity/owner transfer. The native host now adds the admitted capture/history/epoch faults and
+off-owner aggregate release. The complete native matrix qualifies this caller; [evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md).
+The first frozen sizing run passes Debug and Release, then fails ASan's existing folder save-in-place scenario.
+Its original image/source identities and failure log are preserved. The initial fixture-save trace does not cover
+the asynchronous in-place write, so a fixed-capacity trace-only harness gate now records that actual worker's
+IO stages, native values, status and terminal receipt. A rerun passes this scenario; its original cause remains
+F6 work. The final distinct r2 six-configuration matrix qualifies the sizing source against the same 370 inputs.
 
 ## Immediate implementation
+
+### Next H1.4 caller: merge readback and publication
+
+- [ ] Move the merge plan/source/history capture after complete admission. Borrow dimensions and cached storage
+  charges before submission; reserve full readback, crop/thumbnail, survivor/clipping graph and history/trim peaks.
+  Keep the selected ordinal and exact generation/token through admitted capture, GPU tiles and final apply/drop.
+- [ ] Prepare the complete survivor document, clipping-source rewrites, merged layer, active id, selected-id set
+  and history on the worker. Preserve D7 budget refusal, insertion anchor, parent/group and clipping goldens.
+  No owner apply may allocate an unordered set, rebuild survivor records or call allocating Begin/End.
+- [ ] Retain CPU snapshot/readback/prepared result/history and retired document/selected owners in complete release
+  aggregates. GPU mapping and utility-target acknowledgement stay on the owner; job retirement cannot move D3D
+  cleanup to a worker. Device restart releases CPU previous-attempt state on a worker and never publishes partial pixels.
+- [ ] Validate exact document generation/restore serial, history epoch, acquisition and readback device authority
+  before nonthrowing publication. Explicitly define whether CPU-only processing occurs after final map acknowledgement;
+  device changes after that detached boundary cannot invalidate already copied bytes. Update the existing rebind gate
+  if its held-mapping predicate changes, preserving bounded restart and no writer restart requirements.
+- [ ] Add literal merged pixels, clipping/group survivors and Undo/Redo, all five history fault stages, source-capture
+  refusal, cancellation/epoch invalidation and off-owner aggregate retirement. Qualify full configurations and update
+  the owning rendering/document/history contracts before checking this caller complete.
+
+Current `UtilityReadbackJob` captures a value source/token before submission, prepares only the merged pixels,
+and lets `ApplyPreparedMerge` allocate survivor sets/vectors and history on the owner. `DocumentReadbackJob` also
+owns value CPU document storage beside owner-only GPU cleanup. This is an implementation dependency, not a qualified
+merge path; its restructuring must preserve the shared export/adjustment readback lifecycle.
+
+The primary-owned merge draft now passes strict module/host syntax with a cheap descriptor and admitted capture,
+complete detached survivor/history publication, nonthrowing owner swaps and separate CPU retirement. Existing
+export and adjustment-opening routes retain their current lifecycle. Independent agent tests were corrected
+against actual stacking order and valid premultiplied pixels before execution. All 48 focused assertions pass,
+including group/transparent behavior and D7 refusal using a physically tiny large sparse source. This is draft proof;
+device/cancel/epoch/allocation/shutdown runtime gates and native matrix qualification remain unchecked.
 
 Published selection loops already share immutable storage and cache point counts/bounds. Cache their vector
 object, outer retained capacity and inner retained capacities when the producer owns them. Opaque allocator
@@ -147,3 +184,7 @@ and ARM64 cross-builds; native ARM64 runtime requires another host. Timing is ev
 
 This first slice still traverses raster identities for retained accounting. It does not claim incremental
 accounting or the 2 ms apply/G1 target; continue the later checklist rows with measurements before closure.
+
+Sizing authority also compares the captured active layer before publishing history: changing only active selection
+can leave the document token current, and must still refuse a candidate with stale Undo/Redo selection. Two independent
+controls cover that case. The final r2 frozen six-configuration matrix qualifies these controls.

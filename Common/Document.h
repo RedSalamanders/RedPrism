@@ -1203,6 +1203,7 @@ struct HueTargetDrag
 struct ColorEditJobInput;
 struct ColorEditJobResult;
 class PreparedColorEdit;
+class PreparedDocumentSize;
 struct ColorEditPreviewResult;
 struct ColorEditHistogramResult;
 
@@ -1627,6 +1628,8 @@ class DocumentSession
     // entry named `name`; the active layer stays.
     void ApplyDocumentSize(CanvasDocument document, std::wstring name);
     [[nodiscard]] bool ApplyDocumentSizeIfCurrent(CanvasDocument document, std::wstring name, const JobToken& token);
+    [[nodiscard]] bool ApplyPreparedDocumentSizeIfCurrent(PreparedDocumentSize& prepared) noexcept;
+    [[nodiscard]] std::uint64_t DocumentSizeRetirementMemoryBytes() const noexcept;
     // Installs a validated import assembled from this document as one entry. A different document or invalid
     // graph/budget is refused before any session state changes. The synchronous host prepares this copy today.
     [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,

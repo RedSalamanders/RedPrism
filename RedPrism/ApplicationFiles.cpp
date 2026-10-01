@@ -5,6 +5,7 @@
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "KeyboardState.h"
+#include "ProjectSaveTestGate.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
 #include "Resources.h"
@@ -18,6 +19,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -1298,6 +1300,10 @@ int Application::RunFilesSelfTest() noexcept
         if (!command(ChromeHost::kCommandNewLayer))
             return 5;
         const std::size_t layers = layerCount();
+        const auto asynchronousTrace = std::make_shared<ProjectSaveTestGate>();
+        asynchronousTrace->traceOnly = true;
+        _projectSaveTestGate = asynchronousTrace;
+        const auto clearSaveTrace = wil::scope_exit([&]() noexcept { _projectSaveTestGate.reset(); });
         const std::optional<ContinuationReceipt::Result> savedInPlace = queueWrite(HostWriteFormat::Project);
         const DWORD attributes = GetFileAttributesW(exploded.c_str());
         const bool stillFolder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -1309,12 +1315,23 @@ int Application::RunFilesSelfTest() noexcept
             !savedInPlace.has_value() || savedInPlace.value().outcome != HostOutcome::Succeeded || !stillFolder ||
             !complete || _session.history.IsModified())
         {
-            SelfTestFailure(
-                std::format(L"Saving a project opened from a folder did not save it in place "
-                            L"(written {}, opened {}, saved {}, folder {}, reloaded {}).\n",
-                            written, opened.has_value() && opened.value().outcome == HostOutcome::Succeeded,
-                            savedInPlace.has_value() && savedInPlace.value().outcome == HostOutcome::Succeeded,
-                            stillFolder, complete));
+            std::wstring asynchronousStages;
+            // A receipt exists only after SettleJobs acknowledged the worker and established visibility of trace.
+            if (savedInPlace)
+                for (std::size_t index = 0; index < asynchronousTrace->observationCount; ++index)
+                    asynchronousStages +=
+                        std::format(L" {}:{}", static_cast<int>(asynchronousTrace->observations[index].stage),
+                                    asynchronousTrace->observations[index].value);
+            SelfTestFailure(std::format(
+                L"Saving a project opened from a folder did not save it in place "
+                L"(written {}, opened {}, saved {}, folder {}, reloaded {}, receipt {}, "
+                L"error {:#x}, save status {}, reload status {}, trace truncated {}, stages [{}]).\n",
+                written, opened.has_value() && opened.value().outcome == HostOutcome::Succeeded,
+                savedInPlace.has_value() && savedInPlace.value().outcome == HostOutcome::Succeeded, stillFolder,
+                complete, savedInPlace ? static_cast<int>(savedInPlace->outcome) : -1,
+                savedInPlace ? static_cast<std::uint32_t>(savedInPlace->error) : 0,
+                savedInPlace ? static_cast<int>(asynchronousTrace->saveStatus) : -1, static_cast<int>(reloaded.status),
+                savedInPlace && asynchronousTrace->traceTruncated, asynchronousStages));
             return 5;
         }
     }

@@ -156,8 +156,8 @@ results. Preview graphs below the deferred-release threshold may still retire in
 Worker preparation builds the complete candidate history state, including snapshots, entries, stack growth and
 trim bookkeeping, before publication. The candidate is tied to the exact history owner, structural epoch and
 revision; owner publication revalidates all three and swaps the prepared state without allocating. Refusal leaves
-the candidate owned by the caller for aggregate retirement. Only basic raster edits, gradient commits and pixel
-moves currently use this path. Remaining history callers and production Undo/Redo migration are open. H2/H3 must
+the candidate owned by the caller for aggregate retirement. Basic raster edits, gradient commits, pixel moves,
+destructive color and size cards use this path. Remaining history callers and production Undo/Redo migration are open. H2/H3 must
 replace occurrence overcount with exact accounting and make history capture constant-time. The foundation's
 configuration evidence does not qualify complete H1, P1 or G1; remaining caller migration and owner
 capture/history/chrome/upload measurements remain outstanding.
@@ -169,6 +169,13 @@ panel raster/selection/lookup capacities, spare settings capacity and replaced p
 swaps the retired panel and settings into that aggregate. The full native configuration matrix passes
 ([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); adjustment-layer
 transaction closure and the other H1 callers remain open.
+
+Size-card admission additionally includes complete history construction and trim scratch. Owner capture of its
+source/token/history happens under that reservation; the worker constructs the bound resized document/history.
+Publication swaps replaced document, lasso and selection-move owners into the release aggregate. Its retirement
+bound includes retained draft capacities before capture. Token, active-layer and history-epoch validation precede
+publication. The full native configuration matrix passes ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)). This removes history construction from size apply;
+value metadata capture, exact incremental accounting, chrome and uploads remain unqualified costs.
 
 Gradient events retain primitive endpoints/colors/settings in a one-active/latest-pending mailbox. Pixel/selection
 capture follows full admission in the same suspended/resumed record; no published stroke is borrowed by a worker.

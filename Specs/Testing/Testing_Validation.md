@@ -100,6 +100,14 @@ actual host cases pass the full x64 configuration matrix; ARM64 clean cross-buil
 ([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)). Suspension tests include an unrelated memory
 wake while the worker remains held: a wake alone cannot prove that an owner continuation has suspended.
 
+`DocumentSizeHistoryTests` adds 50 independent assertions for literal colored extension and nearest resize pixels,
+masks/selection/crop/active target, resolution-only Undo/Redo, nested/no-op history, moved/foreign/single-use
+authority, an active-layer-only change with a still-valid document token, five history allocation and cancellation
+stages, and retained lasso capacity/ownership. The actual
+size-card host gate covers 22 terminal/ordering scenarios, including admitted capture refusal, all five history
+allocation points, epoch-only staleness, retained redo/source and off-owner complete aggregate destruction.
+The full frozen x64 suites and ARM64 cross-builds pass ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)); these correctness gates make no timing claim.
+
 `.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
 then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated
 negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-switch`) MUST NOT become the test

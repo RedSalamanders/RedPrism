@@ -7,6 +7,8 @@
 - [x] P1.8.3 — Route Canvas Size, including optional colored extension fill, through the same ordered Commit path.
 - [x] P1.8.4 — Extend document and host tests for copied drafts, cancellation, ordering, failure, stale results, undo/redo and existing size scenarios.
 - [x] P1.8.5 — Update owning contracts, record full configuration qualification and real 4K/45 MP/WARP measurements.
+- [x] P1.9 H1 size publication — Move source capture after complete admission, bind detached document/history,
+  transfer retired drafts and qualify five history faults, capture refusal and stale epoch across all profiles.
 - [ ] P1.8 exit — Meet the 2 ms owner-apply target after the P1.9 history/chrome/upload work; current measured failures are retained in the evidence.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.8.
@@ -20,6 +22,12 @@ document tests, all x64 suites and all ARM64 cross-builds pass. Hardware 4K/45 M
 18 real-loop operations. The 45 MP resize requires D13's explicit 2 GiB host history limit; the earlier 256 MiB
 run correctly failed because its required undo entry was trimmed. Apply times still exceed 2 ms in several
 cases, and first-upload/action costs remain measured P1.9 work. P1.8 and G1 are not closed.
+
+The H1 size migration passes the full frozen x64 suites and ARM64 clean cross-builds with 50 independent
+assertions and 22 actual host scenarios in each x64 profile. It preserves resizers and numeric goldens; worker
+preparation owns the complete history candidate, and owner apply validates token, active layer and epoch before
+nonthrowing ownership swaps. The first ASan folder-save failure is preserved and remains F6 work; only the final
+r2 matrix qualifies this slice. [Evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md).
 
 ## Scope and contract
 

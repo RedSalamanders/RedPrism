@@ -32,7 +32,7 @@ class Application::ProjectSaveJob final : public Job
 
     JobResult Run(JobContext& context) override
     {
-        if (_gate && !_gate->afterPublication)
+        if (_gate && !_gate->traceOnly && !_gate->afterPublication)
         {
             const auto result = PassGate(context);
             if (result.status != JobStatus::Finished)
@@ -54,6 +54,14 @@ class Application::ProjectSaveJob final : public Job
                                          {
                                              auto& stateValue = *static_cast<Progress*>(state);
                                              auto& job = stateValue.job;
+                                             if (job._gate)
+                                             {
+                                                 auto& trace = *job._gate;
+                                                 if (trace.observationCount < trace.observations.size())
+                                                     trace.observations[trace.observationCount++] = {stage, value};
+                                                 else
+                                                     trace.traceTruncated = true;
+                                             }
                                              if (stage == ProjectIoStage::Published)
                                              {
                                                  // Independent external truth survives a generic Cancelled/Failed
@@ -71,7 +79,9 @@ class Application::ProjectSaveJob final : public Job
                                          },
                                          &progress};
         _status = SaveProject(_path.c_str(), _document, _active, zip, context.cancellation, observer);
-        if (_gate && _gate->afterPublication)
+        if (_gate)
+            _gate->saveStatus = _status;
+        if (_gate && !_gate->traceOnly && _gate->afterPublication)
         {
             const auto result = PassGate(context);
             if (result.status != JobStatus::Finished)

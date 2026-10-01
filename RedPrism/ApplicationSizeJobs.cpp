@@ -1,29 +1,78 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "DocumentSizeHistory.h"
 #include "SizingWorkTestGate.h"
 #include "resource.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdio>
+#include <limits>
 #include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct SizingPayload final : DeferredReleaseNode
+{
+    std::optional<JobToken> token;
+    std::optional<CanvasDocument> source;
+    DocumentHistory::StateView history;
+    std::optional<Guid> active;
+    CanvasDocument result;
+    std::optional<PreparedDocumentSize> publication;
+    std::shared_ptr<SizingWorkTestGate> gate;
+    DWORD ownerThread = 0;
+    SizingPayload()
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<SizingPayload> owned(static_cast<SizingPayload*>(node)); };
+    }
+    ~SizingPayload()
+    {
+        if (gate)
+        {
+            gate->payloadRetiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->payloadRetired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+struct RetireSizingPayload final
+{
+    void operator()(SizingPayload* payload) const noexcept
+    {
+        if (payload && !TryDeferRelease(*payload))
+        {
+            const std::unique_ptr<SizingPayload> owned(payload);
+        }
+    }
+};
+} // namespace
+
 class Application::SizingJob final : public Job
 {
   public:
-    SizingJob(Application& owner, HistoryWorkStamp stamp, JobToken token, CanvasDocument document,
-              std::variant<CanvasSizeOptions, ImageSizeOptions> options)
-        : _owner(owner), _stamp(stamp), _token(std::move(token)), _source(std::move(document)),
-          _options(std::move(options)), _invocation(owner._sizeInvocation), _gate(owner._sizingWorkTestGate),
+    SizingJob(Application& owner, HistoryWorkStamp stamp, std::variant<CanvasSizeOptions, ImageSizeOptions> options,
+              std::uint64_t retirement)
+        : _owner(owner), _stamp(stamp), _options(std::move(options)), _invocation(owner._sizeInvocation),
+          _generation(owner._session.Generation()), _retirement(retirement), _gate(owner._sizingWorkTestGate),
           _ownerThread(GetCurrentThreadId())
     {
     }
-
     JobResult Run(JobContext& context) override
     {
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (!_payload)
+            return {}; // same admitted record reaches capture on an owner completion pass
         if (_gate && !_gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -31,19 +80,39 @@ class Application::SizingJob final : public Job
                 return result;
         }
         if (_gate && _gate->throwAllocationFailure)
-            throw std::bad_alloc{}; // explicitly injected harness failure, translated by the shared runner
+            throw std::bad_alloc{};
         _status = std::visit(
             [&](const auto& options)
             {
                 using Options = std::decay_t<decltype(options)>;
                 if constexpr (std::is_same_v<Options, CanvasSizeOptions>)
-                    return ResizeCanvas(_source, options, _result, context.cancellation);
+                    return ResizeCanvas(_payload->source.value(), options, _payload->result, context.cancellation);
                 else
-                    return ResizeImage(_source, options, _result, context.cancellation);
+                    return ResizeImage(_payload->source.value(), options, _payload->result, context.cancellation);
             },
             _options);
         if (_gate && _gate->status)
             _status = _gate->status.value();
+        if (_status == ResizeStatus::Ok)
+        {
+            const DocumentHistory::PrepareObserver observer{[](void* context, DocumentHistory::PrepareStage stage)
+                                                            {
+                                                                auto* gate = static_cast<SizingWorkTestGate*>(context);
+                                                                if (gate && gate->historyFailure == stage)
+                                                                {
+                                                                    gate->historyFaultHits.fetch_add(1);
+                                                                    throw std::bad_alloc{};
+                                                                }
+                                                            },
+                                                            _gate.get()};
+            _payload->publication = PrepareDocumentSizePublication(
+                _payload->source, _payload->active, _payload->token.value(), std::move(_payload->history),
+                std::move(_payload->result),
+                std::holds_alternative<CanvasSizeOptions>(_options) ? L"Canvas Size" : L"Image Size",
+                context.cancellation, _gate ? observer : DocumentHistory::PrepareObserver{});
+            if (!_payload->publication)
+                _status = context.cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Invalid;
+        }
         if (_gate && _gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -54,7 +123,41 @@ class Application::SizingJob final : public Job
                    ? JobResult{JobStatus::Cancelled}
                    : JobResult{};
     }
-
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
+    {
+        if (_payload || result.status != JobStatus::Finished || _owner._shutdownStarted ||
+            !_owner._historyWork.IsCurrent(_stamp) || _owner._historyWork.CancelRequested(_stamp) ||
+            _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
+            _owner._session.Generation() != _generation || !_owner._session.Document())
+            return false;
+        try
+        {
+            auto owned = std::make_unique<SizingPayload>();
+            owned->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            owned->gate = _gate;
+            owned->ownerThread = _ownerThread;
+            _payload.reset(owned.release());
+            if (_gate)
+            {
+                _gate->captureReservationHeld.store(_gate->reservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+                if (_gate->throwCaptureFailure)
+                    throw std::bad_alloc{};
+            }
+            _payload->token = _owner._session.CaptureJobToken();
+            _payload->source = _owner._session.Document();
+            _payload->active = _owner._session.ActiveLayerID();
+            _payload->history = _owner._session.history.CaptureState();
+            if (_payload->token && _owner._jobs.Resume(ticket))
+                return true;
+            _captureError = E_UNEXPECTED;
+        }
+        catch (const std::bad_alloc&)
+        {
+            _captureError = E_OUTOFMEMORY;
+        }
+        return false;
+    }
     void Completed(JobResult result) noexcept override
     {
         HostOutcome outcome = result.status == JobStatus::Cancelled ? HostOutcome::Cancelled
@@ -62,7 +165,10 @@ class Application::SizingJob final : public Job
                                                                     : HostOutcome::Succeeded;
         std::int32_t error = result.error;
         if (_owner._sizingStamp != _stamp || !_owner._historyWork.IsCurrent(_stamp) ||
-            _owner._sizeInvocation != _invocation || !_owner._session.CanApplyJobResult(_token, _token.sequence))
+            _owner._sizeInvocation != _invocation || _owner._session.DocumentSerial() != _stamp.documentSerial ||
+            _owner._session.Generation() != _generation ||
+            (_payload && _payload->token &&
+             !_owner._session.CanApplyJobResult(_payload->token.value(), _payload->token->sequence)))
         {
             outcome = HostOutcome::Stale;
             error = E_ABORT;
@@ -72,19 +178,23 @@ class Application::SizingJob final : public Job
             outcome = HostOutcome::Cancelled;
             error = E_ABORT;
         }
+        else if (_captureError && outcome == HostOutcome::Succeeded)
+        {
+            outcome = HostOutcome::Failed;
+            error = _captureError;
+        }
         bool changed = false;
         if (outcome == HostOutcome::Succeeded)
         {
             switch (_status)
             {
             case ResizeStatus::Ok:
-                changed = _owner._session.ApplyDocumentSizeIfCurrent(
-                    std::move(_result),
-                    std::holds_alternative<CanvasSizeOptions>(_options) ? L"Canvas Size" : L"Image Size", _token);
+                changed = _payload && _payload->publication &&
+                          _owner._session.ApplyPreparedDocumentSizeIfCurrent(_payload->publication.value());
                 if (!changed)
                 {
-                    outcome = HostOutcome::Failed;
-                    error = E_FAIL;
+                    outcome = HostOutcome::Stale;
+                    error = E_ABORT;
                 }
                 break;
             case ResizeStatus::Unchanged:
@@ -141,16 +251,17 @@ class Application::SizingJob final : public Job
             return {JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
         return _gate->result;
     }
-    Application& _owner; // owner callback only; worker preparation reads only the captured values
+    Application& _owner; // owner callbacks only; workers read captured payload values
     const HistoryWorkStamp _stamp;
-    const JobToken _token;
-    const CanvasDocument _source;
     const std::variant<CanvasSizeOptions, ImageSizeOptions> _options;
     const std::uint64_t _invocation;
+    const std::uint64_t _generation;
+    const std::uint64_t _retirement;
     const std::shared_ptr<SizingWorkTestGate> _gate;
     const DWORD _ownerThread;
-    CanvasDocument _result;
+    std::unique_ptr<SizingPayload, RetireSizingPayload> _payload;
     ResizeStatus _status = ResizeStatus::Invalid;
+    std::int32_t _captureError = 0;
 };
 
 HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept
@@ -169,13 +280,26 @@ HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOption
     HRESULT result = E_INVALIDARG;
     try
     {
-        const auto token = _session.CaptureJobToken();
-        const auto memory =
+        const auto preparation =
             std::visit([&](const auto& size) { return SizingMemoryBytes(_session.Document().value(), size); }, options);
-        if (token && memory != 0)
+        const auto history = _session.history.EditMemoryBytes(_session.Document());
+        auto retirement = _session.DocumentSizeRetirementMemoryBytes();
+        auto memory = preparation;
+        const auto add = [](std::uint64_t& value, std::uint64_t more) noexcept
         {
-            std::unique_ptr<Job> job = std::make_unique<SizingJob>(*this, _sizingStamp.value(), token.value(),
-                                                                   _session.Document().value(), std::move(options));
+            if (more > (std::numeric_limits<std::uint64_t>::max)() - value)
+                return false;
+            value += more;
+            return true;
+        };
+        if (preparation && history && retirement && add(memory, history) &&
+            add(memory, sizeof(SizingJob) + sizeof(SizingPayload)) &&
+            memory <= (std::numeric_limits<std::uint64_t>::max)() / 2 && add(retirement, memory * 2))
+        {
+            if (_sizingWorkTestGate)
+                _sizingWorkTestGate->reservationBytes = memory;
+            std::unique_ptr<Job> job =
+                std::make_unique<SizingJob>(*this, _sizingStamp.value(), std::move(options), retirement);
             JobTicket ticket;
             result =
                 static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
@@ -185,7 +309,7 @@ HRESULT Application::StartSizing(std::variant<CanvasSizeOptions, ImageSizeOption
     }
     catch (const std::bad_alloc&)
     {
-        result = E_OUTOFMEMORY; // owning admission boundary; the complete request fails without partial acceptance
+        result = E_OUTOFMEMORY; // whole request fails without acceptance or live mutation
     }
     if (FAILED(result))
     {
@@ -220,7 +344,14 @@ int Application::RunSizingWorkSelfTest() noexcept
         Stale,
         Restore,
         Replace,
-        Reopen
+        Reopen,
+        CaptureAllocation,
+        HistoryBefore,
+        HistoryAfter,
+        HistoryEntry,
+        HistoryStack,
+        HistoryTrim,
+        HistoryEpoch
     };
     struct State final
     {
@@ -269,6 +400,11 @@ int Application::RunSizingWorkSelfTest() noexcept
             owner._session.CreateDocument(3, 2);
         else if (state.mode == Mode::Reopen)
             owner.OpenSizeCard(SizeCardKind::ImageSize);
+        else if (state.mode == Mode::HistoryEpoch)
+        {
+            owner._session.history.Begin(L"Epoch only", owner._session.Document(), owner._session.ActiveLayerID());
+            owner._session.history.End(owner._session.Document(), owner._session.ActiveLayerID());
+        }
         else
         {
             // These live values must never alter the already selected options or clear a younger card.
@@ -282,25 +418,62 @@ int Application::RunSizingWorkSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._sizingWorkTestGate->release.get());
     };
-    for (const auto mode : {Mode::CopiedCanvas, Mode::CopiedImage, Mode::PanelThenSizeThenUndo, Mode::CancelBefore,
-                            Mode::CancelAfter, Mode::Failure, Mode::Allocation, Mode::TooLarge, Mode::Invalid,
-                            Mode::Memory, Mode::Unchanged, Mode::Stale, Mode::Restore, Mode::Replace, Mode::Reopen})
+    for (const auto mode : {Mode::CopiedCanvas,
+                            Mode::CopiedImage,
+                            Mode::PanelThenSizeThenUndo,
+                            Mode::CancelBefore,
+                            Mode::CancelAfter,
+                            Mode::Failure,
+                            Mode::Allocation,
+                            Mode::TooLarge,
+                            Mode::Invalid,
+                            Mode::Memory,
+                            Mode::Unchanged,
+                            Mode::Stale,
+                            Mode::Restore,
+                            Mode::Replace,
+                            Mode::Reopen,
+                            Mode::CaptureAllocation,
+                            Mode::HistoryBefore,
+                            Mode::HistoryAfter,
+                            Mode::HistoryEntry,
+                            Mode::HistoryStack,
+                            Mode::HistoryTrim,
+                            Mode::HistoryEpoch})
     {
         _session.CreateDocument(8, 4);
         (void)InsertPaintedLayer(_session, L"Sizing source", 8, 4, {0, 0}, 0, 0xFF404040);
+        const bool historyFailure = mode >= Mode::HistoryBefore && mode <= Mode::HistoryTrim;
+        const bool preservesRedo = historyFailure || mode == Mode::CaptureAllocation || mode == Mode::HistoryEpoch;
+        if (preservesRedo)
+        {
+            _session.SetOpacity(0.75);
+            _session.Undo();
+        }
         _session.history.MarkSaved();
         _session.SetForegroundColor(0xFFFF0000);
         _viewport.followsFit = false;
         DocumentChanged();
         const auto revision = _session.history.CurrentRevision();
         const auto historyCount = _session.history.UndoCount();
+        const Raster sourcePixels = _session.ActiveLayer()->asset->image;
         const auto presents = _renderer.PresentCount();
         _sizingWorkTestGate = std::make_shared<SizingWorkTestGate>();
         if (!_sizingWorkTestGate->release)
             return 5;
         _sizingWorkTestGate->afterPreparation = mode != Mode::CancelBefore;
         _sizingWorkTestGate->throwAllocationFailure = mode == Mode::Allocation;
-        if (mode == Mode::Allocation)
+        _sizingWorkTestGate->throwCaptureFailure = mode == Mode::CaptureAllocation;
+        if (historyFailure)
+        {
+            constexpr std::array stages{
+                DocumentHistory::PrepareStage::BeforeSnapshot, DocumentHistory::PrepareStage::AfterSnapshot,
+                DocumentHistory::PrepareStage::Entry, DocumentHistory::PrepareStage::StackGrowth,
+                DocumentHistory::PrepareStage::TrimIndex};
+            _sizingWorkTestGate->historyFailure =
+                stages[static_cast<unsigned int>(mode) - static_cast<unsigned int>(Mode::HistoryBefore)];
+        }
+        if (mode == Mode::Allocation || historyFailure)
             _sizingWorkTestGate->afterPreparation = false;
         if (mode == Mode::Failure)
             _sizingWorkTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
@@ -336,17 +509,27 @@ int Application::RunSizingWorkSelfTest() noexcept
             undo = QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
         const auto settled = SettleJobs(_jobs, 15000, dispatch, &state);
         const auto actual = state.receipt.Read();
-        const auto expected =
-            mode == Mode::CancelBefore || mode == Mode::CancelAfter ? HostOutcome::Cancelled
-            : mode == Mode::Stale || mode == Mode::Restore || mode == Mode::Replace || mode == Mode::Reopen
-                ? HostOutcome::Stale
-            : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::TooLarge || mode == Mode::Invalid ||
-                    mode == Mode::Memory
-                ? HostOutcome::Failed
-                : HostOutcome::Succeeded;
-        bool correct = settled == SettleResult::Settled && state.visited && state.held && actual.outcome == expected &&
+        const auto expected = mode == Mode::CancelBefore || mode == Mode::CancelAfter ? HostOutcome::Cancelled
+                              : mode == Mode::Stale || mode == Mode::Restore || mode == Mode::Replace ||
+                                      mode == Mode::Reopen || mode == Mode::HistoryEpoch
+                                  ? HostOutcome::Stale
+                              : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::TooLarge ||
+                                      mode == Mode::Invalid || mode == Mode::Memory ||
+                                      mode == Mode::CaptureAllocation || historyFailure
+                                  ? HostOutcome::Failed
+                                  : HostOutcome::Succeeded;
+        const auto gate = _sizingWorkTestGate;
+        const bool reached = mode == Mode::CaptureAllocation ? !state.visited : state.visited && state.held;
+        bool correct = settled == SettleResult::Settled && reached && actual.outcome == expected &&
                        !_historyWork.Busy() && !_sizingTicket && !_sizingStamp && _jobs.ReservedMemoryBytes() == 0 &&
-                       _renderer.PresentCount() == presents;
+                       _renderer.PresentCount() == presents && gate->captureReservationHeld.load() &&
+                       gate->payloadRetired.load() && gate->payloadRetiredOffOwner.load();
+        if (preservesRedo)
+            correct = correct && _session.history.UndoCount() == historyCount && _session.history.CanRedo() &&
+                      _session.history.RedoName() == L"Layer Opacity" && _session.ActiveLayer()->opacity == 1 &&
+                      _session.ActiveLayer()->asset->image == sourcePixels;
+        if (historyFailure)
+            correct = correct && gate->historyFaultHits.load() == 1;
         if (mode == Mode::CopiedCanvas)
         {
             const auto& document = _session.Document().value();
@@ -386,7 +569,7 @@ int Application::RunSizingWorkSelfTest() noexcept
                 correct = correct && SizeCardOpen() && _sizeDialog.kind == SizeCardKind::ImageSize;
             if (mode == Mode::Failure)
                 correct = correct && actual.error == E_ACCESSDENIED;
-            if (mode == Mode::Allocation || mode == Mode::Memory)
+            if (mode == Mode::Allocation || mode == Mode::Memory || mode == Mode::CaptureAllocation || historyFailure)
                 correct = correct && actual.error == E_OUTOFMEMORY;
             if (mode == Mode::TooLarge)
                 correct = correct && actual.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
@@ -405,6 +588,7 @@ int Application::RunSizingWorkSelfTest() noexcept
                 L"Asynchronous sizing failed immutable input, ordering, cancellation or terminal ownership.\n");
             return 5;
         }
+        std::fprintf(stderr, "PASS sizing-history-host.mode=%u\n", static_cast<unsigned int>(mode));
     }
     return 0;
 }

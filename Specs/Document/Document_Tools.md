@@ -819,13 +819,22 @@ detached document, apply validation and existing history copies. Resident source
 geometry are shared. An unrepresentable reservation or failed admission fails the whole action.
 
 `ApplyDocumentSizeIfCurrent` validates the full session/document generation and restore token, same document id
-and document graph immediately before the one named transaction. The host also validates the exact history stamp
-and size-card invocation. Closing/cancelling a running operation requests cancellation and retains the request,
+and document graph immediately before the one named transaction for direct reference callers. The production
+size-card job captures its source/token/active id and immutable history view only after its complete resize/history
+reservation exists. Its worker validates the resized graph and binds it to a detached history publication.
+`ApplyPreparedDocumentSizeIfCurrent` checks the full document token, captured active layer and exact history epoch, publishes the prepared
+history, and swaps document, outline draft and selection-move owners without constructing or destroying their
+retired graphs on the owner. The aggregate's pre-capture retirement bound includes retained lasso/outline capacity.
+The host also validates the exact history stamp and size-card invocation. Closing/cancelling a running operation requests cancellation and retains the request,
 reservation and history barrier through worker acknowledgement and owner apply/drop. Reopening a card invalidates
 the old result; its completion cannot close the newer card. A late Finished result after cancellation is dropped.
 Only a successfully applied changed result enables Fit and invalidates document display. Unchanged, refusal,
 failure and stale results do not add history. Worker failures use posted localized notices outside the completion
 callback; TooLarge retains the distinct Too Large notice.
+
+History preparation failure and capture refusal preserve pixels, revision and seeded redo. Changed history epochs
+refuse publication even when the document generation is unchanged. This H1 migration is in native qualification;
+constant-time metadata capture, incremental accounting and the measured P1.8/G1 exit remain open.
 
 The Crop tool's model (`Common/Crop.*`, legacy `Crop.swift`) works on `CropRect` (x, y, width, height in document
 pixels; the session holds the pending frame, `CropFrame`, and shows the whole canvas when there is none,

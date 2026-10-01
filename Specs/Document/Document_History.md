@@ -100,6 +100,11 @@ owner. Capturing their input follows full admission; no failure after mutation i
 adjustment-layer transaction closure remain open until their separate migration gates pass. The full native
 configuration matrix passes for destructive color; [evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md).
 
+Size-card commits also bind their complete worker-prepared document and detached history to one private result.
+Their source/token/history capture follows complete admission. Apply checks the whole document token, captured
+active layer and history epoch before publishing and swapping the document and retired outline/selection-move owners. Active layer, mask
+target and crop semantics remain unchanged. The full configuration matrix passes for this caller ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)); measured apply/G1 remains open.
+
 ## Trim
 
 While `past.size + future.size > entryLimit` **or** retained bytes exceed the budget, drop the oldest past

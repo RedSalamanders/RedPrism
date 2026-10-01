@@ -21,6 +21,15 @@
       folder-save failure is preserved and unreproduced with bounded exact-stage diagnostics; F6 remains open.
       ASan's two proven inline-table false positives have strict parser controls; the runtime allowlist is unchanged.
     - [ ] A5.2a — Cache immutable opening coverage/lifted pixels across preview ticks; displayed geometry is tracked with P1.6 and bounded first upload with P1.9.
+      - [ ] Bind opaque immutable coverage/lift/source/selection owners; validate exact grid, placement, selection
+        identity and antialiasing on each fresh private worker stroke. Keep callback/cancellation/tile state private.
+      - [ ] Populate one exact-opening host cache only from successful acknowledged work; retain it across admitted
+        commit capture, invalidate it on cancel/replacement/reopen/source change and retire its complete node off-owner.
+      - [ ] Prove one preparation across coalesced previews and commit, literal pixels and one history entry;
+        preserve stale/failure/retirement controls and qualify the complete frozen native matrix.
+      The `.build/` primitive/opaque-worker draft passes 33 independent focused assertions after primary review
+      corrected a test's nonexistent history accessor. Host integration passes strict syntax; real host and full
+      configuration qualification follow the sizing source freeze. No measured drag/G1 claim is made.
   - [x] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry qualify in all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). History construction remains H1.
   - [ ] A5.4 — Worker Copy/Cut preparation with an atomic private clipboard and origin, before mirroring through the F5 OS clipboard graph.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
