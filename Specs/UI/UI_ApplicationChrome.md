@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -243,7 +243,10 @@ Copy and Copy
 Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends
 with it); Alt+Backspace and
 Ctrl+Backspace fill with the foreground and background
-colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
+colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. Ctrl+J uses the ordered worker path: with a selection it adds
+the copied pixels at their document origin as a sibling layer and clears the outline; without one it duplicates
+the active layer record. The new layer is selected and the mask target clears in either case. The operation leaves
+the private and OS clipboards untouched. The selection and publication contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 ## Crop tool

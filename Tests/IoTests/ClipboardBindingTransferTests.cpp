@@ -317,7 +317,13 @@ std::optional<ClipboardFingerprint::Binding> PrepareBound(const ClipboardReceipt
         ClipboardTransfer::Prepare(Source(), 96.0, GetClipboardSequenceNumber(), prepared, {},
                                    observed ? Observe(*observed) : ClipboardTransfer::Observer{}, receipt);
     if (status != Status::Ok || !prepared)
+    {
+        std::printf("clipboardbinding.prepare status=%u prepared=%u sourceSequence=%lu currentSequence=%lu\n",
+                    static_cast<unsigned>(status), prepared ? 1u : 0u,
+                    static_cast<unsigned long>(prepared.SourceSequence()),
+                    static_cast<unsigned long>(GetClipboardSequenceNumber()));
         return std::nullopt;
+    }
     return prepared.ContentBinding();
 }
 
@@ -375,7 +381,13 @@ bool PublishBound(HWND owner, const ClipboardReceipt::Key& key, PreparedImage& p
                   std::optional<ClipboardFingerprint::Binding>& binding, Observation* observed = nullptr)
 {
     if (!PutClipboard(owner, {}, {}, kLiteralDib))
+    {
+        std::printf(
+            "clipboardbinding.fixture-install-failed nativeError=%lu owner=%p openWindow=%p clipboardOwner=%p\n",
+            static_cast<unsigned long>(GetLastError()), static_cast<void*>(owner),
+            static_cast<void*>(GetOpenClipboardWindow()), static_cast<void*>(GetClipboardOwner()));
         return false;
+    }
     binding = PrepareBound(key, prepared);
     if (!binding)
         return false;

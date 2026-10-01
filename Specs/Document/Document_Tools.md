@@ -1,9 +1,10 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
+`Common/LayerCopyWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
 `RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`, and the mask
 command job in `RedPrism/ApplicationMaskJobs.cpp`
@@ -647,6 +648,34 @@ work; functional migration alone establishes no Photoshop speed or bounded nativ
   another app's pixels; `LayerViaCopy` copies the selection to a new layer without the clipboard (`Layer via Copy`),
   or `DuplicateActiveLayer` without one. `NextLayerName` is the first unused `Layer N`. `BeginSelectionTransform`
   restores the document and records nothing when `ClearSelectedPixels` does not paint.
+
+### Layer via Copy worker preparation
+
+Production Layer via Copy is a selected Commit input on the shared `HistoryWork` stream. The host admits its complete
+scheduler-memory reservation before capturing the immutable source document, active layer, image-or-mask target,
+displayed placement, selection and history authority. The admitted record and reservation stay owned through worker
+preparation and owner apply/drop acknowledgement; view input remains dispatchable while it runs.
+
+With a selection, the worker uses the captured image or mask placement and the existing `CopyPixelsWork` path to
+prepare cropped pixels and their exact document origin. It creates the first unused `Layer N` as a pixel layer
+immediately above the source, under the same parent. Successful publication makes that layer the sole selected
+layer, clears the selection outline and clears the mask target. Without a selection, the worker duplicates the full
+source layer record immediately above it under the same parent, preserves its asset, mask, shape and adjustment or
+clipping data and shared raster identities, assigns a fresh Guid, and appends ` copy` to its name. Publication makes
+the duplicate the sole selected layer and clears the mask target. Each branch prepares the complete after-document
+and its one history entry before publication (`Layer via Copy` or `Duplicate Layer`).
+
+The operation leaves the private clipboard pixels, origin, session identity and serial unchanged and does not call
+the OS clipboard. Group sources, explicitly empty selections and selected sources without pixels for the captured
+target do not publish. Admission enforces the layer limit and independent aggregate image- and mask-pixel budgets.
+Owner apply revalidates the captured session/document authority, active and mask target, generation and history
+state before its nonallocating publication. Stale, cancelled, failed or over-budget work adds no layer or history.
+Cancellation retains the record, reservation and captured graph through worker acknowledgement; the complete
+retired CPU aggregate is released off owner.
+
+These settled-source controls do not qualify settlement of a live brush, warp, selection outline/move or transform;
+that remains P1.4/A6/S3 work. Owner metadata capture remains H2, and history/chrome/display costs and the full G1
+measurements remain open. Functional controls establish no G1 bound.
 
 ## Color adjustments and filters (C12)
 

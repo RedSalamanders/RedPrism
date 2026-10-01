@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -884,6 +884,20 @@ and all three ARM64 cross-builds against 496 frozen inputs, including 84 documen
 x64 profile. Exact receipts and the post-qualification XML whitespace-only verification are in the same record.
 Live brush/warp/selection/transform settlement remains P1.4/A6/S3;
 no G1 or native ARM64 runtime claim follows from these controls.
+
+### Layer via Copy worker matrix
+
+`LayerCopyWorkTests` requires the 34 literal document controls recorded in
+[`LayerCopyWorkers_2026-10-01.md`](../TestRuns/LayerCopyWorkers_2026-10-01.md): selected image/mask pixels and exact
+origin, same-parent insertion, outline and mask-target state, complete unselected duplicate semantics, clipboard
+identity/serial preservation, limits, cancellation and stale-publication refusal. The full private WARP application
+run records 214 host checks for ordered admission, view input, cancellation acknowledgement, allocation/history
+faults, staleness, younger Undo and off-owner aggregate retirement. The final incremental native r3 matrix then
+qualifies 503 frozen inputs in x64 Debug, Release and ASan Debug suites and all three ARM64 cross-builds. Each
+x64 profile passes the same 34 document/214 host controls and all unchanged legacy numeric goldens. Exact profile
+receipts and the 297-file evidence archive are identified in that record; its earlier failures remain preserved.
+Live brush/warp/selection/transform settlement remains P1.4/A6/S3; owner capture is H2, and G1 measurements and
+the full P1 clean exit remain open. Cross-build results do not establish native ARM64 runtime behavior.
 
 ### Clipboard host matrix
 

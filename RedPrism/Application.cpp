@@ -2209,6 +2209,11 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: mask-work.\n");
         return maskWork;
     }
+    if (const int layerCopy = RunLayerCopyWorkSelfTest(); layerCopy != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: layer-copy.\n");
+        return layerCopy;
+    }
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
@@ -3126,6 +3131,8 @@ void Application::Shutdown() noexcept
     _shapeTicket.reset();
     _maskTicket.reset();
     _maskStamp.reset();
+    _layerCopyTicket.reset();
+    _layerCopyStamp.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3836,7 +3843,8 @@ void Application::OnCommand(int command) noexcept
     const bool clipboard = command == ChromeHost::kCommandCut || command == ChromeHost::kCommandCopy ||
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit))
+    const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4224,10 +4232,23 @@ void Application::OnCommand(int command) noexcept
         ExecuteRasterEditCommand(RasterEditKind::Invert);
         break;
     case ChromeHost::kCommandLayerViaCopy:
+    {
         EndSelectionInteraction(false);
-        _session.LayerViaCopy();
-        DocumentChanged();
+        const auto result = StartLayerCopy();
+        if (FAILED(result))
+        {
+            _hostExecutionError = result;
+            if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                ReportBudgetRefusal();
+            else
+            {
+                ++_errorsShown;
+                _lastErrorId = IDS_ERROR_PIXEL_EDIT;
+                _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+            }
+        }
         break;
+    }
     case ChromeHost::kCommandCurves:
     case ChromeHost::kCommandLevels:
     case ChromeHost::kCommandHueSaturation:
@@ -7561,11 +7582,15 @@ int Application::RunRefusalSelfTest() noexcept
         const int errors = _errorsShown;
         // Layer via Copy duplicates the 10 000-pixel layer without a selection, and copies it with one.
         OnCommand(ChromeHost::kCommandLayerViaCopy);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         const bool duplicateRefused = layerCount() == layers && _budgetNotices == notices + 1;
         DocumentChanged();
         const bool once = _budgetNotices == notices + 1;
         OnCommand(ChromeHost::kCommandSelectAll);
         OnCommand(ChromeHost::kCommandLayerViaCopy);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         const bool copyRefused = layerCount() == layers && _budgetNotices == notices + 2;
         OnCommand(ChromeHost::kCommandDeselect);
         // A Gaussian Blur whose grown grid would not fit names the budget, not the layer.

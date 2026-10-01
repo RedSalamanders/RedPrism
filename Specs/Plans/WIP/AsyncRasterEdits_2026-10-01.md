@@ -65,6 +65,13 @@
     prepared End and rejects newer draft/source/replacement authority. Group budget planning reserves later
     members' old rasters before accepting an earlier replacement; a virtual 99,990,000-pixel untouched source
     proves no final document can exceed the cap. Floating opening/merge, host activation and native gates remain open.
+    - [x] Prepare an exact-predecessor history view privately, so an opening and its rollback can both be
+      constructed before publication. The complete private DocumentTests run passes against 498 frozen inputs
+      (image SHA-256 `4275F42AF998F661A38784059047BB893AB754E95D639089A53AB5C088CE9FFA`). A competing
+      transaction at the same epoch/revision cannot authorize the rollback; owning stack/pending witnesses
+      preserve identity through moves. `.build/p1-distort-draft/transform-core-qualified-r2/` retains the proof.
+    - [ ] Build floating opening and its complete preallocated restoration bundle before exposing the floating
+      layer; prepare merge pixels, moved outline, mask growth and one outer history closure on workers.
   - [ ] A6.3 — Activate ordered preview, release, header and settlement callers; preserve pending controls,
     continuation outcomes and input-time geometry through acknowledgement and aggregate retirement.
   - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
@@ -97,8 +104,12 @@
       484 frozen source inputs (executable SHA-256
       `C0439133FABB0F0AB02F19DAE9AF950CBCD711C1C8F79C2F9B6EB683A07A48F3`). The earlier r1 budget-notice
       self-test observed before its queued operation settled; r2 fixes observation timing only, with no missing
-      production notice behavior. Native qualification, live producer settlement and G1 remain open
+      production notice behavior. Live producer settlement and G1 remain open
       ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)).
+      - [x] A7.3b.1 — Settled production Ctrl+J commands qualify in all three x64 suites and all three ARM64
+        cross-builds against 503 frozen inputs: 34 document controls and 214 actual host checks per x64 profile.
+        The exact r3 archive retains all images, logs and receipts; the ISA and I/O failures are preserved.
+      - [ ] A7.3b.2 — Complete live producer settlement and capture/apply/history/chrome/upload/G1 measurements.
     - [ ] A7.3c — Live-shape transform redraw with prepared carried mask and atomic after-document/history;
       coordinate with A6 so distortion, redraw and floating settlement cannot bypass the owning worker graph.
 - [ ] A8 — All moved production callers, ordering/lifetime/failure gates and every due G1 operation measured; reconcile master and owning specs before closing P1.5.

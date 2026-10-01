@@ -1,8 +1,7 @@
 # Layer via Copy worker preparation and publication
 
-Status: the complete private DocumentTests suite and private full WARP application proof pass. Native
-configuration qualification and live producer settlement remain open. No measured P1/G1 bound follows from this
-functional proof.
+Status: production Layer via Copy passes all three native x64 suites and all three ARM64 cross-builds.
+Live producer settlement and measured P1/G1 bounds remain open.
 
 ## Implementation checklist
 
@@ -12,7 +11,7 @@ functional proof.
 - [x] Pass 34 independent controls and the complete private document suite.
 - [x] Pass full private WARP host cancellation, faults, staleness, younger Undo and aggregate-retirement controls:
   214 Layer via Copy host checks pass with zero failures.
-- [ ] Activate production routes, qualify all x64 suites and ARM64 clean builds, archive and commit/push.
+- [x] Activate production routes, qualify all x64 suites and ARM64 cross-builds, and archive exact results.
 - [ ] Qualify live producer settlement with P1.4/A6/S3 and measure owner capture/apply/history/chrome/upload.
 
 ## Reference and ownership
@@ -65,3 +64,30 @@ production notice behavior. Native configuration qualification, live producer se
 costs remain open.
 
 No native ARM64 runtime, RAW throughput or Photoshop comparison is claimed.
+
+## Native qualification
+
+Production sources are integrated. Native r1 stopped before tests at the ASan ISA scan: the decoder read
+Application::EditUnderWay's terminal switch table at `0x14065bcd8` as EVEX instructions. Its exact image,
+PDB, scan inputs and 503 frozen sources remain in `.build/p1-layer-copy-r1-ASan-failure/`. The strict
+long unsigned-JA stack-guard proof accepts the same archived binary with zero violations; the runtime
+allowlist is unchanged. All existing synthetic controls and 48 long-JA controls pass. The failed controls
+and pre-repair rescans are retained separately. These results qualify parser data recognition only.
+
+Native r2 passed the scanner and then exited on four clipboard-binding assertions in IoTests. Publication
+diagnostics showed `Invalid` before any sequence/format mutation; the helper could have refused its fixture
+installation or preparation. The exact cause is unproven. All 503 source inputs and 88 evidence files remain
+in `.build/p1-layer-copy-r2-ASan-failure/`. The exact archived IoTests image passed a subsequent full replay.
+R3 adds preparation/fixture-install diagnostics without changing assertions or production clipboard behavior.
+
+The complete incremental native r3 matrix exited zero at `2026-10-01T22:42:19.6601803Z` with 503 frozen inputs.
+Each x64 Debug, Release and ASan Debug suite passes all unchanged numeric goldens, 34 Layer via Copy document
+controls and 214 actual host controls. Existing mask/Shape/clipboard host suites also report 201/199/268 checks
+with zero failures in each profile. All three ARM64 cross-builds pass; no ARM64 runtime was executed.
+
+`.build/p1-layer-copy-r3-qualified/` preserves the 503 sources and 297 evidence files, including all images/PDBs,
+ISA inputs/reports, suite/application logs, profile receipts and the full matrix receipt. Every archived file
+was verified against its source SHA-256. The source manifest hash is
+`275D0A84A609A6586CD9F35B3EBAE5A66CFF1AE754DED8A7B699843E2791771C`; the evidence manifest hash is
+`866EC0F7748656A5105453E50CA49BD7BA7EB44246912CA2EFBDED4514B328B0`.
+Live producer settlement, owner capture/history/chrome/upload costs and the complete P1 clean exit remain open.

@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -101,6 +101,15 @@ Cancellation retains the reservation and complete
 source/history graph through acknowledgement, then the aggregate retires off owner. Settled producers are covered;
 live brush, warp, selection and transform settlement remains P1.4/A6/S3 work. Functional qualification establishes
 no G1 timing bound; capture, history publication, chrome/display work and required measurements remain open.
+
+Layer via Copy also admits its whole scheduler-memory reservation before owner capture of document, active/mask
+target, displayed placement, selection and history. The reservation covers detached pixel, after-document and
+prepared-history work; admission applies the layer limit and independent 100 M aggregate image- and mask-pixel
+budgets. The held-document retirement estimate is included in the deferred-release charge. Stale or cancelled work
+publishes no layer/history and retains its record, reservation and source graph through acknowledgement; its
+complete retired CPU aggregate releases off owner. Source/history metadata capture remains H2, and live brush,
+warp, selection-outline/move and transform settlement remains P1.4/A6/S3. The private functional controls do not
+establish G1 timing; capture, apply, history, chrome/display and full-loop measurements remain open.
 
 These numbers are binding as soon as the feature exists. C1 does not implement them; it MUST NOT choose a host shape
 that makes them impossible.

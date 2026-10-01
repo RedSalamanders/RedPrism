@@ -714,6 +714,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_maskTicket.value());
         }
+        else if (_layerCopyTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_layerCopyTicket.value());
+        }
         else if (_gradientCommitTicket)
         {
             (void)_historyWork.RequestCancel();

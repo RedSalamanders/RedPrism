@@ -92,7 +92,7 @@
       - [ ] P1.3d–f — Utility composition and real host caller migration, restart/error policy and real-loop/G1 measurements.
         - [x] Qualify separate utility targets, tiled adopted worker outputs, bounded rebind restart, explicit EnqueueSetEvent fallback, and Merge/adjustment-opening continuations. All x64 gates and ARM64 cross-builds pass ([evidence](../../TestRuns/GpuUtilityReadback_2026-09-30.md)).
         - [x] Migrate PNG/JPEG export through detached worker encoding and qualify bounded additional-event recovery on actual hardware and both completion routes; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md).
-        - [ ] Migrate Copy Merged, wand, clone and sampler callers; measure the real loop before P1.3 closeout.
+        - [ ] Copy Merged qualifies below. Migrate wand, clone and sampler callers; measure the real loop before P1.3 closeout.
   - [ ] P1.4–P1.6 — Migrate strokes, raster edits, transforms, shapes and selection work with preserved input ordering.
     - [ ] P1.4 — Recorded strokes behind commits, lazy tiled sources, asynchronous heal/warp/mouse-up and younger-input close protection.
     - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
@@ -105,16 +105,20 @@
       - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
       - [x] A5.4b — Atomic private Copy/Copy Merged/Cut and exact Clear/Fill Mask history publication, sealed
         composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
-        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers,
+        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers qualify below;
         constant-time capture and G1 remain open.
       - [x] A7.1/A7.2a — Worker Shape release with exact pixels, owned event-time geometry/color, complete
         document/history publication and actual pointer/cancellation/retirement controls qualifies in all six
         profiles: 76 document controls and 199 host checks against 487 frozen inputs
-        ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, masks, Layer via Copy and measured G1 remain open.
+        ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, live producer settlement and measured G1 remain open; settled masks/Layer via Copy qualify below.
       - [x] A7.3a.1 — Worker selection/uniform masks with eager semantic thumbnail and joint target/selection/
         history publication qualify settled production callers in all six profiles: 84 document controls and
         201 host checks against 496 inputs ([record](../../TestRuns/MaskWorkers_2026-10-01.md)). Live gesture
         settlement and measured capture/apply/upload/G1 remain A7.3a.2/P1.4/A6/S3.
+      - [x] A7.3b.1 — Settled Layer via Copy/Ctrl+J worker preparation and publication qualify against 503 frozen
+        inputs in all three x64 suites and all three ARM64 cross-builds: 34 document and 214 host controls per
+        x64 profile ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)). Live producer settlement,
+        source capture/history/chrome/upload/G1 and the full P1 clean exit remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.
@@ -131,7 +135,7 @@
       - [x] F3b.3a — Production project opening, separate probe/decode reservations, 45 host gates and replacement continuation pass all configurations and 22-row hardware/WARP runs; [evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md). Warm opening: 18.675 ms at hardware 4K / 120.355 ms at 45 MP; 5.079 ms apply / 50.517 ms frame at 45 MP keep G1 open.
       - [x] F3b.3b — Detached image-import probe/preparation/apply, opened-source caps and 130 host cases pass all configurations and 24-row hardware 4K/45 MP/100 MP and WARP 4K measurements; [evidence](../../TestRuns/ImageImportJobs_2026-10-01.md). Warm 45 MP new-canvas import: 169.732 ms; existing-layer apply 11.403 ms leaves P1.9/G1 open.
       - [x] F4b.1/F4b.2 — Project-save and PNG/JPEG export graphs pass all x64 suites, ARM64 cross-builds and 21-row hardware 4K/45 MP and WARP 4K measurements; [evidence](../../TestRuns/ProjectWriters_2026-10-01.md). Save retains captured revision/publication truth; export detaches GPU resources before encoding and cannot replay writes after device changes. Remaining IO faults and measured 2 ms overruns keep F4/P1/G1 open.
-      - [x] F5a/F6a — Detached clipboard byte/metadata helpers and folder rotation/recovery faults, including allocation-safe bounded cleanup and backup-only retries; all 77 new checks and configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production clipboard migration, pending IO waits, intermittent real save cause and measured cancellation bounds remain open.
+      - [x] F5a/F6a — Detached clipboard byte/metadata helpers and folder rotation/recovery faults, including allocation-safe bounded cleanup and backup-only retries; all 77 new checks and configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production clipboard migration qualifies below; pending IO waits, intermittent real save cause and measured cancellation bounds remain open.
       - [x] F5b.1 / A5.4a / owner routing primitive — Native Copy pixel, sealed Win32 transfer and fixed owner
         multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
         against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
@@ -143,7 +147,7 @@
       - [x] F5b.2b.1 — Capped memory PNG/JPEG encoding with pre-growth derived/lower ceilings, bounded commits,
         cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
         six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
-        Detached Paste and production clipboard admission/callers/retries remain open in the file child.
+        Detached Paste and production clipboard admission/callers/retries qualify below; remaining file timing and lifecycle gates stay open.
       - [x] F5b.2b.2 — Detached Paste candidate document/history, guarded publication and producer-order clipboard
         inspection qualify in all six profiles: 62 Paste, 45 availability and unchanged 125 transfer controls
         ([record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md)). Actual host graphs remain F5b.2b.3.

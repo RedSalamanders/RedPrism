@@ -31,6 +31,7 @@
 #include "ImageFilters.h"
 #include "ImportHistoryTests.h"
 #include "ImportPublicationTests.h"
+#include "LayerCopyWorkTests.h"
 #include "LiftReferenceTests.h"
 #include "MaskEditWorkExtraTests.h"
 #include "MaskEditWorkTests.h"
@@ -7414,6 +7415,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunShapeEditWorkTests();
     gFailures += RunMaskEditWorkTests();
     gFailures += RunMaskEditWorkExtraTests();
+    gFailures += RunLayerCopyWorkTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();

@@ -1233,6 +1233,10 @@ class MaskEditInput;
 class PreparedMaskEdit;
 struct MaskEditResult;
 struct MaskWorkObserver;
+class LayerCopyInput;
+class PreparedLayerCopy;
+struct LayerCopyResult;
+struct LayerCopyObserver;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
@@ -2268,6 +2272,12 @@ class DocumentSession
     // Pixels from another app, centered on the canvas (`Paste`).
     void PasteImage(const Raster& image);
     void LayerViaCopy();
+    [[nodiscard]] std::uint64_t LayerCopyPreparationMemoryBytes() const;
+    [[nodiscard]] std::optional<LayerCopyInput> PrepareLayerCopyInput() const;
+    [[nodiscard]] static LayerCopyResult PrepareLayerCopyPublication(
+        LayerCopyInput input, Executor& executor, CancelToken cancellation, LayerCopyObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedLayerCopyIfCurrent(PreparedLayerCopy& prepared) noexcept;
     [[nodiscard]] const std::optional<PixelClipboard>& Clipboard() const noexcept
     {
         return _clipboard;
