@@ -312,6 +312,19 @@ symbol prove that bias. The complete table, including its default entry, must ta
 after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
 invalid default/other targets receive no exemption. This adds no runtime allowlist entry.
 
+The observed Release `std::variant` destruction dispatch (`_Variant_base<...>::_Destroy` of 21 alternatives) is exactly six
+contiguous instructions, 37 bytes: `MOVSX RAX,byte [RCX+disp32]`, `LEA R8,imagebase`, `MOVZX EAX,byte [R8+RAX+disp32]`,
+`MOV EDX,[R8+4*RAX+disp32]`, `ADD RDX,R8` and `JMP RDX`. The index is signed (-1 is the valueless state), so the byte load's
+displacement is the table start plus one. Each row must equal the PE bytes, have its reported length and overlap no other decoded
+row. The DWORD table starts at the exact anonymous same-owner untyped 16-byte `S_LDATA32` of its load. The byte table starts at
+the exact such record one byte before its load displacement (a record at the displacement, or anywhere else, proves nothing),
+which is also where the DWORD table ends. The byte table ends at the end its owning PDB procedure shares with its executable
+contribution, no other data symbol lies inside either table, every byte is an index below the DWORD entry count, and every entry
+is a decoded instruction boundary of that procedure before the tables. The procedure may begin before the MOVSX. Another bias,
+register, displacement width, index extension, row, symbol, bound or target receives no exemption, and nothing is exempted by
+address, object or procedure name. This adds no runtime allowlist entry
+([record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md)).
+
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
 LEA EAX with disp8, compare EAX with imm8, then forward JA. Every instruction preserves R8. Both branch destinations

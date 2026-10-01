@@ -367,6 +367,19 @@ same-procedure decoded boundary. An unrelated later data symbol does not extend 
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
+The Release `std::variant` destruction dispatch (signed byte index, R8 image base, RDX target, byte table biased by one entry)
+has 93 controls that rebuild the bytes observed in `ApplicationFileJobs.obj` at their observed addresses (DWORD table at RVA
+0x962dc, byte table at 0x962ec ending the 114-byte procedure). Three images are accepted: the observed one, one with a leading
+instruction in the procedure and one in a section at another address. Every refusal changes one thing: an instruction of the
+dispatch (28: each register, width, opcode and prefix, a short displacement, a missing byte load, an unsigned, unbiased or
+ECX-target variant and each noncontiguity), a row's listing against the PE (24: mismatch, unknown, overlapping or missing, per
+row), a PDB record (missing, one byte early or late, wrong owner, named, typed, wrong size, or a second record inside either table),
+the bias (none, two, negative, or the DWORD load biased by one entry), the procedure or contribution bound (6), an index byte at
+or above the entry count (2), or a target in the previous or next function, inside an instruction, undecoded, or inside either
+table (6). A genuine VEX instruction in the procedure, in the alignment before the table, on the first byte after the procedure
+or in the next function (4) stays a violation while the two table rows stay data. The real Release images of the merged tree
+pass: [record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md).
+
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
 It checks the actual six scalar function entries and padded, odd-width alpha/transparent adjustment inputs.
