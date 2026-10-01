@@ -1029,8 +1029,13 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
     {
         return std::nullopt;
     }
-    commit.thumbnail = _workerRasterEdit ? ThumbnailRasterForWork(commit.image, 96, _workCancellation)
-                                         : Raster::MakeThumbnail(commit.image);
+    if (_mask)
+    {
+        commit.thumbnail = _workerRasterEdit ? ThumbnailRasterForWork(commit.image, 96, _workCancellation)
+                                             : Raster::MakeThumbnail(commit.image);
+        if (!commit.thumbnail.HasStorage())
+            return std::nullopt;
+    }
     commit.transform = TransformFor(crop);
     if (!commit.transform.IsValid() || (_workerRasterEdit && _workCancellation.IsCancelled()))
     {
@@ -2391,7 +2396,7 @@ void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstri
     }
     ImageLayer layer =
         ImageLayer::Blank(name, Vec2{static_cast<double>(image.Width()), static_cast<double>(image.Height())});
-    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), std::move(name)};
+    layer.asset = RasterAsset{image, {}, std::move(name)};
     layer.transform.origin = origin;
     layer.shape = shape;
     if (shape.has_value())
@@ -2437,7 +2442,7 @@ void DocumentSession::RedrawShape(std::size_t index)
         layer.mask->placement = MaskTransform(layer);
     }
     const std::wstring name = layer.asset->name;
-    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), name};
+    layer.asset = RasterAsset{image, {}, name};
     layer.shapeImage = image;
 }
 
@@ -3028,7 +3033,9 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
     }
     else if (prepared.isGroup || prepared.adjustment || !prepared.asset ||
              !validRaster(prepared.asset->image, RasterFormat::Bgra8888) ||
-             !validRaster(prepared.asset->thumbnail, RasterFormat::Bgra8888) || prepared.asset->name != prepared.name ||
+             (prepared.asset->thumbnail.HasStorage() &&
+              !validRaster(prepared.asset->thumbnail, RasterFormat::Bgra8888)) ||
+             prepared.asset->name != prepared.name ||
              prepared.asset->image.PixelCount() > PixelBudgetLeft(false, {current->id}))
         return false;
     if (publication)
@@ -3482,7 +3489,7 @@ void DocumentSession::BeginSelectionTransform()
     }
     ImageLayer floating = ImageLayer::Blank(L"Floating Selection", Vec2{static_cast<double>(lifted->image.Width()),
                                                                         static_cast<double>(lifted->image.Height())});
-    floating.asset = RasterAsset{lifted->image, Raster::MakeThumbnail(lifted->image), L"Floating Selection"};
+    floating.asset = RasterAsset{lifted->image, {}, L"Floating Selection"};
     floating.transform.origin = lifted->origin;
     floating.parentID = source.parentID;
     floating.opacity = source.opacity;
@@ -3654,7 +3661,7 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
             break;
         }
         ImageLayer& installed = layers[target.value()];
-        installed.asset = RasterAsset{image, Raster::MakeThumbnail(image), name};
+        installed.asset = RasterAsset{image, {}, name};
         installed.transform = mergedTransform;
         installed.mask = mask;
         _document->selection = moved;

@@ -1,7 +1,7 @@
 # Canvas composition
 
 Status: current normative product contract
-Last reviewed: 2026-09-23
+Last reviewed: 2026-10-01
 Owner: `RedPrism/CanvasRenderer.*`, `RedPrism/CanvasViewport.h`, HLSL under `RedPrism/Shaders/`, the frame loop's
 failure handling in `RedPrism/Renderer.*` and `Application::RenderFrame`
 
@@ -255,7 +255,7 @@ stages allocate an aligned output, copy rows using the validated pitch, check ca
 the finished raster. Owner stages acknowledge each lease before the next tile and publish once. Full-image,
 region and 1×1 requests compose only their requested bounds, in tiles at most 2048 or half the lower device/test
 texture limit, retaining the synchronous traversal's guard room for transformed sampling footprints.
-An optional final worker step prepares Merge's trim/thumbnail and complete survivor/history publication under the
+An optional final worker step prepares Merge's trim and complete survivor/history publication under the
 same reservation. Production merge admits and captures metadata first, then builds the plan/composition subset
 on a worker; a missing plan finishes without pixel/readback allocation. A ready plan keeps the same history ordinal
 through separate full-graph admission and history capture. Merge and export detach the final mapping and utility

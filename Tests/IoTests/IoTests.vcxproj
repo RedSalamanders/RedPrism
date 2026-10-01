@@ -106,6 +106,7 @@
     <ClInclude Include="..\..\Common\ZipOwner.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
+    <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IoTests.cpp" />

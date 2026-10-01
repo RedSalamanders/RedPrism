@@ -219,11 +219,11 @@ std::optional<std::uint64_t> CommitMemoryBytes(const ColorEdit& edit, std::uint6
     {
         return std::nullopt;
     }
-    // Trim keeps input and cropped output until the crop is adopted. Finish retains the final image and eager
-    // thumbnails; a reused sparse preview may need a private copy even though ordinary kernel outputs are flat.
+    // Trim keeps input and cropped output until the crop is adopted. Finish retains the final image and any eager
+    // semantic mask thumbnail; a reused sparse preview may need a private copy even though kernel outputs are flat.
     const bool trim = (edit.grownGrid || edit.grownImage.HasStorage()) &&
                       (edit.kind == FilterKind::GaussianBlur || edit.kind == FilterKind::MotionBlur);
-    const std::uint64_t thumbnails = allocation(96 * 96 * 4) + allocation(96 * 96);
+    const std::uint64_t thumbnails = target && target->mask ? allocation(96 * 96) : 0;
     const std::uint64_t newImage = !reused || trim ? rgba : 0;
     const std::uint64_t privatePreview = reused && !edit.previewRaster.IsMaterialized() ? rgba : 0;
     std::uint64_t finishPeak =
@@ -619,11 +619,6 @@ ColorEditJobResult RunColorEditJob(const ColorEditJobInput& input, Executor& exe
     {
         return result;
     }
-    result.thumbnail = ThumbnailRasterForWork(image, 96, cancellation);
-    if (!result.thumbnail.HasStorage() || cancelled())
-    {
-        return result;
-    }
     result.image = std::move(image);
     result.transform = placed;
     result.status = ColorEditJobStatus::Ready;
@@ -816,7 +811,8 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
     if (prepared && !IsPreparedColorEditCurrent(*prepared))
         return false;
     if (!result.image.HasStorage() || result.image.Format() != RasterFormat::Bgra8888 ||
-        !result.thumbnail.HasStorage() || !result.transform.IsValid())
+        (result.thumbnail.HasStorage() && result.thumbnail.Format() != RasterFormat::Bgra8888) ||
+        !result.transform.IsValid())
     {
         _colorEdit->commitFailed = true;
         ++_editRevision;

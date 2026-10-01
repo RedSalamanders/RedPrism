@@ -398,6 +398,17 @@ off the owner. The live-context controls are described below. Final native quali
 [ImageImportHistoryPublication_2026-10-01.md](../TestRuns/ImageImportHistoryPublication_2026-10-01.md);
 functional gates make no measured latency claim.
 
+`HistoryEntriesTests` adds 28 independent immutable-container assertions: zero handle copies during capture/read,
+captured integer contents, clone-before-mutation, empty/moved/swap state, weak-owner retention and four concurrent
+readers with a separate cloned writer. Deterministic throwing-handle fixtures prove partial copy refusal leaves
+root identity, contents and original ownership intact for push/pop/erase; they do not inject the vector allocator.
+Existing prepared-history allocation checkpoints still gate the complete construction/publication boundary.
+`OptionalImageThumbnailTests` adds 30 assertions covering empty/explicit derived image caches, literal sparse
+nearest samples without materialization, equality/no-op redo, invert/resize/prepared color/prepared merge/CPU
+brush pixels, and eager white-to-black semantic mask thumbnails. The legacy retained-thumbnail byte golden supplies
+an explicit nonzero image cache. IoTests retains its original mixed-gray fixture and checks all four literal
+thumbnail bytes, while successful image decode leaves no thumbnail. Native qualification is P1.9 H2.1/H4.1 work.
+
 `HostTests` command-line cases additionally prove bounded positional paths, `--` leading-dash paths, empty/null/
 overlong/count refusal, harness mode conflicts, marker-aware help/self-test preflight and atomic parse output.
 Accepted startup paths are copied into an owning request before the argv storage can be released.
@@ -713,7 +724,7 @@ fixtures explicitly clear a prior intentionally preserved draft before construct
 
 Io import controls independently verify opened-stream caps, literal first-frame metadata/pixels (including
 two-frame TIFF), signed/hard pixel ceilings, per-path and aggregate preparation limits, cached failures and
-PixelBuffer/thumbnail/record memory floors without materializing shared sparse sources. These gates do not prove
+PixelBuffer/record memory floors without materializing shared sparse sources. These gates do not prove
 successful HEIF decoding on a host without its codec, RAW support, in-flight codec interruption or full G1 timing.
 
 ```powershell

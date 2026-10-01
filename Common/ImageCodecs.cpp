@@ -359,10 +359,18 @@ constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
     {
         return ImageCodecStatus::Unreadable;
     }
-    Raster thumbnail = ThumbnailRasterForWork(image, kThumbnailMaxSide, cancellation);
-    if (cancellation.IsCancelled() || !thumbnail.HasStorage())
+    Raster thumbnail;
+    if (mask)
     {
-        return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Unreadable;
+        thumbnail = ThumbnailRasterForWork(image, kThumbnailMaxSide, cancellation);
+        if (cancellation.IsCancelled() || !thumbnail.HasStorage())
+        {
+            return cancellation.IsCancelled() ? ImageCodecStatus::Cancelled : ImageCodecStatus::Unreadable;
+        }
+    }
+    if (cancellation.IsCancelled())
+    {
+        return ImageCodecStatus::Cancelled;
     }
     decoded.image = std::move(image);
     decoded.thumbnail = std::move(thumbnail);

@@ -13,6 +13,7 @@
 #include "GradientStateTests.h"
 #include "GradientWorkTests.h"
 #include "HistoryAccountingTests.h"
+#include "HistoryEntriesTests.h"
 #include "HistoryPreparationFaultTests.h"
 #include "HistoryRestoreTests.h"
 #include "HistoryRetirementBoundTests.h"
@@ -25,6 +26,7 @@
 #include "LiftReferenceTests.h"
 #include "MergeHistoryTests.h"
 #include "MergePlanProbeTests.h"
+#include "OptionalImageThumbnailTests.h"
 #include "PixelMoveOpeningTests.h"
 #include "PixelMoveOpeningWorkTests.h"
 #include "PixelMoveStateTests.h"
@@ -2782,7 +2784,13 @@ void TestBrushSnapshots()
     session.ContinueBrush(Vec2{1600, 400});
     session.FinishBrush();
     const Raster first = session.ActiveLayer()->asset->image;
+    // Supply the optional derived cache explicitly so this legacy retained-thumbnail accounting golden still
+    // covers a distinct thumbnail owner after production image commits stop computing unused thumbnails.
+    session.EditForTest(
+        [](CanvasDocument& document)
+        { document.layers.back().asset->thumbnail = Raster::MakeThumbnail(document.layers.back().asset->image); });
     const std::size_t firstThumbnail = session.ActiveLayer()->asset->thumbnail.ByteSize();
+    Expect(firstThumbnail > 0, "snapshot.optional-thumbnail-accounting-fixture-has-retained-bytes");
     Expect(first.IsSparse() && !first.IsMaterialized() && session.CanPaint(), "snapshot.mouse-up-does-not-flatten");
     const int count = session.history.UndoCount();
     Expect(session.BeginBrush(Vec2{800, 800}), "snapshot.second-begin");
@@ -6207,7 +6215,7 @@ void TestMerge()
                prepared->Layer().name == L"Red" && prepared->Layer().parentID == preparedPlan->parent &&
                prepared->Layer().asset.has_value() && prepared->Layer().asset->image.Width() == 2 &&
                prepared->Layer().asset->image.Height() == 2 && prepared->Layer().transform.origin == Vec2{1, 1} &&
-               prepared->Layer().asset->thumbnail.HasStorage(),
+               !prepared->Layer().asset->thumbnail.HasStorage(),
            "merge.prepare-complete-result");
     if (!prepared)
         return;
@@ -7354,6 +7362,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
     gFailures += RunHistoryStateViewTests();
+    gFailures += RunHistoryEntriesTests();
+    gFailures += RunOptionalImageThumbnailTests();
     gFailures += RunPreparedHistoryTests();
     gFailures += RunHistoryPreparationFaultTests();
     gFailures += RunHistoryRetirementBoundTests();

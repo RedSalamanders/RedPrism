@@ -112,6 +112,7 @@
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\Common\ImageImportHistory.h" />
+    <ClInclude Include="..\Common\HistoryEntries.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />

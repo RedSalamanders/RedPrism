@@ -11,7 +11,7 @@ DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit
     _savedRevision = _revision;
 }
 
-DocumentHistory::StateView DocumentHistory::CaptureState() const
+DocumentHistory::StateView DocumentHistory::CaptureState() const noexcept
 {
     StateView view;
     view.past = _past;
@@ -535,7 +535,8 @@ std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocumen
         return !document->selection || add(1, 128); // retained geometry is shared, only its set entry is new
     };
     if (!snapshot(current, true) || (_pending && !snapshot(_pending->before->document, false)) ||
-        !add(_past.size() + 1, 4 * sizeof(Entry)) || !add(_past.size() + _future.size() + 1, 2 * sizeof(const Entry*)))
+        !add(_past.size() + 1, 4 * sizeof(Entry)) || !add(4, sizeof(HistoryEntries<EntryHandle>::Container) + 64) ||
+        !add(_past.size() + _future.size() + 1, 8 * sizeof(EntryHandle)))
         return 0;
     for (const auto& entry : _past)
         if (!snapshot(entry->before->document, false) || !snapshot(entry->after->document, false))
@@ -627,7 +628,8 @@ std::uint64_t DocumentHistory::RetirementMemoryBytes(const std::optional<CanvasD
         return add(1, sizeof(Entry) + 64) && add(value->name.capacity() + 1, sizeof(wchar_t)) &&
                snapshot(value->before) && snapshot(value->after);
     };
-    if (!document(current) || !raster(additional) || !add(_past.capacity() + _future.capacity(), sizeof(EntryHandle)) ||
+    if (!document(current) || !raster(additional) || !add(2, sizeof(HistoryEntries<EntryHandle>::Container) + 64) ||
+        !add(_past.capacity() + _future.capacity(), sizeof(EntryHandle)) ||
         (_pending && (!add(1, sizeof(Pending) + 64) || !add(_pending->name.capacity() + 1, sizeof(wchar_t)) ||
                       !snapshot(_pending->before))))
         return 0;

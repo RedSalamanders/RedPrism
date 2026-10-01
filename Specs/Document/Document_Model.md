@@ -45,9 +45,11 @@ It is not saved. `nullopt` means no selection; a selection enclosing no area mea
 `ImageLayer` is a value type: `Guid` id, optional shared `Raster` asset, `LayerTransform`, name, visibility,
 optional `parentID`, `isGroup`, opacity 0…1, `LayerBlendMode`, optional `LayerMask`, optional `maskSourceID`,
 optional `LayerAdjustment`, optional `LayerShapeStyle`. Blank layers allocate no pixels. Groups have no image
-file. Adjustment layers (v7) are not groups and have no image file. A shape layer also keeps `shapeImage`, the
-raster its shape drew, outside equality: while the asset still holds it the layer is a live shape (`LiveShape`) that
-redraws at a new size (C11).
+file. Adjustment layers (v7) are not groups and have no image file. `RasterAsset::thumbnail` is optional derived
+image state: it may be empty and can be produced explicitly with `Raster::MakeThumbnail` (at most 96 px on the long
+side). It does not change image-layer equality. A shape layer also keeps `shapeImage`, the raster its shape drew,
+outside equality: while the asset still holds it the layer is a live shape (`LiveShape`) that redraws at a new size
+(C11).
 
 `Raster` is immutable shared storage (`std::shared_ptr`). Equality of image pixels is identity of that storage,
 matching Swift `CGImage ===`. Formats: BGRA8888 (premultiplied, B,G,R,A byte order, the WIC `32bppPBGRA` layout
@@ -245,8 +247,9 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   composite)` takes the document-sized composite the host rendered, trims it to its pixels (`TrimmedToAlpha`),
   places the result at the anchor's slot with clips onto merged layers re-targeted, validates the hierarchy and
   the clip graph, and records one entry named by the plan; a plan whose layers are gone is refused.
-  The asynchronous host uses worker-safe `PrepareMerge(plan, composite, cancellation)` to create the trimmed image and eager
-  thumbnail. Cancellation reaches the trim scan and crop; a cancelled preparation publishes no result.
+  The asynchronous host uses worker-safe `PrepareMerge(plan, composite, cancellation)` to create the trimmed image;
+  an image thumbnail is optional derived state and is not required for merge preparation. Cancellation reaches the
+  trim scan and crop; a cancelled preparation publishes no result.
   Its privately constructed `PreparedMerge` owns the source plan and canvas dimensions.
   `ApplyPreparedMerge` checks those dimensions, plan metadata, live ids, pixel budget and resulting graphs before
   the same history insertion/clip repair. It refuses an unsettled gradient; the selected host continuation
@@ -255,7 +258,7 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   plans on its worker. A missing plan succeeds without canvas pixel allocation or GPU work. A ready plan retains
   that source and worker-built composition subset while a separate full readback/history record retains the same
   history acquisition. History capture follows its complete reservation. `PrepareMergePublication` builds the
-  survivor records, clipping rewrites, trimmed layer/thumbnail, active/selected ids and detached history before
+  survivor records, clipping rewrites, the trimmed layer, active/selected ids and detached history before
   either live state changes. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
   edit state and exact history epoch, then publishes and swaps replaced document/selection/display owners.
   Failure/cancellation/staleness preserves the existing document, revision and redo. The original direct methods
@@ -283,9 +286,11 @@ duplicate, a blur's grown grid, the floating merge, masks, a merge and a distort
 that fits goes through), the legacy insertion/deletion/naming semantics, and sparse rasters (windows, fill,
 `Replacing` splits and fills, `ReadRegion`, thumbnails, lazy `Data()`; C10 `sparse.*`).
 
-`DocumentTests` also races eight event-gated readers through first assembly, whole-buffer reads, padded region
-reads, thumbnails and byte accounting for Gray8 and BGRA8888, on one sparse storage and on two sparse storages
-sharing a base. Expected bytes are independently computed from the base offset, tile window and fill values.
+`DocumentTests` also covers an empty optional image thumbnail, explicit thumbnail derivation without changing image
+pixels or image-layer equality, and eager Gray8 semantic mask thumbnails with the existing `MaskEdgeBackground`
+result. It races eight event-gated readers through first assembly, whole-buffer reads, padded region reads,
+thumbnails and byte accounting for Gray8 and BGRA8888, on one sparse storage and on two sparse storages sharing a
+base. Expected bytes are independently computed from the base offset, tile window and fill values.
 Every materializer of a storage must receive the same stable pointer; separate caches remain distinct. The
 normal suite runs eight rounds; `DocumentTests.exe --stress` runs 256 rounds and MUST pass in ASan Debug before
 the concurrency foundation closes. This is stress coverage of ownership and publication, not a race detector.

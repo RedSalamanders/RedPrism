@@ -246,7 +246,8 @@ class BrushStroke
     [[nodiscard]] bool HasPaint() const noexcept;
     // The touched tiles as replacement tiles of the grid.
     [[nodiscard]] std::vector<RasterTile> Patches() const;
-    // The stroke committed: a sparse raster sharing the layer's pixels, its thumbnail, the transform placing it and
+    // The stroke committed: a sparse raster sharing the layer's pixels, the eager semantic mask thumbnail (an
+    // image thumbnail may be empty), the transform placing it and
     // the grid bounds it covers (painting only adds alpha, so bounds come from the touched tiles).
     [[nodiscard]] std::optional<Commit> PaintSnapshot() const;
     [[nodiscard]] LayerTransform TransformFor(const GridRect& bounds) const noexcept;

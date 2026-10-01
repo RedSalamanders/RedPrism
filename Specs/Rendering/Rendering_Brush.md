@@ -1,7 +1,7 @@
 # Brush rendering
 
 Status: current normative contract (created with C10)
-Last reviewed: 2026-09-23
+Last reviewed: 2026-10-01
 Owner: `Common/BrushStroke.*` (stroke model, CPU kernel, session brush API), `RedPrism/BrushCompute.*` and
 `RedPrism/Shaders/BrushCoverage.hlsl` (compute engine), the sparse-raster and stroke-preview code in
 `RedPrism/CanvasRenderer.*`, the brush code in `RedPrism/Application.cpp`
@@ -69,7 +69,8 @@ Mouse-up (`DocumentSession::FinishBrush`) settles the tail, then installs one ra
 `PaintSnapshot` finds the painted bounds (the alpha bounds of the touched tiles plus the original pixels; a mask
 keeps its whole grid) and builds `Raster::Replacing(source, tiles, bounds)`, a sparse raster that shares the
 layer's previous storage and every untouched tile. The layer's transform becomes `TransformFor(bounds)` (the same
-placement, resized to the crop); the thumbnail is sampled through `ReadRegion`, never through `Data()`. A painted
+placement, resized to the crop); a semantic thumbnail is sampled for a painted mask through `ReadRegion`, never
+through `Data()`; an image thumbnail may remain empty. A painted
 sparse mask keeps its own fill over its own extent (`Replacing` pads only the area the crop adds), so a hide-all
 mask painted any number of times still hides everything no stroke touched; a mask whose pixel size differs from its
 layer's (stretched over it) is resampled onto the layer's grid by the nearest pixel (`Raster::Stretched`), as its
@@ -179,7 +180,7 @@ adoption counts remain required. The direct synchronous gradient API retains its
 | --- | --- |
 | Tile | 256 × 256 grid pixels; only touched tiles allocate (CPU image + coverage, GPU density + preview) |
 | Mouse-up | MUST NOT materialize a contiguous bitmap: `IsMaterialized()` stays false through commit, thumbnail, display and the next stroke |
-| History | A stroke retains only the tiles it replaced plus the previous thumbnail (`RetainedBytes`), never the shared tiles; the session's history limit applies (`Document_History.md`, D13) |
+| History | A stroke retains only the tiles it replaced plus the previous thumbnail when present (`RetainedBytes`), never the shared tiles; the session's history limit applies (`Document_History.md`, D13) |
 | Pixel limit | 100 M image / 100 M mask pixels per document, checked before a stroke grows the layer |
 | Preview upload | Changed tiles only; never a full-canvas upload per pointer update |
 | Frame | One composition per pointer update (the tile update dirties the document); a settled document composites 0 times |

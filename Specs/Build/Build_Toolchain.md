@@ -208,8 +208,17 @@ An observed memory byte-index remap also requires the exact anonymous, untyped s
 its encoded start, followed by an exclusive same-owner anonymous data-symbol boundary. A terminal byte span
 may instead end at the exact shared end of its owning PDB procedure and executable contribution when no
 following data symbol exists. That same procedure must contain the dispatch, DWORD table and byte-table start;
-a missing, shorter, cross-owner or differently bounded procedure cannot prove this terminal span. The complete PE byte
-range must fit the same contribution, contain at most 4096 bytes, follow the associated DWORD table and contain
+a missing, shorter, cross-owner or differently bounded procedure cannot prove this terminal span.
+For the observed ASan RCX/RAX remap, a procedure end inside a larger contribution requires an additional exact
+25-byte guard immediately before LEA: `CMP dword [RSP+disp32],max`, `JA rel32`, then
+`MOVSXD RAX,dword [RSP+the same disp32]`. The three decoded boundaries, lengths, owners and reported PE bytes must agree;
+unknown or overlapping rows fail. The unsigned maximum is below 4096, the JA default is a proved DWORD-table
+target, and `byteStart + max + 1` equals that exact owning procedure's end. The guard, dispatch, DWORD span and
+every target fit that procedure and contribution. An earlier anonymous data symbol contradicts the count;
+a later function's symbol cannot extend it. Every encoded index is validated, with no padding subtracted from
+this guarded count. A bare procedure end does not prove this form. Existing terminal and symbol-bounded proofs
+retain their original rules.
+The complete PE byte range must fit the same contribution, contain at most 4096 bytes, follow the associated DWORD table and contain
 only indices below that table's entry count. Register/immediate remaps do not create a byte-data range. The
 exact trailing alignment `90`, `66 90` or `0F 1F 00` may occupy one to three bytes ending at the proved DWORD-aligned
 boundary. Those complete bytes are padding; every preceding byte still passes the index bound. A changed suffix,

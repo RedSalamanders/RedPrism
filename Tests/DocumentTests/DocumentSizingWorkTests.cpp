@@ -251,7 +251,7 @@ void SizingReservationLowerBounds()
     canvas.height = 4;
     canvas.fill = CanvasExtensionColor{};
     const std::uint64_t canvasBytes = SizingMemoryBytes(source, canvas);
-    const std::uint64_t canvasLowerBound = RoundedPayloadBytes(5u * 4u * 4u) + RoundedPayloadBytes(96u * 96u * 4u);
+    const std::uint64_t canvasLowerBound = RoundedPayloadBytes(5u * 4u * 4u);
 
     ImageSizeOptions refusedImage;
     refusedImage.width = 30'001;
@@ -264,8 +264,7 @@ void SizingReservationLowerBounds()
     const std::uint64_t imageBytesReserved = SizingMemoryBytes(source, image);
     const std::uint64_t sparseSourceLowerBound =
         RoundedPayloadBytes(static_cast<std::uint64_t>(sparse.Stride()) * static_cast<std::uint64_t>(sparse.Height()));
-    const std::uint64_t imageLowerBound =
-        RoundedPayloadBytes(6u * 4u * 4u) + RoundedPayloadBytes(96u * 96u * 4u) + sparseSourceLowerBound;
+    const std::uint64_t imageLowerBound = RoundedPayloadBytes(6u * 4u * 4u) + sparseSourceLowerBound;
 
     CanvasDocument multipleSparse = source;
     const Raster largeSparseImage = Raster::MakeSparse(3'000, 3'000, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
@@ -280,8 +279,8 @@ void SizingReservationLowerBounds()
         RoundedPayloadBytes(static_cast<std::uint64_t>(largeSparseImage.Stride()) * largeSparseImage.Height());
     const std::uint64_t sparseMaskBytes =
         RoundedPayloadBytes(static_cast<std::uint64_t>(smallerSparseMask.Stride()) * smallerSparseMask.Height());
-    const std::uint64_t fixedImageBytes = RoundedPayloadBytes(6u * 4u * 4u) + RoundedPayloadBytes(96u * 96u * 4u) +
-                                          RoundedPayloadBytes(6u * 4u) + RoundedPayloadBytes(96u * 96u);
+    const std::uint64_t fixedImageBytes =
+        RoundedPayloadBytes(6u * 4u * 4u) + RoundedPayloadBytes(6u * 4u) + RoundedPayloadBytes(96u * 96u);
     const std::uint64_t multipleSparseDelta =
         multipleSparseReserved >= multipleSparseMetadata ? multipleSparseReserved - multipleSparseMetadata : 0;
 
@@ -291,7 +290,7 @@ void SizingReservationLowerBounds()
                multipleSparseMetadata > 0 && multipleSparseReserved >= multipleSparseMetadata &&
                multipleSparseDelta >= fixedImageBytes + std::max(sparseImageBytes, sparseMaskBytes) &&
                multipleSparseDelta < fixedImageBytes + sparseImageBytes + sparseMaskBytes,
-           "reservation.metadata-output-rounded-thumbnail-max-private-sparse-source-lower-bounds");
+           "reservation.metadata-rounded-output-mask-thumbnail-max-private-sparse-source-lower-bounds");
 
     CanvasDocument empty;
     empty.width = 1;

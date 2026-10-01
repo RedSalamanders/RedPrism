@@ -2434,7 +2434,7 @@ std::optional<DocumentSession::PreparedMerge> DocumentSession::PrepareMerge(cons
     }
     ImageLayer merged = ImageLayer::Blank(plan.name, trimmed.transform.size);
     merged.transform = trimmed.transform;
-    merged.asset = RasterAsset{trimmed.image, Raster::MakeThumbnail(trimmed.image), plan.name};
+    merged.asset = RasterAsset{trimmed.image, {}, plan.name};
     merged.parentID = plan.parent;
     if (cancellation.IsCancelled())
         return std::nullopt;
@@ -3663,7 +3663,7 @@ void DocumentSession::CommitTransform()
             maskLeft -= newMaskPixels;
             layer.mask = std::move(mask);
             layer.asset->image = warped->image;
-            layer.asset->thumbnail = Raster::MakeThumbnail(warped->image);
+            layer.asset->thumbnail = {};
             layer.transform = warped->transform;
         }
         EndEdit();

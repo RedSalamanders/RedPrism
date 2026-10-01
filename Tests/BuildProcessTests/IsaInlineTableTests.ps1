@@ -1174,3 +1174,188 @@ foreach ($fault in 'SecondDispatchBroken','SecondNoncontiguous','SecondTargetMid
 
 Write-Host "Synthetic ISA parser fixtures: $fixtureRoot"
 $global:LASTEXITCODE = 0
+
+function New-GuardedTerminalByteRemapCase([string]$Name, [string]$Fault = '') {
+    # Start from the existing PE/PDB fixture helper, then replace its code, symbols and listings with
+    # the observed 25-byte stack guard and the exact RCX image-base remap sequence.
+    $case = New-DataProofCase ($Name + 'Seed') 'TerminalValid'
+    $pe = [IO.File]::ReadAllBytes($case.Binary)
+    for ($i = 0x600; $i -lt $pe.Length; ++$i) { $pe[$i] = 0x90 }
+    # The seed helper keeps its CodeView directory inside the synthetic .text raw range.
+    Set-U32 $pe (0x400+0x400+12) 2
+    Set-U32 $pe (0x400+0x400+16) 24
+    Set-U32 $pe (0x400+0x400+20) (0x0010f420)
+    Set-U32 $pe (0x400+0x400+24) 0x820
+    Put-Bytes $pe 0x820 ([Text.Encoding]::ASCII.GetBytes('RSDS'))
+    Put-Bytes $pe 0x824 $script:guid.ToByteArray()
+    Set-U32 $pe 0x834 $script:age
+
+    [UInt32]$section = 0x0010f000
+    [UInt32]$dispatch = $section + 0x300
+    [UInt32]$dwordTable = $section + 0x1000
+    [int]$byteCount = 13
+    [UInt32]$byteTable = $dwordTable + 4 * $byteCount
+    [UInt32]$procedureEnd = $byteTable + $byteCount
+    [UInt32]$rspDisp = 0x40
+    [UInt32]$maxIndex = $byteCount - 1
+    if ($Fault -eq 'RangeTooShort') { $maxIndex-- }
+    if ($Fault -eq 'RangeTooLong') { $maxIndex++ }
+    if ($Fault -eq 'RangeOverflow') { $maxIndex = [UInt32]::MaxValue }
+
+    $rows = [Collections.Generic.List[string]]::new()
+    $cursor = [UInt32]($dispatch - 25)
+    [byte[]]$cmp = [byte[]]@(0x81,0xbc,0x24,0,0,0,0,0,0,0,0)
+    Put-Bytes $cmp 3 ([BitConverter]::GetBytes($rspDisp))
+    Put-Bytes $cmp 7 ([BitConverter]::GetBytes($maxIndex))
+    if ($Fault -eq 'ChangedCmp') { $cmp[1] = 0xbd }
+    Put-Bytes $pe (0x400+$cursor-$section) $cmp
+    if ($Fault -notin @('MissingCmp')) {
+        $cmpText = if ($Fault -eq 'UnknownCmp') { '<unknown>' } else { 'cmp dword ptr [rsp+40h], 0Ch' }
+        [byte[]]$cmpRow = $cmp.Clone()
+        if ($Fault -eq 'WrongLengthCmp') { $cmpRow = [byte[]]$cmpRow[0..9] }
+        if ($Fault -eq 'ListingCmpDisplacementMismatch') { $cmpRow[3]++ }
+        if ($Fault -eq 'ListingCmpMaximumMismatch') { $cmpRow[7]++ }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$cursor), (Hex-Bytes $cmpRow), $cmpText))
+    }
+    if ($Fault -eq 'OverlappingCmp') {
+        $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$cursor+1)))
+    }
+    $cursor += 11
+
+    [UInt32]$defaultTarget = if ($Fault -eq 'TargetOutsideProcedure') { $section + 0x2d0 } else { $section + 0x8c5 }
+    if ($Fault -eq 'WrongDefaultTarget') { $defaultTarget = $section + 0x1800 }
+    [UInt32]$jaRva = $cursor
+    [byte[]]$ja = [byte[]]@(0x0f,0x87,0,0,0,0)
+    if ($Fault -eq 'ChangedJa') { $ja[1] = 0x86 }
+    Put-Bytes $ja 2 ([BitConverter]::GetBytes([Int32]($defaultTarget - ($jaRva + 6))))
+    Put-Bytes $pe (0x400+$cursor-$section) $ja
+    if ($Fault -notin @('MissingJa')) {
+        $jaText = if ($Fault -eq 'UnknownJa') { '<unknown>' } else { 'ja default-target' }
+        [byte[]]$jaRow = $ja.Clone()
+        if ($Fault -eq 'WrongLengthJa') { $jaRow = [byte[]]$jaRow[0..4] }
+        if ($Fault -eq 'ListingJaTargetMismatch') { $jaRow[2]++ }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$cursor), (Hex-Bytes $jaRow), $jaText))
+    }
+    if ($Fault -eq 'OverlappingJa') { $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$cursor+1))) }
+    $cursor += 6
+
+    [UInt32]$movDisp = $rspDisp
+    if ($Fault -eq 'MismatchedStackDisplacement') { $movDisp++ }
+    [byte[]]$movsxd = [byte[]]@(0x48,0x63,0x84,0x24,0,0,0,0)
+    Put-Bytes $movsxd 4 ([BitConverter]::GetBytes($movDisp))
+    if ($Fault -eq 'ChangedMovsxd') { $movsxd[1] = 0x62 }
+    Put-Bytes $pe (0x400+$cursor-$section) $movsxd
+    if ($Fault -notin @('MissingMovsxd')) {
+        $movText = if ($Fault -eq 'UnknownMovsxd') { '<unknown>' } else { 'movsxd rax, dword ptr [rsp+40h]' }
+        [byte[]]$movRow = if ($Fault -eq 'WrongLengthMovsxd') { [byte[]]$movsxd[0..6] } else { $movsxd }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$cursor), (Hex-Bytes $movRow), $movText))
+    }
+    if ($Fault -eq 'OverlappingMovsxd') { $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$cursor+1))) }
+    $cursor += 8
+
+    [byte[]]$lea = [byte[]]@(0x48,0x8d,0x0d,0,0,0,0)
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes([Int32]($script:imageBase-($script:imageBase+$cursor+7))))
+    Put-Bytes $pe (0x400+$cursor-$section) $lea
+    $rows.Add(('{0:x}: {1} lea rcx, [rip+imagebase]' -f ($script:imageBase+$cursor), (Hex-Bytes $lea)))
+    $cursor += 7
+    [byte[]]$byteLoad = [byte[]]@(0x0f,0xb6,0x84,0x01,0,0,0,0)
+    Put-Bytes $byteLoad 4 ([BitConverter]::GetBytes($byteTable))
+    Put-Bytes $pe (0x400+$cursor-$section) $byteLoad
+    $rows.Add(('{0:x}: {1} movzx eax, byte ptr [rcx+rax+byte-table]' -f ($script:imageBase+$cursor), (Hex-Bytes $byteLoad)))
+    $cursor += 8
+    [byte[]]$dwordLoad = [byte[]]@(0x8b,0x84,0x81,0,0,0,0)
+    Put-Bytes $dwordLoad 3 ([BitConverter]::GetBytes($dwordTable))
+    Put-Bytes $pe (0x400+$cursor-$section) $dwordLoad
+    $rows.Add(('{0:x}: {1} mov eax, dword ptr [rcx+4*rax+dword-table]' -f ($script:imageBase+$cursor), (Hex-Bytes $dwordLoad)))
+    $cursor += 7
+    [byte[]]$add = [byte[]]@(0x48,0x03,0xc1)
+    Put-Bytes $pe (0x400+$cursor-$section) $add
+    $rows.Add(('{0:x}: {1} add rax, rcx' -f ($script:imageBase+$cursor), (Hex-Bytes $add)))
+    $cursor += 3
+    [byte[]]$jump = [byte[]]@(0xff,0xe0)
+    Put-Bytes $pe (0x400+$cursor-$section) $jump
+    $rows.Add(('{0:x}: {1} jmp rax' -f ($script:imageBase+$cursor), (Hex-Bytes $jump)))
+
+    [byte[]]$indices = [byte[]]::new($byteCount)
+    for ($i = 0; $i -lt $byteCount; ++$i) {
+        [UInt32]$target = if ($i -eq 0 -and $Fault -eq 'TargetOutsideProcedure') { $section + 0x2d0 } elseif ($i -eq 0 -or ($i -eq 1 -and $Fault -eq 'TargetOutsideProcedure')) { $section + 0x8c5 } else { $section + 0x500 + 2*$i }
+        Set-U32 $pe (0x400+$dwordTable-$section+4*$i) $target
+        $indices[$i] = [byte]$i
+        if (($i -ne 0 -or $Fault -eq 'TargetOutsideProcedure') -and
+            -not ($i -eq 1 -and $Fault -eq 'TargetOutsideProcedure')) {
+            Put-Bytes $pe (0x400+$target-$section) ([byte[]]@(0x66,0x90))
+            $rows.Add(('{0:x}: 66 90 nop' -f ($script:imageBase+$target)))
+        }
+    }
+    Put-Bytes $pe (0x400+$section+0x8c5-$section) ([byte[]]@(0x90))
+    $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$section+0x8c5)))
+    if ($Fault -eq 'MalformedByte') { $indices[7] = [byte]$byteCount }
+    Put-Bytes $pe (0x400+$byteTable-$section) $indices
+    for ($i = 0; $i -lt $byteCount; ++$i) {
+        $tableBytes = [byte[]]$pe[(0x400+$dwordTable-$section+4*$i)..(0x400+$dwordTable-$section+4*$i+3)]
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$dwordTable+4*$i), (Hex-Bytes $tableBytes)))
+    }
+
+    $procBegin = [UInt32]$section
+    $procEnd = [UInt32]$procedureEnd
+    if ($Fault -eq 'ShortProcedure') { $procEnd-- }
+    if ($Fault -eq 'LongProcedure') { $procEnd++ }
+    if ($Fault -eq 'GuardOutsideProcedure') { $procBegin = $dispatch - 24 }
+    if ($Fault -eq 'TargetOutsideProcedure') { $procBegin = $section + 0x2e0 }
+    $procedureModule = if ($Fault -eq 'WrongProcedureOwner') { 1 } else { 0 }
+    $symbols = "  Mod 0 | ``Synthetic.obj``:`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $symbols += "  Mod $procedureModule | ``Synthetic.obj``:`n  0 | S_GPROC32 [size = 16] ``GuardedDispatch`` `n  addr = 0001:$($procBegin-$section), code size = $($procEnd-$procBegin)`n"
+    }
+    if ($Fault -eq 'TargetOutsideProcedure') {
+        # This longer overlapping procedure lets the DWORD-table proof resolve its backward
+        # target; the exact terminal procedure still excludes that decoded target.
+        $shadowBegin = [UInt32]($section + 0x200)
+        $shadowEnd = [UInt32]($procEnd + 0x20)
+        $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_GPROC32 [size = 16] ``ShadowProc`` `n  addr = 0001:$($shadowBegin-$section), code size = $($shadowEnd-$shadowBegin)`n"
+    }
+    $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($dwordTable-$section)`n"
+    $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($byteTable-$section)`n"
+    if ($Fault -eq 'EarlyDataSymbol') {
+        $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($byteTable-$section+5)`n"
+    }
+    if ($Fault -eq 'LaterProcedureDataSymbol') {
+        $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_GPROC32 [size = 16] ``LaterProc`` `n  addr = 0001:$($procEnd-$section), code size = 128`n"
+        $symbols += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($procEnd-$section+32)`n"
+    }
+    $contributionSize = [UInt32]0x2000
+    $metadata = "  Age: $script:age`n  GUID: {$script:guid}`n  Mod 0 | ``Synthetic.obj``:`n  Obj: ``Synthetic.obj``:`n  Mod 1 | ``Other.obj``:`n  Obj: ``Other.obj``:`n`nSection Contributions`n  SC[.text] | mod = 0, 0001:0, size = $contributionSize, data crc = 0, reloc crc = 0`n"
+    if ($Fault -eq 'VexAfterProcedure') {
+        [byte[]]$vex = [byte[]]@(0xc5,0xf8,0x10,0x00)
+        Put-Bytes $pe (0x400+$procEnd-$section+4) $vex
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$procEnd+4), (Hex-Bytes $vex)))
+    }
+    Set-Content -LiteralPath $case.Metadata -Value $metadata -Encoding utf8
+    Set-Content -LiteralPath $case.Symbols -Value $symbols -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value (@($rows | Sort-Object {
+        [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
+    }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary, $pe)
+    $case.Name = $Name
+    return $case
+}
+
+$guardedProofCount = 0
+foreach ($name in 'LargerContribution','LaterProcedureDataSymbol') {
+    $fault = if ($name -eq 'LaterProcedureDataSymbol') { $name } else { '' }
+    $case = New-GuardedTerminalByteRemapCase $name $fault
+    Invoke-Control $case $true 1 0
+    ++$guardedProofCount
+}
+foreach ($fault in 'ChangedCmp','MissingCmp','UnknownCmp','OverlappingCmp','WrongLengthCmp',
+    'ListingCmpDisplacementMismatch','ListingCmpMaximumMismatch',
+    'ChangedJa','MissingJa','UnknownJa','OverlappingJa','WrongLengthJa','ListingJaTargetMismatch',
+    'ChangedMovsxd','MissingMovsxd','UnknownMovsxd','OverlappingMovsxd','WrongLengthMovsxd',
+    'MismatchedStackDisplacement','RangeTooShort','RangeTooLong','RangeOverflow',
+    'MissingProcedure','ShortProcedure','LongProcedure','WrongProcedureOwner','WrongDefaultTarget',
+    'GuardOutsideProcedure','TargetOutsideProcedure','MalformedByte','EarlyDataSymbol','VexAfterProcedure') {
+    $case = New-GuardedTerminalByteRemapCase ("Guarded$fault") $fault
+    Invoke-Control $case $false
+    ++$guardedProofCount
+}
+Write-Host "Guarded terminal byte-remap synthetic controls passed: $guardedProofCount"

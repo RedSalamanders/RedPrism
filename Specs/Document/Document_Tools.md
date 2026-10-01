@@ -133,7 +133,8 @@ a non-persistent edit on the copy; cancelling removes the copy again and leaves 
 or collapsed shape is ignored, `IsUsable`). The edit becomes persistent. A distortion is drawn live by warping the
 pixels at a bounded preview size (longest side 1024) into the shape; Apply (`CommitTransform`) resamples at full
 resolution (`WarpTrimmed`: the shape's whole-pixel bounds, then cropped to the visible pixels so a stroke hugs what
-is there), replaces the layer's pixels and thumbnail, and sets an ordinary axis-aligned transform over the result.
+is there), replaces the layer's pixels and may leave its optional image thumbnail empty, and sets an ordinary
+axis-aligned transform over the result.
 A linked mask without a placement is warped and cropped with the pixels; a uniform mask passes through. A linked
 mask placed apart takes the same perspective over its own bounds: its placement is carried with the layer
 (`Following`), its corners through the distortion (`Carried`), and it is warped into them with its edge tone outside
@@ -607,8 +608,9 @@ are stale closes that old panel without an entry. Unrelated metadata edits, such
 survive a valid targeted apply. A result still rechecks the current document's image and mask budgets before any
 mutation, because another layer can consume budget without invalidating the target.
 
-The worker renders full-size pixels, trims a blur, carries its opening mask and creates both thumbnails before
-returning a ready result. The mask thumbnail is semantic and MUST be installed with the mask. Failure to carry it
+The worker renders full-size pixels, trims a blur, carries its opening mask and creates its required semantic
+mask thumbnail before returning a ready result. The image thumbnail is optional derived state and may be empty.
+The mask thumbnail MUST be installed with the mask. Failure to carry it
 or to allocate selection coverage MUST fail the entire operation. A blur whose requested margin exceeds the
 successfully prepared grid MUST fail; it cannot render on the smaller grid after a growth refusal. An enabled,
 successful preview may supply the committed pixels only when it was rendered with the current settings and seed
@@ -628,7 +630,8 @@ to reach the owning computation boundary.
 
 `ColorEditJobMemoryBytes` declares the complete commit graph's additional allocation peak before submission.
 It accounts for rounded pixel buffers, private sparse reads, coverage, kernel scratch, blending, crop, masks,
-thumbnails and metadata. An exact resident preview avoids another filter/coverage reservation. Geometry producers
+required semantic mask thumbnails and metadata; optional image thumbnails are excluded. An exact resident preview
+avoids another filter/coverage reservation. Geometry producers
 cache selection point counts; querying the estimate does not traverse selection points or loops. The host submits
 this graph through the ordered commit engine and selected continuation described below.
 
@@ -798,7 +801,8 @@ edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK re
   nonuniformly scaled rotated layer shears, which width/height/angle cannot hold). A pixel layer draws its image
   through pixel → document → scale → box (`RenderPlacedImage`: Nearest picks the nearest source pixel, Smooth
   samples bilinearly, High also averages up to a 4×4 grid per pixel when the map shrinks the image) into a new
-  asset with a fresh thumbnail and stops being a live shape; masks on their own placement and 1×1 uniform masks
+  asset whose optional image thumbnail may be empty and stops being a live shape; masks on their own placement and
+  1×1 uniform masks
   keep their pixels with the placement scaled (`Placing` of the scaled unit map), other masks rasterize the same
   way with 0 beyond their pixels (`RenderPlacedMask`); folders and adjustment layers keep only the box. Layer
   pixels and mask pixels each stay within 100 megapixels (`TooLarge`); a failed allocation is `Memory`.
@@ -819,8 +823,9 @@ privately, without publishing `Raster::Data()` on a shared sparse input. Checks 
 256-pixel spans; row initialization/clear checks can cover at most 120 KiB. Cancellation returns no partial raster
 or resized document. These are structural bounds; allocation, page faults and destruction can delay acknowledgement.
 
-`SizingMemoryBytes` declares metadata, all rounded output allocations and eager thumbnail allocations, plus the
-largest private sparse-source assembly (renderers release it before starting the next layer or mask). Refused
+`SizingMemoryBytes` declares metadata, all rounded output allocations and required semantic mask-thumbnail
+allocations, plus the largest private sparse-source assembly (renderers release it before starting the next layer
+or mask). Optional image thumbnails are excluded. Refused
 late-layer bounds still reserve outputs already produced before the refusal. Metadata allows the immutable input,
 detached document, apply validation and existing history copies. Resident source pixels and immutable selection
 geometry are shared. An unrepresentable reservation or failed admission fails the whole action.

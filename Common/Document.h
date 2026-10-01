@@ -2,6 +2,7 @@
 
 #include "DeferredRelease.h"
 #include "Executor.h"
+#include "HistoryEntries.h"
 
 #include "PixelBuffer.h"
 
@@ -1362,7 +1363,7 @@ class DocumentHistory
                              std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
 
     // Owning immutable handles only: capturing the history stacks never copies layer, raster or outline records.
-    // Construction can allocate the bounded handle vectors; capture only under the whole declared reservation.
+    // Capture shares two immutable stack roots without allocation or handle-vector traversal.
     // Saved-revision publication is independent of this structural epoch and never invalidates an edit view.
     struct StateView final
     {
@@ -1412,8 +1413,8 @@ class DocumentHistory
 
       private:
         friend class DocumentHistory;
-        std::vector<EntryHandle> past;
-        std::vector<EntryHandle> future;
+        HistoryEntries<EntryHandle> past;
+        HistoryEntries<EntryHandle> future;
         std::shared_ptr<const Pending> pending;
         const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
         Guid revision;
@@ -1422,7 +1423,7 @@ class DocumentHistory
         int entryLimit = 0;
         std::uint64_t byteLimit = 0;
     };
-    [[nodiscard]] StateView CaptureState() const;
+    [[nodiscard]] StateView CaptureState() const noexcept;
     [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
 
     enum class PrepareStage : std::uint8_t
@@ -1619,8 +1620,8 @@ class DocumentHistory
         std::wstring name;
         std::shared_ptr<const Snapshot> before;
     };
-    std::vector<EntryHandle> _past;
-    std::vector<EntryHandle> _future;
+    HistoryEntries<EntryHandle> _past;
+    HistoryEntries<EntryHandle> _future;
     Guid _revision = Guid::Generate();
     Guid _savedRevision;
     std::shared_ptr<const Pending> _pending;

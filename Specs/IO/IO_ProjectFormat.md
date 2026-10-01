@@ -137,11 +137,13 @@ Passing these limits into `LoadProject` also bounds manifest input bytes before 
 record allocation, and encoded asset length before a ZIP vector or file decoder. Source changes between probe
 and decode may succeed within all ceilings or return a local failure; they cannot increase declared output or
 caller-retained input allocations. This is resource planning, not a claim that reopening the path snapshots its
-identity/content. Accepted PNG conversions, schema, ordered attachment and semantic mask thumbnails are unchanged.
+identity/content. Accepted PNG conversions, schema, ordered attachment and eager semantic mask thumbnails are
+unchanged; image thumbnails are absent from decoded project assets.
 
 `ProjectLoadMetadataMemoryBytes` / `ProjectLoadMemoryBytes` declare separate metadata-probe and complete decode
 peaks. The metadata allowance includes manifest bytes, parser/string copies, record/vector growth, curve copies
-and validation. Decode adds bounded rounded outputs, transient thumbnails and one maximum encoded ZIP buffer.
+and validation. Decode adds bounded rounded outputs, required semantic mask-thumbnail transients and one maximum
+encoded ZIP buffer; optional image thumbnails are not produced or reserved.
 Opaque codec/library allocations remain in process admission headroom.
 
 ### Production project open (P1.7 F3b.3a)

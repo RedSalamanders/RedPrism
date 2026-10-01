@@ -646,13 +646,7 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             }
             ImageLayer extension = ImageLayer::Blank(
                 L"Canvas Extension", Vec2{static_cast<double>(options.width), static_cast<double>(options.height)});
-            const Raster thumbnail = ThumbnailRasterForWork(image, 96, cancellation);
-            if (!thumbnail.HasStorage())
-            {
-                result = {};
-                return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Memory;
-            }
-            extension.asset = RasterAsset{image, thumbnail, extension.name};
+            extension.asset = RasterAsset{image, {}, extension.name};
             next.layers.insert(next.layers.begin(), std::move(extension));
         }
         if (cancellation.IsCancelled())
@@ -748,13 +742,7 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
                     result = {};
                     return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Memory;
                 }
-                const Raster thumbnail = ThumbnailRasterForWork(rendered, 96, cancellation);
-                if (!thumbnail.HasStorage())
-                {
-                    result = {};
-                    return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Memory;
-                }
-                layer.asset = RasterAsset{rendered, thumbnail, layer.asset->name};
+                layer.asset = RasterAsset{rendered, {}, layer.asset->name};
                 layer.shapeImage = Raster{}; // resized pixels are plain pixels
             }
             if (layer.mask.has_value())
@@ -826,9 +814,7 @@ std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const CanvasSizeOp
         source.layers.size() >= static_cast<std::size_t>(kMaxLayerCount))
         return metadata;
     auto bytes = metadata;
-    return AddBytes(bytes, OutputBytes(options.width, options.height, 4)) && AddBytes(bytes, OutputBytes(96, 96, 4))
-               ? bytes
-               : 0;
+    return AddBytes(bytes, OutputBytes(options.width, options.height, 4)) ? bytes : 0;
 }
 
 std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const ImageSizeOptions& options) noexcept
@@ -858,7 +844,7 @@ std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const ImageSizeOpt
                 pixels > kMaxLayerPixels - usedImages)
                 return AddBytes(bytes, privateSource) ? bytes : 0;
             usedImages += pixels;
-            if (!AddBytes(bytes, OutputBytes(width, height, 4)) || !AddBytes(bytes, OutputBytes(96, 96, 4)))
+            if (!AddBytes(bytes, OutputBytes(width, height, 4)))
                 return 0;
             privateSource = std::max(privateSource, PrivateSourceBytes(layer.asset.value().image));
         }

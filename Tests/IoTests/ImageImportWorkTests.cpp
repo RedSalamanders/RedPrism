@@ -598,7 +598,7 @@ void InvalidPlansAndCancellationClearResults(const ScratchDirectory& scratch)
            "cancel.batch-discards-all-prepared-output");
 }
 
-void ImportMemoryPlanCoversPixelThumbnailAndSourceRecordFloors(const ScratchDirectory& scratch)
+void ImportMemoryPlanCoversPixelAndSourceRecordFloors(const ScratchDirectory& scratch)
 {
     const std::wstring path = scratch.Child(L"memory-floor.png");
     const std::array<std::wstring_view, 1> paths{path};
@@ -606,11 +606,10 @@ void ImportMemoryPlanCoversPixelThumbnailAndSourceRecordFloors(const ScratchDire
     int addedLimit = -1;
     const std::uint64_t noSource = ImageImportMemoryBytes(paths, maximum, nullptr, addedLimit);
     const std::uint64_t pixelBytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(kMaxLayerPixels) * 4);
-    const std::uint64_t thumbnailBytes = PixelBuffer::RequiredBytes(96u * 96u * 4u);
     const std::uint64_t layerFloor = sizeof(ImageLayer);
     const std::uint64_t metadata = ImageImportMetadataMemoryBytes(paths);
-    Expect(addedLimit == kMaxLayerPixels && noSource >= metadata + pixelBytes + thumbnailBytes + layerFloor,
-           "memory.100m-pixel-plan-covers-pixelbuffer-thumbnail-and-layer-floor");
+    Expect(addedLimit == kMaxLayerPixels && noSource >= metadata + pixelBytes + layerFloor,
+           "memory.100m-pixel-plan-covers-pixelbuffer-and-layer-floor");
 
     const Raster small = Pixel(21, 32, 43);
     const Raster largeSparse = Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
@@ -669,6 +668,6 @@ int RunImageImportWorkTests()
     AddedPixelLimitPreservesCreatedBaselineAndAcceptsEquality(scratch);
     FailedProbeStatusSurvivesZeroPixelCeiling(scratch);
     InvalidPlansAndCancellationClearResults(scratch);
-    ImportMemoryPlanCoversPixelThumbnailAndSourceRecordFloors(scratch);
+    ImportMemoryPlanCoversPixelAndSourceRecordFloors(scratch);
     return gFailures;
 }

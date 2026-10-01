@@ -86,6 +86,7 @@
     <ClInclude Include="..\..\Common\Document.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
+    <ClInclude Include="..\..\Common\HistoryEntries.h" />
     <ClInclude Include="ColorEditWorkTests.h" />
     <ClInclude Include="ColorEditDeferredTests.h" />
     <ClInclude Include="FilterCancellationTests.h" />
@@ -98,6 +99,8 @@
     <ClInclude Include="HistoryRestoreTests.h" />
     <ClInclude Include="ImportHistoryTests.h" />
     <ClInclude Include="ImportPublicationTests.h" />
+    <ClInclude Include="HistoryEntriesTests.h" />
+    <ClInclude Include="OptionalImageThumbnailTests.h" />
     <ClInclude Include="ProjectSaveMemoryTests.h" />
     <ClInclude Include="ExportMemoryTests.h" />
     <ClInclude Include="..\..\Common\ExportWork.h" />
@@ -148,6 +151,8 @@
     <ClCompile Include="HistoryRestoreTests.cpp" />
     <ClCompile Include="ImportHistoryTests.cpp" />
     <ClCompile Include="ImportPublicationTests.cpp" />
+    <ClCompile Include="HistoryEntriesTests.cpp" />
+    <ClCompile Include="OptionalImageThumbnailTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />
     <ClCompile Include="HistoryStateViewTests.cpp" />

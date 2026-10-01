@@ -89,6 +89,7 @@
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
+    <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CompositionTests.cpp" />

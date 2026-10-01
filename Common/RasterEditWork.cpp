@@ -369,7 +369,7 @@ RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancell
     const auto snapshot = edit.PaintSnapshot();
     if (cancellation.IsCancelled())
         return cancelled();
-    if (!snapshot || !snapshot->image.HasStorage() || !snapshot->thumbnail.HasStorage())
+    if (!snapshot || !snapshot->image.HasStorage() || (input.mask && !snapshot->thumbnail.HasStorage()))
         return {RasterEditStatus::Memory};
 
     ImageLayer prepared = input.layer;

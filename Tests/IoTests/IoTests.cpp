@@ -363,7 +363,7 @@ void TestPngRoundTrip()
     Expect(DecodeProjectPng(png.data(), png.size(), false, kMaxLayerPixels, decoded) == ImageCodecStatus::Ok,
            "png.decode");
     Expect(RastersEqual(red, decoded.image), "png.pixels");
-    Expect(decoded.thumbnail.Width() <= 96 && decoded.thumbnail.Height() <= 96, "png.thumbnail");
+    Expect(!decoded.thumbnail.HasStorage(), "png.image-thumbnail-absent");
 
     const Raster mask = Gray(2, 2, {255, 0, 128, 255});
     std::vector<std::uint8_t> maskPng;
@@ -373,6 +373,13 @@ void TestPngRoundTrip()
            "png.mask-decode");
     Expect(RastersEqual(mask, decodedMask.image) && decodedMask.image.Format() == RasterFormat::Gray8,
            "png.mask-pixels");
+    Expect(decodedMask.thumbnail.HasStorage() && decodedMask.thumbnail.Width() == 2 &&
+               decodedMask.thumbnail.Height() == 2 && decodedMask.thumbnail.Format() == RasterFormat::Gray8,
+           "png.mask-thumbnail-dimensions-format");
+    Expect(decodedMask.thumbnail.HasStorage() && decodedMask.thumbnail.Data()[0] == 255 &&
+               decodedMask.thumbnail.Data()[1] == 0 && decodedMask.thumbnail.Data()[2] == 128 &&
+               decodedMask.thumbnail.Data()[3] == 255 && RastersEqual(mask, decodedMask.thumbnail),
+           "png.mask-thumbnail-independent-edges");
     Expect(DecodeProjectPng(png.data(), png.size(), false, 3, decoded) == ImageCodecStatus::TooLarge &&
                !decoded.image.HasStorage() && !decoded.thumbnail.HasStorage(),
            "png.remaining-pixel-budget-rejected-before-output-allocation");

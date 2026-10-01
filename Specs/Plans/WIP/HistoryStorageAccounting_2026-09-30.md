@@ -82,15 +82,35 @@
       The same 391 inputs remain unchanged after the complete matrix
       ([record](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)); no measured G1 claim follows.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
-    - [ ] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
+    - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering
       zero handle copies on capture/read, independent integer content, weak-owner lifetime, concurrent readers
       and copy refusal. Native activation, reservations and full configuration qualification remain open.
       Full document snapshots, owner admission traversal and H3 accounting are separate unfinished costs.
+      After import publication commit `de10147`, the container roots are integrated with explicit private-root
+      growth/retirement bounds in all five projects. The native Debug build and all executable ISA controls pass;
+      complete native qualification remains active.
+      The first frozen resource matrix passes the complete x64 Debug and Release suites, then ASan's linked
+      application fails the ISA parser on a terminal switch remap inside a larger contribution. The exact failed
+      image/PDB, original parser, disassembly, source freeze and logs are retained in
+      `.build/p1-resources-first-ASan-isa-failure/`. The exact unsigned stack guard and procedure-end proof now
+      accept that preserved image with zero violations; all 297 previous parser controls still pass. New rejection
+      controls and a fresh complete matrix precede qualification. ARM64 and ASan runtime have not passed this candidate.
+      Reviewed private Release microbenchmarks quantify the ownership tradeoff: at 1/100/1000 handles, median
+      capture is 6.43/6.81/7.15 ns versus 30.85/694.79/7659.90 ns for copying handle vectors. Every paired content
+      checksum matches. Immutable cloning costs more on writes: at 100 handles, push/pop averages 876.70 ns per
+      mutation versus 13.36 ns for exclusively owned vectors; oldest-entry erase is 2261.13 versus 292.86 ns.
+      These 27 capture and 36 mutation pairs exclude setup, checksum walks and final destruction, and retain
+      sources, hashes, raw timings and independent expectations in `.build/p1-history-root-benchmark/` and
+      `.build/p1-history-root-mutation-benchmark/`. The extra worker/reference-API write cost is accepted here
+      to keep captured roots immutable; it does not qualify document capture, admission, incremental trim or G1.
+      The fresh matrix passes all x64 suites and all three ARM64 clean cross-builds against the same 396 frozen
+      inputs, with 28 root assertions and 331 parser controls per x64 configuration
+      ([qualified record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
-    - [ ] Private image-only codec/producer candidates remove unused eager generation while retaining every mask
+    - [x] H4.1 — Image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,
       and added a final cancellation check. Complete producer/validator, accounting and I/O/Undo/Redo qualification
       precedes native activation; uploads and measured G1 remain separate.
@@ -98,6 +118,15 @@
       semantic mask tests begin from an independent white mask and require a real new black stroke entry.
       The original retained-thumbnail accounting golden will supply an explicit optional image thumbnail so
       it continues to exercise nonzero retained bytes. Private tests are not yet native-qualified.
+      Native codec/producer/validator/reservation changes and those tests are now activated. The first Debug
+      preflight passes all 28 container assertions and 29/30 thumbnail assertions, exposing a fixture that requests
+      a hide-all mask but expects white. Its exact DocumentTests image/PDB/DLLs, 396-input source freeze and logs
+      remain in `.build/p1-resources-first-Debug-mask-fixture-failure/`. The corrected fixture requests reveal-all,
+      preserving its independent white-to-black byte expectations and real new-entry requirement. Complete
+      configuration qualification remains active; no first-upload or measured G1 claim follows.
+      Final qualification passes all six configurations, including all 30 producer assertions, unchanged legacy
+      history/retained-byte expectations and eager literal mask bytes in I/O
+      ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)). First uploads and measured G1 remain open.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.9.
 Owner: `Common/Document.h`, `DocumentHistory.cpp`, session restore and host upload/chrome costs.
@@ -212,6 +241,39 @@ IO stages, native values, status and terminal receipt. A rerun passes this scena
 F6 work. The final distinct r2 six-configuration matrix qualifies the sizing source against the same 370 inputs.
 
 ## Immediate implementation
+
+### H1.6 adjustment-panel transactions — next caller
+
+- [ ] H1.6a — Prepare adjustment-layer OK as an admitted metadata job. Capture whole-document authority,
+  exact panel opening/settings sequence, active/mask/crop and immutable history only under its complete reservation.
+  On the worker, copy final records with per-layer cancellation, install the edited adjustment and prepare End.
+  Validate all authority/epoch fields before nonthrowing document/history/panel/original/display swaps; retain
+  every replaced owner until worker aggregate retirement. Preview-off OK still applies editable settings.
+- [ ] H1.6b — Prepare Cancel restoration and End without owner snapshot/index construction. Cancellation of an
+  active OK must acknowledge its drop before that same panel can close. Coalesce repeated Cancel by opening;
+  keep younger writes/replacements behind the closure and preserve the current draft on construction failure.
+  Audit every production close/discard caller; no dependent action may treat accepted closure as completed.
+- [ ] H1.6c — Prepare transaction opening before installing a live adjustment panel. Preserve its fixed histogram
+  source, original parameters and named opening snapshot, including nested history. Keep below-composite GPU
+  acquisition with P1.3 rather than hiding synchronous readback in this metadata migration.
+- [ ] H1.6d — Independent literal parameter/pixel/history tests for preview on/off, no-change/redo, nested
+  transactions, all adjustment kinds, later saved revision, stale panel/settings/session/target/epoch and
+  each capture/construction/cancellation boundary. Native host gates cover OK/Cancel/reopen, queued save/close,
+  exactly once publication, barrier/reservation acknowledgement and off-owner retirement.
+- [ ] H1.6e — Complete frozen x64 suites/ARM64 cross-builds, update owning contracts/evidence and commit/push.
+  Constant-time whole document capture, readback, other H1 callers and measured G1 stay separately gated.
+
+Private preparation now includes complete OK/Cancel document/history/panel/original/display ownership and a
+separate opening publication that prepares Begin before installing the panel. The closure module compiles
+against a copied private header with strict v145 flags and zero diagnostics. Independent executable tests and
+production routing are still pending. Test review removes an unreachable BeforeSnapshot closure checkpoint:
+End reuses the already retained opening snapshot. The global filter template must remain unchanged in this
+adjustment route; Undo/Redo restores document adjustment metadata, not that separate template.
+Cancellation routing must own an opening-specific request, coalesce repeated cancellation, wait for any prior
+OK drop acknowledgement and preserve FIFO ordering for younger actions. Every caller that immediately reads
+closed-panel state must wait for the receipt; card/tool/document changes cannot invalidate a still-running
+closure or treat request admission as publication. File replacement retains its separately qualified atomic
+discard-on-success behavior. These rules require caller/host proof before H1.6b or the combined caller closes.
 
 ### H1.5 production Undo/Redo — private proof
 

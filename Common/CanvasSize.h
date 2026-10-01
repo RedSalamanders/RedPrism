@@ -106,7 +106,7 @@ enum class ResizeStatus : std::uint8_t
     Cancelled, // sizing was cancelled; the result document is empty
 };
 
-// Additional whole-job allocation peak, including rounded pixel allocations, eager thumbnails, one private
+// Additional whole-job allocation peak, including rounded pixels, eager semantic mask thumbnails, one private
 // sparse-source assembly and document/history metadata. Zero means arithmetic cannot be represented. Early
 // refusal reserves metadata; later refusal also reserves the allocated prefix. The resizer retains its status.
 [[nodiscard]] std::uint64_t SizingMemoryBytes(const CanvasDocument& source, const CanvasSizeOptions& options) noexcept;

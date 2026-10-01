@@ -106,9 +106,10 @@ struct ImageImportProbeResult final
         largest = (std::max)(largest, static_cast<std::uint64_t>(file.pixels));
     }
     addedPixelLimit = static_cast<int>(pixels);
-    // Rounded final outputs, one serial codec's frame allowance, transient thumbnails and new document records.
+    // Rounded final outputs, one serial codec's frame allowance and new document records; image thumbnails are
+    // optional.
     return add(16ull * 1024 * 1024) && add(8 * pixels + 4 * largest) &&
-                   add(paths.size() * (8ull * (sizeof(ImageLayer) + 4096) + 2ull * 96 * 96 * 4 + 256))
+                   add(paths.size() * (8ull * (sizeof(ImageLayer) + 4096) + 256))
                ? bytes
                : 0;
 }

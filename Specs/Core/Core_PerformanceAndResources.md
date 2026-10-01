@@ -119,7 +119,8 @@ unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
 Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
 tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing
-storage, stretched/carried masks and thumbnails. A geometry-only planner allocates no pixel buffers; published
+storage, stretched/carried masks and required semantic mask thumbnails. Optional image thumbnails are not part of
+the operation's required output or reservation. A geometry-only planner allocates no pixel buffers; published
 inputs stay shared. Target capture occurs under the complete reservation, followed by same-record resume.
 Aggregate input/result retirement uses worker-computed reachable capacity, including shared sources; this is a
 conservative releasing charge, not a measurement of newly allocated or exclusively owned bytes. Its temporary
@@ -306,10 +307,11 @@ no timer polls availability. An insufficient request waits only while a reservat
 return memory; otherwise it completes `Failed(E_OUTOFMEMORY)` without running. Snapshot failure also fails the
 operation. A cancelled waiter never runs. Same-key successors reserve only after predecessor retirement.
 
-Image Size and Canvas Size jobs declare rounded aggregate output and thumbnail allocations, one maximum
-private sparse-source assembly, and conservative metadata for snapshot/result/validation/history. Immutable
-source pixels and selection geometry remain shared. A late bounds refusal still reserves the prefix outputs
-already allocated before that refusal. Source assembly, fill, sampling and thumbnails occur on the worker;
+Image Size and Canvas Size jobs declare rounded aggregate output and required semantic mask-thumbnail
+allocations, one maximum private sparse-source assembly, and conservative metadata for snapshot/result/validation/history.
+Optional image thumbnails are not required outputs and are excluded from these reservations. Immutable source pixels
+and selection geometry remain shared. A late bounds refusal still reserves the prefix outputs already allocated
+before that refusal. Source assembly, fill, sampling and required mask-thumbnail work occur on the worker;
 owner validation/history costs remain measured separately and are subject to the P1.9/G1 gates.
 
 The owner installs a thread-local deferred-release sink. Last-reference storage or directly owned pixel buffers
@@ -488,8 +490,9 @@ save slice does not establish G1 or a hardware timing result.
 
 The selected input owns one history ordinal through a metadata-probe job and a separately admitted decode job.
 Probe memory includes bounded manifest/parser/record storage and owned path; decode adds its enforced image,
-mask, layer, manifest and encoded-asset ceilings, rounded outputs and thumbnail transients. Each reservation
-survives its record's owner completion and destruction. Both charges may coexist during second submission;
+mask, layer, manifest and encoded-asset ceilings, rounded outputs and required semantic mask-thumbnail transients.
+Optional image thumbnails are absent. Each reservation survives its record's owner completion and destruction.
+Both charges may coexist during second submission;
 FIFO Io serialization prevents decode running until probe retirement. Refusal preserves the current document
 and records the first batch error. No worker incrementally reserves memory or waits for a larger reservation.
 Probe handles/parser owners die on the worker; only standard small plan values cross the completion boundary.
@@ -502,8 +505,9 @@ measured separately; this graph does not by itself qualify G1.
 One selected input retains its ordinal through metadata inspection and separately admitted preparation, with
 owned absolute counted paths and standard per-path statuses/pixel/encoded ceilings. The two charges can overlap
 at submission; Io FIFO prevents preparation entry until probe retirement. Preparation reserves rounded added BGRA
-outputs, one serial frame allowance, thumbnail transients, path/name/curve/document-record copies and fixed codec
-allowance. Shared immutable source raster and selection storage is not charged again. Invalid limits/overflow
+outputs, one serial frame allowance, path/name/curve/document-record copies and fixed codec allowance. Successful
+image import has no image-thumbnail transient to reserve. Shared immutable source raster and selection storage is
+not charged again. Invalid limits/overflow
 refuse construction; failed probes require no pixel output and preserve their ordered failure status.
 
 The preparation record first enters a trivial worker stage after admission, then captures source and history metadata

@@ -20,8 +20,9 @@ std::optional<PreparedColorEdit> PrepareColorEditPublication(const std::optional
     if (cancellation.IsCancelled() || !source || !active || result.status != ColorEditJobStatus::Ready ||
         !result.token.target || active != result.token.target->layerId || result.token.canvasWidth != source->width ||
         result.token.canvasHeight != source->height || !result.image.HasStorage() ||
-        result.image.Format() != RasterFormat::Bgra8888 || !result.thumbnail.HasStorage() ||
-        result.thumbnail.Format() != RasterFormat::Bgra8888 || !result.transform.IsValid())
+        result.image.Format() != RasterFormat::Bgra8888 ||
+        (result.thumbnail.HasStorage() && result.thumbnail.Format() != RasterFormat::Bgra8888) ||
+        !result.transform.IsValid())
         return std::nullopt;
     const auto original = std::find_if(source->layers.begin(), source->layers.end(),
                                        [&](const ImageLayer& layer) { return layer.id == active; });

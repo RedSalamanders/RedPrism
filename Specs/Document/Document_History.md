@@ -65,6 +65,12 @@ revision. Production save supplies the revision of its captured snapshot.
 
 `CaptureState` retains immutable entry/pending handles, revision, transaction depth and a structural epoch under
 the operation's whole memory reservation. The view never borrows a live history container for worker reads.
+Past/future stacks have shared immutable container roots. `CaptureState` is nonthrowing and copies two root
+handles and the pending handle without allocation or per-entry traversal. Reads, including non-const iteration,
+never clone. Detached mutation constructs a completed private root before replacing the previous root; a relaxed
+`shared_ptr::use_count` is never permission to mutate formerly shared storage. Failed construction leaves both
+captured and live roots unchanged. Prepared stack growth/trim charges its private container and handle peaks;
+retirement includes retained root capacity. Full document record capture and admission traversal remain H2 work.
 Begin, End (including nested/no-op completion), Undo, Redo, Reset and prepared publication invalidate that epoch.
 `MarkSaved` remains independent and does not invalidate a prepared edit or allow it to replace a later saved
 revision. A view from another history owner, or a moved-from view, has no publication authority.
