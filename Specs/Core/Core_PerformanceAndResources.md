@@ -124,6 +124,13 @@ whole-graph reservation. Relative deadlines and cancellation share one event wai
 sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published acknowledgement.
 Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not establish a
 maximum OS clipboard delay or G1 latency. Production retry attempt accounting remains F5c.2.
+Clipboard receipt encoding is fixed 40-byte metadata. Payload SHA-256 runs only on workers, with a checked
+4096-byte stack object and cancellation between 64 KiB bands. Hash full initialized exposed global blocks,
+including any zeroed padding. Neither receipt parsing nor digest comparison allocates a payload on the owner.
+Complete admission must account for encoding stream, encoded vector, both globals, copied incoming bytes,
+codec/internal decode, document/history preparation and aggregate retirement; the adapter's partial byte report
+cannot authorize the host graph. A post-encoding block cap does not constrain earlier memory-stream growth.
+Digest throughput, native codec/OS interruption and full owner/first-upload costs remain F5d/G1 qualification.
 
 Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
 tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing

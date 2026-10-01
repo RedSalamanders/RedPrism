@@ -1359,3 +1359,114 @@ foreach ($fault in 'ChangedCmp','MissingCmp','UnknownCmp','OverlappingCmp','Wron
     ++$guardedProofCount
 }
 Write-Host "Guarded terminal byte-remap synthetic controls passed: $guardedProofCount"
+
+function New-GuardedTerminalDwordCase([string]$Name, [string]$Fault = '') {
+    $case = New-SyntheticCase ($Name + 'Seed') -PdbData
+    $pe = [IO.File]::ReadAllBytes($case.Binary)
+    [UInt32]$section = $script:sectionRva
+    [UInt32]$dispatch = $section + 0x890
+    [UInt32]$table = $section + 0x900
+    [UInt32]$target = $section + 0x8c5
+    [UInt32]$end = $table + 24
+    [UInt32]$prefix = $dispatch - 12
+    # Actual observed short guard, independent numeric register/opcode encoding.
+    [byte[]]$guard = @(0x83,0x7c,0x24,0x24,0x05,0x77,0,0x48,0x63,0x44,0x24,0x24)
+    $guard[6] = [byte]($target - ($prefix + 7))
+    switch ($Fault) {
+        'WrongCmp' { $guard[1] = 0x7d }
+        'WrongJa' { $guard[5] = 0x76 }
+        'WrongMovsxd' { $guard[8] = 0x62 }
+        'DifferentStackSlot' { $guard[11]++ }
+        'ShortRange' { $guard[4]-- }
+        'LongRange' { $guard[4]++ }
+        'SignedRange' { $guard[4] = 0xff }
+        'WrongDefault' { $guard[6]++ }
+    }
+    [byte[]]$lea = @(0x48,0x8d,0x0d,0,0,0,0)
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes([Int32](-[Int64]($dispatch+7))))
+    [byte[]]$load = @(0x8b,0x84,0x81,0,0,0,0)
+    Put-Bytes $load 3 ([BitConverter]::GetBytes($table))
+    [byte[]]$add = @(0x48,0x03,0xc1)
+    [byte[]]$jump = @(0xff,0xe0)
+    switch ($Fault) {
+        'WrongLoad' { $load[2] = 0x82 }
+        'WrongAdd' { $add[2] = 0xc2 }
+        'WrongJump' { $jump[1] = 0xe1 }
+    }
+    Put-Bytes $pe (0x400+$prefix-$section) $guard
+    Put-Bytes $pe (0x400+$dispatch-$section) $lea
+    Put-Bytes $pe (0x400+$dispatch+7-$section) $load
+    Put-Bytes $pe (0x400+$dispatch+14-$section) $add
+    Put-Bytes $pe (0x400+$dispatch+17-$section) $jump
+    $pe[0x400+$table-$section-2] = 0xc3
+    $pe[0x400+$table-$section-1] = 0x90
+    $rows = [Collections.Generic.List[string]]::new()
+    $starts = @(0,5,7)
+    $lengths = @(5,2,5)
+    for ($i=0; $i -lt 3; ++$i) {
+        if ($Fault -eq "MissingGuard$i") { continue }
+        $bytes = [byte[]]$guard[$starts[$i]..($starts[$i]+$lengths[$i]-1)]
+        if ($Fault -eq "ListingGuard$i") { $bytes[$bytes.Length-1] = $bytes[$bytes.Length-1] -bxor 1 }
+        $text = if ($Fault -eq "UnknownGuard$i") { '<unknown>' } else { 'guard' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($script:imageBase+$prefix+$starts[$i]), (Hex-Bytes $bytes), $text))
+    }
+    if ($Fault -eq 'OverlappingGuard') { $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$prefix+1))) }
+    $offsets = @(0,7,14,17)
+    $instructions = @($lea,$load,$add,$jump)
+    for ($i=0; $i -lt 4; ++$i) {
+        [byte[]]$bytes = $instructions[$i].Clone()
+        if ($Fault -eq "ListingDispatch$i") { $bytes[$bytes.Length-1] = $bytes[$bytes.Length-1] -bxor 1 }
+        $rows.Add(('{0:x}: {1} dispatch' -f ($script:imageBase+$dispatch+$offsets[$i]), (Hex-Bytes $bytes)))
+    }
+    $pe[0x400+$target-$section] = 0x90
+    $rows.Add(('{0:x}: 90 nop' -f ($script:imageBase+$target)))
+    for ($i=0; $i -lt 6; ++$i) {
+        [UInt32]$entry = $target
+        if ($i -eq 5 -and $Fault -eq 'BadLastTarget') { $entry = $target+1 }
+        if ($i -eq 5 -and $Fault -eq 'OutsideTarget') { $entry = $prefix-1 }
+        Set-U32 $pe (0x400+$table-$section+4*$i) $entry
+        $bytes = [byte[]]$pe[(0x400+$table-$section+4*$i)..(0x400+$table-$section+4*$i+3)]
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$table+4*$i), (Hex-Bytes $bytes)))
+    }
+    $procEnd = $end
+    if ($Fault -eq 'ShortProcedure') { $procEnd -= 4 }
+    if ($Fault -eq 'LongProcedure') { $procEnd += 4 }
+    $procOwner = if ($Fault -eq 'WrongProcedureOwner') { 1 } else { 0 }
+    $sym = "  Mod $procOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $sym += "  0 | S_GPROC32 [size = 16] ``GuardedDword`` `n  addr = 0001:$($prefix-$section), code size = $($procEnd-$prefix)`n"
+    }
+    $dataOwner = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+    $sym += "  Mod $dataOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingData') {
+        $data = if ($Fault -eq 'WrongDataStart') { $table+4 } else { $table }
+        $sym += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($data-$section)`n"
+    }
+    $sym += "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:4096`n"
+    if ($Fault -eq 'EarlyData') {
+        $sym += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($table-$section+8)`n"
+    }
+    if ($Fault -eq 'RealVectorAfter') {
+        [byte[]]$vex = @(0xc5,0xf8,0x10,0x00)
+        Put-Bytes $pe (0x400+$end-$section) $vex
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($script:imageBase+$end), (Hex-Bytes $vex)))
+    }
+    Set-Content -LiteralPath $case.Symbols -Value $sym -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value (@($rows | Sort-Object { [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber) }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary,$pe)
+    $case.Name = $Name
+    return $case
+}
+$terminalDwordCount = 0
+Invoke-Control (New-GuardedTerminalDwordCase 'TerminalDwordValid') $true 6 0
+++$terminalDwordCount
+Invoke-Control (New-GuardedTerminalDwordCase 'TerminalDwordRealVectorAfter' 'RealVectorAfter') $false 6 1
+++$terminalDwordCount
+foreach ($fault in 'WrongCmp','WrongJa','WrongMovsxd','DifferentStackSlot','ShortRange','LongRange','SignedRange','WrongDefault',
+    'WrongLoad','WrongAdd','WrongJump','MissingGuard0','MissingGuard1','MissingGuard2','ListingGuard0','ListingGuard1','ListingGuard2',
+    'UnknownGuard0','UnknownGuard1','UnknownGuard2','OverlappingGuard','ListingDispatch0','ListingDispatch1','ListingDispatch2','ListingDispatch3',
+    'BadLastTarget','OutsideTarget','ShortProcedure','LongProcedure','WrongProcedureOwner','MissingProcedure','WrongDataOwner','MissingData','WrongDataStart','EarlyData') {
+    Invoke-Control (New-GuardedTerminalDwordCase ("TerminalDword$fault") $fault) $false
+    ++$terminalDwordCount
+}
+Write-Host "Guarded terminal DWORD synthetic controls passed: $terminalDwordCount"

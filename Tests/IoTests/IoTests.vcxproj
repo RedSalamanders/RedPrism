@@ -63,7 +63,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>bcrypt.lib;user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -78,7 +78,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>bcrypt.lib;user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -112,7 +112,12 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardReceipt.h" />
+    <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
     <ClInclude Include="ClipboardTransferTests.h" />
+    <ClInclude Include="ClipboardReceiptTests.h" />
+    <ClInclude Include="ClipboardFingerprintTests.h" />
+    <ClInclude Include="ClipboardBindingTransferTests.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
@@ -122,6 +127,9 @@
     <ClCompile Include="..\..\RedPrism\ClipboardTransfer.cpp" />
     <ClCompile Include="..\..\RedPrism\SystemClipboard.cpp" />
     <ClCompile Include="ClipboardTransferTests.cpp" />
+    <ClCompile Include="ClipboardReceiptTests.cpp" />
+    <ClCompile Include="ClipboardFingerprintTests.cpp" />
+    <ClCompile Include="ClipboardBindingTransferTests.cpp" />
     <ClCompile Include="ImageImportWorkTests.cpp" />
     <ClCompile Include="ProjectLoadWorkTests.cpp" />
     <ClCompile Include="..\..\Common\ImageImportWork.cpp" />
@@ -144,6 +152,8 @@
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardReceipt.cpp" />
+    <ClCompile Include="..\..\RedPrism\ClipboardFingerprint.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

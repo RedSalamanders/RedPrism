@@ -1,10 +1,12 @@
 #pragma once
 
+#include "ClipboardFingerprint.h"
 #include "Document.h"
 #include "Executor.h"
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 // Private Win32 adapter. Calls belong to admitted workers, never to the Application thread. No HWND,
@@ -31,6 +33,8 @@ enum class Stage : std::uint8_t
     Emptied,
     PngPlaced,
     DibPlaced,
+    ReceiptPlaced,
+    ReceiptRead,
     Closed,
     Inspected,
     Copied,
@@ -47,6 +51,9 @@ enum class Fault : std::uint8_t
     DibGlobal,
     PngRead,
     DibRead,
+    ReceiptGlobal,
+    ReceiptPlace,
+    ReceiptRead,
 };
 
 struct Observer final
@@ -65,6 +72,7 @@ struct Publication final
     bool emptied = false;
     bool pngPlaced = false;
     bool dibPlaced = false;
+    bool receiptPlaced = false;
 };
 
 class PreparedImage final
@@ -79,21 +87,26 @@ class PreparedImage final
     [[nodiscard]] explicit operator bool() const noexcept;
     [[nodiscard]] std::uint64_t RetainedBytes() const noexcept;
     [[nodiscard]] std::uint32_t SourceSequence() const noexcept;
+    [[nodiscard]] std::optional<ClipboardFingerprint::Binding> ContentBinding() const noexcept;
 
   private:
     struct Storage;
     std::unique_ptr<Storage> _storage;
-    friend Status Prepare(const Raster&, double, std::uint32_t, PreparedImage&, CancelToken, Observer);
+    friend Status Prepare(const Raster&, double, std::uint32_t, PreparedImage&, CancelToken, Observer,
+                          const std::optional<ClipboardReceipt::Key>&);
     friend Publication Publish(PreparedImage&, CancelToken, Observer) noexcept;
 };
 
 // Encodes both immediate formats and owns both complete GMEM_MOVEABLE blocks BEFORE any OS mutation.
+// Optional receipt owns its registered-format block too, binding a key to full exposed, zero-padded image blocks.
 // Allocation exceptions propagate to the scheduler worker boundary. Native allocation failures are explicit.
 // The source sequence is captured with the source/private copy before encoding and sealed through retries.
 [[nodiscard]] Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSequence,
-                             PreparedImage& output, CancelToken cancellation = {}, Observer observer = {});
+                             PreparedImage& output, CancelToken cancellation = {}, Observer observer = {},
+                             const std::optional<ClipboardReceipt::Key>& receipt = {});
 // Busy, Stale and cancellation before Empty retain the blocks for an acknowledged retry/drop. Empty is an
-// irreversible external mutation: after it, attempt both formats even if cancellation arrives, report exact
+// irreversible external mutation. A keyed publication places the receipt first; if that fails, place no images.
+// After a successful receipt (or without one), attempt both images despite late cancellation, report exact
 // publication truth and consume the prepared input. Never retry a result whose emptied flag is true.
 [[nodiscard]] Publication Publish(PreparedImage& image, CancelToken cancellation = {}, Observer observer = {}) noexcept;
 
@@ -165,8 +178,11 @@ class ImageCopy final
     std::int64_t _pixelBudget = 0;
     std::vector<std::uint8_t> _png;
     std::vector<std::uint8_t> _dib;
+    std::optional<ClipboardReceipt::Key> _receipt;
     friend Status Copy(const Inspection&, ImageCopy&, CancelToken, Observer);
     friend Status Decode(const ImageCopy&, Raster&, CancelToken);
+    friend Status HasPrivateOrigin(const ImageCopy&, const ClipboardFingerprint::Binding&, const ClipboardReceipt::Key&,
+                                   bool&, CancelToken);
 };
 
 // Inspect locks borrowed global bytes only inside one open scope. PNG first, independently inspect DIBV5/DIB
@@ -178,4 +194,9 @@ class ImageCopy final
 [[nodiscard]] Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancellation = {},
                           Observer observer = {});
 [[nodiscard]] Status Decode(const ImageCopy& copy, Raster& output, CancelToken cancellation = {});
+// Hash only owned copied bytes, after CloseClipboard. Receipt key and every available payload must match
+// the current private copy. No OS handle/address or later sequence number participates in this authority.
+[[nodiscard]] Status HasPrivateOrigin(const ImageCopy& copy, const ClipboardFingerprint::Binding& binding,
+                                      const ClipboardReceipt::Key& currentPrivate, bool& matches,
+                                      CancelToken cancellation = {});
 } // namespace ClipboardTransfer

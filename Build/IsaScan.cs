@@ -265,6 +265,79 @@ namespace RedPrismBuild
             return table.End - table.Begin >= 8 ? table : null;
         }
 
+        // DxUi's ASan grid switch ends with six DWORDs inside a much larger contribution. Its next
+        // anonymous data symbol belongs to another procedure. Prove only the observed short stack guard
+        // and exact RCX dispatch, including every reported/PE byte and the exact terminal procedure end.
+        private static InlineTable ReadGuardedTerminalDwordTable(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
+            Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
+            Dictionary<ulong, byte[]> guardRows)
+        {
+            if (dispatch < imageBase + 12 || dispatch - imageBase > UInt32.MaxValue || afterJump != dispatch + 19)
+                return null;
+            int ownerIndex = FindContribution(contributions, dispatch);
+            if (ownerIndex < 0) return null;
+            Contribution owner = contributions[ownerIndex];
+            ulong begin = checked(imageBase + tableRva), prefix = dispatch - 12;
+            if ((begin & 3) != 0 || begin <= afterJump ||
+                !dataSymbols.TryGetValue(begin, out int dataOwner) || dataOwner != owner.Module) return null;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return null; }
+            if (raw > pe.Length - 31 ||
+                !StartsWithAt(pe, raw, 0x83, 0x7c, 0x24) || pe[raw + 5] != 0x77 ||
+                !StartsWithAt(pe, raw + 7, 0x48, 0x63, 0x44, 0x24) || pe[raw + 3] != pe[raw + 11] ||
+                !StartsWithAt(pe, raw + 12, 0x48, 0x8d, 0x0d) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 15) != (long)imageBase ||
+                !StartsWithAt(pe, raw + 19, 0x8b, 0x84, 0x81) ||
+                BitConverter.ToUInt32(pe, raw + 22) != tableRva ||
+                !StartsWithAt(pe, raw + 26, 0x48, 0x03, 0xc1) ||
+                !StartsWithAt(pe, raw + 29, 0xff, 0xe0)) return null;
+            uint maximum = pe[raw + 4];
+            if (maximum == 0 || maximum >= 128) return null; // CMP imm8 must be nonnegative
+            int[] starts = { 0, 5, 7, 12, 19, 26, 29 };
+            int[] lengths = { 5, 2, 5, 7, 7, 3, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+            {
+                ulong address = prefix + (ulong)starts[i];
+                if (!guardRows.TryGetValue(address, out byte[] reported) || reported.Length != lengths[i] ||
+                    !MatchesDecodedPe(pe, sections, imageBase, address, reported, contributions, decoded, decodedStarts))
+                    return null;
+            }
+            ulong end = checked(begin + 4 * (maximum + 1));
+            if (end > owner.End) return null;
+            foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
+            long defaultAddress = (long)prefix + 7 + unchecked((sbyte)pe[raw + 6]);
+            foreach (Function procedure in procedures)
+            {
+                if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
+                    procedure.ContributionEnd != owner.End || prefix < procedure.Begin || begin < procedure.Begin ||
+                    afterJump > begin || procedure.End != end) continue;
+                var table = new InlineTable { Begin = begin, End = end, Module = owner.Module,
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End };
+                int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
+                if (tableRaw > pe.Length - checked((int)(end - begin))) return null;
+                for (uint entry = 0; entry <= maximum; ++entry)
+                {
+                    ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * entry))));
+                    if (target < procedure.Begin || target >= begin ||
+                        !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts)) return null;
+                    table.Targets.Add(target);
+                }
+                if (defaultAddress >= 0 && table.Targets.Contains((ulong)defaultAddress)) return table;
+            }
+            return null;
+        }
+
+        private static bool StartsWithAt(byte[] bytes, int offset, params byte[] prefix)
+        {
+            if (offset < 0 || offset > bytes.Length - prefix.Length) return false;
+            for (int i = 0; i < prefix.Length; ++i) if (bytes[offset + i] != prefix[i]) return false;
+            return true;
+        }
+
         // ASan's OnCommand remap ends at its procedure, inside a larger contribution. Bound that form
         // from its exact unsigned stack-index guard, not from an unrelated later anonymous data symbol.
         private static ulong GuardedByteIndexEnd(byte[] pe, List<Section> sections,
@@ -636,11 +709,17 @@ namespace RedPrismBuild
                 if (!candidate.Success) continue;
                 string[] candidateBytes = candidate.Groups[2].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 if (candidateBytes.Length != 7 || candidateBytes[0] != "48" || candidateBytes[1] != "8d" ||
-                    candidateBytes[2] != "15") continue;
+                    (candidateBytes[2] != "15" && candidateBytes[2] != "0d")) continue;
                 ulong candidateAddress = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
                 byte[] encoded = Array.ConvertAll(candidateBytes, b => Byte.Parse(b, NumberStyles.HexNumber));
                 if (checked((long)candidateAddress + 7 + BitConverter.ToInt32(encoded, 3)) != (long)imageBase ||
                     candidateAddress < imageBase + 19) continue;
+                if (candidateBytes[2] == "0d")
+                {
+                    int[] offsets = { -12, -7, -5, 0, 7, 14, 17 };
+                    foreach (int offset in offsets) rdxGuardCandidates.Add(checked((ulong)((long)candidateAddress + offset)));
+                    continue;
+                }
                 ulong guard = candidateAddress - 19;
                 rdxGuardCandidates.Add(guard);
                 rdxGuardCandidates.Add(guard + 6);
@@ -765,6 +844,11 @@ namespace RedPrismBuild
                         InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, procedures, imageBase, dispatchBegin,
                             checked(address + (ulong)encoded.Length), tableRva,
                             preludeStep != 0 || raxBase || rdxBase || r9Base || dlByteIndex || hasByteIndexTable, signedByteIndex);
+                        if (table == null && !r8Base && !raxBase && !rdxBase && !r9Base &&
+                            !dlByteIndex && !hasByteIndexTable && !signedByteIndex)
+                            table = ReadGuardedTerminalDwordTable(pe, sections, contributions, dataSymbols, procedures,
+                                imageBase, dispatchBegin, checked(address + (ulong)encoded.Length), tableRva,
+                                decoded, decodedStarts, guardRows);
                         InlineTable provenByteIndexTable = null;
                         if (table != null && preludeStep != 0)
                         {

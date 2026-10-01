@@ -1,3 +1,5 @@
+#include "ClipboardFingerprintTests.h"
+#include "ClipboardReceiptTests.h"
 #include "ClipboardTransferTests.h"
 #include "CodecFileStreamTests.h"
 #include "FileIoBench.h"
@@ -2723,6 +2725,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
     gFailures += RunClipboardDibWorkTests();
+    gFailures += RunClipboardReceiptTests();
+    gFailures += RunClipboardFingerprintTests();
     gFailures += RunClipboardTransferTests();
     gFailures += RunCodecFileStreamTests();
     gFailures += RunProjectCancellationTests();

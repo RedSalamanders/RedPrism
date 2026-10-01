@@ -107,6 +107,13 @@ application window. It publishes fully rendered immediate formats. OS open/get/e
 external clipboard owner and belong on a worker. The adapter does not schedule or retry work; production
 admission, source/history ordering, event retries and caller activation remain F5b.2–F5d.
 
+`ClipboardReceipt` is a standard-only fixed-packet codec with no allocation or platform ownership.
+`ClipboardFingerprint` owns one CNG SHA-256 hash through WIL on its calling worker, using a borrowed algorithm
+pseudo-handle and a checked 4096-byte stack object that outlives that hash. It never reads a live session or OS
+clipboard. The transfer adapter keeps receipt bytes and image bytes inside the exact scoped source open, then
+hashes owned copies after close. Fixed local key/size/digest values may cross to the owner; image payload hashing
+belongs only to the worker. Production private-copy authority remains the selected clipboard graph's obligation.
+
 Each record contains two aligned intrusive completion nodes, one for progress and one for final completion. Workers
 publish through an SLIST and signal the scheduler's auto-reset event. The owner reverses each detached SLIST batch
 to deliver its nodes FIFO. Progress is monotonic and published at most once per 100 ms. `PumpMessages`,

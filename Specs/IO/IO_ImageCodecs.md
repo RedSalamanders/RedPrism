@@ -124,6 +124,26 @@ to F5b.2. Production Copy/Cut/Paste/New Canvas migration remains open. The share
 framework is defined in Core_Architecture; six-attempt accounting and source guards in actual clipboard jobs
 remain F5c.2. An emptied publication must never be retried.
 
+### Registered receipt and owned payload binding (P1.7 F5b.2a)
+
+An optional immediate `RedPrism.ClipboardReceipt.v1` registered format carries exactly 40 bytes: `RPCLIP01`,
+little-endian version 1, reserved zero, a nonzero 16-byte session id and nonzero little-endian 64-bit private copy
+serial. Invalid packet input clears its decoded value. This is content provenance, not security authentication.
+The receipt block is prepared before Empty and placed first. Receipt placement failure records an emptied
+failure, places no image formats and consumes the attempt. After successful receipt placement, late cancellation
+still finishes both image attempts. Only transferred global blocks become Windows-owned.
+
+The encoding worker retains local immutable sizes/SHA-256 fingerprints of the complete exposed PNG/DIB blocks.
+Any allocation padding is initialized to zero and included in the digest. Copy reads the receipt and owned image
+bytes within the same inspected-sequence open scope. Missing/invalid receipt does not prevent foreign image
+decode. After CloseClipboard, worker hashing compares current private session/serial, receipt and every copied
+format; at least one copied image format must match. One altered format refuses private origin even when the
+preferred PNG remains valid. Identical receipt and payload copied back at a changed sequence retain content
+origin. No later sampled sequence or global memory address supplies this authority.
+
+This boundary activates no production caller. Complete encoding-stream bounds, graph admission, Copy/Cut/Paste
+application, event retries and measured UI/digest costs remain F5b.2b/F5c.2/F5d.
+
 ## Status
 
 `Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`.

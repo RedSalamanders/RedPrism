@@ -61,6 +61,15 @@ pending versus ready, bounded/duplicate/self registration refusal, quiescent det
 refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application; actual clipboard
 transfer retry graphs remain F5c.2.
 
+`ClipboardReceipt.*` uses independent literal normal/high-bit packets and malformed version/reserved/length/
+session/serial values, proving exact cleared outputs. `clipboardfingerprint.*` uses literal empty/abc SHA-256
+and a 65,537-byte coordinate fixture whose digest comes from an independent PowerShell calculation. Exact
+64 KiB bands, pre/stage cancellation, reached native failures, cleared output and all-format key/content matching
+are gates. `clipboardbinding.*` runs inside the existing saved/restored dedicated MTA transfer suite. It proves
+receipt-first empty/partial/complete truth, exact held sequence/error, read after owner destruction, receipt-only
+refusal, positive controls for invalid receipt fallback, one-byte original-block tamper with valid PNG, identical
+payload copy-back, private serial refusal and late cancellation. This primitive leaves actual callers and G1 open.
+
 ### Detached gradients
 
 `gradientwork.*` keeps the independent legacy linear/radial/opacity tolerances and literal pixel-center BGRA/Gray8
@@ -327,13 +336,20 @@ function an instruction exemption.
 
 The exact WIC RDX-base/RCX-target dispatch additionally has seven-DWORD fixtures with required anonymous PDB
 start, malformed dispatch/symbol/target/bounds negatives and adjacent real-vector rejection. The standalone
-parser suite has 226 controls including 29 RDX-form cases, 45 exact Menu R9-base/R8-target cases and 24
+parser suite has 368 controls including 29 RDX-form cases, 45 exact Menu R9-base/R8-target cases and 24
 signed-byte RBP+disp32 cases. The signed form requires the exact MOVSX/LEA/load/ADD/JMP encoding, an anonymous
 same-owner table start including its biased default entry, and decoded target bounds; wrong REX/opcode/frame
 base/SIB, noncontiguity, invalid symbols/targets and adjacent real vector code remain rejected. The Menu form
 requires its byte-index load, unchanged base/indices/targets, anonymous PDB start and decoded-target bounds;
 missing/changed operands, noncontiguity, malformed PDB evidence, truncation and adjacent real VEX remain rejected.
 [Original forms record](../TestRuns/IsaTableForms_2026-09-30.md).
+
+The ASan grid switch additionally has 37 short-stack-guard/terminal-DWORD controls. Recognition requires the
+exact unsigned CMP/JA/MOVSXD and contiguous RCX dispatch in the PE and matching decoded listing, anonymous
+same-owner data start, guard-derived entry count equal to the exact PDB procedure end, and every target at a
+same-procedure decoded boundary. An unrelated later data symbol does not extend the table. Missing/changed
+bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
+proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.

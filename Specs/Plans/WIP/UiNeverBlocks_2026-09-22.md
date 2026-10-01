@@ -128,6 +128,10 @@
         multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
         against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
         ([record](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production callers and G1 stay open.
+      - [x] F5b.2a — Registered receipt and worker SHA-256 payload binding, exact partial publication and
+        private-origin controls qualify in all six configurations against 456 frozen inputs: 25/45/34 new
+        assertions plus all 125 transfer controls ([record](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md)).
+        Full host/codec admission, production callers, retries and G1 remain open.
       - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
         six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
         ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.
