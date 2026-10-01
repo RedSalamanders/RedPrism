@@ -117,6 +117,14 @@ aligned intrusive completion nodes; producers push to an SLIST and signal an aut
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
+The owner router serves one ready leaf per pump, with at most eight leaves. Application's retry source adds
+eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
+pressure uses two). A busy transfer MUST release its compute callback while retaining its admitted job and
+whole-graph reservation. Relative deadlines and cancellation share one event wait; no extra pool, periodic timer,
+sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published acknowledgement.
+Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not establish a
+maximum OS clipboard delay or G1 latency. Production retry attempt accounting remains F5c.2.
+
 Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
 tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing
 storage, stretched/carried masks and required semantic mask thumbnails. Optional image thumbnails are not part of

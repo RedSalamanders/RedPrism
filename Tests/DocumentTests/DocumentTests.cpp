@@ -8,6 +8,7 @@
 #include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
 #include "CopyPixelsTests.h"
+#include "CopyPixelsTransformTests.h"
 #include "Crop.h"
 #include "Document.h"
 #include "DocumentSizeHistoryTests.h"
@@ -7403,6 +7404,7 @@ int wmain(int argc, wchar_t** argv)
     PixelMoveOpeningWorkTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
+    gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();
     gFailures += RunSelectionStorageTests();

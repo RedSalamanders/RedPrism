@@ -174,8 +174,11 @@ HRESULT Application::InitializeProcessing() noexcept
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
-    RETURN_IF_FAILED(_gpuWork.Initialize(_jobs));
+    if (!_jobs.RegisterOwnerWork(_ownerWork))
+        return E_UNEXPECTED;
+    RETURN_IF_FAILED(_gpuWork.Initialize(_jobs, &_ownerWork));
     _gpuWorkInitialized = true;
+    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(_jobs, _ownerWork)));
     if (!InitializeHostContinuations())
     {
         return E_UNEXPECTED;
@@ -3069,14 +3072,16 @@ void Application::Shutdown() noexcept
     CancelGradientJobs();
     CancelPixelMoveJobs();
     _jobs.RequestStop();
-    _gpuWork.StopNotifications();
     if (_window)
     {
         ShowWindow(_window.get(), SW_HIDE);
     }
+    _retryWait.StopNotifications();
+    _gpuWork.StopNotifications();
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
     _jobs.Close();
+    _retryWait.CloseAfterWorkers();
     _gpuWork.CloseAfterWorkers();
     _gpuWorkInitialized = false;
     _jobActivity.Clear();

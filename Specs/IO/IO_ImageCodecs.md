@@ -120,7 +120,9 @@ budgets retain the independent 100 M decode cap; cancelled/failed public outputs
 
 This boundary owns no live session or Application window and performs no retry. Its partial memory report covers
 owned bytes and final pixels only; complete codec, capture/history, insertion and retirement admission belongs
-to F5b.2. Production Copy/Cut/Paste/New Canvas migration and event retries remain open.
+to F5b.2. Production Copy/Cut/Paste/New Canvas migration remains open. The shared owner event/deadline retry
+framework is defined in Core_Architecture; six-attempt accounting and source guards in actual clipboard jobs
+remain F5c.2. An emptied publication must never be retried.
 
 ## Status
 

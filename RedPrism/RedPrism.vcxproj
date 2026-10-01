@@ -115,6 +115,7 @@
     <ClInclude Include="..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\Common\OwnerWorkMultiplexer.h" />
+    <ClInclude Include="..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
@@ -229,6 +230,7 @@
     <ClCompile Include="..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\Common\Jobs.cpp" />
+    <ClCompile Include="..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
     <ClCompile Include="Application.cpp" />

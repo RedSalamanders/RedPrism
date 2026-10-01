@@ -1,4 +1,5 @@
 #include "GpuWork.h"
+#include "OwnerWorkMultiplexer.h"
 
 #include <algorithm>
 #include <array>
@@ -49,6 +50,7 @@ struct GpuWorkQueue::Impl final
 
     DWORD ownerThread = GetCurrentThreadId();
     JobScheduler* scheduler = nullptr;
+    OwnerWorkMultiplexer* routes = nullptr;
     std::array<Slot, kCapacity> slots;
     wil::com_ptr_nothrow<ID3D11Device> device;
     wil::com_ptr_nothrow<ID3D11DeviceContext> context;
@@ -275,7 +277,7 @@ GpuWorkQueue::~GpuWorkQueue()
     }
 }
 
-HRESULT GpuWorkQueue::Initialize(JobScheduler& scheduler) noexcept
+HRESULT GpuWorkQueue::Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer* routes) noexcept
 {
     if (_impl || !scheduler.WakeHandle() || scheduler.InUiCallback())
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
@@ -289,6 +291,7 @@ HRESULT GpuWorkQueue::Initialize(JobScheduler& scheduler) noexcept
     }
     auto& self = *_impl;
     self.scheduler = &scheduler;
+    self.routes = routes;
     HRESULT result = S_OK;
     for (auto& slot : self.slots)
     {
@@ -300,7 +303,7 @@ HRESULT GpuWorkQueue::Initialize(JobScheduler& scheduler) noexcept
         if (FAILED(result))
             return result;
     }
-    if (!scheduler.RegisterOwnerWork(*this))
+    if (!(routes ? routes->Attach(*this) : scheduler.RegisterOwnerWork(*this)))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     self.registered = true;
     return S_OK;
@@ -445,7 +448,7 @@ void GpuWorkQueue::CloseAfterWorkers() noexcept
         self.DropStorage(slot);
     }
     if (self.registered)
-        (void)self.scheduler->UnregisterOwnerWork(*this);
+        (void)(self.routes ? self.routes->Detach(*this) : self.scheduler->UnregisterOwnerWork(*this));
     _impl.reset();
 }
 

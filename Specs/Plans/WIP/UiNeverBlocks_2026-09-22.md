@@ -124,6 +124,9 @@
         multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
         against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
         ([record](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production callers and G1 stay open.
+      - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
+        six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
+        ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.
       - [x] F6a.1 — Bounded native rollback recovery and real child/directory-reader release/exhaustion controls; all configurations and 33 rotation checks pass ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)). External reader/filter identity and overall F6 remain open; timer resource faults qualify below.
       - [x] F6a.2 — Native recovery timer create/arm/wait resource faults, healthy-path avoidance and backup-only retry qualify in all configurations; 40 rotation controls pass ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)). Original save causes and overall F6 remain open.
       - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all

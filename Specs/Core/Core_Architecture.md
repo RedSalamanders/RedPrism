@@ -83,11 +83,23 @@ Device completion registrations use the scheduler's existing one-thread WaitPool
 event tickets. Handles and contexts remain borrowed until owner teardown removes/joins them or Close joins the
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
-`OwnerWorkMultiplexer` is a bounded standard-only preparation primitive for the single owner-work source. It
+`OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
 borrows at most eight distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
-scheduler's one-source registration contract. Application GPU/retry multiplexing remains P1.7 F5c work.
+scheduler's one-source registration contract. Application registers this router once and attaches GPU and
+retry readiness sources. Standalone GPU tests may retain direct registration.
+
+`RetryWaitQueue` owns eight persistent manual-reset events registered on that same WaitPool. An admitted
+suspended job owns its borrowed receiver and cancellation token until the wait callback acknowledges a
+relative one-shot deadline or cancellation signal. Retry numbers 1–5 use 50/100/200/400/800 ms deadlines;
+zero timeout retains the ordinary infinite event wait contract. The callback reads stable notification owners,
+publishes readiness and never accesses request metadata afterward. Only the owner pump delivers a receipt and
+releases the slot for reuse; it resumes the original ticket/reservation/FIFO position. Cancellation wakes the
+owner and signals the existing event, without a stop-callback destructor or hot-path join. A signal failure
+retains its native error and request until the original deadline acknowledges. Shutdown hides the window,
+joins/disarms retry and GPU notifications, closes workers, then drops their receivers and detaches both sources.
+This framework does not activate production clipboard transfers; F5b.2/F5c.2 retain those caller obligations.
 
 The clipboard adapter is an explicit private platform exception to generic worker window access. Publishing
 creates/closes/destroys its own built-in message-only window on the calling worker and never touches the

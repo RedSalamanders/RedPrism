@@ -404,6 +404,18 @@ UI work; ready Pump executes under the reentrancy guard and refuses callback-tim
 Synthetic memory checks prove successor admission remains blocked through suspended, resumed and final apply
 stages. State/event references are independent of elapsed-time performance; no hook waits on another stage.
 
+`retrywait.*` checks literal 50/100/200/400/800 ms deadline arguments, eight registrations/ninth refusal, invalid
+and duplicate tickets, exact reached creation/registration/reset/arm errors, real event acknowledgement and
+slot reuse. A real relative deadline also completes without a test signal. Three gated actual-job scenarios
+prove an unrelated job runs on the single compute worker while the original 4096-byte reservation and receiver
+remain held: ordinary waiting, cancellation and failed cancellation signalling. Callback publication stays
+behind an event until the unrelated job completes. Cancellation skips the resumed worker body; a failed signal
+retains its exact error until the original deadline acknowledges. There is one receipt/final result and no
+leaked slot/reservation. Wait bounds detect deadlock; they assert no performance threshold. Multiplexed GPU
+copies additionally initialize both native sources, exercise normal and EnqueueSetEvent cancellation routes,
+and detach them after shutdown. The independent transformed Copy fixtures cover rotation, reflection,
+nearest/smooth centers, High sampling and a placed mask's outside tone through a cropped selection.
+
 `gpu-capability.*` covers literal completion-route prerequisites and unavailable/failed-query combinations,
 plus real WARP immediate-context probing, null/deferred/mismatched-device refusal and report reset.
 `gpu-work.*` uses independent BGRA coordinate formulas for cropped row-pitch copies and single-pixel reads.

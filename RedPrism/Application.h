@@ -16,12 +16,14 @@
 #include "ImageImportWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
+#include "OwnerWorkMultiplexer.h"
 #include "PathClassificationWork.h"
 #include "PreviewMailbox.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
 #include "RasterEditWork.h"
 #include "Renderer.h"
+#include "RetryWaitQueue.h"
 #include "SettingsStore.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
@@ -653,6 +655,8 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     JobScheduler _jobs;
+    OwnerWorkMultiplexer _ownerWork;
+    RetryWaitQueue _retryWait;
     GpuWorkQueue _gpuWork;
     bool _gpuWorkInitialized = false;
     HRESULT _gpuBindingError = E_PENDING;

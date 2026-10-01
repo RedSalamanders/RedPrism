@@ -95,6 +95,7 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
+    <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
@@ -107,6 +108,7 @@
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />

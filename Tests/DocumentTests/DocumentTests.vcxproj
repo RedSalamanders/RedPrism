@@ -89,6 +89,7 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="CopyPixelsTests.h" />
+    <ClInclude Include="CopyPixelsTransformTests.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\Document.h" />
@@ -146,6 +147,7 @@
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="CopyPixelsTests.cpp" />
+    <ClCompile Include="CopyPixelsTransformTests.cpp" />
     <ClCompile Include="ColorEditWorkTests.cpp" />
     <ClCompile Include="ColorEditDeferredTests.cpp" />
     <ClCompile Include="FilterCancellationTests.cpp" />

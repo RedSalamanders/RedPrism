@@ -29,9 +29,10 @@
     - [ ] F5b.2 — Whole-graph admission, worker decode/paste/private-copy publication and actual ordered host
       activation. The adapter primitive alone does not qualify Copy/Cut, Paste or New Canvas.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
-    - [ ] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
+    - [x] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
       wakes the same wait, and no slot or receiver can be reused before callback acknowledgement. Native host
-      routing multiplexes this source with GPU work. A reviewed private prototype is in preparation.
+      routing multiplexes this source with GPU work. All six configurations, 117 retry controls and two routed
+      GPU scenarios qualify ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)); actual transfers remain F5c.2.
     - [ ] F5c.2 — Bind transfer retries to actual ordered Copy/Cut/Paste/New Canvas graphs and their full
       reservation; preserve six total attempts, source authority, publication truth and draft revision guards.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
@@ -253,17 +254,48 @@ cancellation cannot undo or repeat a published external change. An outgoing snap
 before EmptyClipboard so encoding cannot overwrite a later foreign copy. The session's private copy remains
 usable when mirroring fails; remember the sequence at the private copy, not a later unrelated sequence.
 
-The reviewed private F5b.1 probe passes 125 native Win32 checks: literal PNG/DIB bytes, independent straight
+The qualified F5b.1 adapter passes 125 native Win32 checks: literal PNG/DIB bytes, independent straight
 versus premultiplied alpha, post-owner-destruction reads, reached allocation/native faults, complete/partial/empty
 publication, early/late cancellation, sealed stale retries, independent DIB fallback and an externally gated
-delayed renderer. It is not yet the repository configuration qualification or a production caller.
+delayed renderer. All x64 suites and ARM64 clean cross-builds pass
+([evidence](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)); production callers remain open.
 One measured control records held sequence 16016 and later-open sequence 16018 without a foreign replacement.
 Do not assume closing/destroying an immediate owner preserves the held value. The result records the exact
 sequence after the last placement while open, independently observed at that stage; a later sequence is not
 proof that a foreign copy occurred or authority to relabel our old copy. F5b.2 must explicitly resolve this
 post-close authority for private-origin Paste, including a foreign replacement between close and any later
-observation, before host activation. Native test waits are bounded test-only readiness controls; F5c production
-timers remain unimplemented.
+observation, before host activation. Native test waits are bounded test-only readiness controls. The shared
+event/deadline framework qualifies at F5c.1; actual clipboard retry jobs remain F5c.2.
+
+F5b.2 implementation sequence (remaining, not qualified behavior):
+
+- [ ] Seal private Copy/Cut pixels/history authority with a separate session copy serial; direct successful
+  copies also expire older workers, and a failed Cut restores both prior pixels and serial.
+- [ ] Add an immediate registered receipt format binding the process/session and successful private copy serial.
+  Prepare its small movable block before Empty and place it first. Receipt placement failure places no image
+  format and reports exact emptied failure; after a successful receipt, still attempt PNG and DIB despite late stop.
+  Use a registered format, not CF_PRIVATEFIRST (whose handles Windows does not automatically free).
+- [ ] Bind receipt authority to local immutable PNG/DIB sizes and SHA-256 fingerprints produced on the encoding
+  worker. The receipt alone is insufficient: an owned incoming payload must match the bound bytes before using
+  the private copy/origin. Copying back the identical receipt and identical payload retains that content's origin;
+  replacing any readable image format, retaining an old receipt with newer bytes, or changing the private serial
+  refuses preference. No bare HGLOBAL address or later fresh sequence is authority.
+- [ ] Inspect/copy receipt and bytes at the exact sealed source sequence, with all borrowed pointers confined to
+  the open scope. Digest work runs on bounded cancellable worker chunks. PNG-first/DIB fallback remains independent
+  from receipt preference; absent/invalid receipts do not prevent foreign image decode.
+- [ ] Retain captured-sequence private preference on a pre-Empty mirror failure, as the current host does. Never
+  relabel a later sequence as ours. No-image foreign clipboard still permits the existing internal Paste fallback;
+  an image-format decode failure retains the current no-private-fallback rule.
+- [ ] Prove complete/partial/empty receipt publication, native receipt errors, receipt destruction survival,
+  payload tampering, stale serials, identical copy-back, failed mirroring and foreign replacement between close
+  and owner completion. Activate real callers only after these and whole-graph admission qualify.
+
+The receipt design follows the distinction between registered/private formats and immediate/synthesized contents
+in [Microsoft's clipboard format contract](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-formats).
+The [sequence contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboardsequencenumber)
+tracks content/empty changes and delayed rendering; it does not establish content ownership. Existing F5b.1
+sequence and pixel controls remain unchanged. This design adds a content binding, not a security authentication
+claim, and its encoding/digest/owned-byte memory and elapsed cost must be included in F5d measurements.
 
 The master table's short synchronous owner publication is insufficient as a guarantee: EmptyClipboard sends
 WM_DESTROYCLIPBOARD to the preceding owner and GetClipboardData can trigger delayed rendering. Execute these

@@ -1,7 +1,9 @@
 #include "GpuWorkTests.h"
 
 #include "GpuWork.h"
+#include "OwnerWorkMultiplexer.h"
 #include "PixelBuffer.h"
+#include "RetryWaitQueue.h"
 
 #include <array>
 #include <atomic>
@@ -198,7 +200,8 @@ class CopyJob final : public Job, public GpuReadbackReceiver
     bool _submitted = false;
 };
 
-void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false, unsigned int busyMaps = 0)
+void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = false, unsigned int busyMaps = 0,
+              bool multiplexed = false)
 {
     Device device, replacement;
     Expect(SUCCEEDED(device.Create()), "copy.device");
@@ -207,8 +210,13 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
     if (rebind)
         Expect(SUCCEEDED(replacement.Create()), "copy.replacement-device");
     JobScheduler scheduler;
+    OwnerWorkMultiplexer routes;
+    RetryWaitQueue retries;
     GpuWorkQueue queue;
-    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK && SUCCEEDED(queue.Initialize(scheduler)),
+    Expect(scheduler.Initialize(1, {}, {StableMemory, nullptr}) == S_OK &&
+               (!multiplexed || scheduler.RegisterOwnerWork(routes)) &&
+               SUCCEEDED(queue.Initialize(scheduler, multiplexed ? &routes : nullptr)) &&
+               (!multiplexed || SUCCEEDED(retries.Initialize(scheduler, routes))),
            "copy.initialize");
     Expect(SUCCEEDED(queue.Bind(device.device.get(), device.context.get(), forceEvent)), "copy.bind");
     if (forceEvent)
@@ -258,9 +266,13 @@ void TestCopy(bool cancel, bool rebind, bool singlePixel, bool forceEvent = fals
     Expect(queue.LentCount() == 0 && queue.InFlightCount() == 0 && !queue.HasPending() &&
                scheduler.ReservedMemoryBytes() == 0,
            "copy.no-leaked-slot-or-reservation");
+    retries.StopNotifications();
     queue.StopNotifications();
     scheduler.Close();
+    retries.CloseAfterWorkers();
     queue.CloseAfterWorkers();
+    if (multiplexed)
+        Expect(!routes.HasPending() && !routes.HasReady(), "copy.multiplexed-gpu-and-retry-sources-detached");
 }
 
 constexpr UINT kReleaseLeases = WM_APP + 0x4a2;
@@ -605,6 +617,8 @@ int RunGpuWorkTests()
     TestCopy(false, false, false, true, 2);
     TestCopy(true, false, false, false, 1);
     TestCopy(false, true, false, false, 1);
+    TestCopy(false, false, false, false, 0, true);
+    TestCopy(true, false, false, true, 0, true);
     TestCapacity();
     TestShutdownWhileCopying();
     TestHeldRecovery(HeldAction::Cancel);

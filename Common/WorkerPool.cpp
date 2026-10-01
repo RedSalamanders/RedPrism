@@ -335,7 +335,7 @@ HRESULT WaitPool::Add(HANDLE event, Callback callback, void* context, Ticket& ti
     return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
 }
 
-bool WaitPool::Rearm(Ticket ticket) noexcept
+bool WaitPool::Rearm(Ticket ticket, std::uint32_t timeoutMs) noexcept
 {
     WorkerResources::ExclusiveLock lock{_lock};
     if (_closing || !Matches(ticket))
@@ -343,7 +343,10 @@ bool WaitPool::Rearm(Ticket ticket) noexcept
         return false;
     }
     auto& slot = _slots[ticket.slot];
-    SetThreadpoolWait(slot.wait, slot.event, nullptr);
+    LARGE_INTEGER due{};
+    due.QuadPart = -static_cast<LONGLONG>(timeoutMs) * 10'000;
+    FILETIME deadline{due.LowPart, static_cast<DWORD>(due.HighPart)};
+    SetThreadpoolWait(slot.wait, slot.event, timeoutMs ? &deadline : nullptr);
     return true;
 }
 
