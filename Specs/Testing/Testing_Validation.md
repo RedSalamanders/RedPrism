@@ -28,6 +28,24 @@ Clear without selection adds no entry. Terminal states retain no tickets/barrier
 and perform no hidden Present. Gate deadlines detect deadlocks, not performance thresholds. All x64 suites and
 ARM64 cross-builds remain required; pending distortion callers and real-loop timings stay open in P1.
 
+### Detached transforms and floating transactions
+
+`distort-work.*` compares private dense/sparse, trim, preview, edge-background and tile sampling with the unchanged
+numeric warp references. `transform-pixels.*` and `transform-commit-work.*` cover ordinary/group/mask/live-shape
+after-documents, later-member budget reservation, duplicate member refusal, sealed target/draft/session authority,
+nested duplicate closure, single-use publication, cancellation and construction faults. `prepared-history-following.*`
+proves that a dependent End requires its exact predecessor roots/pending owner, including competing transactions
+at the same epoch/revision and moved views.
+
+`floating-opening-work.*`, `floating-work.*` and `floating-merge-work.*` prove preparation exposes no partial hole,
+complete prebuilt rollback, unchanged/cancelled/oversized resolution, one outer entry and exact Undo/Redo, translated
+premultiplied bytes/outline, carried-mask growth/eager thumbnail, clipboard identity, newer-draft/history/source/reopen
+refusal and reached worker/history fault boundaries. Near-cap tests use a virtual 9999-square sibling: a one-pixel
+clear on a 512-square canvas keeps the exact 2-square source; Clear crossing a tile boundary with a four-pixel limit
+preserves placement and untouched bytes. A committed grid beyond its caller limit still refuses.
+These are core qualification gates. Production transform/opening/preview/settlement and aggregate retirement,
+all native configurations and measured G1 remain explicit A5/A6 follow-ups until their own evidence lands.
+
 ### Clipboard and copy preparation
 
 `clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent

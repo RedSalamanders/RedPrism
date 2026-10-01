@@ -622,7 +622,7 @@ void BrushStroke::TileKeys(std::span<const BrushSegment> segments, std::unordere
     }
 }
 
-bool BrushStroke::AllocateTile(std::uint64_t key)
+bool BrushStroke::AllocateTile(std::uint64_t key, bool sourceOnly)
 {
     if (_workerRasterEdit && _workCancellation.IsCancelled())
         return false;
@@ -633,8 +633,15 @@ bool BrushStroke::AllocateTile(std::uint64_t key)
     const int columns = (_width + kTileSize - 1) / kTileSize;
     const int column = static_cast<int>(key % static_cast<std::uint64_t>(columns));
     const int row = static_cast<int>(key / static_cast<std::uint64_t>(columns));
-    const GridRect rect{column * kTileSize, row * kTileSize, std::min(kTileSize, _width - column * kTileSize),
-                        std::min(kTileSize, _height - row * kTileSize)};
+    GridRect rect{column * kTileSize, row * kTileSize, std::min(kTileSize, _width - column * kTileSize),
+                  std::min(kTileSize, _height - row * kTileSize)};
+    // Detached Clear cannot create pixels outside the existing source. Do not charge its temporary canvas
+    // tile as a grown committed image, or a one-pixel clear near the document cap would refuse unnecessarily.
+    // Pointer/GPU brush tiles and operations that can grow the source retain their complete tile rectangles.
+    if (sourceOnly)
+        rect = rect.Intersect(_sourceRect);
+    if (rect.Empty())
+        return false;
     // Every allocated tile grows the committed bounds; they stay within the document limits and the pixel budget.
     const GridRect next =
         _allocated.has_value() ? _allocated->Union(rect) : (_source.HasStorage() ? _sourceRect.Union(rect) : rect);
@@ -1667,7 +1674,7 @@ bool BrushStroke::PaintCanvas(bool withinSource, double opacity, PaintMode mode,
                 return false;
             const std::uint64_t key =
                 static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) + static_cast<std::uint64_t>(tx);
-            if (!AllocateTile(key))
+            if (!AllocateTile(key, _workerRasterEdit && withinSource && mode == PaintMode::DestinationOut))
             {
                 _failed = true;
                 return false;

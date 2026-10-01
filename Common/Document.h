@@ -1227,6 +1227,18 @@ class PreparedColorDismissal;
 class ImageImportAuthority;
 class ShapeEditInput;
 class PreparedShapeEdit;
+class TransformCommitInput;
+class FloatingOpeningInput;
+class PreparedFloatingOpening;
+class PreparedFloatingRestore;
+class FloatingMergeInput;
+class PreparedFloatingMerge;
+struct FloatingMergeResult;
+struct FloatingMergeObserver;
+struct FloatingOpeningResult;
+struct FloatingOpeningObserver;
+class PreparedTransformCommit;
+struct TransformCommitResult;
 struct ShapeEditResult;
 struct ShapeWorkObserver;
 class MaskEditInput;
@@ -1402,7 +1414,10 @@ class DocumentHistory
         StateView(StateView&& source) noexcept
             : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
               owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
-              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit)
+              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit),
+              requirePredecessor(std::exchange(source.requirePredecessor, false)),
+              precedingPast(std::move(source.precedingPast)), precedingFuture(std::move(source.precedingFuture)),
+              precedingPending(std::move(source.precedingPending)), precedingDepth(source.precedingDepth)
         {
         }
         StateView& operator=(StateView&& source) noexcept
@@ -1418,6 +1433,11 @@ class DocumentHistory
                 depth = source.depth;
                 entryLimit = source.entryLimit;
                 byteLimit = source.byteLimit;
+                requirePredecessor = std::exchange(source.requirePredecessor, false);
+                precedingPast = std::move(source.precedingPast);
+                precedingFuture = std::move(source.precedingFuture);
+                precedingPending = std::move(source.precedingPending);
+                precedingDepth = source.precedingDepth;
             }
             return *this;
         }
@@ -1451,6 +1471,13 @@ class DocumentHistory
         int depth = 0;
         int entryLimit = 0;
         std::uint64_t byteLimit = 0;
+        // A dependent publication owns the exact predecessor roots, preventing another publication at
+        // the same epoch/revision from satisfying its authority. Capturing these handles never allocates.
+        bool requirePredecessor = false;
+        HistoryEntries<EntryHandle> precedingPast;
+        HistoryEntries<EntryHandle> precedingFuture;
+        std::shared_ptr<const Pending> precedingPending;
+        int precedingDepth = 0;
     };
     [[nodiscard]] StateView CaptureState() const noexcept;
     [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
@@ -1550,6 +1577,9 @@ class DocumentHistory
                                                                CancelToken cancellation = {},
                                                                PrepareObserver observer = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
+    // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
+    // the exact next structural epoch and can publish only after this predecessor successfully publishes.
+    [[nodiscard]] static std::optional<StateView> FollowingPreparedState(const Publication& publication) noexcept;
     [[nodiscard]] bool Publish(Publication& publication) noexcept;
 
     // A new document has its own saved baseline. Additional images make one entry relative to that baseline.
@@ -1908,6 +1938,30 @@ class DocumentSession
     void PreviewCorners(const std::array<Vec2, 4>& corners);
     void BeginDuplicateTransform();
     void CommitTransform();
+    [[nodiscard]] std::uint64_t FloatingOpeningPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<FloatingOpeningInput> PrepareFloatingOpeningInput() const;
+    [[nodiscard]] static FloatingOpeningResult PrepareFloatingOpeningPublication(
+        FloatingOpeningInput input, Executor& executor, CancelToken cancellation,
+        DocumentHistory::PrepareObserver observer, FloatingOpeningObserver openingObserver);
+    [[nodiscard]] bool ApplyPreparedFloatingOpeningIfCurrent(PreparedFloatingOpening& prepared) noexcept;
+    [[nodiscard]] bool ApplyPreparedFloatingRestoreIfCurrent(PreparedFloatingRestore& prepared) noexcept;
+    [[nodiscard]] bool IsFloatingRestoreCurrent(const PreparedFloatingRestore& prepared) const noexcept;
+    [[nodiscard]] std::uint64_t FloatingMergePreparationMemoryBytes(
+        const PreparedFloatingRestore& restore) const noexcept;
+    [[nodiscard]] std::optional<FloatingMergeInput> PrepareFloatingMergeInput(
+        std::shared_ptr<PreparedFloatingRestore> restore) const;
+    [[nodiscard]] static FloatingMergeResult PrepareFloatingMergePublication(FloatingMergeInput input,
+                                                                             Executor& executor,
+                                                                             CancelToken cancellation,
+                                                                             DocumentHistory::PrepareObserver observer,
+                                                                             FloatingMergeObserver mergeObserver);
+    [[nodiscard]] bool ApplyPreparedFloatingMergeIfCurrent(PreparedFloatingMerge& prepared) noexcept;
+    [[nodiscard]] std::uint64_t TransformCommitPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<TransformCommitInput> PrepareTransformCommitInput() const;
+    [[nodiscard]] static TransformCommitResult PrepareTransformCommitPublication(
+        TransformCommitInput input, Executor& executor, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedTransformCommitIfCurrent(PreparedTransformCommit& prepared) noexcept;
     void CancelTransform();
     // Arrow keys: a pending edit moves its draft; without one the move commits at once.
     void NudgeLayer(double dx, double dy);

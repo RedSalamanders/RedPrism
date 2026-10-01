@@ -208,6 +208,12 @@
     <ClCompile Include="..\Common\ShapeEditWork.cpp" />
     <ClCompile Include="..\Common\MaskEditWork.cpp" />
     <ClCompile Include="..\Common\LayerCopyWork.cpp" />
+    <ClCompile Include="..\Common\DistortWork.cpp" />
+    <ClCompile Include="..\Common\TransformPixelsWork.cpp" />
+    <ClCompile Include="..\Common\TransformCommitWork.cpp" />
+    <ClCompile Include="..\Common\FloatingPixelsWork.cpp" />
+    <ClCompile Include="..\Common\FloatingOpeningWork.cpp" />
+    <ClCompile Include="..\Common\FloatingMergeWork.cpp" />
     <ClCompile Include="..\Common\ClipboardReceipt.cpp" />
     <ClCompile Include="ClipboardFingerprint.cpp" />
     <ClCompile Include="..\Common\ColorDismissalWork.cpp" />

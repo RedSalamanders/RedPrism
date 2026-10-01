@@ -129,6 +129,18 @@ once.
 sharing its pixels (`DuplicateActiveLayer`, one `Duplicate Layer` entry that also spans the following move) and opens
 a non-persistent edit on the copy; cancelling removes the copy again and leaves no entry. Groups do not duplicate.
 
+### Detached transform preparation
+
+`TransformPixelsWork` prepares an immutable after-document for ordinary, mask, group and live-shape transforms.
+`TransformCommitWork` binds that document to captured session/lifetime/generation/active/mask/crop authority,
+the exact draft revision and duplicate state, and prepared history. Ordinary transforms preserve nested history;
+duplicate completion closes its existing outer entry once. Application validates all authority before history
+publication and nonthrowing swaps, retaining old edit, guides, document and duplicate ownership for worker release.
+For group distortion, each accepted replacement reserves the original image/mask budgets of later members;
+refused members retain their old pixels without permitting the completed document to exceed either aggregate cap.
+Groups follow the captured member order and reject duplicate member ids. Pixel sampling and mask semantics remain
+the numeric legacy references. The direct inline APIs remain references; production caller migration is A6.3.
+
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted
@@ -635,6 +647,16 @@ work; functional migration alone establishes no Photoshop speed or bounded nativ
   layer and a mask on its grid where they extend past it (a uniform mask stays), moves the outline with them,
   removes the floating layer and reactivates the source, one entry. `CancelTransform` (Escape, Undo) restores the
   document and the active layer.
+  Detached `FloatingOpeningWork` prepares cleared/copied pixels, the opening Begin, sole floating target and a
+  complete original-document/selection/active/history restoration before exposing either temporary layer or hole.
+  The restoration is bound to the opening's exact prepared history predecessor and retained before-document owner.
+  `FloatingMergeWork` captures that restoration with the complete source, draft and revision, prepares merge pixels,
+  carried mask/eager thumbnail, moved outline and one outer End on workers, then validates before atomic publication.
+  An unchanged/refused/cancelled merge returns a sealed resolution using the prebuilt restoration; it cannot discard
+  newer geometry, a replaced source or newer history. Explicit Escape may restore newer preview geometry from the
+  same opening after acknowledgement. No failure-path document/history construction is needed on the owner.
+  Worker allocation failures leave the live opening and prebuilt restoration intact. Clipboard authority stays
+  unchanged. These core boundaries do not yet qualify production floating callers; A5.5/A5.6/A6.3 track activation.
 - **Clipboard** (`PixelClipboard`: the pixels and their document origin): `SelectionCopyRegion` is the selection's
   bounds (the canvas without one) rounded with a 0.001 tolerance and clipped to the canvas; `CanCopyPixels` needs
   an image layer or a targeted mask and no explicitly empty selection; `RenderSelectedPixels(layer, mask)` crops the

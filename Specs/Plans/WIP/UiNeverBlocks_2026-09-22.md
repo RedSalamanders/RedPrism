@@ -119,6 +119,12 @@
         inputs in all three x64 suites and all three ARM64 cross-builds: 34 document and 214 host controls per
         x64 profile ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)). Live producer settlement,
         source capture/history/chrome/upload/G1 and the full P1 clean exit remain open.
+      - [x] A6.1 / A6.2 core — Detached distortion, transform pixels/publication, floating opening/merge/restore
+        and exact-predecessor history qualify in all six clean profiles against 529 frozen inputs, including
+        409 independent controls per x64 suite and unchanged legacy goldens
+        ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)). Worker Clear preserves committed pixel
+        limits without charging source-external scratch tiles. Production transform callers, nested floating
+        extensions, bounded previews, settlement and G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

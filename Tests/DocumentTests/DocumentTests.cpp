@@ -12,11 +12,15 @@
 #include "CopyPixelsTests.h"
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
+#include "DistortWorkTests.h"
 #include "Document.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
 #include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
+#include "FloatingMergeWorkTests.h"
+#include "FloatingOpeningWorkTests.h"
+#include "FloatingPixelsWorkTests.h"
 #include "GradientResourceTests.h"
 #include "GradientStateTests.h"
 #include "GradientWorkTests.h"
@@ -43,6 +47,7 @@
 #include "PixelMoveStateTests.h"
 #include "PixelMoveWorkTests.h"
 #include "PreparedColorHistoryTests.h"
+#include "PreparedHistoryFollowingTests.h"
 #include "PreparedHistoryTests.h"
 #include "PreparedRasterHistoryTests.h"
 #include "ProjectSaveMemoryTests.h"
@@ -56,7 +61,9 @@
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
 #include "ShapeEditWorkTests.h"
+#include "TransformCommitWorkTests.h"
 #include "TransformEdit.h"
+#include "TransformPixelsWorkTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7416,6 +7423,13 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunMaskEditWorkTests();
     gFailures += RunMaskEditWorkExtraTests();
     gFailures += RunLayerCopyWorkTests();
+    gFailures += RunDistortWorkTests();
+    gFailures += RunTransformPixelsWorkTests();
+    gFailures += RunTransformCommitWorkTests();
+    gFailures += RunFloatingOpeningWorkTests();
+    gFailures += RunFloatingMergeWorkTests();
+    gFailures += RunFloatingPixelsWorkTests();
+    gFailures += RunPreparedHistoryFollowingTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();

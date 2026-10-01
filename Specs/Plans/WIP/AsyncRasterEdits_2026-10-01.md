@@ -50,12 +50,13 @@
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
   - [ ] A5.7 — Full configuration and measured G1 closeout of the complete A5 graph.
 - [ ] A6 — Distortion commit/preview preparation and transform settlement continuations; preserve mapped image/mask geometry and cancellation/staleness.
-  - [ ] A6.1 — Qualify a detached warp kernel with private sparse reads, adopted output, executor tiles,
+  - [x] A6.1 — Qualify a detached warp kernel with private sparse reads, adopted output, executor tiles,
     row cancellation, exact legacy sampling/edge/background bytes and a checked source/output/trim peak.
     Work starts in a verified private draft while the native Shape matrix is frozen.
     The first complete private DocumentTests run passes 56 independent warp controls and all existing goldens
     against 488 frozen inputs. Its exact sources/image/log/result are archived under
-    `.build/p1-distort-draft/core-qualified-r1/`. Native activation, complete transform publication and G1 remain open.
+    `.build/p1-distort-draft/core-qualified-r1/`. Native core qualification now passes all six clean profiles
+    ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)); production host migration and G1 remain open.
   - [ ] A6.2 — Seal transform/group/floating authority and prepare complete pixel/mask/shape/history publication;
     preserve per-layer budget refusal, nested duplicate/floating history and unchanged-opening restoration.
     The detached non-floating draft passes 31 pixel controls and 64 publication/history controls plus the 56 warp
@@ -68,12 +69,50 @@
     - [x] Prepare an exact-predecessor history view privately, so an opening and its rollback can both be
       constructed before publication. The complete private DocumentTests run passes against 498 frozen inputs
       (image SHA-256 `4275F42AF998F661A38784059047BB893AB754E95D639089A53AB5C088CE9FFA`). A competing
-      transaction at the same epoch/revision cannot authorize the rollback; owning stack/pending witnesses
+      transaction with different roots, pending owner or depth cannot authorize the rollback; owning stack/pending witnesses
       preserve identity through moves. `.build/p1-distort-draft/transform-core-qualified-r2/` retains the proof.
     - [ ] Build floating opening and its complete preallocated restoration bundle before exposing the floating
       layer; prepare merge pixels, moved outline, mask growth and one outer history closure on workers.
+      - [x] Private floating opening/restoration proof: 48 opening, 29 pixel and 43 exact-predecessor history
+        controls pass the complete DocumentTests run against 506 frozen inputs, including all legacy goldens.
+        `.build/p1-distort-draft/floating-core-qualified-r2/` retains the exact sources, image and evidence
+        (image SHA-256 `CE06BB4BA6ACD163843D056EFF82A7E1A86F03A80246F4065B87A1D92861E7F3`).
+        The failed r1 near-budget fixture is retained separately; the temporary canvas tile was incorrectly charged
+        against the committed pixel budget. Worker Clear now clips its patches to the source grid.
+        This private proof does not qualify native opening, merge or application callers.
+      - [x] Seal merge success/refusal/cancellation to the exact captured draft and retained restoration;
+        verify one outer entry, unchanged/failure rollback and refusal to discard newer geometry.
+        The complete private suite passes 131 merge, 34 floating-pixel, 48 opening, 43 exact-predecessor history,
+        64 non-floating publication, 33 transform-pixel and 56 warp controls against 510 frozen inputs.
+        `.build/p1-distort-draft/floating-merge-core-qualified-r1/` retains the exact proof (image SHA-256
+        `B4FFC8A9E5406D610E0F1F16098F14AC3FDC2BDCADE29CE2C16A165FA7059415`). The original 512-square near-budget
+        opening and an offset source crossing the 256-tile boundary now pass without weakening the committed limit.
+        All six clean native configuration gates pass against 529 frozen inputs, with 409 core controls per
+        x64 suite and unchanged legacy goldens ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)).
+        `.build/p1-transform-core-r1-qualified/` retains the 529-source/296-evidence proof. This qualifies
+        detached helpers, including the corrected Clear budget; nested floating/cancellation extensions and
+        production host opening, preview and settlement remain open.
   - [ ] A6.3 — Activate ordered preview, release, header and settlement callers; preserve pending controls,
     continuation outcomes and input-time geometry through acknowledgement and aggregate retirement.
+    - [ ] T1 — Prepare transform/group/duplicate/floating opening and cancellation ownership before publication.
+      Ordinary cancellation is draft-only; duplicate and floating closures preserve an existing parent's depth/name.
+      Floating rollback remains preallocated for failure after exposing the temporary layer. Retain its complete
+      CPU node until merge/cancel/replacement acknowledgement and release it off owner before scheduler teardown.
+    - [ ] T2 — Route Ctrl+T, Apply/Cancel, pointer release/leave/capture loss, header/nudge/flip, tool/layer changes,
+      writes and lifetime changes through an opening-specific owned host input and same-ordinal settlement stage.
+      Worker failure cannot discard newer geometry; explicit Escape restores only its still-current opening after
+      acknowledgement. A prerequisite must finish before the dependent input executes or captures its source.
+    - [ ] T3 — Coalesce distortion previews into one active/latest pending worker graph with complete image,
+      linked/placed mask, shape and outline owners. Publish only the captured opening/settings/source authority.
+      Bound both color and mask preview dimensions; rendering retains the last complete preview while work runs.
+      Remove synchronous warp/shape/outline reconstruction from the production display path.
+    - [ ] T4 — Guard deferred session callers against inline commit/cancel/redraw bypass while preserving direct
+      numeric reference APIs. Audit every writer, including Alt-duplicate, BeginTransform/selection transform,
+      SetActiveLayerID, selection commands, flips, New/Close/Reset, source sampling and already selected requests.
+    - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,
+      refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
+      reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation
+      closeout; capture/apply/history/chrome/upload and frame distributions remain measured A6.4/H2/H3/H4/G1.
   - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
   - [x] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare

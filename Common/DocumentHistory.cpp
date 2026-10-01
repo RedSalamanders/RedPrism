@@ -28,7 +28,10 @@ DocumentHistory::StateView DocumentHistory::CaptureState() const noexcept
 
 bool DocumentHistory::IsCurrent(const StateView& view) const noexcept
 {
-    return view.owner == this && view.epoch == _stateEpoch && view.revision == _revision;
+    return view.owner == this && view.epoch == _stateEpoch && view.revision == _revision &&
+           (!view.requirePredecessor || (view.precedingPast.Identity() == _past.Identity() &&
+                                         view.precedingFuture.Identity() == _future.Identity() &&
+                                         view.precedingPending == _pending && view.precedingDepth == _depth));
 }
 
 const std::wstring& DocumentHistory::StateView::UndoName() const noexcept
@@ -317,7 +320,27 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareEnd(StateVie
 bool DocumentHistory::CanPublish(const Publication& publication) const noexcept
 {
     return !publication.published && publication.state.owner == this && publication.expectedEpoch == _stateEpoch &&
-           publication.expectedRevision == _revision;
+           publication.expectedRevision == _revision &&
+           (!publication.state.requirePredecessor ||
+            (publication.state.precedingPast.Identity() == _past.Identity() &&
+             publication.state.precedingFuture.Identity() == _future.Identity() &&
+             publication.state.precedingPending == _pending && publication.state.precedingDepth == _depth));
+}
+
+std::optional<DocumentHistory::StateView> DocumentHistory::FollowingPreparedState(
+    const Publication& publication) noexcept
+{
+    if (publication.published || !publication.state.owner || publication.state.epoch != publication.expectedEpoch ||
+        publication.expectedEpoch == (std::numeric_limits<std::uint64_t>::max)())
+        return std::nullopt;
+    auto state = publication.state;
+    state.epoch = publication.expectedEpoch + 1;
+    state.requirePredecessor = true;
+    state.precedingPast = publication.state.past;
+    state.precedingFuture = publication.state.future;
+    state.precedingPending = publication.state.pending;
+    state.precedingDepth = publication.state.depth;
+    return state;
 }
 
 bool DocumentHistory::Publish(Publication& publication) noexcept
