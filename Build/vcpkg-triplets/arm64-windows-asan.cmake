@@ -2,6 +2,8 @@
 # instrumented by AddressSanitizer like the application, mirroring x64-windows-asan.cmake. A static library built
 # without instrumentation (Clipper2) would otherwise refuse to link against sanitized objects (LNK2038, STL
 # container annotations). Decision D8 (Specs/Plans/WIP/ReviewFixes_2026-09-23.md).
+# vcpkg-install.ps1 does not use this file in place: it copies it, followed by the Visual Studio installation and
+# MSVC toolset pins of the build, to .build/vcpkg-triplets and passes that directory to vcpkg (Specs/Build/Build_Toolchain.md).
 set(VCPKG_TARGET_ARCHITECTURE arm64)
 set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE dynamic)

@@ -25,7 +25,9 @@ Outputs are always `.build/<Platform>/<Configuration>/`. Intermediates are under
 Every x64 build scans all five linked images for misplaced VEX/EVEX instructions and compiles passing/failing
 controls. It requires `llvm-objdump` and `llvm-pdbutil` (VS C++ Clang tools) plus matching full PDBs. Keep tier TUs
 at default `/arch`; runtime exceptions belong only in the reviewed `Build/IsaRuntimeAllowlist.psd1`.
-Pinned vcpkg state stays beneath `.build/`. Do not substitute a developer-global install.
+Pinned vcpkg state stays beneath `.build/`. Do not substitute a developer-global install. vcpkg builds with the Visual Studio
+installation and default MSVC toolset of the MSBuild `build.ps1` found (`vcpkg-install.ps1 -MSBuildPath`), never the newest
+toolset it finds, through pinned copies of every triplet in `.build/vcpkg-triplets/`; see `Specs/Build/Build_Toolchain.md`.
 
 `package.ps1` builds Release and stages the portable ZIP (`.build/packages/`, never committed) with the app-local
 Visual C++ CRT and the vcpkg DLLs the import table names, then proves a clean extraction runs `--help` and

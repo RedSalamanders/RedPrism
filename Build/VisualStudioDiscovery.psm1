@@ -40,6 +40,25 @@ function Find-RedPrismVisualStudioInstallationPath {
     return ($path | Select-Object -First 1).Trim()
 }
 
+function Find-RedPrismVisualStudioInstallationOfMSBuild {
+    <#
+    .SYNOPSIS
+    The Visual Studio installation the given MSBuild.exe belongs to: the path before its MSBuild\<version>\Bin directory. That
+    is the installation whose default MSVC toolset the build compiles with, whichever of several installed ones
+    Find-RedPrismMSBuild picked (MSBUILD_EXE_PATH and PATH win over the search). An MSBuild outside any installation, such as a
+    copy, falls back to the newest Visual Studio 2026 (18.x) with MSBuild, like the rest of the repository; $null when there
+    is none. Runs no vswhere of its own.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $MSBuildPath)
+    $path = [IO.Path]::GetFullPath($MSBuildPath)
+    $match = [regex]::Match($path, '^(?<installation>.+?)\\MSBuild\\(?:Current|[0-9]+\.[0-9]+)\\Bin\\', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ($match.Success) {
+        return $match.Groups['installation'].Value
+    }
+    return Find-RedPrismVisualStudioInstallationPath
+}
+
 function Find-RedPrismMSBuild {
     <#
     .SYNOPSIS
@@ -104,6 +123,7 @@ function Find-RedPrismClangFormat {
 
 Export-ModuleMember -Function @(
     'Find-RedPrismVisualStudioInstallationPath',
+    'Find-RedPrismVisualStudioInstallationOfMSBuild',
     'Find-RedPrismMSBuild',
     'Find-RedPrismClangFormat'
 ) -Variable @('RedPrismVisualStudioVersionRange')

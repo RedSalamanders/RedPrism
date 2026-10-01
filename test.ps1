@@ -285,6 +285,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Tool discovery tests failed with exit code $LASTEXITCODE."
 }
 
+Write-Host 'Validating the vcpkg toolset pin...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\VcpkgToolsetTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "vcpkg toolset pin tests failed with exit code $LASTEXITCODE."
+}
+
+
 Write-Host 'Validating ARM64 ASan wiring...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\AsanArm64Tests.ps1')
 if ($LASTEXITCODE -ne 0) {

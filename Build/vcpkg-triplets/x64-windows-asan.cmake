@@ -1,6 +1,8 @@
 # RedPrism `ASan Debug` (x64): the same CRT and linkage as the stock x64-windows triplet, with every library
 # instrumented by AddressSanitizer like the application. A static library built without instrumentation (Clipper2)
 # would otherwise refuse to link against sanitized objects (LNK2038, STL container annotations).
+# vcpkg-install.ps1 does not use this file in place: it copies it, followed by the Visual Studio installation and
+# MSVC toolset pins of the build, to .build/vcpkg-triplets and passes that directory to vcpkg (Specs/Build/Build_Toolchain.md).
 set(VCPKG_TARGET_ARCHITECTURE x64)
 set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE dynamic)
