@@ -1,3 +1,4 @@
+#include "../Support/FailureReports.h"
 #include "AdapterSelection.h"
 #include "AddressSanitizerProbe.h"
 #include "BenchmarkMachineTests.h"
@@ -1741,35 +1742,15 @@ void TestVersionInfo()
            "version.redprism-exe");
 }
 
-int gCrtReportFailures = 0; // incremented only in Debug / ASan Debug; see CountCrtReportFailures below.
-
-#if defined(_DEBUG)
-// Counts _CRT_ERROR / _CRT_ASSERT reports instead of trusting the CRT's own default handling to abort: a debug-heap
-// corruption report does not always abort by itself, so a run could otherwise print the report and still exit 0
-// (RF-702, Specs/Testing/Testing_Validation.md). _CRTDBG_MODE_FILE / _CRTDBG_FILE_STDERR (installed alongside this
-// hook, in wmain) still write the report text to stderr; this hook only has to observe it.
-int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*returnValue*/) noexcept
-{
-    if (reportType == _CRT_ERROR || reportType == _CRT_ASSERT)
-    {
-        ++gCrtReportFailures;
-    }
-    return 0;
-}
-#endif
-
 int wmain(int argc, wchar_t** argv)
 {
-#if defined(_DEBUG)
-    // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
-    // counts it so this run fails even when the CRT's own default handling would just continue.
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
-    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &CountCrtReportFailures);
-#endif
-    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
+    // Before anything can fail a check: a CRT report ends the run with exit code 3 and no dialog (RF-702,
+    // Tests/Support/FailureReports.h). The hidden switch below proves it.
+    RedPrismTestFailureReports::RouteAwayFromDialogs();
+    if (argc == 2 && std::wstring_view{argv[1]} == L"--failure-report-self-test")
+    {
+        return RedPrismTestFailureReports::RunSelfTest();
+    }
     if (argc > 1 && std::wstring_view{argv[1]} == L"--asan-probe")
     {
         return RunAddressSanitizerProbe();
@@ -1794,15 +1775,6 @@ int wmain(int argc, wchar_t** argv)
     {
         return RunFilterWorkBenchmark();
     }
-#if defined(_DEBUG)
-    if (argc > 1 && std::wstring_view{argv[1]} == L"--crt-report-probe")
-    {
-        // Deliberately trips a CRT report so test.ps1 / BuildProcessTests can prove the hook above counts it and
-        // fails the run, the way --asan-probe proves the sanitizer.
-        _CrtDbgReport(_CRT_ERROR, __FILE__, __LINE__, nullptr, "RF-702 deliberate CRT report probe");
-        return gCrtReportFailures != 0 ? 1 : 0;
-    }
-#endif
 
     const bool stress = argc > 1 && std::wstring_view{argv[1]} == L"--stress";
     gFailures += RunExecutorValueTests();
@@ -1842,9 +1814,9 @@ int wmain(int argc, wchar_t** argv)
     TestCrashDumps();
     TestLocalization();
     TestVersionInfo();
-    if (gFailures != 0 || gCrtReportFailures != 0)
+    if (gFailures != 0)
     {
-        std::printf("%d test(s) failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);
+        std::printf("%d test(s) failed.\n", gFailures);
         return 1;
     }
     std::printf("All host tests passed.\n");

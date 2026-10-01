@@ -202,6 +202,14 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const bool harness =
         parsed.selfTest || parsed.bench != nullptr || parsed.screenshotPath != nullptr || parsed.demo != nullptr;
 
+    if (harness || parsed.crashProbeDirectory != nullptr)
+    {
+        // No one answers a dialog on a harness run: neither Windows Error Reporting's for a fast-fail that bypasses the
+        // crash handler below, nor a critical-error box (an unreadable drive). The run ends instead, and the log keeps
+        // its exit code (Specs/Testing/Testing_Validation.md).
+        (void)SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    }
+
     // Crash handling comes first so every later failure leaves a dump (Specs/Core/Core_CrashHandling.md); the
     // probe raises a fault through it and never reaches the window.
     const std::wstring crashDirectory = parsed.crashProbeDirectory != nullptr ? std::wstring{parsed.crashProbeDirectory}

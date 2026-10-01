@@ -44,6 +44,13 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
     throw 'RedPrism.exe is missing its Windows version identity.'
 }
 
+# First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
+Write-Host 'Running failure report self-tests...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration
+if ($LASTEXITCODE -ne 0) {
+    throw "Failure report self-tests failed with exit code $LASTEXITCODE."
+}
+
 foreach ($suite in @(
         @{ Name = 'HostTests'; Path = $hostTests; Label = 'host contract' },
         @{ Name = 'DocumentTests'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
@@ -249,12 +256,6 @@ foreach ($isaCase in @(
         throw "ISA refusal $($isaCase.Name) did not return its expected diagnostic and exit 2."
     }
     Write-Host "PASS kernel-isa.$($isaCase.Name)"
-}
-
-Write-Host 'Running CRT report hook probe...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\CrtReportHookTests.ps1') -HostTestsPath $hostTests -Configuration $Configuration
-if ($LASTEXITCODE -ne 0) {
-    throw "CRT report hook tests failed with exit code $LASTEXITCODE."
 }
 
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
