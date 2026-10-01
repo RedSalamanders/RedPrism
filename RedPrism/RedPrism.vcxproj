@@ -110,6 +110,7 @@
     <ClInclude Include="..\Common\Version.h" />
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\Document.h" />
+    <ClInclude Include="..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
@@ -140,6 +141,7 @@
     <ClInclude Include="..\Common\ZipOwner.h" />
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
+    <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="ColorWorkTestGate.h" />
     <ClInclude Include="SizingWorkTestGate.h" />
     <ClInclude Include="RasterEditTestGate.h" />
@@ -195,10 +197,12 @@
     <ClCompile Include="ApplicationFileJobs.cpp" />
     <ClCompile Include="ApplicationProjectSaveJobs.cpp" />
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
+    <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
+    <ClCompile Include="..\Common\HistoryRestoreWork.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="..\Common\CodecFileStream.cpp" />

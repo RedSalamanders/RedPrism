@@ -45,6 +45,7 @@ struct UiBenchmarkState;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
+struct HistoryRestoreTestGate;
 struct FileWorkTestGate;
 struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
@@ -390,6 +391,9 @@ class Application final : public ChromeEvents
     int RunSizeSelfTest() noexcept;
     int RunSizingWorkSelfTest() noexcept;
     class SizingJob;
+    class HistoryRestoreJob;
+    [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
+    int RunHistoryRestoreSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept;
     class RasterEditJob;
     [[nodiscard]] HRESULT StartRasterEdit(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
@@ -653,6 +657,9 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _utilityTicket;
     std::shared_ptr<UtilityWorkTestGate> _utilityWorkTestGate;
     std::optional<HistoryWorkStamp> _sizingStamp;
+    std::optional<HistoryWorkStamp> _historyRestoreStamp;
+    std::optional<JobTicket> _historyRestoreTicket;
+    std::shared_ptr<HistoryRestoreTestGate> _historyRestoreTestGate;
     std::optional<JobTicket> _sizingTicket;
     std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
     std::optional<HistoryWorkStamp> _rasterEditStamp;

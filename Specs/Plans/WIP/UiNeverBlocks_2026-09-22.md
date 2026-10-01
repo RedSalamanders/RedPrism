@@ -131,8 +131,11 @@
         retirement pass the frozen six-profile matrix; 71 document assertions and 17 host modes
         ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)). Failed scheduler-wait, process-exit
         observation and IO rotation attempts remain preserved; the rotation cause, other callers and G1 remain open.
-      - [ ] P1.9 H1 Undo/Redo — Prepare complete restore and history before stack movement. The private prototype
-        passes document proof; actual host ordering/refusal/retirement gates and native qualification are next.
+      - [x] P1.9 H1 Undo/Redo — Complete restore/history and deferred retirement pass the frozen six-configuration
+        matrix: 63 document assertions and 28 host scenarios in every x64 suite
+        ([evidence](../../TestRuns/HistoryRestorePublication_2026-10-01.md)). The preserved first crop shortcut
+        failure is corrected by waiting for acknowledgement without changing its expectations. Other callers,
+        metadata capture/accounting, uploads and measured G1 remain open.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

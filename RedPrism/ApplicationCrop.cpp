@@ -304,7 +304,9 @@ int Application::RunCropSelfTest() noexcept
     OnTool(EditorTool::Crop);
     const bool reframed = _session.CropFrame() == CropRect{0, 0, 640, 400};
     _chrome->SetCanvasFocused(true);
-    const bool undone = HandleAccelerator('Z', MK_CONTROL) && document() != nullptr && document()->width == 1280 &&
+    const bool undoAccepted = HandleAccelerator('Z', MK_CONTROL);
+    const bool restoreSettled = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
+    const bool undone = undoAccepted && restoreSettled && document() != nullptr && document()->width == 1280 &&
                         document()->height == 800 && _session.VisibleCropRect() == CropRect{0, 0, 1280, 800} &&
                         _tool == EditorTool::Crop;
     OnTool(EditorTool::Move);

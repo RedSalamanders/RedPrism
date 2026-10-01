@@ -82,7 +82,7 @@ real application-loop qualification are recorded in [HistoryStorage_2026-09-30.m
 
 ### Prepared history publication and retirement (P1.9 H1 foundation)
 
-`DocumentTests` includes five prepared-history groups: `HistoryStateViewTests`, `PreparedHistoryTests`,
+`DocumentTests` includes the five foundation prepared-history groups: `HistoryStateViewTests`, `PreparedHistoryTests`,
 `HistoryPreparationFaultTests`, `PreparedRasterHistoryTests` and `HistoryRetirementBoundTests`. Their expectations
 cover immutable captured views and owner/epoch/revision invalidation; detached edit/restore preparation and
 allocation-free publication with stale, foreign, moved-from and malformed candidates refused; cancellation and
@@ -373,6 +373,18 @@ and readback aggregate retires off the owner; each terminal case leaves no barri
 `MergeHistoryTests` and `MergePlanProbeTests` add 71 independent literal-pixel, trim/group/clip/budget, immutable
 planner, no-plan, exact-authority, moved/single-use, fault and cancellation assertions. Native qualification is
 tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
+
+`HistoryRestoreTests` adds 63 independent restore-publication assertions: literal pixels/opacity/mask/active id,
+actual-restore crop removal/no-entry crop retention, no-document Redo, selected-snapshot memory floors,
+default/foreign/moved/single-use authority, exact history epoch and both directions of all three restore allocation
+and cancellation stages. A later saved revision and newly begun unrecorded lasso cannot corrupt live state.
+The production self-test adds 28 `history-restore-host.mode=` scenarios, including ordered younger edits,
+selected receipt lineage across document removal, empty/nested no-op, stale active/mask/crop/generation/epoch/lasso,
+capture/worker/history refusal, cancellation acknowledgement and complete aggregate retirement off the owner.
+Every terminal case requires no hidden Present and returned reservations/barrier/ticket. Crop/opacity host tests
+wait for acknowledged real restores before inspecting results; pending-edit consumes retain their immediate rules.
+All six configurations qualify this slice ([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
+these functional gates assert no latency threshold.
 
 `HostTests` command-line cases additionally prove bounded positional paths, `--` leading-dash paths, empty/null/
 overlong/count refusal, harness mode conflicts, marker-aware help/self-test preflight and atomic parse output.

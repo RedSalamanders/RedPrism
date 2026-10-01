@@ -84,6 +84,7 @@
 
   <ItemGroup>
     <ClInclude Include="..\..\Common\Document.h" />
+    <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="ColorEditWorkTests.h" />
     <ClInclude Include="ColorEditDeferredTests.h" />
     <ClInclude Include="FilterCancellationTests.h" />
@@ -93,6 +94,7 @@
     <ClInclude Include="HistoryPreparationFaultTests.h" />
     <ClInclude Include="HistoryRetirementBoundTests.h" />
     <ClInclude Include="HistoryStateViewTests.h" />
+    <ClInclude Include="HistoryRestoreTests.h" />
     <ClInclude Include="ProjectSaveMemoryTests.h" />
     <ClInclude Include="ExportMemoryTests.h" />
     <ClInclude Include="..\..\Common\ExportWork.h" />
@@ -140,6 +142,7 @@
     <ClCompile Include="LiftReferenceTests.cpp" />
     <ClCompile Include="PixelMoveWorkTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
+    <ClCompile Include="HistoryRestoreTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />
     <ClCompile Include="HistoryStateViewTests.cpp" />
@@ -177,6 +180,7 @@
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
+    <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

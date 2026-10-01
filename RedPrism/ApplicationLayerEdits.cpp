@@ -432,6 +432,7 @@ int Application::RunLayerEditsSelfTest() noexcept
         return 5;
     }
     OnCommand(ChromeHost::kCommandUndo);
+    settle();
     // A command runs before the field sees Enter (Ctrl+G): the typed value records its own entry first, the folder
     // its own, and the field's late commit of the same value adds nothing to the folder now active.
     _session.SelectLayer(target);
@@ -443,8 +444,10 @@ int Application::RunLayerEditsSelfTest() noexcept
     const bool folderLast = _session.history.UndoName() == L"New Folder" && _session.history.CanUndo() &&
                             _session.history.UndoCount() == entries + 2 && opacityOf(target) == 0.4;
     OnCommand(ChromeHost::kCommandUndo);
+    settle();
     const bool opacityBelow = _session.history.UndoName() == L"Layer Opacity" && opacityOf(target) == 0.4;
     OnCommand(ChromeHost::kCommandUndo);
+    settle();
     if (!folderLast || !opacityBelow || opacityOf(target) != 1.0)
     {
         SelfTestFailure(std::format(L"A command during a typed opacity did not record the opacity as "
@@ -483,6 +486,7 @@ int Application::RunLayerEditsSelfTest() noexcept
     const bool committed = opacityOf(freshId) == 0.25 && _session.history.UndoCount() == entries + 1 &&
                            _session.history.UndoName() == L"Layer Opacity";
     OnCommand(ChromeHost::kCommandUndo);
+    settle();
     if (!cancelled || !committed || opacityOf(freshId) != 1.0)
     {
         SelfTestFailure(std::format(L"The opacity stepper's Escape or commit did not record as one "

@@ -105,6 +105,15 @@ Their source/token/history capture follows complete admission. Apply checks the 
 active layer and history epoch before publishing and swapping the document and retired outline/selection-move owners. Active layer, mask
 target and crop semantics remain unchanged. The full configuration matrix passes for this caller ([evidence](../TestRuns/SizeHistoryPublication_2026-10-01.md)); measured apply/G1 remains open.
 
+Production Undo/Redo captures constant-sized session, document/restore serial, generation, active/mask and crop
+authority, including no-document Redo. Its whole reservation includes the selected restore snapshot's metadata,
+even when it is larger than the live document. The worker prepares the restore, selected ids and history;
+publication validates authority and exact epoch before nonthrowing history/document/display swaps. Old owners
+remain in the deferred aggregate. Empty stacks/open transactions return before capture, preserving crop and redo.
+A later saved revision stays independent of restore preparation. All six configurations pass
+([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
+shared record capture, incremental accounting, other callers and measured G1 remain separate.
+
 ## Trim
 
 Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe

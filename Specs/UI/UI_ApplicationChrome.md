@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -141,6 +141,12 @@ edit and history moves under it. A tool switch or a document on its way out ends
 gradient and a transform record their entries, a panel applies (a tool switch) or cancels (a document on its way out),
 an outline move keeps its place, and lifted pixels, a shape draft, an outline in progress, the crop frame and the size
 card drop. Save, Save As and Export record what Save would (Decision D2, Files) and leave the rest.
+
+When a pending edit does not consume Undo or Redo, the command enters the ordered history-work stream. A worker
+prepares the complete restore and history before either stack or the live document changes. A younger command
+waits for acknowledgement and observes the restored state; document replacement/removal invalidates older
+queued lineage. An empty stack or an open transaction preserves the ignored-key behavior and crop without
+capturing history. Current failure posts the localized history-restore notice and preserves the document.
 
 ## Move tool
 

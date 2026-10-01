@@ -505,6 +505,42 @@ std::uint64_t DocumentHistory::EditMemoryBytes(const std::optional<CanvasDocumen
     return bytes;
 }
 
+std::uint64_t DocumentHistory::RestoreMemoryBytes(const std::optional<CanvasDocument>& current,
+                                                  bool redo) const noexcept
+{
+    auto bytes = EditMemoryBytes(current);
+    if (!bytes)
+        return 0;
+    const auto& stack = redo ? _future : _past;
+    if (stack.empty())
+        return bytes;
+    const auto& restore = redo ? stack.back()->after->document : stack.back()->before->document;
+    if (!restore)
+        return bytes;
+    const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
+    {
+        if ((size && count > maximum / size) || count * size > maximum - bytes)
+            return false;
+        bytes += count * size;
+        return true;
+    };
+    // The selected restore snapshot can contain far more metadata than the live document. Charge its copied
+    // records/strings/curves separately; immutable pixels and selection geometry remain shared.
+    for (const auto& layer : restore->layers)
+    {
+        if (!add(8, sizeof(ImageLayer) + 256) || !add(layer.name.size() + 1, 8 * sizeof(wchar_t)) ||
+            (layer.asset && !add(layer.asset->name.size() + 1, 8 * sizeof(wchar_t))) ||
+            (layer.mask && !add(layer.mask->asset.name.size() + 1, 8 * sizeof(wchar_t))))
+            return 0;
+        if (layer.adjustment)
+            for (const auto& channel : layer.adjustment->curves.channels)
+                if (!add(channel.size(), 8 * sizeof(CurvePoint)))
+                    return 0;
+    }
+    return bytes;
+}
+
 std::uint64_t DocumentHistory::RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
                                                      const Raster& additional) const noexcept
 {

@@ -1204,6 +1204,8 @@ struct ColorEditJobInput;
 struct ColorEditJobResult;
 class PreparedColorEdit;
 class PreparedDocumentSize;
+class PreparedHistoryRestore;
+class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
 struct ColorEditHistogramResult;
 
@@ -1548,6 +1550,8 @@ class DocumentHistory
     // Conservative allocation declaration for Begin/End metadata copies, entry growth and trim bookkeeping.
     // Shared pixel/selection inputs are already resident. Zero refuses overflow or excessive graph depth.
     [[nodiscard]] std::uint64_t EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept;
+    [[nodiscard]] std::uint64_t RestoreMemoryBytes(const std::optional<CanvasDocument>& current,
+                                                   bool redo) const noexcept;
     // Conservative held-graph capacity for retirement, including current, pending, past/future and an optional
     // additional raster owner. Occurrences deliberately overcount sharing; no set/allocation/materialization.
     // Includes a possible sparse materialization cache. Zero refuses overflow or a graph deeper than 128.
@@ -1763,6 +1767,10 @@ class DocumentSession
     void EndEdit();
     void Undo();
     void Redo();
+    [[nodiscard]] HistoryRestoreAuthority CaptureHistoryRestoreAuthority() const noexcept;
+    [[nodiscard]] bool CanApplyHistoryRestore(const HistoryRestoreAuthority& authority) const noexcept;
+    [[nodiscard]] bool ApplyPreparedHistoryRestoreIfCurrent(PreparedHistoryRestore& prepared) noexcept;
+    [[nodiscard]] std::uint64_t HistoryRestoreRetirementMemoryBytes() const noexcept;
 
     [[nodiscard]] const std::optional<CanvasDocument>& Document() const noexcept
     {

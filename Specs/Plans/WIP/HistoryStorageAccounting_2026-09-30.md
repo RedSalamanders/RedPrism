@@ -17,20 +17,33 @@
     - [x] Merge: metadata-only worker probe, admitted readback/history capture, full survivor publication and CPU
       retirement pass all profiles; 71 document assertions and 17 host modes
       ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)).
-    - [ ] Production Undo/Redo: prepare restore, selected target and exact publication/retirement before history moves.
-      A primary-owned private implementation now has constant-sized authority (including no-document Redo), admitted
-      immutable-history capture, worker preparation and nonthrowing swaps. Document proof passes 63 assertions;
-      the host ordering, fault and retirement harness is drafted. Empty stacks/open transactions use a constant-time
-      no-op before capture, preserving crop/redo and the existing ignored-key rule. Native activation follows merge qualification.
+    - [x] Production Undo/Redo: prepare restore, selected target and exact publication/retirement before history moves.
+      The implementation has constant-sized authority (including no-document Redo), admitted immutable-history
+      capture, worker preparation and nonthrowing swaps. Full Debug preflight passes 63 document assertions and
+      28 host ordering, fault and retirement scenarios. Empty stacks/open transactions use a constant-time
+      no-op before capture, preserving crop/redo and the existing ignored-key rule. After merge commit `030fb59`,
+      the production route qualifies in all six configurations against the same 385 frozen inputs
+      ([evidence](../../TestRuns/HistoryRestorePublication_2026-10-01.md)).
+      The first preflight passes all 63 document assertions and 28 host scenarios, then exposes an existing crop
+      shortcut test's immediate restore assertion. Its exact binary, DLLs, source freeze and logs are preserved
+      under `.build/p1-history-restore-first-Debug-crop-failure/`. The test now waits for acknowledgement before
+      reading restored dimensions or switching tools; its pixel/history/crop expectations remain unchanged.
+      The second full Debug preflight passes, including the unchanged crop test. All five projects include the
+      new history module and the string catalog checks the localized notice. The final frozen matrix passes.
     - [ ] Imports: preconstruct new-document saved baseline, additional-image entry and retired session/history
       owners before publication. A primary-owned replacement-history primitive passes private strict syntax and
       55 independent baseline/Undo/Redo/fault assertions. The complete session candidate also passes strict syntax;
-      42 primary-reviewed session assertions also pass, including isolated active/mask/crop/epoch refusal and
+      49 primary-reviewed session assertions also pass, including isolated active/mask/crop/epoch refusal and
       later saved-revision behavior. The production host draft passes strict syntax; actual host fault/retirement
-      execution and native integration remain active.
+      execution and native integration remain active. Project-open preparation also uses the complete private
+      replacement boundary, including absent/unknown active ids and empty projects; module/host strict syntax passes.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
+    - [ ] Private image-only codec/producer candidates remove unused eager generation while retaining every mask
+      thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,
+      and added a final cancellation check. Complete producer/validator, accounting and I/O/Undo/Redo qualification
+      precedes native activation; uploads and measured G1 remain separate.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.9.
 Owner: `Common/Document.h`, `DocumentHistory.cpp`, session restore and host upload/chrome costs.
@@ -76,7 +89,7 @@ this explicit construction/admission boundary is implemented and qualified; do n
   Finishing a transaction reuses its immutable opening snapshot rather than copying layer records again.
   Their value document capture remains an explicit H2 cost. The complete native configuration matrix passes
   for these three groups; the other caller groups remain open.
-- [ ] H1.5 — Prepare Undo/Redo restore, destination stack capacity and trim before removing the source entry.
+- [x] H1.5 — Prepare Undo/Redo restore, destination stack capacity and trim before removing the source entry.
   Even when trim discards the destination entry, the independently owned restore survives. Test each allocation
   refusal boundary and stale history epoch against literal revision, name, redo, depth and pixel expectations.
 
@@ -156,10 +169,10 @@ F6 work. The final distinct r2 six-configuration matrix qualifies the sizing sou
   single-use and moved/foreign refusal. Empty stacks and open transactions do not capture or prepare a restore.
 - [x] Pass 63 isolated document assertions and strict module/host syntax. Both directions exercise all three restore
   allocation/cancellation checkpoints; later saved revisions and a newly begun unrecorded lasso cannot corrupt state.
-- [ ] Activate production command routing and the 28 actual host cases after merge qualification. Test a younger
+- [x] Activate production command routing and the 28 actual host cases after merge qualification. Test a younger
   edit, no-document Redo, selected receipt lineage after document removal, refusal/epoch/generation/target/crop/lasso,
   late cancellation, no hidden Present and worker retirement. Qualify native suites and all ARM64 cross-builds.
-- [ ] Record exact frozen inputs/binaries, update the durable history/host contracts, commit and push this slice.
+- [x] Record exact frozen inputs/binaries, update the durable history/host contracts, commit and push this slice.
   H2/H3/H4 and measured apply/G1 remain separate gates.
 
 ### Next H1.4 caller: merge readback and publication
@@ -175,7 +188,7 @@ F6 work. The final distinct r2 six-configuration matrix qualifies the sizing sou
 - [x] Retain CPU snapshot/readback/prepared result/history and retired document/selected owners in complete release
   aggregates. GPU mapping and utility-target acknowledgement stay on the owner; job retirement cannot move D3D
   cleanup to a worker. Device restart releases CPU previous-attempt state on a worker and never publishes partial pixels.
-- [ ] Validate exact document generation/restore serial, history epoch, acquisition and readback device authority
+- [x] Validate exact document generation/restore serial, history epoch, acquisition and readback device authority
   before nonthrowing publication. Explicitly define whether CPU-only processing occurs after final map acknowledgement;
   device changes after that detached boundary cannot invalidate already copied bytes. Update the existing rebind gate
   if its held-mapping predicate changes, preserving bounded restart and no writer restart requirements.

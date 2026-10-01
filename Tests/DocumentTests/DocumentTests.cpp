@@ -14,6 +14,7 @@
 #include "GradientWorkTests.h"
 #include "HistoryAccountingTests.h"
 #include "HistoryPreparationFaultTests.h"
+#include "HistoryRestoreTests.h"
 #include "HistoryRetirementBoundTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryStateViewTests.h"
@@ -7360,6 +7361,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunMergePlanProbeTests();
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
+    gFailures += RunHistoryRestoreTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();

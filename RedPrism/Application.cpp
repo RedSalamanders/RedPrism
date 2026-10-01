@@ -2178,6 +2178,8 @@ int Application::RunSelfTest() noexcept
     }
     if (const int sizing = RunSizingWorkSelfTest(); sizing != 0)
         return sizing;
+    if (const int restore = RunHistoryRestoreSelfTest(); restore != 0)
+        return restore;
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
     if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
@@ -3905,14 +3907,14 @@ void Application::OnCommand(int command) noexcept
         // stays put; otherwise history moves.
         if (!EndFirstCanvasEdit(EditEnd::Undo))
         {
-            if (command == ChromeHost::kCommandUndo)
+            if (!_hostExecuting)
             {
-                _session.Undo();
+                ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+                return;
             }
-            else
-            {
-                _session.Redo();
-            }
+            _hostExecutionError = StartHistoryRestore(command == ChromeHost::kCommandRedo);
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_HISTORY_RESTORE);
         }
         DocumentChanged();
         break;
