@@ -63,7 +63,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -78,7 +78,7 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;psapi.lib;rpcrt4.lib;ole32.lib;windowscodecs.lib;yyjson.lib;zip.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -110,11 +110,17 @@
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
+    <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
+    <ClInclude Include="ClipboardTransferTests.h" />
+    <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IoTests.cpp" />
+    <ClCompile Include="..\..\RedPrism\ClipboardTransfer.cpp" />
+    <ClCompile Include="..\..\RedPrism\SystemClipboard.cpp" />
+    <ClCompile Include="ClipboardTransferTests.cpp" />
     <ClCompile Include="ImageImportWorkTests.cpp" />
     <ClCompile Include="ProjectLoadWorkTests.cpp" />
     <ClCompile Include="..\..\Common\ImageImportWork.cpp" />
@@ -135,6 +141,7 @@
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
+    <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

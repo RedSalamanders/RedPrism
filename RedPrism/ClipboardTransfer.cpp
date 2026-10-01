@@ -1,0 +1,524 @@
+#include "ClipboardTransfer.h"
+
+#include "ClipboardDibWork.h"
+#include "ImageCodecs.h"
+
+#include <Windows.h>
+#include <ole2.h>
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <span>
+#include <utility>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
+
+namespace ClipboardTransfer
+{
+namespace
+{
+void Reached(Observer observer, Stage stage) noexcept
+{
+    if (observer.reached)
+        observer.reached(observer.context, stage);
+}
+
+DWORD Injected(Observer observer, Fault stage) noexcept
+{
+    return observer.fault ? observer.fault(observer.context, stage) : 0;
+}
+
+DWORD Error() noexcept
+{
+    const DWORD error = GetLastError();
+    return error ? error : ERROR_GEN_FAILURE;
+}
+
+UINT PngFormat() noexcept
+{
+    return RegisterClipboardFormatW(L"PNG");
+}
+
+class OpenScope final
+{
+  public:
+    OpenScope() noexcept = default;
+    ~OpenScope()
+    {
+        if (_open)
+            (void)CloseClipboard();
+    }
+    OpenScope(const OpenScope&) = delete;
+    OpenScope& operator=(const OpenScope&) = delete;
+    bool Open(HWND window = nullptr) noexcept
+    {
+        _open = OpenClipboard(window) != FALSE;
+        return _open;
+    }
+    bool Close() noexcept
+    {
+        if (!_open)
+            return false;
+        if (!CloseClipboard())
+            return false;
+        _open = false;
+        return true;
+    }
+
+  private:
+    bool _open = false;
+};
+
+Status GlobalCopy(std::span<const std::uint8_t> bytes, wil::unique_hglobal& output, CancelToken cancellation) noexcept
+{
+    wil::unique_hglobal local(GlobalAlloc(GMEM_MOVEABLE, bytes.size()));
+    if (!local)
+        return Status::OutOfMemory;
+    {
+        const wil::unique_hglobal_locked locked(local.get());
+        if (!locked.get())
+            return Status::NativeFailure;
+        auto* destination = static_cast<std::uint8_t*>(locked.get());
+        for (std::size_t offset = 0; offset < bytes.size();)
+        {
+            if (cancellation.IsCancelled())
+                return Status::Cancelled;
+            const std::size_t count = (std::min)(std::size_t{64 * 1024}, bytes.size() - offset);
+            std::memcpy(destination + offset, bytes.data() + offset, count);
+            offset += count;
+        }
+    }
+    output = std::move(local);
+    return Status::Ok;
+}
+
+Status CodecStatus(ImageCodecStatus status) noexcept
+{
+    if (status == ImageCodecStatus::Ok)
+        return Status::Ok;
+    if (status == ImageCodecStatus::Cancelled)
+        return Status::Cancelled;
+    if (status == ImageCodecStatus::TooLarge)
+        return Status::TooLarge;
+    return Status::Invalid;
+}
+
+Status DibStatus(ClipboardDibStatus status) noexcept
+{
+    if (status == ClipboardDibStatus::Ok)
+        return Status::Ok;
+    if (status == ClipboardDibStatus::Cancelled)
+        return Status::Cancelled;
+    if (status == ClipboardDibStatus::TooLarge)
+        return Status::TooLarge;
+    if (status == ClipboardDibStatus::OutOfMemory)
+        return Status::OutOfMemory;
+    return Status::Invalid;
+}
+
+Status ProbeBytes(std::span<const std::uint8_t> bytes, bool png, std::int64_t pixelBudget, FormatInfo& info,
+                  CancelToken cancellation)
+{
+    info = {};
+    if (png)
+    {
+        ImageImportMetadata metadata;
+        const Status status =
+            CodecStatus(ProbeProjectPng(bytes.data(), bytes.size(), pixelBudget, metadata, cancellation));
+        if (status == Status::Ok)
+            info = {bytes.size(), metadata.pixels, metadata.rawWidth, metadata.rawHeight};
+        return status;
+    }
+    ClipboardDibMetadata metadata;
+    const Status status = DibStatus(ProbeClipboardDib(bytes, pixelBudget, metadata, cancellation));
+    if (status == Status::Ok)
+        info = {bytes.size(), metadata.pixels, metadata.width, metadata.height};
+    return status;
+}
+
+// ClipboardScope has already opened. GetClipboardData may block a worker while an external owner renders.
+// The OS handle is borrowed; only the locked pointer's scope owns an unlock, never GlobalFree.
+Status InspectFormat(UINT format, bool png, std::int64_t pixelBudget, FormatInfo& info, CancelToken cancellation)
+{
+    info = {};
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    const HANDLE handle = GetClipboardData(format);
+    if (!handle)
+        return Status::NativeFailure;
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    const SIZE_T size = GlobalSize(handle);
+    if (size == 0)
+        return Status::Invalid;
+    if (size > kMaxImageEncodedBytes)
+        return Status::TooLarge;
+    const wil::unique_hglobal_locked locked(handle);
+    if (!locked.get())
+        return Status::NativeFailure;
+    return ProbeBytes({static_cast<const std::uint8_t*>(locked.get()), size}, png, pixelBudget, info, cancellation);
+}
+
+Status CopyFormat(UINT format, bool png, std::int64_t pixelBudget, const FormatInfo& inspected,
+                  std::vector<std::uint8_t>& output, CancelToken cancellation)
+{
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    const HANDLE handle = GetClipboardData(format);
+    if (!handle)
+        return Status::NativeFailure;
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    const SIZE_T size = GlobalSize(handle);
+    if (size == 0 || size != inspected.encodedBytes || size > kMaxImageEncodedBytes)
+        return Status::Stale;
+    const wil::unique_hglobal_locked locked(handle);
+    if (!locked.get())
+        return Status::NativeFailure;
+    const auto* source = static_cast<const std::uint8_t*>(locked.get());
+    FormatInfo current;
+    const Status probed = ProbeBytes({source, size}, png, pixelBudget, current, cancellation);
+    if (probed == Status::Cancelled)
+        return probed;
+    if (probed != Status::Ok || current != inspected)
+        return Status::Stale;
+    output.resize(size);
+    for (std::size_t offset = 0; offset < size;)
+    {
+        if (cancellation.IsCancelled())
+            return Status::Cancelled;
+        const std::size_t count = (std::min)(std::size_t{64 * 1024}, size - offset);
+        std::memcpy(output.data() + offset, source + offset, count);
+        offset += count;
+    }
+    return Status::Ok;
+}
+} // namespace
+
+struct PreparedImage::Storage final
+{
+    wil::unique_hglobal png;
+    wil::unique_hglobal dib;
+    UINT pngFormat = 0;
+    std::uint32_t sourceSequence = 0;
+};
+
+PreparedImage::PreparedImage() noexcept = default;
+PreparedImage::~PreparedImage() = default;
+PreparedImage::PreparedImage(PreparedImage&&) noexcept = default;
+PreparedImage& PreparedImage::operator=(PreparedImage&&) noexcept = default;
+PreparedImage::operator bool() const noexcept
+{
+    return _storage && _storage->png && _storage->dib && _storage->pngFormat != 0;
+}
+
+std::uint64_t PreparedImage::RetainedBytes() const noexcept
+{
+    return _storage ? sizeof(Storage) + GlobalSize(_storage->png.get()) + GlobalSize(_storage->dib.get()) : 0;
+}
+
+std::uint32_t PreparedImage::SourceSequence() const noexcept
+{
+    return _storage ? _storage->sourceSequence : 0;
+}
+
+Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSequence, PreparedImage& output,
+               CancelToken cancellation, Observer observer)
+{
+    output = {};
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
+        return Status::Invalid;
+    if (image.PixelCount() > kMaxLayerPixels)
+        return Status::TooLarge;
+    PreparedImage prepared;
+    prepared._storage = std::make_unique<PreparedImage::Storage>();
+    prepared._storage->pngFormat = PngFormat();
+    prepared._storage->sourceSequence = sourceSequence;
+    if (prepared._storage->pngFormat == 0)
+        return Status::NativeFailure;
+    {
+        std::vector<std::uint8_t> png;
+        Status status = CodecStatus(EncodePng(image, resolution, png, cancellation));
+        if (status != Status::Ok)
+            return status;
+        if (const DWORD error = Injected(observer, Fault::PngGlobal); error != 0)
+            return error == ERROR_NOT_ENOUGH_MEMORY ? Status::OutOfMemory : Status::NativeFailure;
+        status = GlobalCopy(png, prepared._storage->png, cancellation);
+        if (status != Status::Ok)
+            return status;
+    }
+    {
+        std::vector<std::uint8_t> dib;
+        Status status = DibStatus(EncodeClipboardDibV5(image, dib, cancellation));
+        if (status != Status::Ok)
+            return status;
+        if (const DWORD error = Injected(observer, Fault::DibGlobal); error != 0)
+            return error == ERROR_NOT_ENOUGH_MEMORY ? Status::OutOfMemory : Status::NativeFailure;
+        status = GlobalCopy(dib, prepared._storage->dib, cancellation);
+        if (status != Status::Ok)
+            return status;
+    }
+    Reached(observer, Stage::GlobalsPrepared);
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    output = std::move(prepared);
+    return Status::Ok;
+}
+
+Publication Publish(PreparedImage& image, CancelToken cancellation, Observer observer) noexcept
+{
+    Publication result;
+    if (!image)
+        return result;
+    if (cancellation.IsCancelled())
+    {
+        result.status = Status::Cancelled;
+        return result;
+    }
+    if (const DWORD error = Injected(observer, Fault::Window); error != 0)
+    {
+        result.status = Status::NativeFailure;
+        result.nativeError = error;
+        return result;
+    }
+    // Built-in window procedure; no Application pointer, subclass, visible surface or borrowed HWND.
+    wil::unique_hwnd window(
+        CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+    if (!window)
+    {
+        result.status = Status::NativeFailure;
+        result.nativeError = Error();
+        return result;
+    }
+    Reached(observer, Stage::WindowCreated);
+    if (cancellation.IsCancelled())
+    {
+        result.status = Status::Cancelled;
+        return result;
+    }
+    OpenScope scope;
+    if (const DWORD error = Injected(observer, Fault::Open); error != 0)
+    {
+        result.status = Status::Busy;
+        result.nativeError = error;
+        return result;
+    }
+    if (!scope.Open(window.get()))
+    {
+        result.status = Status::Busy;
+        result.nativeError = Error();
+        return result;
+    }
+    Reached(observer, Stage::Opened);
+    result.sequence = GetClipboardSequenceNumber();
+    if (cancellation.IsCancelled())
+    {
+        result.status = Status::Cancelled;
+        return result;
+    }
+    if (result.sequence != image._storage->sourceSequence)
+    {
+        result.status = Status::Stale;
+        return result;
+    }
+    if (const DWORD error = Injected(observer, Fault::Empty); error != 0)
+    {
+        result.status = Status::NativeFailure;
+        result.nativeError = error;
+        return result;
+    }
+    if (!EmptyClipboard())
+    {
+        result.status = Status::NativeFailure;
+        result.nativeError = Error();
+        return result;
+    }
+    result.emptied = true;
+    Reached(observer, Stage::Emptied);
+    // From Empty onward this attempt cannot be rolled back or retried. Complete both independent formats,
+    // retain the first error, and report the exact held sequence even when a stop arrives after publication.
+    DWORD error = Injected(observer, Fault::Png);
+    if (!error && SetClipboardData(image._storage->pngFormat, image._storage->png.get()))
+    {
+        (void)image._storage->png.release();
+        result.pngPlaced = true;
+        Reached(observer, Stage::PngPlaced);
+    }
+    else
+        result.nativeError = error ? error : Error();
+    error = Injected(observer, Fault::Dib);
+    if (!error && SetClipboardData(CF_DIBV5, image._storage->dib.get()))
+    {
+        (void)image._storage->dib.release();
+        result.dibPlaced = true;
+        Reached(observer, Stage::DibPlaced);
+    }
+    else if (result.nativeError == 0)
+        result.nativeError = error ? error : Error();
+    result.sequence = GetClipboardSequenceNumber();
+    result.status = result.pngPlaced && result.dibPlaced ? Status::Ok : Status::NativeFailure;
+    if (!scope.Close() && result.nativeError == 0)
+    {
+        result.nativeError = Error();
+        result.status = Status::NativeFailure;
+    }
+    Reached(observer, Stage::Closed);
+    // Scope closes before the immediate-format window is destroyed. Transferred global blocks belong to
+    // Windows, and remaining blocks are still private. Tests must prove contents survive window destruction.
+    image = {};
+    return result;
+}
+
+Inspection::Inspection(Inspection&& other) noexcept
+{
+    *this = std::move(other);
+}
+Inspection& Inspection::operator=(Inspection&& other) noexcept
+{
+    if (this != &other)
+    {
+        _valid = std::exchange(other._valid, false);
+        _sequence = other._sequence;
+        _pngFormat = other._pngFormat;
+        _dibFormat = other._dibFormat;
+        _png = other._png;
+        _dib = other._dib;
+        _pixelBudget = other._pixelBudget;
+    }
+    return *this;
+}
+
+std::uint64_t Inspection::CopyAndPixelsBytes() const noexcept
+{
+    return _valid ? _png.encodedBytes + _dib.encodedBytes + (std::max)(_png.pixels, _dib.pixels) * 4u : 0;
+}
+
+std::uint64_t ImageCopy::RetainedBytes() const noexcept
+{
+    return _png.capacity() + _dib.capacity();
+}
+
+Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation, Observer observer)
+{
+    output = {};
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    if (pixelBudget < 0)
+        return Status::TooLarge;
+    OpenScope scope;
+    if (Injected(observer, Fault::Open) != 0 || !scope.Open())
+        return Status::Busy;
+    Reached(observer, Stage::Opened);
+    Inspection inspected;
+    inspected._pixelBudget = pixelBudget;
+    const UINT png = PngFormat();
+    if (png == 0)
+        return Status::NativeFailure;
+    Status pngStatus = Status::Invalid;
+    if (IsClipboardFormatAvailable(png))
+    {
+        pngStatus = InspectFormat(png, true, pixelBudget, inspected._png, cancellation);
+        if (pngStatus == Status::Ok)
+            inspected._pngFormat = png;
+    }
+    Status dibStatus = Status::Invalid;
+    const UINT dib = IsClipboardFormatAvailable(CF_DIBV5) ? CF_DIBV5 : IsClipboardFormatAvailable(CF_DIB) ? CF_DIB : 0;
+    if (dib != 0)
+    {
+        dibStatus = InspectFormat(dib, false, pixelBudget, inspected._dib, cancellation);
+        if (dibStatus == Status::Ok)
+            inspected._dibFormat = dib;
+    }
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    if (inspected._pngFormat == 0 && inspected._dibFormat == 0)
+        return pngStatus == Status::TooLarge || dibStatus == Status::TooLarge ? Status::TooLarge : Status::Invalid;
+    inspected._sequence = GetClipboardSequenceNumber();
+    if (!scope.Close())
+        return Status::NativeFailure;
+    Reached(observer, Stage::Inspected);
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    inspected._valid = true;
+    output = std::move(inspected);
+    return Status::Ok;
+}
+
+Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancellation, Observer observer)
+{
+    output = {};
+    if (!inspected)
+        return Status::Invalid;
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    OpenScope scope;
+    if (Injected(observer, Fault::Open) != 0 || !scope.Open())
+        return Status::Busy;
+    Reached(observer, Stage::Opened);
+    if (GetClipboardSequenceNumber() != inspected._sequence)
+        return Status::Stale;
+    ImageCopy copy;
+    copy._pixelBudget = (std::min)(inspected._pixelBudget, static_cast<std::int64_t>(kMaxLayerPixels));
+    Status pngStatus = Status::Invalid;
+    if (inspected._pngFormat != 0)
+        pngStatus = Injected(observer, Fault::PngRead) != 0
+                        ? Status::NativeFailure
+                        : CopyFormat(inspected._pngFormat, true, inspected._pixelBudget, inspected._png, copy._png,
+                                     cancellation);
+    if (pngStatus == Status::Stale || pngStatus == Status::Cancelled)
+        return pngStatus;
+    if (GetClipboardSequenceNumber() != inspected._sequence)
+        return Status::Stale;
+    Status dibStatus = Status::Invalid;
+    if (inspected._dibFormat != 0)
+        dibStatus = Injected(observer, Fault::DibRead) != 0
+                        ? Status::NativeFailure
+                        : CopyFormat(inspected._dibFormat, false, inspected._pixelBudget, inspected._dib, copy._dib,
+                                     cancellation);
+    if (dibStatus == Status::Stale || dibStatus == Status::Cancelled)
+        return dibStatus;
+    if (pngStatus != Status::Ok && dibStatus != Status::Ok)
+        return Status::NativeFailure;
+    if (GetClipboardSequenceNumber() != inspected._sequence)
+        return Status::Stale;
+    copy._sequence = inspected._sequence;
+    if (!scope.Close())
+        return Status::NativeFailure;
+    Reached(observer, Stage::Copied);
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    output = std::move(copy);
+    return Status::Ok;
+}
+
+Status Decode(const ImageCopy& copy, Raster& output, CancelToken cancellation)
+{
+    output = {};
+    if (cancellation.IsCancelled())
+        return Status::Cancelled;
+    if (copy._pixelBudget < 0 || copy._pixelBudget > (std::numeric_limits<int>::max)())
+        return Status::Invalid;
+    if (!copy._png.empty())
+    {
+        DecodedImage decoded;
+        const Status status = CodecStatus(DecodeProjectPng(copy._png.data(), copy._png.size(), false,
+                                                           static_cast<int>(copy._pixelBudget), decoded, cancellation));
+        if (status == Status::Ok)
+        {
+            output = std::move(decoded.image);
+            return Status::Ok;
+        }
+        if (status == Status::Cancelled)
+            return status;
+    }
+    if (copy._dib.empty())
+        return Status::Invalid;
+    return DibStatus(DecodeClipboardDib(copy._dib, copy._pixelBudget, output, cancellation));
+}
+} // namespace ClipboardTransfer

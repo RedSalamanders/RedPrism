@@ -22,12 +22,18 @@
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
   - [x] F5a — Cancellable DIB byte conversion and PNG metadata inspection; 42/11 independent literal checks and all configuration gates pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production transfer/callers remain F5b–F5d.
   - [ ] F5b — Admitted worker-owned source snapshots/global blocks and immediate OS transfer with exact sequence/publication truth.
-    - [ ] F5b.1 — Sealed inspected source, checked owned byte copy, fully prepared movable PNG/DIB blocks and
-      one-attempt private worker adapter. Native controls must prove post-window-destruction reads and exact
-      empty/partial/complete publication truth before production activation.
+    - [x] F5b.1 — Sealed inspected source, checked owned byte copy, fully prepared movable PNG/DIB blocks and
+      one-attempt private worker adapter qualify in all six configurations. 125 native controls prove
+      post-window-destruction reads and exact empty/partial/complete publication truth
+      ([evidence](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production activation stays F5b.2.
     - [ ] F5b.2 — Whole-graph admission, worker decode/paste/private-copy publication and actual ordered host
       activation. The adapter primitive alone does not qualify Copy/Cut, Paste or New Canvas.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
+    - [ ] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
+      wakes the same wait, and no slot or receiver can be reused before callback acknowledgement. Native host
+      routing multiplexes this source with GPU work. A reviewed private prototype is in preparation.
+    - [ ] F5c.2 — Bind transfer retries to actual ordered Copy/Cut/Paste/New Canvas graphs and their full
+      reservation; preserve six total attempts, source authority, publication truth and draft revision guards.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
   - [x] F6a.2 — Timer creation/arming/wait resource faults preserve native rollback errors, backup and publication
@@ -268,10 +274,17 @@ format owner retains readable contents and sequence truth. This is an explicit p
 exception to the generic job prohibition on window access, not permission to call application UI from Run.
 Update the owning architecture/performance/clipboard contracts and the master table with F5b implementation.
 
-Retry failures without occupying a compute callback or sleeping on the owner. Use one-shot timers registered
-with the existing wait pool. A bounded owner work source publishes readiness and resumes the same suspended
+Retry failures without occupying a compute callback or sleeping on the owner. The F5c.1 prototype uses a
+relative one-shot deadline on the existing thread-pool event wait, whose event can also signal cancellation.
+This avoids replacing a timer after its old callback has queued. It is an implementation refinement of the
+one-shot timer requirement, with the same 50/100/200/400/800 ms delays and no separate timer pool. See
+[SetThreadpoolWait](https://learn.microsoft.com/en-us/windows/win32/api/threadpoolapiset/nf-threadpoolapiset-setthreadpoolwait).
+A bounded owner work source publishes readiness and resumes the same suspended
 job/ticket/reservation. Five retries follow the initial attempt at 50, 100, 200, 400 and 800 ms; six total attempts,
-no polling or recurring timer. Cancellation signals readiness immediately; unregister/join wait callbacks before
+no polling or recurring timer. Cancellation signals the existing event immediately and retains the suspended
+job until the callback acknowledges; signal resource failure retains its error and owner until the original
+deadline acknowledges, with no failed-signal polling. Rearm/reuse is allowed only after the prior callback has
+published and will no longer touch request metadata. Unregister/join wait callbacks before
 destroying the timer or job. The Application owner pump can multiplex GPU and retry sources while preserving
 the scheduler's single borrowed owner-work-source contract. Shutdown stops timer producers before closing workers.
 

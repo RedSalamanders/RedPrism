@@ -460,6 +460,19 @@ result uploads through the normal sparse path. Numeric GPU equality and existing
 First preview upload, capture/history/chrome costs and full-loop drag latency remain P1.9/G1; SIMD/GPU gradient
 shading remain P2/P3. Worker migration alone establishes no one-frame latency or Photoshop speed claim.
 
+### Detached copy pixel preparation (P1.5 A5.4a)
+
+`CopyPixelsWork` samples an immutable image/mask or complete document-grid composite on workers, with the same
+pixel-center placement and transient Nearest versus Smooth rules (High collapses to Smooth). Selection bounds
+use the existing 0.001 rounding tolerance, canvas clipping and exact origin. Full-grid coverage keeps the legacy
+antialiasing and byte rounding, including premultiplied alpha. Gray masks copy as opaque gray with the captured
+semantic outside tone; cropped output avoids a redundant full-canvas BGRA mask plane. Sparse reads remain private.
+
+Source/coverage/row/publication checkpoints reject cancellation without publishing partial pixels. The cached
+memory plan covers private source assembly, sampling planes, exact coverage workspace, cropped pixels and rows;
+it excludes already shared inputs and separate host/history/codec/clipboard/retirement owners. No session is
+mutated by this primitive. Atomic Cut publication, clipboard authority and production routing remain A5.4b–c.
+
 ### Other selection pixel edits
 
 - **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):

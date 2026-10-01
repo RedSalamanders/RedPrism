@@ -113,6 +113,8 @@
     <ClInclude Include="..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\Common\SelectionMoveWork.h" />
+    <ClInclude Include="..\Common\CopyPixelsWork.h" />
+    <ClInclude Include="..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
@@ -164,6 +166,7 @@
     <ClInclude Include="LucideToolButton.h" />
     <ClInclude Include="PaletteControl.h" />
     <ClInclude Include="SystemClipboard.h" />
+    <ClInclude Include="ClipboardTransfer.h" />
     <ClInclude Include="TransformOverlay.h" />
     <ClInclude Include="CommandLine.h" />
     <ClInclude Include="CommandCatalog.h" />
@@ -193,6 +196,7 @@
     <ClCompile Include="..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\Common\SelectionMoveWork.cpp" />
+    <ClCompile Include="..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\Common\Adjust.cpp" />
     <ClCompile Include="..\Common\Kernels.cpp" />
@@ -268,6 +272,7 @@
     <ClCompile Include="ApplicationMergeJobs.cpp" />
     <ClCompile Include="CanvasOverlay.cpp" />
     <ClCompile Include="SystemClipboard.cpp" />
+    <ClCompile Include="ClipboardTransfer.cpp" />
     <ClCompile Include="ChromeHost.cpp" />
     <ClCompile Include="LucideToolButton.cpp" />
     <ClCompile Include="PaletteControl.cpp" />

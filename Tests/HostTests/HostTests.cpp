@@ -27,6 +27,7 @@
 #include "Localization.h"
 #include "MemoryAdmissionTests.h"
 #include "MemoryBenchmark.h"
+#include "OwnerWorkMultiplexerTests.h"
 #include "PerfRootTests.h"
 #include "PipelineTraceTests.h"
 #include "PixelRecycleTests.h"
@@ -1813,6 +1814,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWorkerPoolTests(stress);
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();
+    gFailures += RunOwnerWorkMultiplexerTests();
     gFailures += RunJobUiPolicyTests();
     gFailures += RunJobActivityTests();
     gFailures += RunMemoryAdmissionTests();

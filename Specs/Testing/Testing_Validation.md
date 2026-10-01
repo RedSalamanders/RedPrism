@@ -28,6 +28,29 @@ Clear without selection adds no entry. Terminal states retain no tickets/barrier
 and perform no hidden Present. Gate deadlines detect deadlocks, not performance thresholds. All x64 suites and
 ARM64 cross-builds remain required; pending distortion callers and real-loop timings stay open in P1.
 
+### Clipboard and copy preparation
+
+`clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent
+literal PNG/DIB fixtures prove exact premultiplied versus straight bytes, PNG priority, separately inspected DIB
+fallback and hard/lower/wide budgets. Actual OS calls prove reads after immediate owner destruction, a real held
+clipboard, sealed stale retries and complete/partial/empty publication. Every injected allocation/native fault
+must be reached; pre-empty cancellation preserves content, and late cancellation finishes both independent
+formats. A gated delayed renderer proves the API worker remains pending until explicit external release, then
+captures the sequence after both formats render. Individual foreign-thread joins have five-second failure bounds;
+the complete suite has a separate 60-second bound. Test-only one-shot readiness retries do not qualify production
+timers, host input ordering, shutdown or G1. The exact held sequence is checked at its placement stage, without
+assuming a later-open sequence remains equal.
+
+`copypixels.*` uses literal BGRA/Gray8 grids, independent pixel-center mappings and rectangle/cell intersection
+areas. It covers clipped origin, transient sampling, semantic mask outside bytes, sparse/merged inputs, invalid
+grids/formats, reached cancellation/observer allocation failure and independent memory floors. Metadata-only
+16 MP sparse inputs make omitted private/canvas/output/AA planes visible above bookkeeping headroom. It does
+not qualify atomic Cut history or production host admission.
+
+`owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
+pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
+refusal and callback mutation refusal. Actual Application GPU/timer integration remains F5c.
+
 ### Detached gradients
 
 `gradientwork.*` keeps the independent legacy linear/radial/opacity tolerances and literal pixel-center BGRA/Gray8

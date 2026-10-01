@@ -1,3 +1,4 @@
+#include "ClipboardTransferTests.h"
 #include "CodecFileStreamTests.h"
 #include "FileIoBench.h"
 
@@ -2291,7 +2292,7 @@ void TestProjectRotationFaultRecovery()
     // The fault callback can select one stage at a time, so use a context that fails the second requested point.
     struct TwoFaults
     {
-        unsigned int visits[8]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
     } twoFaults;
     const auto failPublishAndRollback = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2306,20 +2307,41 @@ void TestProjectRotationFaultRecovery()
             return ERROR_SHARING_VIOLATION;
         return 0;
     };
+    TwoFaults deadlineVisits{};
+    Expect(failPublishAndRollback(&deadlineVisits, ProjectSaveFaultStage::DestinationTimerCreate) == 0,
+           "rotation-fault.two-fault-policy-permits-destination-timer-create");
+    Expect(failPublishAndRollback(&deadlineVisits, ProjectSaveFaultStage::DestinationTimerArm) == 0,
+           "rotation-fault.two-fault-policy-permits-destination-timer-arm");
+    Expect(failPublishAndRollback(&deadlineVisits, ProjectSaveFaultStage::DestinationTimerWait) == 0,
+           "rotation-fault.two-fault-policy-permits-destination-timer-wait");
     const ProjectIoStatus rollbackStatus =
         SaveProject(destination.c_str(), replacement, layer.id, false, {}, rollbackObserver,
                     ProjectSaveFaultPolicy{failPublishAndRollback, &twoFaults});
     const ProjectLoadResult backupReloaded = LoadProject(backup.c_str());
     const std::size_t rollbackFailureIndex = static_cast<std::size_t>(ProjectIoStage::RollbackFailed);
-    Expect(rollbackStatus == ProjectIoStatus::Encode && rollbackEvents.visits[publishFailureIndex] == 1 &&
-               rollbackEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
-               rollbackEvents.visits[rollbackFailureIndex] == 1 &&
-               rollbackEvents.errors[rollbackFailureIndex] == ERROR_SHARING_VIOLATION &&
-               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerCreate)] == 0 &&
-               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerArm)] == 0 &&
-               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)] == 0 &&
-               rollbackEvents.visits[publishedIndex] == 0,
-           "rotation-fault.rollback-failure-reports-both-exact-errors-without-published");
+    const bool expectedRollback =
+        rollbackStatus == ProjectIoStatus::Encode && rollbackEvents.visits[publishFailureIndex] == 1 &&
+        rollbackEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
+        rollbackEvents.visits[rollbackFailureIndex] == 1 &&
+        rollbackEvents.errors[rollbackFailureIndex] == ERROR_SHARING_VIOLATION &&
+        twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerCreate)] == 0 &&
+        twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerArm)] == 0 &&
+        twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)] == 0 &&
+        rollbackEvents.visits[publishedIndex] == 0;
+    if (!expectedRollback)
+    {
+        std::printf("DIAG rotation-fault.two-fault status=%u backupLoad=%u destExists=%u backupExists=%u\n",
+                    static_cast<unsigned int>(rollbackStatus), static_cast<unsigned int>(backupReloaded.status),
+                    std::filesystem::exists(destination) ? 1u : 0u, std::filesystem::exists(backup) ? 1u : 0u);
+        for (std::size_t index = 0; index < std::size(rollbackEvents.visits); ++index)
+            if (rollbackEvents.visits[index])
+                std::printf("DIAG rotation-fault.two-fault stage=%zu visits=%u value=%u\n", index,
+                            rollbackEvents.visits[index], rollbackEvents.errors[index]);
+        for (std::size_t index = 0; index < std::size(twoFaults.visits); ++index)
+            if (twoFaults.visits[index])
+                std::printf("DIAG rotation-fault.two-fault injection=%zu visits=%u\n", index, twoFaults.visits[index]);
+    }
+    Expect(expectedRollback, "rotation-fault.rollback-failure-reports-both-exact-errors-without-published");
     Expect(!std::filesystem::exists(destination) && backupReloaded.status == ProjectIoStatus::Ok &&
                backupReloaded.document.resolution == 72 && SnapshotProjectTree(backup) == originalTree &&
                CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
@@ -2402,7 +2424,7 @@ void TestProjectRotationFaultRecovery()
     RotationEventLog stagingCleanupEvents{};
     struct RenameAndCleanupFaults
     {
-        unsigned int visits[8]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
     } renameAndCleanupFaults;
     const auto failRenameAndStagingCleanup = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2701,6 +2723,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
     gFailures += RunClipboardDibWorkTests();
+    gFailures += RunClipboardTransferTests();
     gFailures += RunCodecFileStreamTests();
     gFailures += RunProjectCancellationTests();
     gFailures += RunImageImportWorkTests();

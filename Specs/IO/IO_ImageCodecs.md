@@ -101,6 +101,27 @@ not interruptible. Invalid/cancelled results expose no metadata, raster or byte 
 allocation failure reports OutOfMemory; allocating routines otherwise propagate bad_alloc to the worker boundary.
 These are preparation foundations. Production clipboard transfers and host callers remain tracked by F5b–F5d.
 
+## Worker clipboard transfer preparation (P1.7 F5b.1)
+
+`ClipboardTransfer` seals the outgoing source sequence when encoding starts. Fully prepared PNG and DIBV5
+movable global blocks exist before opening/emptying the clipboard. A one-attempt private worker adapter checks
+that sequence while open before EmptyClipboard. Busy, stale and pre-empty cancellation retain private blocks;
+successful Empty is irreversible. Thereafter it attempts both formats despite late cancellation, transfers only
+successful blocks to Windows, reports exact empty/PNG/DIB/native-error truth and consumes its input. An emptied
+attempt is never repeated. The returned sequence is observed after the last placement while open; it is not a
+guarantee about a later observation after close or owner destruction. Private-origin Paste authority remains F5b.2.
+
+Incoming inspection scopes borrowed handles/locks within one open interval and checks encoded/pixel/side caps
+before large owned allocation. PNG and the available DIB are inspected independently. Copy reopens at exactly
+that sequence and rechecks sizes/metadata before copying in bounded chunks. No borrowed handle/pointer escapes
+CloseClipboard. Native PNG read failure permits a separately inspected valid DIB; stale metadata/size/sequence
+and cancellation are terminal. Owned bytes decode after closing, with PNG priority and DIB fallback. Wide caller
+budgets retain the independent 100 M decode cap; cancelled/failed public outputs are empty.
+
+This boundary owns no live session or Application window and performs no retry. Its partial memory report covers
+owned bytes and final pixels only; complete codec, capture/history, insertion and retirement admission belongs
+to F5b.2. Production Copy/Cut/Paste/New Canvas migration and event retries remain open.
+
 ## Status
 
 `Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`.

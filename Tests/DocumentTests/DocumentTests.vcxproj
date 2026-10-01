@@ -87,6 +87,9 @@
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
+    <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
+    <ClInclude Include="CopyPixelsTests.h" />
+    <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\Document.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
@@ -142,6 +145,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
+    <ClCompile Include="CopyPixelsTests.cpp" />
     <ClCompile Include="ColorEditWorkTests.cpp" />
     <ClCompile Include="ColorEditDeferredTests.cpp" />
     <ClCompile Include="FilterCancellationTests.cpp" />
@@ -201,6 +205,7 @@
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
+    <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

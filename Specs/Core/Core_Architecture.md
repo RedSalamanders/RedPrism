@@ -40,6 +40,7 @@ borrows that device. It MUST NOT own a swap chain.
 | `Kernels` (`Common/Kernels.*`) | Immutable process-lifetime CPU function tables and CPU/OS feature detection; noinline tier implementations in separate translation units | Document/session state, HWND, GPU context, scheduler |
 | `WorkerPool` (`Common/WorkerPool.*`) | Private fixed-size Windows pool, bounded payload-free dispatch wakeups, callback cleanup group, implicit MTA lifetime, cancellation and parallel helpers | HWND, document mutation, GPU context, a second scheduler |
 | `WaitPool` (`Common/WorkerPool.*`) | Dedicated one-thread pool and at most 32 one-shot event waits | Pixel work, waits inside callbacks, document mutation |
+| `ClipboardTransfer` (`RedPrism/ClipboardTransfer.*`) | Private worker-local message-only immediate-format window, movable global blocks, scoped clipboard open/locks and standard sealed inspection/copy values | Application HWND/pointer, chrome, document mutation, delayed-format publication, borrowed OS pointer/handle in its public values |
 | DxUi EmbeddedHost | Retained chrome models and their GPU surfaces | Swap chain, renderer HWND, worker, periodic timer |
 
 There is exactly one D3D11 device, one flip-model swap chain, and one `Present` per frame that actually presents.
@@ -81,6 +82,18 @@ external producers are joined before scheduler Close. It creates no queue entry,
 Device completion registrations use the scheduler's existing one-thread WaitPool through bounded standard-only
 event tickets. Handles and contexts remain borrowed until owner teardown removes/joins them or Close joins the
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
+
+`OwnerWorkMultiplexer` is a bounded standard-only preparation primitive for the single owner-work source. It
+borrows at most eight distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
+recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
+Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
+scheduler's one-source registration contract. Application GPU/retry multiplexing remains P1.7 F5c work.
+
+The clipboard adapter is an explicit private platform exception to generic worker window access. Publishing
+creates/closes/destroys its own built-in message-only window on the calling worker and never touches the
+application window. It publishes fully rendered immediate formats. OS open/get/empty/close calls can invoke an
+external clipboard owner and belong on a worker. The adapter does not schedule or retry work; production
+admission, source/history ordering, event retries and caller activation remain F5b.2–F5d.
 
 Each record contains two aligned intrusive completion nodes, one for progress and one for final completion. Workers
 publish through an SLIST and signal the scheduler's auto-reset event. The owner reverses each detached SLIST batch
