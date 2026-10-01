@@ -780,13 +780,23 @@ acknowledgement, including Escape, late cancellation and document replacement. C
 posts an existing localized notice on failure; it never opens a modal from the completion drain. Project save now
 runs as an owned Io worker after file selection and document settlement; its receipt, ordinal and memory
 reservation remain held through publication and cancellation acknowledgement. PNG/JPEG export uses asynchronous
-utility readback and detached worker encoding under the same owned continuation. Project open, image import
-and clipboard processing still perform their file work synchronously and await their later P1.7 slices.
+utility readback and detached worker encoding under the same owned continuation. Project open and image import
+inspect/decode on workers. Clipboard processing awaits its later P1.7 slice.
 
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
 Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
 layer above the active one, in one `Import Images` history entry (`Import Image` for a single file); with no
 document open the first image becomes the document (see below) and the rest join it.
+
+Image import inspection and preparation retain the selected input's receipt, history ordinal and reservation
+until owner apply/drop acknowledgement. View commands remain available; younger document mutations wait.
+Successful worker preparation validates the complete new saved baseline and optional additional import document
+before either applies. Existing-canvas successes form one import entry; ordinary failed files retain successful
+files and produce one posted localized summary. Cancellation, stale lineage/generation or preparation allocation
+failure publishes neither document. A batch containing only projects completes before image-import dispatch.
+Only the validated replacement rebinds its selected batch; younger input captured on the previous document is
+stale. Existing-canvas younger Undo runs after the import and undoes its one entry. A failed mixed project/image
+batch retains its first exact error even if image import also fails. Notices run outside completion callbacks.
 
 An image (PNG, JPEG, TIFF, HEIC) chosen through File › Open or dropped on the window is not imported silently: the
 shell asks, in a task dialog owned by the main window (`IDS_OPEN_IMAGE_TITLE`, `IDS_OPEN_IMAGE_TEXT`), whether to
@@ -853,7 +863,7 @@ current document intact and the batch continues; the final receipt retains its f
 ownership through acknowledgement and suppresses later files. A current successful replacement alone may bind
 the remaining batch to its new session lineage. An unrelated replacement drops the result, including when IDs
 are reused. Load failures post one localized notice per failed file; unsupported versions, including zero, are
-formatted from the posted payload when the notice is delivered. Image import, clipboard, wand/clone and other
+formatted from the posted payload when the notice is delivered. Clipboard, wand/clone and other
 readback callers remain later P1.7/P1 work.
 
 When Windows ends the session (sign-out, restart, shutdown, an installer's restart request) a document with unsaved

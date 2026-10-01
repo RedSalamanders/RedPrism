@@ -323,7 +323,8 @@ void Application::RunHostContinuation() noexcept
                 return;
             }
             _hostImportNewProject = choice == ImageOpenChoice::NewProject || !_session.Document();
-            _hostPathIndex = paths->paths.size(); // execute the image group, rather than another project
+            _hostPathIndex = paths->paths.size();        // execute the image group, rather than another project
+            _hostAfterPrerequisite = HostStage::Execute; // a preceding project worker left FileComplete selected
             _hostStage = _hostImportNewProject ? HostStage::Confirm : HostStage::Settle;
             break;
         }
@@ -409,8 +410,9 @@ void Application::RunHostContinuation() noexcept
             _hostExecutionError = S_OK;
             if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {
-                FinishHostContinuation(
-                    {HostOutcome::Failed, FAILED(_hostExecutionError) ? _hostExecutionError : E_FAIL});
+                FinishHostContinuation({HostOutcome::Failed, FAILED(_hostBatchError)       ? _hostBatchError
+                                                             : FAILED(_hostExecutionError) ? _hostExecutionError
+                                                                                           : E_FAIL});
                 return;
             }
             if (_hostCommitStamp || _historyWork.Busy())
@@ -480,7 +482,12 @@ void Application::CancelHostContinuations() noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_projectOpenTicket)
+        if (_imageImportTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_imageImportTicket.value());
+        }
+        else if (_projectOpenTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_projectOpenTicket.value());

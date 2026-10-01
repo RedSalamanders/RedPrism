@@ -438,8 +438,16 @@ bool Application::ExecuteHostInput() noexcept
                         paths[count++] = path;
                     }
                 }
-                return ImportImagePathViews(std::span<const std::wstring_view>(paths.data(), count),
-                                            _hostImportNewProject, _hostSawProject ? std::nullopt : value.dropPoint);
+                _hostExecutionError =
+                    StartImageImport(std::span<const std::wstring_view>(paths.data(), count), _hostImportNewProject,
+                                     _hostSawProject ? std::nullopt : value.dropPoint);
+                if (FAILED(_hostExecutionError))
+                {
+                    ++_errorsShown;
+                    _lastErrorId = IDS_ERROR_IMPORT_IMAGE;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
+                return SUCCEEDED(_hostExecutionError);
             }
             else if constexpr (std::is_same_v<Input, HostNewInput>)
             {
@@ -576,90 +584,6 @@ void Application::ReplaceDocument(CanvasDocument document, const std::optional<G
 // layer above the active one, all in one `Import Images` entry (`Import Image` for a single file), centered on
 // `center` when the images join the document it was taken on (legacy drainImports: the images of a batch that
 // starts the document center on its canvas, whatever the drop point).
-bool Application::ImportImagePathViews(std::span<const std::wstring_view> paths, bool newProject,
-                                       std::optional<Vec2> center) noexcept
-{
-    if (paths.empty())
-    {
-        return false;
-    }
-    bool failed = false;
-    bool tooLarge = false;
-    const auto noteFailure = [&](ProjectIoStatus status) noexcept
-    {
-        failed = true;
-        tooLarge = tooLarge || status == ProjectIoStatus::TooLarge;
-    };
-    std::size_t next = 0;
-    if (newProject || !_session.Document().has_value())
-    {
-        // The first image that loads determines the canvas (legacy importImages); one that fails before it is
-        // reported with the batch and the next one is tried.
-        std::optional<CanvasDocument> created;
-        std::optional<Guid> active;
-        for (; next < paths.size() && !created.has_value(); ++next)
-        {
-            CanvasDocument document;
-            document.id = Guid::Generate();
-            const ProjectIoStatus status = ImportImageOnto(document, paths[next].data(), active);
-            if (status == ProjectIoStatus::Ok)
-            {
-                created = std::move(document);
-            }
-            else
-            {
-                noteFailure(status);
-            }
-        }
-        if (!created.has_value())
-        {
-            ShowError(tooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
-            return false;
-        }
-        ReplaceDocument(std::move(created.value()), active, std::wstring{});
-        center.reset();
-    }
-    else
-    {
-        // Layers join the document as it stands: a pending edit settles first, and an open panel applies, so the
-        // import never folds into a panel's entry that Cancel would take back.
-        SettleInteractions(true);
-    }
-    if (next < paths.size())
-    {
-        std::optional<Guid> active = _session.ActiveLayerID();
-        std::wstring name = paths.size() - next > 1 ? L"Import Images" : L"Import Image";
-        CanvasDocument document = _session.Document().value();
-        bool imported = false;
-        for (; next < paths.size(); ++next)
-        {
-            const ProjectIoStatus status = ImportImageOnto(document, paths[next].data(), active, center);
-            if (status != ProjectIoStatus::Ok)
-            {
-                noteFailure(status);
-            }
-            else
-            {
-                imported = true;
-            }
-        }
-        if (imported)
-        {
-            if (!_session.ApplyImportedDocument(std::move(document), active, std::move(name)))
-            {
-                noteFailure(ProjectIoStatus::Invalid);
-            }
-        }
-        _viewport.followsFit = true;
-    }
-    if (failed)
-    {
-        ShowError(tooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
-    }
-    DocumentChanged();
-    return !failed;
-}
-
 void Application::ImportImages() noexcept
 {
     // A quiet run never waits on a file dialog (Application::OpenDocument).

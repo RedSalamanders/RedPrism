@@ -1942,7 +1942,8 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
 }
 
 ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, std::optional<Guid>& activeLayerID,
-                                std::optional<Vec2> center, CancelToken cancellation, ProjectIoObserver observer)
+                                std::optional<Vec2> center, CancelToken cancellation, ProjectIoObserver observer,
+                                int maximumImagePixels, std::uint64_t maximumEncodedBytes)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1971,12 +1972,13 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
             usedImagePixels += pixels;
         }
     }
-    const int remainingPixels = static_cast<int>(static_cast<std::int64_t>(kMaxLayerPixels) - usedImagePixels);
+    const int remainingPixels =
+        (std::min)(maximumImagePixels, static_cast<int>(static_cast<std::int64_t>(kMaxLayerPixels) - usedImagePixels));
     if (remainingPixels <= 0)
         return ProjectIoStatus::TooLarge;
 
     DecodedImage decoded{};
-    const ImageCodecStatus status = ImportImageFile(path, remainingPixels, decoded, cancellation);
+    const ImageCodecStatus status = ImportImageFile(path, remainingPixels, decoded, cancellation, maximumEncodedBytes);
     if (status == ImageCodecStatus::Cancelled || cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     if (status == ImageCodecStatus::HeifUnavailable || status == ImageCodecStatus::Unsupported)

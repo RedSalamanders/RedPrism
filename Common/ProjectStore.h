@@ -167,7 +167,8 @@ template <typename AttributeFn>
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,
                                               std::optional<Guid>& activeLayerID,
                                               std::optional<Vec2> center = std::nullopt, CancelToken cancellation = {},
-                                              ProjectIoObserver observer = {});
+                                              ProjectIoObserver observer = {}, int maximumImagePixels = kMaxLayerPixels,
+                                              std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
 [[nodiscard]] ProjectIoStatus ExportDocumentPng(const Raster& flattened, double resolution, const wchar_t* path,
                                                 CancelToken cancellation = {});
 [[nodiscard]] ProjectIoStatus ExportDocumentJpeg(const Raster& flattened, const JpegExportOptions& options,

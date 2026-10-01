@@ -5,6 +5,7 @@
 #include "Kernels.h"
 #include "UiBenchmark.h"
 #include "VersionInfo.h"
+#include "resource.h"
 
 #include <algorithm>
 #include <array>
@@ -27,7 +28,10 @@ enum class Expected
     Saved,
     Opened,
     PngExported,
-    JpegExported
+    JpegExported,
+    ImportedProject,
+    ImportedLayers,
+    ImportedLayersRefused
 };
 
 struct Operation final
@@ -41,7 +45,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 22> kOperations{{
+constexpr std::array<Operation, 24> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -63,6 +67,8 @@ constexpr std::array<Operation, 22> kOperations{{
     {"project-save", 0, 0, {}, 0, Expected::Saved},
     {"project-open", 0, 0, {}, 0, Expected::Opened},
     {"png-export", 0, 0, {}, 0, Expected::PngExported},
+    {"image-import-new-canvas", 0, 0, {}, 0, Expected::ImportedProject},
+    {"image-import-existing-layer", 0, 0, {}, 0, Expected::ImportedLayers},
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
 }};
 
@@ -90,6 +96,11 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
                          0,
                          Expected::Refusal,
                          true};
+    }
+    if (operation.expected == Expected::ImportedLayers &&
+        static_cast<std::int64_t>(state.fixture.width) * state.fixture.height * 2 > kMaxLayerPixels)
+    {
+        operation = {"image-import-existing-refused-pixel-budget", 0, 0, {}, 0, Expected::ImportedLayersRefused};
     }
     return operation;
 }
@@ -192,6 +203,12 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         }
         top.asset = RasterAsset{image, Raster::MakeThumbnail(image), L"Benchmark active"};
         next->activeLayer = top.id;
+        next->imageImportBaseline.id = Guid::Generate();
+        next->imageImportBaseline.width = width;
+        next->imageImportBaseline.height = height;
+        auto importBaseLayer = top;
+        importBaseLayer.mask.reset();
+        next->imageImportBaseline.layers.push_back(std::move(importBaseLayer));
         if (!ceiling)
         {
             Raster mask = Pattern(width, height, 0, true, next->fixtureChecksum);
@@ -218,6 +235,11 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
             next->fixture.layers.push_back(std::move(adjustment));
         }
         if (ValidateDocument(next->fixture) != DocumentStatus::Ok)
+        {
+            return E_INVALIDARG;
+        }
+        if (ValidateDocument(next->imageImportBaseline) != DocumentStatus::Ok ||
+            next->imageImportBaseline.layers.size() != 1 || !next->imageImportBaseline.layers.front().asset.has_value())
         {
             return E_INVALIDARG;
         }
@@ -443,12 +465,15 @@ void Application::PrepareUiBenchmarkStep() noexcept
 {
     auto& state = *_uiBenchmark;
     _session.CancelColorEdit();
-    _session.ReplaceDocument(state.fixture, state.activeLayer);
+    const auto operation = CurrentOperation(state);
+    if (operation.expected == Expected::ImportedLayers || operation.expected == Expected::ImportedLayersRefused)
+        _session.ReplaceDocument(state.imageImportBaseline, state.activeLayer);
+    else
+        _session.ReplaceDocument(state.fixture, state.activeLayer);
     _session.filterSettings = {};
     _session.SetForegroundColor(0xff936427);
     OnTool(EditorTool::Move);
     _viewport.Fit(DocumentSize());
-    const auto operation = CurrentOperation(state);
     if (operation.expected == Expected::Saved)
     {
         state.saveReceipt.reset();
@@ -456,6 +481,9 @@ void Application::PrepareUiBenchmarkStep() noexcept
     }
     if (operation.expected == Expected::Opened)
         state.openReceipt.reset();
+    if (operation.expected == Expected::ImportedProject || operation.expected == Expected::ImportedLayers ||
+        operation.expected == Expected::ImportedLayersRefused)
+        state.importReceipt.reset();
     if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
         state.exportReceipt.reset();
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
@@ -525,7 +553,18 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         const auto& path = format == HostWriteFormat::Png ? _uiBenchmark->pngExportPath : _uiBenchmark->jpegExportPath;
         HostWriteInput input{format, false, path}; // QueueHostInput takes an owned copy for the continuation.
         _uiBenchmark->exportReceipt = QueueHostInput(std::move(input));
+        if (operation.expected == Expected::PngExported)
+            _uiBenchmark->pngExportReceipt = _uiBenchmark->exportReceipt;
         ReportHostAdmission(_uiBenchmark->exportReceipt.value());
+    }
+    else if (operation.expected == Expected::ImportedProject || operation.expected == Expected::ImportedLayers ||
+             operation.expected == Expected::ImportedLayersRefused)
+    {
+        const std::array<std::wstring_view, 1> paths{_uiBenchmark->pngExportPath};
+        const auto action = operation.expected == Expected::ImportedProject ? HostPathAction::ImagesAsProject
+                                                                            : HostPathAction::ImagesAsLayers;
+        _uiBenchmark->importReceipt = QueueHostPaths(paths, action);
+        ReportHostAdmission(_uiBenchmark->importReceipt.value());
     }
     else if (operation.sizeAction)
         OnSizeAction(SizeAction::Apply, 0);
@@ -566,6 +605,14 @@ void Application::AdvanceUiBenchmark() noexcept
     }
     if (state.phase == UiBenchmarkState::Phase::Preparing)
     {
+        const auto operation = CurrentOperation(state);
+        if ((operation.expected == Expected::ImportedProject || operation.expected == Expected::ImportedLayers ||
+             operation.expected == Expected::ImportedLayersRefused) &&
+            (!state.pngExportReceipt || state.pngExportReceipt->Read().outcome != HostOutcome::Succeeded))
+        {
+            FailUiBenchmark("png-export-not-ready");
+            return;
+        }
         state.previousRevision = _session.history.CurrentRevision();
         state.previousSessionSerial = _session.DocumentSerial();
         if (_documentPath.size() >= state.previousDocumentPath.size())
@@ -576,6 +623,24 @@ void Application::AdvanceUiBenchmark() noexcept
         std::copy(_documentPath.begin(), _documentPath.end(), state.previousDocumentPath.begin());
         state.previousDocumentPathUnits = _documentPath.size();
         state.previousModified = _session.history.IsModified();
+        state.previousActiveLayer = _session.ActiveLayerID();
+        state.previousUndoCount = _session.history.UndoCount();
+        state.previousErrorsShown = _errorsShown;
+        state.expectedImageWidth = state.fixture.width;
+        state.expectedImageHeight = state.fixture.height;
+        if (operation.expected == Expected::ImportedLayers || operation.expected == Expected::ImportedLayersRefused)
+        {
+            const auto& document = _session.Document();
+            const auto* baseline = _session.ActiveLayer();
+            if (!document || document->layers.size() != 1 || !baseline || !baseline->asset ||
+                baseline->asset->image.Width() != state.expectedImageWidth ||
+                baseline->asset->image.Height() != state.expectedImageHeight || state.previousUndoCount != 0 ||
+                state.previousActiveLayer != state.activeLayer)
+            {
+                FailUiBenchmark("image-import-baseline-not-ready");
+                return;
+            }
+        }
         state.previousReadback = _gpuWork.Statistics();
         const auto* layer = _session.ActiveLayer();
         if (!layer || !layer->asset.has_value())
@@ -647,6 +712,37 @@ void Application::AdvanceUiBenchmark() noexcept
         layer->asset->image == state.previousImage && !edit;
     const bool pngExported = expected == Expected::PngExported && exportUnchanged;
     const bool jpegExported = expected == Expected::JpegExported && exportUnchanged;
+    const auto* importedLayer = _session.ActiveLayer();
+    const bool importedImage = importedLayer && importedLayer->asset.has_value() &&
+                               importedLayer->asset->image.Width() == state.expectedImageWidth &&
+                               importedLayer->asset->image.Height() == state.expectedImageHeight &&
+                               importedLayer->asset->image != state.previousImage;
+    const auto importResult = state.importReceipt ? state.importReceipt->Read() : ContinuationReceipt::Result{};
+    const bool importedProject =
+        expected == Expected::ImportedProject && state.importReceipt &&
+        importResult.outcome == HostOutcome::Succeeded && _session.DocumentSerial() != state.previousSessionSerial &&
+        _documentPath.empty() && document && document->width == state.expectedImageWidth &&
+        document->height == state.expectedImageHeight && document->layers.size() == 1 &&
+        _session.ActiveLayerID().has_value() && _session.ActiveLayerID() != state.previousActiveLayer &&
+        importedImage && !_session.history.IsModified() && !_session.history.CanUndo() && !_session.history.CanRedo() &&
+        _session.history.UndoCount() == 0 && state.previousUndoCount == 0;
+    const bool importedLayers =
+        expected == Expected::ImportedLayers && state.importReceipt && importResult.outcome == HostOutcome::Succeeded &&
+        _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
+        document->width == state.expectedImageWidth && document->height == state.expectedImageHeight &&
+        document->layers.size() == 2 && _session.ActiveLayerID().has_value() &&
+        _session.ActiveLayerID() != state.previousActiveLayer && importedImage &&
+        _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Import Image";
+    const bool importRefused =
+        expected == Expected::ImportedLayersRefused && state.importReceipt &&
+        importResult.outcome == HostOutcome::Failed && importResult.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) &&
+        _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
+        document->id == state.imageImportBaseline.id && document->width == state.expectedImageWidth &&
+        document->height == state.expectedImageHeight && document->layers.size() == 1 &&
+        _session.ActiveLayerID() == state.previousActiveLayer && layer && layer->asset &&
+        layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount && _errorsShown == state.previousErrorsShown + 1 &&
+        _lastErrorId == IDS_ERROR_TOO_LARGE;
     const bool sizeReady =
         expected == Expected::Size && document && !SizeCardOpen() &&
         _session.history.CurrentRevision() != state.previousRevision &&
@@ -660,8 +756,9 @@ void Application::AdvanceUiBenchmark() noexcept
                    layer->asset && layer->asset->image != state.previousImage &&
                    _session.history.UndoName() == L"Image Size");
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
-        !(viewReady || refused || saved || opened || pngExported || jpegExported || sizeReady || histogramReady ||
-          (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
+        !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
+          importRefused || sizeReady || histogramReady || (expected == Expected::Panel && panelReady) ||
+          (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
         return;

@@ -13,6 +13,7 @@
 #include "EditorTool.h"
 #include "GpuWork.h"
 #include "HistoryWork.h"
+#include "ImageImportWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
 #include "PathClassificationWork.h"
@@ -46,6 +47,7 @@ struct SizingWorkTestGate;
 struct FileWorkTestGate;
 struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
+struct ImageImportTestGate;
 struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
@@ -319,8 +321,14 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartExportReadback(HostWriteFormat format) noexcept;
     int RunExportReadbackSelfTest() noexcept;
     [[nodiscard]] bool ExecuteHostInput() noexcept;
-    [[nodiscard]] bool ImportImagePathViews(std::span<const std::wstring_view> paths, bool newProject,
+    class ImageImportJob;
+    [[nodiscard]] HRESULT StartImageImport(std::span<const std::wstring_view> paths, bool newProject,
+                                           std::optional<Vec2> center) noexcept;
+    [[nodiscard]] HRESULT SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t generation,
+                                            std::vector<std::wstring> paths,
+                                            std::optional<std::vector<ImageImportFilePlan>> files, bool newProject,
                                             std::optional<Vec2> center) noexcept;
+    int RunImageImportSelfTest() noexcept;
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
@@ -597,6 +605,9 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _projectOpenStamp;
     std::optional<JobTicket> _projectOpenTicket;
     std::shared_ptr<ProjectOpenTestGate> _projectOpenTestGate;
+    std::optional<HistoryWorkStamp> _imageImportStamp;
+    std::optional<JobTicket> _imageImportTicket;
+    std::shared_ptr<ImageImportTestGate> _imageImportTestGate;
     std::optional<HistoryWorkStamp> _projectSaveStamp;
     std::optional<JobTicket> _projectSaveTicket;
     std::shared_ptr<ProjectSaveTestGate> _projectSaveTestGate;

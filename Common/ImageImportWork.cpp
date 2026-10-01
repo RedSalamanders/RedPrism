@@ -1,5 +1,6 @@
 #include "ImageImportWork.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -57,10 +58,45 @@ void ReportProgress(const ImageImportBatchInput& input, std::size_t attempted, P
 }
 } // namespace
 
+ImageImportProbeResult ProbeImageImportBatch(std::span<const std::wstring_view> paths, CancelToken cancellation)
+{
+    ImageImportProbeResult result;
+    if (!ValidPaths(paths))
+        return result;
+    result.files.reserve(paths.size());
+    for (const auto pathView : paths)
+    {
+        if (cancellation.IsCancelled())
+        {
+            result.files.clear();
+            result.status = ProjectIoStatus::Cancelled;
+            return result;
+        }
+        const std::wstring path(pathView);
+        ImageImportMetadata metadata;
+        const auto status = ProbeImportImageFile(path.c_str(), kMaxLayerPixels, metadata, cancellation);
+        if (status == ImageCodecStatus::Cancelled || cancellation.IsCancelled())
+        {
+            result.files.clear();
+            result.status = ProjectIoStatus::Cancelled;
+            return result;
+        }
+        const auto mapped = status == ImageCodecStatus::Ok         ? ProjectIoStatus::Ok
+                            : status == ImageCodecStatus::TooLarge ? ProjectIoStatus::TooLarge
+                            : status == ImageCodecStatus::Unsupported || status == ImageCodecStatus::HeifUnavailable
+                                ? ProjectIoStatus::Invalid
+                                : ProjectIoStatus::MissingImage;
+        result.files.push_back({mapped, static_cast<int>(metadata.pixels), metadata.encodedBytes});
+    }
+    result.status = ProjectIoStatus::Ok; // per-file failures are retained for the ordered preparation batch
+    return result;
+}
+
 ImageImportBatchResult RunImageImportBatch(const ImageImportBatchInput& input, CancelToken cancellation)
 {
     ImageImportBatchResult result;
-    if (!ValidPaths(input.paths))
+    if (!ValidPaths(input.paths) || (!input.files.empty() && input.files.size() != input.paths.size()) ||
+        input.maximumAddedPixels < 0 || input.maximumAddedPixels > kMaxLayerPixels)
     {
         result.status = ProjectIoStatus::Invalid;
         return result;
@@ -84,6 +120,7 @@ ImageImportBatchResult RunImageImportBatch(const ImageImportBatchInput& input, C
     bool created = false;
     bool imported = false;
     std::size_t firstSuccessIndex = input.paths.size();
+    int addedPixels = 0;
     for (std::size_t index = 0; index < input.paths.size(); ++index)
     {
         if (cancellation.IsCancelled())
@@ -96,19 +133,34 @@ ImageImportBatchResult RunImageImportBatch(const ImageImportBatchInput& input, C
         // Counted views are not required to be NUL-terminated. ImportImageOnto accepts a C path, so make one
         // bounded per-file copy instead of relying on the backing owner's string representation.
         const std::wstring path(input.paths[index]);
+        const ImageImportFilePlan plan =
+            input.files.empty() ? ImageImportFilePlan{ProjectIoStatus::Ok, kMaxLayerPixels, kMaxImageEncodedBytes}
+                                : input.files[index];
+        const int maximumPixels = (std::min)(plan.pixels, input.maximumAddedPixels - addedPixels);
         ProjectIoStatus status = ProjectIoStatus::Invalid;
-        if (createsCanvas && !created)
+        if (plan.status != ProjectIoStatus::Ok)
+        {
+            status = plan.status;
+        }
+        else if (plan.pixels < 1 || plan.pixels > kMaxLayerPixels || plan.encodedBytes == 0 ||
+                 plan.encodedBytes > kMaxImageEncodedBytes)
+        {
+            status = ProjectIoStatus::TooLarge;
+        }
+        else if (createsCanvas && !created)
         {
             CanvasDocument initial;
             initial.id = Guid::Generate();
             std::optional<Guid> initialActive;
-            status = ImportImageOnto(initial, path.c_str(), initialActive, std::nullopt, cancellation, input.observer);
+            status = ImportImageOnto(initial, path.c_str(), initialActive, std::nullopt, cancellation, input.observer,
+                                     maximumPixels, plan.encodedBytes);
             if (status == ProjectIoStatus::Ok)
             {
                 result.createdDocument = std::move(initial);
                 result.createdActiveLayerID = initialActive;
                 created = true;
                 firstSuccessIndex = index;
+                addedPixels += result.createdDocument->layers.front().asset->image.PixelCount();
                 if (index + 1 < input.paths.size())
                 {
                     workingDocument = result.createdDocument.value();
@@ -118,11 +170,14 @@ ImageImportBatchResult RunImageImportBatch(const ImageImportBatchInput& input, C
         }
         else
         {
-            status =
-                ImportImageOnto(workingDocument, path.c_str(), activeLayerID, center, cancellation, input.observer);
+            status = ImportImageOnto(workingDocument, path.c_str(), activeLayerID, center, cancellation, input.observer,
+                                     maximumPixels, plan.encodedBytes);
             if (status == ProjectIoStatus::Ok)
             {
                 imported = true;
+                const auto layer = std::find_if(workingDocument.layers.begin(), workingDocument.layers.end(),
+                                                [&](const auto& value) { return value.id == activeLayerID; });
+                addedPixels += layer->asset->image.PixelCount();
             }
         }
 

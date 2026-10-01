@@ -2206,6 +2206,8 @@ int Application::RunSelfTest() noexcept
     }
     if (const int opened = RunProjectOpenSelfTest(); opened != 0)
         return opened;
+    if (const int imported = RunImageImportSelfTest(); imported != 0)
+        return imported;
     if (const int projectSave = RunProjectSaveSelfTest(); projectSave != 0)
         return projectSave;
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)

@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <objidl.h>
 
 #pragma warning(push)
@@ -11,13 +12,21 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-// Private WIC destination. One calling worker owns cursor operations; only COM reference counting is concurrent.
-// Encoded bytes go straight to an exclusive temporary file, with a hard size cap and 64 KiB stop checkpoints.
+// Private WIC file stream. One worker owns the cursor; only COM reference counting is concurrent.
+// Reads retain an opened, size-checked source with write/delete sharing denied. Writes own an exclusive temporary.
 class CodecFileStream final : public IStream
 {
+    struct ConstructionKey final
+    {
+    };
+
   public:
     [[nodiscard]] static HRESULT Create(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
                                         CodecFileStream** result) noexcept;
+    [[nodiscard]] static HRESULT CreateRead(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
+                                            CodecFileStream** result) noexcept;
+    CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation,
+                    bool readOnly) noexcept;
     [[nodiscard]] HRESULT CloseChecked() noexcept;
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** result) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
@@ -35,11 +44,14 @@ class CodecFileStream final : public IStream
     HRESULT STDMETHODCALLTYPE Clone(IStream** result) noexcept override;
 
   private:
-    CodecFileStream(wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation) noexcept;
+    friend struct std::default_delete<CodecFileStream>;
+    [[nodiscard]] static HRESULT Open(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
+                                      bool readOnly, CodecFileStream** result) noexcept;
     ~CodecFileStream() = default;
     std::atomic<ULONG> _references{1};
     wil::unique_hfile _file;
     const std::uint64_t _maximumBytes;
     const CancelToken _cancellation;
+    const bool _readOnly;
     bool _dirty = false;
 };

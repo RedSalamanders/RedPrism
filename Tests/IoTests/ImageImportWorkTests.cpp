@@ -4,6 +4,7 @@
 #include "ImageImportWorkTests.h"
 
 #include "ImageCodecs.h"
+#include "PixelBuffer.h"
 
 #include <algorithm>
 #include <array>
@@ -91,6 +92,36 @@ class ScratchDirectory final
 [[nodiscard]] bool WritePixelPng(const std::wstring& path, std::uint8_t blue, std::uint8_t green, std::uint8_t red)
 {
     return EncodePngFile(Pixel(blue, green, red), 72, path.c_str()) == ImageCodecStatus::Ok;
+}
+
+[[nodiscard]] bool WriteGridPng(const std::wstring& path, int width, int height)
+{
+    if (width < 1 || height < 1)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const std::size_t offset =
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)) * 4;
+            pixels[offset] = static_cast<std::uint8_t>(x * 37 + y * 11);
+            pixels[offset + 1] = static_cast<std::uint8_t>(x * 13 + y * 53);
+            pixels[offset + 2] = static_cast<std::uint8_t>(x * 71 + y * 29);
+            pixels[offset + 3] = 255;
+        }
+    }
+    const Raster image = Raster::Make(width, height, RasterFormat::Bgra8888, pixels.data(), pixels.size());
+    return image.HasStorage() && EncodePngFile(image, 72, path.c_str()) == ImageCodecStatus::Ok;
+}
+
+[[nodiscard]] std::uint64_t FileLength(const std::wstring& path) noexcept
+{
+    std::error_code error;
+    const auto size = std::filesystem::file_size(path, error);
+    return error ? 0 : size;
 }
 
 [[nodiscard]] bool HasPixel(const Raster& image, std::array<std::uint8_t, 4> expected) noexcept
@@ -382,6 +413,237 @@ void DecodedAssetCancellationBeforeMutation(const ScratchDirectory& scratch)
                newProject ? "asset-stop.new-source-unchanged" : "asset-stop.existing-source-unchanged");
     }
 }
+
+void ProbeBatchRecordsPerFileMetadataAndContinuesAfterMissing(const ScratchDirectory& scratch)
+{
+    const std::wstring missing = scratch.Child(L"probe-missing-first.png");
+    const std::wstring twoByThree = scratch.Child(L"probe-literal-2x3.png");
+    const std::wstring fourByTwo = scratch.Child(L"probe-literal-4x2.png");
+    Expect(WriteGridPng(twoByThree, 2, 3) && WriteGridPng(fourByTwo, 4, 2), "probe.literal-png-fixtures");
+    const std::array<std::wstring_view, 3> paths{missing, twoByThree, fourByTwo};
+    const ImageImportProbeResult result = ProbeImageImportBatch(paths);
+    Expect(result.status == ProjectIoStatus::Ok && result.files.size() == paths.size(),
+           "probe.batch-retains-per-file-results-after-failure");
+    if (result.files.size() == paths.size())
+    {
+        Expect(result.files[0].status == ProjectIoStatus::MissingImage && result.files[0].pixels == 0 &&
+                   result.files[0].encodedBytes == 0,
+               "probe.first-missing-has-no-decoded-metadata");
+        Expect(result.files[1].status == ProjectIoStatus::Ok && result.files[1].pixels == 6 &&
+                   result.files[1].encodedBytes == FileLength(twoByThree),
+               "probe.literal-2x3-pixel-count-and-exact-encoded-length");
+        Expect(result.files[2].status == ProjectIoStatus::Ok && result.files[2].pixels == 8 &&
+                   result.files[2].encodedBytes == FileLength(fourByTwo),
+               "probe.literal-4x2-pixel-count-and-exact-encoded-length");
+    }
+}
+
+void CachedMissingProbeDoesNotDecodeFileThatAppearsLater(const ScratchDirectory& scratch)
+{
+    const std::wstring path = scratch.Child(L"probe-missing-then-created.png");
+    const std::array<std::wstring_view, 1> paths{path};
+    const ImageImportProbeResult probe = ProbeImageImportBatch(paths);
+    Expect(probe.status == ProjectIoStatus::Ok && probe.files.size() == 1 &&
+               probe.files[0].status == ProjectIoStatus::MissingImage,
+           "probe-cache.missing-status-captured");
+    Expect(WritePixelPng(path, 17, 29, 43), "probe-cache.file-created-after-probe");
+    if (probe.files.size() == 1)
+    {
+        const ImageImportBatchInput input{std::nullopt, std::nullopt, paths, true,       std::nullopt,
+                                          nullptr,      nullptr,      {},    probe.files};
+        const ImageImportBatchResult result = RunImageImportBatch(input);
+        Expect(result.status == ProjectIoStatus::MissingImage && result.failed && !result.tooLarge &&
+                   !result.createdDocument && !result.importedDocument,
+               "probe-cache.late-file-remains-cached-missing-without-decode");
+    }
+}
+
+void ChangedFileCannotExceedProbePixelOrEncodedCeilings(const ScratchDirectory& scratch)
+{
+    const std::wstring path = scratch.Child(L"probe-growth.png");
+    Expect(WritePixelPng(path, 7, 19, 31), "probe-growth.initial-png");
+    const std::array<std::wstring_view, 1> paths{path};
+    const ImageImportProbeResult probe = ProbeImageImportBatch(paths);
+    Expect(probe.status == ProjectIoStatus::Ok && probe.files.size() == 1 && probe.files[0].pixels == 1,
+           "probe-growth.initial-one-pixel-plan");
+    const std::uint64_t probedLength = probe.files.size() == 1 ? probe.files[0].encodedBytes : 0;
+    Expect(WriteGridPng(path, 64, 64), "probe-growth.replacement-png");
+    const std::uint64_t grownLength = FileLength(path);
+    Expect(grownLength > probedLength, "probe-growth.encoded-length-grew-past-plan");
+    if (probe.files.size() == 1)
+    {
+        const ImageImportBatchInput input{std::nullopt, std::nullopt, paths, true,        std::nullopt,
+                                          nullptr,      nullptr,      {},    probe.files, 1};
+        const ImageImportBatchResult result = RunImageImportBatch(input);
+        Expect(result.status == ProjectIoStatus::TooLarge && result.failed && result.tooLarge &&
+                   !result.createdDocument && !result.importedDocument,
+               "probe-growth.decode-caps-refuse-grown-source-with-no-output");
+    }
+}
+
+[[nodiscard]] std::array<ImageImportFilePlan, 2> ProbeTwoOnePixelFiles(const std::wstring& first,
+                                                                       const std::wstring& second)
+{
+    (void)WritePixelPng(first, 31, 47, 59);
+    (void)WritePixelPng(second, 61, 73, 89);
+    const std::array<std::wstring_view, 2> paths{first, second};
+    const ImageImportProbeResult probe = ProbeImageImportBatch(paths);
+    if (probe.status != ProjectIoStatus::Ok || probe.files.size() != 2)
+    {
+        return {};
+    }
+    return {probe.files[0], probe.files[1]};
+}
+
+void AddedPixelLimitPreservesCreatedBaselineAndAcceptsEquality(const ScratchDirectory& scratch)
+{
+    const std::wstring first = scratch.Child(L"pixel-limit-first.png");
+    const std::wstring second = scratch.Child(L"pixel-limit-second.png");
+    const auto files = ProbeTwoOnePixelFiles(first, second);
+    const std::array<std::wstring_view, 2> paths{first, second};
+    Expect(files[0].status == ProjectIoStatus::Ok && files[0].pixels == 1 && files[1].status == ProjectIoStatus::Ok &&
+               files[1].pixels == 1,
+           "pixel-limit.two-probed-one-pixel-plans");
+
+    const ImageImportBatchInput limitedInput{std::nullopt, std::nullopt, paths, true,  std::nullopt,
+                                             nullptr,      nullptr,      {},    files, 1};
+    const ImageImportBatchResult limited = RunImageImportBatch(limitedInput);
+    Expect(limited.status == ProjectIoStatus::TooLarge && limited.failed && limited.tooLarge &&
+               limited.createdDocument && limited.createdActiveLayerID && !limited.importedDocument,
+           "pixel-limit.second-image-fails-after-preserving-created-baseline");
+    if (limited.createdDocument && limited.createdActiveLayerID)
+    {
+        const ImageLayer* baseline = Layer(limited.createdDocument.value(), limited.createdActiveLayerID.value());
+        Expect(limited.createdDocument->layers.size() == 1 && baseline && baseline->asset &&
+                   HasPixel(baseline->asset->image, {31, 47, 59, 255}),
+               "pixel-limit.baseline-is-complete-first-import");
+    }
+
+    const ImageImportBatchInput equalInput{std::nullopt, std::nullopt, paths, true,  std::nullopt,
+                                           nullptr,      nullptr,      {},    files, 2};
+    const ImageImportBatchResult equal = RunImageImportBatch(equalInput);
+    Expect(equal.status == ProjectIoStatus::Ok && equal.createdDocument && equal.createdActiveLayerID &&
+               equal.importedDocument && equal.importedActiveLayerID,
+           "pixel-limit.aggregate-equality-accepted-with-baseline-and-import");
+    if (equal.createdDocument && equal.createdActiveLayerID && equal.importedDocument && equal.importedActiveLayerID)
+    {
+        const ImageLayer* baseline = Layer(equal.createdDocument.value(), equal.createdActiveLayerID.value());
+        const ImageLayer* imported = Layer(equal.importedDocument.value(), equal.importedActiveLayerID.value());
+        Expect(equal.createdDocument->layers.size() == 1 && equal.importedDocument->layers.size() == 2 && baseline &&
+                   baseline->asset && HasPixel(baseline->asset->image, {31, 47, 59, 255}) && imported &&
+                   imported->asset && HasPixel(imported->asset->image, {61, 73, 89, 255}),
+               "pixel-limit.equality-keeps-complete-baseline-and-second-image");
+    }
+}
+
+void FailedProbeStatusSurvivesZeroPixelCeiling(const ScratchDirectory& scratch)
+{
+    const std::wstring path = scratch.Child(L"cached-too-large.png");
+    Expect(WritePixelPng(path, 1, 2, 3), "probe-too-large.file-exists");
+    const std::array<std::wstring_view, 1> paths{path};
+    const std::array<ImageImportFilePlan, 1> files{{{ProjectIoStatus::TooLarge, 0, 0}}};
+    const ImageImportBatchInput input{std::nullopt, std::nullopt, paths, true,  std::nullopt,
+                                      nullptr,      nullptr,      {},    files, 0};
+    const ImageImportBatchResult result = RunImageImportBatch(input);
+    Expect(result.status == ProjectIoStatus::TooLarge && result.failed && result.tooLarge &&
+               result.attemptedPaths == 1 && !result.createdDocument && !result.importedDocument,
+           "probe-too-large.cached-status-before-zero-ceiling-and-no-decode-output");
+}
+
+void InvalidPlansAndCancellationClearResults(const ScratchDirectory& scratch)
+{
+    const std::wstring path = scratch.Child(L"invalid-plan.png");
+    Expect(WritePixelPng(path, 9, 10, 11), "invalid-plan.fixture");
+    const std::array<std::wstring_view, 1> paths{path};
+    const std::array<ImageImportFilePlan, 1> plan{{{ProjectIoStatus::Ok, 1, FileLength(path)}}};
+    const std::array<ImageImportFilePlan, 2> mismatched{{plan[0], plan[0]}};
+    const ImageImportBatchInput negative{std::nullopt, std::nullopt, paths, true, std::nullopt,
+                                         nullptr,      nullptr,      {},    plan, -1};
+    const ImageImportBatchInput wrongLength{std::nullopt, std::nullopt, paths, true,       std::nullopt,
+                                            nullptr,      nullptr,      {},    mismatched, 1};
+    Expect(RunImageImportBatch(negative).status == ProjectIoStatus::Invalid,
+           "invalid-plan.negative-aggregate-limit-refused");
+    Expect(RunImageImportBatch(wrongLength).status == ProjectIoStatus::Invalid,
+           "invalid-plan.file-plan-count-mismatch-refused");
+
+    std::array<std::wstring_view, kImageImportMaxPaths + 1> tooMany{};
+    tooMany.fill(path);
+    int addedLimit = -1;
+    Expect(ImageImportMetadataMemoryBytes(tooMany) == 0 &&
+               ImageImportMemoryBytes(tooMany, {}, nullptr, addedLimit) == 0 && addedLimit == 0,
+           "memory.invalid-path-count-zeroes-limit");
+    const std::array<std::wstring_view, 0> noPaths{};
+    Expect(ImageImportMetadataMemoryBytes(noPaths) == 0 &&
+               ImageImportMemoryBytes(noPaths, {}, nullptr, addedLimit) == 0 && addedLimit == 0,
+           "memory.empty-path-list-refused");
+    const std::array<ImageImportFilePlan, 1> invalidPixels{{{ProjectIoStatus::Ok, -1, 10}}};
+    Expect(ImageImportMemoryBytes(paths, invalidPixels, nullptr, addedLimit) == 0 && addedLimit == 0,
+           "memory.invalid-pixel-plan-refused-and-limit-cleared");
+    const std::array<ImageImportFilePlan, 1> overPixelLimit{{{ProjectIoStatus::Ok, kMaxLayerPixels + 1, 10}}};
+    const std::array<ImageImportFilePlan, 1> overEncodedLimit{{{ProjectIoStatus::Ok, 1, kMaxImageEncodedBytes + 1}}};
+    Expect(ImageImportMemoryBytes(paths, overPixelLimit, nullptr, addedLimit) == 0 && addedLimit == 0 &&
+               ImageImportMemoryBytes(paths, overEncodedLimit, nullptr, addedLimit) == 0 && addedLimit == 0,
+           "memory.pixel-and-encoded-arithmetic-bounds-refused");
+
+    CancelSource cancellation;
+    (void)cancellation.Cancel();
+    const ImageImportProbeResult probe = ProbeImageImportBatch(paths, cancellation.Token());
+    Expect(probe.status == ProjectIoStatus::Cancelled && probe.files.empty(), "cancel.probe-clears-partial-file-plans");
+    const ImageImportBatchInput cancelledInput{std::nullopt, std::nullopt, paths, true, std::nullopt,
+                                               nullptr,      nullptr,      {},    plan, 1};
+    const ImageImportBatchResult cancelled = RunImageImportBatch(cancelledInput, cancellation.Token());
+    Expect(cancelled.status == ProjectIoStatus::Cancelled && !cancelled.createdDocument &&
+               !cancelled.createdActiveLayerID && !cancelled.importedDocument && !cancelled.importedActiveLayerID &&
+               cancelled.historyName.empty(),
+           "cancel.batch-discards-all-prepared-output");
+}
+
+void ImportMemoryPlanCoversPixelThumbnailAndSourceRecordFloors(const ScratchDirectory& scratch)
+{
+    const std::wstring path = scratch.Child(L"memory-floor.png");
+    const std::array<std::wstring_view, 1> paths{path};
+    const std::array<ImageImportFilePlan, 1> maximum{{{ProjectIoStatus::Ok, kMaxLayerPixels, 1}}};
+    int addedLimit = -1;
+    const std::uint64_t noSource = ImageImportMemoryBytes(paths, maximum, nullptr, addedLimit);
+    const std::uint64_t pixelBytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(kMaxLayerPixels) * 4);
+    const std::uint64_t thumbnailBytes = PixelBuffer::RequiredBytes(96u * 96u * 4u);
+    const std::uint64_t layerFloor = sizeof(ImageLayer);
+    const std::uint64_t metadata = ImageImportMetadataMemoryBytes(paths);
+    Expect(addedLimit == kMaxLayerPixels && noSource >= metadata + pixelBytes + thumbnailBytes + layerFloor,
+           "memory.100m-pixel-plan-covers-pixelbuffer-thumbnail-and-layer-floor");
+
+    const Raster small = Pixel(21, 32, 43);
+    const Raster largeSparse = Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
+    CanvasDocument smallSource = ExistingDocument(small, Guid::Generate(), Guid::Generate());
+    CanvasDocument largeSource = smallSource;
+    largeSource.layers[1].asset->image = largeSparse;
+    const void* identity = largeSource.layers[1].asset->image.Identity();
+    int smallLimit = -1;
+    int largeLimit = -1;
+    const std::uint64_t withSmall = ImageImportMemoryBytes(paths, maximum, &smallSource, smallLimit);
+    const std::uint64_t withLarge = ImageImportMemoryBytes(paths, maximum, &largeSource, largeLimit);
+    Expect(smallLimit == kMaxLayerPixels && largeLimit == kMaxLayerPixels && withSmall == withLarge &&
+               !largeSource.layers[1].asset->image.IsMaterialized() &&
+               largeSource.layers[1].asset->image.Identity() == identity,
+           "memory.shared-source-raster-not-materialized-or-double-charged");
+    std::uint64_t sourceNameUnits = 0;
+    for (const ImageLayer& layer : largeSource.layers)
+    {
+        sourceNameUnits += layer.name.size();
+        if (layer.asset)
+        {
+            sourceNameUnits += layer.asset->name.size();
+        }
+        if (layer.mask)
+        {
+            sourceNameUnits += layer.mask->asset.name.size();
+        }
+    }
+    // Independent minimum for captured input, private working copy and prepared output records/names.
+    const std::uint64_t sourceFloor =
+        3ull * sizeof(ImageLayer) * largeSource.layers.size() + sourceNameUnits * 3ull * sizeof(wchar_t);
+    Expect(withLarge >= noSource + sourceFloor, "memory.source-layer-records-and-names-charged");
+}
 } // namespace
 
 int RunImageImportWorkTests()
@@ -401,5 +663,12 @@ int RunImageImportWorkTests()
     TooLargeFailureIsReportedWithoutPublishing(scratch);
     NewProjectReplacesProvidedSnapshotAndCancellationDiscardsAll(scratch);
     DecodedAssetCancellationBeforeMutation(scratch);
+    ProbeBatchRecordsPerFileMetadataAndContinuesAfterMissing(scratch);
+    CachedMissingProbeDoesNotDecodeFileThatAppearsLater(scratch);
+    ChangedFileCannotExceedProbePixelOrEncodedCeilings(scratch);
+    AddedPixelLimitPreservesCreatedBaselineAndAcceptsEquality(scratch);
+    FailedProbeStatusSurvivesZeroPixelCeiling(scratch);
+    InvalidPlansAndCancellationClearResults(scratch);
+    ImportMemoryPlanCoversPixelThumbnailAndSourceRecordFloors(scratch);
     return gFailures;
 }

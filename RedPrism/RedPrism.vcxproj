@@ -129,6 +129,7 @@
     <ClInclude Include="..\Common\ProjectSaveWork.h" />
     <ClInclude Include="ProjectSaveTestGate.h" />
     <ClInclude Include="ProjectOpenTestGate.h" />
+    <ClInclude Include="ImageImportTestGate.h" />
     <ClInclude Include="..\Common\ExportWork.h" />
     <ClInclude Include="..\Common\OutputPathLimits.h" />
     <ClInclude Include="ExportWorkTestGate.h" />
@@ -185,6 +186,7 @@
     <ClCompile Include="ApplicationFileJobs.cpp" />
     <ClCompile Include="ApplicationProjectSaveJobs.cpp" />
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
+    <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />

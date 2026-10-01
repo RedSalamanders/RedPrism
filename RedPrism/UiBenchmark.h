@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 // Opt-in harness state only. Fixed per-operation sample storage lives on the heap, outside timed work.
@@ -31,6 +32,7 @@ struct UiBenchmarkState final
         GpuReadbackStatistics readback;
     };
     CanvasDocument fixture;
+    CanvasDocument imageImportBaseline;
     Guid activeLayer;
     BenchmarkMachineInfo machine;
     UiTimingStats timing;
@@ -57,6 +59,11 @@ struct UiBenchmarkState final
     bool failed = false;
     bool savedBaselineReady = false;
     std::uint64_t previousSessionSerial = 0;
+    std::optional<Guid> previousActiveLayer;
+    int previousUndoCount = 0;
+    int previousErrorsShown = 0;
+    int expectedImageWidth = 0;
+    int expectedImageHeight = 0;
     std::wstring saveDirectory;
     std::wstring savePath;
     std::wstring pngExportPath;
@@ -65,4 +72,6 @@ struct UiBenchmarkState final
     std::optional<ContinuationReceipt> saveReceipt;
     std::optional<ContinuationReceipt> openReceipt;
     std::optional<ContinuationReceipt> exportReceipt;
+    std::optional<ContinuationReceipt> pngExportReceipt;
+    std::optional<ContinuationReceipt> importReceipt;
 };

@@ -378,6 +378,131 @@ void CancellationStopsCreationAndMutation()
     Expect(ReadFileBytes(path, actual) && actual == before, "cancel.existing-bytes-remain-unchanged");
 }
 
+void ReadOnlyLiteralCapsSharingAndMutationRefusal()
+{
+    ScratchDirectory scratch;
+    Expect(scratch.IsCreated(), "read.temp-root-created");
+    if (!scratch.IsCreated())
+    {
+        return;
+    }
+
+    const std::wstring path = scratch.File(L"literal-read.bin");
+    constexpr std::array<std::uint8_t, 7> expected{'R', 'A', 'W', 0x00, 0x7F, 0x80, '!'};
+    Expect(WriteFileBytes(path, expected), "read.literal-fixture-created");
+
+    wil::com_ptr_nothrow<CodecFileStream> refused;
+    ExpectHr(CodecFileStream::CreateRead(path.c_str(), expected.size() - 1, {}, refused.put()),
+             HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE), "read.lower-cap-refused");
+    Expect(!refused, "read.lower-cap-no-stream");
+    std::array<std::uint8_t, expected.size()> untouched{};
+    Expect(ReadFileBytes(path, untouched) && untouched == expected, "read.lower-cap-leaves-source-unchanged");
+
+    wil::com_ptr_nothrow<CodecFileStream> stream;
+    ExpectHr(CodecFileStream::CreateRead(path.c_str(), expected.size(), {}, stream.put()), S_OK,
+             "read.equal-cap-opened");
+    if (!stream)
+    {
+        return;
+    }
+
+    std::array<std::uint8_t, expected.size()> actual{};
+    ULONG received = 0;
+    ExpectHr(stream->Read(actual.data(), static_cast<ULONG>(actual.size()), &received), S_OK,
+             "read.literal-content-status");
+    Expect(received == expected.size() && actual == expected, "read.literal-content-exact");
+
+    STATSTG stat{};
+    ExpectHr(stream->Stat(&stat, STATFLAG_NONAME), S_OK, "read.stat-succeeds");
+    Expect(stat.type == STGTY_STREAM && stat.cbSize.QuadPart == expected.size() &&
+               stat.grfMode == (STGM_READ | STGM_SHARE_DENY_WRITE),
+           "read.stat-size-type-and-read-only-mode");
+    Expect(CursorIs(stream.get(), expected.size()), "read.stat-preserves-cursor");
+
+    wil::unique_hfile sharedReader{CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                               FILE_ATTRIBUTE_NORMAL, nullptr)};
+    Expect(static_cast<bool>(sharedReader), "read.concurrent-shared-reader-allowed");
+
+    wil::unique_hfile writer{CreateFileW(path.c_str(), GENERIC_WRITE,
+                                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                         FILE_ATTRIBUTE_NORMAL, nullptr)};
+    const DWORD writerError = writer ? ERROR_SUCCESS : GetLastError();
+    Expect(!writer && writerError == ERROR_SHARING_VIOLATION, "read.writer-denied-by-sharing-violation");
+
+    const BOOL deleted = DeleteFileW(path.c_str());
+    const DWORD deleteError = deleted ? ERROR_SUCCESS : GetLastError();
+    Expect(deleted == FALSE && deleteError == ERROR_SHARING_VIOLATION, "read.delete-denied-by-sharing-violation");
+
+    LARGE_INTEGER rewind{};
+    ULARGE_INTEGER position{};
+    rewind.QuadPart = 0;
+    ExpectHr(stream->Seek(rewind, STREAM_SEEK_SET, &position), S_OK, "read.seek-before-refused-writes");
+    Expect(position.QuadPart == 0, "read.seek-position-before-refused-writes");
+    constexpr std::array<std::uint8_t, 2> replacement{'N', 'O'};
+    ULONG written = 99;
+    ExpectHr(stream->Write(replacement.data(), static_cast<ULONG>(replacement.size()), &written), STG_E_ACCESSDENIED,
+             "read.write-denied");
+    Expect(written == 0 && CursorIs(stream.get(), 0), "read.write-denied-before-cursor-change");
+    ULARGE_INTEGER newSize{};
+    newSize.QuadPart = expected.size() + 1;
+    ExpectHr(stream->SetSize(newSize), STG_E_ACCESSDENIED, "read.set-size-denied");
+    Expect(CursorIs(stream.get(), 0), "read.set-size-denied-before-cursor-change");
+
+    Expect(ReadFileBytes(path, untouched) && untouched == expected, "read.refused-mutations-leave-source-unchanged");
+    ExpectHr(stream->CloseChecked(), S_OK, "read.close-succeeds");
+    ExpectHr(stream->Read(actual.data(), 1, &received), STG_E_REVERTED, "read.closed-stream-rejects-read");
+    Expect(received == 0, "read.closed-stream-zero-count");
+}
+
+void ReadOnlyCancellationSemantics()
+{
+    ScratchDirectory scratch;
+    Expect(scratch.IsCreated(), "read-cancel.temp-root-created");
+    if (!scratch.IsCreated())
+    {
+        return;
+    }
+
+    const std::wstring path = scratch.File(L"cancel-read.bin");
+    constexpr std::array<std::uint8_t, 4> expected{'s', 'a', 'f', 'e'};
+    Expect(WriteFileBytes(path, expected), "read-cancel.fixture-created");
+
+    std::stop_source preCancelledSource;
+    (void)preCancelledSource.request_stop();
+    wil::com_ptr_nothrow<CodecFileStream> preCancelled;
+    ExpectHr(CodecFileStream::CreateRead(path.c_str(), expected.size(), CancelToken{preCancelledSource.get_token()},
+                                         preCancelled.put()),
+             E_ABORT, "read-cancel.pre-cancelled-create-aborts");
+    Expect(!preCancelled, "read-cancel.pre-cancelled-creates-no-stream");
+    std::array<std::uint8_t, expected.size()> actual{};
+    Expect(ReadFileBytes(path, actual) && actual == expected, "read-cancel.pre-cancelled-leaves-source-unchanged");
+
+    std::stop_source source;
+    wil::com_ptr_nothrow<CodecFileStream> stream;
+    ExpectHr(CodecFileStream::CreateRead(path.c_str(), expected.size(), CancelToken{source.get_token()}, stream.put()),
+             S_OK, "read-cancel.open-before-cancellation");
+    if (!stream)
+    {
+        return;
+    }
+
+    std::array<std::uint8_t, 2> prefix{};
+    ULONG received = 0;
+    ExpectHr(stream->Read(prefix.data(), static_cast<ULONG>(prefix.size()), &received), S_OK,
+             "read-cancel.initial-read-succeeds");
+    Expect(received == prefix.size() && prefix[0] == expected[0] && prefix[1] == expected[1] &&
+               CursorIs(stream.get(), prefix.size()),
+           "read-cancel.initial-read-bytes-and-position");
+
+    (void)source.request_stop();
+    received = 99;
+    ExpectHr(stream->Read(actual.data(), static_cast<ULONG>(actual.size()), &received), E_ABORT,
+             "read-cancel.subsequent-read-aborts");
+    Expect(received == 0 && CursorIs(stream.get(), prefix.size()), "read-cancel.aborted-read-does-not-advance");
+    Expect(ReadFileBytes(path, actual) && actual == expected, "read-cancel.aborted-read-leaves-source-unchanged");
+    stream.reset();
+}
+
 void QueryInterfaceAndCreateNewCollision()
 {
     ScratchDirectory scratch;
@@ -460,6 +585,8 @@ int RunCodecFileStreamTests()
     LiteralWriteSeekOverwriteReadResizeAndStat();
     ClosedStreamRejectsOperations();
     CancellationStopsCreationAndMutation();
+    ReadOnlyLiteralCapsSharingAndMutationRefusal();
+    ReadOnlyCancellationSemantics();
     QueryInterfaceAndCreateNewCollision();
     return gFailures - failuresBefore;
 }

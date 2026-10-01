@@ -1,7 +1,7 @@
 # Image codecs (WIC)
 
 Status: current normative product contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `Common/ImageCodecs.*`
 
 ## Scope
@@ -22,7 +22,8 @@ returns, not what was requested, and un-premultiplies premultiplied raster bytes
 `WritePixels` when the two differ — otherwise every semi-transparent pixel round-trips at roughly half its
 brightness. Masks (`Gray8`, no alpha) are unaffected.
 
-Encoded assets larger than **512 MiB** are `TooLarge`.
+Encoded assets larger than **512 MiB** are `TooLarge`. Negative remaining pixel budgets are `TooLarge`;
+every decoded frame independently obeys the hard 100 M pixel and 30,000 px side limits before output allocation.
 The project-file decoder additionally accepts a lower caller encoded-byte ceiling, checked before constructing
 WIC decode interfaces. Project attachment passes the current remaining per-kind aggregate pixel ceiling;
 frame dimensions must fit before output allocation. A lower ceiling does not change accepted pixel conversion.
@@ -46,13 +47,25 @@ Before starting a decoder, import checks available layer capacity and subtracts 
 the aggregate image budget using checked wide arithmetic. It passes only the remainder to WIC's frame-dimension
 guard; a full document cannot decode one extra full image and reject it afterward.
 
+Import inspection reads frame-zero container/dimension metadata without requesting pixels, conversion, orientation,
+ICC transforms or thumbnails. Its output is empty on every failure. Both inspection and file decode open one owned
+read-only `CodecFileStream`, check that handle's encoded length before WIC decoder construction, and deny normal
+write/delete sharing for the decoder lifetime. File project PNG decode uses the same opened-stream ceiling in
+addition to its existing project-asset attribute guard. A lower caller encoded ceiling is enforced on the decoder's
+actual source. Cancellation is checked between calls and 64 KiB reads; it cannot interrupt a synchronous OS/WIC call.
+
 `RunImageImportBatch` is detached CPU/codec work over a value snapshot and counted paths. A new canvas retains
 its first successful image as a separate saved-baseline result; further successes produce one named import result.
 The new canvas ignores the batch drop point for all images. Existing-canvas imports retain grouping and placement.
 Failed files before the first success do not stop later files; other file failures retain prepared successes and
 report batch failure, with the history name based on attempted remaining path count. Cancellation clears both
-prepared documents/active ids. Preparation never mutates the source document or shared raster bytes. Host-job
-admission and application remain separately tracked at P1.7 F3b.3.
+prepared documents/active ids. Preparation never mutates the source document or shared raster bytes. Batch
+preparation may consume per-path inspection plans and an aggregate added-pixel ceiling. Reopened sources cannot
+exceed those encoded/frame/output ceilings before allocation; changed bytes within the ceilings may still succeed.
+Cached failed inspection statuses retain their original order and skip decoding even if the file later appears.
+Preparation cancellation clears both baseline/final documents. Production host admission/application uses two
+separately admitted Io jobs under one selected input; memory, ordering and owner work are specified in
+`Core_PerformanceAndResources.md` and `UI_ApplicationChrome.md`. Clipboard migration remains P1.7 work.
 
 ## Export
 
@@ -107,6 +120,14 @@ output clearing, distinct existing export preservation and owned-temp cleanup af
 `CodecFileStreamTests` proves hard-cap refusal without partial output, literal write/overwrite/read and retained
 prefix after resize, EOF/count semantics, cursor preservation, checked/closed state, cancellation, shared COM
 identity/lifetime and CREATE_NEW collision preservation. Extended bytes are not assumed to be zero.
+
+Read-stream cases require literal bytes, exact/lower caps, unchanged source/cursor after forbidden mutations,
+shared readers and exact write/delete sharing errors, read-only Stat, closure and cancellation between reads.
+Import inspection/decoder cases use independent literal PNG/JPEG/BMP and a classic two-frame TIFF (red/green
+frame zero, blue/yellow frame one); TIFF imports frame zero. Valid oversized PNG headers exercise the hard pixel
+limit with a larger caller budget, sparse encoded files exercise exact/over 512 MiB, and source replacement checks
+the lower opened decode ceiling. Missing HEIF remains an environment-dependent error test; successful installed
+HEIF decoding and in-flight OS/codec interruption are not established by these fixtures.
 
 Decoded frame pixels are written by `IWICBitmapSource::CopyPixels` into a `PixelBuffer` and published through
 `Raster::Adopt`. Conversion, orientation, color management, tight row strides and eager mask thumbnails are

@@ -26,6 +26,16 @@ struct DecodedImage
     std::wstring name;
 };
 
+inline constexpr std::uint64_t kMaxImageEncodedBytes = 512ull * 1024ull * 1024ull;
+
+struct ImageImportMetadata final
+{
+    int rawWidth = 0;
+    int rawHeight = 0;
+    std::uint64_t pixels = 0;
+    std::uint64_t encodedBytes = 0;
+};
+
 struct JpegExportOptions
 {
     double quality = 0.8;
@@ -39,7 +49,11 @@ struct JpegExportOptions
                                                     DecodedImage& decoded, CancelToken cancellation = {},
                                                     std::size_t maximumEncodedBytes = 512u * 1024u * 1024u);
 [[nodiscard]] ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, DecodedImage& decoded,
-                                               CancelToken cancellation = {});
+                                               CancelToken cancellation = {},
+                                               std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
+// Frame-zero metadata only: no pixel conversion/allocation. Output is empty on every failure.
+[[nodiscard]] ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainingPixels,
+                                                    ImageImportMetadata& metadata, CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus EncodePng(const Raster& image, double resolution, std::vector<std::uint8_t>& bytes,
                                          CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path,

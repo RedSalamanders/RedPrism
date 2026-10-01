@@ -324,7 +324,7 @@ failure, captured revision marking without erasing a later edit, close suppressi
 command success only after the save stage, persisted transform/opacity with their own history entry before the
 captured saved revision, localized failure reporting and full terminal cleanup. These event gates
 have bounded deadlock deadlines, not performance assertions. They provide evidence for project save ownership and
-ordering; image import/clipboard host migrations remain open.
+ordering; clipboard host migration remains open. Image-import host qualification is recorded below.
 
 `project-open-host.phase=* after=* case=*` exercises 36 actual host-loop gates: probe/decode before/after
 preparation, success, younger command staleness after replacement, cancellation acknowledgement, returned
@@ -533,6 +533,22 @@ prepublication saves preserve the complete destination/sibling tree and clean ow
 publication still returns Ok and the saved literal pixels/metadata. The separate explicit `--bench-file` harness
 records time/memory before output verification; its measurements and the remaining production host workers,
 pending IO waits, faults and cancellation latency qualification are tracked by the P1.7 child.
+
+The hidden import host gates cover existing/grouped/new/empty targets across probe/preparation before/after
+boundaries: literal pixels, captured paths, view input, exact reservation retirement, one named history entry,
+new saved baseline, younger Undo ordering/staleness, acknowledged cancellation, returned/actual worker/admission
+allocation failures, reused persisted IDs and generation changes. The admitted owner capture hook observes its
+full reservation before source copying and has an actual allocation-failure control. A device change after
+preparation cannot repeat decoding or prevent CPU-only apply. Batch cases require cached failure/partial-success
+policy, changed pixel/encoded ceilings, mixed project/image ordering and retained first error. They assert no
+hidden Present and zero terminal ticket/barrier/input/graph charges. Existing all-project gates continue to prove
+completion without dispatching an empty image group. The 24-row smoke includes new-canvas and existing-layer
+imports from the preceding successful PNG export; timed readiness reads receipts and session metadata only.
+
+Io import controls independently verify opened-stream caps, literal first-frame metadata/pixels (including
+two-frame TIFF), signed/hard pixel ceilings, per-path and aggregate preparation limits, cached failures and
+PixelBuffer/thumbnail/record memory floors without materializing shared sparse sources. These gates do not prove
+successful HEIF decoding on a host without its codec, RAW support, in-flight codec interruption or full G1 timing.
 
 ```powershell
 .\validate-skills.ps1

@@ -5,35 +5,62 @@
 #include <new>
 #include <utility>
 
-CodecFileStream::CodecFileStream(wil::unique_hfile file, std::uint64_t maximumBytes, CancelToken cancellation) noexcept
-    : _file(std::move(file)), _maximumBytes(maximumBytes), _cancellation(std::move(cancellation))
+CodecFileStream::CodecFileStream(ConstructionKey, wil::unique_hfile file, std::uint64_t maximumBytes,
+                                 CancelToken cancellation, bool readOnly) noexcept
+    : _file(std::move(file)), _maximumBytes(maximumBytes), _cancellation(std::move(cancellation)), _readOnly(readOnly)
 {
 }
 
 HRESULT CodecFileStream::Create(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
                                 CodecFileStream** result) noexcept
 {
+    return Open(path, maximumBytes, std::move(cancellation), false, result);
+}
+
+HRESULT CodecFileStream::CreateRead(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation,
+                                    CodecFileStream** result) noexcept
+{
+    return Open(path, maximumBytes, std::move(cancellation), true, result);
+}
+
+HRESULT CodecFileStream::Open(const wchar_t* path, std::uint64_t maximumBytes, CancelToken cancellation, bool readOnly,
+                              CodecFileStream** result) noexcept
+{
     if (!result)
         return E_POINTER;
     *result = nullptr;
-    if (!path || maximumBytes == 0 || maximumBytes > static_cast<std::uint64_t>(INT64_MAX))
+    if (!path || (!readOnly && maximumBytes == 0) || maximumBytes > static_cast<std::uint64_t>(INT64_MAX))
         return E_INVALIDARG;
     if (cancellation.IsCancelled())
         return E_ABORT;
-    wil::unique_hfile file{
-        CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
+    wil::unique_hfile file{CreateFileW(path, readOnly ? GENERIC_READ : GENERIC_READ | GENERIC_WRITE,
+                                       readOnly ? FILE_SHARE_READ : 0, nullptr, readOnly ? OPEN_EXISTING : CREATE_NEW,
+                                       FILE_ATTRIBUTE_NORMAL, nullptr)};
     if (!file)
         return HRESULT_FROM_WIN32(GetLastError());
-    auto* stream = new (std::nothrow) CodecFileStream(std::move(file), maximumBytes, std::move(cancellation));
-    if (!stream)
+    if (readOnly)
     {
-        // Complete failed construction, with no published owner and no temporary left by this factory.
+        LARGE_INTEGER size{};
+        if (!GetFileSizeEx(file.get(), &size))
+            return HRESULT_FROM_WIN32(GetLastError());
+        if (size.QuadPart < 0 || static_cast<std::uint64_t>(size.QuadPart) > maximumBytes)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+    try
+    {
+        auto stream = std::make_unique<CodecFileStream>(ConstructionKey{}, std::move(file), maximumBytes,
+                                                        std::move(cancellation), readOnly);
+        *result = stream.release(); // transfer the initial COM reference to the caller
+        return S_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        // Explicit noexcept admission boundary: no owner is published and the entire operation fails.
         file.reset();
-        (void)DeleteFileW(path);
+        if (!readOnly)
+            (void)DeleteFileW(path);
         return E_OUTOFMEMORY;
     }
-    *result = stream;
-    return S_OK;
 }
 
 HRESULT CodecFileStream::QueryInterface(REFIID iid, void** result) noexcept
@@ -57,7 +84,9 @@ ULONG CodecFileStream::Release() noexcept
 {
     const ULONG references = _references.fetch_sub(1, std::memory_order_acq_rel) - 1;
     if (references == 0)
-        delete this;
+    {
+        std::unique_ptr<CodecFileStream> retired(this);
+    }
     return references;
 }
 
@@ -96,6 +125,8 @@ HRESULT CodecFileStream::Write(const void* input, ULONG count, ULONG* written) n
         return E_POINTER;
     if (!_file)
         return STG_E_REVERTED;
+    if (_readOnly)
+        return STG_E_ACCESSDENIED;
     if (_cancellation.IsCancelled())
         return E_ABORT;
     LARGE_INTEGER position{};
@@ -159,6 +190,8 @@ HRESULT CodecFileStream::SetSize(ULARGE_INTEGER size) noexcept
 {
     if (!_file)
         return STG_E_REVERTED;
+    if (_readOnly)
+        return STG_E_ACCESSDENIED;
     if (_cancellation.IsCancelled())
         return E_ABORT;
     if (size.QuadPart > _maximumBytes)
@@ -236,7 +269,7 @@ HRESULT CodecFileStream::Stat(STATSTG* result, DWORD) noexcept
         return HRESULT_FROM_WIN32(GetLastError());
     result->type = STGTY_STREAM;
     result->cbSize.QuadPart = static_cast<std::uint64_t>(size.QuadPart);
-    result->grfMode = STGM_READWRITE | STGM_SHARE_EXCLUSIVE;
+    result->grfMode = _readOnly ? STGM_READ | STGM_SHARE_DENY_WRITE : STGM_READWRITE | STGM_SHARE_EXCLUSIVE;
     return S_OK;
 }
 HRESULT CodecFileStream::Clone(IStream** result) noexcept

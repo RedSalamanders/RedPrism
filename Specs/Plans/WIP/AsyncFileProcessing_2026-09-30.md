@@ -4,15 +4,15 @@
 
 - [x] F1 — Qualify one worker classification per owned host batch, cancellation acknowledgement and cached routing. Full configuration matrix passes; pending-IO fault injection and shared wait-pool migration remain F6.
 - [x] F2 — Qualify cancellable banded WIC decode/encode without shared sparse materialization; preserve the existing EXIF/ICC policy and pixel goldens. Full configuration matrix passes; codec-call interruption, additional metadata fixtures and measured cancellation bounds remain F6.
-- [ ] F3 — Worker project open and ordered image import, detached results and token-checked owner application.
+- [x] F3 — Worker project open and ordered image import, detached results and token-checked owner application. Full configuration matrix and real-loop measurements pass; residual apply/frame targets remain F6/P1.9.
   - [x] F3a — Cancellable project loads/imports with banded file/ZIP reads and no partial publication; independent project cancellation tests and full configuration matrix pass.
   - [x] F3a.1 — Remaining aggregate image/mask budgets reach both project decoders before pixel allocation; tiny real ZIP/folder later-asset refusals, exact bytes, zero/negative budgets and no partial publication pass all x64 suites and ARM64 cross-builds ([evidence](../../TestRuns/ProjectPixelBudgets_2026-10-01.md)). Whole-graph host admission remains F3b.
-  - [ ] F3b — Admit and run detached open/import graphs; preserve batch/history order and validate host cancellation/staleness/failure.
+  - [x] F3b — Admit and run detached open/import graphs; preserve batch/history order and validate host cancellation/staleness/failure.
     - [x] F3b.1 — Project manifest/PNG-header probe, adaptive decode ceilings, reopened-input refusals and resource declarations pass all x64 suites and ARM64 cross-builds; 69 tiny folder/ZIP and resource checks ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)). Host admission/reservation and independent allocation-floor controls remain F3b.3.
     - [x] F3b.2 — Detached import helper preserves first-image saved baseline, one additional entry, ignored new-canvas drop point and partial-success/cancellation policy; 31 checks and all configurations pass ([evidence](../../TestRuns/FileLoadPreparation_2026-10-01.md)).
-    - [ ] F3b.3 — Wire both graphs under the selected host ordinal, preserve per-project batch continuation and formatted notices outside completion, qualify real cancellation/staleness/younger-input/device-independent lifetime and record open/import UI measurements.
+    - [x] F3b.3 — Wire both graphs under the selected host ordinal, preserve per-project batch continuation and formatted notices outside completion, qualify real cancellation/staleness/younger-input/device-independent lifetime and record open/import UI measurements.
       - [x] F3b.3a — Project-open probe/decode jobs, validated replacement continuation, 36 phase/nine batch gates, allocation floors and 22-row smoke pass all configurations. Hardware 4K/45 MP and WARP 4K measurements recorded; apply/frame overruns leave G1 open ([evidence](../../TestRuns/ProjectOpenJobs_2026-10-01.md)).
-      - [ ] F3b.3b — Activate detached image-import worker and qualify saved baseline, one additional history entry, partial-success and ordered owner application.
+      - [x] F3b.3b — Image-import probe/preparation/apply, 130 host cases and capped opened streams pass all configurations and 24-row hardware 4K/45 MP/100 MP and WARP 4K runs ([evidence](../../TestRuns/ImageImportJobs_2026-10-01.md)). Existing-layer apply reaches 11.403 ms at 45 MP; P1/G1 remain open.
 - [ ] F4 — Worker save and asynchronous utility export graphs, whole-graph memory admission, per-path serialization, atomic destination publication and captured revision.
   - [x] F4a — Cancellable asset encoding/staged writes/libzip close preserve the external publication boundary; full configuration matrix passes.
   - [x] F4a.1 — Direct bounded PNG/JPEG file streams and staged ZIP asset-file sources remove whole-archive encoded-buffer retention. Three serial Release runs per mode at 4K/45 MP and the full matrix pass.
@@ -29,7 +29,7 @@ Owner: `RedPrism/ApplicationFileJobs.cpp`, `ApplicationProjectSaveJobs.cpp`, fil
 `Common/PathClassificationWork.*`, `ProjectSaveWork.h`, codecs/project store and clipboard.
 
 F1/F2 qualification: [FileFoundation_2026-09-30.md](../../TestRuns/FileFoundation_2026-09-30.md).
-These bounded foundations leave F3–F6 and overall P1.7 active.
+These bounded foundations leave F4–F6 and overall P1.7 active.
 
 F3a/F4a/F4a.1 qualification: [ProjectStreams_2026-09-30.md](../../TestRuns/ProjectStreams_2026-09-30.md).
 The completed helper/stream slice leaves production open/import at F3b. Project-save and utility-export workers
@@ -78,6 +78,27 @@ Cancellation/staleness publishes no partial prepared document. Prepare both the 
 additional import result off-thread so the owner need not perform any per-image decoding or thumbnail work.
 
 ### F3b.3b execution detail
+
+Execution checklist (2026-10-01; bounded slice qualified):
+
+- [x] Implement opened-stream decode caps, signed/hard pixel guards and metadata-only inspection; add independent codec tests.
+- [x] Implement enforced per-path/aggregate preparation ceilings and whole-graph memory plans; add detached batch tests.
+- [x] Implement selected host import probe/preparation/apply ordering, cancellation/staleness/failure gates and mixed batches. Capture occurs only after reservation admission.
+- [x] Qualify import benchmark rows, full configurations and measurements; commit/push this slice with its evidence.
+
+All x64 suites and ARM64 cross-builds passed, including 130 host import cases in each x64 configuration. All four
+24-row runs passed; the 100 MP run additionally exercises exact pixel-budget refusal. The
+[import record](../../TestRuns/ImageImportJobs_2026-10-01.md) retains frozen-source identities and measured overruns.
+
+Qualification corrections: the first Debug run passed I/O but failed a new host placement expectation. The legacy
+`EditorSession.swift:656–657` floors centered placement; the new literal expectations were corrected without
+changing production placement or existing goldens. Original failure logs remain under `.build/p1-image-import-original-placement-*`.
+The next host run caught a new device assertion storing an HRESULT in a Boolean (`S_OK` became false). The control
+now retains the HRESULT and checks `SUCCEEDED`; its original log is `.build/p1-image-import-original-device-*`.
+The direct host run then found a real continuation bug: a completed project left `FileComplete` as the next
+prerequisite stage, so a following image group was skipped. `PathImages` now selects `Execute` before settling;
+the mixed-project/image test requires the image job, imported pixels and one additional history entry. The original
+failed control is `.build/p1-image-import-original-mixed-selftest.err.log`.
 
 Use a metadata inspection job followed by separately admitted bounded preparation. Inspect frame zero on an owned
 WIC stream, retain standard per-path status/pixel/encoded-length values, and never call CopyPixels or create a

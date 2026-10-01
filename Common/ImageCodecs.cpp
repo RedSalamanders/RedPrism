@@ -24,7 +24,7 @@
 namespace
 {
 constexpr int kThumbnailMaxSide = 96;
-constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
+constexpr std::uint64_t kMaxEncodedBytes = kMaxImageEncodedBytes;
 
 [[nodiscard]] std::wstring_view ExtensionOf(std::wstring_view path) noexcept
 {
@@ -76,6 +76,49 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
         return ImageCodecStatus::Unreadable;
     }
     return ImageCodecStatus::Ok;
+}
+
+[[nodiscard]] ImageCodecStatus OpenImportDecoder(const wchar_t* path, std::uint64_t maximumEncodedBytes,
+                                                 CancelToken cancellation,
+                                                 wil::com_ptr_nothrow<IWICImagingFactory>& factory,
+                                                 wil::com_ptr_nothrow<CodecFileStream>& input,
+                                                 wil::com_ptr_nothrow<IWICBitmapDecoder>& decoder,
+                                                 std::uint64_t& encodedBytes) noexcept
+{
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (!path)
+        return ImageCodecStatus::Unreadable;
+    // Open once, deny mutation for the decoder lifetime and check the actual handle before WIC reads it.
+    HRESULT result =
+        CodecFileStream::CreateRead(path, (std::min)(maximumEncodedBytes, kMaxEncodedBytes), cancellation, input.put());
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+        return ImageCodecStatus::TooLarge;
+    if (FAILED(result))
+        return MapDecodeError(result, IsHeifContainer(path));
+    STATSTG stats{};
+    if (FAILED(input->Stat(&stats, STATFLAG_NONAME)) || stats.cbSize.QuadPart == 0)
+        return ImageCodecStatus::Unreadable;
+    encodedBytes = stats.cbSize.QuadPart;
+    result = MakeFactory(factory);
+    if (FAILED(result))
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    result = factory->CreateDecoderFromStream(input.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put());
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    return MapDecodeError(result, IsHeifContainer(path));
+}
+
+[[nodiscard]] bool FrameFits(UINT width, UINT height, std::int64_t remainingPixels) noexcept
+{
+    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
+    return remainingPixels >= 0 && width <= static_cast<UINT>(kMaxCanvasSide) &&
+           height <= static_cast<UINT>(kMaxCanvasSide) && pixels <= static_cast<std::uint64_t>(kMaxLayerPixels) &&
+           pixels <= static_cast<std::uint64_t>(remainingPixels);
 }
 
 // The EXIF/TIFF Orientation tag (274), read from whichever metadata path this container exposes it under, else 1
@@ -258,9 +301,7 @@ constexpr std::uint64_t kMaxEncodedBytes = 512ull * 1024ull * 1024ull;
     {
         return ImageCodecStatus::Unreadable;
     }
-    if (width > static_cast<UINT>(kMaxCanvasSide) || height > static_cast<UINT>(kMaxCanvasSide) ||
-        static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height) >
-            static_cast<std::uint64_t>(remainingPixels))
+    if (!FrameFits(width, height, remainingPixels))
     {
         return ImageCodecStatus::TooLarge;
     }
@@ -662,6 +703,8 @@ ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCou
     {
         return byteCount > kMaxEncodedBytes ? ImageCodecStatus::TooLarge : ImageCodecStatus::Unreadable;
     }
+    if (remainingPixels < 0)
+        return ImageCodecStatus::TooLarge;
     wil::com_ptr_nothrow<IWICImagingFactory> factory;
     HRESULT result = MakeFactory(factory);
     if (FAILED(result))
@@ -702,6 +745,8 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     {
         return ImageCodecStatus::Unreadable;
     }
+    if (remainingPixels < 0)
+        return ImageCodecStatus::TooLarge;
     WIN32_FILE_ATTRIBUTE_DATA info{};
     if (!GetFileAttributesExW(path, GetFileExInfoStandard, &info))
     {
@@ -719,17 +764,16 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
         return ImageCodecStatus::TooLarge;
     }
     wil::com_ptr_nothrow<IWICImagingFactory> factory;
-    HRESULT result = MakeFactory(factory);
-    if (FAILED(result))
-    {
-        return ImageCodecStatus::Unreadable;
-    }
+    wil::com_ptr_nothrow<CodecFileStream> input;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
-    result =
-        factory->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.put());
-    if (FAILED(result))
+    std::uint64_t encodedBytes = 0;
+    const auto opened =
+        OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    if (opened != ImageCodecStatus::Ok)
     {
-        return ImageCodecStatus::Unreadable;
+        return opened == ImageCodecStatus::TooLarge || opened == ImageCodecStatus::Cancelled
+                   ? opened
+                   : ImageCodecStatus::Unreadable;
     }
     const ImageCodecStatus status =
         DecodeFromDecoder(factory.get(), decoder.get(), mask, true, false, remainingPixels, decoded, cancellation);
@@ -741,32 +785,70 @@ ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remain
     return status;
 }
 
+ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainingPixels, ImageImportMetadata& metadata,
+                                      CancelToken cancellation)
+{
+    metadata = {};
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (remainingPixels < 0)
+        return ImageCodecStatus::TooLarge;
+    wil::com_ptr_nothrow<IWICImagingFactory> factory;
+    wil::com_ptr_nothrow<CodecFileStream> input;
+    wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
+    std::uint64_t encodedBytes = 0;
+    const auto opened = OpenImportDecoder(path, kMaxEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    if (opened != ImageCodecStatus::Ok)
+        return opened;
+    GUID container{};
+    if (FAILED(decoder->GetContainerFormat(&container)))
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (!SameGuid(container, GUID_ContainerFormatPng) && !SameGuid(container, GUID_ContainerFormatJpeg) &&
+        !SameGuid(container, GUID_ContainerFormatTiff) && !SameGuid(container, GUID_ContainerFormatHeif))
+        return ImageCodecStatus::Unsupported;
+    UINT frames = 0;
+    if (FAILED(decoder->GetFrameCount(&frames)) || frames == 0)
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    wil::com_ptr_nothrow<IWICBitmapFrameDecode> frame;
+    if (FAILED(decoder->GetFrame(0, frame.put())))
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    UINT width = 0;
+    UINT height = 0;
+    if (FAILED(frame->GetSize(&width, &height)) || width == 0 || height == 0)
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (!FrameFits(width, height, remainingPixels))
+        return ImageCodecStatus::TooLarge;
+    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height,
+                encodedBytes};
+    return ImageCodecStatus::Ok;
+}
+
 ImageCodecStatus ImportImageFile(const wchar_t* path, int remainingPixels, DecodedImage& decoded,
-                                 CancelToken cancellation)
+                                 CancelToken cancellation, std::uint64_t maximumEncodedBytes)
 {
     decoded = {};
     if (cancellation.IsCancelled())
     {
         return ImageCodecStatus::Cancelled;
     }
-    if (path == nullptr)
-    {
-        return ImageCodecStatus::Unreadable;
-    }
-    const bool heif = IsHeifContainer(path);
+    if (remainingPixels < 0)
+        return ImageCodecStatus::TooLarge;
     wil::com_ptr_nothrow<IWICImagingFactory> factory;
-    HRESULT result = MakeFactory(factory);
-    if (FAILED(result))
-    {
-        return ImageCodecStatus::Unreadable;
-    }
+    wil::com_ptr_nothrow<CodecFileStream> input;
     wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
-    result =
-        factory->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.put());
-    if (FAILED(result))
-    {
-        return MapDecodeError(result, heif);
-    }
+    std::uint64_t encodedBytes = 0;
+    const auto opened =
+        OpenImportDecoder(path, maximumEncodedBytes, cancellation, factory, input, decoder, encodedBytes);
+    if (opened != ImageCodecStatus::Ok)
+        return opened;
     const ImageCodecStatus status =
         DecodeFromDecoder(factory.get(), decoder.get(), false, false, true, remainingPixels, decoded, cancellation);
     if (status != ImageCodecStatus::Ok)

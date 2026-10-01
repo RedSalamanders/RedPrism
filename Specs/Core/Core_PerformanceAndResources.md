@@ -421,6 +421,29 @@ Source reopening may observe changed bytes within caps; no file identity snapsho
 allocations remain in global headroom. Replacement, old document/history release, chrome and upload scope are
 measured separately; this graph does not by itself qualify G1.
 
+### Image-import graph admission (P1.7 F3b.3b)
+
+One selected input retains its ordinal through metadata inspection and separately admitted preparation, with
+owned absolute counted paths and standard per-path statuses/pixel/encoded ceilings. The two charges can overlap
+at submission; Io FIFO prevents preparation entry until probe retirement. Preparation reserves rounded added BGRA
+outputs, one serial frame allowance, thumbnail transients, path/name/curve/document-record copies and fixed codec
+allowance. Shared immutable source raster and selection storage is not charged again. Invalid limits/overflow
+refuse construction; failed probes require no pixel output and preserve their ordered failure status.
+
+The preparation record first enters a trivial worker stage after admission, then captures settled source metadata
+on its owner hook while its full reservation is held, then resumes that same record for decode/preparation. It
+does not copy a large source document before memory admission or borrow a live session on a worker. Snapshot-copy
+allocation failure fails the whole graph with no partial application. The copy and final history/chrome application
+remain measured owner costs and P1.9 optimization work. Opaque WIC calls retain global headroom and are not claimed
+interruptible. All files retain per-path ceilings and the whole batch an aggregate added-pixel ceiling on reopened
+decode, in addition to current document-wide limits. No worker waits for a larger recursive reservation.
+
+Only the current serial/generation/ordinal/acquisition may apply the complete validated baseline/final pair.
+Cancellation/staleness/worker failure applies neither and retains input/owners until acknowledgement. Ordinary
+partial success preserves valid files and posts one localized import summary. A new canvas establishes a saved
+baseline; subsequent imports make one named history entry. Mixed project/image batches retain the first error.
+This bounded graph does not establish full P1/G1 or bounded stop-to-return inside OS/codec calls.
+
 ### Utility export graph (P1.7 F4b.2)
 
 PNG/JPEG export owns a settled committed-document snapshot without selection outline data, resolved destination,
