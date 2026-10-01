@@ -619,7 +619,7 @@ indentation. Selecting a row selects the layer; toggling a group's expander upda
 line and, on release, calls `DocumentSession::PlaceLayer`: the top or bottom of a row inserts beside it, the middle
 of a folder drops inside it, and Escape or capture loss cancels. A folder cannot be dropped into its own descendant.
 
-Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`IDxTreeDelegate::OnTreeItemInvoked`, which
+Rename (C16): Layer › Rename Layer…, F2 or a double-click on a row (`ITreeDelegate::OnTreeItemInvoked`, which
 selects the row first) opens the Rename Layer card (`ChromeHost::OpenRenameCard`, a `CardPanel` with a `TextField`
 holding the name selected, Cancel and the primary OK) over the canvas hole beside the layers panel; Enter or OK
 commits the name through `DocumentSession::RenameLayer` (trimmed, a blank name ignored) as one `Rename Layer`

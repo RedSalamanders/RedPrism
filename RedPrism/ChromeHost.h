@@ -769,7 +769,7 @@ class ChromeHost final : public CommandIds
     }
 
   private:
-    class LayerTreeModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
+    class LayerTreeModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
       public:
         explicit LayerTreeModel(ChromeEvents& events) noexcept : events(events) {}
@@ -802,7 +802,7 @@ class ChromeHost final : public CommandIds
 
     // The Command List's rows. An item's id is its command id, so a selection survives filtering only while its
     // command is still listed and never moves to another command.
-    class ShortcutListModel final : public DxUi::IDxTreeModel, public DxUi::IDxTreeDelegate
+    class ShortcutListModel final : public DxUi::ITreeModel, public DxUi::ITreeDelegate
     {
       public:
         struct Row
