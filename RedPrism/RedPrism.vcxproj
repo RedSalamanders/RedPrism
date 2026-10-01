@@ -205,6 +205,7 @@
     <ClCompile Include="..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\Common\ClipboardCommandWork.cpp" />
     <ClCompile Include="..\Common\ClipboardPasteWork.cpp" />
+    <ClCompile Include="..\Common\ShapeEditWork.cpp" />
     <ClCompile Include="..\Common\ClipboardReceipt.cpp" />
     <ClCompile Include="ClipboardFingerprint.cpp" />
     <ClCompile Include="..\Common\ColorDismissalWork.cpp" />
@@ -243,7 +244,14 @@
     <ClCompile Include="..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\Common\Localization.cpp" />
     <ClCompile Include="AdjustControls.cpp" />
-    <ClCompile Include="Application.cpp" /><ClCompile Include="ApplicationClipboardJobs.cpp" /><ClCompile Include="ApplicationClipboardTests.cpp" /><ClCompile Include="ApplicationClipboardPrefillTests.cpp" /><ClCompile Include="ApplicationClipboardDelayedTests.cpp" /><ClCompile Include="ApplicationClipboardFaultTests.cpp" /><ClCompile Include="..\Tests\ClipboardMergedBudgetTests.cpp" /><ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
+    <ClCompile Include="Application.cpp" />
+    <ClCompile Include="ApplicationClipboardJobs.cpp" />
+    <ClCompile Include="ApplicationClipboardTests.cpp" />
+    <ClCompile Include="ApplicationClipboardPrefillTests.cpp" />
+    <ClCompile Include="ApplicationClipboardDelayedTests.cpp" />
+    <ClCompile Include="ApplicationClipboardFaultTests.cpp" />
+    <ClCompile Include="..\Tests\ClipboardMergedBudgetTests.cpp" />
+    <ClCompile Include="..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="ApplicationBenchmark.cpp" />
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
@@ -263,6 +271,8 @@
     <ClCompile Include="ApplicationSize.cpp" />
     <ClCompile Include="ApplicationSizeJobs.cpp" />
     <ClCompile Include="ApplicationRasterEditJobs.cpp" />
+    <ClCompile Include="ApplicationShapeJobs.cpp" />
+    <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />
     <ClCompile Include="ApplicationPixelMoveJobs.cpp" />
     <ClCompile Include="ApplicationGradientTests.cpp" />

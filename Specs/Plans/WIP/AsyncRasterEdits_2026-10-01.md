@@ -50,21 +50,29 @@
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
   - [ ] A5.7 — Full configuration and measured G1 closeout of the complete A5 graph.
 - [ ] A6 — Distortion commit/preview preparation and transform settlement continuations; preserve mapped image/mask geometry and cancellation/staleness.
+  - [ ] A6.1 — Qualify a detached warp kernel with private sparse reads, adopted output, executor tiles,
+    row cancellation, exact legacy sampling/edge/background bytes and a checked source/output/trim peak.
+    Work starts in a verified private draft while the native Shape matrix is frozen.
+    The first complete private DocumentTests run passes 56 independent warp controls and all existing goldens
+    against 488 frozen inputs. Its exact sources/image/log/result are archived under
+    `.build/p1-distort-draft/core-qualified-r1/`. Native activation, complete transform publication and G1 remain open.
+  - [ ] A6.2 — Seal transform/group/floating authority and prepare complete pixel/mask/shape/history publication;
+    preserve per-layer budget refusal, nested duplicate/floating history and unchanged-opening restoration.
+  - [ ] A6.3 — Activate ordered preview, release, header and settlement callers; preserve pending controls,
+    continuation outcomes and input-time geometry through acknowledgement and aggregate retirement.
+  - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
-  - [ ] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare
+  - [x] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare
     the complete inserted document/history and publish through checked nonthrowing swaps. Preserve names,
-    group insertion, selection, live-shape identity and the input-time foreground. Private implementation starts
-    while the clipboard native matrix is frozen; activate only after that matrix exits and is archived.
-    The isolated full DocumentTests suite passes, including 76 shape controls. A focused private WARP host run
-    passes 199 checks across 36 scenarios, including actual release, ordinary leave and capture loss; this is
-    not the full application or native matrix gate.
-    Primary review corrected fixture history baselines and a nonexistent viewport accessor, retaining the failed
-    sources, images and logs. The complete private application r2 exits zero against 468 frozen inputs;
-    native activation remains pending.
-    The [shape record](../../TestRuns/ShapeWorkers_2026-10-01.md) identifies passing focused snapshots and the
-    preserved full-run clipboard failure; no focused result closes native qualification.
+    group insertion, selection, live-shape identity and the input-time foreground. The full native x64 suites
+    and all three ARM64 cross-builds pass the clean r2 and final incremental r3 matrices against 487 frozen
+    inputs: 76 document controls and 199 host checks, including actual release, ordinary leave and capture loss.
+    Exact archives and preserved failures are identified in the [shape record](../../TestRuns/ShapeWorkers_2026-10-01.md).
   - [ ] A7.2 — Ordered production Shape release, cancellation/fault/stale/younger-input and aggregate-retirement
     gates; all configurations and measured owner/first-upload costs. Existing inline goldens stay unchanged.
+    - [x] A7.2a — Actual host ordering, cancellation acknowledgement, stale/fault/drop and aggregate retirement
+      qualify in all configurations. The functional slice is committed and pushed with its owning contracts.
+    - [ ] A7.2b — Measure owner capture/apply, first upload and real-loop G1 before closing A7.2.
   - [ ] A7.3 — Live-shape redraw inside transform settlement, selection masks and Layer via Copy; complete
     pixel/history ownership and eager semantic mask thumbnail preparation for each caller.
     - [ ] A7.3a — Admitted selection-mask/uniform-mask preparation, transformed coverage with legacy
@@ -74,8 +82,12 @@
       pending ([mask record](../../TestRuns/MaskWorkers_2026-10-01.md)).
     - [ ] A7.3b — Layer via Copy with owned copied region/origin, no-selection duplicate semantics, complete
       inserted layer/history and target/mask state. Preserve clipboard identity and serial throughout.
-      Detached preparation/publication and the full private document suite pass 34 independent controls.
-      The ordered host graph is being qualified; native activation and live producer settlement remain open
+      Detached preparation/publication and the full private document suite pass 34 independent controls. The
+      complete private WARP application proof passes 214 Layer via Copy host checks with zero failures against
+      484 frozen source inputs (executable SHA-256
+      `C0439133FABB0F0AB02F19DAE9AF950CBCD711C1C8F79C2F9B6EB683A07A48F3`). The earlier r1 budget-notice
+      self-test observed before its queued operation settled; r2 fixes observation timing only, with no missing
+      production notice behavior. Native qualification, live producer settlement and G1 remain open
       ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)).
     - [ ] A7.3c — Live-shape transform redraw with prepared carried mask and atomic after-document/history;
       coordinate with A6 so distortion, redraw and floating settlement cannot bypass the owning worker graph.

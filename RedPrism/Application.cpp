@@ -1699,6 +1699,11 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONUP, 0, 60.0, 50.0);
+        if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The Shape release did not acknowledge its worker publication.\n");
+            std::_Exit(5);
+        }
         std::array<int, 4> filled{};
         if (_session.Document().value().layers.size() != layersBefore + 1 || _session.ActiveLayer() == nullptr ||
             _session.ActiveLayer()->name != L"Rectangle 1" || _session.history.UndoName() != L"Rectangle" ||
@@ -2199,6 +2204,11 @@ int Application::RunSelfTest() noexcept
         return restore;
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
+    if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
+        return shapeWork;
+    }
     if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
         return gradientWork;
     if (const int pixelMoveWork = RunPixelMoveWorkSelfTest(); pixelMoveWork != 0)
@@ -3108,6 +3118,9 @@ void Application::Shutdown() noexcept
         (void)_historyWork.Finish(_clipboardStamp.value());
     _clipboardStamp.reset();
     _clipboardTicket.reset();
+    _shapeTicket.reset();
+    _shapeStamp.reset();
+    _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
     _retryWait.CloseAfterWorkers();
     _gpuWork.CloseAfterWorkers();
@@ -7611,19 +7624,15 @@ void Application::FinishShapeDraft() noexcept
     {
         return;
     }
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    const auto receipt =
+        QueueHostInput(HostShapeFinishInput{_session.PendingShape().value(), _session.ForegroundColor()});
+    ReportHostAdmission(receipt);
+    if (receipt.Read().outcome == HostOutcome::Pending)
     {
-        const auto receipt =
-            QueueHostInput(HostShapeFinishInput{_session.PendingShape().value(), _session.ForegroundColor()});
-        ReportHostAdmission(receipt);
-        if (receipt.Read().outcome == HostOutcome::Pending)
-        {
-            CancelShapeDraft(); // the queued owned draft replaces the live gesture, without recording history
-        }
-        return;
+        _shapeCommitPreview = _session.PendingShape();
+        _shapePreviewDocumentSerial = _session.DocumentSerial();
+        CancelShapeDraft(); // The owned release keeps its event-time geometry/color through ordered settlement.
     }
-    _session.FinishShape();
-    DocumentChanged();
 }
 
 bool Application::SamplesColor() const noexcept
@@ -7698,7 +7707,10 @@ void Application::SyncToolOverlays() noexcept
     }
     _chrome->SetGradientLine(line);
     std::optional<CanvasOverlay::ShapeDraftOverlay> draft;
-    if (const std::optional<ShapeDraft>& shape = _session.PendingShape();
+    const auto& pendingShape = _session.PendingShape();
+    const auto& committedShape =
+        _shapePreviewDocumentSerial == _session.DocumentSerial() ? _shapeCommitPreview : pendingShape;
+    if (const std::optional<ShapeDraft>& shape = pendingShape ? pendingShape : committedShape;
         hasDocument && shape.has_value() && shape->rect.maxX > shape->rect.minX && shape->rect.maxY > shape->rect.minY)
     {
         const D2D1_POINT_2F a = viewPoint(Vec2{shape->rect.minX, shape->rect.minY});

@@ -1225,6 +1225,10 @@ class PreparedAdjustmentOpening;
 struct ColorDismissalInput;
 class PreparedColorDismissal;
 class ImageImportAuthority;
+class ShapeEditInput;
+class PreparedShapeEdit;
+struct ShapeEditResult;
+struct ShapeWorkObserver;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
@@ -2124,6 +2128,13 @@ class DocumentSession
     void ToggleShapeKind();
     void FinishShape();
     void CommitShape(const ShapeDraft& draft, std::uint32_t foregroundArgb);
+    [[nodiscard]] std::uint64_t ShapeEditPreparationMemoryBytes(const ShapeDraft& draft) const noexcept;
+    [[nodiscard]] std::optional<ShapeEditInput> PrepareShapeEditInput(const ShapeDraft& draft,
+                                                                      std::uint32_t foregroundArgb) const;
+    [[nodiscard]] static ShapeEditResult PrepareShapeEditPublication(
+        ShapeEditInput input, Executor& executor, CancelToken cancellation, ShapeWorkObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedShapeEditIfCurrent(PreparedShapeEdit& prepared) noexcept;
     [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
     {
         return _shapeDraft;

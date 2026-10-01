@@ -363,6 +363,15 @@ composite)`; the kernels, the tile composition and the warp model live in
   shape drew, tracked by `ImageLayer::shapeImage`) and redraws at its new size when a transform commits, keeping a
   rounded corner's radius; a mask on its grid takes an explicit placement so it stays put. Loaded shape layers are
   live; painting on one makes it plain pixels.
+
+Production Shape release uses `ShapeEditWork` and one ordered Commit record. The action owns its input-time
+draft and foreground, and retains its outline while preparation is pending. Whole admission precedes source
+document/history capture. Workers prepare exact coverage, adopted BGRA pixels, unique layer name, insertion,
+selection/live-shape identity and complete history publication together. Checked owner swaps publish once;
+cancelled, failed or stale work publishes no layer or history. The ordinal, reservation and history barrier
+survive until acknowledgement, and the complete replaced CPU graph retires off owner. Capture loss cancels the
+live gesture; ordinary pointer leave commits the owned release. Synchronous session primitives remain numeric
+references. Transform-time live-shape redraw remains a separate P1.5/A6 migration.
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
   document pixel (nullopt outside or over transparency); the host shows the comparison ring while View › Sample Ring
   (the `sampleRing` setting, [`Core_Settings.md`](../Core/Core_Settings.md), default on) is checked.
@@ -865,7 +874,8 @@ owning migration; this slice does not establish whole-application G1.
 A Shape pointer release or ordinary pointer leave during admitted history work captures its draft and foreground
 color in the same bounded host queue, then removes the live gesture without writing history. Its layer is added
 only after preceding work finishes, using those captured values. Lost-pointer cancellation still drops a draft.
-Worker rasterization of this owned Shape action remains P1.5.
+Its production worker rasterization/publication follows the Shape contract above. Complete owner capture,
+chrome synchronization and first-upload timings remain P1.9/G1.
 
 `ApplicationCommitJobs.cpp` implements the production commit engine. Normal OK and dependent write/discard
 requests enter it through the owned continuation source.

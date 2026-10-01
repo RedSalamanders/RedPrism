@@ -504,8 +504,15 @@ bool Application::ExecuteHostInput() noexcept
             }
             else if constexpr (std::is_same_v<Input, HostShapeFinishInput>)
             {
-                _session.CommitShape(value.draft, value.foregroundArgb);
-                DocumentChanged();
+                _hostExecutionError = StartShape(value.draft, value.foregroundArgb);
+                if (FAILED(_hostExecutionError))
+                {
+                    ++_errorsShown;
+                    _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                       ? IDS_ERROR_TOO_LARGE
+                                       : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
             }
             else if constexpr (std::is_same_v<Input, HostLayerSelectInput>)
             {

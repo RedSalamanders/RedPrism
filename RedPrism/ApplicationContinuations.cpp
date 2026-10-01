@@ -167,6 +167,12 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
+    if (std::holds_alternative<HostShapeFinishInput>(_activeHostRequest->input.Input()))
+    {
+        _shapeCommitPreview.reset();
+        SyncToolOverlays();
+        _frameInvalidated = true;
+    }
     _activeHostRequest.reset();
     _pendingPanelOpening.reset();
     _hostCommitStamp.reset();
@@ -641,6 +647,8 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
 
 void Application::CancelHostContinuations() noexcept
 {
+    _shapeCommitPreview.reset();
+    SyncToolOverlays();
     (void)_hostRequests.Clear(RetireHostContinuation);
     _pendingPanelOpening.reset();
     if (_pathClassificationTicket)
@@ -695,6 +703,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_rasterEditTicket.value());
+        }
+        else if (_shapeTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_shapeTicket.value());
         }
         else if (_gradientCommitTicket)
         {

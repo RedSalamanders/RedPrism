@@ -107,6 +107,10 @@
         composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
         pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers,
         constant-time capture and G1 remain open.
+      - [x] A7.1/A7.2a — Worker Shape release with exact pixels, owned event-time geometry/color, complete
+        document/history publication and actual pointer/cancellation/retirement controls qualifies in all six
+        profiles: 76 document controls and 199 host checks against 487 frozen inputs
+        ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, masks, Layer via Copy and measured G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

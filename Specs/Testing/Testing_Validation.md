@@ -858,14 +858,27 @@ successful HEIF decoding on a host without its codec, RAW support, in-flight cod
 .\build.ps1 -Platform ARM64 -Configuration Debug
 ```
 
-### Clipboard host matrix (private run; native qualification pending)
+### Shape worker matrix
+
+`ShapeEditWorkTests` requires 76 numeric/state controls: literal rectangle/ellipse/rounded coverage and color,
+alpha policy, checked dimensions and memory floors, names/group insertion, selection/live-shape identity,
+one-entry Undo/Redo, cancellation checkpoints and stale publication refusal. Existing ShapeToolTests remain
+unchanged. `RunShapeWorkSelfTest` requires 199 event-gated checks across 36 scenarios: actual pointer release,
+ordinary leave/capture loss, input-time color, view dispatch while held, admission/capture/worker/history faults,
+late cancellation, same-ID replacement, younger Undo and complete off-owner aggregate retirement without hidden
+Present or residual tickets/barriers/charges. No focused-only bypass may enter native sources. Full native gates
+and exact passing images are recorded in `Specs/TestRuns/ShapeWorkers_2026-10-01.md`; timing qualification remains G1.
+
+### Clipboard host matrix
 
 `Specs/TestRuns/ClipboardHost_2026-10-01.md` records the final private full-application run. The actual WARP host
 matrix passed 268 checks across 52 scenarios; New Canvas prefill passed 56 checks across 14 scenarios; delayed
 rendering passed 39 checks across seven scenarios; publication/no-paint/retry fault controls passed 81 checks
 across eight scenarios. Separate Copy Merged readback-budget controls passed 30 checks, the clipboard encoding
 budget probe passed 37. Native DocumentTests also includes two independent aliased-ID replacement controls.
-These inventories do not establish a passing full native matrix.
+The later corrected native r9 matrix passes all three x64 gates and all three ARM64 clean builds against
+480 frozen inputs: 268 command, 61 prefill, 41 delayed-render and 88 fault checks. The earlier private inventories
+remain historical proof, and none establishes a timing bound. See the record for exact images and retained failures.
 
 The production paths retain the selected host ordinal and acknowledged history barrier. Copy/Cut apply the
 private result before encoding and OS mirroring, so a later encoding or mirror failure does not undo the private
@@ -877,10 +890,9 @@ targets, then performs CPU Copy Merged work on the detached pixels. Copy Merged 
 pixel/readback owners and the phased encoder estimate. The encoder estimate sequences PNG and DIB phase peaks;
 its 16 MiB WIC allowance is planning headroom, not a proven bound on opaque codec workspace.
 
-The final private run exited zero and passed its application assertions. Native qualification remains pending,
-including the frozen six-profile matrix and required native checks. This run does not close G1, establish ARM64
-runtime behavior, or prove a hard WIC workspace bound. Open import/floating/stroke work, headroom and required
-measurements remain open.
+The final private run exited zero and passed its application assertions. The later frozen native r9 matrix
+qualifies all three x64 runtime suites and all three ARM64 clean cross-builds. G1, native ARM64 runtime behavior,
+the hard WIC workspace bound, floating/stroke work, headroom and required measurements remain open.
 
 ### Capped memory encoder controls
 

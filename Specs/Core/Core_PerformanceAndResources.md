@@ -88,6 +88,12 @@ per input.
 
 ## Budgets that later phases inherit
 
+Shape release rasterization, complete layer insertion and prepared history construction run on workers after
+whole admission. The owner publishes checked handles, retains pending outline metadata and dispatches view
+input through the original acknowledged record. Cancellation cannot release copied source/history or reservation
+before acknowledgement; complete replaced CPU owners retire together off owner. Metadata capture and final
+chrome/display work remain measured P1.9 obligations; worker elapsed time alone does not establish UI latency.
+
 These numbers are binding as soon as the feature exists. C1 does not implement them; it MUST NOT choose a host shape
 that makes them impossible.
 

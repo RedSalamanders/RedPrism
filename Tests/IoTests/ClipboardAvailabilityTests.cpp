@@ -75,6 +75,21 @@ ClipboardTransfer::Status InspectSettled(std::int64_t limit, ClipboardTransfer::
     return ClipboardTransfer::Status::Busy;
 }
 
+ClipboardTransfer::Status CopySettled(const ClipboardTransfer::Inspection& inspected,
+                                      ClipboardTransfer::ImageCopy& output)
+{
+    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
+    if (!timer)
+        return ClipboardTransfer::Status::NativeFailure;
+    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    {
+        const auto status = ClipboardTransfer::Copy(inspected, output);
+        if (status != ClipboardTransfer::Status::Busy || attempt == 3 || !HarnessWait(timer.get()))
+            return status;
+    }
+    return ClipboardTransfer::Status::Busy;
+}
+
 // Literal BITMAPINFOHEADER plus one opaque 32-bit BI_RGB pixel, in BGRA byte order.
 constexpr std::array<std::uint8_t, 44> kDib{40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 32, 0, 0, 0, 0, 0,  4,   0,
                                             0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 9, 20, 140, 255};
@@ -436,8 +451,13 @@ void TestPostCloseReplacementDoesNotRebindFacts()
                available.sequence == state.held && inspected.Sequence() == state.held,
            "post-close.metadata-retains-held-image-authority-after-text-replacement");
     ClipboardTransfer::ImageCopy copy;
-    Expect(ClipboardTransfer::Copy(inspected, copy) == ClipboardTransfer::Status::Stale && copy.RetainedBytes() == 0 &&
-               copy.Sequence() == 0,
+    const auto copied = CopySettled(inspected, copy);
+    if (copied != ClipboardTransfer::Status::Stale || copy.RetainedBytes() != 0 || copy.Sequence() != 0)
+        std::printf("clipboardavailability.post-close copy-status=%u retained=%llu copied-sequence=%u "
+                    "inspected-sequence=%u current-sequence=%lu\n",
+                    static_cast<unsigned int>(copied), static_cast<unsigned long long>(copy.RetainedBytes()),
+                    copy.Sequence(), inspected.Sequence(), GetClipboardSequenceNumber());
+    Expect(copied == ClipboardTransfer::Status::Stale && copy.RetainedBytes() == 0 && copy.Sequence() == 0,
            "post-close.copy-refuses-replaced-source-without-owned-bytes");
 }
 

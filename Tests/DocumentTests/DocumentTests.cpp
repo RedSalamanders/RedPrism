@@ -52,6 +52,7 @@
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
+#include "ShapeEditWorkTests.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
 
@@ -7408,6 +7409,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunCopyPixelsTests();
     gFailures += RunClipboardCommandTests();
     gFailures += RunClipboardPasteTests();
+    gFailures += RunShapeEditWorkTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();

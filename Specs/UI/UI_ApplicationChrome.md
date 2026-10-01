@@ -332,7 +332,9 @@ and so does the brush header's Paint choice for a line on a mask.
 The Shape header (`BuildShapeHeader`, `ShapeInspectorState`): Rectangle / Ellipse, Radius (px, rectangles only) and
 Fill (the foreground swatch). A drag draws the shape as a draft on the overlay, filled with the foreground color and
 outlined (Shift squares, Alt grows from the center); release adds the layer; Escape or a tool switch drops the
-draft; Shift-U switches the kind (U alone selects the tool).
+draft; Shift-U switches the kind (U alone selects the tool). Release owns its draft and foreground and queues one
+worker commit. Its outline remains visible until acknowledged apply/drop while view input dispatches; younger
+mutations wait behind that record. Ordinary pointer leave commits, and capture loss cancels the live gesture.
 
 The Eyedropper (I), or Alt with the Brush, Spot Healing and Gradient between strokes, reads the composited canvas
 under the pointer while pressed into the foreground color, or into the open color picker; the overlay shows the

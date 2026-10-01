@@ -28,6 +28,7 @@
 #include "Renderer.h"
 #include "RetryWaitQueue.h"
 #include "SettingsStore.h"
+#include "ShapeEditWork.h"
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
 
@@ -56,6 +57,7 @@ struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
 struct ImageImportTestGate;
 struct RasterEditTestGate;
+struct ShapeWorkTestGate;
 struct GradientWorkTestGate;
 struct PixelMoveWorkTestGate;
 struct ExportWorkTestGate;
@@ -429,6 +431,9 @@ class Application final : public ChromeEvents
     int RunHistoryRestoreSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept;
     class RasterEditJob;
+    class ShapeJob;
+    [[nodiscard]] HRESULT StartShape(const ShapeDraft& draft, std::uint32_t foreground) noexcept;
+    int RunShapeWorkSelfTest() noexcept;
     [[nodiscard]] HRESULT StartRasterEdit(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
     void ExecuteRasterEditCommand(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
     int RunRasterEditSelfTest() noexcept;
@@ -709,6 +714,11 @@ class Application final : public ChromeEvents
     std::optional<ClipboardFingerprint::Binding> _clipboardBinding;
     std::shared_ptr<struct ClipboardWorkTestGate> _clipboardWorkTestGate;
     std::shared_ptr<RasterEditTestGate> _rasterEditTestGate;
+    std::optional<JobTicket> _shapeTicket;
+    std::optional<HistoryWorkStamp> _shapeStamp;
+    std::shared_ptr<ShapeWorkTestGate> _shapeWorkTestGate;
+    std::optional<ShapeDraft> _shapeCommitPreview;
+    std::uint64_t _shapePreviewDocumentSerial = 0;
     std::optional<JobTicket> _pathClassificationTicket;
     PathClassificationBatch _pathClassifications;
     bool _pathClassificationCancelled = false;
