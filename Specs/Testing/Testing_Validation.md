@@ -862,3 +862,19 @@ encoded-size limits and one-byte-short/one/zero refusal with empty public output
 unchanged premultiplied/sparse bytes. Existing ImageCodecWork pixel/file preservation goldens remain unchanged.
 Require full native x64 Debug/Release/ASan gates and ARM64 clean cross-builds before closing F5b.2b.1; full host
 reservation/caller/retry/retirement/measurement proof remains a separate gate.
+
+### Detached Paste and clipboard availability controls
+
+DocumentTests verifies literal private/foreign origins and pixels, negative floor centering, first-unused names,
+group descendants and expansion, exact 100 M aggregate equality without sparse materialization, selection/mask
+clearing, prepared history, Undo/Redo, move/single-use and session/generation/history/private-serial refusal.
+Cancellation and injected allocation failures at every history preparation stage leave owner state unchanged;
+foreign Paste remains valid after a newer private copy.
+
+IoTests independently verifies metadata-only availability even for malformed/over-budget offered image formats,
+producer-order DIB selection, refusal to request synthesized variants of malformed/over-budget sources,
+malformed PNG fallback, cleared Busy/cancel/native-close output and a deliberate
+post-close clipboard replacement. Its availability and inspection retain the held sequence, and Copy rejects
+the replacement. Fixture helpers use bounded event waits for external listeners; injected Busy remains one
+attempt. Full frozen native qualification is required before closing these foundations. Production host,
+retry/lifetime, G1 and native ARM64 runtime claims remain separate.

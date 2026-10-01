@@ -95,6 +95,7 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
@@ -133,6 +134,7 @@
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardPasteWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

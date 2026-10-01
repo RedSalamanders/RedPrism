@@ -136,6 +136,9 @@
         cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
         six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
         Detached Paste and production clipboard admission/callers/retries remain open in the file child.
+      - [x] F5b.2b.2 — Detached Paste candidate document/history, guarded publication and producer-order clipboard
+        inspection qualify in all six profiles: 62 Paste, 45 availability and unchanged 125 transfer controls
+        ([record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md)). Actual host graphs remain F5b.2b.3.
       - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
         six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
         ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.

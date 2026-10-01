@@ -89,8 +89,10 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="CopyPixelsTests.h" />
     <ClInclude Include="ClipboardCommandTests.h" />
+    <ClInclude Include="ClipboardPasteTests.h" />
     <ClInclude Include="CopyPixelsTransformTests.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
@@ -150,6 +152,7 @@
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="CopyPixelsTests.cpp" />
     <ClCompile Include="ClipboardCommandTests.cpp" />
+    <ClCompile Include="ClipboardPasteTests.cpp" />
     <ClCompile Include="CopyPixelsTransformTests.cpp" />
     <ClCompile Include="ColorEditWorkTests.cpp" />
     <ClCompile Include="ColorEditDeferredTests.cpp" />
@@ -212,6 +215,7 @@
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardPasteWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

@@ -107,6 +107,14 @@ application window. It publishes fully rendered immediate formats. OS open/get/e
 external clipboard owner and belong on a worker. The adapter does not schedule or retry work; production
 admission, source/history ordering, event retries and caller activation remain F5b.2–F5d.
 
+While open, inspection MUST enumerate and read only the first CF_DIBV5/CF_DIB representation, retaining the
+producer's order. Windows lists synthesized formats after their source. Requesting an alternate representation
+can invoke native conversion before validation; an invalid or over-budget first DIB MUST NOT trigger that request.
+PNG remains preferred independently. Availability is a fixed record of the held source, published only after
+successful close and cancellation validation, even when offered bytes are invalid. Malformed offered images
+MUST NOT be treated as an empty clipboard for private fallback. See
+[Microsoft's format enumeration contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumclipboardformats).
+
 `ClipboardReceipt` is a standard-only fixed-packet codec with no allocation or platform ownership.
 `ClipboardFingerprint` owns one CNG SHA-256 hash through WIL on its calling worker, using a borrowed algorithm
 pseudo-handle and a checked 4096-byte stack object that outlives that hash. It never reads a live session or OS

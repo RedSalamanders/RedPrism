@@ -498,6 +498,33 @@ retirement includes token color, mask, semantic thumbnail and shared selection o
 Existing full document capture is still charged and remains H2 work. This boundary activates no production
 clipboard graph; codec/OS admission, receipt binding, retry stages and host ordering remain A5.4c/F5b.2–F5d.
 
+### Detached clipboard Paste preparation (F5b.2b.2)
+
+Deferred Paste callers MUST admit the complete preparation and retirement graph before capturing document,
+history and clipboard owners. `ClipboardPasteWork` captures one source document, active layer, history view,
+Paste authority, private clipboard and private-copy serial. Capture currently copies layer metadata on the
+owner thread; constant-time capture and G1 timing remain separate P1.9 work.
+
+Workers construct the complete candidate document and one prepared `Paste` history entry without mutating
+the live owner. Private-origin Paste preserves the captured pixels and document origin exactly and refuses
+publication after a newer private copy. Foreign Paste uses only the supplied raster and floor-centers it at
+`(floor((canvasWidth-imageWidth)/2), floor((canvasHeight-imageHeight)/2))`, including negative half offsets.
+A newer private copy does not invalidate an already prepared foreign Paste or determine its placement.
+
+Use the first unused `Layer N` name. Insert above an active non-group as its sibling; with an active group,
+insert as its child after the entire descendant subtree. Without an active layer, append at top level. Expand
+the new layer's parent on successful application. The new layer becomes active/selected, the document selection
+is cleared and the mask target is cleared. Enforce the existing 10,000-layer and 100 M aggregate image-pixel
+limits against the complete result; equality is allowed. Sharing a sparse source MUST NOT materialize it.
+
+Publication MUST validate captured session/document identity, document serial, generation, restore serial,
+active/mask target, crop, prepared history lineage/epoch and, for private origin, private-copy serial. Stale,
+foreign-session, moved-from and consumed inputs refuse without partial mutation. One non-allocating owner
+publication swaps the complete document/history/selection state; Undo/Redo restore complete before/after states.
+Cancellation, allocation failure and invalid/over-budget sources publish nothing. Large replaced/captured owners
+remain in the admitted retirement aggregate and retire off the owner thread. Production caller and full graph
+qualification remain tracked separately from this core API's validation.
+
 ### Other selection pixel edits
 
 - **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):

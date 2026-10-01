@@ -1060,6 +1060,8 @@ enum class ClipboardCommandKind : std::uint8_t;
 class ClipboardCommandInput;
 struct CopyPixelsInput;
 class PreparedClipboardCommand;
+class ClipboardPasteInput;
+class PreparedClipboardPaste;
 struct GridRect;
 class BrushCoverageEngine;
 class WarpStroke;
@@ -2216,6 +2218,20 @@ class DocumentSession
                                                             const Raster& composite = {}) const;
     [[nodiscard]] std::uint64_t ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind kind,
                                                                       const Raster& composite = {}) const;
+    // Admitted owner capture after gradient/pixel-move settlement. Workers own the snapshot and never
+    // consult the live private clipboard. Private origin uses its sealed serial; foreign pixels are centered.
+    [[nodiscard]] std::optional<ClipboardPasteInput> PrepareClipboardPasteInput() const;
+    [[nodiscard]] static std::optional<PreparedClipboardPaste> PrepareClipboardPastePublication(
+        ClipboardPasteInput input, bool privateOrigin, const Raster& foreignImage = {}, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedClipboardPasteIfCurrent(PreparedClipboardPaste& prepared) noexcept;
+    [[nodiscard]] std::int64_t ClipboardPastePixelLimit() const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardPastePreparationMemoryBytes(std::int64_t additionalPixels) const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardPasteRetirementMemoryBytes() const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardSerial() const noexcept
+    {
+        return _clipboardSerial;
+    }
     bool CopySelection();
     bool CopyMergedSelection(const Raster& composite);
     void CutSelection();

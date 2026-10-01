@@ -5,6 +5,7 @@
 #include "BrushStroke.h"
 #include "CanvasSize.h"
 #include "ClipboardCommandTests.h"
+#include "ClipboardPasteTests.h"
 #include "ColorDismissalTests.h"
 #include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
@@ -7406,6 +7407,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
     gFailures += RunClipboardCommandTests();
+    gFailures += RunClipboardPasteTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();
