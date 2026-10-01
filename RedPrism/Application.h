@@ -270,6 +270,11 @@ class Application final : public ChromeEvents
     using HostOutcome = ContinuationOutcome;
     class ColorCommitJob;
     class AdjustmentClosureJob;
+    class ColorDismissalJob;
+    [[nodiscard]] HostOutcome StartColorCancellation(std::uint64_t ordinal) noexcept;
+    void CompleteColorDismissal(HistoryWorkStamp stamp, bool current, JobResult completion,
+                                PreparedColorDismissal* publication, std::int32_t captureError) noexcept;
+    int RunColorCancellationSelfTest() noexcept;
     [[nodiscard]] HostOutcome StartColorCommit(std::uint64_t ordinal) noexcept;
     [[nodiscard]] HostOutcome StartAdjustmentClosure(std::uint64_t ordinal, bool commit) noexcept;
     void CompleteAdjustmentClosure(HistoryWorkStamp stamp, bool current, JobResult completion,
@@ -280,8 +285,12 @@ class Application final : public ChromeEvents
     }
     [[nodiscard]] bool ColorControlsFrozen() const noexcept
     {
-        return ColorCommitBusy() || (_pendingPanelOpening && _session.PendingColorEdit() &&
-                                     _pendingPanelOpening.value() == _session.PendingColorEdit()->openingSequence);
+        const auto& panel = _session.PendingColorEdit();
+        return ColorCommitBusy() ||
+               (_pendingPanelOpening && panel && _pendingPanelOpening.value() == panel->openingSequence) ||
+               (_pendingCancelOpening && panel && _pendingCancelOpening.value() == panel->openingSequence &&
+                _pendingCancelDocumentSerial == _session.DocumentSerial() &&
+                _pendingCancelReceipt.Read().outcome == HostOutcome::Pending);
     }
     void CancelColorCommit() noexcept;
     void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
@@ -301,6 +310,7 @@ class Application final : public ChromeEvents
     };
     [[nodiscard]] bool InitializeHostContinuations() noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
+    [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
@@ -369,6 +379,7 @@ class Application final : public ChromeEvents
     void QueueColorFailure() noexcept;
     int RunColorJobsSelfTest() noexcept;
     void CancelColorEdit(bool cancelQueued = true) noexcept;
+    void CancelColorEditForTest() noexcept;
     void OnAdjustAction(AdjustAction action, double value) noexcept override;
     void OnCurveChanged(std::vector<CurvePoint> points) noexcept override;
     void OnBandChanged(int index, double degrees) noexcept override;
@@ -692,6 +703,7 @@ class Application final : public ChromeEvents
         Confirm,
         Output,
         Settle,
+        CancelPanel,
         GradientSettle,
         PixelMoveSettle,
         Write,
@@ -701,6 +713,7 @@ class Application final : public ChromeEvents
     };
     HostStage _hostStage = HostStage::Begin;
     HostStage _hostAfterPrerequisite = HostStage::Execute;
+    HostStage _hostAfterPanelCancel = HostStage::Execute;
     HostWriteFormat _hostWriteFormat = HostWriteFormat::Project;
     std::size_t _hostPathIndex = 0;
     bool _hostSawProject = false;
@@ -716,6 +729,9 @@ class Application final : public ChromeEvents
     std::optional<Prompts::Answer> _forcedDiscardAnswer;
     std::optional<HistoryWorkStamp> _colorCommitStamp;
     std::optional<std::uint64_t> _pendingPanelOpening;
+    std::optional<std::uint64_t> _pendingCancelOpening;
+    std::uint64_t _pendingCancelDocumentSerial = 0;
+    ContinuationReceipt _pendingCancelReceipt;
     std::optional<JobTicket> _colorCommitTicket;
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
     std::int32_t _colorCommitError = 0;
@@ -849,6 +865,7 @@ class Application final : public ChromeEvents
     std::optional<TransformOverlayGeometry> _overlayGeometry;
     GradientMapSettings _adjustColorOriginal; // the Gradient Map ends when its color picker opened
     DWORD _clipboardSequence = 0; // the system clipboard's sequence number right after the last copy was offered to it
+    bool _clipboardWriteSucceeded = false; // observed by failure diagnostics; does not change copy/Paste policy
     ULONGLONG _lastPressTick = 0;
     POINT _lastPressPoint{};
     std::optional<DocumentSelection> _overlaySelection;

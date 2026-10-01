@@ -51,6 +51,25 @@ ContinuationReceipt Application::QueuePanelCommit(std::uint64_t opening) noexcep
     return receipt;
 }
 
+ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcept
+{
+    if (_pendingCancelOpening == std::optional(opening) && _pendingCancelDocumentSerial == _session.DocumentSerial() &&
+        _pendingCancelReceipt.Read().outcome == HostOutcome::Pending)
+        return _pendingCancelReceipt;
+    CancelHostContinuations();
+    CancelColorCommit(); // direct engine acquisition can exist without a selected host input
+    const auto receipt = QueueHostInput(HostPanelCancelInput{opening});
+    if (receipt.Read().outcome == HostOutcome::Pending)
+    {
+        _pendingCancelOpening = opening;
+        _pendingCancelDocumentSerial = _session.DocumentSerial();
+        _pendingCancelReceipt = receipt;
+        SyncAdjustPanel();
+        _frameInvalidated = true;
+    }
+    return receipt;
+}
+
 ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 {
     if (_shutdownStarted || !_hostSourceRegistered)
@@ -140,6 +159,13 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         if (_window)
             (void)ShutdownBlockReasonDestroy(_window.get());
     }
+    if (const auto* cancel = std::get_if<HostPanelCancelInput>(&_activeHostRequest->input.Input());
+        cancel && _pendingCancelOpening == std::optional(cancel->opening) &&
+        _pendingCancelDocumentSerial == _activeHostRequest->documentSerial)
+    {
+        _pendingCancelOpening.reset();
+        _pendingCancelReceipt = {};
+    }
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
     _activeHostRequest.reset();
     _pendingPanelOpening.reset();
@@ -222,6 +248,15 @@ void Application::RunHostContinuation() noexcept
             _hostSaveBeforeAction = false;
             _hostStage = _hostAfterPrerequisite;
         }
+        else if (_hostStage == HostStage::CancelPanel)
+        {
+            if (std::holds_alternative<HostPanelCancelInput>(active.input.Input()))
+            {
+                FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                return;
+            }
+            _hostStage = _hostAfterPanelCancel;
+        }
         else
             _hostStage = _hostStage == HostStage::Settle           ? HostStage::GradientSettle
                          : _hostStage == HostStage::GradientSettle ? HostStage::PixelMoveSettle
@@ -239,7 +274,18 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
-            if (const auto* panel = std::get_if<HostPanelOkInput>(&input))
+            if (const auto* cancel = std::get_if<HostPanelCancelInput>(&input))
+            {
+                const auto& panel = _session.PendingColorEdit();
+                if (!panel || panel->openingSequence != cancel->opening)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostAfterPanelCancel = HostStage::Complete;
+                _hostStage = HostStage::CancelPanel;
+            }
+            else if (const auto* panel = std::get_if<HostPanelOkInput>(&input))
             {
                 const auto& edit = _session.PendingColorEdit();
                 if (!edit || panel->opening != edit->openingSequence)
@@ -301,7 +347,8 @@ void Application::RunHostContinuation() noexcept
                                  command->command == ChromeHost::kCommandImageSize ||
                                  command->command == ChromeHost::kCommandNewCanvas))
             {
-                _hostStage = HostStage::GradientSettle; // these cards deliberately dismiss the live color panel
+                _hostAfterPanelCancel = HostStage::GradientSettle;
+                _hostStage = _session.HasColorEdit() ? HostStage::CancelPanel : HostStage::GradientSettle;
             }
             else
             {
@@ -377,7 +424,16 @@ void Application::RunHostContinuation() noexcept
             }
             _hostSaveBeforeAction = answer == Prompts::Answer::First;
             _hostWriteFormat = HostWriteFormat::Project;
-            _hostStage = _hostSaveBeforeAction ? HostStage::Output : HostStage::Execute;
+            const bool localReplacement = std::holds_alternative<HostNewInput>(input) ||
+                                          std::holds_alternative<HostCloseProjectInput>(input) ||
+                                          std::holds_alternative<HostCloseWindowInput>(input) ||
+                                          std::holds_alternative<HostEndSessionInput>(input) ||
+                                          (std::get_if<HostSizeApplyInput>(&input) &&
+                                           std::get<HostSizeApplyInput>(input).draft.kind == SizeCardKind::NewCanvas);
+            _hostAfterPanelCancel = HostStage::Execute;
+            _hostStage = _hostSaveBeforeAction                         ? HostStage::Output
+                         : localReplacement && _session.HasColorEdit() ? HostStage::CancelPanel
+                                                                       : HostStage::Execute;
             break;
         }
         case HostStage::Output:
@@ -392,6 +448,27 @@ void Application::RunHostContinuation() noexcept
                 return;
             }
             _hostStage = HostStage::Settle;
+            break;
+        }
+        case HostStage::CancelPanel:
+        {
+            const auto outcome = StartColorCancellation(active.ordinal);
+            if (outcome == HostOutcome::Pending)
+            {
+                _hostCommitStamp = _colorCommitStamp;
+                return;
+            }
+            if (outcome != HostOutcome::Succeeded)
+            {
+                FinishHostContinuation({outcome, _colorCommitError});
+                return;
+            }
+            if (std::holds_alternative<HostPanelCancelInput>(input))
+            {
+                FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                return;
+            }
+            _hostStage = _hostAfterPanelCancel;
             break;
         }
         case HostStage::Settle:
@@ -689,7 +766,7 @@ int Application::RunHostContinuationSelfTest() noexcept
                 (void)SetEvent(_colorWorkTestGate->release.get());
             }
             CancelHostContinuations();
-            CancelColorEdit();
+            CancelColorEditForTest();
             if (!settled())
             {
                 SelfTestFailure(L"Host continuation work did not join at its failure boundary.\n");
@@ -702,7 +779,7 @@ int Application::RunHostContinuationSelfTest() noexcept
     const auto prepare = [&]()
     {
         CancelHostContinuations();
-        CancelColorEdit();
+        CancelColorEditForTest();
         if (!settled())
         {
             return false;
@@ -1086,7 +1163,7 @@ int Application::RunHostContinuationSelfTest() noexcept
     }
     std::printf("PASS continuation-host.queued-panel-and-document-lifetimes\n");
 
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!settled())
     {
         return fail(L"Could not settle the metadata host fixture.\n");
@@ -1164,7 +1241,7 @@ int Application::RunHostFlowSelfTest() noexcept
             if (_colorWorkTestGate)
                 (void)SetEvent(_colorWorkTestGate->release.get());
             CancelHostContinuations();
-            CancelColorEdit();
+            CancelColorEditForTest();
             _colorWorkTestGate.reset();
             _forcedDiscardAnswer.reset();
             _endSessionPending = false;
@@ -1196,7 +1273,7 @@ int Application::RunHostFlowSelfTest() noexcept
         return fail(L"Host flow fixtures failed to encode.\n");
     const auto prepare = [&](bool failed) noexcept
     {
-        CancelColorEdit();
+        CancelColorEditForTest();
         if (!settle())
             return false;
         _colorWorkTestGate.reset();

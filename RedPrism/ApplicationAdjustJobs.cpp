@@ -404,7 +404,7 @@ int Application::RunColorJobsSelfTest() noexcept
         SelfTestFailure(message);
         return 5;
     };
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
     {
         return fail(L"Color job fixture could not settle preceding work.\n");
@@ -429,7 +429,7 @@ int Application::RunColorJobsSelfTest() noexcept
             {
                 (void)SetEvent(_colorWorkTestGate->release.get());
             }
-            CancelColorEdit();
+            CancelColorEditForTest();
             _colorWorkTestGate.reset();
             if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
             {
@@ -483,7 +483,7 @@ int Application::RunColorJobsSelfTest() noexcept
     {
         return fail(L"Messages/view input or the opening histogram failed while real color work was gated.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
 
     if (!newGate(false) || !BeginColorEdit(ChromeHost::kCommandLevels))
     {
@@ -512,7 +512,7 @@ int Application::RunColorJobsSelfTest() noexcept
     {
         return fail(L"The preview mailbox did not finish with exactly the latest request.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
 
     if (!newGate(false) || !BeginColorEdit(ChromeHost::kCommandLevels))
     {
@@ -528,7 +528,7 @@ int Application::RunColorJobsSelfTest() noexcept
     {
         return fail(L"The old preview did not finish its pixels before the Cancel/reopen race.\n");
     }
-    CancelColorEdit(); // Its successful pixels exist, but no completion has been drained yet.
+    CancelColorEditForTest(); // Its successful pixels exist, but no completion has been drained yet.
     if (!BeginColorEdit(ChromeHost::kCommandLevels) ||
         SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
         _session.PendingColorEdit()->previewRaster.HasStorage() || _session.PendingColorEdit()->previewLookup ||
@@ -536,7 +536,7 @@ int Application::RunColorJobsSelfTest() noexcept
     {
         return fail(L"A completed old preview crossed the cancelled panel lifetime.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
     {
         return fail(L"The live adjustment fixture could not retire earlier work.\n");
@@ -598,7 +598,7 @@ int Application::RunColorJobsSelfTest() noexcept
     {
         return fail(L"Live preview off waited for a worker before restoring the opening adjustment.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     (void)SetEvent(_colorWorkTestGate->release.get());
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || _session.HasColorEdit() ||
         !matchesAdjustment(original))

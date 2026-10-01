@@ -1624,6 +1624,45 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     }
 }
 
+[[nodiscard]] ProjectIoStatus RotateDestination(const std::wstring& dest, const std::wstring& backup,
+                                                std::uint32_t& failure, CancelToken cancellation,
+                                                ProjectSaveFaultPolicy faultPolicy, ProjectIoObserver observer) noexcept
+{
+    failure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationToBackupRename);
+    if (failure != 0)
+        return ProjectIoStatus::Encode; // injected errors are final; never hide deterministic faults with retries
+    constexpr std::array<LONGLONG, 2> retryDelays100ns{-25 * 10000ll, -100 * 10000ll};
+    wil::unique_handle retryTimer;
+    for (std::size_t attempt = 0;; ++attempt)
+    {
+        if (cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled; // no first rename has succeeded; current destination is intact
+        if (MoveFileW(dest.c_str(), backup.c_str()))
+            return ProjectIoStatus::Ok;
+        failure = GetLastError();
+        if ((failure != ERROR_ACCESS_DENIED && failure != ERROR_SHARING_VIOLATION) ||
+            attempt == retryDelays100ns.size())
+            return ProjectIoStatus::Encode;
+        if (!retryTimer)
+        {
+            if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationTimerCreate) != 0)
+                return ProjectIoStatus::Encode;
+            retryTimer.reset(CreateWaitableTimerW(nullptr, FALSE, nullptr));
+        }
+        LARGE_INTEGER due{};
+        due.QuadPart = retryDelays100ns[attempt];
+        if (!retryTimer || RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationTimerArm) != 0 ||
+            !SetWaitableTimer(retryTimer.get(), &due, 0, nullptr, nullptr, FALSE))
+            return ProjectIoStatus::Encode;
+        Report(observer, ProjectIoStage::DestinationRetryScheduled, failure);
+        if (cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled;
+        if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::DestinationTimerWait) != 0 ||
+            WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
+            return ProjectIoStatus::Encode;
+    }
+}
+
 [[nodiscard]] ProjectIoStatus SaveExploded(const std::wstring& dest, const std::wstring& staging,
                                            CancelToken cancellation, ProjectIoObserver observer,
                                            ProjectSaveFaultPolicy faultPolicy, TreeCleanupBuffer& cleanupScratch)
@@ -1634,7 +1673,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     Report(observer, ProjectIoStage::Staged);
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
-    // Publication begins here. Once rotation starts, finish or recover it without interpreting a later stop
+    // Once the first rename succeeds, finish or recover publication without interpreting a later stop
     // as a rollback. The caller receives Ok only when the new external destination was actually published.
     // Remove an older backup only while the current destination still exists. When a previous rollback failed,
     // .old can be the only surviving project; keep it until new publication or restore it on another failure.
@@ -1644,10 +1683,12 @@ constexpr unsigned int kMaxCleanupDepth = 128;
                         observer, cleanupScratch))
             return ProjectIoStatus::Encode;
         std::uint32_t failure = 0;
-        if (!RenameDirectory(dest, backup, ProjectSaveFaultStage::DestinationToBackupRename, failure, faultPolicy))
+        const auto rotation = RotateDestination(dest, backup, failure, cancellation, faultPolicy, observer);
+        if (rotation != ProjectIoStatus::Ok)
         {
-            Report(observer, ProjectIoStage::DestinationToBackupFailed, failure);
-            return ProjectIoStatus::Encode;
+            if (rotation != ProjectIoStatus::Cancelled)
+                Report(observer, ProjectIoStage::DestinationToBackupFailed, failure);
+            return rotation;
         }
     }
     std::uint32_t publishFailure = 0;

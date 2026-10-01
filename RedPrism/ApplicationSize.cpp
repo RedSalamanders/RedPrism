@@ -44,7 +44,14 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
     {
         return;
     }
-    CancelColorEdit();
+    if (!_hostExecuting && _session.HasColorEdit())
+    {
+        const int command = kind == SizeCardKind::NewCanvas    ? ChromeHost::kCommandNewCanvas
+                            : kind == SizeCardKind::CanvasSize ? ChromeHost::kCommandCanvasSize
+                                                               : ChromeHost::kCommandImageSize;
+        ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
+        return;
+    }
     if (_sizeInvocation == UINT64_MAX)
     {
         ReportBudgetRefusal();

@@ -1007,7 +1007,7 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The Gaussian Blur panel did not show its Radius option.\n");
             return 5;
         }
-        CancelColorEdit();
+        CancelColorEditForTest();
         while (_session.history.CanUndo() && _session.history.UndoCount() > editsBeforeFilter)
         {
             _session.Undo();
@@ -1996,12 +1996,26 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         hostCommand(ChromeHost::kCommandSelectAll);
-        (void)SystemClipboard::WaitUntilFree(_window.get());
-        if (!hostKey('C', MK_CONTROL | MK_SHIFT) || !_session.Clipboard().has_value() ||
-            _session.Clipboard()->image.Width() != _session.Document()->width ||
-            _session.Clipboard()->image.Height() != _session.Document()->height || !mirrorsClip())
+        const bool clipboardFreeBeforeCopy = SystemClipboard::WaitUntilFree(_window.get());
+        const auto clipboardSequenceBeforeCopy = SystemClipboard::SequenceNumber();
+        const bool mergedCopyKeyHandled = hostKey('C', MK_CONTROL | MK_SHIFT);
+        const auto& mergedClip = _session.Clipboard();
+        const bool mergedClipDimensions = mergedClip && mergedClip->image.Width() == _session.Document()->width &&
+                                          mergedClip->image.Height() == _session.Document()->height;
+        const bool mergedClipMirrored = mergedCopyKeyHandled && mergedClipDimensions && mirrorsClip();
+        if (!mergedCopyKeyHandled || !mergedClipDimensions || !mergedClipMirrored)
         {
-            SelfTestFailure(L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system.\n");
+            DWORD clipboardHolderPID = 0;
+            (void)GetWindowThreadProcessId(GetOpenClipboardWindow(), &clipboardHolderPID);
+            SelfTestFailure(std::format(
+                L"Ctrl+Shift+C did not copy the merged canvas and mirror it to the system (free before {}, key {}, "
+                L"clip {}x{}, document {}x{}, mirrored {}, write {}, sequence {} -> {} / offered {}, holder PID {}, "
+                L"history busy {}, queued {}).\n",
+                clipboardFreeBeforeCopy, mergedCopyKeyHandled, mergedClip ? mergedClip->image.Width() : 0,
+                mergedClip ? mergedClip->image.Height() : 0, _session.Document()->width, _session.Document()->height,
+                mergedClipMirrored, _clipboardWriteSucceeded, clipboardSequenceBeforeCopy,
+                SystemClipboard::SequenceNumber(), _clipboardSequence, clipboardHolderPID, _historyWork.Busy(),
+                _hostRequests.Size()));
             return 5;
         }
         hostCommand(ChromeHost::kCommandDeselect);
@@ -2218,6 +2232,10 @@ int Application::RunSelfTest() noexcept
     if (const int adjustmentClosure = RunAdjustmentClosureSelfTest(); adjustmentClosure != 0)
     {
         return adjustmentClosure;
+    }
+    if (const int cancellation = RunColorCancellationSelfTest(); cancellation != 0)
+    {
+        return cancellation;
     }
     if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
     {
@@ -7783,13 +7801,14 @@ void Application::MirrorClipboard() noexcept
     const std::optional<PixelClipboard>& clip = _session.Clipboard();
     if (!clip.has_value() || !_window)
     {
+        _clipboardWriteSucceeded = false;
         return;
     }
     // Other apps read the copy as PNG or a 32-bit DIB. The sequence number lets a later Paste tell that the system
     // clipboard has not changed since this copy, so the exact pixels and their place come from the session instead.
     // It is taken even when the write failed (another app held the clipboard): this copy is still newer than
     // whatever the system clipboard holds, and only a later change there makes Paste read it.
-    (void)SystemClipboard::WriteImage(_window.get(), clip->image);
+    _clipboardWriteSucceeded = SystemClipboard::WriteImage(_window.get(), clip->image);
     _clipboardSequence = SystemClipboard::SequenceNumber();
 }
 

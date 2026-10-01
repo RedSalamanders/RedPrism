@@ -375,7 +375,7 @@ int Application::RunColorCommitSelfTest() noexcept
     };
     const auto settled = [this]() noexcept
     { return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled; };
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!settled())
     {
         return fail(L"The ordered color commit fixture could not settle earlier work.\n");
@@ -399,7 +399,7 @@ int Application::RunColorCommitSelfTest() noexcept
             {
                 (void)SetEvent(_colorWorkTestGate->release.get());
             }
-            CancelColorEdit();
+            CancelColorEditForTest();
             _colorWorkTestGate.reset();
             if (!settled())
             {
@@ -479,7 +479,11 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     const auto oldOpening = _session.PendingColorEdit()->openingSequence;
     const int cancelledHistory = _session.history.UndoCount();
-    CancelColorEdit();
+    // Direct engine lifetime-invalidating reference fixture. Production Cancel/reopen has its own selected
+    // receipt tests, including computed-before-acknowledgement OK, in RunColorCancellationSelfTest.
+    CancelColorCommit();
+    _session.CancelColorEdit();
+    DocumentChanged();
     if (!_historyWork.Busy())
     {
         return fail(L"Cancel released the barrier before the old result dropped.\n");
@@ -492,7 +496,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"Late successful commit pixels crossed a cancelled panel lifetime.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels) || start() != HostOutcome::Pending ||
         !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
@@ -534,7 +538,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"A failed runner result lost its request identity or did not retain the panel safely.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
     {
         return fail(L"The throwing runner commit fixture did not open.\n");
@@ -552,7 +556,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"The scheduler's actual bad_alloc translation did not retain the commit request safely.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     _session.SelectAll();
     const int failedHistory = _session.history.UndoCount();
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandContentAwareFill) || start() != HostOutcome::Pending)
@@ -566,7 +570,7 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"A failed actual fill committed pixels, lost its panel, or retained the history barrier.\n");
     }
-    CancelColorEdit();
+    CancelColorEditForTest();
     _session.Deselect();
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
     {
@@ -627,7 +631,7 @@ int Application::RunColorCommitSelfTest() noexcept
             !_colorWorkTestGate->payloadRetiredOffOwner.load() || _jobs.ReservedMemoryBytes() != 0)
             return fail(L"A color history allocation failure changed pixels/history or lost its release owner.\n");
         std::fprintf(stderr, "PASS color-history-host.stage=%u\n", static_cast<unsigned int>(stage));
-        CancelColorEdit();
+        CancelColorEditForTest();
     }
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
         return fail(L"The admitted color capture refusal fixture could not open its panel.\n");
@@ -647,7 +651,7 @@ int Application::RunColorCommitSelfTest() noexcept
         _jobs.ReservedMemoryBytes() != 0)
         return fail(L"Admitted color capture refusal did not retain the unchanged panel/history and owners.\n");
     std::fprintf(stderr, "PASS color-history-host.capture-refusal\n");
-    CancelColorEdit();
+    CancelColorEditForTest();
 
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
         return fail(L"The stale color history epoch fixture could not open its panel.\n");
@@ -666,7 +670,7 @@ int Application::RunColorCommitSelfTest() noexcept
         !_colorWorkTestGate->payloadRetiredOffOwner.load())
         return fail(L"An old prepared color publication crossed a changed history epoch.\n");
     std::fprintf(stderr, "PASS color-history-host.stale-history-epoch\n");
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!gate())
         return fail(L"The adjustment metadata fixture could not create its worker gate.\n");
     _session.AddAdjustment(AdjustmentKind::Levels);

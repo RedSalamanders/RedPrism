@@ -410,7 +410,7 @@ bool Application::ExecuteHostInput() noexcept
         [this](const auto& value) noexcept -> bool
         {
             using Input = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<Input, HostPanelOkInput>)
+            if constexpr (std::is_same_v<Input, HostPanelOkInput> || std::is_same_v<Input, HostPanelCancelInput>)
             {
                 return !_session.HasColorEdit();
             }
@@ -538,7 +538,8 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return false;
             }
-            if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostGradientApplyInput> &&
+            if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostPanelCancelInput> &&
+                          !std::is_same_v<Input, HostGradientApplyInput> &&
                           !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
                           !std::is_same_v<Input, HostWriteInput>)
             {
@@ -1085,7 +1086,7 @@ int Application::RunFilesSelfTest() noexcept
         if (!command(ChromeHost::kCommandNew))
             return 5;
         const bool panelKept = _session.HasColorEdit(FilterKind::Levels) && layerCount() == 2;
-        CancelColorEdit();
+        CancelColorEditForTest();
         if (!command(ChromeHost::kCommandCanvasSize))
             return 5;
         if (!command(ChromeHost::kCommandCloseProject))
@@ -1144,7 +1145,7 @@ int Application::RunFilesSelfTest() noexcept
         const bool applied = !_session.HasColorEdit() && !_session.history.IsModified() &&
                              _session.history.UndoName() == L"Edit Levels Adjustment";
         // What the panel's Cancel would do, were it still open.
-        CancelColorEdit();
+        CancelColorEditForTest();
         const auto whiteOf = [&](const CanvasDocument& document) -> double
         {
             for (const ImageLayer& layer : document.layers)
@@ -1199,7 +1200,7 @@ int Application::RunFilesSelfTest() noexcept
         const bool historyKept = !_session.history.IsModified() &&
                                  _session.history.CurrentRevision() == revisionBefore &&
                                  _session.history.UndoCount() == undoCountBefore;
-        CancelColorEdit();
+        CancelColorEditForTest();
         _documentPath = pathBefore;
         _forcedDiscard = forcedDiscardBefore;
         if (!cleanBefore || !changedPanel || !unsaved || !cancelKept || !panelKept || !documentKept || !historyKept)
@@ -1248,7 +1249,7 @@ int Application::RunFilesSelfTest() noexcept
         const bool historyKept = !_session.history.IsModified() &&
                                  _session.history.CurrentRevision() == revisionBefore &&
                                  _session.history.UndoCount() == undoCountBefore;
-        CancelColorEdit();
+        CancelColorEditForTest();
         (void)DeleteFileW(fillPath.c_str());
         _documentPath = pathBefore;
         _forcedDiscard = forcedDiscardBefore;

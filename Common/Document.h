@@ -1211,6 +1211,8 @@ struct AdjustmentClosureInput;
 class PreparedAdjustmentClosure;
 struct AdjustmentOpeningInput;
 class PreparedAdjustmentOpening;
+struct ColorDismissalInput;
+class PreparedColorDismissal;
 class ImageImportAuthority;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
@@ -2238,6 +2240,11 @@ class DocumentSession
         DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedAdjustmentOpeningCurrent(const PreparedAdjustmentOpening& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedAdjustmentOpeningIfCurrent(PreparedAdjustmentOpening& prepared) noexcept;
+    [[nodiscard]] std::optional<ColorDismissalInput> PrepareColorDismissalInput() const;
+    [[nodiscard]] static std::optional<PreparedColorDismissal> PrepareColorDismissalPublication(
+        ColorDismissalInput input, DocumentHistory::StateView history, CancelToken cancellation = {});
+    [[nodiscard]] bool IsPreparedColorDismissalCurrent(const PreparedColorDismissal& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedColorDismissalIfCurrent(PreparedColorDismissal& prepared) noexcept;
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditPreview() const;
     [[nodiscard]] bool ApplyColorEditPreview(const ColorEditPreviewResult& result);
     [[nodiscard]] bool ApplyColorEditHistogram(const ColorEditHistogramResult& result);

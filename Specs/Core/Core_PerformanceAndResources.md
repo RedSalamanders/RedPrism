@@ -179,8 +179,18 @@ Metadata OK reserves history and complete original/settings/source/retirement gr
 constructs the final document and End; apply validates exact authority/settings/history epoch before nonthrowing
 ownership swaps. Every closed End expires whole-document mutation tokens. Failure preserves live document/panel,
 pending depth and redo handles. Owner source copy and conservative traversal remain H2/H3 costs; this caller does not
-qualify first upload, G1 or production Cancel routing. See the
+qualify first upload or G1. See the
 [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
+
+Panel Cancel owns a bounded opening-specific request and retains the earlier selected graph until canceled drop
+acknowledges. Same-opening repeated requests coalesce before queue retirement. Adjustment dismissal reserves the
+complete metadata End/restoration graph; destructive dismissal admits a fixed descriptor/history view and constructs
+no document or history snapshot. Both reserve complete held-panel/display/history retirement before capture and
+transfer old CPU owners through the worker-release aggregate. Failure cannot release/close the live panel or lose
+its original HRESULT. Local dependent actions use a selected prerequisite, avoiding queue-behind-self waits; atomic
+file replacement keeps its existing ownership boundary. Functional qualification is tracked in the
+[cancellation record](../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md). Admission traversal, full record
+capture, other pending-edit/reset callers, first upload and measured G1 remain open.
 
 Size-card admission additionally includes complete history construction and trim scratch. Owner capture of its
 source/token/history happens under that reservation; the worker constructs the bound resized document/history.

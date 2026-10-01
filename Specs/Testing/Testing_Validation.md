@@ -121,9 +121,21 @@ late cancellation drop, precise terminal receipt and off-owner retirement for al
 below-composite bytes, unchanged live visibility and history baseline, GPU mapping/target release before detached
 Begin preparation, device recovery after copied pixels and a younger queued rename that waits for opening and OK.
 An open transaction disables Undo/Redo commands; retention assertions therefore inspect its immutable redo stack,
-not `CanRedo()`. No production command pumps a nested wait. Explicit Cancel routing and dependent dismissal callers
-remain separate gates. Final identities and configuration results live in the
+not `CanRedo()`. No production command pumps a nested wait. Final identities and configuration results live in the
 [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
+
+`ColorDismissalTests` uses independent literal state for Levels/Gaussian/Content-Aware Fill, nested outer history,
+stale lifetime/settings/active/mask/crop/history epoch and moved/foreign/single-use refusal. A real preview lookup
+must survive application solely in the prepared retirement owner and expire when that owner releases it. Destructive
+dismissal changes neither generation nor any document/history/template state. Metadata Cancel still performs End.
+The actual owner/worker host tests require repeated queued/active cancellation to retain one request, held and
+already-computed OK to drop before Cancel closes, construction failure to retain the panel/error and a stale old
+opening to leave the new panel intact. Younger save/tool/card/Close Project must stay Pending through that close.
+All owners/reservations return, release is off owner and hidden Present stays unchanged. Ordinary fixture cleanup
+waits for real acknowledgement, with old failure injection excluded from its new cleanup descriptor; the direct
+engine lifetime-invalidating reference case remains explicit. Nested-token refusal must compare the same sequence
+before and after closure and prove the token was current beforehand. Identities/results are tracked in the
+[cancellation record](../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md).
 
 `DocumentSizeHistoryTests` adds 50 independent assertions for literal colored extension and nearest resize pixels,
 masks/selection/crop/active target, resolution-only Undo/Redo, nested/no-op history, moved/foreign/single-use
@@ -482,6 +494,14 @@ Recovery timer create/arm/wait faults additionally preserve exact native error 5
 staging cleanup and publication truth. Each surviving backup subsequently restores after its reader closes.
 The directory fixture locks the backup directory itself; a child-file lock cannot stand in for native sharing
 violation. Healthy save and final injected rollback-rename controls require zero recovery-hook visits.
+
+Native `destination-retry.*` controls hold the current destination's child manifest or directory without delete
+sharing before publication. Release at the first retry observation requires a complete replacement; exhaustion
+and each timer resource failure require the exact old tree and initiating native error. Cancellation at the
+retry observation leaves the original destination intact. Healthy and injected final rename failures require
+zero destination timer create/arm/wait visits. Every case checks publication count, no rollback before rotation
+and complete owned-staging cleanup. These controls bound attempts and preserve ownership; they do not identify
+an external reader/filter or assert wall-clock timer latency.
 
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5

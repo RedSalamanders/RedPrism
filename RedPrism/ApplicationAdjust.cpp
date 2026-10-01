@@ -235,18 +235,28 @@ void Application::ApplyColorEdit() noexcept
 
 void Application::CancelColorEdit(bool cancelQueued) noexcept
 {
-    if (cancelQueued && !_hostExecuting)
+    if (!cancelQueued)
     {
-        CancelHostContinuations();
-    }
-    CancelColorCommit(); // includes direct engine/harness acquisitions without an active host request
-    if (!_session.HasColorEdit())
-    {
+        // DocumentGoes transfers this panel with its replacement/reset owner. Preserve queued inputs so their
+        // document lifetime can retire them Stale after replacement; explicit Cancel alone clears that queue.
+        CancelColorCommit();
         return;
     }
-    DropDrag<HueTargetDrag>();
-    _session.CancelColorEdit();
-    DocumentChanged();
+    if (_hostExecuting)
+    {
+        // A local selected replacement already acknowledged CancelPanel. Atomic file replacements instead
+        // transfer the panel in their qualified replacement aggregate; no request may enqueue behind itself.
+        return;
+    }
+    if (_session.HasColorEdit())
+    {
+        DropDrag<HueTargetDrag>();
+        ReportHostAdmission(QueuePanelCancel(_session.PendingColorEdit()->openingSequence));
+        return;
+    }
+    if (cancelQueued)
+        CancelHostContinuations();
+    CancelColorCommit(); // cancellation of a pending opening without an installed panel
 }
 
 void Application::OnAdjustAction(AdjustAction action, double value) noexcept
@@ -669,7 +679,7 @@ int Application::RunAdjustSelfTest() noexcept
         settle();
         if (!_chrome->FocusAdjustRadiusForTest())
         {
-            CancelColorEdit();
+            CancelColorEditForTest();
             return fail(L"The Gaussian Blur radius field could not take the focus.\n");
         }
         // Each key is followed by the frame its preview asks for, which syncs the panel from the session.
@@ -683,7 +693,7 @@ int Application::RunAdjustSelfTest() noexcept
         }
         const bool previewed = _session.PendingColorEdit().has_value() &&
                                std::fabs(_session.PendingColorEdit()->settings.radius - 2.5) < 1e-9;
-        CancelColorEdit();
+        CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
         if (shown[0] != L"2" || shown[1] != L"2." || shown[2] != L"2.5" || !previewed)
         {
@@ -703,7 +713,7 @@ int Application::RunAdjustSelfTest() noexcept
         settle();
         OnAdjustAction(AdjustAction::OpenShadows, 0.0);
         const bool pickerOpen = _chrome->ColorPickerOpen();
-        CancelColorEdit();
+        CancelColorEditForTest();
         settle();
         const bool closedWithPanel = !_chrome->ColorPickerOpen() && !_chrome->AdjustPanelOpen();
         const std::uint32_t foreground = _session.ForegroundColor();
@@ -731,14 +741,14 @@ int Application::RunAdjustSelfTest() noexcept
         const bool palette = reachable(IDS_PALETTE_FOREGROUND) && reachable(IDS_PALETTE_BACKGROUND) &&
                              reachable(IDS_PALETTE_SWAP) && reachable(IDS_PALETTE_RESET);
         const bool curves = BeginColorEdit(ChromeHost::kCommandCurves) && reachable(IDS_A11Y_CURVE_EDITOR);
-        CancelColorEdit();
+        CancelColorEditForTest();
         const bool levels = BeginColorEdit(ChromeHost::kCommandLevels) && reachable(IDS_A11Y_LEVELS_INPUT) &&
                             reachable(IDS_A11Y_LEVELS_OUTPUT);
-        CancelColorEdit();
+        CancelColorEditForTest();
         const bool opened = BeginColorEdit(ChromeHost::kCommandHueSaturation);
         OnAdjustAction(AdjustAction::SetRange, 1.0);
         const bool spectrum = opened && reachable(IDS_A11Y_HUE_SPECTRUM);
-        CancelColorEdit();
+        CancelColorEditForTest();
         settle();
         if (!palette || !curves || !levels || !spectrum)
         {
@@ -789,7 +799,7 @@ int Application::RunAdjustSelfTest() noexcept
             press(x, (stripTop.value() + stripBottom.value()) * 0.5f);
             stripMoved = hueSettings().has_value() && !(hueSettings().value() == before);
         }
-        CancelColorEdit();
+        CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
         settle();
         if (bounds.right <= bounds.left || !stripTop.has_value() || !onBar || !barIgnored || !stripMoved)
@@ -848,7 +858,7 @@ int Application::RunAdjustBusySelfTest() noexcept
         if (bounds.right <= bounds.left || bounds.bottom <= bounds.top ||
             !_chrome->AdjustControlEnabledForTest(control))
         {
-            CancelColorEdit();
+            CancelColorEditForTest();
             return false;
         }
         const float x = (bounds.left + bounds.right) * 0.5f;
@@ -918,7 +928,7 @@ int Application::RunAdjustBusySelfTest() noexcept
                                         afterPrepare, freshBefore, _chrome->AdjustCallbackCountForTest(), prepared,
                                         silent, restored, bounds.left, bounds.top, bounds.right, bounds.bottom));
         }
-        CancelColorEdit();
+        CancelColorEditForTest();
         _chrome->SetCanvasFocused(true);
         settle();
         return silent && restored && freshWorks;
@@ -943,7 +953,7 @@ int Application::RunAdjustBusySelfTest() noexcept
     settle();
     if (!_chrome->FocusAdjustRadiusForTest())
     {
-        CancelColorEdit();
+        CancelColorEditForTest();
         return fail(L"Gaussian Blur could not focus Radius for the busy decimal check.\n");
     }
     (void)_chrome->DispatchCharacter(L'2', 0);
@@ -986,7 +996,7 @@ int Application::RunAdjustBusySelfTest() noexcept
     const bool restoredDecimal = _chrome->AdjustRadiusTextForTest() == L"2.5";
     const std::wstring restoredText = _chrome->AdjustRadiusTextForTest();
     const double restoredValue = _session.PendingColorEdit()->settings.radius;
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!keptDecimal || !restoredDecimal)
     {
         return fail(std::format(L"Busy changed a complete decimal or delivered a late callback (kept {}, restored {}, "
@@ -1012,7 +1022,7 @@ int Application::RunAdjustBusySelfTest() noexcept
     _chrome->SetAdjustInspector(inspector);
     const bool restoredPrerequisite =
         !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::LevelsAutoContrast);
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!idlePrerequisite || !busyPrerequisite || !restoredPrerequisite)
     {
         return fail(std::format(L"Levels lost its histogram prerequisite (idle {}, busy {}, restored {}).\n",
@@ -1029,7 +1039,7 @@ int Application::RunAdjustBusySelfTest() noexcept
     inspector.busy = false;
     _chrome->SetAdjustInspector(inspector);
     const bool rangeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::HueRange);
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!rangeDisabled)
     {
         return fail(L"Leaving busy enabled a Hue/Saturation range disabled by Colorize.\n");
@@ -1044,7 +1054,7 @@ int Application::RunAdjustBusySelfTest() noexcept
     inspector.busy = false;
     _chrome->SetAdjustInspector(inspector);
     const bool removeDisabled = !_chrome->AdjustControlEnabledForTest(ChromeHost::AdjustControlForTest::CurveRemove);
-    CancelColorEdit();
+    CancelColorEditForTest();
     if (!removeDisabled)
     {
         return fail(L"Leaving busy enabled Curves removal without an interior selected point.\n");

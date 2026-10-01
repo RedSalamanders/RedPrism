@@ -122,9 +122,19 @@ whole-document tokens expire. Stored-record equality still preserves revision an
 Exposure settings to explicit defaults retains its existing real-entry semantics. The global filter template and
 source pixel bytes remain unchanged. Capture/construction/cancellation/staleness preserve the panel, document,
 pending transaction and retained redo. Complete old owners retire on the worker lane.
-Explicit Cancel routing and dependent dismissal callers remain H1.6b work; the prepared cancellation API alone
-does not qualify them. Whole document capture/admission traversal, incremental accounting, first upload and measured
-G1 remain separate. Qualification is recorded in the [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
+Explicit Cancel owns an opening-specific input behind any earlier apply/drop acknowledgement. Repeated Cancel for
+the same document/opening reuses its pending observer before retiring queues; it MUST NOT cancel its own selected
+closure. Adjustment Cancel prepares original-record restoration and End through the metadata publication graph.
+Destructive dismissal captures a fixed authority and immutable history view, preparing no End or document copy.
+Its application swaps panel/display ownership into the release aggregate and advances the panel sequence only;
+pixels, active target, generation, history epoch/depth/revision/redo and global template remain unchanged.
+Both variants retain the panel on admission/capture/preparation failure and validate exact authority before swaps.
+The standalone Cancel receipt finishes after close acknowledgement without ordinary OK settlement. Cards and local
+discard use a same-ordinal prerequisite; atomic file replacement retains its qualified discard-on-success aggregate.
+No caller may enqueue a prerequisite behind itself or read admission as publication. Local reset construction,
+whole document capture/admission traversal, incremental accounting, first upload and measured G1 remain separate.
+Opening/OK qualify in their [record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md);
+Cancel caller qualification is tracked in the [cancellation record](../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md).
 
 Size-card commits also bind their complete worker-prepared document and detached history to one private result.
 Their source/token/history capture follows complete admission. Apply checks the whole document token, captured

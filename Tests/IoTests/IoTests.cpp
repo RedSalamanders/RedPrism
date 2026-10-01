@@ -15,6 +15,7 @@
 #include <cwchar>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <crtdbg.h>
 #include <cstddef>
@@ -29,6 +30,7 @@
 #include <objbase.h>
 #include <stop_token>
 #include <string>
+#include <utility>
 #include <vector>
 #include <wincodec.h>
 #include <windows.h>
@@ -1063,8 +1065,29 @@ void TestExplodedGolden()
 
     const std::wstring exploded = ScratchRoot() + L"\\roundtrip-exploded";
     const std::wstring zipPath = ScratchRoot() + L"\\roundtrip.prism";
-    Expect(SaveProject(exploded.c_str(), loaded.document, loaded.activeLayerID, false) == ProjectIoStatus::Ok,
-           "v7.save-exploded");
+    struct SaveTrace final
+    {
+        std::array<std::pair<ProjectIoStage, unsigned int>, 32> events{};
+        std::size_t count = 0;
+    } trace;
+    const ProjectIoObserver observer{[](void* context, ProjectIoStage stage, unsigned int value) noexcept
+                                     {
+                                         auto& captured = *static_cast<SaveTrace*>(context);
+                                         if (captured.count < captured.events.size())
+                                             captured.events[captured.count++] = {stage, value};
+                                     },
+                                     &trace};
+    const auto explodedStatus =
+        SaveProject(exploded.c_str(), loaded.document, loaded.activeLayerID, false, {}, observer);
+    if (explodedStatus != ProjectIoStatus::Ok)
+    {
+        std::printf("DIAG v7.save-exploded pid=%lu status=%u events=%zu\n", GetCurrentProcessId(),
+                    static_cast<unsigned int>(explodedStatus), trace.count);
+        for (std::size_t index = 0; index < trace.count; ++index)
+            std::printf("DIAG v7.save-exploded stage=%u value=%u\n",
+                        static_cast<unsigned int>(trace.events[index].first), trace.events[index].second);
+    }
+    Expect(explodedStatus == ProjectIoStatus::Ok, "v7.save-exploded");
     const ProjectLoadResult explodedAgain = LoadProject(exploded.c_str());
     Expect(explodedAgain.status == ProjectIoStatus::Ok, "v7.load-exploded");
     if (explodedAgain.status == ProjectIoStatus::Ok)
@@ -1637,14 +1660,14 @@ struct RotationFaultPlan
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::DestinationToBackupRename;
     std::uint32_t error = ERROR_ACCESS_DENIED;
     unsigned int failOnVisit = 1;
-    unsigned int visits[8]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
 };
 
 struct RecoveryTimerFaultPlan
 {
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::RecoveryTimerCreate;
     std::uint32_t error = ERROR_NOT_ENOUGH_MEMORY;
-    unsigned int visits[8]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
 };
 
 std::uint32_t FailPublishAndRecoveryTimerAt(void* context, ProjectSaveFaultStage stage) noexcept
@@ -1680,8 +1703,8 @@ std::uint32_t FailRotationAt(void* context, ProjectSaveFaultStage stage) noexcep
 
 struct RotationEventLog
 {
-    unsigned int visits[static_cast<std::size_t>(ProjectIoStage::RollbackRetryScheduled) + 1]{};
-    unsigned int errors[static_cast<std::size_t>(ProjectIoStage::RollbackRetryScheduled) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled) + 1]{};
+    unsigned int errors[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled) + 1]{};
     std::stop_source* stopOnStagingPublishFailure = nullptr;
 };
 
@@ -1758,6 +1781,143 @@ using ProjectTreeSnapshot = std::vector<std::pair<std::wstring, std::string>>;
             break;
     }
     return count;
+}
+
+void TestNativeDestinationRotation()
+{
+    enum class Mode
+    {
+        ReleaseChild,
+        ReleaseDirectory,
+        PersistentChild,
+        Cancel,
+        TimerCreate,
+        TimerArm,
+        TimerWait,
+        InjectedFinal,
+        Healthy
+    };
+    constexpr Mode modes[]{Mode::ReleaseChild, Mode::ReleaseDirectory, Mode::PersistentChild,
+                           Mode::Cancel,       Mode::TimerCreate,      Mode::TimerArm,
+                           Mode::TimerWait,    Mode::InjectedFinal,    Mode::Healthy};
+    for (const auto mode : modes)
+    {
+        CanvasDocument original;
+        original.id = Guid::Generate();
+        original.width = 2;
+        original.height = 2;
+        auto layer = ImageLayer::Blank(L"Original destination retry", Vec2{2, 2});
+        layer.asset = RasterAsset{SolidBgra(2, 2, 7, 19, 31, 255), {}, layer.name};
+        original.layers.push_back(layer);
+        const auto destination = ScratchRoot() + L"\\destination-retry-" + std::to_wstring(static_cast<int>(mode));
+        const bool baselineSaved = SaveProject(destination.c_str(), original, layer.id, false) == ProjectIoStatus::Ok;
+        Expect(baselineSaved, "destination-retry.baseline");
+        if (!baselineSaved)
+            continue;
+        const auto before = SnapshotProjectTree(destination);
+        auto replacement = original;
+        replacement.resolution = 144;
+        replacement.layers.front().name = L"Published destination retry";
+        struct Control final
+        {
+            Mode mode;
+            RotationEventLog events;
+            wil::unique_hfile reader;
+            CancelSource cancellation;
+            std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1>
+                visits{};
+        } control{mode};
+        const bool needsReader = mode != Mode::InjectedFinal && mode != Mode::Healthy;
+        if (needsReader)
+        {
+            const auto readerPath = mode == Mode::ReleaseDirectory ? destination : destination + L"\\manifest.json";
+            control.reader.reset(CreateFileW(
+                readerPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                mode == Mode::ReleaseDirectory ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL, nullptr));
+            Expect(static_cast<bool>(control.reader), "destination-retry.real-reader-opened-without-delete-share");
+            if (!control.reader)
+                continue;
+        }
+        const ProjectIoObserver observer{[](void* opaque, ProjectIoStage stage, unsigned int value) noexcept
+                                         {
+                                             auto& state = *static_cast<Control*>(opaque);
+                                             ObserveRotation(&state.events, stage, value);
+                                             if (stage == ProjectIoStage::DestinationRetryScheduled)
+                                             {
+                                                 if (state.mode == Mode::ReleaseChild ||
+                                                     state.mode == Mode::ReleaseDirectory)
+                                                     state.reader.reset();
+                                                 else if (state.mode == Mode::Cancel)
+                                                     (void)state.cancellation.Cancel();
+                                             }
+                                         },
+                                         &control};
+        const ProjectSaveFaultPolicy faults{
+            [](void* opaque, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+            {
+                auto& state = *static_cast<Control*>(opaque);
+                ++state.visits[static_cast<std::size_t>(stage)];
+                if (state.mode == Mode::InjectedFinal && stage == ProjectSaveFaultStage::DestinationToBackupRename)
+                    return ERROR_SHARING_VIOLATION;
+                if (state.mode == Mode::TimerCreate && stage == ProjectSaveFaultStage::DestinationTimerCreate)
+                    return ERROR_NOT_ENOUGH_MEMORY;
+                if (state.mode == Mode::TimerArm && stage == ProjectSaveFaultStage::DestinationTimerArm)
+                    return ERROR_INVALID_HANDLE;
+                if (state.mode == Mode::TimerWait && stage == ProjectSaveFaultStage::DestinationTimerWait)
+                    return ERROR_TIMEOUT;
+                return 0;
+            },
+            &control};
+        const auto status = SaveProject(destination.c_str(), replacement, layer.id, false, control.cancellation.Token(),
+                                        observer, faults);
+        control.reader.reset();
+        const auto retries = control.events.visits[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled)];
+        const auto error = control.events.errors[static_cast<std::size_t>(ProjectIoStage::DestinationToBackupFailed)];
+        const auto retryError =
+            control.events.errors[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled)];
+        const bool published = mode == Mode::ReleaseChild || mode == Mode::ReleaseDirectory || mode == Mode::Healthy;
+        const bool nativeError = error == ERROR_ACCESS_DENIED || error == ERROR_SHARING_VIOLATION;
+        Expect(status == (published              ? ProjectIoStatus::Ok
+                          : mode == Mode::Cancel ? ProjectIoStatus::Cancelled
+                                                 : ProjectIoStatus::Encode),
+               "destination-retry.exact-terminal-outcome");
+        const auto loaded = LoadProject(destination.c_str());
+        Expect(loaded.status == ProjectIoStatus::Ok && loaded.document.id == original.id &&
+                   loaded.document.resolution == (published ? 144 : 72) &&
+                   (published ? loaded.document.layers.front().name == L"Published destination retry"
+                              : SnapshotProjectTree(destination) == before),
+               "destination-retry.publishes-complete-replacement-or-preserves-exact-old-tree");
+        if (mode == Mode::ReleaseChild || mode == Mode::ReleaseDirectory || mode == Mode::Cancel)
+            Expect(retries == 1 && (retryError == ERROR_ACCESS_DENIED || retryError == ERROR_SHARING_VIOLATION),
+                   "destination-retry.real-refusal-reached-one-bounded-wait");
+        else if (mode == Mode::PersistentChild)
+            Expect(retries == 2 && nativeError, "destination-retry.persistent-reader-exhausts-two-waits");
+        else if (mode == Mode::InjectedFinal || mode == Mode::Healthy)
+            Expect(retries == 0 &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerCreate)] == 0 &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerArm)] == 0 &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait)] == 0 &&
+                       (mode != Mode::InjectedFinal || error == ERROR_SHARING_VIOLATION),
+                   "destination-retry.healthy-and-injected-final-use-no-timer");
+        else
+        {
+            const bool create = mode == Mode::TimerCreate;
+            const bool wait = mode == Mode::TimerWait;
+            Expect(nativeError &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerCreate)] == 1 &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerArm)] ==
+                           (create ? 0u : 1u) &&
+                       control.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait)] ==
+                           (wait ? 1u : 0u) &&
+                       retries == (wait ? 1u : 0u),
+                   "destination-retry.resource-fault-reached-and-reports-original-native-error");
+        }
+        Expect(control.events.visits[static_cast<std::size_t>(ProjectIoStage::Published)] == (published ? 1u : 0u) &&
+                   control.events.visits[static_cast<std::size_t>(ProjectIoStage::RollbackRetryScheduled)] == 0 &&
+                   CountOwnedStagingDirectories(ScratchRoot(),
+                                                std::filesystem::path(destination).filename().wstring()) == 0,
+               "destination-retry.no-rollback-before-rotation-or-owned-staging-leak");
+    }
 }
 
 [[nodiscard]] bool CreateCleanupJunction(const std::filesystem::path& link, const std::filesystem::path& target)
@@ -2513,6 +2673,7 @@ int wmain(int argc, wchar_t** argv)
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
+    TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();

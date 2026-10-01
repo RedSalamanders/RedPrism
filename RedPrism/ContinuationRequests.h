@@ -122,6 +122,10 @@ struct HostPanelOkInput final
 {
     std::uint64_t opening;
 };
+struct HostPanelCancelInput final
+{
+    std::uint64_t opening;
+};
 struct HostGradientApplyInput final
 {
     std::uint64_t opening;
@@ -154,7 +158,7 @@ using HostRequestInput =
                  HostLayerReorderInput, HostLayerRenameInput, HostLayerOpacityInput, HostWriteInput, HostPathsInput,
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
-                 HostPixelNudgeInput>;
+                 HostPixelNudgeInput, HostPanelCancelInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

@@ -85,6 +85,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
+    <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\Document.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
@@ -120,6 +121,7 @@
     <ClInclude Include="PreparedRasterHistoryTests.h" />
     <ClInclude Include="AdjustmentClosureTests.h" />
     <ClInclude Include="AdjustmentOpeningTests.h" />
+    <ClInclude Include="ColorDismissalTests.h" />
     <ClInclude Include="AdjustmentNestedTests.h" />
     <ClInclude Include="PreparedColorHistoryTests.h" />
     <ClInclude Include="DocumentSizeHistoryTests.h" />
@@ -167,6 +169,7 @@
     <ClCompile Include="PreparedRasterHistoryTests.cpp" />
     <ClCompile Include="AdjustmentClosureTests.cpp" />
     <ClCompile Include="AdjustmentOpeningTests.cpp" />
+    <ClCompile Include="ColorDismissalTests.cpp" />
     <ClCompile Include="AdjustmentNestedTests.cpp" />
     <ClCompile Include="PreparedColorHistoryTests.cpp" />
     <ClCompile Include="DocumentSizeHistoryTests.cpp" />
@@ -190,6 +193,7 @@
     <ClCompile Include="..\..\Common\WarpStroke.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
+    <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />
     <ClCompile Include="..\..\Common\Kernels_Scalar_Adjust.cpp" />

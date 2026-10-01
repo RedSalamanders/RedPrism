@@ -249,25 +249,41 @@ F6 work. The final distinct r2 six-configuration matrix qualifies the sizing sou
   On the worker, copy final records with per-layer cancellation, install the edited adjustment and prepare End.
   Validate all authority/epoch fields before nonthrowing document/history/panel/original/display swaps; retain
   every replaced owner until worker aggregate retirement. Preview-off OK still applies editable settings.
-- [ ] H1.6b — Prepare Cancel restoration and End without owner snapshot/index construction. Cancellation of an
+- [x] H1.6b — Prepare Cancel restoration and End without owner snapshot/index construction. Cancellation of an
   active OK must acknowledge its drop before that same panel can close. Coalesce repeated Cancel by opening;
   keep younger writes/replacements behind the closure and preserve the current draft on construction failure.
   Audit every production close/discard caller; no dependent action may treat accepted closure as completed.
 - [x] H1.6c — Prepare transaction opening before installing a live adjustment panel. Preserve its fixed histogram
   source, original parameters and named opening snapshot, including nested history. Keep below-composite GPU
   acquisition with P1.3 rather than hiding synchronous readback in this metadata migration.
-- [ ] H1.6d — Independent literal parameter/pixel/history tests for preview on/off, no-change/redo, nested
+- [x] H1.6d — Independent literal parameter/pixel/history tests for preview on/off, no-change/redo, nested
   transactions, all adjustment kinds, later saved revision, stale panel/settings/session/target/epoch and
   each capture/construction/cancellation boundary. Native host gates cover OK/Cancel/reopen, queued save/close,
   exactly once publication, barrier/reservation acknowledgement and off-owner retirement.
-- [ ] H1.6e — Complete frozen x64 suites/ARM64 cross-builds, update owning contracts/evidence and commit/push.
+- [x] H1.6e — Complete frozen x64 suites/ARM64 cross-builds, update owning contracts/evidence and commit/push.
   Constant-time whole document capture, other readback/H1 callers and measured G1 stay separately gated.
 
 Opening and metadata OK qualify in all six clean configurations against 408 frozen inputs: 515 closure,
 210 opening and 58 nested assertions, plus 74 closure and 72 opening host cases in each x64 profile
-([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)). H1.6b and the combined
-Cancel/reopen/caller and qualification gates remain open. A reviewed private destructive-dismissal candidate
-passes 264 literal state, lookup-retirement and refusal assertions; its production host integration is next.
+([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)). Production Cancel and the
+combined caller gates now qualify against 414 frozen inputs in all six configurations: 264 dismissal assertions,
+70 Cancel and the existing 146 opening/closure host rows per x64 profile
+([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)). Measured owner costs remain G1 work.
+Native Cancel integration now runs through the owned queue and prepared metadata/destructive publications. The first
+Debug preflight passes those 264 assertions and 58 strengthened nested assertions, plus 45 failure/coalescing and
+four early/late selected OK cases. It exposes an invalid new save-outline expectation, corrected against the existing
+project format contract with its failed image/414-input source and logs preserved. The second preflight captures
+an unexplained existing exploded-save failure; bounded observer diagnostics now report any recurrence without
+changing save behavior or expectations. The third passes all 58 Cancel host rows, then catches DocumentGoes
+clearing queued inputs before replacement could retire them Stale. That production routing error is fixed with
+the original terminal expectations intact. The fourth full Debug preflight passes. Twelve additional selected
+card/New/Close success/capture-failure cases are included in the final 414-input matrix, whose Debug and Release
+suites pass. ASan then fails an existing Copy Merged/system-clipboard assertion before the new Cancel host suite.
+Its exact images/414-input source/freeze/logs are preserved; bounded assertion diagnostics retain the original
+expectations and add no write/retry. The second final matrix records native destination-to-backup rename error 5
+in Debug's existing durability test. Bounded prepublication retry/cancellation and actual reader/timer controls
+pass the fifth full Debug preflight and the fresh final six-configuration matrix
+([candidate evidence](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
 
 Native preparation now includes complete OK/Cancel document/history/panel/original/display ownership and a
 separate opening publication that prepares Begin before installing the panel. The first native Debug preflight
@@ -285,7 +301,7 @@ under `.build/p1-adjustment-first-Debug-hsv-noop-failure` (executable SHA-256
 `19028BDBD6FA7827B7A2D01C5D24B67C333AB84D339FA13F79FA48A0A8D70C12`).
 The r3 build stopped on a missing direct ChromeHost include; its diagnostic log is retained. Later preflights
 corrected the new open-transaction redo predicate and bottom-first layer fixture; their exact failed images and
-inputs remain in the linked evidence. Production Cancel and measured owner costs remain pending.
+inputs remain in the linked evidence. Production Cancel is qualified in its separate record; measured owner costs remain pending.
 Test review removes an unreachable BeforeSnapshot closure checkpoint:
 End reuses the already retained opening snapshot. The global filter template must remain unchanged in this
 adjustment route; Undo/Redo restores document adjustment metadata, not that separate template.
@@ -293,7 +309,7 @@ Cancellation routing must own an opening-specific request, coalesce repeated can
 OK drop acknowledgement and preserve FIFO ordering for younger actions. Every caller that immediately reads
 closed-panel state must wait for the receipt; card/tool/document changes cannot invalidate a still-running
 closure or treat request admission as publication. File replacement retains its separately qualified atomic
-discard-on-success behavior. These rules require caller/host proof before H1.6b or the combined caller closes.
+discard-on-success behavior. The combined caller/host proof now passes in all x64 configurations.
 
 ### H1.5 production Undo/Redo — private proof
 

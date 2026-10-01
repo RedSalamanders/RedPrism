@@ -42,6 +42,17 @@ fails; retain `dest.old` as recovery and report its exact cleanup error. Cleanup
 replace the initiating failure status. Cleanup touches only the exact reserved backup or uniquely created staging
 path, never sibling names selected by a wildcard.
 
+Before the first successful rotation rename, a **native** destination-to-backup rename error
+`ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at most two additional attempts after one-shot worker
+timer waits of 25 ms and 100 ms. A healthy rename creates no timer. `DestinationRetryScheduled` reports the
+immediate native error before each wait. Cancellation before/after a wait returns Cancelled with the existing
+destination intact; once the first rename succeeds, the existing finish-or-recover rule applies. Other errors
+and injected destination-rename failures are final. `DestinationTimerCreate/Arm/Wait` inject only timer resource
+failures after a reached native refusal; failed resource operations report the original native rename error,
+preserve the existing destination and clean only the owned staging tree. This extends failure recovery after a
+recorded Windows error 5 in `save-durability.folder-rotation`; it does not identify the external reader or filter.
+The added worst-case scheduled wait is 125 ms on that error path, with no busy polling or UI-thread wait.
+
 Recovery from a **native** rollback rename error `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at
 most three attempts. Between attempts, the calling IO worker blocks on a one-shot waitable timer with nominal
 25 ms then 100 ms delays; each event wait has a 1 s failure bound. There is no busy polling, healthy-save timer

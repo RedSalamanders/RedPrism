@@ -1541,7 +1541,7 @@ int Application::RunKeyboardSelfTest() noexcept
         OnLayerOpacity(0.4, ChromeEditPhase::Preview); // a typed value that reached the host all the same
         const bool previewWaits = std::fabs(opacity() - start) < 1e-9;
         OnLayerOpacity(0.4, ChromeEditPhase::Cancel);
-        CancelColorEdit();
+        CancelColorEditForTest();
         const bool cancelKeeps = !_session.HasColorEdit() && std::fabs(opacity() - start) < 1e-9;
         undoTo(historyStart);
         _chrome->SetCanvasFocused(true);

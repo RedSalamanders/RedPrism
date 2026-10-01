@@ -644,7 +644,7 @@ panel lookup/coverage, old settings and source/history owners remain in the work
 refusal keeps the panel unchanged; a worker preparation failure retains the existing commit-failure state and
 redo/source pixels. A stale prepared history epoch cannot publish or close a newer panel. Direct reference
 history methods remain reference routes. Adjustment-layer opening and OK use the admitted preparation described
-below; explicit Cancel routing and dependent dismissal callers remain H1.6b work.
+below; explicit Cancel uses the separate ordered dismissal boundary below.
 This boundary passes the full native configuration matrix
 ([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); measured P1/G1 performance remains open.
 
@@ -662,9 +662,26 @@ acknowledged. True stored-record no-op preserves revision/redo; an old record wh
 become explicit keeps the existing real-entry behavior. Every successful End advances the mutation stamp and panel
 sequence. Original source bytes and the global filter template remain unchanged. Construction refusal, stale input
 or cancellation retains the current panel and its open history; complete retained preview/document/history owners
-retire off the UI thread. Synchronous reference APIs keep their goldens. Production Cancel and dependent dismissal
-callers remain a separate migration. See [history](Document_History.md) and the
+retire off the UI thread. Synchronous reference APIs keep their goldens. See [history](Document_History.md) and the
 [qualification record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
+
+### Ordered panel dismissal
+
+Production Cancel/Escape admits an owned request for the exact opening and returns to the outer pump. It requests
+drop of prior selected work and retires previously queued dependent actions, then waits for acknowledgement before
+acquiring the panel. Repeated Cancel for that document/opening coalesces without retiring its own request. Controls
+remain frozen while the receipt is Pending; view input and Cancel stay available.
+
+Adjustment Cancel restores the opening parameters and prepares End on a worker. Destructive dismissal restores no
+pixels and changes no document/history/template state; it prepares fixed authority and transfers panel/display
+ownership to worker retirement. Failure keeps the panel, source/redo and original error. Old openings and stale
+authority cannot close a reopened/current panel. Cancel after acknowledged OK cannot reverse its committed effect.
+
+Standalone dismissal finishes after its close acknowledgement. A size card uses a selected Cancel prerequisite
+before acquiring dimensions; local discard also waits for closure before reset. Prepared file replacement keeps
+its atomic discard-on-success/keep-draft-on-failure boundary. Production callbacks do not pump nested waits.
+The [cancellation record](../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md) tracks caller qualification;
+complete local reset publication and measured P1/G1 costs remain separate gates.
 
 ### Deferred panel computation (P1.1c.1)
 

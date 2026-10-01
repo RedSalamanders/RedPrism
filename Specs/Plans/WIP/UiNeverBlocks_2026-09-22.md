@@ -103,7 +103,9 @@
       - [x] A5.2.1 / A5.3 — Deferred production pixel-move previews and ordered pointer/nudge commits, exact ownership/staleness/cancellation and input-time Shift pass all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Gradient benchmark scenarios/runner controls also qualify functionally.
       - [x] A5.2a — Immutable opening coverage/lift reuse, exact cache authority, one preparation across previews/commit and complete retirement qualify in the frozen six-configuration matrix: 33 independent assertions plus actual host controls ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)). Drag/geometry/upload measurements remain open.
       - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
-    - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests.
+    - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
+      [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
+      gesture/source acquisition and required admission/cancellation proof.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
       - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.
@@ -116,6 +118,9 @@
       - [x] F5a/F6a — Detached clipboard byte/metadata helpers and folder rotation/recovery faults, including allocation-safe bounded cleanup and backup-only retries; all 77 new checks and configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production clipboard migration, pending IO waits, intermittent real save cause and measured cancellation bounds remain open.
       - [x] F6a.1 — Bounded native rollback recovery and real child/directory-reader release/exhaustion controls; all configurations and 33 rotation checks pass ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)). External reader/filter identity and overall F6 remain open; timer resource faults qualify below.
       - [x] F6a.2 — Native recovery timer create/arm/wait resource faults, healthy-path avoidance and backup-only retry qualify in all configurations; 40 rotation controls pass ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)). Original save causes and overall F6 remain open.
+      - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all
+        six configurations with 52 real reader/fault assertions per x64 profile. Old bytes and injected final
+        failures are preserved ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
       - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
       - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
@@ -149,13 +154,16 @@
         The initial mask-fixture and ASan instruction-proof failures remain preserved in the history child.
         Full document
         capture, incremental accounting, first uploads and measured G1 remain separate.
-      - [ ] P1.9 H1 adjustment panels — Prepare Begin and OK/Cancel history before owner publication;
+      - [x] P1.9 H1 adjustment panels — Prepare Begin and OK/Cancel history before owner publication;
         coalesce Cancel, acknowledge prior OK drops, audit dependent callers and retire complete preview owners.
         - [x] H1.6a/H1.6c — Production opening and metadata OK qualify in all six clean configurations:
           515 closure, 210 opening and 58 nested assertions, plus 146 actual host cases in each x64 profile
           ([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)).
-        - [ ] H1.6b/H1.6d–e — Production Cancel routing, combined caller qualification and measured owner costs
-          remain pending. The [history child](HistoryStorageAccounting_2026-09-30.md) tracks the remaining gates.
+        - [x] H1.6b/H1.6d–e — Production Cancel routing and combined caller qualification pass all six clean
+          configurations: 264 dismissal assertions and 70 actual Cancel host rows per x64 profile
+          ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)). Measured owner costs,
+          other H1 callers, full record capture/accounting and uploads remain separate in the
+          [history child](HistoryStorageAccounting_2026-09-30.md).
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

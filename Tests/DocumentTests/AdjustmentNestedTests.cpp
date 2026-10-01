@@ -194,7 +194,8 @@ void NamedOuterCommit(bool preview)
 
     const std::uint64_t generationBeforeClosure = fixture.session.Generation();
     const auto tokenBeforeClosure = fixture.session.CaptureJobToken();
-    Expect(tokenBeforeClosure.has_value(), (prefix + ".whole-document-token-before-closure").c_str());
+    Expect(tokenBeforeClosure && fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), 0),
+           (prefix + ".whole-document-token-current-before-closure").c_str());
     auto closure = PrepareClosure(fixture, true);
     Expect(closure.has_value() && closure->Commits(), (prefix + ".ok-prepared").c_str());
     if (!closure)
@@ -209,8 +210,7 @@ void NamedOuterCommit(bool preview)
     Expect(closedHistory.Depth() == 1 && closedHistory.PastCount() == 0 && closedHistory.FutureCount() == 1 &&
                closedHistory.RedoName() == L"Redo seed entry" && fixture.session.HasColorEdit() == false &&
                !fixture.session.AdjustmentOriginal() && fixture.session.Generation() == generationBeforeClosure + 1u &&
-               tokenBeforeClosure &&
-               !fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), fixture.session.ColorEditSequence()),
+               tokenBeforeClosure && !fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), 0),
            (prefix + ".closure-returns-to-outer-depth-without-inner-entry").c_str());
     Expect(fixture.session.filterSettings == fixture.templateSettings &&
                HasAdjustment(fixture.session.Document(), fixture.adjustmentID, expectedAdjustment) &&
@@ -252,7 +252,8 @@ void CancelNoopRetainsRedo(bool preview)
            (prefix + ".preview-setting").c_str());
     const std::uint64_t generationBeforeClosure = fixture.session.Generation();
     const auto tokenBeforeClosure = fixture.session.CaptureJobToken();
-    Expect(tokenBeforeClosure.has_value(), (prefix + ".whole-document-token-before-closure").c_str());
+    Expect(tokenBeforeClosure && fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), 0),
+           (prefix + ".whole-document-token-current-before-closure").c_str());
     auto closure = PrepareClosure(fixture, false);
     Expect(closure.has_value() && !closure->Commits(), (prefix + ".cancel-prepared").c_str());
     if (!closure)
@@ -266,8 +267,8 @@ void CancelNoopRetainsRedo(bool preview)
     Expect(fixture.session.Document() == fixture.outerBefore && closed.Depth() == 1 && closed.PastCount() == 0 &&
                closed.FutureCount() == 1 && closed.RedoName() == L"Redo seed entry" &&
                fixture.session.Generation() == generationBeforeClosure + 1u && tokenBeforeClosure &&
-               !fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), fixture.session.ColorEditSequence()) &&
-               !fixture.session.HasColorEdit() && !fixture.session.AdjustmentOriginal(),
+               !fixture.session.CanApplyJobResult(tokenBeforeClosure.value(), 0) && !fixture.session.HasColorEdit() &&
+               !fixture.session.AdjustmentOriginal(),
            (prefix + ".cancel-returns-outer-depth-and-preserves-redo").c_str());
     Expect(fixture.session.filterSettings == fixture.templateSettings && fixture.session.Document()->layers[0].asset &&
                HasLiteralSource(fixture.session.Document()->layers[0].asset->image),
