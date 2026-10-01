@@ -166,7 +166,7 @@ void DocumentReadbackJob::RequestTile(JobTicket ticket) noexcept
         ResumeError(ticket, _error);
 }
 
-bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
+bool DocumentReadbackJob::DeferCompletion(JobResult result, JobTicket ticket) noexcept
 {
     Acknowledge();
     if (_phase == Phase::Capture)
@@ -184,7 +184,7 @@ bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
         return true;
     }
     if (_phase == Phase::ProcessDetached)
-        return false; // all GPU rows were acknowledged before this CPU-only stage started
+        return DeferDetachedCompletion(result, ticket); // no GPU rows/utility ownership cross this boundary
     if (_phase == Phase::Copy)
     {
         const HRESULT failure = FAILED(_error)                                   ? _error
@@ -222,6 +222,12 @@ bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
                 _utilityAcquired = false;
             }
             _phase = Phase::ProcessDetached;
+            const HRESULT captured = CaptureDetachedReadback(_image);
+            if (FAILED(captured))
+            {
+                ResumeError(ticket, captured);
+                return true;
+            }
             const bool resumed = _scheduler.Resume(ticket);
             assert(resumed);
             (void)resumed;

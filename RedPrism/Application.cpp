@@ -2267,16 +2267,39 @@ int Application::RunSelfTest() noexcept
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
+        SelfTestFailure(L"SELF-TEST STAGE failed: chrome-sync.\n");
         return chromeSync;
     }
     // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
     // loss, a close inside a chrome dispatch and the session end.
     if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
     {
+        SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-compatibility.\n");
         return clipboard;
+    }
+    if (const int clipboardWork = RunClipboardWorkSelfTest(); clipboardWork != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-work.\n");
+        return clipboardWork;
+    }
+    if (const int clipboardPrefill = RunClipboardPrefillSelfTest(); clipboardPrefill != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-prefill.\n");
+        return clipboardPrefill;
+    }
+    if (const int clipboardDelayed = RunClipboardDelayedSelfTest(); clipboardDelayed != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-delayed.\n");
+        return clipboardDelayed;
+    }
+    if (const int clipboardFault = RunClipboardFaultSelfTest(); clipboardFault != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-fault.\n");
+        return clipboardFault;
     }
     if (const int session = RunSessionSelfTest(); session != 0)
     {
+        SelfTestFailure(L"SELF-TEST STAGE failed: session.\n");
         return session;
     }
     // Refusals the host reports (review fixes wave 1b: RF-1102, RF-1103).
@@ -3081,6 +3104,11 @@ void Application::Shutdown() noexcept
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
     _jobs.Close();
+    if (_clipboardStamp)
+        (void)_historyWork.Finish(_clipboardStamp.value());
+    _clipboardStamp.reset();
+    _clipboardTicket.reset();
+    _clipboardPrefillTicket.reset();
     _retryWait.CloseAfterWorkers();
     _gpuWork.CloseAfterWorkers();
     _gpuWorkInitialized = false;
@@ -3785,7 +3813,9 @@ void Application::OnCommand(int command) noexcept
                             command == ChromeHost::kCommandFillBackground ||
                             command == ChromeHost::kCommandClearPixels || command == ChromeHost::kCommandInvert ||
                             command == ChromeHost::kCommandDeleteKey;
-    if (!_hostExecuting && rasterEdit)
+    const bool clipboard = command == ChromeHost::kCommandCut || command == ChromeHost::kCommandCopy ||
+                           command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
+    if (!_hostExecuting && (rasterEdit || clipboard))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4146,38 +4176,19 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandCut:
         EndSelectionInteraction(false);
-        if (_session.Selection().has_value() && _session.CanCopyPixels())
-        {
-            _session.CutSelection();
-            MirrorClipboard();
-            static_cast<void>(_session.TakeLastBrushCommit());
-            DocumentChanged();
-        }
+        _hostExecutionError = StartClipboardCopy(true);
         break;
     case ChromeHost::kCommandCopy:
         // The copy takes the pixels the canvas shows: a pending gradient applies first as its own entry (Decision D3,
         // as CopySelection would), and its preview ends with it.
-        CommitGradient();
-        if (_session.CopySelection())
-        {
-            MirrorClipboard();
-        }
+        _hostExecutionError = StartClipboardCopy(false);
         break;
     case ChromeHost::kCommandCopyMerged:
-        // The same for the composite, which reads the committed document.
-        CommitGradient();
-        if (_session.CanCopyMerged())
-        {
-            const std::optional<Raster> composite = WandComposite();
-            if (composite.has_value() && _session.CopyMergedSelection(composite.value()))
-            {
-                MirrorClipboard();
-            }
-        }
+        _hostExecutionError = StartClipboardMerged();
         break;
     case ChromeHost::kCommandPaste:
         EndSelectionInteraction(false);
-        PasteFromClipboard();
+        _hostExecutionError = StartClipboardPaste();
         break;
     case ChromeHost::kCommandFillForeground:
     case ChromeHost::kCommandFillBackground:
@@ -7798,42 +7809,5 @@ void Application::CancelPixelDrag() noexcept
     if (_pixelMoveCommitTicket)
         CancelHostContinuations();
     static_cast<void>(_session.TakeLastBrushCommit()); // dropped pixels adopt nothing
-    DocumentChanged();
-}
-
-void Application::MirrorClipboard() noexcept
-{
-    const std::optional<PixelClipboard>& clip = _session.Clipboard();
-    if (!clip.has_value() || !_window)
-    {
-        _clipboardWriteSucceeded = false;
-        return;
-    }
-    // Other apps read the copy as PNG or a 32-bit DIB. The sequence number lets a later Paste tell that the system
-    // clipboard has not changed since this copy, so the exact pixels and their place come from the session instead.
-    // It is taken even when the write failed (another app held the clipboard): this copy is still newer than
-    // whatever the system clipboard holds, and only a later change there makes Paste read it.
-    _clipboardWriteSucceeded = SystemClipboard::WriteImage(_window.get(), clip->image);
-    _clipboardSequence = SystemClipboard::SequenceNumber();
-}
-
-void Application::PasteFromClipboard() noexcept
-{
-    if (!_session.Document().has_value())
-    {
-        return;
-    }
-    const bool foreign = !_session.CanPaste() || _clipboardSequence != SystemClipboard::SequenceNumber();
-    if (foreign && SystemClipboard::HasImage())
-    {
-        Raster image;
-        if (SystemClipboard::ReadImage(_window.get(), DocumentSession::kMaxShapePixels, image))
-        {
-            _session.PasteImage(image);
-            DocumentChanged();
-        }
-        return;
-    }
-    _session.Paste();
     DocumentChanged();
 }

@@ -1,4 +1,6 @@
 #include "ClipboardTransfer.h"
+#include "ClipboardEncodingBudget.h"
+#include "CodecMemoryStream.h"
 
 #include "ClipboardDibWork.h"
 #include "ImageCodecs.h"
@@ -263,6 +265,8 @@ struct PreparedImage::Storage final
     std::optional<ClipboardFingerprint::Binding> binding;
 };
 
+static_assert(sizeof(CodecMemoryStream) <= 256);
+
 PreparedImage::PreparedImage() noexcept = default;
 PreparedImage::~PreparedImage() = default;
 PreparedImage::PreparedImage(PreparedImage&&) noexcept = default;
@@ -293,6 +297,10 @@ std::uint32_t PreparedImage::SourceSequence() const noexcept
 Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSequence, PreparedImage& output,
                CancelToken cancellation, Observer observer, const std::optional<ClipboardReceipt::Key>& receipt)
 {
+    static_assert(sizeof(PreparedImage::Storage) <= 256);
+    static_assert(kClipboardEncodingFixedMetadataBytes >= sizeof(PreparedImage::Storage) + sizeof(CodecMemoryStream) +
+                                                              4 * sizeof(std::vector<std::uint8_t>) + 128 +
+                                                              16 * sizeof(void*));
     output = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
@@ -473,9 +481,11 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
         result.nativeError = error ? error : Error();
     result.sequence = GetClipboardSequenceNumber();
     result.status = result.pngPlaced && result.dibPlaced ? Status::Ok : Status::NativeFailure;
-    if (!scope.Close() && result.nativeError == 0)
+    const bool closed = scope.Close();
+    const DWORD closeError = closed ? Injected(observer, Fault::Close) : Error();
+    if (closeError && result.nativeError == 0)
     {
-        result.nativeError = Error();
+        result.nativeError = closeError;
         result.status = Status::NativeFailure;
     }
     Reached(observer, Stage::Closed);

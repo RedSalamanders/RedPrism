@@ -5,6 +5,8 @@
 #include "CanvasSize.h"
 #include "CanvasViewport.h"
 #include "ChromeEvents.h"
+#include "ClipboardFingerprint.h"
+#include "ClipboardTransfer.h"
 #include "ColorEditWork.h"
 #include "CommandBindings.h"
 #include "ContinuationRequests.h"
@@ -13,6 +15,7 @@
 #include "EditorTool.h"
 #include "GpuWork.h"
 #include "HistoryWork.h"
+#include "ImageImportHistory.h"
 #include "ImageImportWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
@@ -257,8 +260,26 @@ class Application final : public ChromeEvents
     void DragPixels(Vec2 pixel, bool constrain) noexcept;
     void FinishPixelDrag() noexcept;
     void CancelPixelDrag() noexcept;
-    void MirrorClipboard() noexcept;
-    void PasteFromClipboard() noexcept;
+
+    class ClipboardCopyJob;
+    class ClipboardMergedJob;
+    [[nodiscard]] HRESULT StartClipboardCopy(bool cut) noexcept;
+    [[nodiscard]] HRESULT StartClipboardMerged() noexcept;
+    class ClipboardPasteProbeJob;
+    class ClipboardPasteJob;
+    [[nodiscard]] HRESULT StartClipboardPaste() noexcept;
+    class ClipboardPrefillJob;
+    void StartClipboardPrefill() noexcept;
+    void CancelClipboardPrefill() noexcept;
+    int RunClipboardPrefillSelfTest() noexcept;
+    int RunClipboardDelayedSelfTest() noexcept;
+    int RunClipboardFaultSelfTest() noexcept;
+    [[nodiscard]] HRESULT SubmitClipboardPaste(HistoryWorkStamp stamp, ImageImportAuthority authority,
+                                               ClipboardTransfer::Inspection inspection, bool privatePreference,
+                                               ClipboardReceipt::Key key,
+                                               std::optional<ClipboardFingerprint::Binding> binding,
+                                               unsigned int attempts) noexcept;
+
     // Color adjustments and filters (C12, ApplicationAdjust.cpp): the Image and Filter menus, the adjustment panel's
     // actions, adjustment layers edited over the composite beneath them, and the eyedroppers on the canvas.
     bool BeginColorEdit(int command) noexcept;
@@ -624,6 +645,7 @@ class Application final : public ChromeEvents
     int RunFilesSelfTest() noexcept;
     int RunSessionSelfTest() noexcept;
     int RunClipboardSelfTest() noexcept;
+    int RunClipboardWorkSelfTest() noexcept;
     // Refusals the host reports (review fixes wave 1b): Load Mask / Layer Selection past the outline limit, and edits
     // the document's pixel budget refused (Decision D7).
     int RunRefusalSelfTest() noexcept;
@@ -679,6 +701,13 @@ class Application final : public ChromeEvents
     std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
     std::optional<HistoryWorkStamp> _rasterEditStamp;
     std::optional<JobTicket> _rasterEditTicket;
+    std::optional<HistoryWorkStamp> _clipboardStamp;
+    std::optional<JobTicket> _clipboardTicket;
+    std::optional<JobTicket> _clipboardPrefillTicket;
+    std::uint64_t _clipboardPrefillInvocation = 0;
+    bool _newCanvasEdited = false;
+    std::optional<ClipboardFingerprint::Binding> _clipboardBinding;
+    std::shared_ptr<struct ClipboardWorkTestGate> _clipboardWorkTestGate;
     std::shared_ptr<RasterEditTestGate> _rasterEditTestGate;
     std::optional<JobTicket> _pathClassificationTicket;
     PathClassificationBatch _pathClassifications;

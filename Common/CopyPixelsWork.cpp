@@ -22,15 +22,15 @@ bool Valid(const CopyPixelsInput& input) noexcept
             (input.source.Width() == input.canvasWidth && input.source.Height() == input.canvasHeight));
 }
 
-std::optional<GridRect> Region(const CopyPixelsInput& input) noexcept
+std::optional<GridRect> Region(int width, int height, const std::optional<DocumentSelection>& selection) noexcept
 {
     double minX = 0;
     double minY = 0;
-    double maxX = input.canvasWidth;
-    double maxY = input.canvasHeight;
-    if (input.selection)
+    double maxX = width;
+    double maxY = height;
+    if (selection)
     {
-        const auto bounds = input.selection->Bounds();
+        const auto bounds = selection->Bounds();
         if (!bounds)
             return std::nullopt;
         minX = bounds->minX;
@@ -43,8 +43,8 @@ std::optional<GridRect> Region(const CopyPixelsInput& input) noexcept
     // Preserve the direct SelectionCopyRegion tolerance before clipping or converting to integer coordinates.
     const double left = (std::max)(0.0, std::floor(minX + 0.001));
     const double top = (std::max)(0.0, std::floor(minY + 0.001));
-    const double right = (std::min)(static_cast<double>(input.canvasWidth), std::ceil(maxX - 0.001));
-    const double bottom = (std::min)(static_cast<double>(input.canvasHeight), std::ceil(maxY - 0.001));
+    const double right = (std::min)(static_cast<double>(width), std::ceil(maxX - 0.001));
+    const double bottom = (std::min)(static_cast<double>(height), std::ceil(maxY - 0.001));
     if (!(right - left >= 1) || !(bottom - top >= 1))
         return std::nullopt;
     return GridRect{static_cast<int>(left), static_cast<int>(top), static_cast<int>(right - left),
@@ -75,7 +75,9 @@ std::uint64_t CopyPixelsMemoryBytes(const CopyPixelsInput& input) noexcept
 {
     if (!Valid(input))
         return 0;
-    const auto region = Region(input);
+    if (input.composite)
+        return CopyMergedPixelsMemoryBytes(input.canvasWidth, input.canvasHeight, input.selection);
+    const auto region = Region(input.canvasWidth, input.canvasHeight, input.selection);
     if (!region)
         return 0;
     const auto canvasPixels = static_cast<std::size_t>(input.canvasWidth) * input.canvasHeight;
@@ -108,13 +110,47 @@ std::uint64_t CopyPixelsMemoryBytes(const CopyPixelsInput& input) noexcept
     return bytes;
 }
 
+std::uint64_t CopyMergedPixelsMemoryBytes(int width, int height,
+                                          const std::optional<DocumentSelection>& selection) noexcept
+{
+    if (width <= 0 || height <= 0 || width > kMaxCanvasSide || height > kMaxCanvasSide ||
+        static_cast<std::int64_t>(width) * height > kMaxLayerPixels)
+        return 0;
+    const auto region = Region(width, height, selection);
+    if (!region)
+        return 0;
+    const auto canvasPixels = static_cast<std::size_t>(width) * height;
+    const auto regionPixels = static_cast<std::size_t>(region->width) * region->height;
+    std::uint64_t bytes = 4096 + sizeof(CopyPixelsInput) + sizeof(CopyPixelsResult);
+    if (!Add(bytes, PixelBuffer::RequiredBytes(regionPixels * 4u)) ||
+        !Add(bytes, static_cast<std::uint64_t>(region->width) * 5u))
+        return 0;
+    if (selection)
+    {
+        if (!Add(bytes, PixelBuffer::RequiredBytes(canvasPixels)))
+            return 0;
+        if (selection->antialiased)
+        {
+            if (!Add(bytes, (static_cast<std::uint64_t>(width) + 2u) * height * 2u * sizeof(float)))
+                return 0;
+        }
+        else
+        {
+            const auto points = selection->loops.PointCount();
+            if (points > (std::numeric_limits<std::uint64_t>::max)() / 32u || !Add(bytes, points * 32u))
+                return 0;
+        }
+    }
+    return bytes;
+}
+
 CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancellation, CopyPixelsObserver observer)
 {
     if (cancellation.IsCancelled())
         return {CopyPixelsStatus::Cancelled};
     if (!Valid(input))
         return {};
-    const auto region = Region(input);
+    const auto region = Region(input.canvasWidth, input.canvasHeight, input.selection);
     if (!region || !CopyPixelsMemoryBytes(input))
         return {};
     Checkpoint(observer, CopyPixelsStage::Source);

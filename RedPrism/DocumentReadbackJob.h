@@ -51,6 +51,18 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     {
         return false;
     }
+    // Owner-only transition after the last map acknowledgement and utility release. The opening snapshot's
+    // authority must still guard any input captured here. No extra admission or GPU restart follows it.
+    [[nodiscard]] virtual HRESULT CaptureDetachedReadback(Raster&) noexcept
+    {
+        return S_OK;
+    }
+    // Optional further CPU/owner stages under this original record, ticket and reservation. The derived
+    // owner callback resumes or registers one acknowledged event wait, never spins or drains completion.
+    [[nodiscard]] virtual bool DeferDetachedCompletion(JobResult, JobTicket) noexcept
+    {
+        return false;
+    }
     virtual void ResetReadback() noexcept {} // worker-only release of a previous attempt's prepared result
     // Owner thread. Ensure the composition and queue use the current device, recovering on a device-lost reason.
     // No waits, modal or message pump. At most two whole-graph restarts; no partial result is published.

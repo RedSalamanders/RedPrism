@@ -267,7 +267,9 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
   `ReplaceDocument(document, active)` (File › Open, a new project from images) drops what `ClearDocument` drops and
   installs the document unmodified, `active` (when it names a layer) the only selected layer with its pixels, not
-  its mask, targeted.
+  its mask, targeted. Capture the requested active ID before clearing the old session: `active` may reference
+  `ActiveLayerID()` on that same session. Replacement starts a fresh document lifetime even when its persisted
+  document and layer IDs match the old ones, and leaves history marked saved with no undo entries.
 - The active layer changes in one place (legacy `EditorSession.activeLayerID` didSet): every edit that makes another
   layer active (a new layer, folder, shape, paste or duplicate, a moved layer, a group, a merge, a deletion, the
   floating selection, Undo and Redo) drops the mask target and makes the selected set that layer alone, so a new

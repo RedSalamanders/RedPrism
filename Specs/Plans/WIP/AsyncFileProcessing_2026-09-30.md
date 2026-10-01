@@ -49,25 +49,29 @@
         unchanged transfer controls. Preserve 468 physical inputs and 45 evidence files.
         See [record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md).
         Host admission and ordered OS transfer remain F5b.2b/F5c.2.
-      - [ ] F5b.2b.3 — Qualify selected production Copy/Cut/Paste callers with complete reservations, private origin,
+      - [x] F5b.2b.3 — Qualify selected production Copy/Cut/Paste callers with complete reservations, private origin,
         acknowledged retries and worker retirement. The private host compiles with event gates at capture,
         preparation, private application, encoding, transfer and Paste publication. The draft now includes Copy
         Merged's original-authority GPU/CPU/transfer graph, 52 host scenarios and 30 passing metadata-only readback
         budget controls. A separate encoder planner passes 37 controls and actual native object-size assertions.
-        Preserve both private host runtime failures; fixture setup now uses bounded event waits for external
-        clipboard listeners. Complete runtime proof, lifetime/shutdown cases and native qualification remain
-        open; compile success is not behavioral proof.
+        The final full private WARP run exits zero: 268 command, 56 prefill, 39 actual delayed-render and 81
+        publication/no-paint/retry checks pass. Primary fixes protect aliased replacement IDs, sequence fixture
+        arguments, six total Paste acquisitions and prepared chrome hit layout; exact failed images are retained.
+        Native callers, declarations and tests pass all three x64 gates and all three ARM64 clean cross-builds
+        against 480 frozen inputs ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). Corrected native
+        prefill/delayed/fault suites have 61/41/88 controls. F5d/G1 remain separate.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
     - [x] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
       wakes the same wait, and no slot or receiver can be reused before callback acknowledgement. Native host
       routing multiplexes this source with GPU work. All six configurations, 117 retry controls and two routed
       GPU scenarios qualify ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)); actual transfers remain F5c.2.
-    - [ ] F5c.2 — Bind transfer retries to actual ordered Copy/Cut/Paste/New Canvas graphs and their full
+    - [x] F5c.2 — Bind transfer retries to actual ordered Copy/Cut/Paste/New Canvas graphs and their full
       reservation; preserve six total attempts, source authority, publication truth and draft revision guards.
       New Canvas's private draft opens immediately and inspects only clipboard metadata on a worker. Card
       invocation, typed-width/height intent, session and document lifetime guard publication; close/reopen and
       copied Apply drafts cancel older suggestions. The original ticket/reservation survives acknowledged Busy
-      waits. Native integration and runtime controls remain pending.
+      waits. The 14 private prefill and seven real delayed-render cases pass; native integration is complete
+      and all six frozen native profiles qualify. Native waits retain the source even during cancelled external render.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
   - [x] F6a.2 — Timer creation/arming/wait resource faults preserve native rollback errors, backup and publication

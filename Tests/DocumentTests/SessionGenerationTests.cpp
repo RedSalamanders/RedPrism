@@ -3,9 +3,11 @@
 #include "Document.h"
 #include "Selection.h"
 
+#include <array>
 #include <cstdio>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 namespace
 {
@@ -380,6 +382,22 @@ void Refusals()
     Expect(s.Document() == before && s.DocumentSerial() == serial && s.CanApplyJobResult(token, 0),
            "refusals-preserve-document-and-token");
 }
+
+void ReplacementAlias()
+{
+    DocumentSession session = Session();
+    const auto selected = session.ActiveLayerID();
+    const auto image = session.ActiveLayer()->asset->image;
+    const auto token = session.CaptureJobToken().value();
+    const auto serial = session.DocumentSerial();
+    session.ReplaceDocument(session.Document().value(), session.ActiveLayerID());
+    Expect(session.ActiveLayerID() == selected && session.ActiveLayer() && session.ActiveLayer()->asset &&
+               session.ActiveLayer()->asset->image == image,
+           "replacement-captures-aliased-active-id-before-session-clear");
+    Expect(session.DocumentSerial() != serial && !session.CanApplyJobResult(token, token.sequence) &&
+               session.history.UndoCount() == 0 && !session.history.IsModified(),
+           "aliased-replacement-has-fresh-lifetime-and-saved-history");
+}
 } // namespace
 
 int RunSessionGenerationTests()
@@ -389,5 +407,6 @@ int RunSessionGenerationTests()
     Tokens();
     SelectionSharing();
     Refusals();
+    ReplacementAlias();
     return gFailures;
 }

@@ -342,6 +342,21 @@ back buffer; the composition then blits the document into the chrome hole. Those
 
 `Common/CodecMemoryStream.*` owns one reserved virtual buffer through WIL and provides the capped WIC IStream
 implementation. Cursor/data access is confined to one caller; only COM reference counting is concurrent. It owns
-no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker; the current inline
-clipboard caller still awaits F5 host migration. A borrowed completed-byte view is retained only through exact
+no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker. A borrowed completed-byte view is retained only through exact
 worker copying, never exposed as a result. The final public result is an owning vector.
+
+### Ordered clipboard host graphs
+
+`ApplicationClipboardJobs.cpp` owns selected Copy/Cut/Paste/Copy Merged jobs and independent New Canvas metadata
+suggestions. Fixed descriptors precede complete admission; source document/history/pixel owners are captured
+only afterwards. Workers prepare core publication, capped encoding, global blocks, receipts and owned decode.
+Owner stages validate authority and apply complete publication; they perform no OS clipboard transfer, codec
+work, nested completion drain or wait. An acknowledged one-shot retry retains the same ticket and reservation.
+Each command allows at most six clipboard acquisitions; Paste shares that total between Inspect and Copy.
+
+Copy Merged holds its opening whole-document authority across utility tiles, releases maps and utility targets,
+then runs the CPU/private-copy/encoding/transfer stages under the same scheduler record and reservation. A device
+change after owned CPU bytes exist cannot recompose or replay the transfer. Large captured/replaced CPU owners
+retire as one aggregate off owner. Session shutdown keeps receivers, wait slots, windows and borrowed OS-call
+state alive through worker acknowledgement; an external delayed renderer cannot be interrupted by a stop token.
+The normal final join happens after the application hides its confirmed-close window.

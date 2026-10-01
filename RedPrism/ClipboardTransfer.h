@@ -56,13 +56,15 @@ enum class Fault : std::uint8_t
     ReceiptGlobal,
     ReceiptPlace,
     ReceiptRead,
+    Close,
 };
 
 struct Observer final
 {
     void* context = nullptr;
     void (*reached)(void*, Stage) noexcept = nullptr;
-    // Nonzero injects an error before the named native call. It never fakes a successful publication.
+    // Nonzero injects an error before the named native call. Close reports an error after actually closing,
+    // so a harness failure cannot leave the clipboard locked. Never fake a successful publication.
     std::uint32_t (*fault)(void*, Fault) noexcept = nullptr;
 };
 

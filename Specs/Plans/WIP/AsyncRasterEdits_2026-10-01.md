@@ -41,13 +41,44 @@
       All six configurations pass against 446 frozen inputs, including 92 independent core controls
       ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)); the actual host transfer graph and
       measured capture/apply/retirement remain A5.4c/F5/G1.
-    - [ ] A5.4c — Admit and activate ordered Copy/Cut callers with F5 transfer/retry stages; native host failure,
+    - [x] A5.4c — Admit and activate ordered Copy/Cut callers with F5 transfer/retry stages; native host failure,
       stale/cancel/younger-input proof and the full configuration matrix. Primitive proof alone leaves A5.4 open.
+      Actual host graphs and the independent prefill, delayed-render and publication-fault suites pass the full
+      private WARP run. All three x64 gates and all three ARM64 clean builds qualify 480 frozen native inputs
+      ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). Owner capture/apply and G1 remain open.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
   - [ ] A5.7 — Full configuration and measured G1 closeout of the complete A5 graph.
 - [ ] A6 — Distortion commit/preview preparation and transform settlement continuations; preserve mapped image/mask geometry and cancellation/staleness.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
+  - [ ] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare
+    the complete inserted document/history and publish through checked nonthrowing swaps. Preserve names,
+    group insertion, selection, live-shape identity and the input-time foreground. Private implementation starts
+    while the clipboard native matrix is frozen; activate only after that matrix exits and is archived.
+    The isolated full DocumentTests suite passes, including 76 shape controls. A focused private WARP host run
+    passes 199 checks across 36 scenarios, including actual release, ordinary leave and capture loss; this is
+    not the full application or native matrix gate.
+    Primary review corrected fixture history baselines and a nonexistent viewport accessor, retaining the failed
+    sources, images and logs. The complete private application r2 exits zero against 468 frozen inputs;
+    native activation remains pending.
+    The [shape record](../../TestRuns/ShapeWorkers_2026-10-01.md) identifies passing focused snapshots and the
+    preserved full-run clipboard failure; no focused result closes native qualification.
+  - [ ] A7.2 — Ordered production Shape release, cancellation/fault/stale/younger-input and aggregate-retirement
+    gates; all configurations and measured owner/first-upload costs. Existing inline goldens stay unchanged.
+  - [ ] A7.3 — Live-shape redraw inside transform settlement, selection masks and Layer via Copy; complete
+    pixel/history ownership and eager semantic mask thumbnail preparation for each caller.
+    - [ ] A7.3a — Admitted selection-mask/uniform-mask preparation, transformed coverage with legacy
+      hide/reveal bytes, eager edge thumbnail, exact mask target/selection/history publication and retirement.
+      The complete isolated document suite passes 84 core/extra controls. The focused host proof passes 201
+      controls and the complete private WARP application run passes. Native qualification and live producer settlement remain
+      pending ([mask record](../../TestRuns/MaskWorkers_2026-10-01.md)).
+    - [ ] A7.3b — Layer via Copy with owned copied region/origin, no-selection duplicate semantics, complete
+      inserted layer/history and target/mask state. Preserve clipboard identity and serial throughout.
+      Detached preparation/publication and the full private document suite pass 34 independent controls.
+      The ordered host graph is being qualified; native activation and live producer settlement remain open
+      ([record](../../TestRuns/LayerCopyWorkers_2026-10-01.md)).
+    - [ ] A7.3c — Live-shape transform redraw with prepared carried mask and atomic after-document/history;
+      coordinate with A6 so distortion, redraw and floating settlement cannot bypass the owning worker graph.
 - [ ] A8 — All moved production callers, ordering/lifetime/failure gates and every due G1 operation measured; reconcile master and owning specs before closing P1.5.
 
 Status: ACTIVE, executable P1.5 child; no completion claim.
@@ -109,6 +140,60 @@ after Escape is dropped. Younger Undo, tool/layer switches, size/import/write an
 ordinal. A stale result never adds history or mutates a newer document. Failure posts one existing localized
 notice outside worker preparation; retirement releases all owned data safely. Chrome/history/display uploads
 remain measured P1.9 costs and must not be hidden by a worker-only elapsed metric.
+
+## A7 Shape execution design
+
+The admitted host release owns its event-time draft and foreground color, with a transient outline until
+publication. It settles preceding panel/gradient work and then captures document/history owners under the complete
+reservation. The worker validates dimensions before integer conversion, uses the existing clockwise rounded
+corner/ellipse geometry and float coverage order, adopts fully initialized BGRA pixels and prepares insertion,
+unique naming, selection retention, live-shape identity, active target and one named history entry together.
+Independent color tiles may run through the borrowed executor. A plain integer rectangle has exactly full
+coverage, so it needs neither geometry nor Gray8/cell buffers. Curved coverage remains serial in its established
+edge order. Its cancellation checks and memory declaration cover geometry, coverage cells, owned coverage/output,
+record/name/hierarchy working sets, history and full retired owners.
+
+Owner application checks session/document lifetime, generation, active/mask/crop authority, settled drafts and
+history epoch, publishes completed history and swaps document/selection/display ownership. It expands only the
+inserted parent and transfers replaced CPU owners as one aggregate to the release lane. Cancellation keeps the
+selected input, barrier, record and reservation through acknowledgement. A same-ID replacement or stale history
+cannot accept old pixels. Direct inline shape APIs remain legacy references; production pointer release routes
+through the owned host input. Source capture and chrome/first-upload costs still need H2/H3/G1 measurements.
+
+Private review corrected a sidecar's mixed-size `std::min` compile error and its assumption that `CreateDocument`
+starts with zero undo entries. The stale-generation control now checks the exact captured history baseline;
+its refusal expectation is unchanged. Failed private sources/binaries/logs are retained before repair.
+
+### A7.3a Mask execution design
+
+Capture a sealed full source, active target, selected layer IDs, immutable history and reveal/hide argument only
+after whole admission. The worker uses layer-grid coverage through the exact inverse transform. Revealing masks
+contain `255 - coverage`; hiding masks contain coverage. An explicit empty selection still exists and produces
+the corresponding uniform mask over the layer grid. No selection produces the existing 1×1 all-white/all-black
+mask. Adopt initialized Gray8 pixels and compute its semantic edge thumbnail before preparing publication.
+Publish mask targeting, dropped selection, unchanged image pixels and complete selected-layer state with one
+existing history name. No partial mask or missing thumbnail may reach composition. Cancellation/refusal retains
+all source/history owners and never changes the live target. The host must settle any preceding live stroke,
+transform, gradient, outline/lasso or panel according to its existing contract before the admitted capture;
+the settled core alone does not qualify those producer migrations.
+
+### A7.3b Layer via Copy execution design
+
+Capture the settled active layer, displayed source/mask placement, outline, whole document and history after
+complete admission. With a selection, reuse the qualified detached Copy pixel primitive: crop in document
+coordinates, preserve origin and literal mask-as-gray behavior, then prepare a new pixel layer above the active
+child with its existing parent, unique `Layer N` name, dropped outline and one `Layer via Copy` entry. Expand
+only that parent at guarded publication. With no selection, duplicate the active non-group layer, including its
+transform, blend/opacity, clipping source, adjustment/live shape and semantic mask thumbnail, use the existing
+`name copy` and `Duplicate Layer` history name, and count shared image/mask pixels again against independent
+document budgets. An explicit empty selection and a selected target without a usable image/mask do nothing.
+
+Prepare naming, insertion, active/selected-layer target state and complete history together; no session or private
+clipboard is consulted by the worker. The operation must leave private clipboard pixels, origin and serial
+unchanged on success, failure, cancellation and stale refusal. Opening authority includes persisted/lifetime IDs,
+generation, target/crop/mask state and history epoch. Reserve sampling/coverage/cropped output and metadata/history
+peaks before capture, and retain the replaced CPU graph as one aggregate until off-owner retirement. The host
+shares the original ordinal across panel/gradient/pixel-move/transform settlement and final publication.
 
 ## Independent validation
 

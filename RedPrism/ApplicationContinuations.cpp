@@ -651,7 +651,12 @@ void Application::CancelHostContinuations() noexcept
     }
     else if (_hostCommitStamp)
     {
-        if (_imageImportTicket)
+        if (_clipboardTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_clipboardTicket.value());
+        }
+        else if (_imageImportTicket)
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_imageImportTicket.value());

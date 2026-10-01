@@ -22,6 +22,10 @@
   - [x] Qualify Merge and adjustment-opening continuations, worker crop/thumbnail, cancellation and exact apply tokens.
   - [x] Migrate PNG/JPEG export with detached CPU encoding and qualify bounded Map-busy recovery, later-tile failure and actual hardware/WARP measurements ([evidence](../../TestRuns/ProjectWriters_2026-10-01.md)).
   - [ ] Migrate clipboard, wand, clone and sampler consumers.
+    - [x] Copy Merged retains original whole-document authority through GPU/CPU/clipboard phases, releases
+      utility ownership before encoding and prevents device replacement from replaying completed pixels.
+      All six native profiles qualify ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). Wand/clone/sampler
+      and remaining live-input/device/measurement scenarios stay open.
 - [ ] P1.3f — Prove hidden completion, cancellation, stale generation, device loss, saturation and shutdown with owned event gates.
 - [ ] P1.3f — Complete caller qualification and real-loop measurements; reconcile domain specs and commit/push each slice.
   - [x] Utility/Merge/opening slice: all x64 gates and ARM64 cross-builds pass; specifications and evidence reconciled.

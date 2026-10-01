@@ -128,7 +128,7 @@
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="IoTests.cpp" />
+    <ClCompile Include="IoTests.cpp" /><ClCompile Include="ClipboardEncodingBudgetTests.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="..\..\RedPrism\ClipboardTransfer.cpp" />
     <ClCompile Include="..\..\RedPrism\SystemClipboard.cpp" />
     <ClCompile Include="ClipboardTransferTests.cpp" />

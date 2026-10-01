@@ -471,7 +471,7 @@ semantic outside tone; cropped output avoids a redundant full-canvas BGRA mask p
 Source/coverage/row/publication checkpoints reject cancellation without publishing partial pixels. The cached
 memory plan covers private source assembly, sampling planes, exact coverage workspace, cropped pixels and rows;
 it excludes already shared inputs and separate host/history/codec/clipboard/retirement owners. No session is
-mutated by this primitive. Atomic Cut publication, clipboard authority and production routing remain A5.4b–c.
+mutated by this primitive. Atomic command publication and host transfer are defined below.
 
 ### Sealed clipboard command preparation (P1.5 A5.4b)
 
@@ -495,8 +495,8 @@ Prepared publication retains replaced document/display/history/brush-commit/priv
 aggregate retirement on a worker. Its new copy remains separately available for later admitted OS encoding.
 Preparation includes token mask names/adjustment vectors and all private sampling/clear/history allocations;
 retirement includes token color, mask, semantic thumbnail and shared selection owners even for a mask copy.
-Existing full document capture is still charged and remains H2 work. This boundary activates no production
-clipboard graph; codec/OS admission, receipt binding, retry stages and host ordering remain A5.4c/F5b.2–F5d.
+Existing full document capture is still charged and remains H2 work. The production host graph is defined below;
+this primitive alone does not establish its qualification or G1 timing.
 
 ### Detached clipboard Paste preparation (F5b.2b.2)
 
@@ -524,6 +524,34 @@ publication swaps the complete document/history/selection state; Undo/Redo resto
 Cancellation, allocation failure and invalid/over-budget sources publish nothing. Large replaced/captured owners
 remain in the admitted retirement aggregate and retire off the owner thread. Production caller and full graph
 qualification remain tracked separately from this core API's validation.
+
+### Ordered clipboard host processing
+
+Production Copy/Cut/Paste/Copy Merged enter the shared selected-input history barrier. Acquire committed sources
+after required panel/gradient/transform settlement, keep the selected ordinal until apply/drop acknowledges and
+prevent younger mutations from starting. View commands continue dispatching. Copy preserves live brush/warp/shape
+owners and samples committed pixels. Cut that cannot paint mirrors its previous private copy without a Clear
+or new serial, as the direct route does.
+
+Copy/Cut apply their complete private publication before OS encoding. Encoding, pre-Empty refusal, retry
+exhaustion or later cancellation cannot roll back that completed private operation. Record the source sequence
+before encoding. Bind the private session/serial to worker fingerprints and the registered receipt; use the
+held transfer sequence and exact partial-publication truth, never a later owner-window sequence. Before Empty,
+failure leaves the previous OS clipboard intact. After Empty, finish independent format offers and do not retry.
+
+Paste first admits a fixed metadata probe, then admits its full capture/decode/history/retirement graph under
+the same ordinal. An unchanged source sequence can prefer the current private copy; otherwise inspect offered
+formats and copy bytes only while their source scope is held. No offered image permits private fallback;
+malformed/over-budget offered images fail locally. A valid owned receipt and exact fingerprints can retain private
+origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
+owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
+The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+
+Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
+and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or
+the OS writer. Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
+history and retirement. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
+work; functional migration alone establishes no Photoshop speed or bounded native-call cancellation claim.
 
 ### Other selection pixel edits
 

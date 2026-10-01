@@ -210,12 +210,32 @@ void CloseDuringInspection(void* raw, ClipboardTransfer::Stage stage) noexcept
 bool HasPixels(const ClipboardTransfer::Inspection& inspection, const std::array<std::uint8_t, 4>& expected)
 {
     ClipboardTransfer::ImageCopy copy;
-    if (ClipboardTransfer::Copy(inspection, copy) != ClipboardTransfer::Status::Ok)
+    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
+    if (!timer)
         return false;
+    auto copied = ClipboardTransfer::Status::Busy;
+    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    {
+        copied = ClipboardTransfer::Copy(inspection, copy);
+        if (copied != ClipboardTransfer::Status::Busy || attempt == 3 || !HarnessWait(timer.get()))
+            break;
+    }
+    if (copied != ClipboardTransfer::Status::Ok)
+    {
+        std::printf("clipboardavailability.pixel-copy-status=%u inspected-sequence=%u current-sequence=%lu\n",
+                    static_cast<unsigned int>(copied), inspection.Sequence(), GetClipboardSequenceNumber());
+        return false;
+    }
     Raster decoded;
-    return ClipboardTransfer::Decode(copy, decoded) == ClipboardTransfer::Status::Ok && decoded.Width() == 1 &&
-           decoded.Height() == 1 && decoded.Format() == RasterFormat::Bgra8888 &&
-           std::equal(expected.begin(), expected.end(), decoded.Data());
+    const auto status = ClipboardTransfer::Decode(copy, decoded);
+    const bool valid = status == ClipboardTransfer::Status::Ok && decoded.Width() == 1 && decoded.Height() == 1 &&
+                       decoded.Format() == RasterFormat::Bgra8888 && decoded.Data() != nullptr;
+    const bool matches = valid && std::equal(expected.begin(), expected.end(), decoded.Data());
+    if (!matches)
+        std::printf("clipboardavailability.pixel-decode-status=%u dimensions=%dx%d first-pixel=%u,%u,%u,%u\n",
+                    static_cast<unsigned int>(status), decoded.Width(), decoded.Height(), valid ? decoded.Data()[0] : 0,
+                    valid ? decoded.Data()[1] : 0, valid ? decoded.Data()[2] : 0, valid ? decoded.Data()[3] : 0);
+    return matches;
 }
 
 void TestAvailabilityFacts()

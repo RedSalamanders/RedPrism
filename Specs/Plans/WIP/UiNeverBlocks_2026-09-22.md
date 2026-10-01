@@ -139,6 +139,10 @@
       - [x] F5b.2b.2 — Detached Paste candidate document/history, guarded publication and producer-order clipboard
         inspection qualify in all six profiles: 62 Paste, 45 availability and unchanged 125 transfer controls
         ([record](../../TestRuns/ClipboardPastePreparation_2026-10-01.md)). Actual host graphs remain F5b.2b.3.
+      - [x] F5b.2b.3 / A5.4c / F5c.2 — Native Copy/Cut/Paste/Copy Merged and metadata-only New Canvas graphs
+        qualify against 480 frozen inputs: all three x64 gates and all three ARM64 clean builds pass. Native
+        control sets contain 268 command, 61 prefill, 41 delayed-render and 88 publication-fault checks
+        ([record](../../TestRuns/ClipboardHost_2026-10-01.md)). F5d/P1.9/G1 remain open.
       - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
         six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
         ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.

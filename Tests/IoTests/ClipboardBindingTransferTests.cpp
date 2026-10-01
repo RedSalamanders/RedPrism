@@ -261,9 +261,20 @@ bool InspectCopy(HWND owner, Inspection& inspected, ImageCopy& copy, Observation
     const auto observer = observed ? Observe(*observed) : ClipboardTransfer::Observer{};
     const Status inspectStatus = InspectRetry(2, inspected, cancellation, observer);
     if (inspectStatus != Status::Ok || !inspected)
+    {
+        std::printf("clipboardbinding.inspect status=%u valid=%u sequence=%lu currentSequence=%lu\n",
+                    static_cast<unsigned>(inspectStatus), inspected ? 1u : 0u,
+                    static_cast<unsigned long>(inspected.Sequence()),
+                    static_cast<unsigned long>(GetClipboardSequenceNumber()));
         return false;
+    }
     const Status copyStatus = CopyRetry(inspected, copy, cancellation, observer);
     (void)owner;
+    if (copyStatus != Status::Ok || copy.Sequence() != inspected.Sequence())
+        std::printf("clipboardbinding.copy status=%u sequence=%lu expectedSequence=%lu currentSequence=%lu\n",
+                    static_cast<unsigned>(copyStatus), static_cast<unsigned long>(copy.Sequence()),
+                    static_cast<unsigned long>(inspected.Sequence()),
+                    static_cast<unsigned long>(GetClipboardSequenceNumber()));
     return copyStatus == Status::Ok && copy.Sequence() == inspected.Sequence();
 }
 
@@ -504,11 +515,21 @@ void TestPartialFormats(HWND owner, const ClipboardReceipt::Key& key)
             inspected.Png().pixels == (pngExpected ? 2u : 0u) && inspected.Dib().pixels == (dibExpected ? 2u : 0u);
         const char* name = failedFormat == Fault::Png ? "partialpng.receipt-binds-available-dib-decodes"
                                                       : "partialdib.receipt-binds-available-png-decodes";
+        const bool decoded = copied && DecodeEquals(copy, expected);
+        if (!reachedFacts || !copied || !onlyAvailableFormat || publication.sequence != fault.lastMutationSequence ||
+            !originStatus || !origin || !decoded)
+            std::printf("clipboardbinding.partial facts=%u copied=%u onlyAvailable=%u pngPixels=%llu dibPixels=%llu "
+                        "publishedSequence=%lu mutationSequence=%lu originStatus=%u origin=%u decoded=%u\n",
+                        reachedFacts ? 1u : 0u, copied ? 1u : 0u, onlyAvailableFormat ? 1u : 0u,
+                        static_cast<unsigned long long>(inspected.Png().pixels),
+                        static_cast<unsigned long long>(inspected.Dib().pixels),
+                        static_cast<unsigned long>(publication.sequence),
+                        static_cast<unsigned long>(fault.lastMutationSequence), originStatus ? 1u : 0u,
+                        origin ? 1u : 0u, decoded ? 1u : 0u);
         ExpectPublication(binding && publication.status == Status::NativeFailure && publication.emptied &&
                               publication.receiptPlaced && publication.pngPlaced == pngExpected &&
                               publication.dibPlaced == dibExpected && reachedFacts && copied && onlyAvailableFormat &&
-                              publication.sequence == fault.lastMutationSequence && originStatus && origin &&
-                              DecodeEquals(copy, expected),
+                              publication.sequence == fault.lastMutationSequence && originStatus && origin && decoded,
                           name, publication);
     }
 }

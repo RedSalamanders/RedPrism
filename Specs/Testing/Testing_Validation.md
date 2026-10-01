@@ -54,12 +54,14 @@ preparation stage, or stale session/source/private serial/history. Live brush/la
 Cut leaves a live warp and its later closure refuses the changed source. A full-document composition token
 captured before Copy Merged rendering cannot be replaced by a fresh token after a document change. Held owners,
 long token mask names, selection and semantic thumbnail memory floors remain independent controls. This core
-does not qualify the actual host clipboard graph, constant-time capture or G1.
+suite establishes command semantics; the production host graph and current private matrix are recorded below.
+Constant-time capture and G1 remain unqualified.
 
 `owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
 pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
-refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application; actual clipboard
-transfer retry graphs remain F5c.2.
+refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application. Production
+clipboard Inspect/Copy retries retain their admitted record and reservation, with Paste sharing six total
+acquisitions across Inspect and owned Copy; host qualification and its remaining limits are recorded below.
 
 `ClipboardReceipt.*` uses independent literal normal/high-bit packets and malformed version/reserved/length/
 session/serial values, proving exact cleared outputs. `clipboardfingerprint.*` uses literal empty/abc SHA-256
@@ -68,7 +70,8 @@ and a 65,537-byte coordinate fixture whose digest comes from an independent Powe
 are gates. `clipboardbinding.*` runs inside the existing saved/restored dedicated MTA transfer suite. It proves
 receipt-first empty/partial/complete truth, exact held sequence/error, read after owner destruction, receipt-only
 refusal, positive controls for invalid receipt fallback, one-byte original-block tamper with valid PNG, identical
-payload copy-back, private serial refusal and late cancellation. This primitive leaves actual callers and G1 open.
+payload copy-back, private serial refusal and late cancellation. These primitive tests alone do not qualify the
+full host callers; the private host matrix is recorded below, and G1 remains open.
 
 ### Detached gradients
 
@@ -528,7 +531,7 @@ drains and callback-time removal, exact identity, stop and borrowed-source teard
 sequential stages under one selected ordinal with distinct acquisitions, late same-kind completion refusal,
 strict initial Begin ordering and document/owner replacement. DocumentTests combines a committed pixel edit and
 Canvas Size under one request, then a younger queued Undo: the first Undo removes only size and the next restores
-the original numeric pixels. These qualify primitives; production host continuations remain separate work.
+the original numeric pixels. These qualify primitives; other production host continuations remain separate work.
 
 The WARP self-test also simulates an early mode failure with a worker waiting on the shutdown event. The actual
 `Application::Shutdown` must join it without applying its result, retain the implicit MTA through the callback,
@@ -586,8 +589,9 @@ an external reader/filter or assert wall-clock timer latency.
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5
 output, invalid/truncated headers, signed/hard budgets, empty precancelled output and unchanged sparse sources.
-The 512 MiB size predicate and over-cap null PNG input avoid fabricated borrowed spans. These helpers are not
-production clipboard transfer or host-contention qualification; F5b–F5d remain open.
+The 512 MiB size predicate and over-cap null PNG input avoid fabricated borrowed spans. These helpers alone do
+not qualify production transfer or host contention. The production clipboard host's private matrix is recorded
+below; frozen native qualification and F5d/G1 measurements remain open.
 
 `project-save-memory.*` independently checks refusal of zero/overlong paths, invalid canvas dimensions and excess
 layers; acceptance at path/canvas/layer bounds; name/path-sensitive charges; BGRA/Gray8 frame accounting; shared
@@ -604,7 +608,7 @@ failure, captured revision marking without erasing a later edit, close suppressi
 command success only after the save stage, persisted transform/opacity with their own history entry before the
 captured saved revision, localized failure reporting and full terminal cleanup. These event gates
 have bounded deadlock deadlines, not performance assertions. They provide evidence for project save ownership and
-ordering; clipboard host migration remains open. Image-import host qualification is recorded below.
+ordering. Clipboard host qualification is recorded below. Image-import host qualification is recorded below.
 
 `project-open-host.phase=* after=* case=*` exercises 36 actual host-loop gates: probe/decode before/after
 preparation, success, younger command staleness after replacement, cancellation acknowledgement, returned
@@ -816,8 +820,9 @@ file round trips across codec bands, and project stops at manifest, asset, ZIP c
 boundaries. Cancelled loads expose no partial result; cancelled imports preserve original canvas/active/layers;
 prepublication saves preserve the complete destination/sibling tree and clean owned staging. A stop after
 publication still returns Ok and the saved literal pixels/metadata. The separate explicit `--bench-file` harness
-records time/memory before output verification; its measurements and the remaining production host workers,
-pending IO waits, faults and cancellation latency qualification are tracked by the P1.7 child.
+records time/memory before output verification; its measurements and the remaining file-I/O host workers,
+pending IO waits, faults and cancellation latency qualification are tracked by the P1.7 child. Clipboard host
+qualification is recorded separately below.
 
 The hidden import host gates cover existing/grouped/new/empty targets across probe/preparation before/after
 boundaries: literal pixels, captured paths, view input, exact reservation retirement, one named history entry,
@@ -852,6 +857,30 @@ successful HEIF decoding on a host without its codec, RAW support, in-flight cod
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
 .\build.ps1 -Platform ARM64 -Configuration Debug
 ```
+
+### Clipboard host matrix (private run; native qualification pending)
+
+`Specs/TestRuns/ClipboardHost_2026-10-01.md` records the final private full-application run. The actual WARP host
+matrix passed 268 checks across 52 scenarios; New Canvas prefill passed 56 checks across 14 scenarios; delayed
+rendering passed 39 checks across seven scenarios; publication/no-paint/retry fault controls passed 81 checks
+across eight scenarios. Separate Copy Merged readback-budget controls passed 30 checks, the clipboard encoding
+budget probe passed 37. Native DocumentTests also includes two independent aliased-ID replacement controls.
+These inventories do not establish a passing full native matrix.
+
+The production paths retain the selected host ordinal and acknowledged history barrier. Copy/Cut apply the
+private result before encoding and OS mirroring, so a later encoding or mirror failure does not undo the private
+publication. Paste shares
+six total clipboard acquisitions between metadata Inspect and owned-byte Copy; retries retain the same admitted
+record, reservation and wait receiver. `GetClipboardData` executes on a worker, including delayed-render calls.
+Copy Merged keeps the opening document authority through tiled utility readback, releases utility mappings and
+targets, then performs CPU Copy Merged work on the detached pixels. Copy Merged reservation includes the merged
+pixel/readback owners and the phased encoder estimate. The encoder estimate sequences PNG and DIB phase peaks;
+its 16 MiB WIC allowance is planning headroom, not a proven bound on opaque codec workspace.
+
+The final private run exited zero and passed its application assertions. Native qualification remains pending,
+including the frozen six-profile matrix and required native checks. This run does not close G1, establish ARM64
+runtime behavior, or prove a hard WIC workspace bound. Open import/floating/stroke work, headroom and required
+measurements remain open.
 
 ### Capped memory encoder controls
 

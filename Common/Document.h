@@ -2232,6 +2232,10 @@ class DocumentSession
     {
         return _clipboardSerial;
     }
+    [[nodiscard]] Guid ClipboardSessionIdentity() const noexcept
+    {
+        return _tokenIdentity.value;
+    }
     bool CopySelection();
     bool CopyMergedSelection(const Raster& composite);
     void CutSelection();

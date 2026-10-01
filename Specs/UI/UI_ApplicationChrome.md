@@ -234,10 +234,12 @@ Selection for the active layer; an outline the tracer refuses says why, as the w
 while a layer or mask with nothing to trace loads nothing without a word. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
 Delete clears them, and without a selection deletes the targeted mask, or the layer; Shift+Delete opens
 Content-Aware Fill on them ([`Document_Tools.md`](../Document/Document_Tools.md)); Ctrl+X, Ctrl+C, Ctrl+Shift+C
-and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
-PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
-system clipboard changed since that copy; a copy that could not reach the system clipboard, because another app held
-it open, is still the newest, so Paste keeps taking it until the system clipboard changes again; Copy and Copy
+and Ctrl+V cut, copy, copy merged and paste (`ApplicationClipboardJobs` admits the selected command and
+`ClipboardTransfer` publishes PNG and a 32-bit DIB with straight alpha or reads another app's owned PNG/DIB on a
+worker. Foreign pixels are centered on the canvas; a sealed receipt binds the private copy to system content.
+A private copy that could not reach the system clipboard remains the newest until the system changes again.
+Acquisition retries retain the original job and reservation, with at most six total Inspect/Copy acquisitions.
+Copy and Copy
 Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends
 with it); Alt+Backspace and
 Ctrl+Backspace fill with the foreground and background
@@ -767,7 +769,12 @@ the single named history entry occur only when its result is successfully applie
 job requests cancellation; the busy/history state remains until acknowledged drop. Reopening a card invalidates
 the earlier result and its completion leaves the new card open. Size failures are posted localized notices from
 outside the completion callback. The job's dimensions, resolution, sampling, anchor and color come from its copied
-request; subsequent draft/palette changes cannot alter that work. New Canvas keeps its existing route.
+request; subsequent draft/palette changes cannot alter that work. New Canvas opens immediately with its current
+draft and requests a metadata-only worker clipboard suggestion. It decodes no pixels for this hint. Publish only
+for the same card invocation, session and document lifetime while the user has not edited Width or Height.
+Typing either dimension, closing/reopening the card or admitting its copied Create draft invalidates the older
+suggestion. Optional failure leaves the draft unchanged; it creates no notice or history barrier. Busy inspection
+uses at most six acquisition attempts with acknowledged one-shot waits under the original job reservation.
 
 | Card | Rows |
 | --- | --- |
