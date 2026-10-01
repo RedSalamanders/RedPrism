@@ -1,7 +1,7 @@
 # Document history
 
 Status: current normative product contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `Common/Document.h`, `Common/DocumentHistory.cpp`
 
 ## Scope
@@ -32,8 +32,9 @@ If the ended document equals the pending before-document, **do not** push an ent
 entry, and clears redo, then trims.
 
 Undo/redo are ignored while `depth != 0`. Undo restores the entry’s before snapshot (document + active layer
-id + revision). Redo restores after. The completed pending snapshot and stack entry transfer ownership by
-move. Each restore result independently owns its document, active id and revision before trimming can erase
+id + revision). Redo restores after. Entries, opening snapshots and pending records have immutable shared
+ownership. Finishing a transaction reuses its opening snapshot handle; it does not copy its document again.
+Each restore result independently owns its document, active id and revision before trimming can erase
 the destination stack entry. Session restoration takes that result by value and moves its document into place;
 it preserves the existing crop, pending-edit, document/restore serial and mask-target rules.
 
@@ -55,10 +56,43 @@ writes it, and Don't Save settles it as the document goes ([`UI_ApplicationChrom
 identifiers; an older revision restored by Undo is a valid saved revision. If writing snapshot A completes while
 the live document is at revision B, B remains modified; undoing to A is clean and redoing to B is modified. The
 no-argument `MarkSaved()` stores the current revision for synchronous callers. `IsModified` is revision ≠ saved
-revision, regardless of whether the saved revision remains reachable in retained history. Before asynchronous save
-lands, its scheduler MUST enforce completion ordering and session identity and supply the written snapshot's
-revision; this slice adds the history primitive only.
+revision, regardless of whether the saved revision remains reachable in retained history. Asynchronous save's
+scheduler MUST enforce completion ordering and session identity and supply the written snapshot's
+revision. Production save supplies the revision of its captured snapshot.
 `Reset` clears stacks and starts a new saved revision.
+
+## Prepared publication
+
+`CaptureState` retains immutable entry/pending handles, revision, transaction depth and a structural epoch under
+the operation's whole memory reservation. The view never borrows a live history container for worker reads.
+Begin, End (including nested/no-op completion), Undo, Redo, Reset and prepared publication invalidate that epoch.
+`MarkSaved` remains independent and does not invalidate a prepared edit or allow it to replace a later saved
+revision. A view from another history owner, or a moved-from view, has no publication authority.
+
+Detached edit/begin/end/restore preparation performs all snapshot, entry, stack-growth and trim allocations
+before changing live state. Cancellation or `bad_alloc` fails the selected operation with its document, revision,
+redo and pending transaction intact. A prepared nested edit preserves the opening transaction and its name;
+an unchanged edit preserves redo/revision. Preparation of End reuses its immutable opening snapshot. Restore
+owns its payload independently even when the trim decision drops both stack references to the original entry.
+
+Publish validates exact owner, epoch and revision, then swaps prepared containers without allocation. It is a
+single-use operation; moving its result removes the source's authority. Retired history containers remain in
+the result until the worker release lane retires the complete owning aggregate. Raster/gradient/pixel-move
+commits bind history and prepared pixels to one private result and validate their document token before either
+publishes. Old live layers, selections, brush-commit metadata and pending previews transfer into that aggregate too.
+Owner publication neither constructs history nor destroys their large retired graphs.
+
+The migrated jobs set a conservative complete retirement bound before capturing document/history owners.
+It covers current, pending, past and future snapshot capacities, names, curves, held rasters and selection,
+plus private preparation and replaced-preview headroom. Cached raster bounds include possible sparse assembly
+and nested descendants; reads do not recursively expand shared sparse graphs. Sharing may be overcounted;
+overflow or excessive depth refuses admission. This transient bound remains at least the worker release
+threshold through every failure/apply/drop path. It does not replace unique retained-byte accounting or change
+the oldest-first trim policy. Whole document metadata traversal/capture remains H2 work.
+
+Direct reference methods retain their existing behavior; caller migration remains P1.9 H1.4/H1.5. The prepared
+boundary does not qualify constant-time document capture, incremental storage accounting, other operation
+groups or the measured G1 bound. These remain explicit H2/H3/H4 work.
 
 ## Trim
 

@@ -72,6 +72,24 @@ its future entry. Normal Undo/Redo restore the expected document, active id and 
 saved revision, pending-edit, mask/crop and 256 MiB trim numeric expectations stay unchanged. Full matrix and
 real application-loop qualification are recorded in [HistoryStorage_2026-09-30.md](../TestRuns/HistoryStorage_2026-09-30.md).
 
+### Prepared history publication and retirement (P1.9 H1 foundation)
+
+`DocumentTests` includes five prepared-history groups: `HistoryStateViewTests`, `PreparedHistoryTests`,
+`HistoryPreparationFaultTests`, `PreparedRasterHistoryTests` and `HistoryRetirementBoundTests`. Their expectations
+cover immutable captured views and owner/epoch/revision invalidation; detached edit/restore preparation and
+allocation-free publication with stale, foreign, moved-from and malformed candidates refused; cancellation and
+`std::bad_alloc` leaving live history/document state unchanged at the named preparation checkpoints; basic raster,
+gradient and pixel-move apply/Undo/Redo ownership; and conservative graph bounds for current, pending, past, future
+and additional raster owners. Raster-bound cases include sparse bases/tiles and a possible lazy materialization
+cache, shared-DAG occurrence overcount/overflow refusal, and refusal beyond depth 128 without materialization.
+
+The WARP `rasteredit-host.*` self-test also injects `std::bad_alloc` at five history-preparation stages for the
+basic Invert image commit: `BeforeSnapshot`, `AfterSnapshot`, `Entry`, `StackGrowth` and `TrimIndex`. Its expected
+result is `E_OUTOFMEMORY`, unchanged document/history, and retirement of the aggregate payload off the owner
+thread. The required x64 Debug, Release and ASan Debug suites and all ARM64 clean cross-builds pass;
+[current evidence](../TestRuns/PreparedHistoryPublication_2026-10-01.md). Other H1 callers, production Undo/Redo,
+H2/H3/H4, P1 and G1 remain open.
+
 `.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
 then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated
 negative-test children (`HostTests.exe --asan-probe`, `RedPrism.exe --no-such-switch`) MUST NOT become the test

@@ -20,10 +20,12 @@ struct RasterEditTestGate final
     std::atomic<unsigned int> visits{0};
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadRetiredOffOwner{false};
+    std::atomic<unsigned int> historyFaultHits{0};
     bool afterPreparation = false;
     bool throwAllocationFailure = false;
     bool throwAdmissionFailure = false;
     bool throwCaptureFailure = false;
+    std::optional<DocumentHistory::PrepareStage> historyFailure;
     bool captureReservationHeld = false;
     std::uint64_t reservationBytes = 0;
     std::optional<RasterEditStatus> status;

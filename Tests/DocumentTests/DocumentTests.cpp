@@ -12,12 +12,17 @@
 #include "GradientStateTests.h"
 #include "GradientWorkTests.h"
 #include "HistoryAccountingTests.h"
+#include "HistoryPreparationFaultTests.h"
+#include "HistoryRetirementBoundTests.h"
 #include "HistoryRevisionTests.h"
+#include "HistoryStateViewTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
 #include "LiftReferenceTests.h"
 #include "PixelMoveStateTests.h"
 #include "PixelMoveWorkTests.h"
+#include "PreparedHistoryTests.h"
+#include "PreparedRasterHistoryTests.h"
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
@@ -7339,6 +7344,11 @@ int wmain(int argc, wchar_t** argv)
     TestPixelBuffer();
     gFailures += RunRasterConcurrencyTests(8);
     gFailures += RunHistoryRevisionTests();
+    gFailures += RunHistoryStateViewTests();
+    gFailures += RunPreparedHistoryTests();
+    gFailures += RunHistoryPreparationFaultTests();
+    gFailures += RunHistoryRetirementBoundTests();
+    gFailures += RunPreparedRasterHistoryTests();
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunColorEditWorkTests();

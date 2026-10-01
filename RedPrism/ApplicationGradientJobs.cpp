@@ -20,10 +20,14 @@ struct GradientPayload final : DeferredReleaseNode
     RasterEditInput input;
     std::optional<JobToken> token;
     RasterEditResult committed;
+    std::optional<CanvasDocument> source;
+    DocumentHistory::StateView historyState;
+    std::optional<PreparedRasterEdit> publication;
     RasterEditPreviewResult preview;
     std::shared_ptr<GradientWorkTestGate> gate;
     DWORD ownerThread = 0;
     std::uint64_t preparationBytes = 0;
+    std::uint64_t retirementBytes = 0;
     GradientPayload() noexcept
     {
         bytes = kDeferredReleaseThreshold; // capture/preparation OOM still retires a potentially large graph
@@ -72,7 +76,7 @@ struct GradientPayload final : DeferredReleaseNode
         raster(input.layer.shapeImage);
         if (input.selection)
             add(input.selection->loops.StorageBytes());
-        bytes = retained;
+        bytes = retirementBytes ? (std::max)({retained, retirementBytes, kDeferredReleaseThreshold}) : retained;
     }
 };
 #pragma warning(pop)
@@ -96,9 +100,9 @@ class Application::GradientJob final : public Job
   public:
     GradientJob(Application& owner, GradientRequest request, std::uint64_t serial, std::uint64_t generation,
                 std::int64_t pixelLimit, std::uint64_t preparationBytes, std::optional<PreviewStamp> preview,
-                std::optional<HistoryWorkStamp> commit)
+                std::optional<HistoryWorkStamp> commit, std::uint64_t retirementBytes)
         : _owner(owner), _request(request), _serial(serial), _generation(generation), _pixelLimit(pixelLimit),
-          _preparationBytes(preparationBytes), _preview(preview), _commit(commit),
+          _preparationBytes(preparationBytes), _retirementBytes(retirementBytes), _preview(preview), _commit(commit),
           _gate(owner._gradientWorkTestGate &&
                         owner._gradientWorkTestGate->kind ==
                             (commit ? GradientWorkTestKind::Commit : GradientWorkTestKind::Preview)
@@ -134,7 +138,19 @@ class Application::GradientJob final : public Job
                 _payload->input.progressContext = nullptr;
             });
         if (_commit)
+        {
             _payload->committed = RunRasterEdit(_payload->input, context.cancellation);
+            if (_payload->committed.status == RasterEditStatus::Ready && _payload->token)
+            {
+                _payload->publication = PrepareRasterEditPublication(
+                    RasterEditKind::Gradient, _request.mask, _payload->source, _request.target, *_payload->token,
+                    std::move(_payload->historyState), std::move(_payload->committed),
+                    _request.mask ? L"Gradient Mask" : L"Gradient", context.cancellation);
+                if (!_payload->publication)
+                    _payload->committed.status =
+                        context.cancellation.IsCancelled() ? RasterEditStatus::Cancelled : RasterEditStatus::Invalid;
+            }
+        }
         else
             _payload->preview = RunRasterEditPreview(_payload->input, context.cancellation);
         _payload->AccountRetainedGraph();
@@ -178,6 +194,8 @@ class Application::GradientJob final : public Job
             _payload->gate = _gate;
             _payload->ownerThread = _ownerThread;
             _payload->preparationBytes = _preparationBytes;
+            _payload->retirementBytes = _retirementBytes;
+            _payload->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
             auto& input = _payload->input;
             input.layer = *layer;
             input.selection = _owner._session.Selection();
@@ -196,6 +214,11 @@ class Application::GradientJob final : public Job
             // acquisition; a preview has a mailbox sequence. Neither is compared with the metadata sequence.
             _payload->token =
                 _owner._session.CaptureJobToken(_request.target, _commit ? _commit->acquisition : _preview->sequence);
+            if (_commit)
+            {
+                _payload->source = _owner._session.Document();
+                _payload->historyState = _owner._session.history.CaptureState();
+            }
             if (_payload->token && _owner._jobs.Resume(ticket))
                 return true;
             _captureError = E_UNEXPECTED;
@@ -234,12 +257,11 @@ class Application::GradientJob final : public Job
                                        pending->publishedGeneration == _generation &&
                                        _owner._previewSource.lock() == pending->raster &&
                                        _owner._composition.StrokeLayerID() == std::optional<Guid>(_request.target);
-                    produced = _payload->committed.layer &&
-                               _owner._session.ApplyGradientIfCurrent(std::move(_payload->committed.layer.value()),
-                                                                      _payload->token.value(), _request.opening,
-                                                                      _request.sequence);
+                    produced = _payload->publication &&
+                               _owner._session.ApplyPreparedGradientIfCurrent(*_payload->publication, _request.opening,
+                                                                              _request.sequence);
                     if (produced && adopt)
-                        _owner.EndStrokePreview(_payload->committed.previewCommit);
+                        _owner.EndStrokePreview(_payload->publication->PreviewCommit());
                 }
                 else
                     produced = _owner._session.PublishGradientPreview(std::move(_payload->preview.stroke),
@@ -326,6 +348,7 @@ class Application::GradientJob final : public Job
     const std::uint64_t _generation;
     const std::int64_t _pixelLimit;
     const std::uint64_t _preparationBytes;
+    const std::uint64_t _retirementBytes;
     const std::optional<PreviewStamp> _preview;
     const std::optional<HistoryWorkStamp> _commit;
     const std::shared_ptr<GradientWorkTestGate> _gate;
@@ -423,14 +446,19 @@ HRESULT Application::SubmitGradientJob(GradientRequest request, std::optional<Pr
             (std::numeric_limits<std::uint64_t>::max)() - history - sizeof(GradientJob) - sizeof(GradientPayload))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto memory = preparation + history + sizeof(GradientJob) + sizeof(GradientPayload);
+    const auto held = commit ? _session.RasterEditRetirementMemoryBytes() : 0;
+    if ((commit && !held) || memory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    const auto retirement = commit ? held + memory * 2 : 0;
     try
     {
         if (_gradientWorkTestGate &&
             _gradientWorkTestGate->kind == (commit ? GradientWorkTestKind::Commit : GradientWorkTestKind::Preview) &&
             _gradientWorkTestGate->throwAdmissionFailure)
             throw std::bad_alloc{};
-        std::unique_ptr<Job> job = std::make_unique<GradientJob>(
-            *this, request, _session.DocumentSerial(), _session.Generation(), limit, preparation, preview, commit);
+        std::unique_ptr<Job> job =
+            std::make_unique<GradientJob>(*this, request, _session.DocumentSerial(), _session.Generation(), limit,
+                                          preparation, preview, commit, retirement);
         JobTicket ticket;
         const auto result = static_cast<HRESULT>(_jobs.Submit(
             job, {commit ? JobClass::Commit : JobClass::InteractivePreview, _session.DocumentSerial(), memory},

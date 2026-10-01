@@ -230,6 +230,16 @@ class Raster
                     std::uint8_t fill) const noexcept;
     // Every storage this raster reaches: itself, then its base and tiles (retained-memory accounting).
     void ForEachStorage(const std::function<void(const Raster&)>& visit) const;
+    // Construction-time conservative capacity of this complete owning graph, including a possible sparse
+    // cache. Sharing may overcount; zero on a stored raster refuses overflow/depth >128. Reading never traverses.
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept
+    {
+        return _storage ? _storage->retirementBytes : 0;
+    }
+    [[nodiscard]] std::uint64_t RetirementNodeCount() const noexcept
+    {
+        return _storage && _storage->retirementBytes ? _storage->graphNodes : 0;
+    }
 
   private:
     // The intrusive base outlives the last shared_ptr when large storage is handed to the worker release queue.
@@ -252,6 +262,9 @@ class Raster
         int baseX = 0;
         int baseY = 0;
         std::vector<RasterTile> tiles;
+        std::uint64_t retirementBytes = 0;
+        std::uint64_t graphNodes = 1;
+        unsigned int graphDepth = 0;
     };
 #pragma warning(pop)
     struct FreeStorage final
@@ -259,6 +272,7 @@ class Raster
         void operator()(Storage* storage) const noexcept;
     };
     [[nodiscard]] static std::shared_ptr<Storage> AllocateStorage();
+    static void CacheRetirementMemory(Storage& storage) noexcept;
     explicit Raster(std::shared_ptr<const Storage> storage) noexcept : _storage(std::move(storage)) {}
     static void Materialize(const Storage& storage) noexcept;
     std::shared_ptr<const Storage> _storage;
@@ -1040,6 +1054,7 @@ enum class BrushToolMode : std::uint8_t
 };
 
 class BrushStroke;
+class PreparedRasterEdit;
 struct GridRect;
 class BrushCoverageEngine;
 class WarpStroke;
@@ -1323,6 +1338,11 @@ struct HierarchyEntry
 
 class DocumentHistory
 {
+  private:
+    struct Entry;
+    struct Pending;
+    using EntryHandle = std::shared_ptr<const Entry>;
+
   public:
     struct Snapshot
     {
@@ -1333,6 +1353,163 @@ class DocumentHistory
 
     explicit DocumentHistory(int entryLimit = kHistoryEntryLimit,
                              std::uint64_t retainedByteLimit = kHistoryRetainedByteLimit) noexcept;
+
+    // Owning immutable handles only: capturing the history stacks never copies layer, raster or outline records.
+    // Construction can allocate the bounded handle vectors; capture only under the whole declared reservation.
+    // Saved-revision publication is independent of this structural epoch and never invalidates an edit view.
+    struct StateView final
+    {
+        StateView() = default;
+        StateView(const StateView&) = default;
+        StateView& operator=(const StateView&) = default;
+        StateView(StateView&& source) noexcept
+            : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
+              owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
+              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit)
+        {
+        }
+        StateView& operator=(StateView&& source) noexcept
+        {
+            if (this != &source)
+            {
+                past = std::move(source.past);
+                future = std::move(source.future);
+                pending = std::move(source.pending);
+                owner = std::exchange(source.owner, nullptr);
+                revision = source.revision;
+                epoch = source.epoch;
+                depth = source.depth;
+                entryLimit = source.entryLimit;
+                byteLimit = source.byteLimit;
+            }
+            return *this;
+        }
+        [[nodiscard]] Guid Revision() const noexcept
+        {
+            return revision;
+        }
+        [[nodiscard]] int Depth() const noexcept
+        {
+            return depth;
+        }
+        [[nodiscard]] std::size_t PastCount() const noexcept
+        {
+            return past.size();
+        }
+        [[nodiscard]] std::size_t FutureCount() const noexcept
+        {
+            return future.size();
+        }
+        [[nodiscard]] const std::wstring& UndoName() const noexcept;
+        [[nodiscard]] const std::wstring& RedoName() const noexcept;
+
+      private:
+        friend class DocumentHistory;
+        std::vector<EntryHandle> past;
+        std::vector<EntryHandle> future;
+        std::shared_ptr<const Pending> pending;
+        const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
+        Guid revision;
+        std::uint64_t epoch = 0;
+        int depth = 0;
+        int entryLimit = 0;
+        std::uint64_t byteLimit = 0;
+    };
+    [[nodiscard]] StateView CaptureState() const;
+    [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
+
+    enum class PrepareStage : std::uint8_t
+    {
+        BeforeSnapshot,
+        AfterSnapshot,
+        Entry,
+        StackGrowth,
+        TrimIndex,
+        PendingSnapshot,
+        PendingRecord,
+        RestoreSnapshot,
+    };
+    // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
+    // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
+    struct PrepareObserver final
+    {
+        void (*checkpoint)(void*, PrepareStage) = nullptr;
+        void* context = nullptr;
+    };
+
+    struct Publication final
+    {
+        Publication() = default;
+        Publication(const Publication&) = delete;
+        Publication& operator=(const Publication&) = delete;
+        Publication(Publication&& source) noexcept
+            : state(std::move(source.state)), restore(std::move(source.restore)),
+              expectedRevision(source.expectedRevision), expectedEpoch(source.expectedEpoch),
+              published(std::exchange(source.published, true))
+        {
+            source.restore.reset();
+        }
+        Publication& operator=(Publication&& source) noexcept
+        {
+            if (this != &source)
+            {
+                state = std::move(source.state);
+                restore = std::move(source.restore);
+                source.restore.reset();
+                expectedRevision = source.expectedRevision;
+                expectedEpoch = source.expectedEpoch;
+                published = std::exchange(source.published, true);
+            }
+            return *this;
+        }
+        [[nodiscard]] const std::optional<Snapshot>& RestoreSnapshot() const noexcept
+        {
+            return restore;
+        }
+        [[nodiscard]] std::optional<Snapshot> TakeRestoreSnapshot() noexcept
+        {
+            if (!published)
+                return std::nullopt;
+            auto result = std::move(restore);
+            restore.reset();
+            return result;
+        }
+        [[nodiscard]] bool ChangesRevision() const noexcept
+        {
+            return state.revision != expectedRevision;
+        }
+
+      private:
+        friend class DocumentHistory;
+        StateView state;
+        std::optional<Snapshot> restore;
+        Guid expectedRevision;
+        std::uint64_t expectedEpoch = 0;
+        bool published = false;
+    };
+    // Detached preparation owns all snapshot, entry, container and trim allocations. nullopt means cancellation
+    // or ineligible/default state. Allocation failures propagate to the standard worker runner. The returned
+    // publication must survive apply/drop and retire on the worker lane: Publish swaps retired live containers
+    // into it rather than destroying history on the owner. No worker ever consults live mutable history.
+    [[nodiscard]] static std::optional<Publication> PrepareEdit(
+        StateView view, const std::optional<CanvasDocument>& before, const std::optional<Guid>& beforeActive,
+        const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
+        CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareRestore(StateView view, bool redo,
+                                                                   CancelToken cancellation = {},
+                                                                   PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareBegin(StateView view,
+                                                                 const std::optional<CanvasDocument>& before,
+                                                                 const std::optional<Guid>& active, std::wstring name,
+                                                                 CancelToken cancellation = {},
+                                                                 PrepareObserver observer = {});
+    [[nodiscard]] static std::optional<Publication> PrepareEnd(StateView view,
+                                                               const std::optional<CanvasDocument>& after,
+                                                               const std::optional<Guid>& active,
+                                                               CancelToken cancellation = {},
+                                                               PrepareObserver observer = {});
+    [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
+    [[nodiscard]] bool Publish(Publication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
     void End(const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
@@ -1369,6 +1546,12 @@ class DocumentHistory
     // Conservative allocation declaration for Begin/End metadata copies, entry growth and trim bookkeeping.
     // Shared pixel/selection inputs are already resident. Zero refuses overflow or excessive graph depth.
     [[nodiscard]] std::uint64_t EditMemoryBytes(const std::optional<CanvasDocument>& current) const noexcept;
+    // Conservative held-graph capacity for retirement, including current, pending, past/future and an optional
+    // additional raster owner. Occurrences deliberately overcount sharing; no set/allocation/materialization.
+    // Includes a possible sparse materialization cache. Zero refuses overflow or a graph deeper than 128.
+    // H2/H3 replace this traversal with cached immutable record/storage indexes.
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
+                                                      const Raster& additional = {}) const noexcept;
     [[nodiscard]] int EntryLimit() const noexcept
     {
         return _entryLimit;
@@ -1382,18 +1565,25 @@ class DocumentHistory
     struct Entry
     {
         std::wstring name;
-        Snapshot before;
-        Snapshot after;
+        std::shared_ptr<const Snapshot> before;
+        std::shared_ptr<const Snapshot> after;
     };
 
     void Trim(const std::optional<CanvasDocument>& current);
+    [[nodiscard]] static bool TrimPrepared(StateView& state, const std::optional<CanvasDocument>& current,
+                                           CancelToken cancellation);
 
-    std::vector<Entry> _past;
-    std::vector<Entry> _future;
+    struct Pending
+    {
+        std::wstring name;
+        std::shared_ptr<const Snapshot> before;
+    };
+    std::vector<EntryHandle> _past;
+    std::vector<EntryHandle> _future;
     Guid _revision = Guid::Generate();
     Guid _savedRevision;
-    std::optional<Snapshot> _pending;
-    std::wstring _pendingName{L"Edit"};
+    std::shared_ptr<const Pending> _pending;
+    std::uint64_t _stateEpoch = 1;
     int _depth = 0;
     int _entryLimit = kHistoryEntryLimit;
     std::uint64_t _retainedByteLimit = kHistoryRetainedByteLimit;
@@ -1759,6 +1949,8 @@ class DocumentSession
                                               std::uint64_t opening, std::uint64_t sequence) noexcept;
     [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
                                               std::uint64_t sequence);
+    [[nodiscard]] bool ApplyPreparedGradientIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
+                                                      std::uint64_t sequence) noexcept;
     void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
     // Re-renders the pending gradient from the current endpoints, settings and palette.
     void RefreshGradient();
@@ -1814,6 +2006,11 @@ class DocumentSession
     // caller, so an aggregate release owner can retire a large sparse result off-thread.
     [[nodiscard]] bool ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask, std::wstring name,
                                                 const JobToken& token);
+    [[nodiscard]] bool ApplyPreparedRasterEditIfCurrent(PreparedRasterEdit& prepared) noexcept;
+    [[nodiscard]] std::uint64_t RasterEditRetirementMemoryBytes() const noexcept
+    {
+        return history.RetirementMemoryBytes(_document, _lastBrushCommit ? _lastBrushCommit->image : Raster{});
+    }
     // The Delete key: clears the selection when there is one; otherwise deletes the targeted mask, or the layer.
     void DeleteKeyPressed();
     void DeleteLayerOrMask();
@@ -1831,6 +2028,8 @@ class DocumentSession
                                                std::uint64_t opening, std::uint64_t sequence) noexcept;
     [[nodiscard]] bool ApplyPixelMoveIfCurrent(ImageLayer&& prepared, DocumentSelection&& movedSelection,
                                                const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
+    [[nodiscard]] bool ApplyPreparedPixelMoveIfCurrent(PreparedRasterEdit& prepared, std::uint64_t opening,
+                                                       std::uint64_t sequence) noexcept;
     // Previews the pixels `offset` whole document pixels away; the stored selection stays put until commit.
     void MovePixels(double dx, double dy);
     void FinishPixelMove();
@@ -2140,7 +2339,8 @@ class DocumentSession
     [[nodiscard]] bool BeginPixelMoveImpl(bool duplicate, bool deferred);
     [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
                                            bool gradientCommit, bool pixelMoveCommit = false,
-                                           DocumentSelection* movedSelection = nullptr);
+                                           DocumentSelection* movedSelection = nullptr,
+                                           PreparedRasterEdit* publication = nullptr);
 
     TokenIdentity _tokenIdentity;
     std::optional<CanvasDocument> _document;

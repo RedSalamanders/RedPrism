@@ -90,6 +90,9 @@
     <ClInclude Include="DocumentSizingWorkTests.h" />
     <ClInclude Include="SelectionStorageTests.h" />
     <ClInclude Include="HistoryAccountingTests.h" />
+    <ClInclude Include="HistoryPreparationFaultTests.h" />
+    <ClInclude Include="HistoryRetirementBoundTests.h" />
+    <ClInclude Include="HistoryStateViewTests.h" />
     <ClInclude Include="ProjectSaveMemoryTests.h" />
     <ClInclude Include="ExportMemoryTests.h" />
     <ClInclude Include="..\..\Common\ExportWork.h" />
@@ -103,6 +106,9 @@
     <ClInclude Include="GradientResourceTests.h" />
     <ClInclude Include="LiftReferenceTests.h" />
     <ClInclude Include="PixelMoveWorkTests.h" />
+    <ClInclude Include="PreparedHistoryTests.h" />
+    <ClInclude Include="PreparedRasterHistoryTests.h" />
+    <ClInclude Include="..\..\Common\Executor.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
@@ -130,6 +136,11 @@
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />
+    <ClCompile Include="HistoryStateViewTests.cpp" />
+    <ClCompile Include="PreparedHistoryTests.cpp" />
+    <ClCompile Include="HistoryPreparationFaultTests.cpp" />
+    <ClCompile Include="HistoryRetirementBoundTests.cpp" />
+    <ClCompile Include="PreparedRasterHistoryTests.cpp" />
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />
@@ -150,6 +161,7 @@
     <ClCompile Include="..\..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\..\Common\RasterWork.cpp" />
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
   </ItemGroup>
 

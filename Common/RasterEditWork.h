@@ -66,6 +66,56 @@ struct RasterEditResult final
     std::optional<DocumentSelection> selection;
 };
 
+// Only the detached factory creates this bound pair. Publication cannot be supplied for unrelated pixels or
+// selection geometry. After applying, it owns the retired live layer/selection and history containers.
+class PreparedRasterEdit final
+{
+  public:
+    PreparedRasterEdit(const PreparedRasterEdit&) = delete;
+    PreparedRasterEdit& operator=(const PreparedRasterEdit&) = delete;
+    PreparedRasterEdit(PreparedRasterEdit&&) noexcept = default;
+    PreparedRasterEdit& operator=(PreparedRasterEdit&&) noexcept = default;
+    [[nodiscard]] const ImageLayer& Layer() const noexcept
+    {
+        return _raster.layer.value();
+    }
+    [[nodiscard]] const std::optional<DocumentSelection>& Selection() const noexcept
+    {
+        return _raster.selection;
+    }
+    [[nodiscard]] const std::optional<BrushCommitInfo>& PreviewCommit() const noexcept
+    {
+        return _raster.previewCommit;
+    }
+
+  private:
+    friend class DocumentSession;
+    friend std::optional<PreparedRasterEdit> PrepareRasterEditPublication(
+        RasterEditKind, bool, const std::optional<CanvasDocument>&, const std::optional<Guid>&, JobToken,
+        DocumentHistory::StateView, RasterEditResult&&, std::wstring, CancelToken, DocumentHistory::PrepareObserver);
+    PreparedRasterEdit(RasterEditKind kind, bool mask, JobToken token, RasterEditResult&& raster,
+                       DocumentHistory::Publication&& history) noexcept
+        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)), _history(std::move(history))
+    {
+    }
+    RasterEditKind _kind;
+    bool _mask;
+    JobToken _token;
+    RasterEditResult _raster;
+    DocumentHistory::Publication _history;
+    std::optional<BrushCommitInfo> _retiredBrushCommit;
+    std::optional<GradientEdit> _retiredGradient;
+    std::optional<PixelMove> _retiredPixelMove;
+};
+
+// source/view/token are captured under whole admission. All after-document construction, history snapshots,
+// growth and trim occur on this calling worker; failed preparation never mutates live session/history state.
+// Refusal leaves `raster` with its caller. Existing source layer records remain value copies until H2.
+[[nodiscard]] std::optional<PreparedRasterEdit> PrepareRasterEditPublication(
+    RasterEditKind kind, bool mask, const std::optional<CanvasDocument>& source, const std::optional<Guid>& active,
+    JobToken token, DocumentHistory::StateView history, RasterEditResult&& raster, std::wstring name,
+    CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+
 struct RasterEditPreviewResult final
 {
     RasterEditStatus status = RasterEditStatus::Invalid;

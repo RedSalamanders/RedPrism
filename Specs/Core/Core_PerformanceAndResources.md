@@ -93,7 +93,7 @@ that makes them impossible.
 
 | Budget | Limit |
 | --- | --- |
-| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached; incremental accounting remains P1.9 |
+| History retained bytes (C4, D13) | Application: ≤ min(physical RAM / 4, 2 GiB), 100 entries, shared immutable rasters and selection storage; unsigned 64-bit limit. Class default/query-failure fallback: 256 MiB. Selection retained capacities are cached. Conservative raster retirement bounds and prepared publication qualify for basic raster/gradient/pixel move; other H1 callers and H2/H3 exact accounting/constant-time capture remain open |
 | Document pixels | 30 000 px/side; 100 M image pixels + 100 M mask pixels; ≤ 10 000 layers |
 | Manifest / asset | 4 MiB manifest; 512 MiB per asset |
 | File encode buffers (P1.7) | Direct bounded temporary-file streams for PNG/JPEG; ZIP sources stream durable staged PNG files. No retention of all encoded asset vectors through archive close. Manifest/source-path/codec allocations remain in whole-graph admission/headroom; serial staging disk cost is measured separately |
@@ -128,8 +128,39 @@ elapsed time. History/chrome/upload and admission/apply scopes still require G1 
 The raster-edit charge also includes complete document/history snapshot metadata, entry-vector growth and trim
 set bookkeeping via `DocumentHistory::EditMemoryBytes`. This preflight allocates no storage, counts graph
 occurrences conservatively and refuses overflow/depth beyond 128. Existing shared pixels are not charged as new
-allocations. Incremental preflight/accounting and prepared, allocation-safe history publication remain P1.9;
-current owner Begin/End allocation failure retains the repository's fatal-failure policy.
+allocations. H1 adds a conservative whole-graph retirement bound and prepared history publication for basic raster
+edits, gradients and pixel moves; its scoped native qualification is recorded in
+[PreparedHistoryPublication_2026-10-01.md](../TestRuns/PreparedHistoryPublication_2026-10-01.md). Other production history callers and
+production Undo/Redo have not migrated to prepared publication. Exact retained-byte accounting and constant-time
+history capture remain H2/H3 work. Unmigrated synchronous Begin/End callers retain their existing owner-side
+allocation behavior.
+
+### Prepared history and aggregate retirement (P1.9 H1 foundation)
+
+Each raster storage record caches a construction-time upper bound for its complete held graph: its aligned pixel
+capacity, storage/control allowance and tile-vector capacity, plus cached bounds for its base and tile rasters. A
+sparse record includes space for a possible lazy materialization cache. Child bounds are summed by occurrence, so
+shared storage is deliberately overcounted without allocating a deduplication set or materializing pixels.
+Checked arithmetic, a zero/unavailable child bound, overflow, or graph depth beyond 128 refuses the estimate.
+Materializing a sparse raster does not increase this cached bound.
+
+Before capturing a commit input, the basic raster-edit, gradient and pixel-move job callers conservatively estimate
+retirement for the current document, pending snapshot, past/future history and (where applicable) the last brush
+commit raster. The release bound adds twice the declared preparation/history/job peak to that held graph bound
+for private output and retired-preview ownership; existing shared pixels are not charged as new allocations
+in the operation's memory reservation. The estimate itself allocates no accounting set. Each commit payload is
+offered to worker deferred release with a charge of at least 16 MiB, including failures before later worker-side
+accounting. Charges are conservative release scheduling bounds, not measured exclusive bytes or performance
+results. Preview graphs below the deferred-release threshold may still retire inline under the release policy.
+
+Worker preparation builds the complete candidate history state, including snapshots, entries, stack growth and
+trim bookkeeping, before publication. The candidate is tied to the exact history owner, structural epoch and
+revision; owner publication revalidates all three and swaps the prepared state without allocating. Refusal leaves
+the candidate owned by the caller for aggregate retirement. Only basic raster edits, gradient commits and pixel
+moves currently use this path. Remaining history callers and production Undo/Redo migration are open. H2/H3 must
+replace occurrence overcount with exact accounting and make history capture constant-time. The foundation's
+configuration evidence does not qualify complete H1, P1 or G1; remaining caller migration and owner
+capture/history/chrome/upload measurements remain outstanding.
 
 Gradient events retain primitive endpoints/colors/settings in a one-active/latest-pending mailbox. Pixel/selection
 capture follows full admission in the same suspended/resumed record; no published stroke is borrowed by a worker.

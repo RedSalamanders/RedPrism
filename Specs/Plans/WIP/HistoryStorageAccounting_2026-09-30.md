@@ -11,6 +11,7 @@
 - [x] Full configuration matrix and measured real-loop history/apply costs; record outstanding P1.9 gates.
 - [ ] Incremental accounting, lazy image thumbnails and first uploads; complete the remaining P1.9 work before closure.
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.
+    - [x] Immutable views, detached publication and complete aggregate release for basic raster, gradient and pixel-move commits; all profiles pass ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers remain open.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
@@ -34,10 +35,11 @@ this explicit construction/admission boundary is implemented and qualified; do n
   retained entry handles, pending/depth state, current revision and a mutation epoch. A worker must not borrow
   the live DocumentHistory. Saved revision is independent: a saved older revision cannot invalidate a valid edit
   or overwrite the owner's later saved state. Preserve existing names, entry limits and undo ordering.
-  Detached drafts now implement immutable entries/opening snapshots, state views and prepared edit/begin/end/restore containers.
+  Native code now implements immutable entries/opening snapshots, state views and prepared edit/begin/end/restore containers.
   Moving a view/publication explicitly removes the source's publication authority. Independent state, nested,
   saved-revision, restore-after-trim, moved-from and construction-refusal controls pass isolated Debug execution
-  and strict syntax checks. The complete native configuration matrix and production activation remain open.
+  and strict syntax checks. Native Debug, Release and ASan Debug suites and all ARM64 clean cross-builds pass.
+  Basic raster, gradient and pixel-move production commits are activated; other caller groups remain open.
 - [ ] H1.2 — Prepare the before/after snapshots, entry/container growth, exact current-document storage
   exclusion, trim decision and retirement owners entirely before publication. Include all record/string/curve,
   storage-index and scratch capacity in admission. Preparation must fail locally on bad_alloc or cancellation;
@@ -51,13 +53,13 @@ this explicit construction/admission boundary is implemented and qualified; do n
   to the prepared boundary. Nested floating-selection transactions need explicit opening/finish/cancel state;
   they cannot use a catch after clearing pixels or inserting a temporary layer. Direct reference APIs retain
   their behavior, with production routing audited before closure.
-  Raster, gradient and lifted-pixel commit drafts bind their complete history publication to the prepared
+  Raster, gradient and lifted-pixel production commits bind their complete history publication to the prepared
   target and captured token. Owner application swaps retired layer/selection/history owners into the job
   aggregate, which retires on a worker. Pending gradient/move previews and brush-commit owners also transfer
-  instead of being destroyed during apply; independent weak-owner controls pass in the isolated draft.
+  instead of being destroyed during apply; independent weak-owner controls pass in native DocumentTests.
   Finishing a transaction reuses its immutable opening snapshot rather than copying layer records again.
-  Their value document capture remains an explicit H2 cost. Production
-  activation, all configuration gates and the other caller groups remain open.
+  Their value document capture remains an explicit H2 cost. The complete native configuration matrix passes
+  for these three groups; the other caller groups remain open.
 - [ ] H1.5 — Prepare Undo/Redo restore, destination stack capacity and trim before removing the source entry.
   Even when trim discards the destination entry, the independently owned restore survives. Test each allocation
   refusal boundary and stale history epoch against literal revision, name, redo, depth and pixel expectations.
@@ -67,6 +69,39 @@ H3's incremental accounting. A temporary immutable-entry view can still contain 
 Do not close H2 while any production capture/restore still copies 10,000 layers on the owner, or H3 while every
 edit still rebuilds a set of all retained storages. Their measurements include metadata traversal and release,
 in addition to pixels, and retain the original trim/current-document exclusion goldens.
+
+### Native foundation qualified, 2026-10-01
+
+Before owner capture, each migrated commit reserves its preparation/history peak and supplies a conservative
+release bound for current, pending, past and future owners, plus private output and retired-preview headroom.
+The bound remains in the aggregate through failed capture, preparation, apply/drop and worker destruction;
+accounting cannot lower it below the 16 MiB release threshold. Raster construction caches complete descendant
+capacity and node-count upper bounds, including a possible sparse assembly. Reads do not traverse or
+materialize nested sparse graphs. Sharing is deliberately overcounted; overflow or depth above 128 refuses
+admission. This is a transient release bound, separate from the legacy retained-history budget.
+
+New state/publication/fault/raster-publication/capacity controls pass native DocumentTests. Full native
+Debug, Release and ASan Debug suites and all three ARM64 clean cross-builds pass against the same 362 frozen
+inputs; [evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md). H1 remains open for the other caller groups and
+production Undo/Redo; H2/H3/H4 and every measured apply/G1 claim remain open.
+
+### Next H1.4 caller: color/filter commits
+
+- [ ] Borrow immutable panel metadata to estimate the whole color/history peak before copying worker inputs.
+  Capture the source document, opening token and history handles only after the full reservation exists.
+- [ ] Bind ready color output to its complete worker-built after-layer/history state and captured generation.
+  Owner apply validates the panel/settings token and exact history epoch, then swaps layer/settings/panel owners.
+  Unchanged, donorless, cancelled, failed, replaced and newer-panel outcomes retain their existing semantics.
+- [ ] Keep the retired panel lookup/coverage, old settings and source/history owners in the complete worker-release
+  aggregate, including failed capture and every history-allocation checkpoint.
+- [ ] Pump admitted capture in the native harness, inject all five history failures and capture refusal,
+  preserve seeded redo and source pixels, reject changed epochs and run the complete frozen configuration matrix.
+- [ ] Migrate adjustment-layer OK/Cancel transaction closure separately; its live metadata semantics must remain
+  intact. Production destructive-color activation alone cannot close this row or the other H1 caller groups.
+
+An isolated color draft passes strict syntax checks and 45 independent focused Debug assertions (literal Gamma 2,
+settings/Levels reopening, save independence, stale/foreign/moved authority, five-stage cancellation/allocation
+refusal and retired-panel ownership/capacity). It remains outside production while the foundation is frozen.
 
 ## Immediate implementation
 

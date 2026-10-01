@@ -22,6 +22,11 @@ int Application::RunRasterEditSelfTest() noexcept
         Allocation,
         Admission,
         Capture,
+        HistoryBefore,
+        HistoryAfter,
+        HistoryEntry,
+        HistoryStack,
+        HistoryTrim,
         Invalid,
         Memory,
         TooLarge,
@@ -126,15 +131,19 @@ int Application::RunRasterEditSelfTest() noexcept
             for (const bool after : {false, true})
             {
                 for (const auto mode :
-                     {Mode::Success,        Mode::Cancel,    Mode::LateCancel,     Mode::Failure,
-                      Mode::Allocation,     Mode::Admission, Mode::Capture,        Mode::Invalid,
-                      Mode::Memory,         Mode::TooLarge,  Mode::Unchanged,      Mode::StaleImage,
-                      Mode::StaleTransform, Mode::StaleMask, Mode::StaleSelection, Mode::StaleGeneration,
-                      Mode::Restore,        Mode::Replace,   Mode::Undo,           Mode::LargeRelease})
+                     {Mode::Success,         Mode::Cancel,         Mode::LateCancel,   Mode::Failure,
+                      Mode::Allocation,      Mode::Admission,      Mode::Capture,      Mode::Invalid,
+                      Mode::HistoryBefore,   Mode::HistoryAfter,   Mode::HistoryEntry, Mode::HistoryStack,
+                      Mode::HistoryTrim,     Mode::Memory,         Mode::TooLarge,     Mode::Unchanged,
+                      Mode::StaleImage,      Mode::StaleTransform, Mode::StaleMask,    Mode::StaleSelection,
+                      Mode::StaleGeneration, Mode::Restore,        Mode::Replace,      Mode::Undo,
+                      Mode::LargeRelease})
                 {
                     // Failure injections precede preparation; the large aggregate-release control needs only one
                     // full-size canceled result. All five production commands still get both ordinary gate stages.
+                    const bool historyFailure = mode >= Mode::HistoryBefore && mode <= Mode::HistoryTrim;
                     if ((after && mode == Mode::Allocation) ||
+                        (historyFailure && (mask || after || command != ChromeHost::kCommandInvert)) ||
                         (mode == Mode::LargeRelease && (mask || !after || command != ChromeHost::kCommandInvert)))
                         continue;
                     const bool large = mode == Mode::LargeRelease;
@@ -176,6 +185,15 @@ int Application::RunRasterEditSelfTest() noexcept
                     _rasterEditTestGate->throwAllocationFailure = mode == Mode::Allocation;
                     _rasterEditTestGate->throwAdmissionFailure = mode == Mode::Admission;
                     _rasterEditTestGate->throwCaptureFailure = mode == Mode::Capture;
+                    if (historyFailure)
+                    {
+                        constexpr std::array stages{
+                            DocumentHistory::PrepareStage::BeforeSnapshot, DocumentHistory::PrepareStage::AfterSnapshot,
+                            DocumentHistory::PrepareStage::Entry, DocumentHistory::PrepareStage::StackGrowth,
+                            DocumentHistory::PrepareStage::TrimIndex};
+                        _rasterEditTestGate->historyFailure =
+                            stages[static_cast<std::size_t>(mode) - static_cast<std::size_t>(Mode::HistoryBefore)];
+                    }
                     if (mode == Mode::Failure)
                         _rasterEditTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
                     if (mode == Mode::Invalid)
@@ -207,8 +225,12 @@ int Application::RunRasterEditSelfTest() noexcept
                     if (mode == Mode::Cancel || mode == Mode::LateCancel || large)
                         correct = correct && state.cancelRetained && actual.error == E_ABORT;
                     if (mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::Capture ||
-                        mode == Mode::Memory)
+                        mode == Mode::Memory || historyFailure)
                         correct = correct && actual.error == E_OUTOFMEMORY;
+                    if (historyFailure)
+                        correct = correct && _rasterEditTestGate->historyFaultHits.load() == 1 &&
+                                  _rasterEditTestGate->payloadRetired.load() &&
+                                  _rasterEditTestGate->payloadRetiredOffOwner.load();
                     if (mode == Mode::Failure)
                         correct = correct && actual.error == E_ACCESSDENIED;
                     if (mode == Mode::Invalid)

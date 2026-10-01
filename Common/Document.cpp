@@ -13,6 +13,7 @@
 #include <exception>
 #include <format>
 #include <iterator>
+#include <limits>
 #include <new>
 #include <rpc.h>
 #include <string>
@@ -173,6 +174,43 @@ std::shared_ptr<Raster::Storage> Raster::AllocateStorage()
     return std::shared_ptr<Storage>{std::move(storage)};
 }
 
+void Raster::CacheRetirementMemory(Storage& storage) noexcept
+{
+    const auto logical = static_cast<std::uint64_t>(storage.stride) * static_cast<std::uint64_t>(storage.height);
+    if (logical > (std::numeric_limits<std::size_t>::max)())
+        return;
+    auto bytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(logical));
+    const auto add = [&](std::uint64_t count, std::uint64_t size) noexcept
+    {
+        if ((size && count > (std::numeric_limits<std::uint64_t>::max)() / size) ||
+            count * size > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += count * size;
+        return true;
+    };
+    const auto child = [&](const std::shared_ptr<const Storage>& value) noexcept
+    {
+        if (!value)
+            return true;
+        storage.graphDepth = (std::max)(storage.graphDepth, (std::min)(129u, value->graphDepth + 1));
+        if (!value->retirementBytes || storage.graphDepth > 128 ||
+            value->graphNodes > (std::numeric_limits<std::uint64_t>::max)() - storage.graphNodes ||
+            !add(1, value->retirementBytes))
+            return false;
+        storage.graphNodes += value->graphNodes;
+        return true;
+    };
+    // Sum already cached child bounds while the producer owns this record. Even a repeatedly shared nested
+    // sparse DAG then has an O(1) bound read; admission never recursively expands it or materializes pixels.
+    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)) ||
+        !child(storage.base))
+        return;
+    for (const auto& tile : storage.tiles)
+        if (!child(tile.pixels._storage))
+            return;
+    storage.retirementBytes = bytes;
+}
+
 void Raster::FreeStorage::operator()(Storage* storage) const noexcept
 {
     storage->DeferredReleaseNode::bytes = storage->bytes.capacity() + storage->adoptedBytes.AllocationBytes() +
@@ -220,6 +258,7 @@ Raster Raster::Make(int width, int height, RasterFormat format, const std::uint8
         storage->bytes.assign(pixels, pixels + size);
     }
     storage->assembled.store(storage->bytes.data(), std::memory_order_release);
+    CacheRetirementMemory(*storage);
     raster._storage = std::move(storage);
     return raster;
 }
@@ -244,6 +283,7 @@ Raster Raster::Adopt(int width, int height, RasterFormat format, PixelBuffer&& p
     storage->format = format;
     storage->adoptedBytes = std::move(pixels);
     storage->assembled.store(storage->adoptedBytes.Data(), std::memory_order_release);
+    CacheRetirementMemory(*storage);
     return Raster(std::move(storage));
 }
 
@@ -589,6 +629,7 @@ Raster Raster::MakeSparse(int width, int height, RasterFormat format, const Rast
         tile.height = kept.height;
         storage->tiles.push_back(std::move(tile));
     }
+    CacheRetirementMemory(*storage);
     Raster raster;
     raster._storage = std::move(storage);
     return raster;

@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-10-01
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -91,6 +91,14 @@ The intrusive node remains alive until its worker destroys it; workers with no s
 owned `PixelBuffer` results follow the same rule, including unpublished/cancelled results. Clearing the sink
 before joining/draining prevents callbacks into a destroyed scheduler. Sparse bases and tiles retain independent
 shared ownership; dropping a wrapper never frees a still-referenced base or tile.
+
+Each newly constructed raster caches a conservative bound for its complete held storage graph and node count.
+The capacity bound includes its possible contiguous sparse assembly, storage/control overhead, tile capacity
+and the cached bounds of directly held base/tile owners. It sums occurrences, so repeated shared owners can be
+overcounted. Bound reads are constant-time and never assemble pixels or recursively expand a shared graph.
+An overflow or graph depth above 128 produces an unavailable bound (zero), which migrated whole-operation
+admission refuses. These immutable construction caches are separate from history's retained-byte accounting;
+they do not change pixel equality, history trim goldens or the raster's published assembly lifetime.
 
 Basic raster-edit jobs retain input/token/result handles in one aggregate deferred-release owner. A stale or
 canceled sparse frame can consist of many individually small tiles; retirement MUST NOT free that entire graph

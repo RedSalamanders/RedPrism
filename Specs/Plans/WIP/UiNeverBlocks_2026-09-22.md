@@ -123,6 +123,7 @@
     - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
       - [x] P1.9a — Explicit unsigned 64-bit session limit min(physical RAM / 4, 2 GiB), 256 MiB query fallback/class default, retained legacy trim golden and machine host wiring. Full matrix passes; the previously failed 45 MP sizing benchmark now retains its undo and completes.
       - [x] P1.9b — Retained immutable selection capacity and safe pending/restore snapshot moves pass all x64 suites and ARM64 cross-builds; [history child](HistoryStorageAccounting_2026-09-30.md), [evidence](../../TestRuns/HistoryStorage_2026-09-30.md). Hardware 4K/45 MP each complete 18 operations. Incremental accounting, thumbnails, uploads and the 2 ms apply target remain open.
+      - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, production Undo/Redo, constant-time capture, incremental accounting and the measured G1 exit remain open.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

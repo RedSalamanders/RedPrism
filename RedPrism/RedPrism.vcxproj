@@ -187,6 +187,7 @@
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
+    <ClCompile Include="..\Common\RasterEditHistory.cpp" />
     <ClCompile Include="..\Common\CanvasSize.cpp" />
     <ClCompile Include="..\Common\PathClassificationWork.cpp" />
     <ClCompile Include="ApplicationFileJobs.cpp" />

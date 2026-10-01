@@ -2,6 +2,7 @@
 
 #include "Heal.h"
 #include "ImageFilters.h"
+#include "RasterEditWork.h"
 #include "RasterWork.h"
 #include "TransformEdit.h"
 #include "WarpStroke.h"
@@ -2835,13 +2836,14 @@ bool DocumentSession::ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask,
 }
 
 bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
-                                          bool gradientCommit, bool pixelMoveCommit, DocumentSelection* movedSelection)
+                                          bool gradientCommit, bool pixelMoveCommit, DocumentSelection* movedSelection,
+                                          PreparedRasterEdit* publication)
 {
     if (!token.target || token.generation != _generation || !CanApplyJobResult(token, token.sequence) || _brush ||
         _warp || (_pixelMove && !pixelMoveCommit) || _transformEdit || (_gradient && !gradientCommit) ||
         HasColorEdit() || _activeLayerID != token.target->layerId || _maskSelected != mask)
         return false;
-    if (pixelMoveCommit && (!_pixelMove || !_pixelMove->deferred || mask || !movedSelection))
+    if (pixelMoveCommit && (!_pixelMove || !_pixelMove->deferred || mask || !movedSelection || !_document->selection))
         return false;
     ImageLayer* const current = MutableLayer(token.target->layerId);
     if (!current || prepared.id != current->id || prepared.name != current->name ||
@@ -2878,12 +2880,31 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
              !validRaster(prepared.asset->thumbnail, RasterFormat::Bgra8888) || prepared.asset->name != prepared.name ||
              prepared.asset->image.PixelCount() > PixelBudgetLeft(false, {current->id}))
         return false;
-    BeginEdit(std::move(name));
-    *current = std::move(prepared);
-    if (pixelMoveCommit)
-        _document->selection = std::move(*movedSelection);
-    _lastBrushCommit.reset(); // an older gradient/stroke preview cannot be adopted for this prepared edit
-    EndEdit();
+    if (publication)
+    {
+        if (!history.CanPublish(publication->_history) || !history.Publish(publication->_history))
+            return false;
+        // Every operation after validation is nonthrowing. The caller's aggregate now retains the old layer,
+        // selection and history containers until its worker release; no destructor walks a large graph here.
+        std::swap(*current, prepared);
+        if (pixelMoveCommit)
+            std::swap(_document->selection.value(), *movedSelection);
+        std::swap(_lastBrushCommit, publication->_retiredBrushCommit);
+        if (gradientCommit)
+            std::swap(_gradient, publication->_retiredGradient);
+        if (pixelMoveCommit)
+            std::swap(_pixelMove, publication->_retiredPixelMove);
+        NoteDocumentMutation();
+    }
+    else
+    {
+        BeginEdit(std::move(name));
+        *current = std::move(prepared);
+        if (pixelMoveCommit)
+            _document->selection = std::move(*movedSelection);
+        _lastBrushCommit.reset(); // an older gradient/stroke preview cannot be adopted for this prepared edit
+        EndEdit();
+    }
     if (gradientCommit)
         _gradient.reset();
     if (pixelMoveCommit)
