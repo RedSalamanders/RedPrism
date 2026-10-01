@@ -163,6 +163,8 @@ bool DocumentSession::CanContentAwareFill() const noexcept
 
 void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
     {
         return;
@@ -170,7 +172,8 @@ void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
     // Every kind settles the same pending work first: a pending transform commits, a pending gradient applies and a
     // lasso draft goes, so the edit reads the layer and the selection as they will stay.
     CommitTransform();
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     CancelLasso();
     const ImageLayer* layer = ActiveLayer();
     if (layer == nullptr || !layer->asset.has_value() || !_document.has_value())

@@ -143,6 +143,7 @@
     <ClInclude Include="ColorWorkTestGate.h" />
     <ClInclude Include="SizingWorkTestGate.h" />
     <ClInclude Include="RasterEditTestGate.h" />
+    <ClInclude Include="GradientWorkTestGate.h" />
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
@@ -221,6 +222,8 @@
     <ClCompile Include="ApplicationSize.cpp" />
     <ClCompile Include="ApplicationSizeJobs.cpp" />
     <ClCompile Include="ApplicationRasterEditJobs.cpp" />
+    <ClCompile Include="ApplicationGradientJobs.cpp" />
+    <ClCompile Include="ApplicationGradientTests.cpp" />
     <ClCompile Include="ApplicationRasterEditTests.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />

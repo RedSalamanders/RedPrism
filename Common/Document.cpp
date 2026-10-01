@@ -1531,9 +1531,12 @@ void DocumentSession::Redo()
 
 void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (id != _activeLayerID)
     {
-        ResolveGradient();
+        if (!ResolveGradient())
+            return;
         CommitTransform();
     }
     if (!id.has_value() || FindLayer(id.value()) == nullptr)
@@ -1546,11 +1549,14 @@ void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 
 void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (width < 1 || width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
     {
         return;
     }
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     _lassoDraft.reset();
     BeginEdit(L"New Canvas");
     CanvasDocument document;
@@ -1585,12 +1591,15 @@ void DocumentSession::AddBlankLayer()
 
 void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (!_document.has_value())
     {
         return;
     }
     // The new layer becomes the target: a pending gradient applies first, as any layer switch does.
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     const ImageLayer* active = ActiveLayer();
     if (active != nullptr)
     {
@@ -1652,7 +1661,10 @@ std::wstring DocumentSession::UniqueLayerName(const std::wstring& prefix) const
 
 void DocumentSession::AddGroup()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value() || static_cast<int>(_document.value().layers.size()) >= kMaxLayerCount)
     {
         return;
@@ -1743,7 +1755,10 @@ bool DocumentSession::CanPlaceLayer(const Guid& id, const std::optional<Guid>& p
 bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& parent, const std::optional<Guid>& above,
                                  bool atBottom, bool before)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     const std::optional<Guid> destination = parent;
     const std::optional<Guid> aboveId = above;
     if (!CanPlaceLayer(id, destination) || !_document.has_value() || (aboveId.has_value() && aboveId.value() == id))
@@ -1881,7 +1896,10 @@ void DocumentSession::MoveActiveLayer(int offset)
 
 void DocumentSession::GroupSelectedLayers()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value() || static_cast<int>(_document.value().layers.size()) >= kMaxLayerCount)
     {
         return;
@@ -2391,7 +2409,10 @@ bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMe
 
 bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     const std::optional<PreparedMerge> prepared = PrepareMerge(plan, composite);
     return prepared.has_value() && ApplyPreparedMerge(plan, prepared.value());
 }
@@ -2459,7 +2480,10 @@ void DocumentSession::ChangeCropRatio() noexcept
 
 bool DocumentSession::CommitCrop()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     if (!_document.has_value() || !_cropRect.has_value() || !CropGeometry::Valid(_cropRect.value()))
     {
         return false;
@@ -2484,7 +2508,10 @@ bool DocumentSession::CommitCrop()
 
 void DocumentSession::DeleteLayer(const Guid& id)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value())
     {
         return;
@@ -3082,9 +3109,12 @@ std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
 
 void DocumentSession::BeginTransform(bool persistent)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (!_transformEdit.has_value())
     {
-        ResolveGradient();
+        if (!ResolveGradient())
+            return;
     }
     if (_transformEdit.has_value() || !CanTransform())
     {
@@ -3157,6 +3187,8 @@ void DocumentSession::PreviewCorners(const std::array<Vec2, 4>& corners)
 
 void DocumentSession::BeginDuplicateTransform()
 {
+    if (_gradient && _gradient->deferred)
+        return;
     // Alt-drag duplicates a single layer; several selected, or a folder, just move.
     if (_transformDuplicate.has_value() || TransformsAsGroup() || !_activeLayerID.has_value())
     {
@@ -3164,7 +3196,8 @@ void DocumentSession::BeginDuplicateTransform()
     }
     const Guid source = _activeLayerID.value();
     CommitTransform();
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     if (!CanTransform())
     {
         return;
@@ -3667,8 +3700,11 @@ LayerTransform DocumentSession::SnappedMove(const LayerTransform& draft, const s
 
 void DocumentSession::FlipLayers(bool horizontally)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     CommitTransform();
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     if (!CanTransform() || !_document.has_value())
     {
         return;
@@ -3719,6 +3755,8 @@ void DocumentSession::FlipLayers(bool horizontally)
 
 void DocumentSession::FlipCanvas(bool horizontally)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     // An open color or filter panel owns the document until OK or Cancel.
     if (!_document.has_value() || HasColorEdit())
     {
@@ -3728,7 +3766,8 @@ void DocumentSession::FlipCanvas(bool horizontally)
     // (Decision D3).
     CommitTransform();
     CancelCrop();
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     CanvasDocument& document = _document.value();
     const double axis = horizontally ? document.width / 2.0 : document.height / 2.0;
     BeginEdit(horizontally ? L"Flip Canvas Horizontal" : L"Flip Canvas Vertical");
@@ -3765,7 +3804,10 @@ void DocumentSession::FlipCanvas(bool horizontally)
 
 void DocumentSession::DuplicateActiveLayer()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value())
     {
         return;
@@ -3800,9 +3842,12 @@ void DocumentSession::DuplicateActiveLayer()
 
 void DocumentSession::SelectLayerTarget(const Guid& id, bool mask)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (id != _activeLayerID || mask != _maskSelected)
     {
-        ResolveGradient();
+        if (!ResolveGradient())
+            return;
     }
     SelectLayer(id);
     const ImageLayer* layer = ActiveLayer();

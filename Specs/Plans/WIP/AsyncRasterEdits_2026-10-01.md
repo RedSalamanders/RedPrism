@@ -5,7 +5,9 @@
 - [x] A1 — Detached cancellable Fill/Clear/Invert preparation; literal legacy pixels, placed masks, sparse inputs, checked budgets and complete memory declarations. All configurations qualify ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
 - [x] A2 — Production commands under the selected host ordinal; capture after whole-graph admission, token-checked application, cancellation acknowledgement, one-entry undo and event-gated host scenarios. All configurations qualify ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
 - [ ] A3 — Qualify all configurations and hardware/WARP real-loop measurements; commit and push the basic raster-edit step. UI apply/history/upload overruns remain P1.9/G1.
-- [ ] A4 — Ordered worker gradient rendering and application, copied palette/settings/endpoints and superseded preview cancellation.
+- [ ] A4 — Ordered worker gradient rendering and application, copied palette/settings/endpoints, one active/latest pending preview and invalidation cancellation.
+  - [x] A4.1–A4.5 — Preparation, deferred state, host producers/settlement and resource/outcome tests qualify in all configurations ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
+  - [ ] A4.6 — Real-loop gradient timing and measured owner/first-upload costs; functional step committed separately.
 - [ ] A5 — Lifted pixels, pixel move and floating selection Free Transform; atomic Cut preparation shared with F5, preserved private clipboard/origin and numeric goldens.
 - [ ] A6 — Distortion commit/preview preparation and transform settlement continuations; preserve mapped image/mask geometry and cancellation/staleness.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
@@ -100,22 +102,22 @@ implementing A1/A2; keep the master opening checklist and this execution checkli
 
 ## A4 execution sequence
 
-- [ ] A4.1 — Extend detached raster preparation with the exact linear/radial gradient formula, copied straight
+- [x] A4.1 — Extend detached raster preparation with the exact linear/radial gradient formula, copied straight
   endpoint colors, document-space endpoints and opacity. Validate finite arithmetic before rounding. Return a
   complete prepared layer for commits and a privately owned CPU stroke for previews. Preserve direct gradient
   APIs and all legacy numeric tolerances.
-- [ ] A4.2 — Add a deferred pending-gradient mode whose opening, target, endpoints, settings sequence and line
+- [x] A4.2 — Add a deferred pending-gradient mode whose opening, target, endpoints, settings sequence and line
   overlay are metadata only. Palette/header/pointer callbacks advance that sequence and never render pixels,
   selection coverage or thumbnails. Keep the direct synchronous mode for existing session tests.
-- [ ] A4.3 — Admit one active and one latest pending InteractivePreview request per opening. Capture source
+- [x] A4.3 — Admit one active and one latest pending InteractivePreview request per opening. Capture source
   layer/selection/token only under the complete reservation; copy each request's endpoint colors/settings at its
   event. Workers borrow no live session, GPU engine or chrome. A replaced CPU stroke's aggregate tile graph retires
   on the release lane; no worker mutates a stroke that the owner/composition is reading.
-- [ ] A4.4 — Add a separate gradient settlement stage after color settlement and before a selected command,
+- [x] A4.4 — Add a separate gradient settlement stage after color settlement and before a selected command,
   tool/layer switch, size/write or readback. A gradient commit retains that same ordinal with a fresh acquisition;
   success continues the dependent action, cancellation/failure/staleness stops it. Enter/header Apply admit an
   owned opening-specific request. Undo/Escape retain their existing pending-edit drop semantics.
-- [ ] A4.5 — Exercise preview coalescing, admission/capture/worker refusal, early/late cancel, changed endpoints
+- [x] A4.5 — Exercise preview coalescing, admission/capture/worker refusal, early/late cancel, changed endpoints
   and palette after capture, mask placement and source/selection/restore staleness using real event gates. Adapt
   host observations to await acknowledgements, preserving their existing pixels and history expectations.
 - [ ] A4.6 — Qualify the frozen six-profile matrix and real-loop drag/settle measurements, then commit/push.
@@ -128,7 +130,58 @@ worker controls use literal pixel-center coordinates and the documented source-o
 stretched and sparse masks; successful history application must preserve `Gradient` / `Gradient Mask` and exact
 Undo restoration. A worker/direct comparison supplements these references and cannot replace them.
 
+A4 progress: detached preparation/deferred model/resource tests and production color→gradient→dependent
+continuations pass all x64 suites and ARM64 cross-builds ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)). Review corrected test assumptions about sparse
+results and settlement guards, and ensured no-line redrag cannot resurrect old pixels. Exact preview generation/
+sequence permits existing GPU adoption; stale previews upload anew. The next preview launches only after the old
+job reservation retires. There are 105 new document/resource checks and 33 host scenarios. No latency claim yet.
+
 Preview GPU shading and SIMD remain P3/P2. A4 moves the existing exact CPU computation into the Interactive
 lane; it does not by itself establish the one-frame drag target, first-upload bound or allocation-safe history
 publication. Measure those costs explicitly and keep their owning gates open until their implementation passes.
+
+## A5 execution sequence
+
+- [ ] A5.1 — Add a detached lifted-pixel/move graph over the same CPU-only raster path. Compute coverage, lift,
+  landing tiles, source-over samples, carried masks, commit metadata and moved selection privately. Check cancel
+  between rows, tiles and outline batches; reject nonfinite/out-of-range mapping before integer conversion. No
+  worker may materialize a published sparse source. Admission additionally includes the complete lifted plane,
+  replacement windows, landing/hole indexes and new immutable outline storage.
+- [ ] A5.2 — Add deferred pixel-move metadata (opening, source target, original selection, captured duplicate
+  intent, rounded offset and sequence). Pointer motion updates only this metadata and the outline placement;
+  one active/latest pending worker owns every pixel preview. Keep existing direct APIs as numeric references.
+  A newly published preview is private to its worker until acknowledgement and immutable to the composition.
+- [ ] A5.3 — Retain accepted mouse-up/nudge input through a selected history ordinal. Commit the latest captured
+  offset and outline as one `Move Pixels` / `Duplicate Pixels` edit. Zero offset preserves pixels, history and
+  redo; cancel drops previews and blocks dependent commands until acknowledgement. Source/selection/target,
+  restored generation, reopening and document replacement invalidate results before publication.
+- [ ] A5.4 — Prepare Copy/Cut through one shared document-space extraction graph with F5. Capture region,
+  displayed placement, mask edge tone, immutable selection and private clipboard origin after settlement.
+  Copy Merged uses P1.3 region readback. Cut prepares both clipboard and cleared layer before either publishes;
+  failed preparation preserves the previous private clipboard and pixels. System-clipboard refusal follows the
+  existing product policy, with its publication fact independent of cancellation.
+- [ ] A5.5 — Prepare floating-selection opening as a complete source-hole/floating-layer graph, with snapshot,
+  raster, image thumbnail, transform and cancellation restore state allocated before installation. It consumes
+  one `Transform Selection` transaction, closed only by acknowledged merge or exact restore. Account for the
+  additional temporary layer and independent image/mask budgets. H1 owns allocation-safe history publication;
+  H2 owns constant-time snapshot capture rather than owner copying of all layer records.
+- [ ] A5.6 — Move floating merge (affine samples, carried mask and transformed/distorted selection) to detached
+  work under the same transaction/ordinal. A6 supplies cancellable distortion. Failure/cancel restores the
+  complete opening document; no partial source, temporary layer or moved outline survives. Plain transform
+  geometry remains owner metadata. Capture draft and corner sequence before work, never from a worker.
+- [ ] A5.7 — Qualify missing independent pixel/origin/outline goldens and event-gated host outcomes, preserve
+  every existing clipboard/pixel-move/floating-transform golden, run all configurations and real-loop measures,
+  then reconcile owning contracts, the opening checklist and commit/push.
+
+The existing move algorithm lifts premultiplied bytes multiplied by selection coverage, clears the original
+coverage unless duplicating, then applies the lifted pixels with exact whole-pixel reads or bilinear source-over
+sampling. Every pointer update rebuilds from the original tile; samples cannot accumulate across previews.
+Offsets round in document pixels, including on stretched or rotated layers. Clipboard extraction instead renders
+on the document grid and retains the clipped selection/canvas region's integer origin. These coordinate rules
+are separate and must stay numerically identical to their existing references.
+
+Do not implement migration by sharing a mutable BrushStroke between owner and worker, by mutating a live session
+on a worker, or by accepting a successful empty result after failed preparation. The preview mailbox retains one
+active ticket through cancellation acknowledgement, and the next request can start only after its whole graph
+reservation retires. Selection-overlay geometry caching and bounded owner uploads remain P1.6/P1.9 gates.
 

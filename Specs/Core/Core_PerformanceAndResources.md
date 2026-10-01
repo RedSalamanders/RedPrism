@@ -131,6 +131,16 @@ occurrences conservatively and refuses overflow/depth beyond 128. Existing share
 allocations. Incremental preflight/accounting and prepared, allocation-safe history publication remain P1.9;
 current owner Begin/End allocation failure retains the repository's fatal-failure policy.
 
+Gradient events retain primitive endpoints/colors/settings in a one-active/latest-pending mailbox. Pixel/selection
+capture follows full admission in the same suspended/resumed record; no published stroke is borrowed by a worker.
+The complete private stroke/source/tile/coverage graph has one deferred release owner. Cancellation invalidates
+publication immediately but keeps the ticket until acknowledgement. After completion, the registered host source
+starts the next preview only after the previous reservation retires; idle has no readiness or retry loop. Commit
+shares the selected input ordinal, acquires fresh history ownership after color settlement, and freezes its exact
+metadata sequence. Matching uploaded previews are adopted only for the same source generation/target/settings;
+stale or unshown results use ordinary sparse upload. First upload, owner capture/history/chrome and drag/settle
+latency remain measured P1.9/G1 requirements, while CPU vectorization/GPU shading remain P2/P3.
+
 Suspended worker stages count against the same 128-record capacity and retain their original reservation and
 FIFO key through final apply/drop. Resume consumes no second reservation, container entry or job allocation.
 Successful stage deferral cannot race worker re-entry into its UI hook. Cancellation preserves external mapped

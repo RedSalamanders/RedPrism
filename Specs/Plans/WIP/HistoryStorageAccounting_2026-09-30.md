@@ -28,6 +28,35 @@ non-throwing ownership transfer may publish. Preparation/capture/admission failu
 operation locally with its original document/history intact. Retain the repository's exception policy until
 this explicit construction/admission boundary is implemented and qualified; do not add a catch after mutation.
 
+## H1 publication sequence
+
+- [ ] H1.1 — Give history entries immutable shared ownership. Capture a bounded history-state view containing
+  retained entry handles, pending/depth state, current revision and a mutation epoch. A worker must not borrow
+  the live DocumentHistory. Saved revision is independent: a saved older revision cannot invalidate a valid edit
+  or overwrite the owner's later saved state. Preserve existing names, entry limits and undo ordering.
+- [ ] H1.2 — Prepare the before/after snapshots, entry/container growth, exact current-document storage
+  exclusion, trim decision and retirement owners entirely before publication. Include all record/string/curve,
+  storage-index and scratch capacity in admission. Preparation must fail locally on bad_alloc or cancellation;
+  no revision, redo, pending transaction or live pixel changes occur on refusal. Zero-change publication keeps
+  the current revision and redo. Every stored identity retains its corresponding raster/selection owner.
+- [ ] H1.3 — Validate document token and exact history epoch on the owner before either document or history
+  changes. Publish only by nonthrowing moves/swaps into already prepared storage. Keep replaced containers in
+  the prepared release aggregate until the release lane retires them; no synchronous whole-history destructor
+  is hidden inside the apply scope. Worker result wrappers must account for their retained input/result graphs.
+- [ ] H1.4 — Wire raster edits/gradients, color commits, sizes, merges/imports, selection and stroke operations
+  to the prepared boundary. Nested floating-selection transactions need explicit opening/finish/cancel state;
+  they cannot use a catch after clearing pixels or inserting a temporary layer. Direct reference APIs retain
+  their behavior, with production routing audited before closure.
+- [ ] H1.5 — Prepare Undo/Redo restore, destination stack capacity and trim before removing the source entry.
+  Even when trim discards the destination entry, the independently owned restore survives. Test each allocation
+  refusal boundary and stale history epoch against literal revision, name, redo, depth and pixel expectations.
+
+H1 removes failing construction from publication; it does not establish H2's constant-time document capture or
+H3's incremental accounting. A temporary immutable-entry view can still contain value document snapshots.
+Do not close H2 while any production capture/restore still copies 10,000 layers on the owner, or H3 while every
+edit still rebuilds a set of all retained storages. Their measurements include metadata traversal and release,
+in addition to pixels, and retain the original trim/current-document exclusion goldens.
+
 ## Immediate implementation
 
 Published selection loops already share immutable storage and cache point counts/bounds. Cache their vector

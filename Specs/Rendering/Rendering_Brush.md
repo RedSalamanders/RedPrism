@@ -167,6 +167,11 @@ sparse path. Production Fill, Clear and Invert use `RasterEditWork`: a detached 
 segment/permanent-density/coverage-engine buffers, cancellation between rows/tiles and private sparse reads.
 The pointer brush's compute engine, including the required WARP compute path, is unchanged. Prepared sparse
 handles and eager mask thumbnails publish once through the token-checked owner API in `Document_Tools`.
+Production gradients use that same private CPU path, with metadata-only owner updates and one active/latest
+pending worker preview. No worker mutates a published stroke. Preview/source/tile/coverage owners retire as one
+graph; progress/cancellation borrows end before publication. A commit can adopt the uploaded preview only for
+its exact settings/source generation and target, with worker-prepared crop coordinates; GPU pixel equality and
+adoption counts remain required. The direct synchronous gradient API retains its numeric oracle behavior.
 
 ## Budgets
 

@@ -97,6 +97,9 @@
     <ClInclude Include="..\..\Common\ProjectSaveWork.h" />
     <ClInclude Include="RasterWorkTests.h" />
     <ClInclude Include="RasterEditWorkTests.h" />
+    <ClInclude Include="GradientWorkTests.h" />
+    <ClInclude Include="GradientStateTests.h" />
+    <ClInclude Include="GradientResourceTests.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
@@ -115,6 +118,9 @@
     <ClCompile Include="ExportMemoryTests.cpp" />
     <ClCompile Include="RasterWorkTests.cpp" />
     <ClCompile Include="RasterEditWorkTests.cpp" />
+    <ClCompile Include="GradientWorkTests.cpp" />
+    <ClCompile Include="GradientStateTests.cpp" />
+    <ClCompile Include="GradientResourceTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />

@@ -412,6 +412,10 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return !_session.HasColorEdit();
             }
+            else if constexpr (std::is_same_v<Input, HostGradientApplyInput>)
+            {
+                return _session.PendingGradient() == nullptr;
+            }
             else if constexpr (std::is_same_v<Input, HostPathsInput>)
             {
                 if (_hostPathIndex < value.paths.size())
@@ -524,8 +528,8 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return false;
             }
-            if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostPathsInput> &&
-                          !std::is_same_v<Input, HostWriteInput>)
+            if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostGradientApplyInput> &&
+                          !std::is_same_v<Input, HostPathsInput> && !std::is_same_v<Input, HostWriteInput>)
             {
                 return true;
             }
@@ -1478,18 +1482,22 @@ int Application::RunClipboardSelfTest() noexcept
             BeginGradientDrag(_viewport.ViewFromDocument(Vec2{0, 50}, DocumentSize()));
             DragGradient(_viewport.ViewFromDocument(Vec2{100, 50}, DocumentSize()), 0);
             EndGradientDrag();
-            return _session.PendingGradient() != nullptr && _composition.HasStroke();
+            return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                   _session.PendingGradient() != nullptr && _composition.HasStroke();
         };
         const int before = _session.history.UndoCount();
         const bool copyPending = dragLine();
         OnCommand(ChromeHost::kCommandCopy);
-        const bool copyApplied = _session.PendingGradient() == nullptr && !_composition.HasStroke() &&
+        const bool copyApplied = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                 _session.PendingGradient() == nullptr && !_composition.HasStroke() &&
                                  _session.history.UndoCount() == before + 1 &&
                                  _session.history.UndoName() == L"Gradient";
         // A white start this time: the merged copy shows it only when the pending line was applied first.
         _session.SetForegroundColor(0xFFFFFFFFu);
         const bool mergedPending = dragLine();
         OnCommand(ChromeHost::kCommandCopyMerged);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         std::array<std::uint8_t, 4> start{};
         if (_session.Clipboard().has_value())
         {

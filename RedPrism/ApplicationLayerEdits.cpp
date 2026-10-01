@@ -35,8 +35,8 @@ void Application::RenameActiveLayer() noexcept
 
 void Application::OnLayerInvoked(Guid id) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                            _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerInvokeInput{id}));
         return;
@@ -138,7 +138,8 @@ void Application::CloseOpacityEdit() noexcept
 
 void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.PendingGradient() || _activeHostRequest || _hostRequests.Size()))
     {
         if (const auto id = _session.ActiveLayerID())
             ReportHostAdmission(QueueHostInput(HostLayerOpacityInput{id.value(), opacity, phase}));

@@ -847,8 +847,12 @@ Ordered file batches, complete size drafts and layer/tool inputs retain their ev
 Fill, Clear, selected Delete and Invert also use this ordered input path. The selected ordinal owns their
 complete worker reservation through token-checked publication or acknowledged cancellation; younger document
 actions wait while view input remains available. Escape cancels the raster-edit barrier without discarding its
-request early. Failed preparation/admission reports one localized pixel-edit or size notice. Pending gradient
-and distortion settlement still follow their existing rules until the tracked P1.5 continuations replace them.
+request early. Failed preparation/admission reports one localized pixel-edit or size notice. Gradient pointer,
+header and palette input now updates metadata and offers one active/latest pending worker preview. Apply/Enter
+owns the opening; color then gradient settlement precedes dependent actions or writes. Failed/cancelled/stale
+gradient settlement stops that action. Undo/Redo drop an uncommitted line, while X/D only refresh it. A frozen
+commit refuses palette mutation with the existing Busy notice. View input and cancellation remain available;
+preview cancellation retains ownership until acknowledgement. Distortion settlement remains tracked P1.5 work.
 They share the eight-entry pending ring plus one active request and 1 MiB combined host-input budget. A refused
 input reports the busy/budget notice; earlier entries keep their order. View and chrome input remain available
 while color commits, project opens or project saves run. The write stage first settles typed opacity and live canvas edits under

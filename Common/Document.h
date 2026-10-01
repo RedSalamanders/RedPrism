@@ -1051,6 +1051,13 @@ struct GradientEdit
     std::shared_ptr<BrushStroke> raster;
     Vec2 start;
     Vec2 end;
+    Guid target;
+    bool mask = false;
+    bool deferred = false;
+    std::uint64_t opening = 0;
+    std::uint64_t sequence = 1;
+    std::uint64_t publishedSequence = 0;
+    std::uint64_t publishedGeneration = 0;
     [[nodiscard]] bool HasLine() const noexcept
     {
         return std::hypot(end.x - start.x, end.y - start.y) >= 0.5;
@@ -1735,6 +1742,12 @@ class DocumentSession
     // Apply, Enter, or a tool, layer or target switch commits it (`Gradient`, `Gradient Mask`); Undo, Escape or
     // Cancel drop it. Dragging a new line on the same target replaces the pending one.
     bool BeginGradient(Vec2 point);
+    // Metadata-only opening; the host prepares/publishes its private preview and settles before mutations.
+    [[nodiscard]] bool BeginDeferredGradient(Vec2 point);
+    [[nodiscard]] bool PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
+                                              std::uint64_t opening, std::uint64_t sequence) noexcept;
+    [[nodiscard]] bool ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
+                                              std::uint64_t sequence);
     void MoveGradient(std::optional<Vec2> start, std::optional<Vec2> end);
     // Re-renders the pending gradient from the current endpoints, settings and palette.
     void RefreshGradient();
@@ -1747,7 +1760,8 @@ class DocumentSession
     void CancelGradient() noexcept;
     void CommitGradient();
     // Switching tools, layers or targets applies the pending gradient, as in Photoshop.
-    void ResolveGradient();
+    // Inline callers refuse an unresolved deferred opening; its host must acknowledge worker settlement.
+    [[nodiscard]] bool ResolveGradient();
     [[nodiscard]] const GradientEdit* PendingGradient() const noexcept
     {
         return _gradient ? &_gradient.value() : nullptr;
@@ -2105,6 +2119,9 @@ class DocumentSession
         ++_generation;
         ++_editRevision;
     }
+    [[nodiscard]] bool BeginGradientImpl(Vec2 point, bool deferred);
+    [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
+                                           bool gradientCommit);
 
     TokenIdentity _tokenIdentity;
     std::optional<CanvasDocument> _document;
@@ -2149,6 +2166,7 @@ class DocumentSession
     std::array<std::array<double, 3>, 3> _parkedTips{{{40, 1, 1}, {40, 0, 1}, {40, 0, 1}}};
     std::uint32_t _healSeed = 0x9e3779b9u;
     std::optional<GradientEdit> _gradient;
+    std::uint64_t _gradientOpening = 0;
     std::optional<ShapeDraft> _shapeDraft;
     std::optional<PixelMove> _pixelMove;
     std::optional<PixelClipboard> _clipboard;

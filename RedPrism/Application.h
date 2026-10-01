@@ -50,6 +50,7 @@ struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
 struct ImageImportTestGate;
 struct RasterEditTestGate;
+struct GradientWorkTestGate;
 struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
@@ -384,6 +385,28 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartRasterEdit(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
     void ExecuteRasterEditCommand(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
     int RunRasterEditSelfTest() noexcept;
+    struct GradientRequest final
+    {
+        Guid target;
+        std::uint64_t opening = 0;
+        std::uint64_t sequence = 0;
+        bool mask = false;
+        Vec2 start;
+        Vec2 end;
+        GradientShape shape = GradientShape::Linear;
+        std::array<double, 4> color{};
+        std::array<double, 4> endColor{};
+        double opacity = 1;
+    };
+    class GradientJob;
+    [[nodiscard]] GradientRequest CaptureGradientRequest() const noexcept;
+    void RefreshGradientJobs() noexcept;
+    void CancelGradientJobs() noexcept;
+    void LaunchGradientPreview() noexcept;
+    [[nodiscard]] HRESULT SubmitGradientJob(GradientRequest request, std::optional<PreviewStamp> preview,
+                                            std::optional<HistoryWorkStamp> commit) noexcept;
+    [[nodiscard]] HRESULT StartGradientCommit(std::uint64_t ordinal) noexcept;
+    int RunGradientWorkSelfTest() noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
@@ -634,6 +657,7 @@ class Application final : public ChromeEvents
         Confirm,
         Output,
         Settle,
+        GradientSettle,
         Write,
         Execute,
         FileComplete,
@@ -660,6 +684,16 @@ class Application final : public ChromeEvents
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
     std::int32_t _colorCommitError = 0;
     PreviewMailbox<ColorEditJobInput> _colorPreviews;
+    PreviewMailbox<GradientRequest> _gradientPreviews;
+    bool _gradientMailboxOpen = false;
+    bool _gradientCompleting = false;
+    std::uint64_t _gradientPreviewSerial = 0;
+    std::uint64_t _gradientPreviewOpening = 0;
+    std::uint64_t _gradientSeenSequence = 0;
+    std::optional<JobTicket> _gradientPreviewTicket;
+    std::optional<JobTicket> _gradientCommitTicket;
+    std::optional<HistoryWorkStamp> _gradientCommitStamp;
+    std::shared_ptr<GradientWorkTestGate> _gradientWorkTestGate;
     bool _colorMailboxOpen = false;
     std::uint64_t _colorDocumentSerial = 0;
     std::uint64_t _colorOpening = 0;

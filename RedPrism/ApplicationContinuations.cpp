@@ -164,6 +164,10 @@ void Application::RunHostContinuation() noexcept
     {
         return;
     }
+    // Preview completion rearms this source so the old record and its full reservation retire before the next
+    // capture is admitted. Accepted host mutations take precedence over starting another pending preview.
+    if (!_activeHostRequest && _hostRequests.Size() == 0)
+        LaunchGradientPreview();
     if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {
         return; // consumed readiness stays disarmed until this prerequisite's exact UI completion
@@ -213,7 +217,8 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
         }
         else
-            _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
+            _hostStage = _hostStage == HostStage::Settle ? HostStage::GradientSettle
+                         : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
     }
@@ -231,6 +236,16 @@ void Application::RunHostContinuation() noexcept
             {
                 const auto& edit = _session.PendingColorEdit();
                 if (!edit || panel->opening != edit->openingSequence)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Settle;
+            }
+            else if (const auto* gradient = std::get_if<HostGradientApplyInput>(&input))
+            {
+                const auto* pending = _session.PendingGradient();
+                if (!pending || pending->opening != gradient->opening)
                 {
                     FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                     return;
@@ -269,7 +284,7 @@ void Application::RunHostContinuation() noexcept
                                  command->command == ChromeHost::kCommandImageSize ||
                                  command->command == ChromeHost::kCommandNewCanvas))
             {
-                _hostStage = HostStage::Execute; // opening these cards deliberately dismisses the live panel
+                _hostStage = HostStage::GradientSettle; // these cards deliberately dismiss the live color panel
             }
             else
             {
@@ -374,6 +389,37 @@ void Application::RunHostContinuation() noexcept
             {
                 FinishHostContinuation({outcome, _colorCommitError});
                 return;
+            }
+            _hostStage = HostStage::GradientSettle;
+            break;
+        }
+        case HostStage::GradientSettle:
+        {
+            const auto* command = std::get_if<HostCommandInput>(&input);
+            const bool dropOrRefresh = command && (command->command == ChromeHost::kCommandUndo ||
+                                                   command->command == ChromeHost::kCommandRedo ||
+                                                   command->command == ChromeHost::kCommandSwapPalette ||
+                                                   command->command == ChromeHost::kCommandResetPalette);
+            if (!dropOrRefresh)
+            {
+                if (const auto* apply = std::get_if<HostGradientApplyInput>(&input);
+                    apply && (!_session.PendingGradient() || _session.PendingGradient()->opening != apply->opening))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                const auto result = StartGradientCommit(active.ordinal);
+                if (FAILED(result))
+                {
+                    ++_errorsShown;
+                    _lastErrorId =
+                        result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_gradientCommitTicket)
+                    return;
             }
             _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
@@ -516,6 +562,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_rasterEditTicket.value());
+        }
+        else if (_gradientCommitTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_gradientCommitTicket.value());
         }
         else
             CancelColorCommit(); // retain the active receipt until apply/drop acknowledges cancellation

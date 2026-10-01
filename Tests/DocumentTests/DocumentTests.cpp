@@ -8,6 +8,9 @@
 #include "DocumentSizingWorkTests.h"
 #include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
+#include "GradientResourceTests.h"
+#include "GradientStateTests.h"
+#include "GradientWorkTests.h"
 #include "HistoryAccountingTests.h"
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
@@ -7339,6 +7342,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();
     gFailures += RunRasterEditWorkTests();
+    gFailures += RunGradientWorkTests();
+    gFailures += RunGradientStateTests();
+    gFailures += RunGradientResourceTests();
     gFailures += RunFilterCancellationTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunSelectionStorageTests();

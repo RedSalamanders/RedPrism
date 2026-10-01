@@ -331,8 +331,9 @@ HRESULT Application::StartRasterEdit(RasterEditKind kind, FillSource fill) noexc
         return E_UNEXPECTED;
     if (!_session.Document())
         return S_FALSE;
-    // Preserve legacy settlement while A4/A6 move these prerequisites to workers. This is an explicitly measured
-    // remaining caller, not proof that pending gradient/distortion routes have passed G1.
+    // The selected runner has acknowledged gradient settlement. Distortion still has its A6 prerequisite.
+    if (const auto* pending = _session.PendingGradient(); pending && pending->deferred)
+        return E_UNEXPECTED;
     if (kind == RasterEditKind::Invert)
         (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     CommitGradient();

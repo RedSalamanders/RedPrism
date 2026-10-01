@@ -26,7 +26,25 @@ capture/admission failure, stale image/transform/full mask/selection/generation/
 and aggregate release of a large sparse canceled result on a worker. No-selection Delete remains metadata;
 Clear without selection adds no entry. Terminal states retain no tickets/barriers/host-input or memory charges
 and perform no hidden Present. Gate deadlines detect deadlocks, not performance thresholds. All x64 suites and
-ARM64 cross-builds remain required; pending gradient/distortion callers and real-loop timings stay open in P1.
+ARM64 cross-builds remain required; pending distortion callers and real-loop timings stay open in P1.
+
+### Detached gradients
+
+`gradientwork.*` keeps the independent legacy linear/radial/opacity tolerances and literal pixel-center BGRA/Gray8
+expectations for transparent source-over, selection exterior, placed/stretched masks and sparse inputs. Invalid
+finite projection arithmetic, enums/colors, exact/lower budgets and pre/mid-tile cancellation publish no result.
+`gradientstate.*` proves metadata-only deferred openings, independent acquisition/settings clocks, active/latest
+publication order, no-line redrag, refusal before synchronous settlement mutation and exact named apply/Undo.
+`gradientresource.*` checks independent coverage/output/mask/metadata floors, shared last-owner retirement,
+retained source/private tiles and callback-borrow termination without shared sparse materialization.
+
+`gradient-host.*` exercises the actual preview and selected commit callers at event gates. Capture follows full
+reservation; input/history/tickets survive early/late cancellation. Admission/capture/worker OOM, returned statuses,
+source/selection/generation/restore/opening changes cannot authorize dependent edits. Coalesced endpoints and
+palette refreshes finish at the latest settings with no history entry. Image/mask commits use literal pixels and
+one named entry; Undo drops an uncommitted line. Existing GPU checks await acknowledgement, retaining their
+canvas-vs-raster tolerance and adoption count. Full x64 suites and ARM64 cross-builds are required. No event-gate
+deadline is a performance assertion; real-loop drag/settle timing and owner upload/history budgets remain open.
 
 ### Retained selection and history ownership
 

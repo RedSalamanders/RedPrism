@@ -182,6 +182,12 @@ class BrushStroke
     {
         return _pixelLimitRefused;
     }
+    void EndWorkerPreparation() noexcept
+    {
+        _workProgress = nullptr;
+        _workProgressContext = nullptr;
+        _workCancellation = {};
+    }
     // Gray8 coverage at document resolution that limits the edit (nullopt: the whole canvas).
     void SetSelectionClip(std::optional<Raster> coverage) noexcept
     {

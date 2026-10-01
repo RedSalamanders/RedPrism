@@ -98,6 +98,8 @@
     - [ ] P1.5 — Worker raster edits, gradients, lifted pixels, transforms, shapes, masks and Layer via Copy; preserve eager semantic mask thumbnails.
       - [x] A1/A2 — Basic Fill, Clear/selected Delete and Invert preparation and host activation; exact pixels, cancellation/staleness and ordered history pass all configurations ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
       - [ ] A3 — Basic raster-edit real-loop timing; six-profile functional qualification passed, but the display-off presentation guard refused measurement. Preserved qualified binaries await an active desktop; [raster-edit child](AsyncRasterEdits_2026-10-01.md). Owner/history/upload bounds remain P1.9/G1.
+      - [x] A4.1–A4.5 — Ordered worker gradient previews/commits, deferred metadata and cancellation/stale/resource gates pass all configurations; 105 new document checks and 33 production host scenarios ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
+      - [ ] A4.6 / A5–A8 — Gradient real-loop timing, lifted pixels/Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.

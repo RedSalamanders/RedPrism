@@ -1,6 +1,7 @@
 #include "RasterEditWork.h"
 
 #include "BrushStroke.h"
+#include "DeferredRelease.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -62,6 +63,97 @@ namespace
     }
     return true;
 }
+
+[[nodiscard]] RasterEditStatus InputStatus(const RasterEditInput& input, CancelToken cancellation) noexcept
+{
+    if (cancellation.IsCancelled())
+        return RasterEditStatus::Cancelled;
+    const auto colorValid = [](const std::array<double, 4>& color) noexcept
+    {
+        return std::all_of(color.begin(), color.end(),
+                           [](double value) noexcept { return std::isfinite(value) && value >= 0 && value <= 1; });
+    };
+    if (!InputGeometryValid(input.layer, input.canvasWidth, input.canvasHeight, input.pixelLimit, input.mask) ||
+        input.kind > RasterEditKind::Gradient || !colorValid(input.color))
+        return RasterEditStatus::Invalid;
+    if (input.kind == RasterEditKind::Gradient)
+    {
+        const double dx = input.end.x - input.start.x;
+        const double dy = input.end.y - input.start.y;
+        if (input.shape > GradientShape::Radial || !std::isfinite(input.start.x) || !std::isfinite(input.start.y) ||
+            !std::isfinite(input.end.x) || !std::isfinite(input.end.y) || !std::isfinite(dx * dx + dy * dy) ||
+            !std::isfinite(input.opacity) || input.opacity < 0 || input.opacity > 1 || !colorValid(input.endColor))
+            return RasterEditStatus::Invalid;
+        if (std::hypot(dx, dy) < 0.5)
+            return RasterEditStatus::Unchanged;
+        if (input.shape == GradientShape::Linear)
+        {
+            // Shaded points are clipped to the document canvas. Linear projection is affine, so its extrema
+            // occur at these four corners; a finite line length alone does not prevent far-origin overflow.
+            for (const double x : {0.0, static_cast<double>(input.canvasWidth)})
+                for (const double y : {0.0, static_cast<double>(input.canvasHeight)})
+                    if (!std::isfinite((x - input.start.x) * dx + (y - input.start.y) * dy))
+                        return RasterEditStatus::Invalid;
+        }
+    }
+    return (input.kind == RasterEditKind::Clear && !input.selection) || (input.selection && input.selection->IsEmpty())
+               ? RasterEditStatus::Unchanged
+               : RasterEditStatus::Ready;
+}
+
+[[nodiscard]] RasterEditStatus PaintForWork(const RasterEditInput& input, BrushStroke& edit, CancelToken cancellation)
+{
+    if (!edit.IsValid() || !edit.ConfigureWorkerRasterEdit(cancellation, input.progress, input.progressContext))
+        return RasterEditStatus::Invalid;
+    edit.SetPixelLimit(input.pixelLimit);
+    if (input.selection)
+    {
+        Raster coverage = SelectionGeometry::Coverage(input.selection->loops, input.canvasWidth, input.canvasHeight,
+                                                      input.selection->antialiased, cancellation);
+        if (cancellation.IsCancelled())
+            return RasterEditStatus::Cancelled;
+        if (!coverage.HasStorage())
+            return RasterEditStatus::Memory;
+        edit.SetSelectionClip(std::move(coverage));
+    }
+    const bool rendered =
+        input.kind == RasterEditKind::Gradient
+            ? edit.FillGradient(input.shape, input.start, input.end, input.color, input.endColor, input.opacity)
+        : input.kind == RasterEditKind::Invert               ? edit.Invert()
+        : input.kind == RasterEditKind::Clear && !input.mask ? edit.ClearPixels()
+                                                             : edit.Fill(input.color);
+    if (cancellation.IsCancelled())
+        return RasterEditStatus::Cancelled;
+    if (!rendered)
+        return edit.PixelLimitRefused() ? RasterEditStatus::TooLarge : RasterEditStatus::Memory;
+    return edit.HasPaint() ? RasterEditStatus::Ready : RasterEditStatus::Unchanged;
+}
+
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct OwnedPreviewStroke final : DeferredReleaseNode
+{
+    std::unique_ptr<BrushStroke> stroke;
+    OwnedPreviewStroke() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<OwnedPreviewStroke> owned(static_cast<OwnedPreviewStroke*>(node)); };
+    }
+};
+#pragma warning(pop)
+
+struct RetirePreviewStroke final
+{
+    OwnedPreviewStroke* owner;
+    void operator()(BrushStroke*) const noexcept
+    {
+        if (!TryDeferRelease(*owner))
+        {
+            const std::unique_ptr<OwnedPreviewStroke> owned(owner);
+        }
+    }
+};
 } // namespace
 
 std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional<DocumentSelection>& selection,
@@ -124,39 +216,13 @@ std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional
 RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancellation)
 {
     const auto cancelled = [&]() noexcept { return RasterEditResult{RasterEditStatus::Cancelled}; };
-    if (cancellation.IsCancelled())
-        return cancelled();
-    if (!InputGeometryValid(input.layer, input.canvasWidth, input.canvasHeight, input.pixelLimit, input.mask) ||
-        input.kind > RasterEditKind::Invert ||
-        std::any_of(input.color.begin(), input.color.end(),
-                    [](double value) { return !std::isfinite(value) || value < 0 || value > 1; }))
-        return {RasterEditStatus::Invalid};
-    if ((input.kind == RasterEditKind::Clear && !input.selection) || (input.selection && input.selection->IsEmpty()))
-        return {RasterEditStatus::Unchanged};
-
+    const auto status = InputStatus(input, cancellation);
+    if (status != RasterEditStatus::Ready)
+        return {status};
     BrushStroke edit(input.layer, input.mask, BrushSettings{}, input.canvasWidth, input.canvasHeight, nullptr);
-    if (!edit.IsValid() || !edit.ConfigureWorkerRasterEdit(cancellation, input.progress, input.progressContext))
-        return {RasterEditStatus::Invalid};
-    edit.SetPixelLimit(input.pixelLimit);
-    if (input.selection)
-    {
-        Raster coverage = SelectionGeometry::Coverage(input.selection->loops, input.canvasWidth, input.canvasHeight,
-                                                      input.selection->antialiased, cancellation);
-        if (cancellation.IsCancelled())
-            return cancelled();
-        if (!coverage.HasStorage())
-            return {RasterEditStatus::Memory};
-        edit.SetSelectionClip(std::move(coverage));
-    }
-    const bool rendered = input.kind == RasterEditKind::Invert                 ? edit.Invert()
-                          : input.kind == RasterEditKind::Clear && !input.mask ? edit.ClearPixels()
-                                                                               : edit.Fill(input.color);
-    if (cancellation.IsCancelled())
-        return cancelled();
-    if (!rendered)
-        return {edit.PixelLimitRefused() ? RasterEditStatus::TooLarge : RasterEditStatus::Memory};
-    if (!edit.HasPaint())
-        return {RasterEditStatus::Unchanged};
+    const auto rendered = PaintForWork(input, edit, cancellation);
+    if (rendered != RasterEditStatus::Ready)
+        return {rendered};
     const auto snapshot = edit.PaintSnapshot();
     if (cancellation.IsCancelled())
         return cancelled();
@@ -195,5 +261,54 @@ RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancell
     }
     if (cancellation.IsCancelled())
         return cancelled();
-    return {RasterEditStatus::Ready, std::move(prepared)};
+    return {RasterEditStatus::Ready, std::move(prepared),
+            BrushCommitInfo{snapshot->image, snapshot->bounds.x, snapshot->bounds.y, snapshot->bounds.width,
+                            snapshot->bounds.height, input.mask}};
+}
+
+RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation)
+{
+    const auto status = InputStatus(input, cancellation);
+    if (status != RasterEditStatus::Ready)
+        return {status};
+    auto owner = std::make_unique<OwnedPreviewStroke>();
+    owner->stroke = std::make_unique<BrushStroke>(input.layer, input.mask, BrushSettings{}, input.canvasWidth,
+                                                  input.canvasHeight, nullptr);
+    const auto rendered = PaintForWork(input, *owner->stroke, cancellation);
+    if (rendered != RasterEditStatus::Ready)
+        return {rendered};
+    owner->stroke->EndWorkerPreparation(); // no callback/context or job cancellation state escapes Run
+    // The declared whole preparation peak also bounds the privately owned stroke/coverage/tile graph. Retained
+    // source storages were not charged as new allocations, but may lose their last other owner after replacement.
+    owner->bytes = RasterEditMemoryBytes(input.layer, input.selection, input.canvasWidth, input.canvasHeight,
+                                         input.pixelLimit, input.mask);
+    const auto retainedSource = [&](const Raster& image)
+    {
+        image.ForEachStorage(
+            [&](const Raster& source)
+            {
+                const auto retained = PixelBuffer::RequiredBytes(source.ByteSize()) + 256ull +
+                                      source.Tiles().capacity() * sizeof(RasterTile);
+                if (!AddBytes(owner->bytes, retained))
+                    owner->bytes = (std::numeric_limits<std::uint64_t>::max)();
+            });
+    };
+    retainedSource(owner->stroke->SourceImage());
+    if (input.layer.asset)
+    {
+        retainedSource(input.layer.asset->image);
+        retainedSource(input.layer.asset->thumbnail);
+    }
+    if (input.layer.mask)
+    {
+        retainedSource(input.layer.mask->asset.image);
+        retainedSource(input.layer.mask->asset.thumbnail);
+    }
+    if (cancellation.IsCancelled())
+        return {RasterEditStatus::Cancelled};
+    // shared_ptr invokes its deleter if allocating its control block fails. Transfer the unique node exactly
+    // once before construction; evaluating a release and dereference in different arguments is unsafe.
+    auto* transferred = owner.release();
+    return {RasterEditStatus::Ready,
+            std::shared_ptr<BrushStroke>(transferred->stroke.get(), RetirePreviewStroke{transferred})};
 }

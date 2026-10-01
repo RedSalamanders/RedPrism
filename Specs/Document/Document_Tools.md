@@ -327,7 +327,8 @@ composite)`; the kernels, the tile composition and the warp model live in
   (a new line on the same target replaces the pending one); `MoveGradient(start, end)` and `RefreshGradient`
   re-render from the endpoints, settings and palette (the palette setters refresh it); `GradientColors` are the two
   straight ends; `EndGradientDrag` drops a click without a line (under half a pixel); `CommitGradient` records
-  `Gradient` / `Gradient Mask`; `ResolveGradient` commits a pending edit. It runs on every layer or target switch (a
+  `Gradient` / `Gradient Mask`; `ResolveGradient` commits an inline pending edit and returns false for an
+  unresolved deferred host opening, without mutating document/history. It runs on every layer or target switch (a
   new layer, folder, shape, paste, duplicate or mask, a selected, moved, grouped, merged or deleted layer, a deleted
   mask) and before every edit that reads or changes the target's pixels or placement (brush, warp, fill, Clear, Cut,
   Copy, Layer via Copy, pixel moves and nudges, the floating selection, transforms, both flips, Crop, the color
@@ -404,9 +405,46 @@ Workers catch allocation failure only through the shared runner; capture/admissi
 the whole request. Failure displays one localized pixel-edit/size notice. No-selection Delete remains the layer
 or mask metadata operation, and Clear without selection changes nothing.
 
-Pending gradient and distortion settlement still use existing synchronous prerequisites until A4/A6 in the
+Pending distortion settlement still uses existing synchronous prerequisites until A6 in the
 active raster-edit plan. History, chrome refresh and display upload remain measured P1.9/G1 costs. This contract
 does not claim that these remaining callers or all P1 timing targets are qualified.
+
+### Detached gradient previews and settlement (P1.5)
+
+Production pointer input uses `BeginDeferredGradient`. Opening identity, target/mask, endpoints and monotonically
+increasing settings sequence are metadata only. Move, palette and header changes do not allocate pixels or
+coverage, and valid mouse-up leaves the line pending. A redrag with no valid line clears the old raster; an older
+worker cannot republish it while there is no line. Direct `BeginGradient`/Commit APIs retain the inline numeric
+oracle behavior. A Common operation that needs settlement MUST refuse an unresolved deferred opening before any
+preceding transform/history mutation; its Application caller supplies ordered settlement.
+
+Each opening has one active InteractivePreview and one latest pending primitive request. Event-time endpoints,
+straight endpoint colors, opacity and linear/radial shape are copied when offered. The complete reservation
+precedes owning layer/selection/token capture; the same admitted record resumes after capture. Workers use the
+existing exact CPU gradient math and private raster path, including selected/placed masks. No session, UI, GPU
+engine or published stroke is borrowed. Progress/context/cancellation borrows end before publishing a stroke.
+The stroke and its source/tile/coverage graph retire together through the release sink.
+
+An active result may show before the latest pending settings render, preventing continuous dragging from
+starving all previews. Publication validates mailbox epoch, opening, generation, source token, target/mask and
+strictly increasing published metadata sequence. It refuses future, duplicate/backward or invalidated results
+without consuming the caller's candidate. Opening/close/cancel/commit invalidation requests cancellation, retaining
+the old ticket until acknowledgement. Launch after completion is rearmed through the event-backed owner source
+after the old record's reservation retires; no second full reservation is acquired inside completion.
+
+Enter/header Apply is an opening-owned input. Gradient settlement follows color settlement before dependent
+commands, layer/tool switches, size, readback or writes. It retains the selected ordinal with a fresh acquisition
+and a complete Commit reservation. Only an exact current metadata sequence and whole source/session token can
+apply one `Gradient`/`Gradient Mask` entry; cancellation/failure/staleness stops the dependent action. Valid
+Unchanged drops the exact pending line with no entry. Undo/Redo drop an uncommitted line; Swap/Reset Palette only
+refresh it. Confirmed discard skips settlement intentionally; Save before discard settles before snapshot/write.
+
+Production mutation/palette callbacks cannot change a frozen commit. Forced model changes invalidate it. The
+owner may adopt an already uploaded gradient preview only when its published settings and source generation
+match that commit and it belongs to the same target; the worker supplies the crop coordinates. Otherwise the
+result uploads through the normal sparse path. Numeric GPU equality and existing adoption counts remain gates.
+First preview upload, capture/history/chrome costs and full-loop drag latency remain P1.9/G1; SIMD/GPU gradient
+shading remain P2/P3. Worker migration alone establishes no one-frame latency or Photoshop speed claim.
 
 ### Other selection pixel edits
 

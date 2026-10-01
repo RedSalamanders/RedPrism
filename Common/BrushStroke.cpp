@@ -1029,8 +1029,11 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
 {
+    if (_gradient && _gradient->deferred)
+        return false;
     // A pending gradient applies first, so the stroke paints over it and never drops it (Decision D3).
-    ResolveGradient();
+    if (!ResolveGradient())
+        return false;
     if (!CanPaint())
     {
         return false;
@@ -1291,8 +1294,11 @@ int DocumentSession::TypedOpacityPercent(int digit, double timeSeconds) noexcept
 
 void DocumentSession::AddLayerMask(bool revealing)
 {
+    if (_gradient && _gradient->deferred)
+        return;
     // Targeting the new mask is a target switch: a pending gradient applies first.
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     ImageLayer* layer = MutableActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->mask.has_value())
     {
@@ -1801,7 +1807,10 @@ Raster DocumentSession::BlurSample(bool mask) const
 
 bool DocumentSession::BeginWarp(Vec2 point)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     if (!CanPaint() || _maskSelected || _warp)
     {
         return false;
@@ -1959,7 +1968,7 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
 {
     // A mask has its own palette (legacy paletteColor): black hides and white reveals, the foreground per
     // `maskPaintWhite` and the background the other one.
-    const bool mask = _gradient ? _gradient->raster->IsMask() : _maskSelected;
+    const bool mask = _gradient ? _gradient->mask : _maskSelected;
     constexpr std::array<double, 4> kBlack{0.0, 0.0, 0.0, 1.0};
     constexpr std::array<double, 4> kWhite{1.0, 1.0, 1.0, 1.0};
     const std::array<double, 4> foreground =
@@ -1984,6 +1993,16 @@ std::array<std::array<double, 4>, 2> DocumentSession::GradientColors() const noe
 
 bool DocumentSession::BeginGradient(Vec2 point)
 {
+    return BeginGradientImpl(point, false);
+}
+
+bool DocumentSession::BeginDeferredGradient(Vec2 point)
+{
+    return BeginGradientImpl(point, true);
+}
+
+bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
+{
     if (!_document.has_value() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
         return false;
@@ -1995,29 +2014,38 @@ bool DocumentSession::BeginGradient(Vec2 point)
     }
     // Dragging a new line replaces the pending one on the same target; a line on another target applies the
     // pending one first (Decision D3), never dropping it.
-    if (_gradient && _gradient->raster->LayerID() == layer->id && _gradient->raster->IsMask() == _maskSelected)
+    if (_gradient && _gradient->target == layer->id && _gradient->mask == _maskSelected)
     {
+        if (_gradient->deferred != deferred)
+            return false;
         _gradient->start = point;
         _gradient->end = point;
         RefreshGradient();
         return _gradient.has_value();
     }
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false; // a host must acknowledge settlement before opening on another target
+    if (!ResolveGradient())
+        return false;
     layer = ActiveLayer();
     if (layer == nullptr || !CanPaint())
     {
         return false;
     }
     const bool mask = _maskSelected;
-    std::shared_ptr<BrushStroke> raster = MakeRasterEdit(*layer, mask);
-    if (!raster)
+    std::shared_ptr<BrushStroke> raster;
+    if (!deferred)
     {
-        return false;
+        raster = MakeRasterEdit(*layer, mask);
+        if (!raster)
+            return false;
+        raster->SetEditName(mask ? L"Gradient Mask" : L"Gradient");
     }
-    raster->SetEditName(mask ? L"Gradient Mask" : L"Gradient");
+    if (_gradientOpening == (std::numeric_limits<std::uint64_t>::max)())
+        return false;
     // Vec2 and a moved shared_ptr cannot throw: no allocation is left to catch (unlike a pixel move's selection
     // copy).
-    _gradient = GradientEdit{std::move(raster), point, point};
+    _gradient = GradientEdit{std::move(raster), point, point, layer->id, mask, deferred, ++_gradientOpening};
     return true;
 }
 
@@ -2040,10 +2068,24 @@ void DocumentSession::MoveGradient(std::optional<Vec2> start, std::optional<Vec2
 
 void DocumentSession::RefreshGradient()
 {
-    if (!_gradient || !_gradient->HasLine())
+    if (!_gradient)
     {
         return;
     }
+    if (_gradient->sequence == (std::numeric_limits<std::uint64_t>::max)())
+    {
+        CancelGradient();
+        return;
+    }
+    ++_gradient->sequence;
+    if (_gradient->deferred)
+    {
+        if (!_gradient->HasLine())
+            _gradient->raster.reset(); // a redrag without a line must not keep the previous pixels visible
+        return;
+    }
+    if (!_gradient->HasLine())
+        return;
     const std::array<std::array<double, 4>, 2> colors = GradientColors();
     if (!_gradient->raster->FillGradient(gradientSettings.shape, _gradient->start, _gradient->end, colors[0], colors[1],
                                          gradientSettings.opacity))
@@ -2067,7 +2109,7 @@ void DocumentSession::CancelGradient() noexcept
 
 void DocumentSession::CommitGradient()
 {
-    if (!_gradient)
+    if (!_gradient || _gradient->deferred)
     {
         return;
     }
@@ -2080,12 +2122,41 @@ void DocumentSession::CommitGradient()
     CommitStroke(edit.raster);
 }
 
-void DocumentSession::ResolveGradient()
+bool DocumentSession::PublishGradientPreview(std::shared_ptr<BrushStroke>&& raster, const JobToken& token,
+                                             std::uint64_t opening, std::uint64_t sequence) noexcept
 {
+    if (!_gradient || !_gradient->deferred || !_gradient->HasLine() || _gradient->opening != opening || !token.target ||
+        token.generation != _generation || !CanApplyJobResult(token, token.sequence) ||
+        _gradient->target != token.target->layerId || _activeLayerID != _gradient->target ||
+        _maskSelected != _gradient->mask || sequence == 0 || sequence > _gradient->sequence ||
+        sequence <= _gradient->publishedSequence || !raster || !raster->IsValid() ||
+        raster->LayerID() != _gradient->target || raster->IsMask() != _gradient->mask)
+        return false;
+    _gradient->raster = std::move(raster);
+    _gradient->publishedSequence = sequence;
+    _gradient->publishedGeneration = _generation;
+    return true;
+}
+
+bool DocumentSession::ApplyGradientIfCurrent(ImageLayer&& prepared, const JobToken& token, std::uint64_t opening,
+                                             std::uint64_t sequence)
+{
+    if (!_gradient || !_gradient->deferred || !_gradient->HasLine() || _gradient->opening != opening ||
+        _gradient->sequence != sequence || !token.target || _gradient->target != token.target->layerId)
+        return false;
+    const bool mask = _gradient->mask;
+    return ApplyRasterEditImpl(std::move(prepared), mask, mask ? L"Gradient Mask" : L"Gradient", token, true);
+}
+
+bool DocumentSession::ResolveGradient()
+{
+    if (_gradient && _gradient->deferred)
+        return false;
     if (_gradient)
     {
         CommitGradient();
     }
+    return true;
 }
 
 void DocumentSession::BeginShape(Vec2 point)
@@ -2216,7 +2287,10 @@ void DocumentSession::CommitShape(const ShapeDraft& draft, std::uint32_t foregro
 void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
                                     bool dropsSelection, std::optional<LayerShapeStyle> shape)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value() || !image.HasStorage())
     {
         return;
@@ -2644,8 +2718,11 @@ std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& l
 
 bool DocumentSession::FillSelection(FillSource source)
 {
+    if (_gradient && _gradient->deferred)
+        return false;
     // Pixel edits apply a pending gradient first (Decision D3; legacy refuses them while one is pending).
-    ResolveGradient();
+    if (!ResolveGradient())
+        return false;
     if (!CanPaint())
     {
         return false;
@@ -2679,7 +2756,10 @@ bool DocumentSession::FillSelection(FillSource source)
 
 bool DocumentSession::ClearSelectedPixels()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     if (!_document.has_value() || !_document->selection.has_value() || !CanPaint())
     {
         return false;
@@ -2710,8 +2790,14 @@ bool DocumentSession::ClearSelectedPixels()
 bool DocumentSession::ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask, std::wstring name,
                                                const JobToken& token)
 {
+    return ApplyRasterEditImpl(std::move(prepared), mask, std::move(name), token, false);
+}
+
+bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
+                                          bool gradientCommit)
+{
     if (!token.target || token.generation != _generation || !CanApplyJobResult(token, token.sequence) || _brush ||
-        _warp || _pixelMove || _transformEdit || _gradient || HasColorEdit() ||
+        _warp || _pixelMove || _transformEdit || (_gradient && !gradientCommit) || HasColorEdit() ||
         _activeLayerID != token.target->layerId || _maskSelected != mask)
         return false;
     ImageLayer* const current = MutableLayer(token.target->layerId);
@@ -2753,12 +2839,17 @@ bool DocumentSession::ApplyRasterEditIfCurrent(ImageLayer&& prepared, bool mask,
     *current = std::move(prepared);
     _lastBrushCommit.reset(); // an older gradient/stroke preview cannot be adopted for this prepared edit
     EndEdit();
+    if (gradientCommit)
+        _gradient.reset();
     return true;
 }
 
 void DocumentSession::DeleteLayerMask()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_activeLayerID.has_value())
     {
         return;
@@ -2825,13 +2916,16 @@ bool DocumentSession::CanInvert() const noexcept
 
 void DocumentSession::InvertPixels()
 {
+    if (_gradient && _gradient->deferred)
+        return;
     if (!CanInvert())
     {
         return;
     }
     // Invert is available in every tool: a pending transform or gradient is applied first.
     CommitTransform();
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     if (!CanInvert())
     {
         return;
@@ -2853,7 +2947,10 @@ void DocumentSession::InvertPixels()
 
 bool DocumentSession::BeginPixelMove(bool duplicate)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return false;
+    if (!ResolveGradient())
+        return false;
     if (_pixelMove || !_document.has_value() || !_document->selection.has_value() || _document->selection->IsEmpty() ||
         !CanPaint() || _maskSelected)
     {
@@ -2963,7 +3060,10 @@ void DocumentSession::NudgePixels(double dx, double dy)
 
 void DocumentSession::AddMask(bool revealing)
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value() || !_document->selection.has_value())
     {
         AddLayerMask(revealing);
@@ -3059,8 +3159,11 @@ void DocumentSession::TransformCommand()
 
 void DocumentSession::BeginSelectionTransform()
 {
+    if (_gradient && _gradient->deferred)
+        return;
     // Before the snapshot Escape restores, so a pending gradient is never part of what a cancel undoes.
-    ResolveGradient();
+    if (!ResolveGradient())
+        return;
     if (!CanTransformSelection())
     {
         return;
@@ -3472,8 +3575,11 @@ std::optional<PixelClipboard> DocumentSession::RenderMergedPixels(const Raster& 
 
 bool DocumentSession::CopySelection()
 {
+    if (_gradient && _gradient->deferred)
+        return false;
     // The copy takes the pixels the canvas shows, a pending gradient applied.
-    ResolveGradient();
+    if (!ResolveGradient())
+        return false;
     if (!CanCopyPixels())
     {
         return false;
@@ -3504,7 +3610,10 @@ bool DocumentSession::CopyMergedSelection(const Raster& composite)
 
 void DocumentSession::CutSelection()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     if (!_document.has_value() || !_document->selection.has_value() || !CanCopyPixels() || !CanPaint())
     {
         return;
@@ -3543,7 +3652,10 @@ void DocumentSession::PasteImage(const Raster& image)
 
 void DocumentSession::LayerViaCopy()
 {
-    ResolveGradient();
+    if (_gradient && _gradient->deferred)
+        return;
+    if (!ResolveGradient())
+        return;
     const ImageLayer* layer = ActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->isGroup ||
         (_document->selection.has_value() && _document->selection->IsEmpty()))

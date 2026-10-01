@@ -1561,7 +1561,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
         pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
         std::array<int, 4> pendingPixel{};
-        if (_session.PendingGradient() == nullptr || !_composition.HasStroke() || !pixelAt(20, 250, pendingPixel) ||
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+            _session.PendingGradient() == nullptr || !_composition.HasStroke() || !pixelAt(20, 250, pendingPixel) ||
             pendingPixel[2] > 40 || _session.history.UndoCount() != beforeGradient)
         {
             SelfTestFailure(L"Dragging the Gradient did not show a pending line on the canvas.\n");
@@ -1572,7 +1573,8 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The digit keys did not set the gradient opacity.\n");
             return 5;
         }
-        if (!hostKey(VK_RETURN, 0) || _session.PendingGradient() != nullptr || _composition.HasStroke() ||
+        if (!hostKey(VK_RETURN, 0) || SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+            _session.PendingGradient() != nullptr || _composition.HasStroke() ||
             _session.history.UndoCount() != beforeGradient + 1 || _session.history.UndoName() != L"Gradient")
         {
             SelfTestFailure(L"Enter did not apply the gradient as one entry.\n");
@@ -1595,10 +1597,13 @@ int Application::RunSelfTest() noexcept
             pointer(WM_LBUTTONDOWN, 0, 10.0, 250.0);
             pointer(WM_MOUSEMOVE, MK_LBUTTON, 290.0, 250.0);
             pointer(WM_LBUTTONUP, 0, 290.0, 250.0);
-            const bool maskLine = _session.IsMaskSelected() && _session.PendingGradient() != nullptr &&
-                                  _session.PendingGradient()->raster->IsMask();
+            const bool maskLine = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                  _session.IsMaskSelected() && _session.PendingGradient() != nullptr &&
+                                  _session.PendingGradient()->raster && _session.PendingGradient()->raster->IsMask();
             OnBrushAction(BrushAction::SetMaskPaint, 1.0);
-            const bool applied = hostKey(VK_RETURN, 0) && _session.history.UndoName() == L"Gradient Mask";
+            const bool applied = hostKey(VK_RETURN, 0) &&
+                                 SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
+                                 _session.history.UndoName() == L"Gradient Mask";
             std::uint8_t start = 0;
             if (const ImageLayer* masked = _session.ActiveLayer(); masked != nullptr && masked->mask.has_value())
             {
@@ -2165,6 +2170,8 @@ int Application::RunSelfTest() noexcept
         return sizing;
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
+    if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
+        return gradientWork;
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;
@@ -2406,8 +2413,8 @@ HRESULT Application::InitializeChrome() noexcept
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                            _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
@@ -2421,8 +2428,8 @@ void Application::OnLayerSelected(Guid id) noexcept
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                            _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
@@ -2461,8 +2468,8 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                    DxUi::TreeDropPlace place) noexcept
 {
-    if (!_hostExecuting &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+                            _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
@@ -2497,6 +2504,11 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
         // the next frame rather than re-entering Prepare.
         if (phase == ChromeEditPhase::Commit)
         {
+            if (_gradientCommitTicket)
+            {
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+                return;
+            }
             if (target == PickerTarget::Foreground)
             {
                 _session.SetForegroundColor(argb);
@@ -2505,6 +2517,7 @@ void Application::OnPickerColor(PickerTarget target, ChromeEditPhase phase, uint
             {
                 _session.SetBackgroundColor(argb);
             }
+            RefreshGradientJobs();
             _layoutDirty = true;
             _frameInvalidated = true;
         }
@@ -2563,6 +2576,7 @@ void Application::DocumentChanged() noexcept
 
 void Application::SyncChrome() noexcept
 {
+    RefreshGradientJobs();
     if (!_chrome)
     {
         return;
@@ -3011,6 +3025,7 @@ void Application::Shutdown() noexcept
     _shutdownDeferred = false;
     StopHostContinuations();
     CancelColorJobs();
+    CancelGradientJobs();
     _jobs.RequestStop();
     _gpuWork.StopNotifications();
     if (_window)
@@ -3768,7 +3783,8 @@ void Application::OnCommand(int command) noexcept
         return; // an open, uncommitted panel owns history until OK/Cancel
     }
     if (!_hostExecuting && !view && !file &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() || _activeHostRequest ||
+         _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4448,7 +4464,8 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _activeHostRequest || _hostRequests.Size()))
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() || _activeHostRequest ||
+         _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -6674,11 +6691,12 @@ void Application::BeginGradientDrag(Vec2 view) noexcept
             return;
         }
     }
-    if (!_session.BeginGradient(_viewport.DocumentFromView(view, DocumentSize())))
+    if (!_session.BeginDeferredGradient(_viewport.DocumentFromView(view, DocumentSize())))
     {
         return;
     }
     _drag = GradientDrag{1};
+    RefreshGradientJobs();
     SyncStrokePreview();
     SyncToolOverlays();
 }
@@ -6705,6 +6723,7 @@ void Application::DragGradient(Vec2 view, UINT modifiers) noexcept
     {
         _session.MoveGradient(std::nullopt, pixel);
     }
+    RefreshGradientJobs();
     SyncStrokePreview();
     SyncToolOverlays();
 }
@@ -6724,13 +6743,26 @@ void Application::CommitGradient() noexcept
         return;
     }
     DropDrag<GradientDrag>();
-    // The preview ends with the commit, its texture adopted for the gradient's own layer and target.
+    if (const auto* pending = _session.PendingGradient(); pending->deferred)
+    {
+        // Apply/Enter is an owned event. Dependent selected actions arrive only after GradientSettle, so an
+        // unresolved opening here is never permission to run a synchronous kernel or continue a mutation.
+        if (!_hostExecuting)
+            ReportHostAdmission(QueueHostInput(HostGradientApplyInput{pending->opening}));
+        else
+            _hostExecutionError = E_UNEXPECTED;
+        return;
+    }
+    // Direct session fixtures retain the existing inline oracle path.
     _session.CommitGradient();
     DocumentChanged();
 }
 
 void Application::CancelGradient() noexcept
 {
+    CancelGradientJobs();
+    if (_gradientCommitTicket)
+        CancelHostContinuations();
     if (_session.PendingGradient() == nullptr)
     {
         return;
@@ -7064,7 +7096,8 @@ int Application::RunRenderingSelfTest() noexcept
     SyncChrome();
     BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
     DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
-    if (_composition.StrokeLayerID() != std::optional<Guid>(first))
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+        _composition.StrokeLayerID() != std::optional<Guid>(first))
     {
         SelfTestFailure(L"The gradient on the first layer did not preview on it.\n");
         return 5;
@@ -7075,7 +7108,8 @@ int Application::RunRenderingSelfTest() noexcept
     _session.SelectLayer(second);
     BeginGradientDrag(_viewport.ViewFromDocument(Vec2{10, 100}, DocumentSize()));
     DragGradient(_viewport.ViewFromDocument(Vec2{290, 100}, DocumentSize()), 0);
-    if (_composition.StrokeLayerID() != std::optional<Guid>(second) || _composition.StrokeTextureMissing())
+    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled ||
+        _composition.StrokeLayerID() != std::optional<Guid>(second) || _composition.StrokeTextureMissing())
     {
         SelfTestFailure(L"A gradient on another layer drew into the previous layer's preview texture.\n");
         return 5;
@@ -7097,27 +7131,37 @@ int Application::RunRenderingSelfTest() noexcept
         _session.gradientSettings = GradientSettings{};
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());
         // What a click on the layer's row does (ChromeEvents::OnLayerSelected).
-        const auto chooseLayer = [&](const Guid& id) { OnLayerSelected(id); };
+        const auto chooseLayer = [&](const Guid& id)
+        {
+            OnLayerSelected(id);
+            return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
+        };
         const auto line = [&](double fromX, double toX)
         {
             BeginGradientDrag(_viewport.ViewFromDocument(Vec2{fromX, 100}, DocumentSize()));
             DragGradient(_viewport.ViewFromDocument(Vec2{toX, 100}, DocumentSize()), 0);
             EndGradientDrag();
+            return SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
         };
-        chooseLayer(left);
+        if (!chooseLayer(left))
+            return 5;
         const int entries = _session.history.UndoCount();
         const std::uint64_t adoptions = _composition.AdoptionCount();
-        line(10.0, 140.0);
+        if (!line(10.0, 140.0))
+            return 5;
         const bool leftPreview = _composition.StrokeLayerID() == std::optional<Guid>(left);
-        chooseLayer(right);
+        if (!chooseLayer(right))
+            return 5;
         const bool leftCommitted = _session.PendingGradient() == nullptr &&
                                    _session.history.UndoCount() == entries + 1 && !_composition.HasStroke() &&
                                    _composition.AdoptionCount() == adoptions + 1;
-        line(160.0, 290.0);
+        if (!line(160.0, 290.0))
+            return 5;
         const bool rightPreview =
             _composition.StrokeLayerID() == std::optional<Guid>(right) && !_composition.StrokeTextureMissing();
         _chrome->SetCanvasFocused(true);
-        const bool entered = HandleAccelerator(VK_RETURN, 0);
+        const bool entered = HandleAccelerator(VK_RETURN, 0) &&
+                             SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled;
         const bool rightCommitted = _session.PendingGradient() == nullptr &&
                                     _session.history.UndoCount() == entries + 2 &&
                                     _session.history.UndoName() == L"Gradient" && !_composition.HasStroke() &&
