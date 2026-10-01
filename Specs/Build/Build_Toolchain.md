@@ -12,7 +12,9 @@ lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orche
 [`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
 
 DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxUi.lock.json` into
-`.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. See [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
+`.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. The clone keeps Git long paths and leaves out the directories a
+build never reads (`Measurements/`, `docs/gallery`, `Specs/`), so a deep checkout root restores. See
+[`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
 
 Lucide is the tool-rail picture source. It is not a vcpkg port and not an icon font. `Dependencies/Lucide.lock.json`
 names `https://github.com/lucide-icons/lucide` and one commit. `ThirdParty/Lucide/icons/` holds only the tool SVGs
@@ -155,7 +157,7 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 | Script | Duty |
 | --- | --- |
 | `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan] [-MSBuildPath <path>]` | Restore WIL, yyjson, libzip, and Clipper2 with the Visual Studio installation and default toolset of the MSBuild in use (`-Asan`: the sanitized tree of the platform) |
-| `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
+| `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin as a sparse, long-path-safe checkout; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |

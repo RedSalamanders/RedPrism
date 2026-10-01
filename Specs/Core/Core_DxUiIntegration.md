@@ -2,7 +2,7 @@
 
 Status: current normative consumer contract
 Last reviewed: 2026-09-21
-Owner: `restore-dxui.ps1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
+Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
 
@@ -21,6 +21,18 @@ drag survives sibling layout). `build.ps1` runs
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
 sibling `Z:\src\DxUi` working tree. A mismatched or dirty pin fails restore.
+
+The clone (`Build/DxUiRestore.psm1`) is a sparse checkout of the pinned commit that leaves out `Measurements/`,
+`docs/gallery` and `Specs/`. A build, `Tools/validate_consumer.ps1`, `Tools/ConsumerBuild.psm1` and DxUi's `vcpkg-install.ps1`
+read none of them, they hold most of the library's files (about 180 of 1,650 are checked out at the previous pin), and pins
+before API revision 3 kept tracked paths of up to 164 characters in them (176 on DxUi `main` between its #22 and the
+150-character budget). Git gets `core.longpaths=true` for the clone and the checkout, and the
+clone keeps it in its own configuration, which the clean-tree check of the pin validation needs as much as the checkout does.
+A clone from the public repository is blobless, so only the files the checkout names are downloaded (about 2 MB instead of
+35 MB at the previous pin). A root deep enough that a kept file's Win32 path passes 259 characters therefore restores, which a
+plain restore did not: from a 121-character root it left 39 files of the previous pin uncreated and the checkout dirty, and the
+pin validation failed. `Tests/BuildProcessTests/DxUiRestoreTests.ps1` restores a fixture repository from a root of about 215
+characters; `-RealPin` restores the locked commit the same way, from the sibling checkout or the public repository.
 
 `build.ps1` passes `-CheckUpdates`. `Show-DxUiUpdateNotice` from the pinned `Tools/ConsumerUpdate.psm1` then compares
 the lock with DxUi `main`. The notice is build output only: yellow when a newer `main` commit has a successful

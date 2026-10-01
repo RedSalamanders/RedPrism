@@ -292,6 +292,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 
+Write-Host 'Validating the DxUi source restore from a deep root...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiRestoreTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "DxUi source restore tests failed with exit code $LASTEXITCODE."
+}
+
 Write-Host 'Validating ARM64 ASan wiring...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\AsanArm64Tests.ps1')
 if ($LASTEXITCODE -ne 0) {
