@@ -58,10 +58,18 @@ admission/capture/worker failure, early and late cancellation, stale source gene
 one named entry and Undo, and a younger Undo queued behind the commit. A younger Shift nudge retains its
 event-time ten-pixel offset after the modifier changes. Coalesced previews show an acknowledged active result
 and then the latest offset. Refused nudge admission posts one notice and preserves source/history. A canceled
-large graph proves retirement on a worker; graphs below the 16 MiB deferred-release threshold may retire inline.
+large graph proves retirement on a worker. Complete migrated job/stroke/opening aggregates retain release headroom
+before capture; a small component alone cannot lower the complete aggregate below its retirement threshold.
 Empty source-region moves preserve history. All terminal states drop tickets, barriers, input and memory charges
-without hidden presentation. Full configuration qualification is required; immutable opening reuse, floating
+without hidden presentation. Full configuration qualification is required; floating
 transactions, display geometry, owner history/first upload and real-loop bounds remain separate P1 work.
+
+The new opening suites add 33 independent primitive/opaque-worker assertions for literal move/partial-alpha
+duplicate output, placed/sparse sources, wrong source/grid/selection/AA/canvas/refusal, moved-from/second-install,
+cancelled preparation and exact complete-node release ownership. Actual host controls count one opening
+preparation across two coalesced previews plus commit, check latest literal pixels/outline and one undo entry,
+and invalidate/rebuild on gesture reopen. Every terminal commit clears the cache and returns reservations;
+weak-owner controls check final retirement. These additions enter native qualification and make no drag-time claim.
 
 ### Retained selection and history ownership
 

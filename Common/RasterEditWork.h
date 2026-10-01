@@ -27,6 +27,8 @@ enum class RasterEditStatus : std::uint8_t
     Cancelled,
 };
 
+class PixelMoveOpening;
+
 // Captured under the complete reservation, after earlier history work settles. Only value metadata and shared
 // immutable raster/selection owners cross the worker boundary. Clear on a mask is the captured background fill.
 struct RasterEditInput final
@@ -49,6 +51,9 @@ struct RasterEditInput final
     // PixelMove offsets round in document pixels. Duplicate keeps the original coverage instead of a hole.
     Vec2 offset{};
     bool duplicate = false;
+    // Immutable opening coverage/lift owners only. Worker validation includes selection identity/AA and exact
+    // source grid/placement; mutable stroke state and cancellation never cross between jobs.
+    std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
     // Borrowed only during RunRasterEdit, never retained by its result. Observe completed tile checkpoints;
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
@@ -64,6 +69,7 @@ struct RasterEditResult final
     std::optional<BrushCommitInfo> previewCommit;
     // PixelMove owns the completely prepared translated outline; other kinds leave it absent.
     std::optional<DocumentSelection> selection;
+    std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
 };
 
 // Only the detached factory creates this bound pair. Publication cannot be supplied for unrelated pixels or
@@ -120,7 +126,12 @@ struct RasterEditPreviewResult final
 {
     RasterEditStatus status = RasterEditStatus::Invalid;
     std::shared_ptr<BrushStroke> stroke;
+    std::shared_ptr<const PixelMoveOpening> pixelMoveOpening;
 };
+
+// Cached complete ownership bound; no raster materialization, allocation or graph traversal.
+[[nodiscard]] std::uint64_t PixelMoveOpeningMemoryBytes(
+    const std::shared_ptr<const PixelMoveOpening>& opening) noexcept;
 
 // Allocation-free planning over borrowed metadata, before owning capture. Zero refuses invalid/overflowing
 // input. Existing published input rasters/selection storage are not charged twice. Include job size separately.

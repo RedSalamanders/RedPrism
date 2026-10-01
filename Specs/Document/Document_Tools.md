@@ -479,8 +479,15 @@ shading remain P2/P3. Worker migration alone establishes no one-frame latency or
   Refusal retains caller ownership; zero/no-overlap leaves redo intact. Early/late cancellation keeps the ticket,
   admission and history barrier until acknowledgement. Terminal commit failure drops only that opening's gesture
   without changing its document; a newer opening survives. Tool/history termination keeps the existing drop rule.
-  Copy reads the unchanged original document during a move, as its direct reference does. Opening lift/coverage
-  reuse, displayed geometry caching, bounded history/upload costs and real-loop measurement remain open gates;
+  Copy reads the unchanged original document during a move, as its direct reference does. One acknowledged opaque
+  opening may supply immutable coverage/lifted pixels to later previews and the final commit. Its key includes
+  document serial, opening and generation; each fresh worker stroke additionally validates retained target/source,
+  grid/placement and selection identity/antialiasing. Mutable stroke state and cancellation remain private. An
+  active older preview may populate this exact-opening cache before the pending newest tick, preserving mailbox
+  publication order. Cancel/replacement/reopen/source change clears it; failed/cancelled/stale work never populates
+  a newer opening. Its complete last owner retires through a cached conservative release bound. Full preparation
+  admission is retained even on cache reuse. This reuse is in native qualification; displayed geometry caching,
+  bounded history/upload costs and real-loop measurement remain open gates;
   this functional migration alone is no whole-host nonblocking or performance claim.
 - **Masks from the selection** (`AddMask(revealing)`): with a selection, a mask on the layer's own pixel grid (the
   loops mapped through the layer transform and rasterized with the selection's antialiasing): revealing hides the

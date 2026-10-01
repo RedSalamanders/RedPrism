@@ -32,6 +32,8 @@ struct PixelMoveWorkTestGate final
     JobResult result;
     std::optional<RasterEditStatus> status;
     std::atomic<unsigned int> visits{0};
+    std::atomic<unsigned int> openingPreparations{0};
+    std::atomic<unsigned int> openingReuses{0};
     std::atomic<bool> payloadRetired{false};
     std::atomic<bool> payloadReleaseRequired{true};
     std::atomic<bool> payloadRetiredOffOwner{false};

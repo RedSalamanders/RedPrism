@@ -182,7 +182,13 @@ capture follows full admission in the same suspended/resumed record; no publishe
 The complete private stroke/source/tile/coverage graph has one deferred release owner. Cancellation invalidates
 publication immediately but keeps the ticket until acknowledgement. After completion, the registered host source
 starts the next preview only after the previous reservation retires; idle has no readiness or retry loop. Commit
-shares the selected input ordinal, acquires fresh history ownership after color settlement, and freezes its exact
+may reuse one acknowledged immutable pixel-move opening for the exact document serial, gesture opening and
+generation. Worker validation additionally checks retained source, grid/placement and selection identity/AA.
+The opening contains coverage and lifted pixels only; each preview/commit builds fresh mutable stroke state.
+Cancel/replacement/reopen/source changes clear the cache through its complete deferred-release node. Admission
+still charges the full preparation peak even on reuse; cached ownership bounds are constant-time conservative
+retirement declarations, not a reduced allocation peak or measured latency claim. The selected commit
+retains its input ordinal, acquires fresh history ownership after color settlement, and freezes its exact
 metadata sequence. Matching uploaded previews are adopted only for the same source generation/target/settings;
 stale or unshown results use ordinary sparse upload. First upload, owner capture/history/chrome and drag/settle
 latency remain measured P1.9/G1 requirements, while CPU vectorization/GPU shading remain P2/P3.

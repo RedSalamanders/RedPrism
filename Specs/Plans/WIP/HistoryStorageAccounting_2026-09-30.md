@@ -132,8 +132,10 @@ F6 work. The final distinct r2 six-configuration matrix qualifies the sizing sou
 
 ### Next H1.4 caller: merge readback and publication
 
-- [ ] Move the merge plan/source/history capture after complete admission. Borrow dimensions and cached storage
-  charges before submission; reserve full readback, crop/thumbnail, survivor/clipping graph and history/trim peaks.
+- [ ] Move merge source capture after metadata-probe admission, then plan on the worker. No plan succeeds without
+  pixel allocation or GPU work, including a 30,000-square blank canvas. A ready plan keeps its immutable source
+  and selected ordinal while a separately admitted record reserves full readback, crop/thumbnail, survivor/clipping
+  graph and history/trim peaks before history capture.
   Keep the selected ordinal and exact generation/token through admitted capture, GPU tiles and final apply/drop.
 - [ ] Prepare the complete survivor document, clipping-source rewrites, merged layer, active id, selected-id set
   and history on the worker. Preserve D7 budget refusal, insertion anchor, parent/group and clipping goldens.
@@ -158,8 +160,12 @@ The primary-owned merge draft now passes strict module/host syntax with a cheap 
 complete detached survivor/history publication, nonthrowing owner swaps and separate CPU retirement. Existing
 export and adjustment-opening routes retain their current lifecycle. Independent agent tests were corrected
 against actual stacking order and valid premultiplied pixels before execution. All 48 focused assertions pass,
-including group/transparent behavior and D7 refusal using a physically tiny large sparse source. This is draft proof;
-device/cancel/epoch/allocation/shutdown runtime gates and native matrix qualification remain unchecked.
+including group/transparent behavior and D7 refusal using a physically tiny large sparse source. A cheaper agent
+adds 23 independent immutable-planner/no-plan/group/multiselection/cancellation assertions, reviewed and executed
+by the primary. The planner expands selected descendants once and validation indexes source ids once. The new
+metadata-only probe preserves one history ordinal across readback admission; its source/cancel/stale/refusal and
+huge no-plan host scenarios are drafted. This is draft proof; device/cancel/epoch/allocation/shutdown runtime gates
+and native matrix qualification remain unchecked.
 
 Published selection loops already share immutable storage and cache point counts/bounds. Cache their vector
 object, outer retained capacity and inner retained capacities when the producer owns them. Opaque allocator

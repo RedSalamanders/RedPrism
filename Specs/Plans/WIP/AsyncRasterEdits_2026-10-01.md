@@ -20,17 +20,18 @@
       ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Input-time Shift nudges are owned. The original
       folder-save failure is preserved and unreproduced with bounded exact-stage diagnostics; F6 remains open.
       ASan's two proven inline-table false positives have strict parser controls; the runtime allowlist is unchanged.
-    - [ ] A5.2a — Cache immutable opening coverage/lifted pixels across preview ticks; displayed geometry is tracked with P1.6 and bounded first upload with P1.9.
-      - [ ] Bind opaque immutable coverage/lift/source/selection owners; validate exact grid, placement, selection
+    - [x] A5.2a — Cache immutable opening coverage/lifted pixels across preview ticks ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)); displayed geometry remains P1.6 and bounded first upload P1.9.
+      - [x] Bind opaque immutable coverage/lift/source/selection owners; validate exact grid, placement, selection
         identity and antialiasing on each fresh private worker stroke. Keep callback/cancellation/tile state private.
-      - [ ] Populate one exact-opening host cache only from successful acknowledged work; retain it across admitted
+      - [x] Populate one exact-opening host cache only from successful acknowledged work; retain it across admitted
         commit capture, invalidate it on cancel/replacement/reopen/source change and retire its complete node off-owner.
-      - [ ] Prove one preparation across coalesced previews and commit, literal pixels and one history entry;
+      - [x] Prove one preparation across coalesced previews and commit, literal pixels and one history entry;
         preserve stale/failure/retirement controls and qualify the complete frozen native matrix.
-      The `.build/` primitive/opaque-worker draft passes 33 independent focused assertions after primary review
-      corrected a test's nonexistent history accessor. Host integration passes strict syntax; real host and full
-      configuration qualification follow the sizing source freeze. No measured drag/G1 claim is made.
-  - [x] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry qualify in all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). History construction remains H1.
+      All 33 independent primitive/opaque-worker assertions and the actual host cache/coalescing/reopen/retirement
+      controls pass native Debug, Release and ASan Debug suites; all three ARM64 clean cross-builds pass against
+      the same 374 frozen inputs. Primary review corrected a test's nonexistent history accessor before execution.
+      The complete preparation peak remains reserved even on reuse. No measured drag/G1 claim is made.
+  - [x] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry qualify in all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). This caller's prepared history also qualifies ([H1 evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)); other H1 callers remain open.
   - [ ] A5.4 — Worker Copy/Cut preparation with an atomic private clipboard and origin, before mirroring through the F5 OS clipboard graph.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
@@ -180,7 +181,7 @@ publication. Measure those costs explicitly and keep their owning gates open unt
   A5.2a retains an immutable opening coverage/lifted-pixel cache for later private preview strokes. It never
   shares mutable tile/index/move state. Validate its opening token before reuse, charge the complete preparation
   peak on cache miss, and retire its last owner through the release sink. Measure reuse before the drag gate closes.
-- [ ] A5.3 — Retain accepted mouse-up/nudge input through a selected history ordinal. Commit the latest captured
+- [x] A5.3 — Retain accepted mouse-up/nudge input through a selected history ordinal. Commit the latest captured
   offset and outline as one `Move Pixels` / `Duplicate Pixels` edit. Zero offset preserves pixels, history and
   redo; cancel drops previews and blocks dependent commands until acknowledgement. Source/selection/target,
   restored generation, reopening and document replacement invalidate results before publication.

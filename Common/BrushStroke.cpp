@@ -2473,6 +2473,71 @@ bool BrushStroke::LiftSelection(bool* noPixels)
     return true;
 }
 
+std::optional<BrushStrokeOpening> BrushStroke::CaptureLiftedOpening() const noexcept
+{
+    if (!_valid || _failed || _mask || !_workerRasterEdit || _engine != &CpuBrushCoverage::Shared() ||
+        _workCancellation.IsCancelled() || !_source.HasStorage() || !_selection.has_value() || !_lifted.has_value())
+        return std::nullopt;
+
+    const Raster& coverage = _selection.value();
+    const Raster& lifted = _lifted->image;
+    if (!coverage.HasStorage() || coverage.Format() != RasterFormat::Gray8 || coverage.Width() != _canvasWidth ||
+        coverage.Height() != _canvasHeight || !lifted.HasStorage() || lifted.Format() != RasterFormat::Bgra8888 ||
+        lifted.Width() != _lifted->rect.width || lifted.Height() != _lifted->rect.height || _lifted->rect.Empty() ||
+        _sourceRect.Empty() || _width < 1 || _height < 1)
+        return std::nullopt;
+
+    // MoveLifted changes only mutable tile/landing state. The opening handles above remain the exact immutable
+    // inputs to the existing computation, so a post-move capture is safe and does not retain those mutable buffers.
+    std::uint64_t retainedBytes = static_cast<std::uint64_t>(sizeof(BrushStrokeOpening));
+    const auto addRasterBound = [&retainedBytes](const Raster& raster) noexcept
+    {
+        const std::uint64_t bytes = raster.RetirementMemoryBytes();
+        if (bytes == 0 || bytes > std::numeric_limits<std::uint64_t>::max() - retainedBytes)
+            return false;
+        retainedBytes += bytes;
+        return true;
+    };
+    if (!addRasterBound(_source) || !addRasterBound(coverage) || !addRasterBound(lifted))
+        return std::nullopt;
+
+    BrushStrokeOpening opening;
+    opening._source = _source;
+    opening._coverage = coverage;
+    opening._lifted = lifted;
+    opening._sourceRect = _sourceRect;
+    opening._liftedRect = _lifted->rect;
+    opening._pixelToDocument = _pixelToDocument;
+    opening._sourceTransform = _sourceTransform;
+    opening._paintTransform = _paintTransform;
+    opening._width = _width;
+    opening._height = _height;
+    opening._canvasWidth = _canvasWidth;
+    opening._canvasHeight = _canvasHeight;
+    opening._retirementMemoryBytes = retainedBytes;
+    return std::optional<BrushStrokeOpening>{std::move(opening)};
+}
+
+bool BrushStroke::UseLiftedOpening(const BrushStrokeOpening& opening) noexcept
+{
+    // This installs only the immutable lift inputs. In particular it does not copy worker progress/cancellation,
+    // mutable tiles, coverage-engine state or a previous move's landing state.
+    if (!_valid || _failed || _mask || !_workerRasterEdit || _engine != &CpuBrushCoverage::Shared() ||
+        _workCancellation.IsCancelled() || !_tiles.empty() || !_samples.empty() || !_tailKeys.empty() ||
+        !_index.empty() || _allocated.has_value() || _selection.has_value() || _sample.has_value() ||
+        _lifted.has_value() || _moved.has_value() || !_landingTiles.empty() || !_source.HasStorage() ||
+        _sourceRect != opening._sourceRect || _source != opening._source || _width != opening._width ||
+        _height != opening._height || _canvasWidth != opening._canvasWidth || _canvasHeight != opening._canvasHeight ||
+        _pixelToDocument != opening._pixelToDocument || _sourceTransform != opening._sourceTransform ||
+        _paintTransform != opening._paintTransform || opening._retirementMemoryBytes == 0 ||
+        !opening._coverage.HasStorage() || !opening._lifted.HasStorage())
+        return false;
+
+    _selection = opening._coverage;
+    _lifted = Lifted{opening._lifted, opening._liftedRect};
+    return true;
+}
+
 bool BrushStroke::AllocateTilesIn(const GridRect& rect, std::vector<std::uint64_t>& keys)
 {
     const GridRect clipped = rect.Intersect(GridRect{0, 0, _width, _height});

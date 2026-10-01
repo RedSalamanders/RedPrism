@@ -34,6 +34,7 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         Coalesce,
         YoungerUndo,
         YoungerNudge,
+        ReopenPreview,
     };
     struct State final
     {
@@ -128,6 +129,14 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
                 const auto* pending = owner._session.PendingPixelMove();
                 state.firstShown = pending && pending->raster && pending->publishedSequence < pending->sequence &&
                                    owner._composition.HasStroke();
+            }
+            break;
+        case Mode::ReopenPreview:
+            if (state.gate->visits.load() == 1)
+            {
+                owner.CancelPixelDrag();
+                owner.BeginPixelDrag(Vec2{1.5, 0.5}, false);
+                owner.DragPixels(Vec2{3.5, 0.5}, false);
             }
             break;
         default:
@@ -238,6 +247,9 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
                         static_cast<unsigned long long>(_pixelMoveWorkTestGate->reservationBytes));
             return failure(__LINE__);
         }
+        if (_pixelMoveWorkTestGate->openingPreparations.load() != 1 ||
+            _pixelMoveWorkTestGate->openingReuses.load() != 0 || !_pixelMoveOpening)
+            return failure(__LINE__);
         const Raster source = _session.ActiveLayer()->asset->image;
         const Guid revision = _session.history.CurrentRevision();
         if (!gate(PixelMoveWorkTestKind::Commit, mode, mode != Mode::Cancel && mode != Mode::Allocation))
@@ -261,7 +273,7 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
             : mode == Mode::StaleGeneration || mode == Mode::StaleSelection || mode == Mode::Replace
                 ? HostOutcome::Stale
                 : HostOutcome::Failed;
-        if (receipt.Read().outcome != expected ||
+        if (receipt.Read().outcome != expected || _pixelMoveOpening ||
             (_pixelMoveWorkTestGate->payloadRetired && _pixelMoveWorkTestGate->payloadReleaseRequired &&
              !_pixelMoveWorkTestGate->payloadRetiredOffOwner))
         {
@@ -323,6 +335,9 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         !_session.PendingPixelMove() ||
         _session.PendingPixelMove()->publishedSequence != _session.PendingPixelMove()->sequence)
         return failure(__LINE__);
+    if (_pixelMoveWorkTestGate->openingPreparations.load() != 1 || _pixelMoveWorkTestGate->openingReuses.load() != 1 ||
+        !_pixelMoveOpening)
+        return failure(__LINE__);
     const auto latest = _session.PendingPixelMove()->raster->PaintSnapshot();
     std::array<std::uint8_t, 4> moved{};
     if (!latest)
@@ -331,6 +346,54 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
     if (moved != std::array<std::uint8_t, 4>{40, 50, 60, 255})
         return failure(__LINE__);
     std::printf("PASS pixelmove-host.active-preview-shown-and-latest-coalesced\n");
+    const std::weak_ptr<const PixelMoveOpening> reusedOpening = _pixelMoveOpening;
+    const Raster coalescedSource = _session.ActiveLayer()->asset->image;
+    const auto coalescedRevision = _session.history.CurrentRevision();
+    const auto coalescedOpening = _session.PendingPixelMove()->opening;
+    if (!gate(PixelMoveWorkTestKind::Commit, Mode::Success, true))
+        return failure(__LINE__);
+    DropDrag<PixelDrag>();
+    const auto coalescedReceipt = QueueHostInput(HostPixelMoveApplyInput{coalescedOpening});
+    State reusedCommit{*this,           Mode::Success,    _pixelMoveWorkTestGate, coalescedReceipt,
+                       coalescedSource, coalescedRevision};
+    if (SettleJobs(_jobs, 15000, dispatch, &reusedCommit) != SettleResult::Settled || !reusedCommit.held ||
+        coalescedReceipt.Read().outcome != HostOutcome::Succeeded || !terminal() || _pixelMoveOpening ||
+        !reusedOpening.expired() || _pixelMoveWorkTestGate->openingPreparations.load() != 0 ||
+        _pixelMoveWorkTestGate->openingReuses.load() != 1 || !_pixelMoveWorkTestGate->payloadRetired.load() ||
+        !_pixelMoveWorkTestGate->payloadRetiredOffOwner.load() || _session.history.UndoCount() != 1 ||
+        _session.history.UndoName() != L"Move Pixels")
+        return failure(__LINE__);
+    constexpr std::array<std::uint8_t, 20> reusedPixels{10, 20,  30,  255, 0,   0,   0,  0,  70, 80,
+                                                        90, 255, 100, 110, 120, 255, 40, 50, 60, 255};
+    std::array<std::uint8_t, 20> actualReused{};
+    _session.ActiveLayer()->asset->image.ReadRegion(0, 0, 5, 1, actualReused.data(), 20, 0);
+    if (actualReused != reusedPixels || !_session.Selection()->Bounds() || _session.Selection()->Bounds()->minX != 4 ||
+        _session.Selection()->Bounds()->maxX != 5)
+        return failure(__LINE__);
+    _session.Undo();
+    if (_session.ActiveLayer()->asset->image != coalescedSource)
+        return failure(__LINE__);
+    std::printf("PASS pixelmove-host.one-opening-two-previews-commit-literal-pixels-and-worker-retirement\n");
+
+    CancelPixelDrag();
+    if (!settle() || !gate(PixelMoveWorkTestKind::Preview, Mode::ReopenPreview, true) || !open())
+        return failure(__LINE__);
+    State reopened{*this,
+                   Mode::ReopenPreview,
+                   _pixelMoveWorkTestGate,
+                   {},
+                   _session.ActiveLayer()->asset->image,
+                   _session.history.CurrentRevision()};
+    if (SettleJobs(_jobs, 15000, dispatch, &reopened) != SettleResult::Settled || !terminal() ||
+        _pixelMoveWorkTestGate->visits.load() != 2 || _pixelMoveWorkTestGate->openingPreparations.load() != 2 ||
+        _pixelMoveWorkTestGate->openingReuses.load() != 0 || !_pixelMoveOpening || !_session.PendingPixelMove() ||
+        _pixelMoveOpeningId != _session.PendingPixelMove()->opening || _session.history.UndoCount() != 0)
+        return failure(__LINE__);
+    const std::weak_ptr<const PixelMoveOpening> cancelledOpening = _pixelMoveOpening;
+    CancelPixelDrag();
+    if (!settle() || _pixelMoveOpening || !cancelledOpening.expired())
+        return failure(__LINE__);
+    std::printf("PASS pixelmove-host.reopen-refuses-old-opening-and-cancel-retires-cache\n");
     CancelPixelDrag();
     if (!settle())
         return failure(__LINE__);

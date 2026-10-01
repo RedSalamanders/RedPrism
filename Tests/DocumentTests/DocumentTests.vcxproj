@@ -110,6 +110,8 @@
     <ClInclude Include="PreparedRasterHistoryTests.h" />
     <ClInclude Include="PreparedColorHistoryTests.h" />
     <ClInclude Include="DocumentSizeHistoryTests.h" />
+    <ClInclude Include="PixelMoveOpeningTests.h" />
+    <ClInclude Include="PixelMoveOpeningWorkTests.h" />
     <ClInclude Include="..\..\Common\Executor.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
@@ -145,6 +147,8 @@
     <ClCompile Include="PreparedRasterHistoryTests.cpp" />
     <ClCompile Include="PreparedColorHistoryTests.cpp" />
     <ClCompile Include="DocumentSizeHistoryTests.cpp" />
+    <ClCompile Include="PixelMoveOpeningTests.cpp" />
+    <ClCompile Include="PixelMoveOpeningWorkTests.cpp" />
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />
     <ClCompile Include="..\..\Common\PixelBuffer.cpp" />

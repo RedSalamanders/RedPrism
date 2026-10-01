@@ -10,6 +10,23 @@
 #include <limits>
 #include <utility>
 
+class PixelMoveOpening final
+{
+  public:
+    PixelMoveOpening(BrushStrokeOpening stroke, DocumentSelection selection, Guid target) noexcept
+        : stroke(std::move(stroke)), selection(std::move(selection)), target(target)
+    {
+    }
+    [[nodiscard]] bool Matches(const RasterEditInput& input) const noexcept
+    {
+        return input.layer.id == target && input.selection && input.selection->antialiased == selection.antialiased &&
+               input.selection->loops.Identity() == selection.loops.Identity();
+    }
+    const BrushStrokeOpening stroke;
+    const DocumentSelection selection;
+    const Guid target;
+};
+
 namespace
 {
 [[nodiscard]] bool AddBytes(std::uint64_t& bytes, std::uint64_t value) noexcept
@@ -139,7 +156,13 @@ namespace
     if (!edit.IsValid() || !edit.ConfigureWorkerRasterEdit(cancellation, input.progress, input.progressContext))
         return RasterEditStatus::Invalid;
     edit.SetPixelLimit(input.pixelLimit);
-    if (input.selection)
+    const bool reuseOpening = input.kind == RasterEditKind::PixelMove && input.pixelMoveOpening;
+    if (reuseOpening)
+    {
+        if (!input.pixelMoveOpening->Matches(input) || !edit.UseLiftedOpening(input.pixelMoveOpening->stroke))
+            return RasterEditStatus::Invalid;
+    }
+    else if (input.selection)
     {
         Raster coverage = SelectionGeometry::Coverage(input.selection->loops, input.canvasWidth, input.canvasHeight,
                                                       input.selection->antialiased, cancellation);
@@ -149,7 +172,7 @@ namespace
             return RasterEditStatus::Memory;
         edit.SetSelectionClip(std::move(coverage));
     }
-    if (input.kind == RasterEditKind::PixelMove)
+    if (input.kind == RasterEditKind::PixelMove && !reuseOpening)
     {
         bool noPixels = false;
         if (!edit.LiftSelection(&noPixels))
@@ -197,7 +220,64 @@ struct RetirePreviewStroke final
         }
     }
 };
+
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct OwnedPixelMoveOpening final : DeferredReleaseNode
+{
+    std::optional<PixelMoveOpening> value;
+    OwnedPixelMoveOpening() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<OwnedPixelMoveOpening> owned(static_cast<OwnedPixelMoveOpening*>(node)); };
+    }
+};
+#pragma warning(pop)
+
+struct RetirePixelMoveOpening final
+{
+    void operator()(OwnedPixelMoveOpening* node) const noexcept
+    {
+        if (node && !TryDeferRelease(*node))
+        {
+            const std::unique_ptr<OwnedPixelMoveOpening> owned(node);
+        }
+    }
+};
+
+[[nodiscard]] std::shared_ptr<const PixelMoveOpening> OpeningForWork(const RasterEditInput& input,
+                                                                     const BrushStroke& stroke)
+{
+    if (input.kind != RasterEditKind::PixelMove)
+        return {};
+    if (input.pixelMoveOpening)
+        return input.pixelMoveOpening;
+    auto captured = stroke.CaptureLiftedOpening();
+    if (!captured || !input.selection)
+        return {};
+    auto bytes = captured->RetirementMemoryBytes();
+    if (!AddBytes(bytes, input.selection->loops.StorageBytes()) ||
+        !AddBytes(bytes, sizeof(OwnedPixelMoveOpening) + 256))
+        return {};
+    std::unique_ptr<OwnedPixelMoveOpening, RetirePixelMoveOpening> owned(new OwnedPixelMoveOpening);
+    owned->bytes = (std::max)(bytes, kDeferredReleaseThreshold);
+    owned->value.emplace(std::move(captured.value()), input.selection.value(), input.layer.id);
+    auto shared = std::shared_ptr<OwnedPixelMoveOpening>(owned.release(), RetirePixelMoveOpening{});
+    return std::shared_ptr<const PixelMoveOpening>(shared, &shared->value.value());
+}
 } // namespace
+
+std::uint64_t PixelMoveOpeningMemoryBytes(const std::shared_ptr<const PixelMoveOpening>& opening) noexcept
+{
+    if (!opening)
+        return 0;
+    auto bytes = opening->stroke.RetirementMemoryBytes();
+    if (!AddBytes(bytes, opening->selection.loops.StorageBytes()) ||
+        !AddBytes(bytes, sizeof(OwnedPixelMoveOpening) + 256))
+        return 0;
+    return (std::max)(bytes, kDeferredReleaseThreshold);
+}
 
 std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional<DocumentSelection>& selection,
                                     int canvasWidth, int canvasHeight, std::int64_t pixelLimit, bool mask) noexcept
@@ -270,7 +350,10 @@ std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelect
     BrushStroke probe(layer, false, BrushSettings{}, canvasWidth, canvasHeight, nullptr);
     const auto columns = (static_cast<std::uint64_t>((std::min)(probe.Width(), kMaxCanvasSide)) + 255) / 256 + 1;
     const auto rows = (static_cast<std::uint64_t>((std::min)(probe.Height(), kMaxCanvasSide)) + 255) / 256 + 1;
-    return AddProduct(bytes, columns * rows, 8 * sizeof(std::uint64_t)) ? bytes : 0;
+    return AddProduct(bytes, columns * rows, 8 * sizeof(std::uint64_t)) &&
+                   AddBytes(bytes, sizeof(OwnedPixelMoveOpening) + 256)
+               ? bytes
+               : 0;
 }
 
 RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancellation)
@@ -343,10 +426,15 @@ RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancell
     }
     if (cancellation.IsCancelled())
         return cancelled();
+    auto opening = OpeningForWork(input, edit);
+    if (input.kind == RasterEditKind::PixelMove && !opening)
+        return {RasterEditStatus::Memory};
+    if (cancellation.IsCancelled())
+        return cancelled();
     return {RasterEditStatus::Ready, std::move(prepared),
             BrushCommitInfo{snapshot->image, snapshot->bounds.x, snapshot->bounds.y, snapshot->bounds.width,
                             snapshot->bounds.height, input.mask},
-            std::move(moved)};
+            std::move(moved), std::move(opening)};
 }
 
 RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation)
@@ -360,6 +448,9 @@ RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, Cance
     const auto rendered = PaintForWork(input, *owner->stroke, cancellation);
     if (rendered != RasterEditStatus::Ready)
         return {rendered};
+    auto opening = OpeningForWork(input, *owner->stroke);
+    if (input.kind == RasterEditKind::PixelMove && !opening)
+        return {RasterEditStatus::Memory};
     owner->stroke->EndWorkerPreparation(); // no callback/context or job cancellation state escapes Run
     // The declared whole preparation peak also bounds the privately owned stroke/coverage/tile graph. Retained
     // source storages were not charged as new allocations, but may lose their last other owner after replacement.
@@ -370,14 +461,9 @@ RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, Cance
                                                input.pixelLimit, input.mask);
     const auto retainedSource = [&](const Raster& image)
     {
-        image.ForEachStorage(
-            [&](const Raster& source)
-            {
-                const auto retained = PixelBuffer::RequiredBytes(source.ByteSize()) + 256ull +
-                                      source.Tiles().capacity() * sizeof(RasterTile);
-                if (!AddBytes(owner->bytes, retained))
-                    owner->bytes = (std::numeric_limits<std::uint64_t>::max)();
-            });
+        if (image.HasStorage() &&
+            (!image.RetirementMemoryBytes() || !AddBytes(owner->bytes, image.RetirementMemoryBytes())))
+            owner->bytes = (std::numeric_limits<std::uint64_t>::max)();
     };
     retainedSource(owner->stroke->SourceImage());
     if (input.layer.asset)
@@ -390,11 +476,14 @@ RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, Cance
         retainedSource(input.layer.mask->asset.image);
         retainedSource(input.layer.mask->asset.thumbnail);
     }
+    if (!AddBytes(owner->bytes, PixelMoveOpeningMemoryBytes(opening)))
+        owner->bytes = (std::numeric_limits<std::uint64_t>::max)();
     if (cancellation.IsCancelled())
         return {RasterEditStatus::Cancelled};
     // shared_ptr invokes its deleter if allocating its control block fails. Transfer the unique node exactly
     // once before construction; evaluating a release and dereference in different arguments is unsafe.
     auto* transferred = owner.release();
     return {RasterEditStatus::Ready,
-            std::shared_ptr<BrushStroke>(transferred->stroke.get(), RetirePreviewStroke{transferred})};
+            std::shared_ptr<BrushStroke>(transferred->stroke.get(), RetirePreviewStroke{transferred}),
+            std::move(opening)};
 }

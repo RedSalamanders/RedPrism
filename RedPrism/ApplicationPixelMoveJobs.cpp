@@ -56,12 +56,9 @@ struct PixelMovePayload final : DeferredReleaseNode
         };
         const auto raster = [&](const Raster& image)
         {
-            image.ForEachStorage(
-                [&](const Raster& storage)
-                {
-                    add(PixelBuffer::RequiredBytes(storage.ByteSize()) + 256ull +
-                        storage.Tiles().capacity() * sizeof(RasterTile));
-                });
+            if (image.HasStorage())
+                add(image.RetirementMemoryBytes() ? image.RetirementMemoryBytes()
+                                                  : (std::numeric_limits<std::uint64_t>::max)());
         };
         if (input.layer.asset)
         {
@@ -76,6 +73,7 @@ struct PixelMovePayload final : DeferredReleaseNode
         raster(input.layer.shapeImage);
         if (input.selection)
             add(input.selection->loops.StorageBytes());
+        add(PixelMoveOpeningMemoryBytes(input.pixelMoveOpening));
         bytes = retirementBytes ? (std::max)({retained, retirementBytes, kDeferredReleaseThreshold}) : retained;
         if (gate)
             gate->payloadReleaseRequired.store(bytes >= kDeferredReleaseThreshold);
@@ -142,6 +140,8 @@ class Application::PixelMoveJob final : public Job
         if (_commit)
         {
             _payload->committed = RunRasterEdit(_payload->input, context.cancellation);
+            if (_gate && _payload->committed.status == RasterEditStatus::Ready && _payload->committed.pixelMoveOpening)
+                (_payload->input.pixelMoveOpening ? _gate->openingReuses : _gate->openingPreparations).fetch_add(1);
             if (_payload->committed.status == RasterEditStatus::Ready && _payload->token)
             {
                 _payload->publication = PrepareRasterEditPublication(
@@ -154,7 +154,11 @@ class Application::PixelMoveJob final : public Job
             }
         }
         else
+        {
             _payload->preview = RunRasterEditPreview(_payload->input, context.cancellation);
+            if (_gate && _payload->preview.status == RasterEditStatus::Ready && _payload->preview.pixelMoveOpening)
+                (_payload->input.pixelMoveOpening ? _gate->openingReuses : _gate->openingPreparations).fetch_add(1);
+        }
         _payload->AccountRetainedGraph();
         if (_gate && _gate->status)
         {
@@ -208,6 +212,9 @@ class Application::PixelMoveJob final : public Job
             input.kind = RasterEditKind::PixelMove;
             input.offset = _request.offset;
             input.duplicate = _request.duplicate;
+            if (_owner._pixelMoveOpeningSerial == _serial && _owner._pixelMoveOpeningId == _request.opening &&
+                _owner._pixelMoveOpeningGeneration == _generation)
+                input.pixelMoveOpening = _owner._pixelMoveOpening;
             // Acquisition and pixelMove settings are separate clocks. A continued selected ordinal has a fresh
             // acquisition; a preview has a mailbox sequence. Neither is compared with the metadata sequence.
             _payload->token =
@@ -262,9 +269,20 @@ class Application::PixelMoveJob final : public Job
                         _owner.EndStrokePreview(_payload->publication->PreviewCommit());
                 }
                 else
+                {
+                    // Active older ticks may publish before the pending newest tick, as required by the mailbox.
+                    // The cache belongs to the exact opening/source, independently of its frame settings sequence.
+                    if (_payload->preview.pixelMoveOpening)
+                    {
+                        _owner._pixelMoveOpening = _payload->preview.pixelMoveOpening;
+                        _owner._pixelMoveOpeningSerial = _serial;
+                        _owner._pixelMoveOpeningId = _request.opening;
+                        _owner._pixelMoveOpeningGeneration = _generation;
+                    }
                     produced = _owner._session.PublishPixelMovePreview(std::move(_payload->preview.stroke),
                                                                        _payload->token.value(), _request.opening,
                                                                        _request.sequence);
+                }
                 if (!produced)
                     outcome = HostOutcome::Stale;
                 break;
@@ -300,6 +318,10 @@ class Application::PixelMoveJob final : public Job
             }
             _owner._pixelMoveCommitTicket.reset();
             _owner._pixelMoveCommitStamp.reset();
+            _owner._pixelMoveOpening.reset(); // the admitted payload still holds it through worker retirement
+            _owner._pixelMoveOpeningSerial = 0;
+            _owner._pixelMoveOpeningId = 0;
+            _owner._pixelMoveOpeningGeneration = 0;
             (void)_owner._historyWork.Finish(_commit.value());
             if (outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale)
                 error = E_ABORT;
@@ -368,11 +390,18 @@ Application::PixelMoveRequest Application::CapturePixelMoveRequest() const noexc
     return PixelMoveRequest{pending->target, pending->opening, pending->sequence, pending->offset, pending->duplicate};
 }
 
-void Application::CancelPixelMoveJobs() noexcept
+void Application::CancelPixelMoveJobs(bool keepOpening) noexcept
 {
     (void)_pixelMovePreviews.Close();
     _pixelMoveMailboxOpen = false;
     _pixelMoveSeenSequence = 0;
+    if (!keepOpening)
+    {
+        _pixelMoveOpening.reset(); // complete immutable node retires through the release lane
+        _pixelMoveOpeningSerial = 0;
+        _pixelMoveOpeningId = 0;
+        _pixelMoveOpeningGeneration = 0;
+    }
     if (_pixelMovePreviewTicket)
         (void)_jobs.Cancel(_pixelMovePreviewTicket.value());
     // Keep the ticket until acknowledgement; a reopened epoch cannot launch a second interactive worker.
@@ -390,7 +419,7 @@ void Application::RefreshPixelMoveJobs() noexcept
     if (_shutdownStarted || _pixelMoveCommitTicket || !pending || !pending->deferred || !pending->HasOffset())
     {
         if (_pixelMoveMailboxOpen)
-            CancelPixelMoveJobs();
+            CancelPixelMoveJobs(_pixelMoveCommitTicket.has_value());
         return;
     }
     if (_pixelMoveMailboxOpen &&
@@ -447,10 +476,25 @@ HRESULT Application::SubmitPixelMoveJob(PixelMoveRequest request, std::optional<
             (std::numeric_limits<std::uint64_t>::max)() - history - sizeof(PixelMoveJob) - sizeof(PixelMovePayload))
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     const auto memory = preparation + history + sizeof(PixelMoveJob) + sizeof(PixelMovePayload);
-    const auto held = commit ? _session.RasterEditRetirementMemoryBytes() : 0;
-    if ((commit && !held) || memory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
+    auto held = commit ? _session.RasterEditRetirementMemoryBytes() : 1;
+    const auto addHeld = [&](std::uint64_t more) noexcept
+    {
+        if (more > (std::numeric_limits<std::uint64_t>::max)() - held)
+            return false;
+        held += more;
+        return true;
+    };
+    const auto addRaster = [&](const Raster& raster) noexcept
+    { return !raster.HasStorage() || (raster.RetirementMemoryBytes() && addHeld(raster.RetirementMemoryBytes())); };
+    if (!held || !addHeld(PixelMoveOpeningMemoryBytes(_pixelMoveOpening)) ||
+        (!commit &&
+         ((!addHeld(_session.Selection()->loops.StorageBytes())) ||
+          (layer->asset && (!addRaster(layer->asset->image) || !addRaster(layer->asset->thumbnail))) ||
+          (layer->mask && (!addRaster(layer->mask->asset.image) || !addRaster(layer->mask->asset.thumbnail))) ||
+          !addRaster(layer->shapeImage))) ||
+        memory > ((std::numeric_limits<std::uint64_t>::max)() - held) / 2)
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-    const auto retirement = commit ? held + memory * 2 : 0;
+    const auto retirement = held + memory * 2;
     try
     {
         if (_pixelMoveWorkTestGate &&
@@ -515,7 +559,7 @@ HRESULT Application::StartPixelMoveCommit(std::uint64_t ordinal) noexcept
         return result;
     }
     _hostCommitStamp = _pixelMoveCommitStamp;
-    CancelPixelMoveJobs();
+    CancelPixelMoveJobs(true); // acknowledged immutable opening remains available to admitted commit capture
     DropDrag<PixelDrag>();
     return S_OK;
 }

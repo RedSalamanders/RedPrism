@@ -128,6 +128,40 @@ class CpuBrushCoverage final : public BrushCoverageEngine
 [[nodiscard]] LayerTransform PlacementOfRect(const LayerTransform& placed, int width, int height,
                                              const GridRect& rect) noexcept;
 
+// Immutable worker-side inputs for repeating the existing LiftSelection/MoveLifted computation. The
+// conservative byte bound includes the retained source, selection coverage and lifted raster graphs.
+class BrushStrokeOpening
+{
+  public:
+    BrushStrokeOpening(const BrushStrokeOpening&) noexcept = default;
+    BrushStrokeOpening& operator=(const BrushStrokeOpening&) noexcept = default;
+    BrushStrokeOpening(BrushStrokeOpening&&) noexcept = default;
+    BrushStrokeOpening& operator=(BrushStrokeOpening&&) noexcept = default;
+
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept
+    {
+        return _retirementMemoryBytes;
+    }
+
+  private:
+    friend class BrushStroke;
+    BrushStrokeOpening() noexcept = default;
+
+    Raster _source;
+    Raster _coverage;
+    Raster _lifted;
+    GridRect _sourceRect;
+    GridRect _liftedRect;
+    Affine2 _pixelToDocument;
+    LayerTransform _sourceTransform;
+    LayerTransform _paintTransform;
+    int _width = 0;
+    int _height = 0;
+    int _canvasWidth = 0;
+    int _canvasHeight = 0;
+    std::uint64_t _retirementMemoryBytes = 0;
+};
+
 class BrushStroke
 {
   public:
@@ -242,6 +276,8 @@ class BrushStroke
     // pixels under it).
     // Optional emptiness classification distinguishes a valid no-pixel selection from failed preparation.
     [[nodiscard]] bool LiftSelection(bool* noPixels = nullptr);
+    [[nodiscard]] std::optional<BrushStrokeOpening> CaptureLiftedOpening() const noexcept;
+    [[nodiscard]] bool UseLiftedOpening(const BrushStrokeOpening& opening) noexcept;
     // Rebuilds the affected tiles from the original: the selection becomes a transparent hole (unless `duplicate`)
     // and the lifted pixels are placed `offset` document pixels away.
     [[nodiscard]] bool MoveLifted(Vec2 offset, bool duplicate);

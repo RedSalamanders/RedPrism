@@ -420,7 +420,7 @@ class Application final : public ChromeEvents
     class PixelMoveJob;
     [[nodiscard]] PixelMoveRequest CapturePixelMoveRequest() const noexcept;
     void RefreshPixelMoveJobs() noexcept;
-    void CancelPixelMoveJobs() noexcept;
+    void CancelPixelMoveJobs(bool keepOpening = false) noexcept;
     void LaunchPixelMovePreview() noexcept;
     [[nodiscard]] HRESULT SubmitPixelMoveJob(PixelMoveRequest request, std::optional<PreviewStamp> preview,
                                              std::optional<HistoryWorkStamp> commit) noexcept;
@@ -725,6 +725,10 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _pixelMoveCommitTicket;
     std::optional<HistoryWorkStamp> _pixelMoveCommitStamp;
     std::shared_ptr<PixelMoveWorkTestGate> _pixelMoveWorkTestGate;
+    std::shared_ptr<const PixelMoveOpening> _pixelMoveOpening;
+    std::uint64_t _pixelMoveOpeningSerial = 0;
+    std::uint64_t _pixelMoveOpeningId = 0;
+    std::uint64_t _pixelMoveOpeningGeneration = 0;
     bool _colorMailboxOpen = false;
     std::uint64_t _colorDocumentSerial = 0;
     std::uint64_t _colorOpening = 0;

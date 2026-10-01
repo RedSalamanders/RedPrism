@@ -92,6 +92,13 @@ owned `PixelBuffer` results follow the same rule, including unpublished/cancelle
 before joining/draining prevents callbacks into a destroyed scheduler. Sparse bases and tiles retain independent
 shared ownership; dropping a wrapper never frees a still-referenced base or tile.
 
+Production pixel moves may retain one opaque immutable opening with source, selection, coverage and lifted pixels.
+It owns each identity it uses for validation, including the selection's antialiasing and source grid/placement.
+Offset and duplicate intent remain per-request values. Fresh private worker strokes install only these immutable
+owners; mutable tiles, landing indexes, callbacks, cancellation and GPU engines are never shared between jobs.
+The opening is session-only, outside history and the project schema. Its complete deferred-release node caches
+a conservative ownership bound so last-reference retirement does not traverse or materialize its rasters.
+
 Each newly constructed raster caches a conservative bound for its complete held storage graph and node count.
 The capacity bound includes its possible contiguous sparse assembly, storage/control overhead, tile capacity
 and the cached bounds of directly held base/tile owners. It sums occurrences, so repeated shared owners can be
