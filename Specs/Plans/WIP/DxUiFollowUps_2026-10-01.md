@@ -36,8 +36,8 @@
   default toolset, as DxUi's now does (`Build/VcpkgToolset.psm1`, `Tests/BuildProcessTests/VcpkgToolsetTests.ps1`; the
   first restore rebuilds the packages, because the triplet change alters their ABI hash).
 - [x] Restore the pin with Git long paths and as a sparse checkout that leaves out `Measurements/`, `docs/gallery` and
-  `Specs/` (`Build/DxUiRestore.psm1`, `Tests/BuildProcessTests/DxUiRestoreTests.ps1`, a restore from a root of about 215
-  characters). Qualified in x64 Debug, Release and ASan Debug and in the three ARM64 builds, rollback pin recorded,
+  `Specs/` (`Build/DxUiRestore.psm1`, `Tests/BuildProcessTests/DxUiRestoreTests.ps1`, a restore into a destination of about
+  210 characters). Qualified in x64 Debug, Release and ASan Debug and in the three ARM64 builds, rollback pin recorded,
   `Core_DxUiIntegration.md` and `Build_Toolchain.md` updated
   ([record](../../TestRuns/DxUiRevision3_2026-10-01.md)).
 - [ ] Run the checks that need the user's clipboard at the new pin on a machine whose clipboard is free: IoTests'

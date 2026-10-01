@@ -36,8 +36,9 @@ clone keeps it in its own configuration, which the clean-tree check of the pin v
 A clone from the public repository is blobless, so only the files the checkout names are downloaded (about 2 MB instead of
 35 MB at the previous pin). A root deep enough that a kept file's Win32 path passes 259 characters therefore restores, which a
 plain restore did not: from a 121-character root it left 39 files of the previous pin uncreated and the checkout dirty, and the
-pin validation failed. `Tests/BuildProcessTests/DxUiRestoreTests.ps1` restores a fixture repository from a root of about 215
-characters; `-RealPin` restores the locked commit the same way, from the sibling checkout or the public repository.
+pin validation failed. `Tests/BuildProcessTests/DxUiRestoreTests.ps1` restores a fixture repository into a destination of about
+210 characters (from a checkout at `D:\RedPrism-dxui`), which puts a 107-character kept path past 259; `-RealPin` restores the
+locked commit the same way, from the sibling checkout or the public repository.
 
 `build.ps1` passes `-CheckUpdates`. `Show-DxUiUpdateNotice` from the pinned `Tools/ConsumerUpdate.psm1` then compares
 the lock with DxUi `main`. The notice is build output only: yellow when a newer `main` commit has a successful

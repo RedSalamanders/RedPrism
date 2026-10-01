@@ -98,7 +98,7 @@ function Assert-RestoredCleanly([string] $Destination, [string] $Commit, [string
 }
 
 try {
-    # The shape of the DxUi tree the restore sees: tracked paths of 150 to 190 characters under the three directories the
+    # The shape of the DxUi tree the restore sees: tracked paths of 148 to 175 characters under the three directories the
     # restore leaves out, and a deep tracked path in src, which is kept.
     $deep = 'Deep-Directory-Name-For-Long-Path-Checks'
     $deepKept = "src/Controls/$deep-A/$deep-B/Deep.cpp"
@@ -113,8 +113,8 @@ try {
     $origin = Join-Path $fixture 'origin.git'
     $commit = New-FixtureOrigin $origin $files
 
-    # A restore root of about 215 characters: the directory itself can still be created, and the deep tracked path in src lies
-    # past the 259 characters of a Win32 path.
+    # A destination of about 210 characters from a checkout at D:\RedPrism-dxui (under 245, so the directory itself can still be
+    # created): the 107-character tracked path in src lies past the 259 characters of a Win32 path.
     $root = New-DeepRoot (Join-Path $fixture 'restore') 142
     $destination = Join-Path $root ".build/dependencies/DxUi/source/$commit"
     Assert-True ($destination.Length -lt 245) "The fixture root is too deep to create its directories ($($destination.Length) characters); run the test from a shorter checkout path."

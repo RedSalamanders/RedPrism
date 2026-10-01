@@ -137,6 +137,11 @@ try {
     $toolsetIndex = $installer.IndexOf('$toolset = Get-RedPrismDefaultToolset -Installation')
     $cloneIndex = $installer.IndexOf('& git.exe clone')
     Assert-True ($toolsetIndex -ge 0 -and $cloneIndex -gt $toolsetIndex) 'vcpkg-install.ps1 reads the default toolset after it clones: a broken installation must fail before anything is cloned.'
+    # A -MSBuildPath that does not exist is refused before the toolset is read: the installation comes from the text of the path
+    # (or, for a path outside any installation, falls back to the newest one), so a mistyped path would otherwise go on to clone,
+    # bootstrap and build with a toolset the build's MSBuild may not use.
+    $existenceIndex = $installer.IndexOf('MSBuild was not found at', [StringComparison]::Ordinal)
+    Assert-True ($existenceIndex -ge 0 -and $existenceIndex -lt $toolsetIndex) 'vcpkg-install.ps1 does not refuse a -MSBuildPath that does not exist before it reads the toolset and clones.'
     Assert-True ($installer -match 'core\.longpaths=true') 'vcpkg-install.ps1 clones the managed vcpkg checkout without Git long paths.'
     Assert-True ($installer -notmatch '--overlay-triplets=\$overlayTriplets' -and $installer -match '--overlay-triplets=\$overlayDirectory') 'vcpkg-install.ps1 still takes the unpinned triplets as its overlay.'
     foreach ($triplet in 'x64-windows', 'arm64-windows', 'x64-windows-asan', 'arm64-windows-asan') {
