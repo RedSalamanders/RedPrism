@@ -47,9 +47,19 @@ grids/formats, reached cancellation/observer allocation failure and independent 
 16 MP sparse inputs make omitted private/canvas/output/AA planes visible above bookkeeping headroom. It does
 not qualify atomic Cut history or production host admission.
 
+`clipboard-command.*` independently controls sealed Copy/Copy Merged/Cut publication. Literal image/mask bytes,
+origin and unchanged Copy history are required. Cut publishes one exact Clear/Fill Mask entry with both halves,
+or neither half after pre-cancel, no painted pixels, injected cancellation/allocation failure at every history
+preparation stage, or stale session/source/private serial/history. Live brush/lasso/warp Copy drafts survive;
+Cut leaves a live warp and its later closure refuses the changed source. A full-document composition token
+captured before Copy Merged rendering cannot be replaced by a fresh token after a document change. Held owners,
+long token mask names, selection and semantic thumbnail memory floors remain independent controls. This core
+does not qualify the actual host clipboard graph, constant-time capture or G1.
+
 `owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
 pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
-refusal and callback mutation refusal. Actual Application GPU/timer integration remains F5c.
+refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application; actual clipboard
+transfer retry graphs remain F5c.2.
 
 ### Detached gradients
 

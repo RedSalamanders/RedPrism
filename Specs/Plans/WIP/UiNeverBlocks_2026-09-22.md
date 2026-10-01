@@ -103,6 +103,10 @@
       - [x] A5.2.1 / A5.3 — Deferred production pixel-move previews and ordered pointer/nudge commits, exact ownership/staleness/cancellation and input-time Shift pass all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Gradient benchmark scenarios/runner controls also qualify functionally.
       - [x] A5.2a — Immutable opening coverage/lift reuse, exact cache authority, one preparation across previews/commit and complete retirement qualify in the frozen six-configuration matrix: 33 independent assertions plus actual host controls ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)). Drag/geometry/upload measurements remain open.
       - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
+      - [x] A5.4b — Atomic private Copy/Copy Merged/Cut and exact Clear/Fill Mask history publication, sealed
+        composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
+        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers,
+        constant-time capture and G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

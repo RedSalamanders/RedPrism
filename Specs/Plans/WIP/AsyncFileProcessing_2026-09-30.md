@@ -28,6 +28,11 @@
       ([evidence](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production activation stays F5b.2.
     - [ ] F5b.2 — Whole-graph admission, worker decode/paste/private-copy publication and actual ordered host
       activation. The adapter primitive alone does not qualify Copy/Cut, Paste or New Canvas.
+      - [ ] F5b.2a — Registered receipt, worker payload fingerprint binding, truthful receipt/partial publication
+        and native origin controls. Private prototype passes 25 receipt, 45 fingerprint and 34 native binding
+        controls together with the 125 existing transfer checks; changed native qualification remains pending.
+      - [ ] F5b.2b — Actual selected Copy/Cut/Paste graphs, complete preparation/encoding/decode/history/retirement
+        admission and private-origin authority at production application. Keep F5b.2 open after primitive proof.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
     - [x] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
       wakes the same wait, and no slot or receiver can be reused before callback acknowledgement. Native host
@@ -269,8 +274,10 @@ event/deadline framework qualifies at F5c.1; actual clipboard retry jobs remain 
 
 F5b.2 implementation sequence (remaining, not qualified behavior):
 
-- [ ] Seal private Copy/Cut pixels/history authority with a separate session copy serial; direct successful
+- [x] Seal private Copy/Cut pixels/history authority with a separate session copy serial; direct successful
   copies also expire older workers, and a failed Cut restores both prior pixels and serial.
+  A5.4b passes all six configurations and 92 independent controls
+  ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)); production callers remain F5b.2b.
 - [ ] Add an immediate registered receipt format binding the process/session and successful private copy serial.
   Prepare its small movable block before Empty and place it first. Receipt placement failure places no image
   format and reports exact emptied failure; after a successful receipt, still attempt PNG and DIB despite late stop.
@@ -296,6 +303,21 @@ The [sequence contract](https://learn.microsoft.com/en-us/windows/win32/api/winu
 tracks content/empty changes and delayed rendering; it does not establish content ownership. Existing F5b.1
 sequence and pixel controls remain unchanged. This design adds a content binding, not a security authentication
 claim, and its encoding/digest/owned-byte memory and elapsed cost must be included in F5d measurements.
+
+Primary review refinement: fingerprint the complete exposed movable block, including deterministic zeroed
+padding if Windows exposes more bytes than requested. Incoming owned copies include that full block, so hashing
+only the encoder vector length could refuse a legitimate private-origin copy. Keep the SHA hash object's fixed
+4096-byte storage on its worker stack, check the provider's required object length before creation, and cancel
+between 64 KiB bands. No owner-side payload hashing is allowed. The private prototype's first compile failure
+(missing WIL prerequisite header and a sidecar's nonexistent CancelSource method) is byte-preserved; the corrected
+prototype passes. Positive receipt controls now discriminate malformed receipt refusal, and native tamper controls
+change exactly one byte of the original encoded DIB while keeping its header and matching PNG unchanged.
+
+F5b.2b admission must also bound the encoding stream before growth. Current memory `EncodeToFormat` uses a
+growable `CreateStreamOnHGlobal`; the outgoing adapter's later 512 MiB block cap alone does not constrain this
+earlier stream or the simultaneous stream/vector/global peaks. Add a checked capped encoder destination and
+independent exact/over-cap controls, or account for an enforced earlier bound before activating the complete host
+graph. Codec-internal allocations and digest throughput remain measured headroom and F5d/G1 work.
 
 The master table's short synchronous owner publication is insufficient as a guarantee: EmptyClipboard sends
 WM_DESTROYCLIPBOARD to the preceding owner and GetClipboardData can trigger delayed rendering. Execute these

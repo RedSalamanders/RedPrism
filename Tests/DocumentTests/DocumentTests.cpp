@@ -4,6 +4,7 @@
 #include "AdjustmentOpeningTests.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
+#include "ClipboardCommandTests.h"
 #include "ColorDismissalTests.h"
 #include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
@@ -7404,6 +7405,7 @@ int wmain(int argc, wchar_t** argv)
     PixelMoveOpeningWorkTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
+    gFailures += RunClipboardCommandTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();

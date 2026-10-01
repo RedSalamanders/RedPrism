@@ -92,6 +92,7 @@
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
     <ClInclude Include="OwnerWorkMultiplexerTests.h" />
     <ClInclude Include="RetryWaitQueueTests.h" />
     <ClInclude Include="RetryWaitCancellationTests.h" />
@@ -132,6 +133,7 @@
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

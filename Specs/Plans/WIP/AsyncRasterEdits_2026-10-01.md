@@ -36,8 +36,11 @@
     - [x] A5.4a — Cancellable immutable image/mask/merged sampling, exact full-grid selection coverage and
       copied-region origin qualify in all six configurations; 33 independent pixel/placement/mask/sparse,
       cancellation and allocation-floor controls pass ([evidence](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)).
-    - [ ] A5.4b — Seal the selected source/private clipboard/history authority, prepare Cut pixels and history
+    - [x] A5.4b — Seal the selected source/private clipboard/history authority, prepare Cut pixels and history
       before publishing either part, and retain the complete replaced graph through off-owner retirement.
+      All six configurations pass against 446 frozen inputs, including 92 independent core controls
+      ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)); the actual host transfer graph and
+      measured capture/apply/retirement remain A5.4c/F5/G1.
     - [ ] A5.4c — Admit and activate ordered Copy/Cut callers with F5 transfer/retry stages; native host failure,
       stale/cancel/younger-input proof and the full configuration matrix. Primitive proof alone leaves A5.4 open.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
