@@ -106,6 +106,10 @@
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.
+      - [x] S0a/S1a/S3a core — Complete Select All/Deselect and outline-move End/Cancel preparation, exact
+        authority/history and retained retirement pass 312 checks in every x64 suite and all three ARM64 clean
+        cross-builds against 423 frozen inputs ([evidence](../../TestRuns/SelectionCommandPreparation_2026-10-01.md)).
+        Host routing, live gesture/stroke ordering, Clipper/coverage/display bounds and G1 remain open.
   - [ ] P1.7–P1.9 — Migrate files and sizes; remove remaining history, thumbnail and upload stalls; measure every G1 operation.
     - [ ] P1.7 — Worker file classification/open/import/save/export/clipboard, positional paths, bounded retries, banded codecs, atomic outputs and per-path serialization.
       - [x] F1/F2 — Worker classification/cached routing and cancellable banded codecs with atomic export staging pass all x64 suites and ARM64 cross-builds; [file child](AsyncFileProcessing_2026-09-30.md), [evidence](../../TestRuns/FileFoundation_2026-09-30.md). Open/import/save/export/clipboard host workers, pending-IO faults and measured bounds remain open.

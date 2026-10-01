@@ -209,6 +209,15 @@ its encoded start, followed by an exclusive same-owner anonymous data-symbol bou
 may instead end at the exact shared end of its owning PDB procedure and executable contribution when no
 following data symbol exists. That same procedure must contain the dispatch, DWORD table and byte-table start;
 a missing, shorter, cross-owner or differently bounded procedure cannot prove this terminal span.
+The observed Release RDX-image-base remap requires its exact contiguous LEA EAX,[RDX+disp32], CMP EAX,imm32,
+unsigned JA and CDQE guard immediately before the image-base LEA. The JA default is a proved DWORD-table target;
+maximum+1 bounds the byte table within the same exact owning procedure and contribution. Every guard and
+dispatch row must agree with PE bytes, decoded length and nonoverlapping known instruction boundaries. A
+missing/malformed guard cannot fall back to another data symbol or procedure end. The 39 independent RDX
+controls include corrupt bytes/targets/bounds/PDB records, duplicate/unknown/overlapping dispatch rows,
+listing-versus-PE mismatches and real vector code outside the proved range. This is data proof, not a runtime
+allowlist entry.
+
 For the observed ASan RCX/RAX remap, a procedure end inside a larger contribution requires an additional exact
 25-byte guard immediately before LEA: `CMP dword [RSP+disp32],max`, `JA rel32`, then
 `MOVSXD RAX,dword [RSP+the same disp32]`. The three decoded boundaries, lengths, owners and reported PE bytes must agree;

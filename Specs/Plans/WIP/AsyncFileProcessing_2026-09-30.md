@@ -22,6 +22,11 @@
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
   - [x] F5a — Cancellable DIB byte conversion and PNG metadata inspection; 42/11 independent literal checks and all configuration gates pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production transfer/callers remain F5b–F5d.
   - [ ] F5b — Admitted worker-owned source snapshots/global blocks and immediate OS transfer with exact sequence/publication truth.
+    - [ ] F5b.1 — Sealed inspected source, checked owned byte copy, fully prepared movable PNG/DIB blocks and
+      one-attempt private worker adapter. Native controls must prove post-window-destruction reads and exact
+      empty/partial/complete publication truth before production activation.
+    - [ ] F5b.2 — Whole-graph admission, worker decode/paste/private-copy publication and actual ordered host
+      activation. The adapter primitive alone does not qualify Copy/Cut, Paste or New Canvas.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
@@ -38,6 +43,13 @@
   - [x] F6a — Directory rotation/rollback/cleanup faults, backup-only retry recovery and truthful publication/errors; 24 injected/real filesystem checks and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Cleanup allocates its bounded scratch before staging and never follows reparse targets. Intermittent real save cause, flush/close faults and overall F6 remain open.
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
+
+    Selection r2 qualification passes Debug/Release, then ASan fails one `destination-retry.baseline` initial
+    fixture save. Its complete 423-input/image/log snapshot is preserved under
+    `.build/p1-selection-r2-ASan-baseline-failure/`. This happens before the fault-injected replacement and is
+    not evidence of a failed native retry. The fixture now retains 32 immediate stage events and prints mode,
+    status and those values only on failure. Production policy and the exact assertion remain unchanged;
+    the original cause and F6 stay open.
 
     Sizing's first frozen ASan run also fails the real host folder save-in-place case after its initial fixture
     write/open succeed. Preserve `.build/p1-size-history-first-ASan-failure*` and its executable/source hashes.
@@ -234,6 +246,18 @@ Record whether the clipboard was emptied, which formats were placed and its sequ
 cancellation cannot undo or repeat a published external change. An outgoing snapshot checks the source sequence
 before EmptyClipboard so encoding cannot overwrite a later foreign copy. The session's private copy remains
 usable when mirroring fails; remember the sequence at the private copy, not a later unrelated sequence.
+
+The reviewed private F5b.1 probe passes 125 native Win32 checks: literal PNG/DIB bytes, independent straight
+versus premultiplied alpha, post-owner-destruction reads, reached allocation/native faults, complete/partial/empty
+publication, early/late cancellation, sealed stale retries, independent DIB fallback and an externally gated
+delayed renderer. It is not yet the repository configuration qualification or a production caller.
+One measured control records held sequence 16016 and later-open sequence 16018 without a foreign replacement.
+Do not assume closing/destroying an immediate owner preserves the held value. The result records the exact
+sequence after the last placement while open, independently observed at that stage; a later sequence is not
+proof that a foreign copy occurred or authority to relabel our old copy. F5b.2 must explicitly resolve this
+post-close authority for private-origin Paste, including a foreign replacement between close and any later
+observation, before host activation. Native test waits are bounded test-only readiness controls; F5c production
+timers remain unimplemented.
 
 The master table's short synchronous owner publication is insufficient as a guarantee: EmptyClipboard sends
 WM_DESTROYCLIPBOARD to the preceding owner and GetClipboardData can trigger delayed rendering. Execute these

@@ -1,7 +1,8 @@
 # Prepared Select All / Deselect publication — 2026-10-01
 
-Status: candidate P1.6 S0a/S1a core preparation. The private strict probe passes 127 independently reviewed
-assertions; native activation and full qualification are pending. Production commands remain synchronous until
+Status: qualified P1.6 S0a/S1a/S3a core preparation. All x64 suites and all three ARM64 clean cross-builds pass
+against the same 423 frozen inputs, including 127 command and 185 move-closure assertions per x64 suite.
+Both core modules are integrated in all five native projects. Production commands remain synchronous until
 S2 qualifies their ordered input and all overlapping gesture writers. No UI latency claim follows from this probe.
 
 ## Checklist
@@ -10,11 +11,44 @@ S2 qualifies their ordered input and all overlapping gesture writers. No UI late
 - [x] Preserve literal full-canvas/AA, nullopt versus empty, no-op/redo, saved marker and nested transaction rules.
 - [x] Reach every preparation OOM/cancel stage and independently invalidate target, mask, crop, history and generation.
 - [x] Strict private native probe: 127 assertions; copied input hashes and original-header round trip preserved.
-- [ ] Activate only core preparation and native DocumentTests registration, preserving direct reference APIs.
-- [ ] Complete frozen x64 suites and ARM64 cross-builds, archive exact qualified binaries and commit/push.
+- [x] Activate only core preparation and native DocumentTests registration, preserving direct reference APIs.
+- [x] Complete frozen x64 suites and ARM64 cross-builds and archive exact qualified binaries; commit/push this slice.
 - [ ] Activate host commands only with S2 gesture authority, owned input and prepared move closure proof.
 
 ## Independent expectation and ownership
+
+First native failure: `.build/p1-selection-first-Release-isa-failure` retains all 422 physical input hashes,
+all five Release images/PDBs/DLLs and the matching disassembly/contribution/procedure metadata. The source freeze
+is `7779378AD26E402403828E4525F89DADDC4AFB22C6F5A00A039E7A323BC8E1A4`; RedPrism.exe is
+`EB7566A9ADAAEF49086D23FFCCEFC678D3B852300A2413AF1CD5B96195C34E5E`. At `0x140121b58`, the reported
+`vmovlpd` encoding is the DWORD switch target `0x001219c5`. The real dispatch uses an RDX image base and a
+201-entry byte remap guarded by CMP/JA/CDQE. The existing audit recognizes direct RDX dispatch but misses that
+remap. A strict byte/PE/PDB/range proof and independent negative controls are required; the runtime allowlist
+is unchanged. Neither the failed Release build nor its Debug-only subset qualifies the full native matrix.
+
+The corrected r2 run passes complete x64 Debug and Release suites, then ASan fails the existing
+`destination-retry.baseline` fixture save before its fault-injected replacement. All 312 new selection checks
+pass. `.build/p1-selection-r2-ASan-baseline-failure/` retains the exact 423 physical inputs, images and logs:
+freeze `965AB0AE1D48C9FFD9B2700E538DAB41159EEFEEBEF69CE6FC13B8395087F1D0`, executable
+`43BF1D87F01D2E14D8C7A0246D72AF7FE0F25842CE7A5ED178538BC725593FEE`. The original baseline cause is
+unknown. A fixed 32-event failure-only observer now records mode, save status and immediate stage values;
+production save policy and the expectation are unchanged. The r3 full matrix passes and r2 remains unqualified;
+the original cause is not established by the successful rerun.
+
+## Qualified native matrix
+
+Skills: 15; format: 372 files. All x64 Debug/Release/ASan Debug normal suites, WARP checks, linked ISA/negative
+controls, actual sanitizer/crash probes, RAW corpus recreation controls and harness screenshots pass. ARM64
+Debug/Release/ASan Debug clean cross-builds pass; native ARM64 runtime is not available.
+The 39 new RDX controls prove PE/decoded instruction/range/procedure/guard integrity, including rejected
+duplicates, unknown/overlapping rows, mismatched listings, bad targets and a real VEX outside table data.
+
+Qualified archive: `.build/p1-selection-r3-qualified/`; Release version `0.1.132.0`.
+Source freeze SHA-256: `B626CF292271BB7AC55805B6AED356349413C21FD5CF0FC0F0458B6B05079B9A`.
+RedPrism.exe SHA-256: `C8AA8856A942B3CCAECC264118EB5F2C20F269184EBF7D15A300CEC2ADDDA6E0`.
+Runtime allowlist SHA-256 remains `6F55A40AB0CE23E98BB10839EC68765531129EF375B00DD29B298C3DC97EE560`.
+Parent commit: `c8307735aad8d83685190de70d035f6e8a0e0cfd`. Full document capture/admission traversal, production
+selection/move routing, Clipper capacities and coverage/display caching remain open. No measured G1 claim follows.
 
 The owning selection contract requires an antialiased rectangle from (0,0) through (4,1) for a literal 4-by-1
 canvas, coverage bytes {255,255,255,255}, and absent optional selection for Deselect. Explicit empty is a change;
@@ -73,4 +107,4 @@ verification with Undo, and added copied/moved-session, pre-cancelled and admiss
 The strict 31-unit probe passes without warnings; executable SHA-256:
 `32F4961A5574C691FCBB269A280F4CC883429CB8C89094F230C0F2FFEEE01119`.
 Its 93 verified Common copies and isolated header round trip are recorded under `.build/p1-selection-move-probe/`.
-Native activation, the combined frozen matrix and production move/draft/replay routes remain unqualified.
+Both core modules are activated and qualify in the combined frozen matrix. Production move/draft/replay routes remain unqualified.

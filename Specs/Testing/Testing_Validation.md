@@ -173,6 +173,25 @@ applications' clipboard listeners open for tens of milliseconds after every chan
 the set-aside wait them out (`SystemClipboard::kHarnessAttempts`, about 3 s), and it waits for a free clipboard
 before a copy whose mirror it checks, while the product's copy and paste keep their short wait.
 
+### Prepared selection publication (P1.6 core)
+
+`selection-command.*` uses literal 4-by-1 pixels/mask, full-canvas geometry and coverage bytes for Select All,
+absent versus explicit empty Deselect, no-op/redo, named nested transactions and a distinct later saved marker.
+Both operations reach each SelectionSnapshot/BeforeSnapshot/AfterSnapshot/Entry/StackGrowth/TrimIndex cancellation
+and bad_alloc boundary before unchanged-state assertions. Active/mask-only changes prove generation/epoch did not
+change. Foreign, copied/moved-session, moved-from, single-use, draft and stale results cannot publish.
+
+`selection-move-closure.*` independently checks x=1..2 moved to x=2..3, End's one generation and Cancel's two,
+exact history title, Undo/Redo, retained seeded redo, no-op and named outer transaction, distinct saved marker,
+source/mask/crop/target preservation and independent authority-field refusals. End and a Cancel with an additional
+real transaction change each reach every AfterSnapshot/Entry/StackGrowth/TrimIndex cancellation/OOM boundary.
+A fully undone Cancel proves that changed-history construction checkpoints are absent. Failed preparation
+retains the live move and complete history; a separate clean candidate can still close. Pre-cancelled, foreign,
+copied/moved-session and moved-from/single-use candidates are refused. No timing threshold is asserted.
+
+The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
+live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
+
 ## Gates
 
 The pipeline foundation adds `DocumentTests.exe --stress`: 256 rounds of eight simultaneous readers of shared

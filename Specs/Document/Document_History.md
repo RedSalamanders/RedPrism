@@ -170,6 +170,15 @@ Cancellation, construction refusal and stale authority preserve live state and p
 six-configuration matrix qualifies this caller ([evidence](../TestRuns/ImageImportHistoryPublication_2026-10-01.md));
 shared metadata capture and measured apply remain separate.
 
+Prepared selection commands and outline-move closure bind complete worker-built history to their sealed owning
+input. Select All/Deselect preserve history epoch/revision/redo on geometric equality; changed commands prepare
+one named entry or preserve an existing outer transaction. Outline End always acknowledges its transaction,
+including an unchanged outline; Cancel first restores the retained origin and then acknowledges End. Cancellation
+of work, failed construction and stale whole-document/target/crop/origin/history authority leave the live move and
+history unchanged. A later saved marker remains owned by the session. Publication swaps old geometry/display/
+document/history owners into the result for worker retirement. These core boundaries do not activate production
+selection/gesture callers or close shared capture/accounting and measured G1 gates.
+
 ## Trim
 
 Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe

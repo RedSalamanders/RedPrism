@@ -43,6 +43,8 @@
 #include "RasterEditWorkTests.h"
 #include "RasterWorkTests.h"
 #include "Selection.h"
+#include "SelectionCommandTests.h"
+#include "SelectionMoveClosureTests.h"
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
@@ -7375,6 +7377,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPreparedColorHistoryTests();
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
+    gFailures += RunSelectionCommandTests();
+    gFailures += RunSelectionMoveClosureTests();
     gFailures += RunColorDismissalTests();
     gFailures += RunAdjustmentNestedTests();
     gFailures += RunMergeHistoryTests();

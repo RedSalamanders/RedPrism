@@ -218,6 +218,19 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.
 - `SelectAll` (`Select All`, antialiased), `Deselect` (`Deselect`; nothing without a selection), `InvertSelection`
   (`Inverse`, canvas minus the selection).
+- `SelectionCommandWork` supplies a separate settled-session preparation boundary for Select All/Deselect.
+  Capture owns the whole document/history after admission; worker preparation builds complete changed
+  geometry/history, and exact session/generation/active/mask/crop/epoch validation precedes nonthrowing apply.
+  Geometrically unchanged commands preserve revision, redo, epoch and generation. Explicit empty remains
+  distinct from absent selection. This factory refuses pending gestures and edits; direct command eligibility
+  remains unchanged until ordered production callers and exact live-gesture authority qualify.
+- `SelectionMoveWork` prepares active outline-move End/Cancel history before removing the original outline.
+  End retains moved geometry and acknowledges one generation. Cancel restores the original and acknowledges
+  two generations (restoration plus End), including a no-op. Changed history and named outer transaction depth
+  follow the direct reference methods. Whole-document authority, original outline identity, active/mask/crop and
+  exact history epoch are checked before publication. Replaced origin/display/document/history ownership
+  remains in the prepared aggregate for worker retirement. Existing host pointer/command routes remain direct
+  until their owned input and prepared closure are separately qualified.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,

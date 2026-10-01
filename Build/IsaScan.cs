@@ -115,6 +115,30 @@ namespace RedPrismBuild
             return true;
         }
 
+        private static bool MatchesPe(byte[] pe, List<Section> sections, ulong imageBase,
+            ulong address, byte[] encoded)
+        {
+            if (address < imageBase || address - imageBase > UInt32.MaxValue) return false;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(address - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return false; }
+            if (raw > pe.Length - encoded.Length) return false;
+            for (int i = 0; i < encoded.Length; ++i) if (pe[raw + i] != encoded[i]) return false;
+            return true;
+        }
+
+        private static bool MatchesDecodedPe(byte[] pe, List<Section> sections, ulong imageBase,
+            ulong address, byte[] encoded, List<Contribution> contributions,
+            Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts)
+        {
+            int owner = FindContribution(contributions, address);
+            if (owner < 0 || !IsDecodedBoundary(address, contributions[owner].Module, contributions,
+                decoded, decodedStarts) || decoded[address].Length != encoded.Length) return false;
+            int next = decodedStarts.BinarySearch(address) + 1;
+            if (next < decodedStarts.Count && decodedStarts[next] < address + (ulong)encoded.Length) return false;
+            return MatchesPe(pe, sections, imageBase, address, encoded);
+        }
+
         private static bool IsTableData(InlineTable table, List<InlineTable> tables, ulong address, string[] bytes, byte[] pe,
                                         List<Section> sections, ulong imageBase)
         {
@@ -292,9 +316,59 @@ namespace RedPrismBuild
             return 0;
         }
 
+        // Prove the observed switch remap: LEA EAX,[RDX+disp32], CMP EAX,imm32,
+        // unsigned JA to the same default target used by the DWORD switch, then CDQE and
+        // the image-base dispatch. This bounds the byte table to max+1 entries. Both PE
+        // bytes and decoded/listed boundaries must agree; disassembly text is not evidence.
+        private static ulong RdxRemapEnd(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, List<Function> procedures, ulong imageBase,
+            ulong dispatch, ulong byteTableBegin, InlineTable dwordTable, Dictionary<ulong, DecodedInstruction> decoded,
+            List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows)
+        {
+            if (dispatch < imageBase + 19 || dispatch - imageBase > UInt32.MaxValue) return 0;
+            ulong prefix = dispatch - 19;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return 0; }
+            if (raw > pe.Length - 19 || pe[raw] != 0x8d || pe[raw + 1] != 0x82 ||
+                pe[raw + 6] != 0x3d || pe[raw + 11] != 0x0f || pe[raw + 12] != 0x87 ||
+                pe[raw + 17] != 0x48 || pe[raw + 18] != 0x98) return 0;
+            uint maximum = BitConverter.ToUInt32(pe, raw + 7);
+            if (maximum >= 4096) return 0;
+            long defaultAddress = (long)prefix + 17 + BitConverter.ToInt32(pe, raw + 13);
+            if (defaultAddress < 0 || !dwordTable.Targets.Contains((ulong)defaultAddress)) return 0;
+            int[] starts = { 0, 6, 11, 17 };
+            int[] lengths = { 6, 5, 6, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+            {
+                ulong address = prefix + (ulong)starts[i];
+                if (!IsDecodedBoundary(address, dwordTable.Module, contributions, decoded, decodedStarts) ||
+                    decoded[address].Length != lengths[i] ||
+                    !guardRows.TryGetValue(address, out byte[] reported) || reported.Length != lengths[i]) return 0;
+                for (int offset = 0; offset < reported.Length; ++offset)
+                    if (reported[offset] != pe[raw + starts[i] + offset]) return 0;
+                int next = decodedStarts.BinarySearch(address) + 1;
+                if (next < decodedStarts.Count && decodedStarts[next] < address + (ulong)lengths[i]) return 0;
+            }
+            ulong end = checked(byteTableBegin + maximum + 1);
+            foreach (Function procedure in procedures)
+            {
+                if (procedure.Module != dwordTable.Module || prefix < procedure.Begin || dispatch >= procedure.End ||
+                    procedure.ContributionBegin != dwordTable.ContributionBegin ||
+                    procedure.ContributionEnd != dwordTable.ContributionEnd || end > procedure.End ||
+                    dwordTable.Begin < procedure.Begin || dwordTable.End > byteTableBegin) continue;
+                bool allTargetsInside = true;
+                foreach (ulong target in dwordTable.Targets)
+                    if (target < procedure.Begin || target >= procedure.End) { allTargetsInside = false; break; }
+                if (allTargetsInside) return end;
+            }
+            return 0;
+        }
+
         private static InlineTable ProveByteIndexTable(byte[] pe, List<Section> sections,
             Dictionary<ulong, int> dataSymbols, List<Contribution> contributions, List<Function> procedures,
             ulong imageBase, ulong dispatch, uint byteTableRva, InlineTable dwordTable, bool guardedRcxForm,
+            bool guardedRdxRemap,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows)
         {
             ulong begin = checked(imageBase + byteTableRva);
@@ -309,6 +383,12 @@ namespace RedPrismBuild
                     end = symbol.Key;
             ulong guardedEnd = guardedRcxForm ? GuardedByteIndexEnd(pe, sections, contributions, procedures,
                 imageBase, dispatch, begin, dwordTable, decoded, decodedStarts, guardRows) : 0;
+            if (guardedRdxRemap)
+                guardedEnd = RdxRemapEnd(pe, sections, contributions, procedures, imageBase,
+                    dispatch, begin, dwordTable, decoded, decodedStarts, guardRows);
+            // This newly recognized dispatch is accepted only with its exact range guard. A later anonymous
+            // data symbol or procedure-end fallback cannot rescue a malformed/missing guard.
+            if (guardedRdxRemap && guardedEnd == 0) return null;
             if (guardedEnd != 0)
             {
                 // An earlier symbol contradicts the encoded index count. A later function's data cannot
@@ -549,6 +629,24 @@ namespace RedPrismBuild
             var decodedStarts = new List<ulong>();
             var guardRows = new Dictionary<ulong, byte[]>();
             string[] disassemblyLines = File.ReadAllLines(disassembly);
+            var rdxGuardCandidates = new HashSet<ulong>();
+            foreach (string line in disassemblyLines)
+            {
+                Match candidate = InstructionLine.Match(line);
+                if (!candidate.Success) continue;
+                string[] candidateBytes = candidate.Groups[2].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                if (candidateBytes.Length != 7 || candidateBytes[0] != "48" || candidateBytes[1] != "8d" ||
+                    candidateBytes[2] != "15") continue;
+                ulong candidateAddress = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
+                byte[] encoded = Array.ConvertAll(candidateBytes, b => Byte.Parse(b, NumberStyles.HexNumber));
+                if (checked((long)candidateAddress + 7 + BitConverter.ToInt32(encoded, 3)) != (long)imageBase ||
+                    candidateAddress < imageBase + 19) continue;
+                ulong guard = candidateAddress - 19;
+                rdxGuardCandidates.Add(guard);
+                rdxGuardCandidates.Add(guard + 6);
+                rdxGuardCandidates.Add(guard + 11);
+                rdxGuardCandidates.Add(guard + 17);
+            }
             foreach (string line in disassemblyLines)
             {
                 Match row = InstructionLine.Match(line);
@@ -562,12 +660,12 @@ namespace RedPrismBuild
                         Unknown = row.Groups[3].Value.StartsWith("<unknown>", StringComparison.Ordinal),
                         Module = contributions[rowOwner].Module });
                     decodedStarts.Add(rowAddress);
-                    // Retain reported encodings only for the three possible guard instructions, not millions
-                    // of unrelated rows. The new proof checks these bytes against the actual PE as well.
+                    // Retain the stack guard encodings and four rows preceding a candidate RDX image base,
+                    // not millions of unrelated encodings. Each new proof checks actual PE bytes as well.
                     if ((rowBytes.Length == 11 && rowBytes[0] == "81" && rowBytes[1] == "bc" && rowBytes[2] == "24") ||
                         (rowBytes.Length == 6 && rowBytes[0] == "0f" && rowBytes[1] == "87") ||
                         (rowBytes.Length == 8 && rowBytes[0] == "48" && rowBytes[1] == "63" &&
-                         rowBytes[2] == "84" && rowBytes[3] == "24"))
+                         rowBytes[2] == "84" && rowBytes[3] == "24") || rdxGuardCandidates.Contains(rowAddress))
                         guardRows.Add(rowAddress, Array.ConvertAll(rowBytes, b => Byte.Parse(b, NumberStyles.HexNumber)));
                 }
                 else if (rowOwner >= 0) decoded[rowAddress].Unknown = true;
@@ -577,6 +675,8 @@ namespace RedPrismBuild
             bool r8Base = false;
             bool raxBase = false;
             bool rdxBase = false;
+            bool rdxRemap = false;
+            bool rdxBaseMatchesPe = false;
             bool r9Base = false;
             int indexRegister = 0, targetRegister = 0;
             int preludeStep = 0;
@@ -621,6 +721,10 @@ namespace RedPrismBuild
                     { dlByteIndex = true; dispatchStage = 2; } // MOVZX EAX,DL preserves the RCX image base
                     else if (!r8Base && !raxBase && !rdxBase && !r9Base && dispatchStage == 1 && encoded.Length == 8 && StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x01))
                     { byteIndexTableRva = BitConverter.ToUInt32(encoded, 4); hasByteIndexTable = true; dispatchStage = 2; }
+                    else if (rdxBase && rdxBaseMatchesPe && dispatchStage == 1 && encoded.Length == 8 &&
+                        StartsWith(encoded, 0x0f, 0xb6, 0x84, 0x02) && MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                            contributions, decoded, decodedStarts))
+                    { byteIndexTableRva = BitConverter.ToUInt32(encoded, 4); hasByteIndexTable = true; rdxRemap = true; dispatchStage = 2; }
                     else if (r9Base && dispatchStage == 1 && encoded.Length == 9 && StartsWith(encoded, 0x41, 0x0f, 0xb6, 0x84, 0x01))
                     { byteIndexTableRva = BitConverter.ToUInt32(encoded, 5); hasByteIndexTable = true; dispatchStage = 2; }
                     else if (r8Base && dispatchStage == 1 && preludeStep == 0 && encoded.Length == 9 &&
@@ -629,7 +733,9 @@ namespace RedPrismBuild
                       hasByteIndexTable = true; dispatchStage = 2; }
                     else if (raxBase && dispatchStage == 2 && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x8c, 0x88))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 1; dispatchStage = 3; }
-                    else if (rdxBase && dispatchStage == 1 && encoded.Length == 7 && StartsWith(encoded, 0x8b, 0x8c, 0x82))
+                    else if (rdxBase && dispatchStage == (rdxRemap ? 2 : 1) && encoded.Length == 7 &&
+                        StartsWith(encoded, 0x8b, 0x8c, 0x82) && (!rdxRemap || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                            contributions, decoded, decodedStarts)))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 1; dispatchStage = 3; }
                     else if (r9Base && dispatchStage == 2 && encoded.Length == 8 && StartsWith(encoded, 0x45, 0x8b, 0x84, 0x81))
                     { tableRva = BitConverter.ToUInt32(encoded, 4); targetRegister = 8; dispatchStage = 3; }
@@ -644,13 +750,17 @@ namespace RedPrismBuild
                     else if (dispatchStage == 3 && encoded.Length == 3 &&
                         ((!r8Base && !raxBase && !rdxBase && !r9Base && StartsWith(encoded, 0x48, 0x03, 0xc1)) ||
                          (raxBase && StartsWith(encoded, 0x48, 0x03, 0xc8)) ||
-                         (rdxBase && StartsWith(encoded, 0x48, 0x03, 0xca)) ||
+                         (rdxBase && StartsWith(encoded, 0x48, 0x03, 0xca) &&
+                          (!rdxRemap || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                            contributions, decoded, decodedStarts))) ||
                          (r9Base && StartsWith(encoded, 0x4d, 0x03, 0xc1)) ||
                          (r8Base && encoded[0] == 0x49 && encoded[1] == 0x03 && encoded[2] == 0xc0 + 8 * targetRegister)))
                         dispatchStage = 4;
                     else if (dispatchStage == 4 &&
                         ((r9Base && encoded.Length == 3 && StartsWith(encoded, 0x41, 0xff, 0xe0)) ||
-                         (!r9Base && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister)))
+                         (!r9Base && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister &&
+                          (!rdxRemap || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                            contributions, decoded, decodedStarts)))))
                     {
                         InlineTable table = ReadInlineTable(pe, sections, contributions, dataSymbols, procedures, imageBase, dispatchBegin,
                             checked(address + (ulong)encoded.Length), tableRva,
@@ -675,7 +785,7 @@ namespace RedPrismBuild
                             provenByteIndexTable = ProveByteIndexTable(pe, sections, dataSymbols,
                                 contributions, procedures, imageBase, dispatchBegin, byteIndexTableRva, table,
                                 !r8Base && !raxBase && !rdxBase && !r9Base && !signedByteIndex,
-                                decoded, decodedStarts, guardRows);
+                                rdxRemap, decoded, decodedStarts, guardRows);
                             if (provenByteIndexTable == null) table = null;
                         }
                         if (table != null)
@@ -701,8 +811,11 @@ namespace RedPrismBuild
                     { dispatchBegin = address; dispatchStage = 1; r8Base = encoded[0] == 0x4c && encoded[2] == 0x05;
                       raxBase = encoded[0] == 0x48 && encoded[2] == 0x05; indexRegister = 0;
                       rdxBase = encoded[0] == 0x48 && encoded[2] == 0x15;
+                      rdxBaseMatchesPe = rdxBase && MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                          contributions, decoded, decodedStarts);
                       r9Base = encoded[0] == 0x4c && encoded[2] == 0x0d;
                       hasByteIndexTable = false; byteIndexTableRva = 0;
+                      rdxRemap = false;
                       signedByteIndex = !r8Base && !raxBase && !rdxBase && !r9Base && previousSignedByteIndex && address == precedingEnd;
                       dlByteIndex = false;
                       preludeStep = 0; firstPreludeTarget = 0; secondPreludeTarget = 0; }

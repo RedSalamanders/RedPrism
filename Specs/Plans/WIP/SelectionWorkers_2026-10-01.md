@@ -1,8 +1,11 @@
 # Ordered selection workers (P1.6)
 
-Status: active execution child of [UiNeverBlocks](UiNeverBlocks_2026-09-22.md). The private strict Select All/Deselect
-preparation probe passes 127 primary-reviewed assertions. Host draft and native activation remain unqualified
-while the preceding Cancel/rename-recovery slice completes its frozen qualification.
+Status: active execution child of [UiNeverBlocks](UiNeverBlocks_2026-09-22.md). S0a/S1a/S3a core preparation
+qualifies in all six clean configurations against 423 frozen inputs: 127 command and 185 move-closure checks
+per x64 suite. The 39 strict RDX controls and unchanged failed Release image pass with the runtime allowlist
+unchanged. The initial parser failure and r2 ASan baseline-save failure retain exact images/source/logs;
+the original baseline cause remains unknown. The r3 full matrix passes. Host commands, gesture routing,
+general geometry admission and measured G1 remain unqualified.
 The owning selection behavior is [Document_Tools](../../Document/Document_Tools.md); existing legacy numeric
 expectations remain unchanged. This plan does not add a Smooth command, which the current product does not expose.
 
@@ -10,20 +13,22 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
 
 - [ ] S0 — Bound owned input, Clipper workspace/output and history/retirement peaks; identify library cancellation
   boundaries and measured stop latency. Overflow/refusal must preserve current geometry, history and pending input.
-  - [ ] S0a — Select All/Deselect use no Clipper or pixel output: account complete record/history capture,
+  - [x] S0a — Select All/Deselect use no Clipper or pixel output: account complete record/history capture,
     four-point result and retirement using the existing conservative history bounds. H2/H3 traversal stays open.
   - [ ] S0b — Boolean/offset/source geometry requires its own proved capacity and cancellation contract below.
 - [ ] S1 — Prepare Select All, Deselect, Inverse, Expand and Contract geometry and complete history publication
   off owner; immutable authority and nonthrowing apply/retirement. Preserve nullopt versus explicit empty and AA.
-  - [ ] S1a — Sealed Select All/Deselect input/publication and independent native preparation proof first.
+  - [x] S1a — Sealed Select All/Deselect input/publication and 127 independent preparation checks qualify in all configurations.
   - [ ] S1b — Inverse/Expand/Contract only after S0b; reuse complete publication, preserve legacy geometry.
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
 - [ ] S3 — Move committed marquee/lasso booleans and layer/mask traces; own gesture arguments and exact source
   authority, retaining drafts until apply/drop. Preserve outline-move cancellation and undo semantics.
-  - [ ] S3a — Prepare outline-move End/Cancel history and retirement separately. The reviewed private core passes
+  - [x] S3a — Prepare outline-move End/Cancel history and retirement separately. The qualified native core passes
     185 assertions, preserving End's moved outline, Escape's original outline, nested name/depth, no-op/redo and
-    exact acknowledged generation stamps. Native activation and host/gesture closure remain open.
+    exact acknowledged generation stamps in all x64 suites; all three ARM64 cross-builds pass.
+  - [ ] S3b — Activate move/draft/gesture closure under the selected ordinal and exact retained input; the
+    prepared core does not authorize synchronous host End/Cancel or altered live-stroke settlement.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.

@@ -1810,7 +1810,30 @@ void TestNativeDestinationRotation()
         layer.asset = RasterAsset{SolidBgra(2, 2, 7, 19, 31, 255), {}, layer.name};
         original.layers.push_back(layer);
         const auto destination = ScratchRoot() + L"\\destination-retry-" + std::to_wstring(static_cast<int>(mode));
-        const bool baselineSaved = SaveProject(destination.c_str(), original, layer.id, false) == ProjectIoStatus::Ok;
+        struct BaselineTrace final
+        {
+            std::array<std::pair<ProjectIoStage, unsigned int>, 32> events{};
+            std::size_t count = 0;
+        } baselineTrace;
+        const ProjectIoObserver baselineObserver{[](void* opaque, ProjectIoStage stage, unsigned int value) noexcept
+                                                 {
+                                                     auto& trace = *static_cast<BaselineTrace*>(opaque);
+                                                     if (trace.count < trace.events.size())
+                                                         trace.events[trace.count++] = {stage, value};
+                                                 },
+                                                 &baselineTrace};
+        const auto baselineStatus = SaveProject(destination.c_str(), original, layer.id, false, {}, baselineObserver);
+        const bool baselineSaved = baselineStatus == ProjectIoStatus::Ok;
+        if (!baselineSaved)
+        {
+            std::printf("DIAG destination-retry.baseline pid=%lu mode=%u status=%u events=%zu\n", GetCurrentProcessId(),
+                        static_cast<unsigned int>(mode), static_cast<unsigned int>(baselineStatus),
+                        baselineTrace.count);
+            for (std::size_t index = 0; index < baselineTrace.count; ++index)
+                std::printf("DIAG destination-retry.baseline stage=%u value=%u\n",
+                            static_cast<unsigned int>(baselineTrace.events[index].first),
+                            baselineTrace.events[index].second);
+        }
         Expect(baselineSaved, "destination-retry.baseline");
         if (!baselineSaved)
             continue;

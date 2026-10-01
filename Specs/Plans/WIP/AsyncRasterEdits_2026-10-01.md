@@ -33,6 +33,12 @@
       The complete preparation peak remains reserved even on reuse. No measured drag/G1 claim is made.
   - [x] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry qualify in all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). This caller's prepared history also qualifies ([H1 evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)); other H1 callers remain open.
   - [ ] A5.4 — Worker Copy/Cut preparation with an atomic private clipboard and origin, before mirroring through the F5 OS clipboard graph.
+    - [ ] A5.4a — Cancellable immutable image/mask/merged sampling, exact full-grid selection coverage and
+      copied-region origin; independent pixel/placement/mask/sparse/cancellation and allocation-floor proof.
+    - [ ] A5.4b — Seal the selected source/private clipboard/history authority, prepare Cut pixels and history
+      before publishing either part, and retain the complete replaced graph through off-owner retirement.
+    - [ ] A5.4c — Admit and activate ordered Copy/Cut callers with F5 transfer/retry stages; native host failure,
+      stale/cancel/younger-input proof and the full configuration matrix. Primitive proof alone leaves A5.4 open.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
   - [ ] A5.7 — Full configuration and measured G1 closeout of the complete A5 graph.

@@ -1201,6 +1201,11 @@ struct HueTargetDrag
     double saturation = 0;
 };
 
+enum class SelectionCommandKind : std::uint8_t;
+class SelectionCommandInput;
+class PreparedSelectionCommand;
+class SelectionMoveClosureInput;
+class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
 struct ColorEditJobResult;
 class PreparedColorEdit;
@@ -1445,6 +1450,7 @@ class DocumentHistory
         ReplacementReset,
         ReplacementSnapshot,
         AdjustmentSnapshot,
+        SelectionSnapshot,
     };
     // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
     // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
@@ -1980,6 +1986,20 @@ class DocumentSession
     [[nodiscard]] bool CanModifySelection() const noexcept;
     void ExpandSelection(int amount);
     void ContractSelection(int amount);
+    // Admitted owner capture; these sealed preparation APIs leave the direct selection reference routes intact.
+    [[nodiscard]] std::optional<SelectionCommandInput> PrepareSelectionCommandInput(SelectionCommandKind kind) const;
+    [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(
+        SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
+    [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
+    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(bool cancel) const;
+    [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
+        SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
+        const PreparedSelectionMoveClosure& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;
+    [[nodiscard]] std::uint64_t SelectionMoveClosureMemoryBytes() const noexcept;
     void SelectAll();
     void Deselect();
     void InvertSelection();

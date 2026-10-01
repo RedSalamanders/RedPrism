@@ -81,6 +81,10 @@
       Each x64 suite passes 55 history/157 session assertions and 70 project/155 image-import host cases.
       The same 391 inputs remain unchanged after the complete matrix
       ([record](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)); no measured G1 claim follows.
+    - [x] Selection core: sealed Select All/Deselect and outline-move End/Cancel prepare complete history and
+      replaced document/display/origin owners; 312 independent assertions per x64 suite and all ARM64 clean
+      cross-builds pass against 423 frozen inputs ([evidence](../../TestRuns/SelectionCommandPreparation_2026-10-01.md)).
+      Production command/gesture routing and full metadata capture/accounting remain open.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
@@ -283,7 +287,7 @@ Its exact images/414-input source/freeze/logs are preserved; bounded assertion d
 expectations and add no write/retry. The second final matrix records native destination-to-backup rename error 5
 in Debug's existing durability test. Bounded prepublication retry/cancellation and actual reader/timer controls
 pass the fifth full Debug preflight and the fresh final six-configuration matrix
-([candidate evidence](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
+([qualified evidence](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
 
 Native preparation now includes complete OK/Cancel document/history/panel/original/display ownership and a
 separate opening publication that prepares Begin before installing the panel. The first native Debug preflight
