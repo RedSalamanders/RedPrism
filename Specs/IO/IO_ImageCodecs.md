@@ -30,6 +30,27 @@ The project-file decoder additionally accepts a lower caller encoded-byte ceilin
 WIC decode interfaces. Project attachment passes the current remaining per-kind aggregate pixel ceiling;
 frame dimensions must fit before output allocation. A lower ceiling does not change accepted pixel conversion.
 
+## Bounded memory encoding (P1.7 F5b.2b.1)
+
+Memory `EncodePng`/`EncodeJpeg` enforce `min(512 MiB, 4 MiB + 2 * logical pixel bytes)` through
+`EncodeMemoryCapacity`; an empty raster has capacity zero. A caller may supply a smaller encoded-byte ceiling.
+The smallest limit reaches `CodecMemoryStream` before growth. Valid zero-ceiling or exceeded-ceiling encoding
+returns `TooLarge`; every failed/cancelled encode leaves the public byte vector empty. A larger caller ceiling
+cannot increase the derived/hard limit. Pixel formats, premultiplication, JPEG white matte, resolution and
+existing numeric expectations are unchanged. File forms retain their separate direct checked file destination.
+
+The private stream reserves bounded virtual address space once and commits pages lazily, at most 64 KiB per
+native commit call. Reads/writes/stale-gap clearing and final vector copying check cancellation between 64 KiB
+bands. Newly committed pages already contain zeros, avoiding a second clearing pass. Shrink/regrow clears stale
+committed bytes; cursor/size arithmetic and cap refusal precede growth. A sticky cap-refusal flag prevents
+publication even if a codec ignores a refused stream call. Borrow final bytes only with a retained COM owner
+and after successful encoder completion; no borrowed view escapes. COM stream methods allocate no C++ storage
+and allow no C++ exception; explicit noexcept creation admission translates only bad_alloc to E_OUTOFMEMORY.
+
+Whole host admission additionally charges stream/vector overlap, source/document/history roots, row/conversion
+buffers, movable blocks, receipt/hash owners, opaque codec workspace and aggregate retirement. The sink cap
+alone does not bound WIC workspace or qualify production clipboard activation. Existing inline clipboard callers
+remain F5b.2b/F5d work. Cancellation cannot interrupt an in-flight OS/WIC call.
 ## Import
 
 `ImportImageFile` / `ImportImageOnto` accept JPEG, PNG, TIFF, and HEIC/HEIF when WIC has a HEIF codec. Missing HEIF
@@ -120,7 +141,29 @@ budgets retain the independent 100 M decode cap; cancelled/failed public outputs
 
 This boundary owns no live session or Application window and performs no retry. Its partial memory report covers
 owned bytes and final pixels only; complete codec, capture/history, insertion and retirement admission belongs
-to F5b.2. Production Copy/Cut/Paste/New Canvas migration and event retries remain open.
+to F5b.2. Production Copy/Cut/Paste/New Canvas migration remains open. The shared owner event/deadline retry
+framework is defined in Core_Architecture; six-attempt accounting and source guards in actual clipboard jobs
+remain F5c.2. An emptied publication must never be retried.
+
+### Registered receipt and owned payload binding (P1.7 F5b.2a)
+
+An optional immediate `RedPrism.ClipboardReceipt.v1` registered format carries exactly 40 bytes: `RPCLIP01`,
+little-endian version 1, reserved zero, a nonzero 16-byte session id and nonzero little-endian 64-bit private copy
+serial. Invalid packet input clears its decoded value. This is content provenance, not security authentication.
+The receipt block is prepared before Empty and placed first. Receipt placement failure records an emptied
+failure, places no image formats and consumes the attempt. After successful receipt placement, late cancellation
+still finishes both image attempts. Only transferred global blocks become Windows-owned.
+
+The encoding worker retains local immutable sizes/SHA-256 fingerprints of the complete exposed PNG/DIB blocks.
+Any allocation padding is initialized to zero and included in the digest. Copy reads the receipt and owned image
+bytes within the same inspected-sequence open scope. Missing/invalid receipt does not prevent foreign image
+decode. After CloseClipboard, worker hashing compares current private session/serial, receipt and every copied
+format; at least one copied image format must match. One altered format refuses private origin even when the
+preferred PNG remains valid. Identical receipt and payload copied back at a changed sequence retain content
+origin. No later sampled sequence or global memory address supplies this authority.
+
+This boundary activates no production caller. Complete encoding-stream bounds, graph admission, Copy/Cut/Paste
+application, event retries and measured UI/digest costs remain F5b.2b/F5c.2/F5d.
 
 ## Status
 

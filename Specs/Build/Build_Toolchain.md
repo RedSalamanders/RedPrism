@@ -246,6 +246,16 @@ controls include corrupt bytes/targets/bounds/PDB records, duplicate/unknown/ove
 listing-versus-PE mismatches and real vector code outside the proved range. This is data proof, not a runtime
 allowlist entry.
 
+The observed terminal RDX DWORD table has a different exact guard: `MOVZX ECX,byte [RAX]`, `CMP CL,max`,
+`JA rel8`, followed contiguously by `LEA RDX,imagebase`, `MOV EAX,[RDX+4*RCX+table]`, `ADD RAX,RDX`, `JMP RAX`.
+The unsigned byte maximum is 1–127. The aligned table has an exact same-owner anonymous data symbol and
+`tableStart + 4*(max+1)` equals the exact owning PDB procedure end inside its executable contribution. Every
+entry and the default target must be decoded boundaries in that procedure before the table; the default may
+be separate from the table entries. Guard/dispatch bytes and decoded lengths must match the PE without unknown
+or overlapping boundaries. An earlier same-owner data symbol contradicts the table count; a later procedure's
+symbol cannot extend it. This form cannot fall back to a looser symbol/procedure-end proof. All 66 controls pass,
+including a real adjacent vector instruction that stays rejected. No runtime allowlist entry is added.
+
 For the observed ASan RCX/RAX remap, a procedure end inside a larger contribution requires an additional exact
 25-byte guard immediately before LEA: `CMP dword [RSP+disp32],max`, `JA rel32`, then
 `MOVSXD RAX,dword [RSP+the same disp32]`. The three decoded boundaries, lengths, owners and reported PE bytes must agree;

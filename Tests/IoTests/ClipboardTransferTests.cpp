@@ -1,4 +1,5 @@
 #include "ClipboardTransferTests.h"
+#include "ClipboardBindingTransferTests.h"
 
 #include "../../RedPrism/ClipboardTransfer.h"
 #include "../../RedPrism/SystemClipboard.h"
@@ -331,8 +332,8 @@ struct Control final
     ClipboardTransfer::Fault faultAt2 = static_cast<ClipboardTransfer::Fault>(255);
     DWORD faultError = ERROR_GEN_FAILURE;
     CancelSource* cancel = nullptr;
-    std::array<unsigned, 9> reached{};
-    std::array<unsigned, 9> injected{};
+    std::array<unsigned, static_cast<std::size_t>(ClipboardTransfer::Stage::Copied) + 1> reached{};
+    std::array<unsigned, static_cast<std::size_t>(ClipboardTransfer::Fault::ReceiptRead) + 1> injected{};
     DWORD dibPlacedSequence = 0;
 };
 
@@ -1051,6 +1052,7 @@ int RunWorker()
     TestInspectionCancellation();
     TestReadFaultFallbacks();
     TestDelayedRenderer();
+    gFailures += RunClipboardBindingTransferTests(gOwner);
     restoreAttempted = true;
     Expect(SystemClipboard::RestoreContents(gOwner, saved), "clipboard.restore-user-contents");
     std::printf("clipboardtransfer summary: %u checks, %d failures\n", gExpectations, gFailures);

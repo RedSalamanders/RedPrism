@@ -3876,6 +3876,7 @@ bool DocumentSession::CopySelection()
         return false;
     }
     _clipboard = std::move(copied);
+    ++_clipboardSerial;
     return true;
 }
 
@@ -3891,6 +3892,7 @@ bool DocumentSession::CopyMergedSelection(const Raster& composite)
         return false;
     }
     _clipboard = std::move(copied);
+    ++_clipboardSerial;
     return true;
 }
 
@@ -3905,6 +3907,7 @@ void DocumentSession::CutSelection()
         return;
     }
     const std::optional<PixelClipboard> previous = _clipboard;
+    const auto previousSerial = _clipboardSerial;
     if (!CopySelection())
     {
         return;
@@ -3912,6 +3915,7 @@ void DocumentSession::CutSelection()
     if (!ClearSelectedPixels())
     {
         _clipboard = previous;
+        _clipboardSerial = previousSerial;
     }
 }
 

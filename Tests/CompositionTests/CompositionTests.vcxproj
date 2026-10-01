@@ -95,7 +95,9 @@
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
+    <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
@@ -108,6 +110,7 @@
     <ClCompile Include="..\..\RedPrism\GpuWork.cpp" />
     <ClCompile Include="..\..\RedPrism\DocumentReadbackJob.cpp" />
     <ClCompile Include="..\..\Common\Jobs.cpp" />
+    <ClCompile Include="..\..\Common\RetryWaitQueue.cpp" />
     <ClCompile Include="..\..\Common\WorkerPool.cpp" />
     <ClCompile Include="..\..\Common\CrashDumps.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
@@ -130,6 +133,7 @@
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

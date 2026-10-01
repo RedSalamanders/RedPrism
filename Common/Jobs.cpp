@@ -713,6 +713,7 @@ bool JobScheduler::Cancel(JobTicket ticket) noexcept
         cancel = record.cancel;
     }
     (void)cancel->Cancel();
+    NotifyOwnerWork();
     self.AdmitWaiting();
     return true;
 }
@@ -814,7 +815,7 @@ std::int32_t JobScheduler::RegisterEventWait(void* event, void (*callback)(void*
     return result;
 }
 
-bool JobScheduler::RearmEventWait(JobEventTicket ticket) noexcept
+bool JobScheduler::RearmEventWait(JobEventTicket ticket, std::uint32_t timeoutMs) noexcept
 {
     if (!_impl || _impl->closed || _impl->workers.ShutdownToken().stop_requested())
         return false;
@@ -822,7 +823,7 @@ bool JobScheduler::RearmEventWait(JobEventTicket ticket) noexcept
     if (ticket.slot >= _impl->eventGenerations.size() || ticket.generation == 0 ||
         _impl->eventGenerations[ticket.slot] != ticket.generation)
         return false;
-    return _impl->memoryWaits.Rearm({ticket.slot, ticket.generation});
+    return _impl->memoryWaits.Rearm({ticket.slot, ticket.generation}, timeoutMs);
 }
 
 bool JobScheduler::RemoveEventWait(JobEventTicket ticket) noexcept

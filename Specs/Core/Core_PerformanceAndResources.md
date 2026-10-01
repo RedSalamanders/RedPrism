@@ -117,6 +117,21 @@ aligned intrusive completion nodes; producers push to an SLIST and signal an aut
 FIFO batches. Progress is monotonic and publication is limited to once per 100 ms. These fixed bounds prevent
 unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
+The owner router serves one ready leaf per pump, with at most eight leaves. Application's retry source adds
+eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
+pressure uses two). A busy transfer MUST release its compute callback while retaining its admitted job and
+whole-graph reservation. Relative deadlines and cancellation share one event wait; no extra pool, periodic timer,
+sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published acknowledgement.
+Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not establish a
+maximum OS clipboard delay or G1 latency. Production retry attempt accounting remains F5c.2.
+Clipboard receipt encoding is fixed 40-byte metadata. Payload SHA-256 runs only on workers, with a checked
+4096-byte stack object and cancellation between 64 KiB bands. Hash full initialized exposed global blocks,
+including any zeroed padding. Neither receipt parsing nor digest comparison allocates a payload on the owner.
+Complete admission must account for encoding stream, encoded vector, both globals, copied incoming bytes,
+codec/internal decode, document/history preparation and aggregate retirement; the adapter's partial byte report
+cannot authorize the host graph. A post-encoding block cap does not constrain earlier memory-stream growth.
+Digest throughput, native codec/OS interruption and full owner/first-upload costs remain F5d/G1 qualification.
+
 Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
 tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing
 storage, stretched/carried masks and required semantic mask thumbnails. Optional image thumbnails are not part of
@@ -599,3 +614,14 @@ and the linked-image check in `Build_Toolchain.md`. New SIMD tables and measured
 `HostTests` asserts idle vs render vs occlusion-probe selection. `RedPrism.exe --self-test --warp` presents exactly one
 hidden frame and exits. Interactive idle is qualified by running the titled window: a settled visible window MUST not
 spin the CPU in `Renderer::Render`.
+
+### Memory encoder capacity and overlap
+
+Memory PNG/JPEG sinks enforce `EncodeMemoryCapacity` before growth, with a lower caller ceiling supported.
+Charge up to that capacity plus 64 KiB page-rounding allowance for the lazy committed stream and a separate
+capacity-sized final vector while both owners coexist. Bounded commit/write/read/zero/copy bands are 64 KiB.
+New pages are already zero; reserve/insert final copying avoids a redundant vector zero-fill pass. File encoding
+keeps its direct file stream. This bound does not include opaque WIC workspace, retained source/private document/
+history graphs, conversion rows, simultaneous PNG/DIB vectors/globals, receipt/hash owners or retirement.
+Complete clipboard admission must add those overlapping owners and retain codec/native headroom. The primitive
+cannot close F5b.2b, F5d or G1 by itself.

@@ -1056,6 +1056,10 @@ enum class BrushToolMode : std::uint8_t
 
 class BrushStroke;
 class PreparedRasterEdit;
+enum class ClipboardCommandKind : std::uint8_t;
+class ClipboardCommandInput;
+struct CopyPixelsInput;
+class PreparedClipboardCommand;
 struct GridRect;
 class BrushCoverageEngine;
 class WarpStroke;
@@ -2198,6 +2202,20 @@ class DocumentSession
     [[nodiscard]] std::optional<PixelClipboard> RenderSelectedPixels(const ImageLayer& layer, bool mask) const;
     [[nodiscard]] bool CanCopyMerged() const noexcept;
     [[nodiscard]] std::optional<PixelClipboard> RenderMergedPixels(const Raster& composite) const;
+    // Sealed immutable Copy/Cut preparation. Callers reserve complete capture/pixels/history/encoding/transfer
+    // before capture. Copy Merged requires the full-document token captured before utility composition.
+    [[nodiscard]] std::optional<ClipboardCommandInput> PrepareClipboardCommandInput(
+        ClipboardCommandKind kind, const Raster& composite = {},
+        const std::optional<JobToken>& compositeAuthority = {}) const;
+    [[nodiscard]] static std::optional<PreparedClipboardCommand> PrepareClipboardCommandPublication(
+        ClipboardCommandInput input, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool IsPreparedClipboardCommandCurrent(const PreparedClipboardCommand& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedClipboardCommandIfCurrent(PreparedClipboardCommand& prepared) noexcept;
+    [[nodiscard]] std::uint64_t ClipboardCommandMemoryBytes(ClipboardCommandKind kind,
+                                                            const Raster& composite = {}) const;
+    [[nodiscard]] std::uint64_t ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind kind,
+                                                                      const Raster& composite = {}) const;
     bool CopySelection();
     bool CopyMergedSelection(const Raster& composite);
     void CutSelection();
@@ -2547,6 +2565,10 @@ class DocumentSession
     std::optional<PixelMove> _pixelMove;
     std::uint64_t _pixelMoveOpening = 0;
     std::optional<PixelClipboard> _clipboard;
+    std::uint64_t _clipboardSerial = 1;
+    [[nodiscard]] bool CanPrepareClipboardCommand(ClipboardCommandKind kind) const noexcept;
+    [[nodiscard]] std::optional<CopyPixelsInput> ClipboardPixelsInput(ClipboardCommandKind kind,
+                                                                      const Raster& composite) const;
     std::optional<ColorEdit> _colorEdit;
     std::uint64_t _colorEditSequence = 0;
     bool _budgetRefused = false;

@@ -58,12 +58,17 @@ struct JpegExportOptions
 // Frame-zero metadata only: no pixel conversion/allocation. Output is empty on every failure.
 [[nodiscard]] ImageCodecStatus ProbeImportImageFile(const wchar_t* path, std::int64_t remainingPixels,
                                                     ImageImportMetadata& metadata, CancelToken cancellation = {});
+// Enforced private output stream ceiling; whole graph admission also charges the exact returned vector and codec
+// workspace.
+[[nodiscard]] std::uint64_t EncodeMemoryCapacity(const Raster& image) noexcept;
 [[nodiscard]] ImageCodecStatus EncodePng(const Raster& image, double resolution, std::vector<std::uint8_t>& bytes,
-                                         CancelToken cancellation = {});
+                                         CancelToken cancellation = {},
+                                         std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
 [[nodiscard]] ImageCodecStatus EncodePngFile(const Raster& image, double resolution, const wchar_t* path,
                                              CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus EncodeJpeg(const Raster& image, const JpegExportOptions& options,
-                                          std::vector<std::uint8_t>& bytes, CancelToken cancellation = {});
+                                          std::vector<std::uint8_t>& bytes, CancelToken cancellation = {},
+                                          std::uint64_t maximumEncodedBytes = kMaxImageEncodedBytes);
 [[nodiscard]] ImageCodecStatus EncodeJpegFile(const Raster& image, const JpegExportOptions& options,
                                               const wchar_t* path, CancelToken cancellation = {});
 [[nodiscard]] bool IsHeifContainer(std::wstring_view path) noexcept;

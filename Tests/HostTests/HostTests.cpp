@@ -34,6 +34,8 @@
 #include "PixelRecycleTests.h"
 #include "PreviewMailboxTests.h"
 #include "Resources.h"
+#include "RetryWaitCancellationTests.h"
+#include "RetryWaitQueueTests.h"
 #include "SettingsStore.h"
 #include "TransformOverlay.h"
 #include "UiTimingHistogramTests.h"
@@ -1787,6 +1789,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunJobTests(stress);
     gFailures += RunJobStageTests();
     gFailures += RunOwnerWorkMultiplexerTests();
+    gFailures += RunRetryWaitQueueTests();
+    gFailures += RunRetryWaitCancellationTests();
     gFailures += RunJobUiPolicyTests();
     gFailures += RunJobActivityTests();
     gFailures += RunMemoryAdmissionTests();

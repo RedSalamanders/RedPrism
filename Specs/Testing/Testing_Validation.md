@@ -47,9 +47,28 @@ grids/formats, reached cancellation/observer allocation failure and independent 
 16 MP sparse inputs make omitted private/canvas/output/AA planes visible above bookkeeping headroom. It does
 not qualify atomic Cut history or production host admission.
 
+`clipboard-command.*` independently controls sealed Copy/Copy Merged/Cut publication. Literal image/mask bytes,
+origin and unchanged Copy history are required. Cut publishes one exact Clear/Fill Mask entry with both halves,
+or neither half after pre-cancel, no painted pixels, injected cancellation/allocation failure at every history
+preparation stage, or stale session/source/private serial/history. Live brush/lasso/warp Copy drafts survive;
+Cut leaves a live warp and its later closure refuses the changed source. A full-document composition token
+captured before Copy Merged rendering cannot be replaced by a fresh token after a document change. Held owners,
+long token mask names, selection and semantic thumbnail memory floors remain independent controls. This core
+does not qualify the actual host clipboard graph, constant-time capture or G1.
+
 `owner-work.*` uses independent leaf mocks and literal round-robin call order. It proves one leaf per pass,
 pending versus ready, bounded/duplicate/self registration refusal, quiescent detach/reused slot, recursive pump
-refusal and callback mutation refusal. Actual Application GPU/timer integration remains F5c.
+refusal and callback mutation refusal. Native GPU/retry sources are multiplexed by Application; actual clipboard
+transfer retry graphs remain F5c.2.
+
+`ClipboardReceipt.*` uses independent literal normal/high-bit packets and malformed version/reserved/length/
+session/serial values, proving exact cleared outputs. `clipboardfingerprint.*` uses literal empty/abc SHA-256
+and a 65,537-byte coordinate fixture whose digest comes from an independent PowerShell calculation. Exact
+64 KiB bands, pre/stage cancellation, reached native failures, cleared output and all-format key/content matching
+are gates. `clipboardbinding.*` runs inside the existing saved/restored dedicated MTA transfer suite. It proves
+receipt-first empty/partial/complete truth, exact held sequence/error, read after owner destruction, receipt-only
+refusal, positive controls for invalid receipt fallback, one-byte original-block tamper with valid PNG, identical
+payload copy-back, private serial refusal and late cancellation. This primitive leaves actual callers and G1 open.
 
 ### Detached gradients
 
@@ -333,13 +352,20 @@ function an instruction exemption.
 
 The exact WIC RDX-base/RCX-target dispatch additionally has seven-DWORD fixtures with required anonymous PDB
 start, malformed dispatch/symbol/target/bounds negatives and adjacent real-vector rejection. The standalone
-parser suite has 226 controls including 29 RDX-form cases, 45 exact Menu R9-base/R8-target cases and 24
+parser suite has 368 controls including 29 RDX-form cases, 45 exact Menu R9-base/R8-target cases and 24
 signed-byte RBP+disp32 cases. The signed form requires the exact MOVSX/LEA/load/ADD/JMP encoding, an anonymous
 same-owner table start including its biased default entry, and decoded target bounds; wrong REX/opcode/frame
 base/SIB, noncontiguity, invalid symbols/targets and adjacent real vector code remain rejected. The Menu form
 requires its byte-index load, unchanged base/indices/targets, anonymous PDB start and decoded-target bounds;
 missing/changed operands, noncontiguity, malformed PDB evidence, truncation and adjacent real VEX remain rejected.
 [Original forms record](../TestRuns/IsaTableForms_2026-09-30.md).
+
+The ASan grid switch additionally has 37 short-stack-guard/terminal-DWORD controls. Recognition requires the
+exact unsigned CMP/JA/MOVSXD and contiguous RCX dispatch in the PE and matching decoded listing, anonymous
+same-owner data start, guard-derived entry count equal to the exact PDB procedure end, and every target at a
+same-procedure decoded boundary. An unrelated later data symbol does not extend the table. Missing/changed
+bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
+proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
@@ -419,6 +445,18 @@ readiness through a joined wait callback. Pending-only owner work prevents idle 
 UI work; ready Pump executes under the reentrancy guard and refuses callback-time registration/removal.
 Synthetic memory checks prove successor admission remains blocked through suspended, resumed and final apply
 stages. State/event references are independent of elapsed-time performance; no hook waits on another stage.
+
+`retrywait.*` checks literal 50/100/200/400/800 ms deadline arguments, eight registrations/ninth refusal, invalid
+and duplicate tickets, exact reached creation/registration/reset/arm errors, real event acknowledgement and
+slot reuse. A real relative deadline also completes without a test signal. Three gated actual-job scenarios
+prove an unrelated job runs on the single compute worker while the original 4096-byte reservation and receiver
+remain held: ordinary waiting, cancellation and failed cancellation signalling. Callback publication stays
+behind an event until the unrelated job completes. Cancellation skips the resumed worker body; a failed signal
+retains its exact error until the original deadline acknowledges. There is one receipt/final result and no
+leaked slot/reservation. Wait bounds detect deadlock; they assert no performance threshold. Multiplexed GPU
+copies additionally initialize both native sources, exercise normal and EnqueueSetEvent cancellation routes,
+and detach them after shutdown. The independent transformed Copy fixtures cover rotation, reflection,
+nearest/smooth centers, High sampling and a placed mask's outside tone through a cropped selection.
 
 `gpu-capability.*` covers literal completion-route prerequisites and unavailable/failed-query combinations,
 plus real WARP immediate-context probing, null/deferred/mismatched-device refusal and report reset.
@@ -830,3 +868,13 @@ successful HEIF decoding on a host without its codec, RAW support, in-flight cod
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
 .\build.ps1 -Platform ARM64 -Configuration Debug
 ```
+
+### Capped memory encoder controls
+
+IoTests runs independent IStream controls for literal read/write bytes, exact/over-cap unchanged state, signed
+seeks, shrink/regrow/gap zeros, OS page rounding, bounded lazy commits, native reserve/commit failures, reached
+cancellation, sticky cap refusal and retained COM byte-view lifetime. Real WIC PNG/JPEG controls prove exact
+encoded-size limits and one-byte-short/one/zero refusal with empty public output, larger-ceiling clipping and
+unchanged premultiplied/sparse bytes. Existing ImageCodecWork pixel/file preservation goldens remain unchanged.
+Require full native x64 Debug/Release/ASan gates and ARM64 clean cross-builds before closing F5b.2b.1; full host
+reservation/caller/retry/retirement/measurement proof remains a separate gate.

@@ -473,6 +473,31 @@ memory plan covers private source assembly, sampling planes, exact coverage work
 it excludes already shared inputs and separate host/history/codec/clipboard/retirement owners. No session is
 mutated by this primitive. Atomic Cut publication, clipboard authority and production routing remain A5.4b–c.
 
+### Sealed clipboard command preparation (P1.5 A5.4b)
+
+`ClipboardCommandWork` captures immutable Copy/Copy Merged sources and an exact private-copy serial after
+complete admission and command-specific settlement. Successful direct copies also advance that serial; failed
+direct Cut restores the previous serial with its private copy. Copy does not change document generation or
+history and may coexist with live brush, warp, shape, lasso and outline drafts. It samples committed target
+pixels using the displayed placement. Copy Merged requires the complete committed-document utility composite
+and its full-document token captured before composition; layer-only, foreign or stale authority is refused
+at input capture and checked again at publication with its original sequence. An old composite cannot acquire
+a fresh generation at capture. A color/gradient/transform prerequisite must already be settled.
+
+Cut requires selection interaction closure and the current paintable target. It does not finish an existing
+warp. One worker prepares copied pixels, the complete Clear document and history together, with an eager mask
+thumbnail and captured mask background palette. Its image history name remains `Clear`; a targeted mask uses
+`Fill Mask`. A clear that did not paint, cancellation or allocation failure publishes neither half. Exact session,
+document generation, target/mask/selection, active target, crop, private serial and history authority are rechecked
+before nonthrowing history/document/private-copy swaps. A younger copy refuses both halves of an older Cut.
+
+Prepared publication retains replaced document/display/history/brush-commit/private clipboard owners for caller
+aggregate retirement on a worker. Its new copy remains separately available for later admitted OS encoding.
+Preparation includes token mask names/adjustment vectors and all private sampling/clear/history allocations;
+retirement includes token color, mask, semantic thumbnail and shared selection owners even for a mask copy.
+Existing full document capture is still charged and remains H2 work. This boundary activates no production
+clipboard graph; codec/OS admission, receipt binding, retry stages and host ordering remain A5.4c/F5b.2–F5d.
+
 ### Other selection pixel edits
 
 - **Pixel moves** (`PixelMove`: the lifted raster, the outline it started from, `duplicate`, `offset`):

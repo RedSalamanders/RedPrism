@@ -188,7 +188,7 @@ class JobScheduler final
     // Handles/contexts remain borrowed until Remove or Close returns. Event callbacks publish only readiness.
     [[nodiscard]] std::int32_t RegisterEventWait(void* event, void (*callback)(void*) noexcept, void* context,
                                                  JobEventTicket& ticket) noexcept;
-    [[nodiscard]] bool RearmEventWait(JobEventTicket ticket) noexcept;
+    [[nodiscard]] bool RearmEventWait(JobEventTicket ticket, std::uint32_t timeoutMs = 0) noexcept;
     [[nodiscard]] bool RemoveEventWait(JobEventTicket ticket) noexcept;
     [[nodiscard]] bool PostUiAction(std::unique_ptr<UiAction>& action) noexcept;
     // One stable, borrowed owner-thread source for host continuations. Register/unregister only outside UI

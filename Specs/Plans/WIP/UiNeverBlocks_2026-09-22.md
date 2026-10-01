@@ -103,6 +103,10 @@
       - [x] A5.2.1 / A5.3 — Deferred production pixel-move previews and ordered pointer/nudge commits, exact ownership/staleness/cancellation and input-time Shift pass all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Gradient benchmark scenarios/runner controls also qualify functionally.
       - [x] A5.2a — Immutable opening coverage/lift reuse, exact cache authority, one preparation across previews/commit and complete retirement qualify in the frozen six-configuration matrix: 33 independent assertions plus actual host controls ([evidence](../../TestRuns/PixelMoveOpeningReuse_2026-10-01.md)). Drag/geometry/upload measurements remain open.
       - [ ] A4.6 / A5.4–A8 — Gradient real-loop timing, Cut/floating transforms, distortion, shapes/masks and complete caller qualification; [execution sequence](AsyncRasterEdits_2026-10-01.md).
+      - [x] A5.4b — Atomic private Copy/Copy Merged/Cut and exact Clear/Fill Mask history publication, sealed
+        composition/private serial authority and held-owner memory floors; 92 controls and all six configurations
+        pass ([record](../../TestRuns/ClipboardCommandPublication_2026-10-01.md)). Production clipboard callers,
+        constant-time capture and G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.
@@ -124,6 +128,17 @@
         multiplexer pass 33/125/31 new assertions in every x64 suite and all three ARM64 clean cross-builds
         against 434 frozen inputs. Earlier ISA/folder/clipboard failures retain exact inputs and images
         ([record](../../TestRuns/CopyClipboardPreparation_2026-10-01.md)). Production callers and G1 stay open.
+      - [x] F5b.2a — Registered receipt and worker SHA-256 payload binding, exact partial publication and
+        private-origin controls qualify in all six configurations against 456 frozen inputs: 25/45/34 new
+        assertions plus all 125 transfer controls ([record](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md)).
+        Full host/codec admission, production callers, retries and G1 remain open.
+      - [x] F5b.2b.1 — Capped memory PNG/JPEG encoding with pre-growth derived/lower ceilings, bounded commits,
+        cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
+        six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
+        Detached Paste and production clipboard admission/callers/retries remain open in the file child.
+      - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
+        six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
+        ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.
       - [x] F6a.1 — Bounded native rollback recovery and real child/directory-reader release/exhaustion controls; all configurations and 33 rotation checks pass ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)). External reader/filter identity and overall F6 remain open; timer resource faults qualify below.
       - [x] F6a.2 — Native recovery timer create/arm/wait resource faults, healthy-path avoidance and backup-only retry qualify in all configurations; 40 rotation controls pass ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)). Original save causes and overall F6 remain open.
       - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all

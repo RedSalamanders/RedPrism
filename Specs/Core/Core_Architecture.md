@@ -83,17 +83,36 @@ Device completion registrations use the scheduler's existing one-thread WaitPool
 event tickets. Handles and contexts remain borrowed until owner teardown removes/joins them or Close joins the
 pool. Register/remove inside callbacks and stale generation rearms/removals are refused.
 
-`OwnerWorkMultiplexer` is a bounded standard-only preparation primitive for the single owner-work source. It
+`OwnerWorkMultiplexer` is a bounded standard-only router for the single owner-work source. It
 borrows at most eight distinct leaf pumps, routes one ready leaf per call with round-robin fairness, and refuses
 recursive pumping or list mutation from a leaf callback. Pending-only leaves do not request a ready pass.
 Detach refuses pending/ready leaves; their external producers must already be joined. This does not change the
-scheduler's one-source registration contract. Application GPU/retry multiplexing remains P1.7 F5c work.
+scheduler's one-source registration contract. Application registers this router once and attaches GPU and
+retry readiness sources. Standalone GPU tests may retain direct registration.
+
+`RetryWaitQueue` owns eight persistent manual-reset events registered on that same WaitPool. An admitted
+suspended job owns its borrowed receiver and cancellation token until the wait callback acknowledges a
+relative one-shot deadline or cancellation signal. Retry numbers 1–5 use 50/100/200/400/800 ms deadlines;
+zero timeout retains the ordinary infinite event wait contract. The callback reads stable notification owners,
+publishes readiness and never accesses request metadata afterward. Only the owner pump delivers a receipt and
+releases the slot for reuse; it resumes the original ticket/reservation/FIFO position. Cancellation wakes the
+owner and signals the existing event, without a stop-callback destructor or hot-path join. A signal failure
+retains its native error and request until the original deadline acknowledges. Shutdown hides the window,
+joins/disarms retry and GPU notifications, closes workers, then drops their receivers and detaches both sources.
+This framework does not activate production clipboard transfers; F5b.2/F5c.2 retain those caller obligations.
 
 The clipboard adapter is an explicit private platform exception to generic worker window access. Publishing
 creates/closes/destroys its own built-in message-only window on the calling worker and never touches the
 application window. It publishes fully rendered immediate formats. OS open/get/empty/close calls can invoke an
 external clipboard owner and belong on a worker. The adapter does not schedule or retry work; production
 admission, source/history ordering, event retries and caller activation remain F5b.2–F5d.
+
+`ClipboardReceipt` is a standard-only fixed-packet codec with no allocation or platform ownership.
+`ClipboardFingerprint` owns one CNG SHA-256 hash through WIL on its calling worker, using a borrowed algorithm
+pseudo-handle and a checked 4096-byte stack object that outlives that hash. It never reads a live session or OS
+clipboard. The transfer adapter keeps receipt bytes and image bytes inside the exact scoped source open, then
+hashes owned copies after close. Fixed local key/size/digest values may cross to the owner; image payload hashing
+belongs only to the worker. Production private-copy authority remains the selected clipboard graph's obligation.
 
 Each record contains two aligned intrusive completion nodes, one for progress and one for final completion. Workers
 publish through an SLIST and signal the scheduler's auto-reset event. The owner reverses each detached SLIST batch
@@ -310,3 +329,11 @@ back buffer; the composition then blits the document into the chrome hole. Those
 `Tests/DocumentTests` covers the document graph, validation, and history. `Tests/IoTests` covers `.prism` load/save.
 `Tests/CompositionTests` covers WARP blend goldens. `RedPrism.exe --self-test --warp` covers HWND + WARP Present. See
 [`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
+
+### Private bounded codec output stream
+
+`Common/CodecMemoryStream.*` owns one reserved virtual buffer through WIL and provides the capped WIC IStream
+implementation. Cursor/data access is confined to one caller; only COM reference counting is concurrent. It owns
+no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker; the current inline
+clipboard caller still awaits F5 host migration. A borrowed completed-byte view is retained only through exact
+worker copying, never exposed as a result. The final public result is an owning vector.

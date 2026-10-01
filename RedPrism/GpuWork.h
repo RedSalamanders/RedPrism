@@ -53,6 +53,8 @@ struct GpuReadbackStatistics final
     std::uint64_t busyFailures = 0;
 };
 
+class OwnerWorkMultiplexer;
+
 class GpuWorkQueue final : public OwnerWorkPump
 {
   public:
@@ -65,7 +67,7 @@ class GpuWorkQueue final : public OwnerWorkPump
     ~GpuWorkQueue();
     GpuWorkQueue(const GpuWorkQueue&) = delete;
     GpuWorkQueue& operator=(const GpuWorkQueue&) = delete;
-    [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler) noexcept;
+    [[nodiscard]] HRESULT Initialize(JobScheduler& scheduler, OwnerWorkMultiplexer* routes = nullptr) noexcept;
     // The test override exercises the supported event fallback even when this device also supports fences.
     [[nodiscard]] HRESULT Bind(ID3D11Device* device, ID3D11DeviceContext* context,
                                bool forceEventForTest = false) noexcept;

@@ -117,7 +117,7 @@ class WaitPool final
     WaitPool& operator=(const WaitPool&) = delete;
     _No_competing_thread_ [[nodiscard]] HRESULT Initialize() noexcept;
     [[nodiscard]] HRESULT Add(HANDLE event, Callback callback, void* context, Ticket& ticket) noexcept;
-    [[nodiscard]] bool Rearm(Ticket ticket) noexcept;
+    [[nodiscard]] bool Rearm(Ticket ticket, std::uint32_t timeoutMs = 0) noexcept;
     // Owner-thread teardown only. The lifetime wait is not a UI operation.
     void Remove(Ticket ticket) noexcept;
     void Close() noexcept;
