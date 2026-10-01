@@ -458,6 +458,18 @@ shading remain P2/P3. Worker migration alone establishes no one-frame latency or
   offset commits nothing); `CancelPixelMove` drops it; `NudgePixels(dx, dy)` is one entry per press.
   `DisplayedSelection` is the outline to draw: during a move the original shifted by the offset; while transforming
   selected pixels, the outline mapped through the handles (`FloatingSelectionMap`) or the distortion's homography.
+  Detached preparation is also available through `RasterEditKind::PixelMove`: copied target/selection/canvas,
+  duplicate intent and document offset enter `RunRasterEdit` or `RunRasterEditPreview`. It uses a private CPU
+  stroke, cancellable coverage/source reads/lift rows/landing tiles and source-over samples, with no shared sparse
+  materialization. Offsets round half away from zero in document space. Whole-pixel landing uses exact reads;
+  stretched/rotated fractional landing uses the same bilinear formula as the direct API. The complete result
+  owns the prepared target, crop metadata and translated outline; zero rounded offset or no overlap of selection
+  coverage with the source grid is `Unchanged`. Transparent pixels inside that grid retain the direct move behavior.
+  Nonfinite/unrepresentable mapping, pixel-budget refusal, failed allocation or cancellation
+  publishes no target/outline. `PixelMoveMemoryBytes` includes lifted pixels, landing/hole keys, all existing
+  raster-edit planes/windows/masks and immutable moved geometry. Borrowed progress state is cleared before a
+  preview escapes. Production pointer/nudge callers remain inline until the deferred A5 host migration; this
+  detached helper alone is no whole-host nonblocking or performance claim.
 - **Masks from the selection** (`AddMask(revealing)`): with a selection, a mask on the layer's own pixel grid (the
   loops mapped through the layer transform and rasterized with the selection's antialiasing): revealing hides the
   selected area (`255 − coverage`), otherwise shows only it; the selection is dropped and the mask targeted, one

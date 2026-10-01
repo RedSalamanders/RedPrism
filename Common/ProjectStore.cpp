@@ -1607,13 +1607,19 @@ constexpr unsigned int kMaxCleanupDepth = 128;
             attempt == retryDelays100ns.size())
             return false;
         if (!retryTimer)
+        {
+            if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::RecoveryTimerCreate) != 0)
+                return false; // Test trigger only; keep reporting the native rename error in failure.
             retryTimer.reset(CreateWaitableTimerW(nullptr, FALSE, nullptr));
+        }
         LARGE_INTEGER due{};
         due.QuadPart = retryDelays100ns[attempt];
-        if (!retryTimer || !SetWaitableTimer(retryTimer.get(), &due, 0, nullptr, nullptr, FALSE))
+        if (!retryTimer || RequestedFailure(faultPolicy, ProjectSaveFaultStage::RecoveryTimerArm) != 0 ||
+            !SetWaitableTimer(retryTimer.get(), &due, 0, nullptr, nullptr, FALSE))
             return false; // Preserve the initiating native rename error and the complete recovery backup.
         Report(observer, ProjectIoStage::RollbackRetryScheduled, failure);
-        if (WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
+        if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::RecoveryTimerWait) != 0 ||
+            WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
             return false;
     }
 }

@@ -48,6 +48,10 @@ most three attempts. Between attempts, the calling IO worker blocks on a one-sho
 cost or UI-thread wait. `RollbackRetryScheduled` reports the immediate native error before each wait. Cancellation
 after rotation starts cannot abandon recovery. Other native errors, unavailable/failed timers and injected
 operation failures are final; exhausted recovery preserves the complete `.old` tree and reports `RollbackFailed`.
+The per-save fault policy exposes separate recovery timer create/arm/wait boundaries, consulted only after a
+qualifying native rename failure. A nonzero resource fault stops recovery immediately and still reports the
+initiating native rollback error; it cannot claim successful publication or replace that error with the seam's
+configured value. Healthy saves and an injected final rollback-rename failure reach none of these timer hooks.
 These bounds cover attempts and event waits, not interruption of an in-flight filesystem call. NTFS can reject
 a directory rename while any descendant file is open; the independent real-reader fixtures exercise both release
 at a retry observation and a reader retained through all attempts. They do not identify the external reader or

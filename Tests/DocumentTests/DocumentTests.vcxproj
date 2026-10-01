@@ -100,6 +100,8 @@
     <ClInclude Include="GradientWorkTests.h" />
     <ClInclude Include="GradientStateTests.h" />
     <ClInclude Include="GradientResourceTests.h" />
+    <ClInclude Include="LiftReferenceTests.h" />
+    <ClInclude Include="PixelMoveWorkTests.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\TransformEdit.h" />
@@ -121,6 +123,8 @@
     <ClCompile Include="GradientWorkTests.cpp" />
     <ClCompile Include="GradientStateTests.cpp" />
     <ClCompile Include="GradientResourceTests.cpp" />
+    <ClCompile Include="LiftReferenceTests.cpp" />
+    <ClCompile Include="PixelMoveWorkTests.cpp" />
     <ClCompile Include="HistoryWorkTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />

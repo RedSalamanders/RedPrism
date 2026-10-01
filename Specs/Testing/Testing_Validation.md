@@ -356,6 +356,10 @@ open through exactly two event waits/three attempts and requires the exact acces
 tree, cleaned staging and no false publication. Closing that reader then permits backup-only recovery. Test
 observers control ownership transitions, never sleep or assert nominal timer latency. Read-only attribute reset
 and deep-fixture removal are asserted explicitly.
+Recovery timer create/arm/wait faults additionally preserve exact native error 5/32, the byte-identical backup,
+staging cleanup and publication truth. Each surviving backup subsequently restores after its reader closes.
+The directory fixture locks the backup directory itself; a child-file lock cannot stand in for native sharing
+violation. Healthy save and final injected rollback-rename controls require zero recovery-hook visits.
 
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5
@@ -442,7 +446,7 @@ are interpretable. This is instrumentation overhead only; operation baselines an
 
 `RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
 [`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
-its 21 operation rows include production project-save and PNG/JPEG export workers.
+its 24 operation rows include production project open/save, image imports and PNG/JPEG export workers.
 normal test runs never download the RAW corpus.
 
 Smoke may render with the session display off, while full measurements refuse that state. It validates ordered

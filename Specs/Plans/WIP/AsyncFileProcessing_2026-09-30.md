@@ -25,13 +25,16 @@
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
+  - [x] F6a.2 — Timer creation/arming/wait resource faults preserve native rollback errors, backup and publication
+    truth; healthy/final-injected rollback paths skip timer hooks. All configurations and 40 rotation checks pass
+    after correcting the directory fixture to lock the directory itself ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).
   - [x] F6a.1 — Qualify bounded native rollback recovery: three attempts, 25/100 ms event waits, exact native errors,
     late cancellation and complete backup retention. Real child-reader controls reproduce error 5 and exercise
     release/exhaustion without timing assertions. ASan reproduced the prior immediate rollback failure; an
     independent later diagnostic rename succeeded and no project-tree handles remained in the test process.
     All x64 suites and ARM64 cross-builds pass, with 33 rotation checks ([evidence](../../TestRuns/RasterEdits_2026-10-01.md)).
-    The responsible external reader/filter remains unproven; timer creation/arming/wait resource-fault injection
-    and the original first-save cause remain F6. Original failures are retained.
+    The responsible external reader/filter and original first-save cause remain unproven. Timer resource faults
+    are tracked at F6a.2; original failures are retained.
   - [x] F6a — Directory rotation/rollback/cleanup faults, backup-only retry recovery and truthful publication/errors; 24 injected/real filesystem checks and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Cleanup allocates its bounded scratch before staging and never follows reparse targets. Intermittent real save cause, flush/close faults and overall F6 remain open.
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.

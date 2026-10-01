@@ -9,6 +9,15 @@
   - [x] A4.1–A4.5 — Preparation, deferred state, host producers/settlement and resource/outcome tests qualify in all configurations ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
   - [ ] A4.6 — Real-loop gradient timing and measured owner/first-upload costs; functional step committed separately.
 - [ ] A5 — Lifted pixels, pixel move and floating selection Free Transform; atomic Cut preparation shared with F5, preserved private clipboard/origin and numeric goldens.
+  - [x] A5.1 — Detached move/lift helper and missing numeric references qualify in all configurations; clean rebuilds resolve the initial incremental layout mismatch ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).
+    Production pointer/nudge activation, Copy/Cut and floating transactions remain A5.2–A5.7.
+  - [ ] A5.2 — Deferred move model and production preview jobs, whole admission, owning tokens and caller-ownership refusal tests.
+    - [ ] A5.2a — Cache immutable opening coverage/lifted pixels across preview ticks; displayed geometry is tracked with P1.6 and bounded first upload with P1.9.
+  - [ ] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry.
+  - [ ] A5.4 — Worker Copy/Cut preparation with an atomic private clipboard and origin, before mirroring through the F5 OS clipboard graph.
+  - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
+  - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.
+  - [ ] A5.7 — Full configuration and measured G1 closeout of the complete A5 graph.
 - [ ] A6 — Distortion commit/preview preparation and transform settlement continuations; preserve mapped image/mask geometry and cancellation/staleness.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
 - [ ] A8 — All moved production callers, ordering/lifetime/failure gates and every due G1 operation measured; reconcile master and owning specs before closing P1.5.
@@ -142,7 +151,7 @@ publication. Measure those costs explicitly and keep their owning gates open unt
 
 ## A5 execution sequence
 
-- [ ] A5.1 — Add a detached lifted-pixel/move graph over the same CPU-only raster path. Compute coverage, lift,
+- [x] A5.1 — Add a detached lifted-pixel/move graph over the same CPU-only raster path. Compute coverage, lift,
   landing tiles, source-over samples, carried masks, commit metadata and moved selection privately. Check cancel
   between rows, tiles and outline batches; reject nonfinite/out-of-range mapping before integer conversion. No
   worker may materialize a published sparse source. Admission additionally includes the complete lifted plane,
@@ -151,6 +160,9 @@ publication. Measure those costs explicitly and keep their owning gates open unt
   intent, rounded offset and sequence). Pointer motion updates only this metadata and the outline placement;
   one active/latest pending worker owns every pixel preview. Keep existing direct APIs as numeric references.
   A newly published preview is private to its worker until acknowledgement and immutable to the composition.
+  A5.2a retains an immutable opening coverage/lifted-pixel cache for later private preview strokes. It never
+  shares mutable tile/index/move state. Validate its opening token before reuse, charge the complete preparation
+  peak on cache miss, and retire its last owner through the release sink. Measure reuse before the drag gate closes.
 - [ ] A5.3 — Retain accepted mouse-up/nudge input through a selected history ordinal. Commit the latest captured
   offset and outline as one `Move Pixels` / `Duplicate Pixels` edit. Zero offset preserves pixels, history and
   redo; cancel drops previews and blocks dependent commands until acknowledgement. Source/selection/target,

@@ -240,7 +240,8 @@ class BrushStroke
     [[nodiscard]] bool ClearPixels();
     // Cuts the selected pixels out of the original image; false when nothing is lifted (no selection, a mask, no
     // pixels under it).
-    [[nodiscard]] bool LiftSelection();
+    // Optional emptiness classification distinguishes a valid no-pixel selection from failed preparation.
+    [[nodiscard]] bool LiftSelection(bool* noPixels = nullptr);
     // Rebuilds the affected tiles from the original: the selection becomes a transparent hole (unless `duplicate`)
     // and the lifted pixels are placed `offset` document pixels away.
     [[nodiscard]] bool MoveLifted(Vec2 offset, bool duplicate);

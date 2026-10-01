@@ -15,6 +15,8 @@
 #include "HistoryRevisionTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
+#include "LiftReferenceTests.h"
+#include "PixelMoveWorkTests.h"
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
@@ -7345,6 +7347,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunGradientWorkTests();
     gFailures += RunGradientStateTests();
     gFailures += RunGradientResourceTests();
+    PixelLiftReference::Run(gFailures);
+    PixelMoveWorkTests::Run(gFailures);
     gFailures += RunFilterCancellationTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunSelectionStorageTests();

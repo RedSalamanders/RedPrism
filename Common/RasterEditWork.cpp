@@ -74,8 +74,41 @@ namespace
                            [](double value) noexcept { return std::isfinite(value) && value >= 0 && value <= 1; });
     };
     if (!InputGeometryValid(input.layer, input.canvasWidth, input.canvasHeight, input.pixelLimit, input.mask) ||
-        input.kind > RasterEditKind::Gradient || !colorValid(input.color))
+        input.kind > RasterEditKind::PixelMove || !colorValid(input.color))
         return RasterEditStatus::Invalid;
+    if (input.kind == RasterEditKind::PixelMove)
+    {
+        if (input.mask || !input.layer.asset || !input.selection || !std::isfinite(input.offset.x) ||
+            !std::isfinite(input.offset.y))
+            return RasterEditStatus::Invalid;
+        if (std::round(input.offset.x) == 0 && std::round(input.offset.y) == 0)
+            return RasterEditStatus::Unchanged;
+        BrushStroke probe(input.layer, false, BrushSettings{}, input.canvasWidth, input.canvasHeight, nullptr);
+        if (!probe.IsValid())
+            return RasterEditStatus::Invalid;
+        const auto inverse = probe.PixelToDocument().Inverted();
+        const auto zero = inverse.Apply({0, 0});
+        const auto shifted = inverse.Apply({std::round(input.offset.x), std::round(input.offset.y)});
+        const double landingX = probe.SourceRect().x + shifted.x - zero.x;
+        const double landingY = probe.SourceRect().y + shifted.y - zero.y;
+        // MoveLifted converts the landing box to a signed grid rectangle. Bound it before floor/cast/addition;
+        // an off-canvas move may still clear the hole, but cannot overflow the grid representation.
+        for (const double coordinate : {landingX, landingY, landingX + probe.SourceRect().width + 1.0,
+                                        landingY + probe.SourceRect().height + 1.0})
+            if (!std::isfinite(coordinate) || coordinate < -BrushStroke::kMaxGridSide ||
+                coordinate > BrushStroke::kMaxGridSide)
+                return RasterEditStatus::Invalid;
+        std::size_t checked = 0;
+        for (const auto& loop : input.selection->loops)
+            for (const auto& point : loop)
+            {
+                if ((checked++ & 255u) == 0 && cancellation.IsCancelled())
+                    return RasterEditStatus::Cancelled;
+                if (!std::isfinite(point.x + std::round(input.offset.x)) ||
+                    !std::isfinite(point.y + std::round(input.offset.y)))
+                    return RasterEditStatus::Invalid;
+            }
+    }
     if (input.kind == RasterEditKind::Gradient)
     {
         const double dx = input.end.x - input.start.x;
@@ -116,8 +149,18 @@ namespace
             return RasterEditStatus::Memory;
         edit.SetSelectionClip(std::move(coverage));
     }
+    if (input.kind == RasterEditKind::PixelMove)
+    {
+        bool noPixels = false;
+        if (!edit.LiftSelection(&noPixels))
+            return cancellation.IsCancelled() ? RasterEditStatus::Cancelled
+                   : noPixels                 ? RasterEditStatus::Unchanged
+                                              : RasterEditStatus::Memory;
+    }
     const bool rendered =
-        input.kind == RasterEditKind::Gradient
+        input.kind == RasterEditKind::PixelMove
+            ? edit.MoveLifted({std::round(input.offset.x), std::round(input.offset.y)}, input.duplicate)
+        : input.kind == RasterEditKind::Gradient
             ? edit.FillGradient(input.shape, input.start, input.end, input.color, input.endColor, input.opacity)
         : input.kind == RasterEditKind::Invert               ? edit.Invert()
         : input.kind == RasterEditKind::Clear && !input.mask ? edit.ClearPixels()
@@ -213,6 +256,23 @@ std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer, const std::optional
     return bytes;
 }
 
+std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelection& selection, int canvasWidth,
+                                   int canvasHeight, std::int64_t pixelLimit) noexcept
+{
+    if (!layer.asset || selection.IsEmpty())
+        return 0;
+    auto bytes = RasterEditMemoryBytes(layer, selection, canvasWidth, canvasHeight, pixelLimit, false);
+    if (!bytes || !AddProduct(bytes, layer.asset->image.PixelCount(), 8) ||
+        !AddProduct(bytes, selection.loops.PointCount(), 2 * sizeof(Vec2)) ||
+        !AddProduct(bytes, selection.loops.size(), 2 * sizeof(SelectionLoop)))
+        return 0;
+    // Tile keys for landing, hole, current/previous landing and merged uniqueness coexist with tile storage.
+    BrushStroke probe(layer, false, BrushSettings{}, canvasWidth, canvasHeight, nullptr);
+    const auto columns = (static_cast<std::uint64_t>((std::min)(probe.Width(), kMaxCanvasSide)) + 255) / 256 + 1;
+    const auto rows = (static_cast<std::uint64_t>((std::min)(probe.Height(), kMaxCanvasSide)) + 255) / 256 + 1;
+    return AddProduct(bytes, columns * rows, 8 * sizeof(std::uint64_t)) ? bytes : 0;
+}
+
 RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancellation)
 {
     const auto cancelled = [&]() noexcept { return RasterEditResult{RasterEditStatus::Cancelled}; };
@@ -261,9 +321,32 @@ RasterEditResult RunRasterEdit(const RasterEditInput& input, CancelToken cancell
     }
     if (cancellation.IsCancelled())
         return cancelled();
+    std::optional<DocumentSelection> moved;
+    if (input.kind == RasterEditKind::PixelMove)
+    {
+        std::vector<SelectionLoop> loops;
+        loops.reserve(input.selection->loops.size());
+        for (const auto& original : input.selection->loops)
+        {
+            loops.emplace_back();
+            auto& loop = loops.back();
+            loop.reserve(original.size());
+            for (std::size_t index = 0; index < original.size(); ++index)
+            {
+                if ((index & 255u) == 0 && cancellation.IsCancelled())
+                    return cancelled();
+                loop.push_back(
+                    {original[index].x + std::round(input.offset.x), original[index].y + std::round(input.offset.y)});
+            }
+        }
+        moved = DocumentSelection{input.selection->antialiased, std::move(loops)};
+    }
+    if (cancellation.IsCancelled())
+        return cancelled();
     return {RasterEditStatus::Ready, std::move(prepared),
             BrushCommitInfo{snapshot->image, snapshot->bounds.x, snapshot->bounds.y, snapshot->bounds.width,
-                            snapshot->bounds.height, input.mask}};
+                            snapshot->bounds.height, input.mask},
+            std::move(moved)};
 }
 
 RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, CancelToken cancellation)
@@ -280,8 +363,11 @@ RasterEditPreviewResult RunRasterEditPreview(const RasterEditInput& input, Cance
     owner->stroke->EndWorkerPreparation(); // no callback/context or job cancellation state escapes Run
     // The declared whole preparation peak also bounds the privately owned stroke/coverage/tile graph. Retained
     // source storages were not charged as new allocations, but may lose their last other owner after replacement.
-    owner->bytes = RasterEditMemoryBytes(input.layer, input.selection, input.canvasWidth, input.canvasHeight,
-                                         input.pixelLimit, input.mask);
+    owner->bytes = input.kind == RasterEditKind::PixelMove
+                       ? PixelMoveMemoryBytes(input.layer, input.selection.value(), input.canvasWidth,
+                                              input.canvasHeight, input.pixelLimit)
+                       : RasterEditMemoryBytes(input.layer, input.selection, input.canvasWidth, input.canvasHeight,
+                                               input.pixelLimit, input.mask);
     const auto retainedSource = [&](const Raster& image)
     {
         image.ForEachStorage(

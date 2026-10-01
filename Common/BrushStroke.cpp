@@ -2388,18 +2388,23 @@ bool BrushStroke::Invert()
                        });
 }
 
-bool BrushStroke::LiftSelection()
+bool BrushStroke::LiftSelection(bool* noPixels)
 {
+    if (noPixels)
+        *noPixels = false;
     if (!_valid || _failed || _mask || !_source.HasStorage() || !_selection.has_value() ||
-        _selection->Data() == nullptr)
+        _selection->Data() == nullptr || (_workerRasterEdit && _workCancellation.IsCancelled()))
     {
         return false;
     }
-    const SpotHealing::Bounds bounds = SpotHealing::CoverageBounds(
-        _selection->Data(), static_cast<std::size_t>(_selection->Width()),
-        static_cast<std::size_t>(_selection->Height()), static_cast<std::size_t>(_selection->Stride()));
+    const SpotHealing::Bounds bounds =
+        SpotHealing::CoverageBounds(_selection->Data(), static_cast<std::size_t>(_selection->Width()),
+                                    static_cast<std::size_t>(_selection->Height()),
+                                    static_cast<std::size_t>(_selection->Stride()), _workCancellation);
     if (bounds.Empty())
     {
+        if (noPixels && !_workCancellation.IsCancelled())
+            *noPixels = true;
         return false;
     }
     const GridRect region =
@@ -2408,6 +2413,8 @@ bool BrushStroke::LiftSelection()
             .Intersect(_sourceRect);
     if (region.Empty())
     {
+        if (noPixels)
+            *noPixels = true;
         return false;
     }
     std::vector<std::uint8_t> bytes;
@@ -2417,13 +2424,27 @@ bool BrushStroke::LiftSelection()
     }
     catch (const std::bad_alloc&)
     {
+        if (_workerRasterEdit)
+            throw;
         return false;
     }
     // The layer's pixels under the selection, faded by its coverage.
-    _source.ReadRegion(region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height, bytes.data(),
-                       region.width * 4, 0);
+    if (_workerRasterEdit)
+    {
+        if (!ReadRasterRegionForWork(_source,
+                                     {region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height},
+                                     bytes, static_cast<std::size_t>(region.width) * 4, 0, _workCancellation))
+            return false;
+    }
+    else
+        _source.ReadRegion(region.x - _sourceRect.x, region.y - _sourceRect.y, region.width, region.height,
+                           bytes.data(), region.width * 4, 0);
+    if (_workerRasterEdit && _workProgress)
+        _workProgress(_workProgressContext, 0, static_cast<std::size_t>(region.height));
     for (int y = 0; y < region.height; ++y)
     {
+        if (_workerRasterEdit && _workCancellation.IsCancelled())
+            return false;
         for (int x = 0; x < region.width; ++x)
         {
             const double coverage = SelectionAt(_pixelToDocument.Apply(Vec2{region.x + x + 0.5, region.y + y + 0.5}));
@@ -2435,7 +2456,12 @@ bool BrushStroke::LiftSelection()
                 pixel[channel] = static_cast<std::uint8_t>(std::lround(pixel[channel] * coverage));
             }
         }
+        if (_workerRasterEdit && _workProgress)
+            _workProgress(_workProgressContext, static_cast<std::size_t>(y + 1),
+                          static_cast<std::size_t>(region.height));
     }
+    if (_workerRasterEdit && _workCancellation.IsCancelled())
+        return false;
     const Raster image = Raster::Make(region.width, region.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     if (!image.HasStorage())
     {
@@ -2457,6 +2483,8 @@ bool BrushStroke::AllocateTilesIn(const GridRect& rect, std::vector<std::uint64_
     {
         for (int tx = clipped.x / kTileSize; tx <= (clipped.x + clipped.width - 1) / kTileSize; ++tx)
         {
+            if (_workerRasterEdit && _workCancellation.IsCancelled())
+                return false;
             const std::uint64_t key =
                 static_cast<std::uint64_t>(ty) * static_cast<std::uint64_t>(columns) + static_cast<std::uint64_t>(tx);
             if (!AllocateTile(key))
@@ -2471,7 +2499,7 @@ bool BrushStroke::AllocateTilesIn(const GridRect& rect, std::vector<std::uint64_
 
 bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
 {
-    if (!_lifted.has_value() || !_selection.has_value())
+    if (!_lifted.has_value() || !_selection.has_value() || (_workerRasterEdit && _workCancellation.IsCancelled()))
     {
         return false;
     }
@@ -2520,8 +2548,13 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         add(hole);
     }
     const Raster& lifted = _lifted->image;
+    std::size_t completedTiles = 0;
+    if (_workerRasterEdit && _workProgress)
+        _workProgress(_workProgressContext, 0, keys.size());
     for (const std::uint64_t key : keys)
     {
+        if (_workerRasterEdit && _workCancellation.IsCancelled())
+            return false;
         const auto found = _index.find(key);
         if (found == _index.end())
         {
@@ -2539,6 +2572,9 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
         std::vector<std::uint8_t> bytes(base, base + count * 4u);
         for (std::size_t index = 0; index < count; ++index)
         {
+            if (_workerRasterEdit && index % static_cast<std::size_t>(tile.rect.width) == 0 &&
+                _workCancellation.IsCancelled())
+                return false;
             const int px = static_cast<int>(index % static_cast<std::size_t>(tile.rect.width));
             const int py = static_cast<int>(index / static_cast<std::size_t>(tile.rect.width));
             const int gx = tile.rect.x + px;
@@ -2596,7 +2632,11 @@ bool BrushStroke::MoveLifted(Vec2 offset, bool duplicate)
             Raster::Make(tile.rect.width, tile.rect.height, RasterFormat::Bgra8888, bytes.data(), bytes.size());
         tile.touched = true;
         tile.changed = true;
+        if (_workerRasterEdit && _workProgress)
+            _workProgress(_workProgressContext, ++completedTiles, keys.size());
     }
+    if (_workerRasterEdit && _workCancellation.IsCancelled())
+        return false;
     _landingTiles = std::move(landing);
     _moved = MoveState{offset, duplicate};
     return true;

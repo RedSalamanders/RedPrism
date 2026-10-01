@@ -1630,8 +1630,36 @@ struct RotationFaultPlan
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::DestinationToBackupRename;
     std::uint32_t error = ERROR_ACCESS_DENIED;
     unsigned int failOnVisit = 1;
-    unsigned int visits[5]{};
+    unsigned int visits[8]{};
 };
+
+struct RecoveryTimerFaultPlan
+{
+    ProjectSaveFaultStage stage = ProjectSaveFaultStage::RecoveryTimerCreate;
+    std::uint32_t error = ERROR_NOT_ENOUGH_MEMORY;
+    unsigned int visits[8]{};
+};
+
+std::uint32_t FailPublishAndRecoveryTimerAt(void* context, ProjectSaveFaultStage stage) noexcept
+{
+    auto& plan = *static_cast<RecoveryTimerFaultPlan*>(context);
+    const std::size_t index = static_cast<std::size_t>(stage);
+    if (index >= std::size(plan.visits))
+        return ERROR_INVALID_PARAMETER;
+    ++plan.visits[index];
+    if (stage == ProjectSaveFaultStage::StagingToDestinationRename)
+        return ERROR_ACCESS_DENIED;
+    return stage == plan.stage ? plan.error : 0;
+}
+
+std::uint32_t CountRecoveryTimerStages(void* context, ProjectSaveFaultStage stage) noexcept
+{
+    auto& visits = *static_cast<unsigned int*>(context);
+    if (stage == ProjectSaveFaultStage::RecoveryTimerCreate || stage == ProjectSaveFaultStage::RecoveryTimerArm ||
+        stage == ProjectSaveFaultStage::RecoveryTimerWait)
+        ++visits;
+    return 0;
+}
 
 std::uint32_t FailRotationAt(void* context, ProjectSaveFaultStage stage) noexcept
 {
@@ -1966,6 +1994,70 @@ void TestProjectRotationFaultRecovery()
                SnapshotProjectTree(destination) == originalTree && !std::filesystem::exists(backup),
            "rotation-fault.native-reader-close-allows-backup-only-recovery");
 
+    unsigned int healthyRecoveryHookVisits = 0;
+    Expect(SaveProject(destination.c_str(), original, layer.id, false, {}, {},
+                       ProjectSaveFaultPolicy{&CountRecoveryTimerStages, &healthyRecoveryHookVisits}) ==
+                   ProjectIoStatus::Ok &&
+               SnapshotProjectTree(destination) == originalTree && healthyRecoveryHookVisits == 0,
+           "rotation-fault.healthy-save-skips-recovery-timer-hooks");
+
+    const auto exerciseRecoveryTimerFailure = [&](ProjectSaveFaultStage faultStage, std::uint32_t injectedError,
+                                                  bool directoryReader, std::uint32_t nativeRenameError,
+                                                  const char* failureCase, const char* restoredCase)
+    {
+        RollbackChildReader reader;
+        reader.manifest = directoryReader ? backup.c_str() : backupManifest.c_str();
+        reader.directory = directoryReader;
+        RecoveryTimerFaultPlan timerFault{faultStage, injectedError};
+        const ProjectSaveFaultPolicy policy{&FailPublishAndRecoveryTimerAt, &timerFault};
+        const ProjectIoStatus status = SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                                                   ProjectIoObserver{&ObserveRollbackChildReader, &reader}, policy);
+        const std::size_t publishFailure = static_cast<std::size_t>(ProjectIoStage::StagingToDestinationFailed);
+        const std::size_t rollbackFailure = static_cast<std::size_t>(ProjectIoStage::RollbackFailed);
+        const std::size_t published = static_cast<std::size_t>(ProjectIoStage::Published);
+        const std::size_t retries = static_cast<std::size_t>(ProjectIoStage::RollbackRetryScheduled);
+        const std::size_t selectedFault = static_cast<std::size_t>(faultStage);
+        const bool expectedHookOrder =
+            timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerCreate)] == 1 &&
+            timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerArm)] ==
+                (faultStage == ProjectSaveFaultStage::RecoveryTimerCreate ? 0u : 1u) &&
+            timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)] ==
+                (faultStage == ProjectSaveFaultStage::RecoveryTimerWait ? 1u : 0u);
+        const bool failedAsExpected =
+            status == ProjectIoStatus::Encode && reader.opened && timerFault.visits[selectedFault] == 1 &&
+            timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::StagingToDestinationRename)] == 1 &&
+            timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RollbackRename)] == 1 &&
+            expectedHookOrder && reader.events.visits[publishFailure] == 1 &&
+            reader.events.errors[publishFailure] == ERROR_ACCESS_DENIED && reader.events.visits[rollbackFailure] == 1 &&
+            reader.events.errors[rollbackFailure] == nativeRenameError && reader.events.visits[published] == 0 &&
+            reader.events.visits[retries] == (faultStage == ProjectSaveFaultStage::RecoveryTimerWait ? 1u : 0u) &&
+            !std::filesystem::exists(destination) && SnapshotProjectTree(backup) == originalTree &&
+            CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0;
+        Expect(failedAsExpected, failureCase);
+
+        reader.file.reset();
+        RotationFaultPlan backupOnlyPublishFault{ProjectSaveFaultStage::StagingToDestinationRename, ERROR_ACCESS_DENIED,
+                                                 1};
+        const ProjectIoStatus recoveryStatus =
+            SaveProject(destination.c_str(), replacement, layer.id, false, {}, {},
+                        ProjectSaveFaultPolicy{&FailRotationAt, &backupOnlyPublishFault});
+        Expect(recoveryStatus == ProjectIoStatus::Encode && SnapshotProjectTree(destination) == originalTree &&
+                   !std::filesystem::exists(backup),
+               restoredCase);
+    };
+
+    exerciseRecoveryTimerFailure(ProjectSaveFaultStage::RecoveryTimerCreate, ERROR_NOT_ENOUGH_MEMORY, false,
+                                 ERROR_ACCESS_DENIED,
+                                 "rotation-fault.timer-create-failure-keeps-native-child-lock-error-and-backup",
+                                 "rotation-fault.timer-create-failure-remains-backup-only-recoverable");
+    exerciseRecoveryTimerFailure(ProjectSaveFaultStage::RecoveryTimerArm, ERROR_INVALID_HANDLE, true,
+                                 ERROR_SHARING_VIOLATION,
+                                 "rotation-fault.timer-arm-failure-keeps-native-directory-lock-error-and-backup",
+                                 "rotation-fault.timer-arm-failure-remains-backup-only-recoverable");
+    exerciseRecoveryTimerFailure(ProjectSaveFaultStage::RecoveryTimerWait, ERROR_TIMEOUT, false, ERROR_ACCESS_DENIED,
+                                 "rotation-fault.timer-wait-failure-keeps-native-child-lock-error-and-backup",
+                                 "rotation-fault.timer-wait-failure-remains-backup-only-recoverable");
+
     // Fail both publication and rollback. The prior complete tree must remain available at the documented .old
     // recovery name; the failed new staging tree is owned and removed. No Published event is emitted.
     RotationEventLog rollbackEvents{};
@@ -1973,7 +2065,7 @@ void TestProjectRotationFaultRecovery()
     // The fault callback can select one stage at a time, so use a context that fails the second requested point.
     struct TwoFaults
     {
-        unsigned int visits[5]{};
+        unsigned int visits[8]{};
     } twoFaults;
     const auto failPublishAndRollback = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -1997,6 +2089,9 @@ void TestProjectRotationFaultRecovery()
                rollbackEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
                rollbackEvents.visits[rollbackFailureIndex] == 1 &&
                rollbackEvents.errors[rollbackFailureIndex] == ERROR_SHARING_VIOLATION &&
+               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerCreate)] == 0 &&
+               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerArm)] == 0 &&
+               twoFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)] == 0 &&
                rollbackEvents.visits[publishedIndex] == 0,
            "rotation-fault.rollback-failure-reports-both-exact-errors-without-published");
     Expect(!std::filesystem::exists(destination) && backupReloaded.status == ProjectIoStatus::Ok &&
@@ -2081,7 +2176,7 @@ void TestProjectRotationFaultRecovery()
     RotationEventLog stagingCleanupEvents{};
     struct RenameAndCleanupFaults
     {
-        unsigned int visits[5]{};
+        unsigned int visits[8]{};
     } renameAndCleanupFaults;
     const auto failRenameAndStagingCleanup = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {

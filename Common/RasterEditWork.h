@@ -14,6 +14,7 @@ enum class RasterEditKind : std::uint8_t
     Clear,
     Invert,
     Gradient,
+    PixelMove,
 };
 
 enum class RasterEditStatus : std::uint8_t
@@ -45,6 +46,9 @@ struct RasterEditInput final
     GradientShape shape = GradientShape::Linear;
     std::array<double, 4> endColor{};
     double opacity = 1;
+    // PixelMove offsets round in document pixels. Duplicate keeps the original coverage instead of a hole.
+    Vec2 offset{};
+    bool duplicate = false;
     // Borrowed only during RunRasterEdit, never retained by its result. Observe completed tile checkpoints;
     // callbacks publish progress/cancellation state and never mutate the input or application objects.
     void (*progress)(void*, std::size_t completed, std::size_t total) noexcept = nullptr;
@@ -58,6 +62,8 @@ struct RasterEditResult final
     // Worker-computed crop coordinates for the installed raster. Adoption is allowed only when an acknowledged
     // gradient preview has the same settings and mutation generation; this metadata alone does not authorize it.
     std::optional<BrushCommitInfo> previewCommit;
+    // PixelMove owns the completely prepared translated outline; other kinds leave it absent.
+    std::optional<DocumentSelection> selection;
 };
 
 struct RasterEditPreviewResult final
@@ -71,6 +77,11 @@ struct RasterEditPreviewResult final
 [[nodiscard]] std::uint64_t RasterEditMemoryBytes(const ImageLayer& layer,
                                                   const std::optional<DocumentSelection>& selection, int canvasWidth,
                                                   int canvasHeight, std::int64_t pixelLimit, bool mask) noexcept;
+
+// Adds private lifted pixels, landing/hole indexes and moved immutable outline storage to the raster-edit graph.
+// Requires an image target and selection. Zero refuses invalid or overflowing geometry.
+[[nodiscard]] std::uint64_t PixelMoveMemoryBytes(const ImageLayer& layer, const DocumentSelection& selection,
+                                                 int canvasWidth, int canvasHeight, std::int64_t pixelLimit) noexcept;
 
 // Uses only a private CPU raster path. Allocations may throw bad_alloc to the shared runner. Cancellation,
 // failed growing-mask preparation and pixel-limit refusal publish no layer. Caller owns eligibility checks

@@ -85,8 +85,9 @@ struct ProjectIoObserver
 
 // Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
 // value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
-// there is no process-wide test state. Injected errors are final; only native rollback errors get the bounded
-// recovery attempts. ZIP saves do not consult this policy.
+// there is no process-wide test state. Injected operation errors are final; only native rollback errors get the
+// bounded recovery attempts. RecoveryTimerCreate/Arm/Wait fault results stop that recovery operation while the
+// observer still receives the native rollback rename error. ZIP saves do not consult this policy.
 enum class ProjectSaveFaultStage : std::uint8_t
 {
     DestinationToBackupRename,
@@ -94,7 +95,14 @@ enum class ProjectSaveFaultStage : std::uint8_t
     RollbackRename,
     BackupCleanup,
     StagingCleanup,
+    RecoveryTimerCreate,
+    RecoveryTimerArm,
+    RecoveryTimerWait,
 };
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RollbackRename) == 2);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerCreate) == 5);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerArm) == 6);
+static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerWait) == 7);
 
 struct ProjectSaveFaultPolicy
 {
