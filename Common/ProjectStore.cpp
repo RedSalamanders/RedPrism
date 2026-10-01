@@ -14,7 +14,9 @@
 #include <cstring>
 #include <cwctype>
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <windows.h>
@@ -1473,14 +1475,121 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
     return ProjectIoStatus::Ok;
 }
 
-void DeleteTree(const std::wstring& path)
+[[nodiscard]] std::uint32_t RequestedFailure(ProjectSaveFaultPolicy policy, ProjectSaveFaultStage stage) noexcept
 {
-    std::error_code error;
-    std::filesystem::remove_all(std::filesystem::path(path), error);
+    return policy.failure == nullptr ? 0 : policy.failure(policy.context, stage);
+}
+
+using TreeCleanupBuffer = std::array<wchar_t, 32768>;
+constexpr unsigned int kMaxCleanupDepth = 128;
+
+// The path buffer is allocated before staging ownership begins. Cleanup also runs during worker OOM unwinding:
+// no path construction, container growth or filesystem allocation is permitted here. Do not follow reparse points.
+[[nodiscard]] std::uint32_t DeleteTreePath(TreeCleanupBuffer& path, std::size_t length, unsigned int depth) noexcept
+{
+    const DWORD attributes = GetFileAttributesW(path.data());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        const DWORD failure = GetLastError();
+        return failure == ERROR_FILE_NOT_FOUND || failure == ERROR_PATH_NOT_FOUND ? 0 : failure;
+    }
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        return DeleteFileW(path.data()) ? 0 : GetLastError();
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return RemoveDirectoryW(path.data()) ? 0 : GetLastError();
+    if (depth >= kMaxCleanupDepth || length + 2 >= path.size())
+        return ERROR_FILENAME_EXCED_RANGE;
+
+    path[length] = L'\\';
+    path[length + 1] = L'*';
+    path[length + 2] = L'\0';
+    WIN32_FIND_DATAW entry{};
+    wil::unique_hfind search{FindFirstFileW(path.data(), &entry)};
+    path[length] = L'\0';
+    if (!search)
+    {
+        const DWORD failure = GetLastError();
+        if (failure != ERROR_FILE_NOT_FOUND)
+            return failure;
+    }
+    else
+    {
+        for (;;)
+        {
+            const std::wstring_view name{entry.cFileName};
+            if (name != L"." && name != L"..")
+            {
+                if (length + 1 + name.size() >= path.size())
+                    return ERROR_FILENAME_EXCED_RANGE;
+                path[length] = L'\\';
+                std::copy(name.begin(), name.end(), path.begin() + length + 1);
+                const std::size_t childLength = length + 1 + name.size();
+                path[childLength] = L'\0';
+                const std::uint32_t failure = DeleteTreePath(path, childLength, depth + 1);
+                path[length] = L'\0';
+                if (failure != 0)
+                    return failure;
+            }
+            if (!FindNextFileW(search.get(), &entry))
+            {
+                const DWORD failure = GetLastError();
+                if (failure != ERROR_NO_MORE_FILES)
+                    return failure;
+                break;
+            }
+        }
+        search.reset();
+    }
+    return RemoveDirectoryW(path.data()) ? 0 : GetLastError();
+}
+
+[[nodiscard]] bool DeleteTree(const std::wstring& path, ProjectSaveFaultStage faultStage, ProjectIoStage failureStage,
+                              ProjectSaveFaultPolicy faultPolicy, ProjectIoObserver observer,
+                              TreeCleanupBuffer& scratch) noexcept
+{
+    std::uint32_t failure = RequestedFailure(faultPolicy, faultStage);
+    if (failure == 0)
+    {
+        const bool extended = path.starts_with(L"\\\\?\\");
+        const bool unc = !extended && path.starts_with(L"\\\\");
+        const std::wstring_view prefix = extended ? L"" : unc ? L"\\\\?\\UNC\\" : L"\\\\?\\";
+        const std::size_t offset = unc ? 2 : 0;
+        const std::size_t length = prefix.size() + path.size() - offset;
+        if (path.empty() || length >= scratch.size())
+            failure = ERROR_FILENAME_EXCED_RANGE;
+        else
+        {
+            std::copy(prefix.begin(), prefix.end(), scratch.begin());
+            std::copy(path.begin() + offset, path.end(), scratch.begin() + prefix.size());
+            scratch[length] = L'\0';
+            failure = DeleteTreePath(scratch, length, 0);
+        }
+    }
+    if (failure != 0)
+    {
+        Report(observer, failureStage, failure);
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool RenameDirectory(const std::wstring& from, const std::wstring& to, ProjectSaveFaultStage faultStage,
+                                   std::uint32_t& failure, ProjectSaveFaultPolicy faultPolicy) noexcept
+{
+    failure = RequestedFailure(faultPolicy, faultStage);
+    if (failure != 0)
+        return false;
+    if (!MoveFileW(from.c_str(), to.c_str()))
+    {
+        failure = GetLastError(); // Capture before reporting, rollback or cleanup.
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] ProjectIoStatus SaveExploded(const std::wstring& dest, const std::wstring& staging,
-                                           CancelToken cancellation, ProjectIoObserver observer)
+                                           CancelToken cancellation, ProjectIoObserver observer,
+                                           ProjectSaveFaultPolicy faultPolicy, TreeCleanupBuffer& cleanupScratch)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1489,24 +1598,38 @@ void DeleteTree(const std::wstring& path)
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     // Publication begins here. Once rotation starts, finish or recover it without interpreting a later stop
-    // as a rollback. The caller receives Ok when the external destination has actually been published.
-    DeleteTree(backup);
-    if (IsDirectory(dest.c_str()) && !MoveFileW(dest.c_str(), backup.c_str()))
+    // as a rollback. The caller receives Ok only when the new external destination was actually published.
+    // Remove an older backup only while the current destination still exists. When a previous rollback failed,
+    // .old can be the only surviving project; keep it until new publication or restore it on another failure.
+    if (IsDirectory(dest.c_str()))
     {
-        Report(observer, ProjectIoStage::RotateFailed, GetLastError());
-        return ProjectIoStatus::Encode;
+        if (!DeleteTree(backup, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, faultPolicy,
+                        observer, cleanupScratch))
+            return ProjectIoStatus::Encode;
+        std::uint32_t failure = 0;
+        if (!RenameDirectory(dest, backup, ProjectSaveFaultStage::DestinationToBackupRename, failure, faultPolicy))
+        {
+            Report(observer, ProjectIoStage::DestinationToBackupFailed, failure);
+            return ProjectIoStatus::Encode;
+        }
     }
-    if (!MoveFileW(staging.c_str(), dest.c_str()))
+    std::uint32_t publishFailure = 0;
+    if (!RenameDirectory(staging, dest, ProjectSaveFaultStage::StagingToDestinationRename, publishFailure, faultPolicy))
     {
-        Report(observer, ProjectIoStage::PublishFailed, GetLastError());
+        Report(observer, ProjectIoStage::StagingToDestinationFailed, publishFailure);
         if (IsDirectory(backup.c_str()))
         {
-            (void)MoveFileW(backup.c_str(), dest.c_str());
+            std::uint32_t rollbackFailure = 0;
+            if (!RenameDirectory(backup, dest, ProjectSaveFaultStage::RollbackRename, rollbackFailure, faultPolicy))
+                Report(observer, ProjectIoStage::RollbackFailed, rollbackFailure);
         }
         return ProjectIoStatus::Encode;
     }
-    DeleteTree(backup);
+    // This is the irreversible publication fact. Cleanup faults may retain the old backup but cannot turn a
+    // published document into a failed or cancelled save.
     Report(observer, ProjectIoStage::Published);
+    (void)DeleteTree(backup, ProjectSaveFaultStage::BackupCleanup, ProjectIoStage::BackupCleanupFailed, faultPolicy,
+                     observer, cleanupScratch);
     return ProjectIoStatus::Ok;
 }
 
@@ -1890,7 +2013,7 @@ ProjectLoadProbeResult ProbeProjectLoad(const wchar_t* path, CancelToken cancell
 
 ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
                             const std::optional<Guid>& activeLayerID, bool zipArchive, CancelToken cancellation,
-                            ProjectIoObserver observer)
+                            ProjectIoObserver observer, ProjectSaveFaultPolicy faultPolicy)
 {
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1909,12 +2032,19 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
     if (destination.empty() || !std::filesystem::path(destination).has_filename())
         return ProjectIoStatus::Invalid;
     const std::wstring staging = UniqueSiblingPath(destination);
+    const auto cleanupScratch = std::make_unique_for_overwrite<TreeCleanupBuffer>();
     if (!CreateDirectoryW(staging.c_str(), nullptr))
     {
         Report(observer, ProjectIoStage::CreateFailed, GetLastError());
         return ProjectIoStatus::Encode;
     }
-    auto cleanup = wil::scope_exit([&]() noexcept { DeleteTree(staging); });
+    const ProjectSaveFaultPolicy stagingFaultPolicy = zipArchive ? ProjectSaveFaultPolicy{} : faultPolicy;
+    auto cleanup = wil::scope_exit(
+        [&]() noexcept
+        {
+            (void)DeleteTree(staging, ProjectSaveFaultStage::StagingCleanup, ProjectIoStage::StagingCleanupFailed,
+                             stagingFaultPolicy, observer, *cleanupScratch);
+        });
     const std::wstring images = staging + L"\\images";
     if (!CreateDirectoryW(images.c_str(), nullptr))
     {
@@ -1934,8 +2064,9 @@ ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
     {
         return encoded;
     }
-    const auto status = zipArchive ? SaveZip(path, json, images, files, cancellation, observer)
-                                   : SaveExploded(destination, staging, cancellation, observer);
+    const auto status = zipArchive
+                            ? SaveZip(path, json, images, files, cancellation, observer)
+                            : SaveExploded(destination, staging, cancellation, observer, faultPolicy, *cleanupScratch);
     if (status == ProjectIoStatus::Ok && !zipArchive)
         cleanup.release(); // rotation transferred the directory; this name no longer denotes our staging.
     return status;

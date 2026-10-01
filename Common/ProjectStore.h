@@ -4,6 +4,7 @@
 #include "ImageCodecs.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -62,8 +63,13 @@ enum class ProjectIoStage
     WriteFailed,
     FlushFailed,
     CloseFailed,
-    RotateFailed,
-    PublishFailed,
+    RotateFailed,  // Retained numeric/API slot; new saves report the named failure stages below.
+    PublishFailed, // Retained numeric/API slot; new saves report the named failure stages below.
+    DestinationToBackupFailed,
+    StagingToDestinationFailed,
+    RollbackFailed,
+    BackupCleanupFailed,
+    StagingCleanupFailed,
 };
 
 // Optional bounded observer on the calling worker. It must not touch UI or throw. The context remains borrowed
@@ -72,6 +78,24 @@ enum class ProjectIoStage
 struct ProjectIoObserver
 {
     void (*notify)(void*, ProjectIoStage, unsigned int) noexcept = nullptr;
+    void* context = nullptr;
+};
+
+// Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
+// value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
+// there is no process-wide test state. ZIP saves do not consult this policy.
+enum class ProjectSaveFaultStage : std::uint8_t
+{
+    DestinationToBackupRename,
+    StagingToDestinationRename,
+    RollbackRename,
+    BackupCleanup,
+    StagingCleanup,
+};
+
+struct ProjectSaveFaultPolicy
+{
+    std::uint32_t (*failure)(void*, ProjectSaveFaultStage) noexcept = nullptr;
     void* context = nullptr;
 };
 
@@ -161,7 +185,8 @@ template <typename AttributeFn>
                                                       ProjectIoObserver observer = {});
 [[nodiscard]] ProjectIoStatus SaveProject(const wchar_t* path, const CanvasDocument& document,
                                           const std::optional<Guid>& activeLayerID, bool zipArchive,
-                                          CancelToken cancellation = {}, ProjectIoObserver observer = {});
+                                          CancelToken cancellation = {}, ProjectIoObserver observer = {},
+                                          ProjectSaveFaultPolicy faultPolicy = {});
 // The image becomes a layer above the active one (legacy EditorSession.insert), centered on `center` (a drop point,
 // in document pixels) or else on the canvas; into an empty document it becomes the canvas and `center` is ignored.
 [[nodiscard]] ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path,

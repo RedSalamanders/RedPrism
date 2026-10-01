@@ -96,6 +96,8 @@
     <ClInclude Include="..\..\Common\PathClassificationWork.h" />
     <ClInclude Include="PathClassificationWorkTests.h" />
     <ClInclude Include="ImageCodecWorkTests.h" />
+    <ClInclude Include="ClipboardDibWorkTests.h" />
+    <ClInclude Include="..\..\Common\ClipboardDibWork.h" />
     <ClInclude Include="CodecFileStreamTests.h" />
     <ClInclude Include="ProjectCancellationTests.h" />
     <ClInclude Include="FileIoBench.h" />
@@ -132,6 +134,8 @@
     <ClCompile Include="..\..\Common\PathClassificationWork.cpp" />
     <ClCompile Include="PathClassificationWorkTests.cpp" />
     <ClCompile Include="ImageCodecWorkTests.cpp" />
+    <ClCompile Include="ClipboardDibWorkTests.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="CodecFileStreamTests.cpp" />
     <ClCompile Include="ProjectCancellationTests.cpp" />
     <ClCompile Include="FileIoBench.cpp" />

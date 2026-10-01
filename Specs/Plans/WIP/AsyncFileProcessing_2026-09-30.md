@@ -20,7 +20,12 @@
     - [x] F4b.1 — Production project save worker owns document/path/revision and one whole-graph reservation; captured revision, publication/cancel acknowledgement and dependent action ordering pass the complete configuration matrix and real-loop measurements.
     - [x] F4b.2 — Asynchronous export readback/encoding graph; captured options/destination ordering, detached GPU lifetime and bounded additional-event recovery pass the complete configuration matrix and hardware/WARP measurements.
 - [ ] F5 — Worker clipboard decode/encode, owned immediate OS transfers, event-backed bounded retry and copied New Canvas prefill.
+  - [x] F5a — Cancellable DIB byte conversion and PNG metadata inspection; 42/11 independent literal checks and all configuration gates pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Production transfer/callers remain F5b–F5d.
+  - [ ] F5b — Admitted worker-owned source snapshots/global blocks and immediate OS transfer with exact sequence/publication truth.
+  - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
+  - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
+  - [x] F6a — Directory rotation/rollback/cleanup faults, backup-only retry recovery and truthful publication/errors; 24 injected/real filesystem checks and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)). Cleanup allocates its bounded scratch before staging and never follows reparse targets. Intermittent real save cause, flush/close faults and overall F6 remain open.
   - [x] Qualify a bounded recovery policy for real hardware `DXGI_ERROR_WAS_STILL_DRAWING` after its GPU event: retain the original copy through one additional event and nonblocking Map, then fail locally if still busy. Full configuration gates, injected failures/later-tile refusal and 4K/45 MP hardware exports pass. The exact driver cause remains unknown; this policy bounds attempts, not driver delay.
   - [ ] Establish the cause of intermittent exploded save/rotation failures. Save-worker qualification preparation saw `save-durability.folder-first-save` and a later `project-cancel.publish-exploded` failure; twelve runs after adding failure-only stage/error diagnostics passed without reproducing either. Keep the original failures, distinguish immediate observer error values from cleanup LastError, and cover the final recovery/cleanup paths with injected faults.
 
@@ -178,6 +183,67 @@ no published output, one exact failure receipt/notice and unchanged document/his
 Worker gates require zero lent GPU mappings and zero utility-surface bytes before encoding; recovery cases
 require one encode attempt. All current failure cases require exactly one localized notice. These tests need
 full configuration qualification and real-loop measurements, now recorded in the writer evidence above.
+
+### F5 execution detail
+
+Implementation checklist (start here; each qualified slice is committed and pushed):
+
+- [x] F5a — Separate cancellable DIB byte conversion and PNG metadata inspection from Win32 transfer; 53 literal byte/metadata controls and all configurations pass ([evidence](../../TestRuns/ClipboardAndRecovery_2026-10-01.md)).
+- [ ] F5b — Own prepared global blocks, inspected source limits and immediate OS transfer on workers; preserve PNG-first fallback, sequence truth, private-copy preference and acknowledged cancellation.
+- [ ] F5c — Add bounded event-backed clipboard retries and ordered Copy/Cut/Paste continuations, plus metadata-only New Canvas prefill guarded against typing, replacement and clipboard changes.
+- [ ] F5d — Qualify publication/cancellation/late failure, delayed rendering, contention, shutdown and full real-loop measurements; retire production UI-thread codec/clipboard access before closing F5.
+
+F5a preserves the current integer BGRA premultiplication rules and accepted DIB layouts. Parse and serialize
+explicit little-endian bytes, check offsets before pointer arithmetic and enforce 30,000-side, 100 M pixel and
+512 MiB encoded limits independently of caller ceilings. Decode into an adopted PixelBuffer. Encode reads
+bounded rows privately from sparse rasters; no shared Data() assembly and no additional full-source buffer.
+Metadata probes must neither CopyPixels nor create thumbnails. Failed/cancelled outputs are empty. Independent
+literal DIB and PNG fixtures cover top/bottom rows, padding, alpha, masks, malformed sizes and exact budget edges.
+
+F5b must inspect before large allocation and reserve the complete copy/decode/paste graph. Reopened clipboard
+input must match the inspected sequence and fit inspected encoded/pixel limits before copying or allocating;
+failed PNG can fall back only to a separately inspected DIB. Never retain borrowed clipboard handles/locked
+pointers after CloseClipboard. Worker-owned resources survive cancellation until the OS call returns.
+Outgoing global blocks are prepared before EmptyClipboard; SetClipboardData transfers only successful blocks.
+Record whether the clipboard was emptied, which formats were placed and its sequence while held. Late
+cancellation cannot undo or repeat a published external change. An outgoing snapshot checks the source sequence
+before EmptyClipboard so encoding cannot overwrite a later foreign copy. The session's private copy remains
+usable when mirroring fails; remember the sequence at the private copy, not a later unrelated sequence.
+
+The master table's short synchronous owner publication is insufficient as a guarantee: EmptyClipboard sends
+WM_DESTROYCLIPBOARD to the preceding owner and GetClipboardData can trigger delayed rendering. Execute these
+calls on a worker inside the private Win32 clipboard adapter. Reading can use a null owner. Publishing uses an
+adapter-owned message-only window on that worker; never borrow the Application HWND or call session/chrome.
+Use already rendered PNG/DIB global blocks, never delayed rendering. Verify that destruction of the immediate
+format owner retains readable contents and sequence truth. This is an explicit private platform-adapter
+exception to the generic job prohibition on window access, not permission to call application UI from Run.
+Update the owning architecture/performance/clipboard contracts and the master table with F5b implementation.
+
+Retry failures without occupying a compute callback or sleeping on the owner. Use one-shot timers registered
+with the existing wait pool. A bounded owner work source publishes readiness and resumes the same suspended
+job/ticket/reservation. Five retries follow the initial attempt at 50, 100, 200, 400 and 800 ms; six total attempts,
+no polling or recurring timer. Cancellation signals readiness immediately; unregister/join wait callbacks before
+destroying the timer or job. The Application owner pump can multiplex GPU and retry sources while preserving
+the scheduler's single borrowed owner-work-source contract. Shutdown stops timer producers before closing workers.
+
+The selected Copy/Cut/Paste request retains its history ordinal until its admitted stages acknowledge.
+Clipboard replacement has a separate copy stamp so an older encode cannot publish over a newer private copy.
+Cut's private copy and clear remain atomic under the existing numeric golden; selection rendering, clear and
+Copy Merged readback migrate in P1.5/P1.3 rather than being called synchronously as part of F5's final exit.
+Foreign Paste prepares the inserted layer/document privately and validates the settled serial/generation before
+one owner history entry. Internal Paste preserves the stored origin; foreign Paste uses floored centering.
+New Canvas opens immediately at the last size. Its probe result applies only to the same card invocation,
+unedited draft revision and clipboard sequence; any Width/Height edit, even back to the previous value, wins.
+
+Keep ordinary correctness tests event gated, not latency assertions. Separate measured codec row checkpoints,
+clipboard retry deadlines and stop-to-return distributions from any claim about an in-flight OS/WIC call.
+An external delayed renderer can block that worker; it must never block the interactive application thread.
+F6 still owns measured slow/hung-source and hidden shutdown qualification. No G1 claim follows a helper alone.
+
+Primary platform references: [OpenClipboard](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard),
+[Clipboard operations](https://learn.microsoft.com/en-us/windows/win32/dataxchg/clipboard-operations),
+[SetClipboardData](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata).
+
 
 ## Required evidence
 

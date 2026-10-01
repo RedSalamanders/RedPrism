@@ -307,7 +307,17 @@ do not measure in-kernel stop latency.
 P1.7 project durability checks inspect ZIP methods (STORE encoded PNG, DEFLATE manifest), load an independently
 rewritten legacy DEFLATE archive, exercise ZIP and folder overwrite, preserve unrelated same-prefix paths,
 require owned staging cleanup and refuse a locked destination while preserving its distinct previous bytes and
-resolution. The folder's second-rename rollback and injected flush/close faults are not covered by these controls.
+resolution. Separate `rotation-fault.*` controls inject every folder rotation/rollback/cleanup stage, retain
+exact reported errors, compare literal loaded pixels and byte-identical old trees, and check publication truth.
+Backup-only retries cover repeated failed rollback, successful restoration and successful new publication;
+unrelated siblings survive. Real cleanup cases cover a read-only file, nested files, a mount-point junction with
+an intact external target and the 128-level refusal. Injected flush/close faults remain open.
+
+P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
+They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5
+output, invalid/truncated headers, signed/hard budgets, empty precancelled output and unchanged sparse sources.
+The 512 MiB size predicate and over-cap null PNG input avoid fabricated borrowed spans. These helpers are not
+production clipboard transfer or host-contention qualification; F5b–F5d remain open.
 
 `project-save-memory.*` independently checks refusal of zero/overlong paths, invalid canvas dimensions and excess
 layers; acceptance at path/canvas/layer bounds; name/path-sensitive charges; BGRA/Gray8 frame accounting; shared

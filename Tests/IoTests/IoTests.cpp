@@ -1,6 +1,7 @@
 #include "CodecFileStreamTests.h"
 #include "FileIoBench.h"
 
+#include "ClipboardDibWorkTests.h"
 #include "Document.h"
 #include "ImageCodecWorkTests.h"
 #include "ImageCodecs.h"
@@ -13,19 +14,25 @@
 #include "ZipOwner.h"
 #include <cwchar>
 
+#include <algorithm>
 #include <cmath>
 #include <crtdbg.h>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <objbase.h>
+#include <stop_token>
 #include <string>
 #include <vector>
 #include <wincodec.h>
 #include <windows.h>
+#include <winioctl.h>
 #include <zip.h>
 
 #pragma warning(push)
@@ -1618,6 +1625,405 @@ void TestProjectSaveDurability()
     return SettingsStore::ReadFileBytes(path, bytes) ? bytes : std::string{};
 }
 
+struct RotationFaultPlan
+{
+    ProjectSaveFaultStage stage = ProjectSaveFaultStage::DestinationToBackupRename;
+    std::uint32_t error = ERROR_ACCESS_DENIED;
+    unsigned int failOnVisit = 1;
+    unsigned int visits[5]{};
+};
+
+std::uint32_t FailRotationAt(void* context, ProjectSaveFaultStage stage) noexcept
+{
+    auto& plan = *static_cast<RotationFaultPlan*>(context);
+    const std::size_t index = static_cast<std::size_t>(stage);
+    if (index >= std::size(plan.visits))
+        return ERROR_INVALID_PARAMETER;
+    const unsigned int visit = ++plan.visits[index];
+    return stage == plan.stage && visit == plan.failOnVisit ? plan.error : 0;
+}
+
+struct RotationEventLog
+{
+    unsigned int visits[static_cast<std::size_t>(ProjectIoStage::StagingCleanupFailed) + 1]{};
+    unsigned int errors[static_cast<std::size_t>(ProjectIoStage::StagingCleanupFailed) + 1]{};
+    std::stop_source* stopOnStagingPublishFailure = nullptr;
+};
+
+void ObserveRotation(void* context, ProjectIoStage stage, unsigned int value) noexcept
+{
+    auto& log = *static_cast<RotationEventLog*>(context);
+    const std::size_t index = static_cast<std::size_t>(stage);
+    if (index < std::size(log.visits))
+    {
+        ++log.visits[index];
+        log.errors[index] = value;
+    }
+    if (stage == ProjectIoStage::StagingToDestinationFailed && log.stopOnStagingPublishFailure != nullptr)
+        (void)log.stopOnStagingPublishFailure->request_stop();
+}
+
+using ProjectTreeSnapshot = std::vector<std::pair<std::wstring, std::string>>;
+
+[[nodiscard]] ProjectTreeSnapshot SnapshotProjectTree(const std::filesystem::path& root)
+{
+    ProjectTreeSnapshot files;
+    std::error_code error;
+    for (const std::filesystem::directory_entry& entry : std::filesystem::recursive_directory_iterator(root, error))
+    {
+        if (entry.is_regular_file(error) && !error)
+            files.emplace_back(std::filesystem::relative(entry.path(), root).generic_wstring(), ReadText(entry.path()));
+        if (error)
+            break;
+    }
+    std::sort(files.begin(), files.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
+    return files;
+}
+
+[[nodiscard]] std::size_t CountOwnedStagingDirectories(const std::filesystem::path& parent,
+                                                       const std::wstring& destinationName)
+{
+    std::error_code error;
+    std::size_t count = 0;
+    const std::wstring prefix = destinationName + L".~";
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(parent, error))
+    {
+        if (entry.is_directory(error) && !error && entry.path().filename().wstring().starts_with(prefix) &&
+            entry.path().filename().wstring() != prefix + L"unowned")
+            ++count;
+        if (error)
+            break;
+    }
+    return count;
+}
+
+[[nodiscard]] bool CreateCleanupJunction(const std::filesystem::path& link, const std::filesystem::path& target)
+{
+    // Mount-point reparse data needs no symbolic-link privilege. Both paths belong to the unique test root.
+    struct JunctionData
+    {
+        DWORD tag = IO_REPARSE_TAG_MOUNT_POINT;
+        WORD dataLength = 0;
+        WORD reserved = 0;
+        WORD substituteOffset = 0;
+        WORD substituteLength = 0;
+        WORD printOffset = 0;
+        WORD printLength = 0;
+        wchar_t names[1024]{};
+    } data;
+    static_assert(offsetof(JunctionData, names) == 16);
+    const std::wstring print = target.wstring();
+    const std::wstring substitute = L"\\??\\" + print;
+    if (substitute.size() + print.size() + 2 > std::size(data.names))
+        return false;
+    data.substituteLength = static_cast<WORD>(substitute.size() * sizeof(wchar_t));
+    data.printOffset = static_cast<WORD>((substitute.size() + 1) * sizeof(wchar_t));
+    data.printLength = static_cast<WORD>(print.size() * sizeof(wchar_t));
+    data.dataLength = static_cast<WORD>(8 + data.printOffset + data.printLength + sizeof(wchar_t));
+    std::copy(substitute.begin(), substitute.end(), data.names);
+    std::copy(print.begin(), print.end(), data.names + substitute.size() + 1);
+    if (!CreateDirectoryW(link.c_str(), nullptr))
+        return false;
+    wil::unique_hfile handle{CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                         FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr)};
+    DWORD returned = 0;
+    return handle && DeviceIoControl(handle.get(), FSCTL_SET_REPARSE_POINT, &data, 8 + data.dataLength, nullptr, 0,
+                                     &returned, nullptr);
+}
+
+void TestProjectRotationFaultRecovery()
+{
+    const std::filesystem::path root =
+        std::filesystem::path(ScratchRoot()) / (L"rotation-fault-" + Guid::Generate().ToString());
+    std::error_code filesystemError;
+    const bool ownsRoot = std::filesystem::create_directories(root, filesystemError);
+    Expect(ownsRoot && !filesystemError, "rotation-fault.fixture-root-created");
+    if (!ownsRoot || filesystemError)
+        return;
+
+    CanvasDocument original;
+    original.width = 2;
+    original.height = 2;
+    original.id = Guid::Generate();
+    original.resolution = 72;
+    ImageLayer layer = ImageLayer::Blank(L"Rotation fixture", Vec2{2, 2});
+    const Raster pixels = SolidBgra(2, 2, 13, 29, 47, 255);
+    layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
+    original.layers.push_back(layer);
+    CanvasDocument replacement = original;
+    replacement.resolution = 144;
+
+    const std::filesystem::path destination = root / L"project";
+    const std::filesystem::path sentinel = root / L"project.~unowned";
+    std::filesystem::create_directories(sentinel, filesystemError);
+    WriteText(sentinel / L"keep.txt", "unowned sibling");
+    Expect(SaveProject(destination.c_str(), original, layer.id, false) == ProjectIoStatus::Ok,
+           "rotation-fault.tiny-png-manifest-fixture");
+    const ProjectTreeSnapshot originalTree = SnapshotProjectTree(destination);
+    const ProjectLoadResult originalReloaded = LoadProject(destination.c_str());
+    Expect(originalReloaded.status == ProjectIoStatus::Ok && originalReloaded.document.id == original.id &&
+               originalReloaded.document.resolution == 72 && originalReloaded.document.layers.size() == 1 &&
+               originalReloaded.document.layers.front().asset.has_value() &&
+               RastersEqual(originalReloaded.document.layers.front().asset->image, pixels),
+           "rotation-fault.fixture-reloads-exact-literal-pixels");
+
+    // Failure while clearing the reserved .old recovery path must stop before moving either tree.
+    const std::filesystem::path backup = destination.wstring() + L".old";
+    std::filesystem::create_directories(backup, filesystemError);
+    WriteText(backup / L"older.txt", "older recovery tree");
+    const ProjectTreeSnapshot olderTree = SnapshotProjectTree(backup);
+    RotationFaultPlan staleBackupFault{ProjectSaveFaultStage::BackupCleanup, ERROR_ACCESS_DENIED, 1};
+    RotationEventLog staleBackupEvents{};
+    const ProjectIoStatus staleBackupStatus = SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                                                          ProjectIoObserver{&ObserveRotation, &staleBackupEvents},
+                                                          ProjectSaveFaultPolicy{&FailRotationAt, &staleBackupFault});
+    const std::size_t backupCleanupIndex = static_cast<std::size_t>(ProjectIoStage::BackupCleanupFailed);
+    const std::size_t publishedIndex = static_cast<std::size_t>(ProjectIoStage::Published);
+    Expect(staleBackupStatus == ProjectIoStatus::Encode && staleBackupEvents.visits[backupCleanupIndex] == 1 &&
+               staleBackupEvents.errors[backupCleanupIndex] == ERROR_ACCESS_DENIED &&
+               staleBackupEvents.visits[publishedIndex] == 0 && SnapshotProjectTree(destination) == originalTree &&
+               SnapshotProjectTree(backup) == olderTree &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
+           "rotation-fault.stale-backup-cleanup-failure-preserves-both-trees");
+
+    // Real cleanup errors retain the current destination and report the actual API error, without injection.
+    const std::filesystem::path readonly = backup / L"older.txt";
+    Expect(SetFileAttributesW(readonly.c_str(), FILE_ATTRIBUTE_READONLY) != FALSE,
+           "rotation-fault.readonly-fixture-created");
+    RotationEventLog readonlyEvents{};
+    const ProjectIoStatus readonlyStatus = SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                                                       ProjectIoObserver{&ObserveRotation, &readonlyEvents});
+    Expect(readonlyStatus == ProjectIoStatus::Encode &&
+               readonlyEvents.errors[backupCleanupIndex] == ERROR_ACCESS_DENIED &&
+               readonlyEvents.visits[publishedIndex] == 0 && SnapshotProjectTree(destination) == originalTree &&
+               ReadText(readonly) == "older recovery tree" &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
+           "rotation-fault.real-cleanup-error-preserves-destination");
+    (void)SetFileAttributesW(readonly.c_str(), FILE_ATTRIBUTE_NORMAL);
+
+    std::filesystem::create_directories(backup / L"nested" / L"child", filesystemError);
+    WriteText(backup / L"nested" / L"child" / L"remove.txt", "owned nested file");
+    Expect(CreateCleanupJunction(backup / L"link", sentinel), "rotation-fault.cleanup-junction-created");
+    RotationFaultPlan nestedFault{ProjectSaveFaultStage::DestinationToBackupRename, ERROR_ACCESS_DENIED, 1};
+    RotationEventLog nestedEvents{};
+    const ProjectIoStatus nestedStatus = SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                                                     ProjectIoObserver{&ObserveRotation, &nestedEvents},
+                                                     ProjectSaveFaultPolicy{&FailRotationAt, &nestedFault});
+    Expect(nestedStatus == ProjectIoStatus::Encode && !std::filesystem::exists(backup) &&
+               SnapshotProjectTree(destination) == originalTree && nestedEvents.visits[backupCleanupIndex] == 0 &&
+               nestedEvents.visits[publishedIndex] == 0 && ReadText(sentinel / L"keep.txt") == "unowned sibling" &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
+           "rotation-fault.nested-cleanup-removes-link-without-following-target");
+
+    const std::filesystem::path extendedBackup = L"\\\\?\\" + backup.wstring();
+    std::filesystem::path deep = extendedBackup;
+    for (unsigned int depth = 0; depth < 130; ++depth)
+        deep /= L"d";
+    std::filesystem::create_directories(deep, filesystemError);
+    WriteText(deep / L"keep.txt", "depth refusal");
+    RotationEventLog depthEvents{};
+    const ProjectIoStatus depthStatus = SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                                                    ProjectIoObserver{&ObserveRotation, &depthEvents});
+    Expect(depthStatus == ProjectIoStatus::Encode &&
+               depthEvents.errors[backupCleanupIndex] == ERROR_FILENAME_EXCED_RANGE &&
+               depthEvents.visits[publishedIndex] == 0 && SnapshotProjectTree(destination) == originalTree &&
+               ReadText(deep / L"keep.txt") == "depth refusal" &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
+           "rotation-fault.cleanup-depth-bound-is-local-failure");
+    std::filesystem::remove_all(extendedBackup, filesystemError);
+    filesystemError.clear();
+
+    // Fail the staging publication after dest->backup succeeded. The observer requests cancellation at that
+    // failure boundary; rotation must still recover the old tree and report Encode, with no false Published.
+    RotationFaultPlan publishFault{ProjectSaveFaultStage::StagingToDestinationRename, ERROR_ACCESS_DENIED, 1};
+    RotationEventLog publishEvents{};
+    std::stop_source stopAfterRotationFailure;
+    publishEvents.stopOnStagingPublishFailure = &stopAfterRotationFailure;
+    const ProjectSaveFaultPolicy publishPolicy{&FailRotationAt, &publishFault};
+    const ProjectIoObserver publishObserver{&ObserveRotation, &publishEvents};
+    const ProjectIoStatus publishStatus =
+        SaveProject(destination.c_str(), replacement, layer.id, false,
+                    CancelToken{stopAfterRotationFailure.get_token()}, publishObserver, publishPolicy);
+    const std::size_t publishFailureIndex = static_cast<std::size_t>(ProjectIoStage::StagingToDestinationFailed);
+    const ProjectLoadResult restored = LoadProject(destination.c_str());
+    Expect(publishStatus == ProjectIoStatus::Encode && stopAfterRotationFailure.stop_requested() &&
+               publishEvents.visits[publishFailureIndex] == 1 &&
+               publishEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
+               publishEvents.visits[publishedIndex] == 0,
+           "rotation-fault.publish-error-preserved-across-cancel-without-false-published");
+    const bool restoredTreeMatches = SnapshotProjectTree(destination) == originalTree;
+    const bool backupGone = !std::filesystem::exists(backup);
+    const std::size_t stagingCount = CountOwnedStagingDirectories(root, destination.filename().wstring());
+    if (!restoredTreeMatches || restored.status != ProjectIoStatus::Ok || restored.document.resolution != 72 ||
+        !backupGone || stagingCount != 0)
+        std::printf("rotation rollback: tree=%d status=%u dpi=%g backupGone=%d staging=%zu cleanupError=%u\n",
+                    restoredTreeMatches, static_cast<unsigned int>(restored.status), restored.document.resolution,
+                    backupGone, stagingCount,
+                    publishEvents.errors[static_cast<std::size_t>(ProjectIoStage::StagingCleanupFailed)]);
+    Expect(restoredTreeMatches, "rotation-fault.rollback-restores-exact-original-tree");
+    Expect(restored.status == ProjectIoStatus::Ok && restored.document.resolution == 72,
+           "rotation-fault.rollback-restores-readable-original");
+    Expect(backupGone, "rotation-fault.rollback-consumes-backup");
+    Expect(stagingCount == 0, "rotation-fault.rollback-cleans-owned-staging");
+    Expect(ReadText(sentinel / L"keep.txt") == "unowned sibling",
+           "rotation-fault.rollback-leaves-unowned-sibling-alone");
+
+    // Fail both publication and rollback. The prior complete tree must remain available at the documented .old
+    // recovery name; the failed new staging tree is owned and removed. No Published event is emitted.
+    RotationEventLog rollbackEvents{};
+    const ProjectIoObserver rollbackObserver{&ObserveRotation, &rollbackEvents};
+    // The fault callback can select one stage at a time, so use a context that fails the second requested point.
+    struct TwoFaults
+    {
+        unsigned int visits[5]{};
+    } twoFaults;
+    const auto failPublishAndRollback = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+    {
+        auto& state = *static_cast<TwoFaults*>(context);
+        const std::size_t index = static_cast<std::size_t>(stage);
+        if (index >= std::size(state.visits))
+            return ERROR_INVALID_PARAMETER;
+        ++state.visits[index];
+        if (stage == ProjectSaveFaultStage::StagingToDestinationRename)
+            return ERROR_ACCESS_DENIED;
+        if (stage == ProjectSaveFaultStage::RollbackRename)
+            return ERROR_SHARING_VIOLATION;
+        return 0;
+    };
+    const ProjectIoStatus rollbackStatus =
+        SaveProject(destination.c_str(), replacement, layer.id, false, {}, rollbackObserver,
+                    ProjectSaveFaultPolicy{failPublishAndRollback, &twoFaults});
+    const ProjectLoadResult backupReloaded = LoadProject(backup.c_str());
+    const std::size_t rollbackFailureIndex = static_cast<std::size_t>(ProjectIoStage::RollbackFailed);
+    Expect(rollbackStatus == ProjectIoStatus::Encode && rollbackEvents.visits[publishFailureIndex] == 1 &&
+               rollbackEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
+               rollbackEvents.visits[rollbackFailureIndex] == 1 &&
+               rollbackEvents.errors[rollbackFailureIndex] == ERROR_SHARING_VIOLATION &&
+               rollbackEvents.visits[publishedIndex] == 0,
+           "rotation-fault.rollback-failure-reports-both-exact-errors-without-published");
+    Expect(!std::filesystem::exists(destination) && backupReloaded.status == ProjectIoStatus::Ok &&
+               backupReloaded.document.resolution == 72 && SnapshotProjectTree(backup) == originalTree &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0,
+           "rotation-fault.failed-rollback-retains-readable-recovery-backup");
+    // A second failed save must not delete .old when it is the only surviving project.
+    TwoFaults failedRetryFaults{};
+    RotationEventLog failedRetryEvents{};
+    const ProjectIoStatus failedRetryStatus = SaveProject(
+        destination.c_str(), replacement, layer.id, false, {}, ProjectIoObserver{&ObserveRotation, &failedRetryEvents},
+        ProjectSaveFaultPolicy{failPublishAndRollback, &failedRetryFaults});
+    Expect(failedRetryStatus == ProjectIoStatus::Encode && !std::filesystem::exists(destination) &&
+               SnapshotProjectTree(backup) == originalTree &&
+               failedRetryFaults.visits[static_cast<std::size_t>(ProjectSaveFaultStage::BackupCleanup)] == 0 &&
+               failedRetryEvents.visits[publishFailureIndex] == 1 &&
+               failedRetryEvents.errors[publishFailureIndex] == ERROR_ACCESS_DENIED &&
+               failedRetryEvents.visits[rollbackFailureIndex] == 1 &&
+               failedRetryEvents.errors[rollbackFailureIndex] == ERROR_SHARING_VIOLATION &&
+               failedRetryEvents.visits[publishedIndex] == 0 &&
+               CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0 &&
+               ReadText(sentinel / L"keep.txt") == "unowned sibling",
+           "rotation-fault.failed-retry-preserves-only-surviving-backup");
+
+    // A failed publication with a successful rollback on the next retry restores that same complete tree.
+    RotationFaultPlan recoveredRetryFault{ProjectSaveFaultStage::StagingToDestinationRename, ERROR_ACCESS_DENIED, 1};
+    RotationEventLog recoveredRetryEvents{};
+    const ProjectIoStatus recoveredRetryStatus =
+        SaveProject(destination.c_str(), replacement, layer.id, false, {},
+                    ProjectIoObserver{&ObserveRotation, &recoveredRetryEvents},
+                    ProjectSaveFaultPolicy{&FailRotationAt, &recoveredRetryFault});
+    const ProjectLoadResult retryReloaded = LoadProject(destination.c_str());
+    Expect(recoveredRetryStatus == ProjectIoStatus::Encode && SnapshotProjectTree(destination) == originalTree &&
+               !std::filesystem::exists(backup) && retryReloaded.status == ProjectIoStatus::Ok &&
+               retryReloaded.document.resolution == 72 &&
+               recoveredRetryFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::BackupCleanup)] == 0 &&
+               recoveredRetryEvents.visits[publishFailureIndex] == 1 &&
+               recoveredRetryEvents.visits[rollbackFailureIndex] == 0 &&
+               recoveredRetryEvents.visits[publishedIndex] == 0,
+           "rotation-fault.backup-only-retry-restores-original-destination");
+
+    // The first BackupCleanup visit discards no files (there is no old backup); inject the second visit, after
+    // publication. The new destination is truthful and successful while the prior tree remains as recovery.
+    RotationFaultPlan cleanupFault{ProjectSaveFaultStage::BackupCleanup, ERROR_ACCESS_DENIED, 2};
+    RotationEventLog cleanupEvents{};
+    const ProjectSaveFaultPolicy cleanupPolicy{&FailRotationAt, &cleanupFault};
+    const ProjectIoObserver cleanupObserver{&ObserveRotation, &cleanupEvents};
+    const ProjectIoStatus cleanupStatus =
+        SaveProject(destination.c_str(), replacement, layer.id, false, {}, cleanupObserver, cleanupPolicy);
+    const ProjectLoadResult replacementReloaded = LoadProject(destination.c_str());
+    Expect(cleanupStatus == ProjectIoStatus::Ok && replacementReloaded.status == ProjectIoStatus::Ok &&
+               replacementReloaded.document.resolution == 144 && cleanupEvents.visits[publishedIndex] == 1 &&
+               cleanupEvents.visits[backupCleanupIndex] == 1 &&
+               cleanupEvents.errors[backupCleanupIndex] == ERROR_ACCESS_DENIED,
+           "rotation-fault.backup-cleanup-failure-keeps-published-result-truthful");
+    Expect(LoadProject(backup.c_str()).status == ProjectIoStatus::Ok && SnapshotProjectTree(backup) == originalTree &&
+               ReadText(sentinel / L"keep.txt") == "unowned sibling",
+           "rotation-fault.backup-retained-and-unowned-sibling-preserved");
+
+    // Successful publication from backup-only state never clears that recovery copy before the rename.
+    std::filesystem::remove_all(destination, filesystemError); // Exact owned fixture, retaining its old backup.
+    RotationFaultPlan backupOnlyCleanupFault{ProjectSaveFaultStage::BackupCleanup, ERROR_ACCESS_DENIED, 1};
+    RotationEventLog backupOnlyEvents{};
+    const ProjectIoStatus backupOnlyStatus = SaveProject(
+        destination.c_str(), replacement, layer.id, false, {}, ProjectIoObserver{&ObserveRotation, &backupOnlyEvents},
+        ProjectSaveFaultPolicy{&FailRotationAt, &backupOnlyCleanupFault});
+    const ProjectLoadResult backupOnlyReloaded = LoadProject(destination.c_str());
+    Expect(
+        backupOnlyStatus == ProjectIoStatus::Ok && backupOnlyReloaded.status == ProjectIoStatus::Ok &&
+            backupOnlyReloaded.document.resolution == 144 && SnapshotProjectTree(backup) == originalTree &&
+            backupOnlyCleanupFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::BackupCleanup)] == 1 &&
+            backupOnlyCleanupFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationToBackupRename)] ==
+                0 &&
+            backupOnlyEvents.visits[publishedIndex] == 1 &&
+            backupOnlyEvents.errors[backupCleanupIndex] == ERROR_ACCESS_DENIED &&
+            CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0 &&
+            ReadText(sentinel / L"keep.txt") == "unowned sibling",
+        "rotation-fault.backup-only-retry-publishes-before-cleanup");
+
+    // A pre-rotation rename failure leaves dest untouched. If owned staging cleanup also fails, report that exact
+    // cleanup error and leave only the uniquely named staging directory for manual/retry recovery.
+    RotationEventLog stagingCleanupEvents{};
+    struct RenameAndCleanupFaults
+    {
+        unsigned int visits[5]{};
+    } renameAndCleanupFaults;
+    const auto failRenameAndStagingCleanup = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
+    {
+        auto& state = *static_cast<RenameAndCleanupFaults*>(context);
+        const std::size_t index = static_cast<std::size_t>(stage);
+        if (index >= std::size(state.visits))
+            return ERROR_INVALID_PARAMETER;
+        ++state.visits[index];
+        if (stage == ProjectSaveFaultStage::DestinationToBackupRename || stage == ProjectSaveFaultStage::StagingCleanup)
+            return ERROR_ACCESS_DENIED;
+        return 0;
+    };
+    const ProjectTreeSnapshot beforeStagingCleanupFailure = SnapshotProjectTree(destination);
+    const ProjectIoStatus stagingCleanupStatus = SaveProject(
+        destination.c_str(), original, layer.id, false, {}, ProjectIoObserver{&ObserveRotation, &stagingCleanupEvents},
+        ProjectSaveFaultPolicy{failRenameAndStagingCleanup, &renameAndCleanupFaults});
+    const std::size_t destinationRenameIndex = static_cast<std::size_t>(ProjectIoStage::DestinationToBackupFailed);
+    const std::size_t stagingCleanupIndex = static_cast<std::size_t>(ProjectIoStage::StagingCleanupFailed);
+    Expect(stagingCleanupStatus == ProjectIoStatus::Encode &&
+               stagingCleanupEvents.visits[destinationRenameIndex] == 1 &&
+               stagingCleanupEvents.errors[destinationRenameIndex] == ERROR_ACCESS_DENIED &&
+               stagingCleanupEvents.visits[stagingCleanupIndex] == 1 &&
+               stagingCleanupEvents.errors[stagingCleanupIndex] == ERROR_ACCESS_DENIED &&
+               stagingCleanupEvents.visits[publishedIndex] == 0 &&
+               SnapshotProjectTree(destination) == beforeStagingCleanupFailure && !std::filesystem::exists(backup),
+           "rotation-fault.staging-cleanup-error-is-reported-without-losing-destination");
+    Expect(CountOwnedStagingDirectories(root, destination.filename().wstring()) == 1 &&
+               ReadText(sentinel / L"keep.txt") == "unowned sibling",
+           "rotation-fault.only-owned-staging-remains-after-injected-cleanup-failure");
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(root, filesystemError))
+    {
+        const std::wstring name = entry.path().filename().wstring();
+        if (name.starts_with(destination.filename().wstring() + L".~") && name != L"project.~unowned")
+            std::filesystem::remove_all(entry.path(), filesystemError);
+    }
+    std::filesystem::remove_all(destination, filesystemError);
+    std::filesystem::remove_all(sentinel, filesystemError);
+    std::filesystem::remove(root, filesystemError);
+}
+
 void TestSettingsStore()
 {
     Expect(std::wstring_view{SettingsStore::FileName(true)} == L"settings.debug.json" &&
@@ -1871,8 +2277,10 @@ int wmain(int argc, wchar_t** argv)
     TestImportOntoDocument();
     TestSaveRejectsInvalidDocument();
     TestProjectSaveDurability();
+    TestProjectRotationFaultRecovery();
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
+    gFailures += RunClipboardDibWorkTests();
     gFailures += RunCodecFileStreamTests();
     gFailures += RunProjectCancellationTests();
     gFailures += RunImageImportWorkTests();

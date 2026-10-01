@@ -694,6 +694,51 @@ void WriteBigEndian32(std::vector<std::uint8_t>& bytes, std::size_t offset, std:
     return !decoded.image.HasStorage() && !decoded.thumbnail.HasStorage() && decoded.name.empty();
 }
 
+void ClipboardPngMetadataProbe()
+{
+    const auto empty = [](const ImageImportMetadata& value) noexcept
+    { return value.rawWidth == 0 && value.rawHeight == 0 && value.pixels == 0 && value.encodedBytes == 0; };
+    ImageImportMetadata metadata{9, 8, 72, 44};
+    Expect(ProbeProjectPng(kProbePng.data(), kProbePng.size(), 6, metadata) == ImageCodecStatus::Ok &&
+               metadata.rawWidth == 2 && metadata.rawHeight == 3 && metadata.pixels == 6 && metadata.encodedBytes == 77,
+           "clipboard-png-probe.literal-dimensions-and-equal-budget");
+    Expect(ProbeProjectPng(kProbePng.data(), kProbePng.size(), 5, metadata) == ImageCodecStatus::TooLarge &&
+               empty(metadata),
+           "clipboard-png-probe.lower-budget-clears-metadata");
+    metadata = {9, 8, 72, 44};
+    Expect(ProbeProjectPng(kProbePng.data(), kProbePng.size(), -1, metadata) == ImageCodecStatus::TooLarge &&
+               empty(metadata),
+           "clipboard-png-probe.negative-budget-clears-metadata");
+    Expect(ProbeProjectPng(kProbePng.data(), kProbePng.size(), 0, metadata) == ImageCodecStatus::TooLarge &&
+               empty(metadata),
+           "clipboard-png-probe.zero-budget-refuses-nonempty-frame");
+    metadata = {9, 8, 72, 44};
+    Expect(ProbeProjectPng(nullptr, 0, 6, metadata) == ImageCodecStatus::Unreadable && empty(metadata),
+           "clipboard-png-probe.empty-input-clears-metadata");
+    Expect(ProbeProjectPng(nullptr, 1, 6, metadata) == ImageCodecStatus::Unreadable && empty(metadata),
+           "clipboard-png-probe.null-input-refused");
+    Expect(ProbeProjectPng(kProbePng.data(), 4, 6, metadata) == ImageCodecStatus::Unreadable && empty(metadata),
+           "clipboard-png-probe.truncated-signature-refused");
+    Expect(ProbeProjectPng(kProbeJpeg.data(), kProbeJpeg.size(), 6, metadata) == ImageCodecStatus::Unreadable &&
+               empty(metadata),
+           "clipboard-png-probe.other-container-refused");
+    Expect(ProbeProjectPng(nullptr, static_cast<std::size_t>(kMaxImageEncodedBytes + 1), 6, metadata) ==
+                   ImageCodecStatus::TooLarge &&
+               empty(metadata),
+           "clipboard-png-probe.encoded-cap-before-reading-input");
+    const auto oversized = MakeOversizedPngHeader();
+    Expect(ProbeProjectPng(oversized.data(), oversized.size(), INT64_MAX, metadata) == ImageCodecStatus::TooLarge &&
+               empty(metadata),
+           "clipboard-png-probe.independent-hard-pixel-limit");
+    std::stop_source stopped;
+    stopped.request_stop();
+    metadata = {9, 8, 72, 44};
+    Expect(ProbeProjectPng(kProbePng.data(), kProbePng.size(), 6, metadata, CancelToken{stopped.get_token()}) ==
+                   ImageCodecStatus::Cancelled &&
+               empty(metadata),
+           "clipboard-png-probe.precancel-clears-metadata");
+}
+
 void ImportTiffUsesFirstFrame()
 {
     ScratchDirectory scratch;
@@ -910,5 +955,6 @@ int RunImageCodecWorkTests()
     LockedDestinationFailurePreservesFiles();
     ImageImportCodecProbeAndBudgetGuards();
     ImportTiffUsesFirstFrame();
+    ClipboardPngMetadataProbe();
     return gFailures;
 }

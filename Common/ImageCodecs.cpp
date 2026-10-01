@@ -691,6 +691,66 @@ bool IsHeifContainer(std::wstring_view path) noexcept
     return EqualsExtension(ext, L".heic") || EqualsExtension(ext, L".heif") || EqualsExtension(ext, L".hif");
 }
 
+ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCount, std::int64_t remainingPixels,
+                                 ImageImportMetadata& metadata, CancelToken cancellation)
+{
+    metadata = {};
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (remainingPixels < 0 || byteCount > kMaxEncodedBytes)
+        return ImageCodecStatus::TooLarge;
+    if (!bytes || byteCount == 0)
+        return ImageCodecStatus::Unreadable;
+    wil::com_ptr_nothrow<IWICImagingFactory> factory;
+    if (FAILED(MakeFactory(factory)))
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    wil::com_ptr_nothrow<IWICStream> stream;
+    if (FAILED(factory->CreateStream(stream.put())) ||
+        FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(bytes), static_cast<DWORD>(byteCount))))
+        return ImageCodecStatus::Unreadable;
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    wil::com_ptr_nothrow<IWICBitmapDecoder> decoder;
+    const HRESULT opened =
+        factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.put());
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (FAILED(opened))
+        return ImageCodecStatus::Unreadable;
+    GUID container{};
+    const HRESULT identified = decoder->GetContainerFormat(&container);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (FAILED(identified) || !SameGuid(container, GUID_ContainerFormatPng))
+        return ImageCodecStatus::Unreadable;
+    UINT frameCount = 0;
+    const HRESULT counted = decoder->GetFrameCount(&frameCount);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (FAILED(counted) || frameCount == 0)
+        return ImageCodecStatus::Unreadable;
+    wil::com_ptr_nothrow<IWICBitmapFrameDecode> frame;
+    const HRESULT framed = decoder->GetFrame(0, frame.put());
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (FAILED(framed))
+        return ImageCodecStatus::Unreadable;
+    UINT width = 0;
+    UINT height = 0;
+    const HRESULT sized = frame->GetSize(&width, &height);
+    if (cancellation.IsCancelled())
+        return ImageCodecStatus::Cancelled;
+    if (FAILED(sized) || width == 0 || height == 0)
+        return ImageCodecStatus::Unreadable;
+    if (!FrameFits(width, height, remainingPixels))
+        return ImageCodecStatus::TooLarge;
+    metadata = {static_cast<int>(width), static_cast<int>(height), static_cast<std::uint64_t>(width) * height,
+                static_cast<std::uint64_t>(byteCount)};
+    return ImageCodecStatus::Ok;
+}
+
 ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCount, bool mask, int remainingPixels,
                                   DecodedImage& decoded, CancelToken cancellation)
 {

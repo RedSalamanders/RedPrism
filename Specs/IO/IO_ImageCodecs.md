@@ -2,7 +2,7 @@
 
 Status: current normative product contract
 Last reviewed: 2026-10-01
-Owner: `Common/ImageCodecs.*`
+Owner: `Common/ImageCodecs.*`, `Common/ClipboardDibWork.*`
 
 ## Scope
 
@@ -77,6 +77,28 @@ separately admitted Io jobs under one selected input; memory, ordering and owner
   flush and close it, then replace the destination atomically (`ReplaceFileW`,
   falling back to `MoveFileExW`), so a crash mid-export never leaves a truncated file at the destination path.
 
+## Detached clipboard byte preparation (P1.7 F5a)
+
+`ProbeProjectPng` inspects a borrowed memory PNG through WIC frame-zero `GetSize`, without requesting pixels,
+conversion, ICC/orientation processing or thumbnails. The source is borrowed only for that call. It applies the
+512 MiB encoded cap, signed remaining budget and independent hard frame/side limits before output allocation;
+non-PNG, invalid and cancelled inputs expose empty metadata. An in-flight WIC call is not interruptible.
+
+`ClipboardDibWork` has standard-only interfaces and no clipboard, window, COM or GPU ownership. It accepts the
+existing 24/32-bit BI_RGB/BI_BITFIELDS byte layouts, padded rows, bottom-up or top-down height, V4/V5 masks and
+the existing BI_RGB palette offset policy. Unsupported 32-bit channel masks are invalid. Plain 32-bit BI_RGB
+padding is opaque unless a V4/V5 alpha mask declares alpha. Signed dimensions, header/mask/palette offsets,
+row bytes and total storage are checked before pixel access. The independent limits are 512 MiB encoded bytes,
+100 M pixels, 30,000 px per side and the lower caller pixel budget. Negative budgets are TooLarge.
+
+Decode fills an adopted final PixelBuffer, using `(channel * alpha + 127) / 255`. Encode emits the literal
+124-byte sRGB bottom-up DIBV5 header and straight BGRA, with `(channel * 255 + alpha / 2) / alpha`, clamped to 255;
+zero alpha has zero RGB. Sparse rows are read into the final output vector without source materialization or a
+second full source frame. Cancellation is checked between rows and before publication; an active scalar row is
+not interruptible. Invalid/cancelled results expose no metadata, raster or byte vector. Explicit PixelBuffer
+allocation failure reports OutOfMemory; allocating routines otherwise propagate bad_alloc to the worker boundary.
+These are preparation foundations. Production clipboard transfers and host callers remain tracked by F5b–F5d.
+
 ## Status
 
 `Ok`, `Unreadable`, `Unsupported`, `TooLarge`, `HeifUnavailable`, `Encode`, `Cancelled`.
@@ -123,6 +145,14 @@ identity/lifetime and CREATE_NEW collision preservation. Extended bytes are not 
 
 Read-stream cases require literal bytes, exact/lower caps, unchanged source/cursor after forbidden mutations,
 shared readers and exact write/delete sharing errors, read-only Stat, closure and cancellation between reads.
+
+`ClipboardDibWorkTests` uses independently authored literal DIB headers/rows and expected premultiplied bytes:
+RGB padding, direction, V4/V5 alpha, bitfields/palette offsets, malformed/truncated layouts, signed extrema,
+hard/lower/exact budgets, cancellation, literal DIBV5 output and unchanged sparse input. The encoded-size
+predicate checks exactly 512 MiB and one byte over without fabricating a huge borrowed span. PNG metadata
+controls use a literal 2×3 PNG, wrong/truncated/null sources, signed budgets, valid oversized IHDR and an
+over-cap null input rejected before access. These tests do not establish system clipboard transfer, contention,
+delayed rendering, in-kernel cancellation latency or large DIB allocation performance.
 Import inspection/decoder cases use independent literal PNG/JPEG/BMP and a classic two-frame TIFF (red/green
 frame zero, blue/yellow frame one); TIFF imports frame zero. Valid oversized PNG headers exercise the hard pixel
 limit with a larger caller budget, sparse encoded files exercise exact/over 512 MiB, and source replacement checks

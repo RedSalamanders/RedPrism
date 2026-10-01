@@ -45,6 +45,10 @@ struct JpegExportOptions
 [[nodiscard]] ImageCodecStatus DecodeProjectPng(const std::uint8_t* bytes, std::size_t byteCount, bool mask,
                                                 int remainingPixels, DecodedImage& decoded,
                                                 CancelToken cancellation = {});
+// Memory PNG frame-zero metadata only; no pixel conversion or thumbnails, and empty output on every failure.
+[[nodiscard]] ImageCodecStatus ProbeProjectPng(const std::uint8_t* bytes, std::size_t byteCount,
+                                               std::int64_t remainingPixels, ImageImportMetadata& metadata,
+                                               CancelToken cancellation = {});
 [[nodiscard]] ImageCodecStatus DecodeProjectPngFile(const wchar_t* path, bool mask, int remainingPixels,
                                                     DecodedImage& decoded, CancelToken cancellation = {},
                                                     std::size_t maximumEncodedBytes = 512u * 1024u * 1024u);

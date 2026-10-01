@@ -18,7 +18,8 @@
         document.layers.size() > static_cast<std::size_t>(kMaxLayerCount) || document.width < 1 ||
         document.height < 1 || document.width > kMaxCanvasSide || document.height > kMaxCanvasSide)
         return 0;
-    // Bounded manifest payload, JSON text copies and codec/scratch allowance. Per-record nodes and dynamic
+    // Bounded manifest payload, JSON text copies and codec/scratch allowance (including the 64 KiB directory
+    // cleanup buffer allocated before staging). Per-record nodes and dynamic
     // strings are charged below even for documents whose serialized manifest will ultimately be refused.
     std::uint64_t bytes = 16ull * 1024 * 1024;
     const auto add = [&](std::uint64_t value) noexcept

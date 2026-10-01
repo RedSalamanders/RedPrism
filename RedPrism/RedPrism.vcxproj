@@ -122,6 +122,7 @@
     <ClInclude Include="BrushCompute.h" />
     <ClInclude Include="KernelBenchmark.h" />
     <ClInclude Include="..\Common\ImageCodecs.h" />
+    <ClInclude Include="..\Common\ClipboardDibWork.h" />
     <ClInclude Include="..\Common\CodecFileStream.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
     <ClInclude Include="..\Common\ProjectLoadWork.h" />
@@ -191,6 +192,7 @@
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
+    <ClCompile Include="..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="..\Common\CodecFileStream.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\Common\ImageImportWork.cpp" />

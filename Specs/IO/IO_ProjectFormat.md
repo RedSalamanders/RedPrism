@@ -27,12 +27,33 @@ asset or `manifest.json` is rejected when any path component after the project r
 A truncated, empty, or non-ZIP `.prism` is `Invalid` or `MissingImage` and yields no layers.
 
 Atomic save: exploded projects write into an exclusively created, unique same-directory `dest.~<guid>` staging
-directory, then rotate `dest` → `dest.old` and the staging directory → `dest`. ZIP projects write into a unique
-same-directory `dest.~<guid>` file opened with `ZIP_CREATE | ZIP_EXCL`, then `ReplaceFileW` (with the existing
-`MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed successfully before publication;
-ZIP close, flush, and handle close must all succeed before replacement. A failed staging or durability step leaves
-the previous destination intact and removes only the temporary file or directory owned by that save. Existing ZIP
-readers accept both stored and deflated entries. Writers store already encoded PNG assets and deflate the manifest.
+directory, then rotate `dest` → `dest.old` and the staging directory → `dest`. Before moving `dest`, the writer must
+remove the reserved prior `dest.old`; if that cleanup fails, it leaves `dest` untouched, reports the cleanup error
+and does not publish. A cleanup already in progress may partially remove the older backup; a fault injected before
+the cleanup starts leaves both trees untouched. If `dest` → `dest.old` fails, `dest` remains the current project and the save
+fails. If staging → `dest` fails after the first rename, the writer attempts `dest.old` → `dest` even if
+cancellation arrives. A successful rollback leaves the original tree at `dest` and the save fails. If rollback also
+fails, the save fails without a `Published` report; the old complete tree remains at `dest.old` for recovery, the
+new staging tree is cleaned up when possible, and the failure observer receives both rename errors. When a save
+is retried while `dest` is absent, retain the surviving `dest.old` through the new publication attempt; a failed
+attempt must restore or preserve that same recovery tree. Remove that backup only after successful publication.
+Once staging → `dest` succeeds, publication is irreversible: report `Published` and return `Ok` even if later backup cleanup
+fails; retain `dest.old` as recovery and report its exact cleanup error. Cleanup reports never claim publication or
+replace the initiating failure status. Cleanup touches only the exact reserved backup or uniquely created staging
+path, never sibling names selected by a wildcard.
+
+Tree cleanup uses a single 64 KiB path buffer allocated before creating staging, and makes no C++ heap
+allocations after it starts, including during bad_alloc unwinding. It removes reparse entries themselves without
+traversing their targets. Paths are bounded to 32,767 UTF-16 units and ordinary directory traversal to 128 levels;
+exceeding either reports ERROR_FILENAME_EXCED_RANGE. Real cleanup errors may leave a partly cleaned owned tree.
+Read-only files are not forcibly changed. Capture and report the initiating Win32 error before later cleanup.
+
+ZIP projects write into a unique same-directory `dest.~<guid>` file opened with `ZIP_CREATE | ZIP_EXCL`, then
+`ReplaceFileW` (with the existing `MoveFileExW` fallback). Each staged manifest/asset file is flushed and closed
+successfully before publication; ZIP close, flush, and handle close must all succeed before replacement. A failed
+pre-publication staging or durability step leaves the previous destination intact and removes only the temporary
+file or directory owned by that save. Existing ZIP readers accept both stored and deflated entries. Writers store
+already encoded PNG assets and deflate the manifest.
 
 Both shapes first encode assets serially into bounded files in the owned sibling staging directory. ZIP saves
 use file sources for those assets through close; they retain filenames/manifest, not all encoded PNG vectors.
@@ -189,7 +210,13 @@ The optional bounded worker observer reports preparation/publication stages, com
 percentage, and immediate Win32 failures where reported. Its context is borrowed until return; callbacks must
 not throw, wait or access UI. Stop before the final publication check preserves the destination and unrelated
 temporary siblings. Once exploded rotation begins, finish or recover it without treating a later stop as a
-rollback. Successful file replacement/directory publication reports Ok even when stop arrives afterward.
+rollback. It reports distinct destination-to-backup, staging-to-destination, rollback, backup-cleanup and
+staging-cleanup failures with the immediate operation error. Successful file replacement/directory publication
+reports `Published` and `Ok` even when stop arrives afterward. A rollback failure keeps the old tree under `.old`
+when it cannot be restored to the destination; no `Published` event is emitted. A post-publication cleanup failure
+leaves the published result successful and the old backup available. Staging cleanup failures are reported while
+preserving the save's original status. These events do not broaden cleanup beyond the exact owned staging path or
+reserved `.old` path.
 Host writer jobs must separately retain this external publication fact, because scheduler cancellation can
 still override their generic Finished outcome. Mark only the revision actually published.
 
@@ -207,12 +234,12 @@ records the captured path and marks only the captured revision saved; a later ed
 Publication followed by cancellation still records the external file and captured saved revision, but cancellation
 suppresses a dependent close/replacement. Cancellation before publication and failed publication preserve the old
 destination and document path/revision. Returned failure and worker `bad_alloc` fail the receipt and show the save
-notice. A stale lineage cannot update the path or saved revision. Image import and clipboard processing remain
-synchronous pending their later P1.7 slices.
+notice. A stale lineage cannot update the path or saved revision. Clipboard processing remains synchronous
+pending its later P1.7 slices; project open and image import are worker graphs.
 
 Preflight declares one whole-graph peak before owning job construction; submission reserves it before any worker
 decode/encode or staged output allocation. The resolved path and worker object are
-included, as are 16 MiB fixed manifest/JSON/codec scratch, per-layer records and names, per-asset names and source
+included, as are 16 MiB fixed manifest/JSON/codec scratch (including the 64 KiB cleanup buffer), per-layer records and names, per-asset names and source
 metadata, one largest-asset frame allowance, and path-dependent libzip/staging names and bookkeeping. The frame
 allowance is not multiplied by asset count; sparse rasters remain shared and encoded PNG vectors are streamed to
 staging files rather than retained per asset. Zero, overflow, out-of-range canvas/layer/asset/path/curve inputs
@@ -257,11 +284,18 @@ mask, v6 adjustment, invalid/unknown adjustment payloads, adjustment on group, g
 a file, missing parent, self clip, blank name, zero-size transform, missing active layer, bad resolution; report a
 missing image as `MissingImage`; import PNG/JPEG onto a document; and prove a failed save leaves the previous
 archive intact; prove saved PNG ZIP entries use STORE and the manifest uses DEFLATE; load an older DEFLATE-encoded
-project; prove unique save staging preserves unrelated `dest.~*` entries and cleans up its own staging; and prove a
+project; prove unique save staging preserves unrelated `dest.~*` entries and cleans up its own staging; inject
+exploded-save fault points for stale-backup cleanup, destination-to-backup rename, staging-to-destination rename,
+rollback rename, post-publication backup cleanup and owned staging cleanup; verify exact reported errors,
+destination and backup contents, truthful `Published` and `Ok`, failed and successful retries from backup-only
+state and preservation of an unrelated sibling. Real filesystem controls exercise read-only cleanup failure,
+nested ordinary files, a mount-point junction whose target survives, and the bounded traversal-depth refusal;
+and prove a
 replacement failure leaves an existing archive intact. ASan Debug is required for this parser.
 
 `ProjectCancellationTests` adds independent literal pixels/metadata and observer-controlled stops at manifest,
 decoded/encoded asset, libzip close, staged and published boundaries for ZIP/exploded forms. Before publication
 it verifies unchanged destination/tree, `.old` and unrelated temporary siblings, no partial load/import and
 owned-temp cleanup; after publication it verifies Ok and the new literal content. These structural tests are
-not cancellation latency bounds or injected flush/rotation/device-fault qualification.
+not cancellation latency bounds or injected flush/device-fault qualification. Rotation faults are separate
+`rotation-fault.*` controls.
