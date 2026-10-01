@@ -124,7 +124,7 @@
     - [ ] P1.9 — Incremental history accounting/moves, uint64 session limit, lazy image thumbnails and first-upload ring.
       - [x] P1.9a — Explicit unsigned 64-bit session limit min(physical RAM / 4, 2 GiB), 256 MiB query fallback/class default, retained legacy trim golden and machine host wiring. Full matrix passes; the previously failed 45 MP sizing benchmark now retains its undo and completes.
       - [x] P1.9b — Retained immutable selection capacity and safe pending/restore snapshot moves pass all x64 suites and ARM64 cross-builds; [history child](HistoryStorageAccounting_2026-09-30.md), [evidence](../../TestRuns/HistoryStorage_2026-09-30.md). Hardware 4K/45 MP each complete 18 operations. Incremental accounting, thumbnails, uploads and the 2 ms apply target remain open.
-      - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, production Undo/Redo, constant-time capture, incremental accounting and the measured G1 exit remain open.
+      - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, constant-time capture, incremental accounting and the measured G1 exit remain open; Undo/Redo qualification is recorded below.
       - [x] P1.9 H1 destructive color — Prepared after-layer/history, admitted capture and actual host failure gates pass all profiles ([evidence](../../TestRuns/ColorHistoryPublication_2026-10-01.md)). Adjustment-layer closure remains separate.
       - [x] P1.9 H1 size cards — Admitted capture, complete document/history publication and retirement pass all profiles; 50 independent assertions and 22 host scenarios ([evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md)). Measured apply remains open.
       - [x] P1.9 H1 merge — Admitted metadata probe, full survivor/history publication and complete deferred CPU
@@ -136,6 +136,12 @@
         ([evidence](../../TestRuns/HistoryRestorePublication_2026-10-01.md)). The preserved first crop shortcut
         failure is corrected by waiting for acknowledgement without changing its expectations. Other callers,
         metadata capture/accounting, uploads and measured G1 remain open.
+      - [x] P1.9 H1 import/project open — Saved-baseline/edit/reset publication and complete session/path/draft
+        retirement qualify in the frozen six-configuration matrix: 55 history/157 session assertions plus
+        70 project/155 image-import host cases per x64 suite
+        ([evidence](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)). Separate file-operation authority
+        preserves live edits on failure and retires them on successful replacement; Undo remains settled-only.
+        The history child retains original host/fixture/ISA failure evidence. Other H1 callers, H2/H3/H4 and G1 remain open.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

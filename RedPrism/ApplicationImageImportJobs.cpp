@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "ImageImportHistory.h"
 #include "ImageImportTestGate.h"
 #include "ImageImportWork.h"
 #include "ProjectOpenTestGate.h"
@@ -11,30 +12,84 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <new>
 #include <utility>
+
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ImageImportPayload final : DeferredReleaseNode
+{
+    std::vector<std::wstring> paths;
+    std::optional<std::vector<ImageImportFilePlan>> files;
+    std::optional<CanvasDocument> source;
+    DocumentHistory::StateView history;
+    ImageImportProbeResult probed;
+    std::optional<PreparedImageImport> publication;
+    std::wstring retiredPath;
+    std::shared_ptr<ImageImportTestGate> gate;
+    DWORD ownerThread = 0;
+    ProjectIoStatus status = ProjectIoStatus::Invalid;
+    bool failed = false, tooLarge = false;
+    ImageImportPayload() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ImageImportPayload> owned(static_cast<ImageImportPayload*>(node)); };
+    }
+    ~ImageImportPayload()
+    {
+        if (gate && files)
+        {
+            gate->retiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->retired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+struct RetireImageImportPayload final
+{
+    void operator()(ImageImportPayload* payload) const noexcept
+    {
+        if (payload && !TryDeferRelease(*payload))
+        {
+            const std::unique_ptr<ImageImportPayload> owned(payload);
+        }
+    }
+};
+} // namespace
 
 class Application::ImageImportJob final : public Job
 {
   public:
     ImageImportJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t generation,
                    std::vector<std::wstring> paths, std::optional<std::vector<ImageImportFilePlan>> files,
-                   std::optional<CanvasDocument> source, std::optional<Guid> active, bool newProject,
-                   std::optional<Vec2> center, int maximumAddedPixels)
-        : _owner(owner), _stamp(stamp), _generation(generation), _paths(std::move(paths)), _files(std::move(files)),
-          _source(std::move(source)), _active(active), _newProject(newProject), _center(center),
-          _maximumAddedPixels(maximumAddedPixels), _gate(owner._imageImportTestGate), _ownerThread(GetCurrentThreadId())
+                   std::optional<Guid> active, bool newProject, std::optional<Vec2> center, int maximumAddedPixels,
+                   std::uint64_t retirement)
+        : _owner(owner), _stamp(stamp), _generation(generation), _active(active), _newProject(newProject),
+          _center(center), _maximumAddedPixels(maximumAddedPixels), _gate(owner._imageImportTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
+        _authority = owner._session.CaptureImageImportAuthority();
+        _payload.reset(std::make_unique<ImageImportPayload>().release());
+        // Install the whole bound before capture can fail after a partial owner copy.
+        _payload->bytes = (std::max)(retirement, kDeferredReleaseThreshold);
+        _payload->paths = std::move(paths);
+        _payload->files = std::move(files);
+        _payload->gate = _gate;
+        _payload->ownerThread = _ownerThread;
     }
 
     JobResult Run(JobContext& context) override
     {
         if (context.cancellation.IsCancelled())
             return {JobStatus::Cancelled};
-        if (_files && !_snapshotReady)
+        if (_payload->files && !_snapshotReady)
             return {}; // admitted record reaches its owner capture hook before any document copy
-        const auto phase = _files ? ImageImportTestPhase::Prepare : ImageImportTestPhase::Probe;
+        const auto phase = _payload->files ? ImageImportTestPhase::Prepare : ImageImportTestPhase::Probe;
         if (_gate && _gate->phase == phase && !_gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -44,13 +99,13 @@ class Application::ImageImportJob final : public Job
         if (_gate && _gate->phase == phase && !_gate->afterPreparation && _gate->throwAllocationFailure)
             throw std::bad_alloc{};
         std::array<std::wstring_view, kImageImportMaxPaths> views{};
-        for (std::size_t index = 0; index < _paths.size(); ++index)
-            views[index] = _paths[index];
-        const auto paths = std::span<const std::wstring_view>(views.data(), _paths.size());
-        if (_files)
+        for (std::size_t index = 0; index < _payload->paths.size(); ++index)
+            views[index] = _payload->paths[index];
+        const auto paths = std::span<const std::wstring_view>(views.data(), _payload->paths.size());
+        if (_payload->files)
         {
-            ImageImportBatchInput input{std::move(_source), _active, paths, _newProject, _center};
-            input.files = _files.value();
+            ImageImportBatchInput input{_payload->source, _active, paths, _newProject, _center};
+            input.files = _payload->files.value();
             input.maximumAddedPixels = _maximumAddedPixels;
             struct Progress final
             {
@@ -63,25 +118,35 @@ class Application::ImageImportJob final : public Job
                 auto& progressValue = *static_cast<Progress*>(value);
                 progressValue.context.ReportProgress(static_cast<unsigned int>(attempted * 100 / progressValue.count));
             };
-            _prepared = RunImageImportBatch(input, context.cancellation);
-            // Validate the complete pair off-thread before either can reach the owner replacement boundary.
-            const auto valid = [](const std::optional<CanvasDocument>& document, const std::optional<Guid>& active)
+            auto prepared = RunImageImportBatch(input, context.cancellation);
+            _payload->status = prepared.status;
+            _payload->failed = prepared.failed;
+            _payload->tooLarge = prepared.tooLarge;
+            if (context.cancellation.IsCancelled() || prepared.status == ProjectIoStatus::Cancelled)
+                return {JobStatus::Cancelled};
+            DocumentHistory::PrepareObserver observer;
+            if (_gate && _gate->throwHistoryStage)
             {
-                return !document || (ValidateDocument(document.value()) == DocumentStatus::Ok && active &&
-                                     std::any_of(document->layers.begin(), document->layers.end(),
-                                                 [&](const auto& layer) { return layer.id == active.value(); }));
-            };
-            if (!valid(_prepared.createdDocument, _prepared.createdActiveLayerID) ||
-                !valid(_prepared.importedDocument, _prepared.importedActiveLayerID) ||
-                (_prepared.createdDocument && _prepared.importedDocument &&
-                 _prepared.createdDocument->id != _prepared.importedDocument->id))
-            {
-                _prepared = {};
-                return {JobStatus::Failed, E_UNEXPECTED};
+                observer = {[](void* opaque, DocumentHistory::PrepareStage stage)
+                            {
+                                auto& gate = *static_cast<ImageImportTestGate*>(opaque);
+                                if (gate.throwHistoryStage == stage)
+                                {
+                                    gate.historyFaultHits.fetch_add(1);
+                                    throw std::bad_alloc{};
+                                }
+                            },
+                            _gate.get()};
             }
+            _payload->publication = DocumentSession::PrepareImageImportPublication(
+                _authority, std::move(_payload->source), _active, std::move(_payload->history), std::move(prepared),
+                context.cancellation, observer);
+            if (!_payload->publication)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_UNEXPECTED};
         }
         else
-            _probed = ProbeImageImportBatch(paths, context.cancellation);
+            _payload->probed = ProbeImageImportBatch(paths, context.cancellation);
         if (_gate && _gate->phase == phase && _gate->afterPreparation)
         {
             const auto result = PassGate(context);
@@ -91,14 +156,14 @@ class Application::ImageImportJob final : public Job
         if (_gate && _gate->phase == phase && _gate->afterPreparation && _gate->throwAllocationFailure)
             throw std::bad_alloc{};
         return context.cancellation.IsCancelled() ||
-                       (_files ? _prepared.status : _probed.status) == ProjectIoStatus::Cancelled
+                       (_payload->files ? _payload->status : _payload->probed.status) == ProjectIoStatus::Cancelled
                    ? JobResult{JobStatus::Cancelled}
                    : JobResult{};
     }
 
     bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
     {
-        if (!_files || _snapshotReady)
+        if (!_payload->files || _snapshotReady)
             return false;
         if (!Current() || _owner._historyWork.CancelRequested(_stamp))
             return false;
@@ -112,11 +177,9 @@ class Application::ImageImportJob final : public Job
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            // The complete preparation reservation is held now. Capture only settled metadata here; workers
-            // subsequently read private values and shared immutable raster/selection owners. This owner copy
-            // remains a measured P1.9 cost until document record snapshots themselves become shared.
-            if (!_newProject)
-                _source = _owner._session.Document();
+            // The bound includes old session/history owners even when these images create a replacement canvas.
+            _payload->source = _owner._session.Document();
+            _payload->history = _owner._session.history.CaptureState();
             _snapshotReady = true;
             if (_owner._jobs.Resume(ticket))
                 return true;
@@ -140,44 +203,42 @@ class Application::ImageImportJob final : public Job
         std::int32_t error = FAILED(_snapshotError) ? _snapshotError : result.error;
         bool replaced = false;
         _owner._imageImportTicket.reset();
-        if (outcome == HostOutcome::Succeeded && !_files)
+        if (outcome == HostOutcome::Succeeded && !_payload->files)
         {
-            error = _probed.status == ProjectIoStatus::Ok
-                        ? _owner.SubmitImageImport(_stamp, _generation, std::move(_paths), std::move(_probed.files),
-                                                   _newProject, _center)
+            error = _payload->probed.status == ProjectIoStatus::Ok
+                        ? _owner.SubmitImageImport(_stamp, _generation, std::move(_payload->paths),
+                                                   std::move(_payload->probed.files), _newProject, _center)
                         : E_FAIL;
             if (SUCCEEDED(error))
                 return; // selected input/barrier survives; Io FIFO waits for probe record retirement
             outcome = HostOutcome::Failed;
         }
-        if (outcome == HostOutcome::Succeeded && _files)
+        if (outcome == HostOutcome::Succeeded && _payload->files)
         {
-            if (_prepared.createdDocument)
+            const bool changes = _payload->publication && _payload->publication.value().ChangesDocument();
+            replaced = _payload->publication && _payload->publication.value().ReplacesDocument();
+            if (!_payload->publication ||
+                !_owner._session.ApplyPreparedImageImportIfCurrent(_payload->publication.value()))
             {
-                _owner.ReplaceDocument(std::move(_prepared.createdDocument.value()), _prepared.createdActiveLayerID,
-                                       std::wstring{});
-                _owner._activeHostRequest->documentSerial = _owner._session.DocumentSerial();
-                replaced = true;
+                outcome = HostOutcome::Stale;
+                error = E_ABORT;
+                replaced = false;
             }
-            if (_prepared.importedDocument)
+            else if (changes)
             {
-                if (!_owner._session.ApplyImportedDocument(std::move(_prepared.importedDocument.value()),
-                                                           _prepared.importedActiveLayerID,
-                                                           std::move(_prepared.historyName)))
+                if (replaced)
                 {
-                    outcome = HostOutcome::Failed;
-                    error = E_UNEXPECTED; // pair validation and current generation make refusal unreachable
+                    std::swap(_owner._documentPath, _payload->retiredPath);
+                    _owner.FinishPreparedDocumentReplacement();
+                    _owner._activeHostRequest->documentSerial = _owner._session.DocumentSerial();
                 }
-                else
-                {
-                    _owner._viewport.followsFit = true;
-                    _owner.DocumentChanged();
-                }
+                _owner._viewport.followsFit = true;
+                _owner.DocumentChanged();
             }
-            if (_prepared.failed || _prepared.status != ProjectIoStatus::Ok)
+            if (outcome == HostOutcome::Succeeded && (_payload->failed || _payload->status != ProjectIoStatus::Ok))
             {
                 outcome = HostOutcome::Failed;
-                error = _prepared.tooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : E_FAIL;
+                error = _payload->tooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) : E_FAIL;
             }
         }
         if (outcome == HostOutcome::Failed)
@@ -188,7 +249,7 @@ class Application::ImageImportJob final : public Job
             if (!FAILED(_owner._hostBatchError))
                 _owner._hostBatchError = error;
             ++_owner._errorsShown;
-            _owner._lastErrorId = _prepared.tooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE;
+            _owner._lastErrorId = _payload->tooLarge ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, _owner._lastErrorId);
             outcome = HostOutcome::Succeeded; // FileComplete reports the first batch error; no later images remain
             error = S_OK;
@@ -206,10 +267,12 @@ class Application::ImageImportJob final : public Job
   private:
     bool Current() const noexcept
     {
-        return _owner._imageImportStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
-               _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
+        return !_owner._shutdownStarted && _owner._imageImportStamp == _stamp && _owner._hostCommitStamp == _stamp &&
+               _owner._historyWork.IsCurrent(_stamp) && _owner._activeHostRequest &&
+               _owner._activeHostRequest->ordinal == _stamp.ordinal &&
                _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
-               _owner._session.DocumentSerial() == _stamp.documentSerial && _owner._session.Generation() == _generation;
+               _owner._session.DocumentSerial() == _stamp.documentSerial &&
+               _owner._session.Generation() == _generation && _owner._session.CanApplyImageImport(_authority);
     }
     JobResult PassGate(JobContext& context) noexcept
     {
@@ -228,17 +291,14 @@ class Application::ImageImportJob final : public Job
     Application& _owner; // worker never dereferences Application, session, HWND or GPU
     const HistoryWorkStamp _stamp;
     const std::uint64_t _generation;
-    std::vector<std::wstring> _paths;
-    std::optional<std::vector<ImageImportFilePlan>> _files;
-    std::optional<CanvasDocument> _source;
+    ImageImportAuthority _authority;
+    std::unique_ptr<ImageImportPayload, RetireImageImportPayload> _payload;
     const std::optional<Guid> _active;
     const bool _newProject;
     const std::optional<Vec2> _center;
     const int _maximumAddedPixels;
     const std::shared_ptr<ImageImportTestGate> _gate;
     const DWORD _ownerThread;
-    ImageImportProbeResult _probed;
-    ImageImportBatchResult _prepared;
     bool _snapshotReady = false;
     HRESULT _snapshotError = S_OK;
 };
@@ -259,26 +319,45 @@ HRESULT Application::SubmitImageImport(HistoryWorkStamp stamp, std::uint64_t gen
         const bool createsCanvas = newProject || !_session.Document();
         const bool prepares = files.has_value();
         int pixelLimit = 0;
-        const auto memory =
-            files ? ImageImportMemoryBytes(pathViews, files.value(),
-                                           createsCanvas ? nullptr : &_session.Document().value(), pixelLimit)
-                  : ImageImportMetadataMemoryBytes(pathViews);
+        auto memory = files ? ImageImportMemoryBytes(pathViews, files.value(),
+                                                     createsCanvas ? nullptr : &_session.Document().value(), pixelLimit)
+                            : ImageImportMetadataMemoryBytes(pathViews);
         if (memory == 0)
             return E_INVALIDARG;
+        const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        auto retirement = kDeferredReleaseThreshold;
+        if (prepares)
+        {
+            const auto history = _session.history.EditMemoryBytes(_session.Document());
+            retirement = _session.ImageImportRetirementMemoryBytes();
+            if (!history || !retirement || history > maximum - memory)
+                return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            memory += history;
+            // Derived previews already in flight remain allowed; later mutating inputs wait behind this ordinal.
+            const auto previews = _jobs.ReservedMemoryBytes();
+            if (previews > maximum - retirement)
+                return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            retirement += previews;
+        }
+        if (sizeof(ImageImportJob) + sizeof(ImageImportPayload) > maximum - memory)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        memory += sizeof(ImageImportJob) + sizeof(ImageImportPayload);
+        if (memory > maximum / 4 || memory * 4 > maximum - retirement)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        retirement += memory * 4;
         if (_imageImportTestGate && _imageImportTestGate->throwAdmissionFailure &&
             _imageImportTestGate->phase == (files ? ImageImportTestPhase::Prepare : ImageImportTestPhase::Probe))
             throw std::bad_alloc{};
         std::unique_ptr<Job> job =
-            std::make_unique<ImageImportJob>(*this, stamp, generation, std::move(paths), std::move(files), std::nullopt,
-                                             _session.ActiveLayerID(), createsCanvas, center, pixelLimit);
+            std::make_unique<ImageImportJob>(*this, stamp, generation, std::move(paths), std::move(files),
+                                             _session.ActiveLayerID(), createsCanvas, center, pixelLimit, retirement);
         JobTicket ticket;
-        const auto result =
-            static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, 0, memory + sizeof(ImageImportJob)}, ticket));
+        const auto result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, 0, memory}, ticket));
         if (SUCCEEDED(result))
         {
             _imageImportTicket = ticket;
             if (_imageImportTestGate && prepares)
-                _imageImportTestGate->preparationReservationBytes = memory + sizeof(ImageImportJob);
+                _imageImportTestGate->preparationReservationBytes = memory;
         }
         return result;
     }
@@ -359,7 +438,17 @@ int Application::RunImageImportSelfTest() noexcept
         Stale,
         Generation,
         Device,
-        CaptureAllocation
+        CaptureAllocation,
+        HistoryReset,
+        HistoryBefore,
+        HistoryAfter,
+        HistoryEntry,
+        HistoryStack,
+        HistoryTrim,
+        Epoch,
+        ActiveOnly,
+        MaskOnly,
+        CropOnly
     };
     struct State final
     {
@@ -410,6 +499,17 @@ int Application::RunImageImportSelfTest() noexcept
         }
         else if (state.mode == Mode::Generation)
             owner._session.RenameLayer(state.active.value(), L"Import external generation");
+        else if (state.mode == Mode::Epoch)
+        {
+            owner._session.history.Begin(L"Epoch only", owner._session.Document(), owner._session.ActiveLayerID());
+            owner._session.history.End(owner._session.Document(), owner._session.ActiveLayerID());
+        }
+        else if (state.mode == Mode::ActiveOnly)
+            owner._session.SelectLayer(owner._session.Document().value().layers.front().id);
+        else if (state.mode == Mode::MaskOnly)
+            owner._session.SelectLayerTarget(state.active.value(), false);
+        else if (state.mode == Mode::CropOnly)
+            owner._session.SetCropFrame(CropRect{0, 0, 2, 1});
         else if (state.mode == Mode::Device)
         {
             state.deviceRecovered = owner._renderer.RecoverDeviceForTest();
@@ -458,10 +558,18 @@ int Application::RunImageImportSelfTest() noexcept
         for (const auto phase : {ImageImportTestPhase::Probe, ImageImportTestPhase::Prepare})
             for (const bool after : {false, true})
                 for (const auto mode :
-                     {Mode::Success, Mode::Ordered, Mode::Cancel, Mode::Failure, Mode::Allocation, Mode::Admission,
-                      Mode::Stale, Mode::Generation, Mode::Device, Mode::CaptureAllocation})
+                     {Mode::Success,      Mode::Ordered,           Mode::Cancel,       Mode::Failure,
+                      Mode::Allocation,   Mode::Admission,         Mode::Stale,        Mode::Generation,
+                      Mode::Device,       Mode::CaptureAllocation, Mode::HistoryReset, Mode::HistoryBefore,
+                      Mode::HistoryAfter, Mode::HistoryEntry,      Mode::HistoryStack, Mode::HistoryTrim,
+                      Mode::Epoch,        Mode::ActiveOnly,        Mode::MaskOnly,     Mode::CropOnly})
                 {
-                    if ((target == Target::Empty && (mode == Mode::Stale || mode == Mode::Generation)) ||
+                    const bool historyFailure = mode >= Mode::HistoryReset && mode <= Mode::HistoryTrim;
+                    const bool scopeStale = mode >= Mode::Epoch && mode <= Mode::CropOnly;
+                    if (((historyFailure || scopeStale) && ((target != Target::Existing && target != Target::New) ||
+                                                            phase != ImageImportTestPhase::Prepare || !after)) ||
+                        (mode == Mode::HistoryReset && target != Target::New) ||
+                        (target == Target::Empty && (mode == Mode::Stale || mode == Mode::Generation)) ||
                         (mode == Mode::CaptureAllocation &&
                          (target != Target::Existing || phase != ImageImportTestPhase::Prepare || after)) ||
                         (mode == Mode::Device &&
@@ -469,8 +577,36 @@ int Application::RunImageImportSelfTest() noexcept
                         continue;
                     if (!settle())
                         return 5;
+                    _session.ClearDocument();
                     _session.CreateDocument(8, 4);
                     (void)InsertPaintedLayer(_session, L"Before import", 8, 4, {}, 0, 0xFF404040);
+                    if (mode == Mode::ActiveOnly)
+                        _session.AddBlankLayer();
+                    if (mode == Mode::MaskOnly)
+                    {
+                        const auto selected = _session.ActiveLayerID().value();
+                        _session.EditForTest(
+                            [&](CanvasDocument& document)
+                            {
+                                for (auto& layer : document.layers)
+                                    if (layer.id == selected)
+                                    {
+                                        const std::uint8_t byte = 173;
+                                        const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                        LayerMask placed;
+                                        placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                        layer.mask = std::move(placed);
+                                    }
+                            });
+                        _session.SelectLayerTarget(selected, true);
+                    }
+                    if (historyFailure || scopeStale)
+                    {
+                        _session.SetOpacity(0.5);
+                        _session.Undo(); // Both stacks exist before refusal; the literal source opacity is 1.
+                    }
+                    if (mode == Mode::CropOnly)
+                        _session.SetCropFrame(CropRect{1, 0, 1, 1});
                     if (target == Target::Grouped)
                         _session.EditForTest(
                             [](CanvasDocument& document)
@@ -489,6 +625,7 @@ int Application::RunImageImportSelfTest() noexcept
                     const auto active = _session.ActiveLayerID();
                     const auto revision = _session.history.CurrentRevision();
                     const auto undoCount = _session.history.UndoCount();
+                    const auto redoName = _session.history.RedoName();
                     const auto serial = _session.DocumentSerial();
                     const auto errors = _errorsShown;
                     const auto presents = _renderer.PresentCount();
@@ -501,6 +638,17 @@ int Application::RunImageImportSelfTest() noexcept
                     _imageImportTestGate->throwAllocationFailure = mode == Mode::Allocation;
                     _imageImportTestGate->throwAdmissionFailure = mode == Mode::Admission;
                     _imageImportTestGate->throwCaptureFailure = mode == Mode::CaptureAllocation;
+                    if (historyFailure)
+                    {
+                        constexpr std::array stages{DocumentHistory::PrepareStage::ReplacementReset,
+                                                    DocumentHistory::PrepareStage::BeforeSnapshot,
+                                                    DocumentHistory::PrepareStage::AfterSnapshot,
+                                                    DocumentHistory::PrepareStage::Entry,
+                                                    DocumentHistory::PrepareStage::StackGrowth,
+                                                    DocumentHistory::PrepareStage::TrimIndex};
+                        _imageImportTestGate->throwHistoryStage =
+                            stages[static_cast<unsigned int>(mode) - static_cast<unsigned int>(Mode::HistoryReset)];
+                    }
                     if (mode == Mode::Failure)
                         _imageImportTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
                     std::wstring callerPath = first;
@@ -516,20 +664,22 @@ int Application::RunImageImportSelfTest() noexcept
                     State state{*this, mode, receipt, source, active, revision, serial};
                     const auto settled = SettleJobs(_jobs, 25000, dispatch, &state);
                     const auto actual = receipt.Read();
-                    const auto expected = mode == Mode::Stale || mode == Mode::Generation ? HostOutcome::Stale
-                                          : mode == Mode::Cancel                          ? HostOutcome::Cancelled
-                                          : mode == Mode::Failure || mode == Mode::Allocation ||
-                                                  mode == Mode::Admission || mode == Mode::CaptureAllocation
-                                              ? HostOutcome::Failed
-                                              : HostOutcome::Succeeded;
+                    const auto expected =
+                        mode == Mode::Stale || mode == Mode::Generation || scopeStale ? HostOutcome::Stale
+                        : mode == Mode::Cancel                                        ? HostOutcome::Cancelled
+                        : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission ||
+                                mode == Mode::CaptureAllocation || historyFailure
+                            ? HostOutcome::Failed
+                            : HostOutcome::Succeeded;
                     const bool failed = expected == HostOutcome::Failed;
-                    bool correct =
-                        settled == SettleResult::Settled && actual.outcome == expected &&
-                        (mode == Mode::Admission || mode == Mode::CaptureAllocation ? !state.visited
-                                                                                    : state.visited && state.held) &&
-                        !_imageImportStamp && !_imageImportTicket && !_activeHostRequest && !_historyWork.Busy() &&
-                        _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
-                        _renderer.PresentCount() == presents && _errorsShown == errors + static_cast<int>(failed);
+                    bool correct = settled == SettleResult::Settled && actual.outcome == expected &&
+                                   (mode == Mode::Admission || mode == Mode::CaptureAllocation || historyFailure
+                                        ? !state.visited
+                                        : state.visited && state.held) &&
+                                   !_imageImportStamp && !_imageImportTicket && !_activeHostRequest &&
+                                   !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 &&
+                                   _hostInputBudget.Used() == 0 && _renderer.PresentCount() == presents &&
+                                   _errorsShown == errors + static_cast<int>(failed);
                     if (expected == HostOutcome::Succeeded)
                     {
                         if (mode == Mode::Ordered && !creates)
@@ -574,6 +724,18 @@ int Application::RunImageImportSelfTest() noexcept
                         correct = correct && _session.Document() == source &&
                                   _session.history.CurrentRevision() == revision &&
                                   _documentPath == L"before-import.prism";
+                    if (historyFailure || scopeStale)
+                        correct = correct && _session.history.UndoCount() == undoCount &&
+                                  _session.history.RedoName() == redoName;
+                    if (mode == Mode::ActiveOnly)
+                        correct = correct && _session.ActiveLayerID() == source.value().layers.front().id;
+                    if (mode == Mode::MaskOnly)
+                        correct = correct && !_session.IsMaskSelected();
+                    if (mode == Mode::CropOnly)
+                        correct = correct && _session.CropFrame() == std::optional(CropRect{0, 0, 2, 1});
+                    if (historyFailure)
+                        correct = correct && _imageImportTestGate->historyFaultHits.load() == 1 &&
+                                  !_session.history.IsModified();
                     if (failed)
                         correct = correct && actual.error == (mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY) &&
                                   _lastErrorId == IDS_ERROR_IMPORT_IMAGE;
@@ -582,7 +744,8 @@ int Application::RunImageImportSelfTest() noexcept
                     if (mode == Mode::Device)
                         correct = correct && SUCCEEDED(state.deviceRecovered);
                     if (phase == ImageImportTestPhase::Prepare && mode != Mode::Admission)
-                        correct = correct && _imageImportTestGate->captureReservationHeld;
+                        correct = correct && _imageImportTestGate->captureReservationHeld &&
+                                  _imageImportTestGate->retired.load() && _imageImportTestGate->retiredOffOwner.load();
                     if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
                         correct = correct && actual.error == E_ABORT;
                     if (younger)
@@ -604,6 +767,92 @@ int Application::RunImageImportSelfTest() noexcept
                         return 5;
                     }
                 }
+    // Actual selected input route: nested import retains the outer entry; Images as Project discards live
+    // previews/floating transactions only after the complete baseline and additional-image entry exist.
+    for (const unsigned int context : {0U, 1U, 2U})
+        for (const bool fail : {false, true})
+        {
+            if (!settle())
+                return 5;
+            _session.ClearDocument(); // Fixture isolation: failed replacement keeps drafts in the prior case.
+            _session.CreateDocument(8, 4);
+            (void)InsertPaintedLayer(_session, L"Live import source", 8, 4, {}, 0, 0xFF404040);
+            _session.history.MarkSaved();
+            _documentPath = L"live-import.prism";
+            if (context == 0)
+                _session.BeginEdit(L"Outer host import");
+            else if (context == 1)
+                _session.BeginColorEdit(FilterKind::Exposure, true);
+            else
+            {
+                _session.SelectAll();
+                _session.BeginSelectionTransform();
+            }
+            DocumentChanged();
+            if (!settle())
+                return 5;
+            const auto source = _session.Document();
+            const auto active = _session.ActiveLayerID();
+            const auto revision = _session.history.CurrentRevision();
+            const auto depth = _session.history.CaptureState().Depth();
+            const auto undo = _session.history.UndoCount();
+            const auto serial = _session.DocumentSerial();
+            _forcedDiscardAnswer = Prompts::Answer::Second;
+            _imageImportTestGate = std::make_shared<ImageImportTestGate>();
+            if (!_imageImportTestGate->release)
+                return 5;
+            _imageImportTestGate->phase = ImageImportTestPhase::Prepare;
+            _imageImportTestGate->afterPreparation = true;
+            _imageImportTestGate->throwAllocationFailure = fail;
+            const std::array<std::wstring_view, 2> paths{first, second};
+            const auto receipt =
+                QueueHostPaths(paths, context == 0 ? HostPathAction::ImagesAsLayers : HostPathAction::ImagesAsProject);
+            State state{*this, fail ? Mode::Allocation : Mode::Success, receipt, source, active, revision, serial};
+            const auto settled = SettleJobs(_jobs, 25000, dispatch, &state);
+            bool correct = settled == SettleResult::Settled && state.visited && state.held &&
+                           receipt.Read().outcome == (fail ? HostOutcome::Failed : HostOutcome::Succeeded) &&
+                           !_imageImportTicket && !_imageImportStamp && !_activeHostRequest && !_historyWork.Busy() &&
+                           _jobs.ReservedMemoryBytes() == 0 && _imageImportTestGate->retired.load() &&
+                           _imageImportTestGate->retiredOffOwner.load();
+            if (fail)
+                correct = correct && _session.Document() == source && _session.ActiveLayerID() == active &&
+                          _session.DocumentSerial() == serial && _session.history.CurrentRevision() == revision &&
+                          _session.history.CaptureState().Depth() == depth && _session.history.UndoCount() == undo &&
+                          _documentPath == L"live-import.prism" &&
+                          (context == 0   ? depth == 1
+                           : context == 1 ? _session.HasColorEdit()
+                                          : _session.PendingTransformEdit() &&
+                                                _session.PendingTransformEdit()->floating.has_value());
+            else if (context == 0)
+            {
+                correct = correct && _session.history.CurrentRevision() == revision &&
+                          _session.history.UndoCount() == undo && _session.history.CaptureState().Depth() == 1 &&
+                          _session.DocumentSerial() == serial && _documentPath == L"live-import.prism";
+                _session.EndEdit();
+                correct = correct && _session.history.UndoCount() == undo + 1 &&
+                          _session.history.UndoName() == L"Outer host import";
+                _session.Undo();
+                correct = correct && _session.Document() == source && _session.ActiveLayerID() == active;
+                _session.Redo();
+                correct = correct && _session.Document()->layers.size() == source->layers.size() + 2 &&
+                          _session.ActiveLayer()->asset->image.Data()[0] == 191;
+            }
+            else
+            {
+                correct = correct && !_session.HasColorEdit() && !_session.PendingTransformEdit() &&
+                          _session.history.CaptureState().Depth() == 0 && _session.history.UndoCount() == 1 &&
+                          _session.DocumentSerial() != serial && _documentPath.empty() &&
+                          _session.Document()->layers.size() == 2 &&
+                          _session.ActiveLayer()->asset->image.Data()[0] == 191;
+                _session.Undo();
+                correct = correct && !_session.history.IsModified() && _session.Document()->layers.size() == 1 &&
+                          _session.ActiveLayer()->asset->image.Data()[4] == 23;
+            }
+            std::fprintf(stderr, "%s image-import-host.live-context=%u fail=%u\n", correct ? "PASS" : "FAIL", context,
+                         fail ? 1U : 0U);
+            if (!correct)
+                return 5;
+        }
     enum class BatchMode
     {
         MissingFirst,

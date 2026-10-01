@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Document.h"
 #include "Jobs.h"
 
 #include <atomic>
@@ -25,7 +26,10 @@ struct ImageImportTestGate final
     bool throwAllocationFailure = false;
     bool throwAdmissionFailure = false;
     bool throwCaptureFailure = false;
-    bool captureReservationHeld = false;           // observed in the real admitted owner capture hook
+    bool captureReservationHeld = false; // observed in the real admitted owner capture hook
+    std::atomic<bool> retired{false}, retiredOffOwner{false};
+    std::atomic<unsigned int> historyFaultHits{0};
+    std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
     std::uint64_t preparationReservationBytes = 0; // owner-only assertion
     JobResult result{};
 };

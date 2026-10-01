@@ -23,6 +23,8 @@ class WarpStroke
     {
         return _valid;
     }
+    // Retained CPU storage bound for retirement/admission accounting; zero means arithmetic overflow.
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
     // Continues the stroke to `point` (document pixels), dabbing along the way.
     void Append(Vec2 point);
     // Every dab's center, for painting the result into the layer.

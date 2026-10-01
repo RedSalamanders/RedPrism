@@ -506,7 +506,7 @@ outputs, one serial frame allowance, thumbnail transients, path/name/curve/docum
 allowance. Shared immutable source raster and selection storage is not charged again. Invalid limits/overflow
 refuse construction; failed probes require no pixel output and preserve their ordered failure status.
 
-The preparation record first enters a trivial worker stage after admission, then captures settled source metadata
+The preparation record first enters a trivial worker stage after admission, then captures source and history metadata
 on its owner hook while its full reservation is held, then resumes that same record for decode/preparation. It
 does not copy a large source document before memory admission or borrow a live session on a worker. Snapshot-copy
 allocation failure fails the whole graph with no partial application. The copy and final history/chrome application
@@ -514,7 +514,11 @@ remain measured owner costs and P1.9 optimization work. Opaque WIC calls retain 
 interruptible. All files retain per-path ceilings and the whole batch an aggregate added-pixel ceiling on reopened
 decode, in addition to current document-wide limits. No worker waits for a larger recursive reservation.
 
-Only the current serial/generation/ordinal/acquisition may apply the complete validated baseline/final pair.
+Only the current session/document serial, generation, restore serial, active/mask/crop target, history epoch and
+selected ordinal/acquisition may apply the complete validated baseline/final pair. File-operation authority permits
+pending edits; successful replacement retires their complete CPU owners, while failure preserves them. Borrowed
+coverage engines are detached on the owner before those drafts can be destroyed on the release worker. Ordinary
+imports inside an open transaction preserve its original opening, depth and name. Undo/Redo remains settled-only.
 Cancellation/staleness/worker failure applies neither and retains input/owners until acknowledgement. Ordinary
 partial success preserves valid files and posts one localized import summary. A new canvas establishes a saved
 baseline; subsequent imports make one named history entry. Mixed project/image batches retain the first error.

@@ -585,6 +585,24 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optiona
 // over, the history starts afresh with the document marked saved, and the viewport fits it. The session replaces its
 // whole state (DocumentSession::ReplaceDocument), so a mask target or a selection of layers never survives into the
 // new document, not even when the reopened active layer has the same id and a mask of its own.
+void Application::FinishPreparedDocumentReplacement() noexcept
+{
+    // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
+    // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
+    _opacityEdit.reset();
+    _opacityRecorded.reset();
+    _sizeDialog.kind = SizeCardKind::None;
+    CloseRenameCard();
+    _drag = PointerDrag{};
+    _composition.EndStroke();
+    if (_window && GetCapture() == _window.get())
+    {
+        _releasingCapture = true;
+        ReleaseCapture();
+        _releasingCapture = false;
+    }
+}
+
 void Application::ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active,
                                   std::wstring path) noexcept
 {

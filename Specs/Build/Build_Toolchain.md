@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `format.ps1`
 
 ## Scope
@@ -191,7 +191,12 @@ It also recognizes the observed R8-base forms with RAX/RCX index and RAX/RCX/RDX
 add and jump use the same registers. The aligned table must follow RET plus at most three alignment bytes, or
 have an exact anonymous `S_LDATA32` start in the matching PDB and owning contribution. The latter covers multiple
 tables after one function. A following data symbol bounds the table; it is not itself an exempt range. Every entry must
-target a decoded instruction after the dispatch and before the table. Only complete instructions inside that
+target a known decoded instruction boundary before the table, in the same executable contribution. A target before
+the dispatch additionally requires one exact same-owner PDB procedure containing the dispatch, the backward
+targets and the entire DWORD table; that procedure must fit its executable contribution and section. Unknown
+instructions, overlapping boundaries and cross-procedure targets do not prove data. When the next same-owner
+anonymous data symbol bounds a DWORD table, every entry through that exclusive boundary must pass; an invalid
+last entry cannot silently shorten the span. Only complete instructions inside that
 verified DWORD span are counted separately as `inlineTableVectorData`. An observed linear-disassembly row starting
 inside that span may consume adjacent `INT3` alignment: the row must be at most 15 bytes, match the PE byte for
 byte, and have only `0xCC` outside the proved table. A row may cross directly touching tables only when each table
@@ -199,6 +204,19 @@ has independently passed the dispatch, PDB, PE and decoded-target proof, belongs
 and contribution, and has no unresolved targets. Gaps and merely neighboring data symbols do not extend the
 proved span. A row starting at or after the end, a nonpadding suffix or an unproved table stays gated. Other code
 in the function remains gated.
+An observed memory byte-index remap also requires the exact anonymous, untyped same-owner PDB data symbol at
+its encoded start, followed by an exclusive same-owner anonymous data-symbol boundary. A terminal byte span
+may instead end at the exact shared end of its owning PDB procedure and executable contribution when no
+following data symbol exists. That same procedure must contain the dispatch, DWORD table and byte-table start;
+a missing, shorter, cross-owner or differently bounded procedure cannot prove this terminal span. The complete PE byte
+range must fit the same contribution, contain at most 4096 bytes, follow the associated DWORD table and contain
+only indices below that table's entry count. Register/immediate remaps do not create a byte-data range. The
+exact trailing alignment `90`, `66 90` or `0F 1F 00` may occupy one to three bytes ending at the proved DWORD-aligned
+boundary. Those complete bytes are padding; every preceding byte still passes the index bound. A changed suffix,
+repeated padding, nonaligned end or empty index range receives no exemption. No other instruction is padding.
+The byte table becomes proved data only after its associated DWORD table and every branch target pass. Rows crossing
+directly touching DWORD and byte-index spans keep the same 15-byte, byte-for-byte PE and contribution checks.
+No object, library or function runtime allowlist entry is added by either proof.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 

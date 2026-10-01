@@ -135,6 +135,9 @@ function New-SyntheticCase {
     $instructions = [Collections.Generic.List[string]]::new()
     $leaText = if ($RaxBase) { 'lea rax, [rip+imagebase]' } elseif ($RdxBase) { 'lea rdx, [rip+imagebase]' } elseif ($R8Base) { 'lea r8, [rip+imagebase]' } else { 'lea rcx, [rip+imagebase]' }
     $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$caseDispatchRva), (Hex-Bytes $lea), $leaText))
+    $optionalIndexInstructionRva = [UInt32]0
+    $optionalIndexInstructionIndex = -1
+    $optionalIndexText = ''
     if ($SignedIndex) {
         $indexText = if ($Fault -eq 'SignedBadFrame') { 'movsx rax, byte ptr [rsp-40h]' } elseif ($Fault -eq 'SignedBadSize') { 'movsx rax, word ptr [rbp-40h]' } elseif ($Fault -eq 'SignedWideWrongFrameBase') { 'movsx rax, byte ptr [rdi+1c0h]' } elseif ($Fault -eq 'SignedWideWrongFrameSib') { 'movsx rax, byte ptr [rbp+rax+1c0h]' } elseif ($SignedWideFrame) { 'movsx rax, byte ptr [rbp+1c0h]' } else { 'movsx rax, byte ptr [rbp-40h]' }
         $instructions.Insert(0, ('{0:x}: {1} {2}' -f ($imageBase+$dispatchRva), (Hex-Bytes $signedIndex), $indexText))
@@ -144,13 +147,15 @@ function New-SyntheticCase {
     }
     if ($OptionalByteIndex) {
         $indexLoad = [byte[]]@(0x0f,0xb6,0x84,0x01,0,0,0,0)
-        Put-Bytes $indexLoad 4 ([BitConverter]::GetBytes([UInt32]0))
         if ($R8Base) {
             $indexLoad = [byte[]]@(0x41,0x0f,0xb6,0x84,0x00,0,0,0,0)
             if ($TargetRegister -eq 2) { $indexLoad[3] = 0x8c; $indexLoad[4] = 0x08 }
         }
+        $optionalIndexInstructionRva = $cursor
+        $optionalIndexInstructionIndex = $instructions.Count
+        $optionalIndexText = if ($R8Base) { 'movzx eax, byte ptr [r8+rax+index]' } else { 'movzx eax, byte ptr [rcx+rax+index]' }
         Put-Bytes $pe (0x400+$cursor-$sectionRva) $indexLoad
-        $instructions.Add(('{0:x}: {1} movzx eax, byte ptr [rcx+rax]' -f ($imageBase+$cursor), (Hex-Bytes $indexLoad)))
+        $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$cursor), (Hex-Bytes $indexLoad), $optionalIndexText))
         $cursor += $indexLoad.Length
     }
     if ($DlByteIndex) {
@@ -347,6 +352,14 @@ function New-SyntheticCase {
     $jumpText = if ($RaxBase -or $RdxBase -or $HoistedR8Base) { 'jmp rcx' } else { 'jmp rax' }
     $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$cursor), (Hex-Bytes $jump), $jumpText))
     $afterJump = [UInt32]($cursor + 2)
+    if ($OptionalByteIndex) {
+        $byteIndexTableRva = [UInt32]($actualTableRva + 8)
+        $dispOffset = if ($R8Base) { 5 } else { 4 }
+        Put-Bytes $indexLoad $dispOffset ([BitConverter]::GetBytes($byteIndexTableRva))
+        Put-Bytes $pe (0x400+$optionalIndexInstructionRva-$sectionRva) $indexLoad
+        $instructions[$optionalIndexInstructionIndex] = ('{0:x}: {1} {2}' -f
+            ($imageBase+$optionalIndexInstructionRva), (Hex-Bytes $indexLoad), $optionalIndexText)
+    }
 
     $target = if ($HoistedR8Base) { $bodyFirstRva } else { $targetRva }
     if ($Fault -eq 'TargetBeforeDispatch') { $target = $caseDispatchRva }
@@ -394,6 +407,9 @@ function New-SyntheticCase {
         $pe[0x400+$actualTableRva-$sectionRva-1] = 0x90
     } else { $pe[0x400+$actualTableRva-$sectionRva-1] = 0xc3 }
     Put-Bytes $pe (0x400+$actualTableRva-$sectionRva) $tableBytes
+    if ($OptionalByteIndex) {
+        Put-Bytes $pe (0x400+$actualTableRva+$tableBytes.Length-$sectionRva) ([byte[]]@(0,1,0,1))
+    }
 
     $dataEnd = [UInt32]($actualTableRva + $tableBytes.Length)
     $contributionEnd = [UInt32]0x2000
@@ -410,7 +426,7 @@ function New-SyntheticCase {
     $metadataText = "  Age: $age`n  GUID: {$guid}`n$moduleHeader`nSection Contributions`n$contributions"
     Set-Content -LiteralPath $metadata -Value $metadataText -Encoding utf8
     $symbolText = ''
-    if (($PdbData -or $SignedIndex -or $DlByteIndex -or $RdxBase) -and $Fault -notin @('MissingDataSymbol','MissingDataWithRet')) {
+    if (($PdbData -or $OptionalByteIndex -or $SignedIndex -or $DlByteIndex -or $RdxBase) -and $Fault -notin @('MissingDataSymbol','MissingDataWithRet')) {
         $dataModule = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
         $dataOffset = $actualTableRva - $sectionRva
         if ($Fault -eq 'WrongDataStart') { $dataOffset += 4 }
@@ -419,6 +435,12 @@ function New-SyntheticCase {
         $dataSize = if (($RdxBase -or $RaxBase -or $SignedIndex -or $DlByteIndex) -and $Fault -eq 'WrongDataRecordSize') { 15 } else { 16 }
         $symbolText = "  Mod $dataModule | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = $dataSize] ``$dataName`` `n".TrimEnd() +
             "`n  type = $dataType, addr = 0001:$dataOffset`n"
+        if ($OptionalByteIndex) {
+            $byteModule = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+            $byteOffset = [UInt32]($dataEnd - $sectionRva)
+            $symbolText += "  Mod $byteModule | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$byteOffset`n"
+            $symbolText += "  Mod $byteModule | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($byteOffset+4)`n"
+        }
     }
     Set-Content -LiteralPath $symbols -Value $symbolText -Encoding utf8
 
@@ -583,6 +605,132 @@ function Invoke-Control($Case, [bool]$ExpectedPass, [int]$ExpectedInline = -1, [
     Write-Host "PASS isa-inline-table.$($Case.Name)"
 }
 
+function New-DataProofCase([string]$Name, [string]$Fault = '') {
+    $directory = Join-Path $fixtureRoot $Name
+    [void](New-Item -ItemType Directory -Path $directory -Force)
+    $binary = Join-Path $directory 'Synthetic.exe'
+    $metadata = Join-Path $directory 'contributions.txt'
+    $symbols = Join-Path $directory 'symbols.txt'
+    $disassembly = Join-Path $directory 'disassembly.txt'
+    $section = [UInt32]0x0010f000
+    $dispatch = [UInt32]0x0010f000
+    if ($Fault -in @('BackwardValid','MissingProcedure','BadProcedureBounds','CrossProcedure','BackwardMiddle','UnknownTarget','ShortProcedure','WrongProcedureOwner')) {
+        $dispatch = [UInt32]0x0010f300
+    }
+    $dword = [UInt32]($section + 0x1000)
+    $byteTable = [UInt32]($dword + 12)
+    $terminal = $Fault.StartsWith('Terminal')
+    $targets = if ($dispatch -eq $section) { @([UInt32]($section+0x262),[UInt32]($section+0x282),[UInt32]($section+0x2a2)) } else { @([UInt32]($section+0x62),[UInt32]($section+0x162),[UInt32]($section+0x262)) }
+    if ($Fault -eq 'BackwardMiddle') { $targets[0]++ }
+    if ($Fault -eq 'UnknownTarget') { $targets[0] = [UInt32]($section+0x100) }
+    if ($Fault -eq 'MalformedDwordLastEntry') { $targets[2] = [UInt32]($dword+16) }
+    $indexValues = [byte[]]@(0,1,2)
+    if ($Fault -in @('MalformedByteRange','TerminalMalformedByte')) { $indexValues[2] = 3 }
+    if ($Fault.StartsWith('AlignedByte')) {
+        $indexValues = [byte[]]@(0,1,2,0,1,0x0f,0x1f,0)
+        if ($Fault -eq 'AlignedByteMalformedNop') { $indexValues[6]=0x1e }
+        if ($Fault -eq 'AlignedByteInvalidIndex') { $indexValues[4]=3 }
+        if ($Fault -eq 'AlignedByteRepeatedNop') { $indexValues += [byte[]]@(0x0f,0x1f,0) }
+    }
+    $pe = [byte[]]::new(0x2400)
+    $pe[0]=0x4d; $pe[1]=0x5a; Set-U32 $pe 0x3c 0x80; Set-U32 $pe 0x80 0x4550
+    Set-U16 $pe 0x84 0x8664; Set-U16 $pe 0x86 1; Set-U16 $pe 0x94 0xf0; Set-U16 $pe 0x98 0x20b
+    Set-U64 $pe (0x98+24) $imageBase; Set-U32 $pe (0x98+56) 0x2000; Set-U32 $pe (0x98+60) 0x400
+    Set-U32 $pe (0x98+112+6*8) ($section+0x400); Set-U32 $pe (0x98+116+6*8) 28
+    $sh=0x80+24+0xf0; Put-Bytes $pe $sh ([Text.Encoding]::ASCII.GetBytes('.text'+[char]0+[char]0+[char]0))
+    Set-U32 $pe ($sh+8) 0x2000; Set-U32 $pe ($sh+12) $section; Set-U32 $pe ($sh+16) 0x2000
+    Set-U32 $pe ($sh+20) 0x400; Set-U32 $pe ($sh+36) 0x60000020
+    Set-U32 $pe (0x400+0x400+12) 2; Set-U32 $pe (0x400+0x400+16) 24
+    Set-U32 $pe (0x400+0x400+20) ($section+0x420); Set-U32 $pe (0x400+0x400+24) 0x820
+    Put-Bytes $pe 0x820 ([Text.Encoding]::ASCII.GetBytes('RSDS')); Put-Bytes $pe 0x824 $guid.ToByteArray(); Set-U32 $pe 0x834 $age
+    $leaAt=$dispatch; [byte[]]$lea=@(0x4c,0x8d,0x05,0,0,0,0)
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes([Int32]($imageBase-($imageBase+$leaAt+7))))
+    $cursor=[UInt32]($dispatch+7); $rows=[Collections.Generic.List[string]]::new()
+    Put-Bytes $pe (0x400+$leaAt-$section) $lea; $rows.Add(('{0:x}: {1} lea r8, [rip+imagebase]' -f ($imageBase+$leaAt),(Hex-Bytes $lea)))
+    [byte[]]$indexLoad=@(0x41,0x0f,0xb6,0x8c,0x08,0,0,0,0)
+    $indexDisplacement=$byteTable
+    if ($Fault -eq 'WrongDispatch') { $indexDisplacement++ }
+    Put-Bytes $indexLoad 5 ([BitConverter]::GetBytes($indexDisplacement))
+    Put-Bytes $pe (0x400+$cursor-$section) $indexLoad
+    $rows.Add(('{0:x}: {1} movzx ecx, byte ptr [r8+rcx+index]' -f ($imageBase+$cursor),(Hex-Bytes $indexLoad))); $cursor += 9
+    [byte[]]$tableLoad=@(0x41,0x8b,0x94,0x88,0,0,0,0); Put-Bytes $tableLoad 4 ([BitConverter]::GetBytes($dword))
+    Put-Bytes $pe (0x400+$cursor-$section) $tableLoad
+    $rows.Add(('{0:x}: {1} mov edx, dword ptr [r8+rcx*4+table]' -f ($imageBase+$cursor),(Hex-Bytes $tableLoad))); $cursor += 8
+    [byte[]]$add=@(0x49,0x03,0xd0); Put-Bytes $pe (0x400+$cursor-$section) $add
+    $rows.Add(('{0:x}: {1} add rdx, r8' -f ($imageBase+$cursor),(Hex-Bytes $add))); $cursor += 3
+    [byte[]]$jump=@(0xff,0xe2); Put-Bytes $pe (0x400+$cursor-$section) $jump
+    $rows.Add(('{0:x}: {1} jmp rdx' -f ($imageBase+$cursor),(Hex-Bytes $jump)))
+    for ($i=0; $i -lt 3; ++$i) { Set-U32 $pe (0x400+$dword-$section+4*$i) $targets[$i] }
+    Put-Bytes $pe (0x400+$byteTable-$section) $indexValues
+    foreach ($target in ($targets | Select-Object -Unique)) {
+        $instructionAddress=$target
+        if ($Fault -eq 'BackwardMiddle' -and $target -eq $targets[0]) { $instructionAddress-- }
+        if ($Fault -eq 'UnknownTarget' -and $target -eq $targets[0]) {
+            $pe[0x400+$target-$section]=0x06; $rows.Add(('{0:x}: 06 <unknown>' -f ($imageBase+$target)))
+        } else {
+            Put-Bytes $pe (0x400+$instructionAddress-$section) ([byte[]]@(0x66,0x90)); $rows.Add(('{0:x}: 66 90 nop' -f ($imageBase+$instructionAddress)))
+        }
+    }
+    if ($Fault -eq 'ActualVexOutside') {
+        Put-Bytes $pe (0x400+$section-$section+0x300) ([byte[]]@(0xc5,0xf8,0x10,0x00))
+        $rows.Add(('{0:x}: c5 f8 10 00 vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$section+0x300)))
+    }
+    foreach ($i in 0..2) { $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$dword+4*$i),(Hex-Bytes ([byte[]]$pe[(0x400+$dword-$section+4*$i)..(0x400+$dword-$section+4*$i+3)])))) }
+    $symbolsText="  Mod 0 | ``Synthetic.obj``:`n"
+    if ($Fault -notin @('MissingProcedure','TerminalMissingProcedure')) {
+        $procOffset=if ($Fault -eq 'CrossProcedure') { $dispatch-$section-0x80 } elseif ($Fault -eq 'BadProcedureBounds') { $dispatch-$section-0x80 } else { 0 }
+        $procSize=if ($Fault -eq 'CrossProcedure') { 0x100 } else { 0x800 }
+        if ($Fault -in @('BackwardValid','WrongProcedureOwner')) { $procOffset=0; $procSize=0x1100 }
+        if ($Fault -eq 'BadProcedureBounds') { $procOffset=0; $procSize=0x2001 }
+        if ($Fault -eq 'ShortProcedure') { $procOffset=0; $procSize=0x400 }
+        if ($Fault -in @('BackwardMiddle','UnknownTarget')) { $procOffset=0; $procSize=0x1100 }
+        if ($terminal) { $procOffset=0; $procSize=0x100f }
+        if ($Fault -eq 'TerminalShortProcedure') { $procSize=0x100e }
+        if ($Fault -in @('WrongProcedureOwner','TerminalWrongProcedureOwner')) { $symbolsText = "  Mod 1 | ``Other.obj``:`n" }
+        $symbolsText += "  0 | S_GPROC32 [size = 16] ``SyntheticProc`` `n  addr = 0001:$procOffset, code size = $procSize`n"
+        if ($Fault -eq 'CrossProcedure') {
+            $symbolsText += "  0 | S_GPROC32 [size = 16] ``SeparateTargetProc`` `n  addr = 0001:64, code size = 128`n"
+        }
+    }
+    $symbolsText += "  Mod 0 | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($dword-$section)`n"
+    $byteSymbolOffset=$byteTable-$section; if ($Fault -eq 'WrongByteStart') { $byteSymbolOffset++ }
+    $symbolModule=if ($Fault -eq 'WrongByteOwner') { 1 } else { 0 }
+    $byteName = if ($Fault -eq 'NamedByteSymbol') { 'NamedTable' } else { '' }
+    $byteType = if ($Fault -eq 'TypedByteSymbol') { '0x1000' } else { '<no type>' }
+    $symbolsText += "  Mod $symbolModule | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] ``$byteName```n  type = $byteType, addr = 0001:$byteSymbolOffset`n"
+    if ($Fault -ne 'MissingByteEnd' -and -not $terminal) {
+        $endModule = if ($Fault -eq 'WrongByteEndOwner') { 1 } else { $symbolModule }
+        $symbolsText += "  Mod $endModule | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($byteTable-$section+$indexValues.Length)`n"
+    }
+    $contributionSize = if ($terminal) { 0x100f } else { 8192 }
+    if ($Fault -eq 'TerminalWrongContributionEnd') { $contributionSize=0x1010 }
+    $metadataText="  Age: $age`n  GUID: {$guid}`n  Mod 0 | ``Synthetic.obj``:`n  Obj: ``Synthetic.obj``:`n  Mod 1 | ``Other.obj``:`n  Obj: ``Other.obj``:`n`nSection Contributions`n  SC[.text] | mod = 0, 0001:0, size = $contributionSize, data crc = 0, reloc crc = 0`n"
+    [IO.File]::WriteAllBytes($binary,$pe)
+    Set-Content -LiteralPath $metadata -Value $metadataText -Encoding utf8
+    Set-Content -LiteralPath $symbols -Value $symbolsText -Encoding utf8
+    Set-Content -LiteralPath $disassembly -Value (@($rows | Sort-Object { [UInt64]::Parse(($_ -split ':',2)[0],[Globalization.NumberStyles]::HexNumber) }) -join "`n") -Encoding utf8
+    return @{Name=$Name;Binary=$binary;Metadata=$metadata;Symbols=$symbols;Disassembly=$disassembly}
+}
+
+$dataProofCount=0
+foreach ($caseName in @('ValidByteIndex','MalformedByteRange','WrongByteStart','WrongByteOwner','WrongDispatch','ActualVexOutside','MalformedDwordLastEntry','MissingByteEnd','NamedByteSymbol','TypedByteSymbol','WrongByteEndOwner')) {
+    $case=New-DataProofCase $caseName $(if ($caseName -eq 'ValidByteIndex') { '' } else { $caseName })
+    Invoke-Control $case ($caseName -eq 'ValidByteIndex'); ++$dataProofCount
+}
+foreach ($caseName in @('BackwardValid','MissingProcedure','BadProcedureBounds','CrossProcedure','BackwardMiddle','UnknownTarget','ShortProcedure','WrongProcedureOwner')) {
+    $case=New-DataProofCase $caseName $caseName
+    Invoke-Control $case ($caseName -eq 'BackwardValid'); ++$dataProofCount
+}
+foreach ($caseName in @('TerminalValid','TerminalMissingProcedure','TerminalShortProcedure','TerminalWrongProcedureOwner','TerminalWrongContributionEnd','TerminalMalformedByte')) {
+    $case=New-DataProofCase $caseName $caseName
+    Invoke-Control $case ($caseName -eq 'TerminalValid'); ++$dataProofCount
+}
+foreach ($caseName in @('AlignedByteValid','AlignedByteMalformedNop','AlignedByteInvalidIndex','AlignedByteRepeatedNop')) {
+    $case=New-DataProofCase $caseName $caseName
+    Invoke-Control $case ($caseName -eq 'AlignedByteValid'); ++$dataProofCount
+}
+Write-Host "ISA data-proof synthetic controls passed: $dataProofCount"
+
 function New-R9R8DispatchCase([string]$Name, [string]$Fault = '', [switch]$RealVex) {
     # Reuse the checked PE/PDB/table fixture, replacing only the dispatch bytes and their listing.
     # The accepted sequence is exactly LEA R9,imagebase; MOVZX EAX,byte [R9+RAX+disp32];
@@ -617,7 +765,8 @@ function New-R9R8DispatchCase([string]$Name, [string]$Fault = '', [switch]$RealV
     $sequence.Add(@{ Bytes=$lea; Text='lea r9, [rip+imagebase]' })
 
     [byte[]]$index = [byte[]]@(0x41,0x0f,0xb6,0x84,0x01,0,0,0,0)
-    Put-Bytes $index 5 ([BitConverter]::GetBytes([UInt32]0x1234))
+    $byteIndexTable = [UInt32]($table + 28)
+    Put-Bytes $index 5 ([BitConverter]::GetBytes($byteIndexTable))
     switch ($Fault) {
         'R9WrongIndexOpcode' { $index[2] = 0xb7 }
         'R9WrongIndexDestination' { $index[3] = 0x8c }
@@ -673,14 +822,21 @@ function New-R9R8DispatchCase([string]$Name, [string]$Fault = '', [switch]$RealV
         $tableRaw = 0x400 + $table - $case.SectionRva
         Put-Bytes $pe ($tableRaw+4) ([BitConverter]::GetBytes([UInt32]$table))
     }
+    Put-Bytes $pe (0x400+$byteIndexTable-$case.SectionRva) ([byte[]]@(0,1,2,3,4,5,6))
+    $outsideVexRva = [UInt32]($byteIndexTable+7)
+    if ($RealVex) { Put-Bytes $pe (0x400+$outsideVexRva-$case.SectionRva) ([byte[]]@(0xc5,0xf8,0x10,0x40,0x01)) }
+    $byteOffset = [UInt32]($byteIndexTable-$case.SectionRva)
+    Add-Content -LiteralPath $case.Symbols -Value "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$byteOffset`n  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($byteOffset+7)`n" -Encoding utf8
     $disassemblyRows = [Collections.Generic.List[string]]::new()
     foreach ($line in [IO.File]::ReadAllLines($case.Disassembly)) {
         $address = [UInt64]::Parse(($line -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
-        if ($address -lt ($case.ImageBase+$dispatch) -or $address -ge ($case.ImageBase+$cursor)) {
+        if (($address -lt ($case.ImageBase+$dispatch) -or $address -ge ($case.ImageBase+$cursor)) -and
+            (-not $RealVex -or $address -ne ($case.ImageBase+$byteIndexTable))) {
             $disassemblyRows.Add($line)
         }
     }
     foreach ($line in $instructionRows) { $disassemblyRows.Add($line) }
+    if ($RealVex) { $disassemblyRows.Add(('{0:x}: c5 f8 10 40 01 vmovups xmm0, xmmword ptr [rax+1]' -f ($case.ImageBase+$outsideVexRva))) }
     Set-Content -LiteralPath $case.Disassembly -Value (@($disassemblyRows | Sort-Object {
         [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
     }) -join "`n") -Encoding utf8

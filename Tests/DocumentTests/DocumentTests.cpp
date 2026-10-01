@@ -20,6 +20,8 @@
 #include "HistoryStateViewTests.h"
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
+#include "ImportHistoryTests.h"
+#include "ImportPublicationTests.h"
 #include "LiftReferenceTests.h"
 #include "MergeHistoryTests.h"
 #include "MergePlanProbeTests.h"
@@ -7362,6 +7364,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunHistoryRestoreTests();
+    gFailures += internal::RunImportHistoryTests();
+    gFailures += internal::RunImportPublicationTests();
     gFailures += RunColorEditWorkTests();
     gFailures += RunColorEditDeferredTests();
     gFailures += RunRasterWorkTests();

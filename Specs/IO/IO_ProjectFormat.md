@@ -161,8 +161,15 @@ result. Cancellation retains the input, receipt, barrier and reservation until a
 later files. Ordinary failure preserves the current document and continues later project paths; the batch retains
 the first failing HRESULT even if a later load succeeds. Each failed file posts one localized notice. Unsupported
 version formatting runs in the posted notice handler using the file's version, including zero, outside completion.
-Successful replacement resets history/targets and uses the captured path and Fit policy. Owner replacement,
-chrome preparation and uploads remain measured P1.9 costs; worker migration alone does not establish G1.
+Successful replacement resets history/targets and uses the captured path and Fit policy. Decode resumes only
+after admitted source/history capture. Its worker constructs complete replacement history, selected ids and
+retirement owners; completion checks file-operation session authority, exact history epoch and selected acquisition,
+then swaps document/history/session/path owners without constructing replacement history. Manifest active-id
+validation remains unchanged. Construction refusal preserves the previous document/path/history; replaced owners retire
+off the application thread. Replacement over a live panel/stroke/transform/draft discards it only on success;
+construction or IO failure preserves it. Borrowed coverage engines end on their owner before CPU draft retirement.
+Metadata capture, chrome preparation and uploads remain measured P1.9 costs;
+worker migration alone does not establish G1.
 
 ## Layer record
 

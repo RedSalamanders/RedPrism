@@ -30,20 +30,74 @@
       reading restored dimensions or switching tools; its pixel/history/crop expectations remain unchanged.
       The second full Debug preflight passes, including the unchanged crop test. All five projects include the
       new history module and the string catalog checks the localized notice. The final frozen matrix passes.
-    - [ ] Imports: preconstruct new-document saved baseline, additional-image entry and retired session/history
+    - [x] Imports: preconstruct new-document saved baseline, additional-image entry and retired session/history
       owners before publication. A primary-owned replacement-history primitive passes private strict syntax and
       55 independent baseline/Undo/Redo/fault assertions. The complete session candidate also passes strict syntax;
       49 primary-reviewed session assertions also pass, including isolated active/mask/crop/epoch refusal and
-      later saved-revision behavior. The production host draft passes strict syntax; actual host fault/retirement
-      execution and native integration remain active. Project-open preparation also uses the complete private
-      replacement boundary, including absent/unknown active ids and empty projects; module/host strict syntax passes.
+      later saved-revision behavior. After qualified Undo/Redo commit `82f1123`, native import and project-open
+      publication is activated. Full Debug preflight is running; actual host fault/retirement execution and
+      final frozen configuration qualification remain open. Project replacement covers absent/unknown active
+      ids and empty projects. Exact selected host commit stamps are checked before either publication.
+      The first native preflight passes 55 history and 49 session assertions, then exposes a new host test
+      injecting BeforeSnapshot into a clean replacement that creates no history entry. The exact failed image,
+      DLLs/PDB/source freeze and logs remain under `.build/p1-import-history-first-Debug-project-failure/`.
+      A real ReplacementSnapshot checkpoint now precedes the worker's replacement-document copy, with twelve
+      added first-image/project allocation/cancellation controls. The second full Debug preflight passes 55
+      history/61 session assertions and 52 project/149 image-import host cases. The first final matrix passes
+      x64 Debug, then stops at Release's ISA parser reporting switch-table data in the pinned DxUi image as
+      instructions. Its exact exe/PDB/DLLs, source freeze and logs are preserved in
+      `.build/p1-import-history-first-Release-isa-failure/`; parser proof/controls precede another matrix.
+      Caller review also finds an unqualified live-context gap: the settled restore authority currently refuses
+      replacement over a live panel/stroke/transform/draft and existing imports inside a transaction. Before this
+      caller closes, retain original discard-on-success/preserve-on-failure behavior, nested history semantics
+      and complete retirement of all replaced preview owners. The running matrix qualifies settled contexts only;
+      it cannot close this row or authorize a completion claim while the live-context route regresses.
+      A separate file-operation authority now preserves the settled-only Undo contract. The activated live-context
+      candidate prepares replacement over an open transaction, keeps nested existing-import openings intact,
+      transfers every discarded CPU draft/preview to an allocated retirement holder, and detaches borrowed coverage
+      engines on their owner before worker destruction. Eleven independent pending-context refusal/success controls,
+      weak-owner release controls, nine actual project contexts and three actual image-import contexts are added.
+      The first live-context Debug run exposes a fixture calling the layer-transform API instead of
+      BeginSelectionTransform. Its exact image and source freeze are retained in
+      `.build/p1-import-live-first-Debug-floating-fixture-failure/`. The corrected run passes all 157 session
+      assertions, then exposes host-fixture reuse: CreateDocument preserves a refused panel/transaction, so the
+      next floating fixture could not begin. Its exact image/logs/freeze are retained in
+      `.build/p1-import-live-r2-Debug-fixture-state-failure/`. Fixtures now explicitly clear the previous session
+      before constructing each new case. The focused native build/WARP preflight passes all 70 project-open
+      and 155 image-import host cases; no production expectations or literal pixels were changed.
+      Parser integration passes 287 synthetic controls, then the first live-context frozen matrix exposes a
+      terminal byte table with no following data symbol in Debug's pinned DxUi image. Its exact image/PDB/DLLs,
+      parser, freeze and disassembly are retained in `.build/p1-import-history-r2-Debug-isa-failure/`.
+      The primary adds the exact common procedure/contribution-end proof, six terminal-span controls and
+      stricter malformed-last-entry/procedure-bound controls. All 293 synthetic controls and preserved
+      Debug/Release/ASan parser scans pass with the runtime allowlist unchanged. Final qualification and commit
+      remain open. The next matrix passes the app scan, then exposes a byte table followed by three-byte NOP
+      alignment in HostTests. Its exact image/parser/freeze/disassembly are retained in
+      `.build/p1-import-history-r3-Debug-host-isa-failure/`. Four alignment acceptance/refusal controls keep the
+      suffix exact and reject repeated padding, changed bytes and an invalid preceding index. All 297 synthetic
+      controls and all five executable scans in Debug, Release and ASan Debug now pass. Their compiled
+      misplaced-ISA, unapproved runtime owner/function and PDB rejection controls pass unchanged.
+      The final clean matrix passes all x64 suites and all three ARM64 clean cross-builds.
+      Each x64 suite passes 55 history/157 session assertions and 70 project/155 image-import host cases.
+      The same 391 inputs remain unchanged after the complete matrix
+      ([record](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)); no measured G1 claim follows.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
+    - [ ] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
+      non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
+      authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering
+      zero handle copies on capture/read, independent integer content, weak-owner lifetime, concurrent readers
+      and copy refusal. Native activation, reservations and full configuration qualification remain open.
+      Full document snapshots, owner admission traversal and H3 accounting are separate unfinished costs.
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
     - [ ] Private image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,
       and added a final cancellation check. Complete producer/validator, accounting and I/O/Undo/Redo qualification
       precedes native activation; uploads and measured G1 remain separate.
+      The private nine-group producer suite now has 30 primary-reviewed literal-pixel/equality/history assertions;
+      semantic mask tests begin from an independent white mask and require a real new black stroke entry.
+      The original retained-thumbnail accounting golden will supply an explicit optional image thumbnail so
+      it continues to exercise nonzero retained bytes. Private tests are not yet native-qualified.
 
 Status: ACTIVE. Parent: [UiNeverBlocks_2026-09-22.md](UiNeverBlocks_2026-09-22.md), P1.9.
 Owner: `Common/Document.h`, `DocumentHistory.cpp`, session restore and host upload/chrome costs.

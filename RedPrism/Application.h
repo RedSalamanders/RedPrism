@@ -566,6 +566,7 @@ class Application final : public ChromeEvents
     // `dropPoint`: where a drop landed on the canvas, in document pixels; images added as layers center on it.
     void OpenPaths(const std::vector<std::wstring>& paths, std::optional<Vec2> dropPoint = std::nullopt) noexcept;
     void ReplaceDocument(CanvasDocument document, const std::optional<Guid>& active, std::wstring path) noexcept;
+    void FinishPreparedDocumentReplacement() noexcept;
     void ImportImages() noexcept;
     void CloseProject() noexcept;
     // Ends every interaction in flight before a tool switch (panels apply) or before the document goes (they cancel).

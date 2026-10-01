@@ -15,6 +15,7 @@
 #include <cstring>
 #include <limits>
 #include <new>
+#include <utility>
 
 namespace
 {
@@ -22,6 +23,51 @@ constexpr double kDensityCap = 20.0;
 constexpr double kFalloffK = 2.5;
 constexpr double kCurveTolerance = 0.2;
 constexpr int kCurveDepth = 10;
+
+[[nodiscard]] bool AddRetirementBytes(std::uint64_t& total, std::uint64_t bytes) noexcept
+{
+    if (bytes > std::numeric_limits<std::uint64_t>::max() - total)
+    {
+        return false;
+    }
+    total += bytes;
+    return true;
+}
+
+template <typename T> [[nodiscard]] bool AddRetirementCapacity(std::uint64_t& total, std::size_t capacity) noexcept
+{
+    if (capacity > std::numeric_limits<std::uint64_t>::max() / sizeof(T))
+    {
+        return false;
+    }
+    return AddRetirementBytes(total, static_cast<std::uint64_t>(capacity) * sizeof(T));
+}
+
+template <typename Container>
+[[nodiscard]] bool AddRetirementHashStorage(std::uint64_t& total, const Container& container) noexcept
+{
+    using Value = typename Container::value_type;
+    constexpr std::uint64_t kNodeBytes = sizeof(Value) + 4 * sizeof(void*) + 64;
+    const std::size_t buckets = container.bucket_count();
+    const std::size_t nodes = container.size();
+    if (buckets > std::numeric_limits<std::uint64_t>::max() / sizeof(void*) ||
+        nodes > std::numeric_limits<std::uint64_t>::max() / kNodeBytes)
+    {
+        return false;
+    }
+    return AddRetirementBytes(total, static_cast<std::uint64_t>(buckets) * sizeof(void*)) &&
+           AddRetirementBytes(total, static_cast<std::uint64_t>(nodes) * kNodeBytes);
+}
+
+[[nodiscard]] bool AddRetirementRaster(std::uint64_t& total, const Raster& raster) noexcept
+{
+    if (!raster.HasStorage())
+    {
+        return true;
+    }
+    const std::uint64_t bytes = raster.RetirementMemoryBytes();
+    return bytes != 0 && AddRetirementBytes(total, bytes);
+}
 
 [[nodiscard]] Vec2 Mix(Vec2 a, Vec2 b, double ta, double tb, double t) noexcept
 {
@@ -416,6 +462,46 @@ BrushStroke::~BrushStroke()
     {
         _engine->EndStroke();
     }
+}
+
+void BrushStroke::ReleaseCoverageEngine() noexcept
+{
+    auto* engine = std::exchange(_engine, nullptr);
+    if (_valid && engine != nullptr)
+        engine->EndStroke();
+}
+
+std::uint64_t BrushStroke::RetirementMemoryBytes() const noexcept
+{
+    std::uint64_t total = sizeof(*this) + 1024; // control/allocator/stop-token headroom
+    if (!AddRetirementCapacity<Vec2>(total, _samples.capacity()) ||
+        !AddRetirementCapacity<std::uint64_t>(total, _landingTiles.capacity()) ||
+        _editName.capacity() == std::numeric_limits<std::size_t>::max() ||
+        !AddRetirementCapacity<wchar_t>(total, _editName.capacity() + 1) ||
+        !AddRetirementCapacity<Tile>(total, _tiles.capacity()) || !AddRetirementHashStorage(total, _tailKeys) ||
+        !AddRetirementHashStorage(total, _index))
+    {
+        return 0;
+    }
+
+    if (!AddRetirementRaster(total, _source) ||
+        (_selection.has_value() && !AddRetirementRaster(total, _selection.value())) ||
+        (_sample.has_value() && !AddRetirementRaster(total, _sample.value())) ||
+        (_lifted.has_value() && !AddRetirementRaster(total, _lifted->image)))
+    {
+        return 0;
+    }
+
+    for (const Tile& tile : _tiles)
+    {
+        if (!AddRetirementCapacity<float>(total, tile.permanent.capacity()) ||
+            !AddRetirementCapacity<std::uint8_t>(total, tile.coverage.capacity()) ||
+            !AddRetirementRaster(total, tile.base) || !AddRetirementRaster(total, tile.image))
+        {
+            return 0;
+        }
+    }
+    return total;
 }
 
 bool BrushStroke::ConfigureWorkerRasterEdit(CancelToken cancellation,

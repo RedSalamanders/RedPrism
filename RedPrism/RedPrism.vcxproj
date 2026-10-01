@@ -111,6 +111,7 @@
     <ClInclude Include="..\Common\WindowCapture.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
+    <ClInclude Include="..\Common\ImageImportHistory.h" />
     <ClInclude Include="..\Common\RasterWork.h" />
     <ClInclude Include="..\Common\RasterEditWork.h" />
     <ClInclude Include="..\Common\TransformEdit.h" />
@@ -203,6 +204,7 @@
     <ClCompile Include="..\Common\Crop.cpp" />
     <ClCompile Include="..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\Common\HistoryRestoreWork.cpp" />
+    <ClCompile Include="..\Common\ImageImportHistory.cpp" />
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="..\Common\CodecFileStream.cpp" />

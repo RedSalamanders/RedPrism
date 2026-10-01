@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
+#include <utility>
 
 DocumentHistory::DocumentHistory(int entryLimit, std::uint64_t retainedByteLimit) noexcept
     : _entryLimit(std::max(0, entryLimit)), _retainedByteLimit(retainedByteLimit)
@@ -201,6 +202,46 @@ std::optional<DocumentHistory::Publication> DocumentHistory::PrepareRestore(Stat
         !TrimPrepared(result.state, result.restore->document, cancellation))
         return std::nullopt;
     return result;
+}
+
+std::optional<DocumentHistory::ReplacementPublication> DocumentHistory::PrepareReplacement(
+    StateView view, const std::optional<CanvasDocument>& baseline, const std::optional<Guid>& baselineActive,
+    const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
+    CancelToken cancellation, PrepareObserver observer)
+{
+    if (!view.owner || view.depth < 0 || (view.depth != 0 && !view.pending) ||
+        !HistoryPrepareCheckpoint(observer, PrepareStage::ReplacementReset, cancellation))
+        return std::nullopt;
+    const Guid expectedRevision = view.revision;
+    const std::uint64_t expectedEpoch = view.epoch;
+    const Guid baselineRevision = Guid::Generate();
+    view.past.clear();
+    view.future.clear();
+    view.pending.reset();
+    view.depth = 0;
+    view.revision = baselineRevision;
+    auto prepared = PrepareEdit(std::move(view), baseline, baselineActive, after, afterActive, std::move(name),
+                                cancellation, observer);
+    if (!prepared || cancellation.IsCancelled())
+        return std::nullopt;
+    // PrepareEdit recorded its opening against the new saved baseline; only publication validates the old lineage.
+    prepared->expectedRevision = expectedRevision;
+    prepared->expectedEpoch = expectedEpoch;
+    return ReplacementPublication(std::move(prepared.value()), baselineRevision);
+}
+
+bool DocumentHistory::CanPublishReplacement(const ReplacementPublication& publication) const noexcept
+{
+    return CanPublish(publication.history);
+}
+
+bool DocumentHistory::PublishReplacement(ReplacementPublication& publication) noexcept
+{
+    if (!Publish(publication.history))
+        return false;
+    // Unlike an edit/restore, validated document replacement deliberately installs a new saved lineage.
+    _savedRevision = publication.savedRevision;
+    return true;
 }
 
 std::optional<DocumentHistory::Publication> DocumentHistory::PrepareBegin(StateView view,

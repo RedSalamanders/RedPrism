@@ -1205,6 +1205,9 @@ struct ColorEditJobResult;
 class PreparedColorEdit;
 class PreparedDocumentSize;
 class PreparedHistoryRestore;
+class PreparedImageImport;
+class ImageImportAuthority;
+struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
 struct ColorEditHistogramResult;
@@ -1432,6 +1435,8 @@ class DocumentHistory
         PendingSnapshot,
         PendingRecord,
         RestoreSnapshot,
+        ReplacementReset,
+        ReplacementSnapshot,
     };
     // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
     // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
@@ -1514,6 +1519,36 @@ class DocumentHistory
                                                                PrepareObserver observer = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
     [[nodiscard]] bool Publish(Publication& publication) noexcept;
+
+    // A new document has its own saved baseline. Additional images make one entry relative to that baseline.
+    // The result still validates the old owner's exact epoch/revision and retains retired containers after apply.
+    class ReplacementPublication final
+    {
+      public:
+        ReplacementPublication(const ReplacementPublication&) = delete;
+        ReplacementPublication& operator=(const ReplacementPublication&) = delete;
+        ReplacementPublication(ReplacementPublication&&) noexcept = default;
+        ReplacementPublication& operator=(ReplacementPublication&&) noexcept = default;
+        [[nodiscard]] Guid BaselineRevision() const noexcept
+        {
+            return savedRevision;
+        }
+
+      private:
+        friend class DocumentHistory;
+        ReplacementPublication(Publication prepared, Guid baseline) noexcept
+            : history(std::move(prepared)), savedRevision(baseline)
+        {
+        }
+        Publication history;
+        Guid savedRevision;
+    };
+    [[nodiscard]] static std::optional<ReplacementPublication> PrepareReplacement(
+        StateView view, const std::optional<CanvasDocument>& baseline, const std::optional<Guid>& baselineActive,
+        const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
+        CancelToken cancellation = {}, PrepareObserver observer = {});
+    [[nodiscard]] bool CanPublishReplacement(const ReplacementPublication& publication) const noexcept;
+    [[nodiscard]] bool PublishReplacement(ReplacementPublication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
     void End(const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
@@ -1638,6 +1673,18 @@ class DocumentSession
     // graph/budget is refused before any session state changes. The synchronous host prepares this copy today.
     [[nodiscard]] bool ApplyImportedDocument(CanvasDocument document, const std::optional<Guid>& active,
                                              std::wstring name);
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareImageImportPublication(
+        ImageImportAuthority authority, std::optional<CanvasDocument> source, std::optional<Guid> sourceActive,
+        DocumentHistory::StateView history, ImageImportBatchResult imported, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedImageImportIfCurrent(PreparedImageImport& prepared) noexcept;
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentReplacementPublication(
+        ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
+        CanvasDocument replacement, std::optional<Guid> active, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] std::uint64_t ImageImportRetirementMemoryBytes() const noexcept;
+    [[nodiscard]] ImageImportAuthority CaptureImageImportAuthority() const noexcept;
+    [[nodiscard]] bool CanApplyImageImport(const ImageImportAuthority& authority) const noexcept;
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
     // it. The host sets the whole canvas when the tool is chosen and cancels when it goes.
     [[nodiscard]] const std::optional<CropRect>& CropFrame() const noexcept

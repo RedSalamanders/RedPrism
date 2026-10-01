@@ -114,6 +114,26 @@ A later saved revision stays independent of restore preparation. All six configu
 ([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
 shared record capture, incremental accounting, other callers and measured G1 remain separate.
 
+Image import and project opening now prepare replacement history off the owner. A new image establishes a fresh
+saved baseline; its additional successful images form one named entry. Existing-document imports retain the
+saved lineage. Project opening establishes a clean baseline. The generic replacement boundary selects nothing
+for absent/unknown active ids; project parsing retains its existing manifest active-id validation.
+Complete source/history capture follows whole-graph admission. Worker preparation owns final records, selected
+ids and reset/edit/trim containers; apply checks file-operation session authority and exact history epoch before
+nonthrowing document/history/target/display swaps. Old session/history/path owners retire in the aggregate.
+Ordinary edits preserve a later saved revision; validated replacement deliberately installs its new baseline.
+File-operation authority permits live drafts and open transactions; Undo/Redo's settled-only authority remains
+separate. Existing imports inside a transaction preserve its opening, depth and name. Successful replacement
+resets that transaction and swaps all transform/floating, lasso, outline move, brush, warp, gradient, shape,
+pixel-move and color-panel owners into its already allocated retirement holder. Their complete CPU bounds are
+declared before capture. Borrowed brush coverage engines close/detach on the owner before CPU destruction moves
+to the worker; GPU resources retain application ownership. Already admitted preview graph peaks cover derived
+buffers that can arrive during IO; later mutating inputs wait behind the selected ordinal. Host UI drag/card
+state clears after publication without committing an old edit against reused layer ids.
+Cancellation, construction refusal and stale authority preserve live state and pending drafts. The frozen
+six-configuration matrix qualifies this caller ([evidence](../TestRuns/ImageImportHistoryPublication_2026-10-01.md));
+shared metadata capture and measured apply remain separate.
+
 ## Trim
 
 Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe

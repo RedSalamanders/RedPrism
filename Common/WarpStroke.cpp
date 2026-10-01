@@ -3,7 +3,22 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <new>
+
+namespace
+{
+template <typename T> [[nodiscard]] bool AddRetirementCapacity(std::uint64_t& total, std::size_t capacity) noexcept
+{
+    const std::uint64_t maximum = std::numeric_limits<std::uint64_t>::max();
+    if (capacity > maximum / sizeof(T) || static_cast<std::uint64_t>(capacity) * sizeof(T) > maximum - total)
+    {
+        return false;
+    }
+    total += static_cast<std::uint64_t>(capacity) * sizeof(T);
+    return true;
+}
+} // namespace
 
 WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings& settings)
     : _mode(mode), _diameter(std::max(2.0, settings.diameter)), _hardness(std::clamp(settings.hardness, 0.0, 0.98)),
@@ -35,6 +50,20 @@ WarpStroke::WarpStroke(const Raster& image, SmearMode mode, const BrushSettings&
         return;
     }
     _valid = true;
+}
+
+std::uint64_t WarpStroke::RetirementMemoryBytes() const noexcept
+{
+    std::uint64_t total = sizeof(*this) + 1024; // control/allocator headroom
+    if (!AddRetirementCapacity<std::uint8_t>(total, _pixels.capacity()) ||
+        !AddRetirementCapacity<Vec2>(total, _points.capacity()) ||
+        !AddRetirementCapacity<float>(total, _carried.capacity()) ||
+        !AddRetirementCapacity<float>(total, _scratch.capacity()) ||
+        !AddRetirementCapacity<std::uint8_t>(total, _dirty.capacity()))
+    {
+        return 0;
+    }
+    return total;
 }
 
 int WarpStroke::Radius() const noexcept

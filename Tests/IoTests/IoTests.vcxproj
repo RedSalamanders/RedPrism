@@ -105,6 +105,7 @@
     <ClInclude Include="..\..\Common\Utf8.h" />
     <ClInclude Include="..\..\Common\ZipOwner.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
+    <ClInclude Include="..\..\Common\ImageImportHistory.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IoTests.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="..\..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />
+    <ClCompile Include="..\..\Common\ImageImportHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\..\Common\CodecFileStream.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />

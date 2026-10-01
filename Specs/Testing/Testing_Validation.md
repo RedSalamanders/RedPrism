@@ -386,6 +386,18 @@ wait for acknowledged real restores before inspecting results; pending-edit cons
 All six configurations qualify this slice ([evidence](../TestRuns/HistoryRestorePublication_2026-10-01.md));
 these functional gates assert no latency threshold.
 
+`ImportHistoryTests` adds 55 independent reset/baseline/edit/trim-publication assertions, including literal
+Undo/Redo and all six replacement/edit construction and cancellation checkpoints with the old state preserved.
+`ImportPublicationTests` adds 157 complete session assertions: initial/extra/existing image semantics, exact
+authority/history staleness, moved/foreign/single-use refusal, later saved revision, project active-id/empty
+document rules and refusal without mutation. Twelve controls cover both project and first-image replacement
+snapshot construction, injected allocation/cancellation, exact old history/target and literal source pixels.
+Actual import/project-open host tests additionally require
+capture reservation, exact history faults, isolated active/mask/crop/epoch invalidation and aggregate retirement
+off the owner. The live-context controls are described below. Final native qualification is recorded in
+[ImageImportHistoryPublication_2026-10-01.md](../TestRuns/ImageImportHistoryPublication_2026-10-01.md);
+functional gates make no measured latency claim.
+
 `HostTests` command-line cases additionally prove bounded positional paths, `--` leading-dash paths, empty/null/
 overlong/count refusal, harness mode conflicts, marker-aware help/self-test preflight and atomic parse output.
 Accepted startup paths are copied into an owning request before the argv storage can be released.
@@ -689,6 +701,15 @@ policy, changed pixel/encoded ceilings, mixed project/image ordering and retaine
 hidden Present and zero terminal ticket/barrier/input/graph charges. Existing all-project gates continue to prove
 completion without dispatching an empty image group. The 24-row smoke includes new-canvas and existing-layer
 imports from the preceding successful PNG export; timed readiness reads receipts and session metadata only.
+
+Prepared import publication also has independent live-context controls for destructive/adjustment panels,
+layer/floating transforms, lasso, shape, brush, warp, gradient, pixel move and outline move. Actual allocation
+and cancellation refusal preserve each live draft, source pixels, target, transaction depth, revision and redo.
+Replacement clears them only after complete publication; weak preview owners remain in the release aggregate,
+and a coverage-engine thread witness must observe exactly one owner-thread close before worker destruction.
+Nested existing imports keep the outer name/opening/depth and record once on outer End, with literal Undo/Redo.
+Actual selected project/image host routes include successful and failed live replacements and nested import;
+fixtures explicitly clear a prior intentionally preserved draft before constructing the next independent case.
 
 Io import controls independently verify opened-stream caps, literal first-frame metadata/pixels (including
 two-frame TIFF), signed/hard pixel ceilings, per-path and aggregate preparation limits, cached failures and

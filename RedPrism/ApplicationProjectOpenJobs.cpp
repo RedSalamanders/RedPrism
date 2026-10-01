@@ -3,6 +3,7 @@
 #include "ChromeHost.h"
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
+#include "ImageImportHistory.h"
 #include "ProjectLoadWork.h"
 #include "ProjectOpenTestGate.h"
 #include "Resources.h"
@@ -12,23 +13,78 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <new>
 #include <string>
 #include <utility>
 
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ProjectOpenPayload final : DeferredReleaseNode
+{
+    std::wstring path;
+    std::optional<CanvasDocument> source;
+    DocumentHistory::StateView history;
+    ProjectLoadProbeResult probed;
+    ProjectLoadResult loaded;
+    std::optional<PreparedImageImport> publication;
+    std::shared_ptr<ProjectOpenTestGate> gate;
+    DWORD ownerThread = 0;
+    bool decode = false;
+    ProjectOpenPayload() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ProjectOpenPayload> owned(static_cast<ProjectOpenPayload*>(node)); };
+    }
+    ~ProjectOpenPayload()
+    {
+        if (gate && decode)
+        {
+            gate->retiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->retired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+struct RetireProjectOpenPayload final
+{
+    void operator()(ProjectOpenPayload* payload) const noexcept
+    {
+        if (payload && !TryDeferRelease(*payload))
+        {
+            const std::unique_ptr<ProjectOpenPayload> owned(payload);
+        }
+    }
+};
+} // namespace
+
 class Application::ProjectOpenJob final : public Job
 {
   public:
     ProjectOpenJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t generation, std::wstring path,
-                   std::optional<ProjectLoadLimits> limits)
-        : _owner(owner), _stamp(stamp), _generation(generation), _path(std::move(path)), _limits(limits),
-          _gate(owner._projectOpenTestGate), _ownerThread(GetCurrentThreadId())
+                   std::optional<ProjectLoadLimits> limits, std::uint64_t retirement)
+        : _owner(owner), _stamp(stamp), _generation(generation), _limits(limits), _gate(owner._projectOpenTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
+        _authority = owner._session.CaptureImageImportAuthority();
+        _payload.reset(std::make_unique<ProjectOpenPayload>().release());
+        _payload->bytes = (std::max)(retirement, kDeferredReleaseThreshold);
+        _payload->path = std::move(path);
+        _payload->gate = _gate;
+        _payload->ownerThread = _ownerThread;
+        _payload->decode = _limits.has_value();
     }
 
     JobResult Run(JobContext& context) override
     {
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (_limits && !_snapshotReady)
+            return {};
         const auto phase = _limits ? ProjectOpenTestPhase::Decode : ProjectOpenTestPhase::Probe;
         if (_gate && _gate->phase == phase && !_gate->afterPreparation)
         {
@@ -42,15 +98,37 @@ class Application::ProjectOpenJob final : public Job
             return {JobStatus::Cancelled};
         if (_limits)
         {
-            _loaded = LoadProject(_path.c_str(), context.cancellation, {}, _limits.value());
-            _status = _loaded.status;
-            _version = _loaded.formatVersion;
+            _payload->loaded = LoadProject(_payload->path.c_str(), context.cancellation, {}, _limits.value());
+            _status = _payload->loaded.status;
+            _version = _payload->loaded.formatVersion;
+            if (_status == ProjectIoStatus::Ok && !context.cancellation.IsCancelled())
+            {
+                DocumentHistory::PrepareObserver observer;
+                if (_gate && _gate->throwHistoryStage)
+                    observer = {[](void* opaque, DocumentHistory::PrepareStage stage)
+                                {
+                                    auto& gate = *static_cast<ProjectOpenTestGate*>(opaque);
+                                    if (gate.throwHistoryStage == stage)
+                                    {
+                                        gate.historyFaultHits.fetch_add(1);
+                                        throw std::bad_alloc{};
+                                    }
+                                },
+                                _gate.get()};
+                _payload->publication = DocumentSession::PrepareDocumentReplacementPublication(
+                    _authority, std::move(_payload->source), std::move(_payload->history),
+                    std::move(_payload->loaded.document), _payload->loaded.activeLayerID, context.cancellation,
+                    observer);
+                if (!_payload->publication)
+                    return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                              : JobResult{JobStatus::Failed, E_UNEXPECTED};
+            }
         }
         else
         {
-            _probed = ProbeProjectLoad(_path.c_str(), context.cancellation);
-            _status = _probed.status;
-            _version = _probed.formatVersion;
+            _payload->probed = ProbeProjectLoad(_payload->path.c_str(), context.cancellation);
+            _status = _payload->probed.status;
+            _version = _payload->probed.formatVersion;
         }
         if (_gate && _gate->phase == phase && _gate->afterPreparation)
         {
@@ -65,19 +143,41 @@ class Application::ProjectOpenJob final : public Job
                    : JobResult{};
     }
 
+    bool DeferCompletion(JobResult, JobTicket ticket) noexcept override
+    {
+        if (!_limits || _snapshotReady || !Current() || _owner._historyWork.CancelRequested(_stamp))
+            return false;
+        try
+        {
+            if (_gate)
+            {
+                _gate->captureReservationHeld = _gate->decodeReservationBytes != 0 &&
+                                                _owner._jobs.ReservedMemoryBytes() == _gate->decodeReservationBytes;
+                if (_gate->throwCaptureFailure)
+                    throw std::bad_alloc{};
+            }
+            _payload->source = _owner._session.Document();
+            _payload->history = _owner._session.history.CaptureState();
+            _snapshotReady = true;
+            if (_owner._jobs.Resume(ticket))
+                return true;
+            _captureError = E_UNEXPECTED;
+        }
+        catch (const std::bad_alloc&)
+        {
+            _captureError = E_OUTOFMEMORY;
+        }
+        return false;
+    }
     void Completed(JobResult result) noexcept override
     {
-        const bool current = _owner._projectOpenStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
-                             _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
-                             _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
-                             _owner._session.DocumentSerial() == _stamp.documentSerial &&
-                             _owner._session.Generation() == _generation;
+        const bool current = Current();
         HostOutcome outcome = !current ? HostOutcome::Stale
                               : result.status == JobStatus::Cancelled || _owner._historyWork.CancelRequested(_stamp)
                                   ? HostOutcome::Cancelled
-                              : result.status == JobStatus::Failed ? HostOutcome::Failed
-                                                                   : HostOutcome::Succeeded;
-        std::int32_t error = result.error;
+                              : result.status == JobStatus::Failed || FAILED(_captureError) ? HostOutcome::Failed
+                                                                                            : HostOutcome::Succeeded;
+        std::int32_t error = FAILED(_captureError) ? _captureError : result.error;
         bool replaced = false;
         _owner._projectOpenTicket.reset();
         if (outcome == HostOutcome::Succeeded && _status == ProjectIoStatus::Ok && !_limits)
@@ -85,18 +185,30 @@ class Application::ProjectOpenJob final : public Job
             // All manifest/header owners died on the probe worker. This small immutable plan becomes the
             // next graph's enforced ceilings. FIFO retirement prevents decode starting before this callback
             // returns and its separate metadata reservation retires.
-            error = _owner.SubmitProjectOpen(_stamp, _generation, std::move(_path), _probed.limits);
+            error = _owner.SubmitProjectOpen(_stamp, _generation, std::move(_payload->path), _payload->probed.limits);
             if (SUCCEEDED(error))
                 return; // retain the selected input/history stamp through decode and owner apply/drop
             outcome = HostOutcome::Failed;
         }
         if (outcome == HostOutcome::Succeeded && _status == ProjectIoStatus::Ok && _limits)
         {
-            _owner.ReplaceDocument(std::move(_loaded.document), _loaded.activeLayerID, std::move(_path));
-            // Only this validated replacement may rebind its selected batch. A subsequent external replacement
-            // is still stale at the next source dispatch, including reused persisted document/layer IDs.
-            _owner._activeHostRequest->documentSerial = _owner._session.DocumentSerial();
-            replaced = true;
+            if (!_payload->publication ||
+                !_owner._session.ApplyPreparedImageImportIfCurrent(_payload->publication.value()))
+            {
+                outcome = HostOutcome::Stale;
+                error = E_ABORT;
+            }
+            else
+            {
+                std::swap(_owner._documentPath, _payload->path);
+                _owner.FinishPreparedDocumentReplacement();
+                _owner._viewport.followsFit = true;
+                _owner.DocumentChanged();
+                // Only this validated replacement may rebind its selected batch. A subsequent external replacement
+                // is still stale at the next source dispatch, including reused persisted document/layer IDs.
+                _owner._activeHostRequest->documentSerial = _owner._session.DocumentSerial();
+                replaced = true;
+            }
         }
         else if (outcome == HostOutcome::Succeeded)
         {
@@ -129,6 +241,15 @@ class Application::ProjectOpenJob final : public Job
     }
 
   private:
+    [[nodiscard]] bool Current() const noexcept
+    {
+        return !_owner._shutdownStarted && _owner._projectOpenStamp == _stamp && _owner._hostCommitStamp == _stamp &&
+               _owner._historyWork.IsCurrent(_stamp) && _owner._activeHostRequest &&
+               _owner._activeHostRequest->ordinal == _stamp.ordinal &&
+               _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
+               _owner._session.DocumentSerial() == _stamp.documentSerial &&
+               _owner._session.Generation() == _generation && _owner._session.CanApplyImageImport(_authority);
+    }
     JobResult PassGate(JobContext& context) noexcept
     {
         if (!ResetEvent(_gate->release.get()))
@@ -146,12 +267,13 @@ class Application::ProjectOpenJob final : public Job
     Application& _owner; // owner callbacks only; both workers read only owned immutable input
     const HistoryWorkStamp _stamp;
     const std::uint64_t _generation;
-    std::wstring _path;
+    ImageImportAuthority _authority;
+    std::unique_ptr<ProjectOpenPayload, RetireProjectOpenPayload> _payload;
     const std::optional<ProjectLoadLimits> _limits;
     const std::shared_ptr<ProjectOpenTestGate> _gate;
     const DWORD _ownerThread;
-    ProjectLoadProbeResult _probed;
-    ProjectLoadResult _loaded;
+    bool _snapshotReady = false;
+    HRESULT _captureError = S_OK;
     ProjectIoStatus _status = ProjectIoStatus::Invalid;
     int _version = 0;
 };
@@ -161,24 +283,46 @@ HRESULT Application::SubmitProjectOpen(HistoryWorkStamp stamp, std::uint64_t gen
 {
     try
     {
-        const auto memory = limits ? ProjectLoadMemoryBytes(limits.value(), path.size())
-                                   : ProjectLoadMetadataMemoryBytes(ProjectLoadLimits{}, path.size());
+        auto memory = limits ? ProjectLoadMemoryBytes(limits.value(), path.size())
+                             : ProjectLoadMetadataMemoryBytes(ProjectLoadLimits{}, path.size());
         if (memory == 0)
             return E_INVALIDARG;
+        const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        auto retirement = kDeferredReleaseThreshold;
+        if (limits)
+        {
+            const auto history = _session.history.EditMemoryBytes(_session.Document());
+            retirement = _session.ImageImportRetirementMemoryBytes();
+            if (!history || !retirement || history > maximum - memory)
+                return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            memory += history;
+            // Existing admitted preview graphs may publish derived buffers while IO runs. Mutating inputs are
+            // held behind this history ordinal; charge all already admitted graph peaks in the retirement bound.
+            const auto previews = _jobs.ReservedMemoryBytes();
+            if (previews > maximum - retirement)
+                return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            retirement += previews;
+        }
+        if (sizeof(ProjectOpenJob) + sizeof(ProjectOpenPayload) > maximum - memory)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        memory += sizeof(ProjectOpenJob) + sizeof(ProjectOpenPayload);
+        if (memory > maximum / 4 || memory * 4 > maximum - retirement)
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        retirement += memory * 4;
         if (_projectOpenTestGate && _projectOpenTestGate->throwAdmissionFailure &&
             (_projectOpenTestGate->admissionFailurePath.empty() ||
              _projectOpenTestGate->admissionFailurePath == path) &&
             _projectOpenTestGate->phase == (limits ? ProjectOpenTestPhase::Decode : ProjectOpenTestPhase::Probe))
             throw std::bad_alloc{};
-        std::unique_ptr<Job> job = std::make_unique<ProjectOpenJob>(*this, stamp, generation, std::move(path), limits);
+        std::unique_ptr<Job> job =
+            std::make_unique<ProjectOpenJob>(*this, stamp, generation, std::move(path), limits, retirement);
         JobTicket ticket;
-        const auto result =
-            static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, 0, memory + sizeof(ProjectOpenJob)}, ticket));
+        const auto result = static_cast<HRESULT>(_jobs.Submit(job, {JobClass::Io, 0, memory}, ticket));
         if (SUCCEEDED(result))
         {
             _projectOpenTicket = ticket;
             if (_projectOpenTestGate && limits)
-                _projectOpenTestGate->decodeReservationBytes = memory + sizeof(ProjectOpenJob);
+                _projectOpenTestGate->decodeReservationBytes = memory;
         }
         return result;
     }
@@ -239,7 +383,32 @@ int Application::RunProjectOpenSelfTest() noexcept
         Stale,
         Generation,
         Admission,
-        EmptySession
+        EmptySession,
+        CaptureAllocation,
+        HistoryReset,
+        HistorySnapshot,
+        Epoch,
+        ActiveOnly,
+        MaskOnly,
+        CropOnly,
+        LiveColor,
+        LiveColorFailure,
+        LiveAdjustment,
+        LiveAdjustmentFailure,
+        LiveFloating,
+        LiveFloatingFailure,
+        LiveBrush,
+        LiveBrushFailure,
+        LiveGradient,
+        LiveGradientFailure,
+        LiveLasso,
+        LiveLassoFailure,
+        LiveWarp,
+        LiveWarpFailure,
+        LiveShape,
+        LiveShapeFailure,
+        LiveOutline,
+        LiveOutlineFailure
     };
     struct State final
     {
@@ -288,6 +457,17 @@ int Application::RunProjectOpenSelfTest() noexcept
         }
         else if (state.mode == Mode::Generation)
             owner._session.RenameLayer(state.active.value(), L"External generation change");
+        else if (state.mode == Mode::Epoch)
+        {
+            owner._session.history.Begin(L"Epoch only", owner._session.Document(), owner._session.ActiveLayerID());
+            owner._session.history.End(owner._session.Document(), owner._session.ActiveLayerID());
+        }
+        else if (state.mode == Mode::ActiveOnly)
+            owner._session.SelectLayer(state.source.layers.front().id);
+        else if (state.mode == Mode::MaskOnly)
+            owner._session.SelectLayerTarget(state.active.value(), false);
+        else if (state.mode == Mode::CropOnly)
+            owner._session.SetCropFrame(CropRect{0, 0, 2, 1});
         owner._composition.ReleaseDocumentSurfaces();
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         if (owner._projectOpenTestGate->phase == ProjectOpenTestPhase::Decode)
@@ -341,21 +521,152 @@ int Application::RunProjectOpenSelfTest() noexcept
     {
         for (const bool after : {false, true})
         {
-            for (const auto mode : {Mode::Success, Mode::Ordered, Mode::Cancel, Mode::Failure, Mode::Allocation,
-                                    Mode::Stale, Mode::Generation, Mode::Admission, Mode::EmptySession})
+            for (const auto mode : {Mode::Success,        Mode::Ordered,
+                                    Mode::Cancel,         Mode::Failure,
+                                    Mode::Allocation,     Mode::Stale,
+                                    Mode::Generation,     Mode::Admission,
+                                    Mode::EmptySession,   Mode::CaptureAllocation,
+                                    Mode::HistoryReset,   Mode::HistorySnapshot,
+                                    Mode::Epoch,          Mode::ActiveOnly,
+                                    Mode::MaskOnly,       Mode::CropOnly,
+                                    Mode::LiveColor,      Mode::LiveColorFailure,
+                                    Mode::LiveAdjustment, Mode::LiveAdjustmentFailure,
+                                    Mode::LiveFloating,   Mode::LiveFloatingFailure,
+                                    Mode::LiveBrush,      Mode::LiveBrushFailure,
+                                    Mode::LiveGradient,   Mode::LiveGradientFailure,
+                                    Mode::LiveLasso,      Mode::LiveLassoFailure,
+                                    Mode::LiveWarp,       Mode::LiveWarpFailure,
+                                    Mode::LiveShape,      Mode::LiveShapeFailure,
+                                    Mode::LiveOutline,    Mode::LiveOutlineFailure})
             {
+                const bool historyFailure = mode == Mode::HistoryReset || mode == Mode::HistorySnapshot;
+                const bool scopeStale = mode >= Mode::Epoch && mode <= Mode::CropOnly;
+                const bool live = mode >= Mode::LiveColor;
+                const auto liveKind =
+                    (static_cast<unsigned int>(mode) - static_cast<unsigned int>(Mode::LiveColor)) / 2;
+                const bool liveFailure =
+                    live && (static_cast<unsigned int>(mode) - static_cast<unsigned int>(Mode::LiveColor)) % 2 != 0;
+                if (mode >= Mode::CaptureAllocation && (phase != ProjectOpenTestPhase::Decode || !after))
+                    continue;
                 if (!settle())
                     return 5;
+                _session.ClearDocument(); // A preceding refusal deliberately left its live panel/transaction intact.
                 _session.CreateDocument(8, 4);
                 (void)InsertPaintedLayer(_session, L"Before open", 8, 4, {}, 0, 0xFF404040);
+                if (mode == Mode::ActiveOnly)
+                    _session.AddBlankLayer();
+                if (mode == Mode::MaskOnly)
+                {
+                    const auto selected = _session.ActiveLayerID().value();
+                    _session.EditForTest(
+                        [&](CanvasDocument& document)
+                        {
+                            for (auto& layer : document.layers)
+                                if (layer.id == selected)
+                                {
+                                    const std::uint8_t byte = 173;
+                                    const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                    LayerMask placed;
+                                    placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                    layer.mask = std::move(placed);
+                                }
+                        });
+                    _session.SelectLayerTarget(selected, true);
+                }
+                if (historyFailure || scopeStale || mode == Mode::CaptureAllocation)
+                {
+                    _session.SetOpacity(0.5);
+                    _session.Undo();
+                }
+                if (mode == Mode::CropOnly)
+                    _session.SetCropFrame(CropRect{1, 0, 1, 1});
                 _session.history.MarkSaved();
                 _documentPath = L"before-open.prism";
+                const auto liveOpen = [&]() noexcept
+                {
+                    switch (liveKind)
+                    {
+                    case 0:
+                        return _session.HasColorEdit();
+                    case 1:
+                        return _session.HasColorEdit() && _session.AdjustmentEditingID().has_value();
+                    case 2:
+                        return _session.PendingTransformEdit() && _session.PendingTransformEdit()->floating.has_value();
+                    case 3:
+                        return _session.PendingBrush() != nullptr;
+                    case 4:
+                        return _session.PendingGradient() != nullptr;
+                    case 5:
+                        return _session.PendingLasso().has_value();
+                    case 6:
+                        return _session.PendingWarp() != nullptr;
+                    case 7:
+                        return _session.PendingShape().has_value();
+                    case 8:
+                        return _session.IsMovingSelection();
+                    default:
+                        return false;
+                    }
+                };
+                if (live)
+                {
+                    switch (liveKind)
+                    {
+                    case 0:
+                        _session.BeginColorEdit(FilterKind::Exposure, true);
+                        break;
+                    case 1:
+                    {
+                        const auto image = _session.ActiveLayer()->asset->image;
+                        _session.AddAdjustment(AdjustmentKind::Exposure);
+                        if (!_session.BeginAdjustmentEditing(_session.ActiveLayerID().value(), image, true))
+                            return 5;
+                        break;
+                    }
+                    case 2:
+                        _session.SelectAll();
+                        _session.BeginSelectionTransform();
+                        break;
+                    case 3:
+                        if (!_session.BeginBrush({2, 2}))
+                            return 5;
+                        break;
+                    case 4:
+                        if (!_session.BeginGradient({0, 0}))
+                            return 5;
+                        _session.MoveGradient(Vec2{0, 0}, Vec2{4, 0});
+                        break;
+                    case 5:
+                        _session.BeginLasso({0, 0}, SelectionMode::New);
+                        _session.ExtendLasso({4, 2});
+                        break;
+                    case 6:
+                        if (!_session.BeginWarp({2, 2}))
+                            return 5;
+                        break;
+                    case 7:
+                        _session.BeginShape({0, 0});
+                        _session.DragShape({4, 2}, false, false);
+                        break;
+                    case 8:
+                        _session.SelectAll();
+                        if (!_session.BeginSelectionMove())
+                            return 5;
+                        break;
+                    }
+                    if (!liveOpen())
+                        return 5;
+                }
                 const auto source = _session.Document().value();
                 const auto active = _session.ActiveLayerID();
                 if (mode == Mode::EmptySession)
                     _session.ClearDocument();
                 DocumentChanged();
+                if (live && !settle())
+                    return 5;
                 const auto revision = _session.history.CurrentRevision();
+                const auto undoCount = _session.history.UndoCount();
+                const auto redoName = _session.history.RedoName();
                 const auto serial = _session.DocumentSerial();
                 const auto errors = _errorsShown;
                 const auto presents = _renderer.PresentCount();
@@ -367,6 +678,13 @@ int Application::RunProjectOpenSelfTest() noexcept
                 _projectOpenTestGate->afterPreparation = after;
                 _projectOpenTestGate->throwAllocationFailure = mode == Mode::Allocation;
                 _projectOpenTestGate->throwAdmissionFailure = mode == Mode::Admission;
+                _projectOpenTestGate->throwCaptureFailure = mode == Mode::CaptureAllocation;
+                if (liveFailure)
+                    _projectOpenTestGate->throwHistoryStage = DocumentHistory::PrepareStage::ReplacementSnapshot;
+                if (historyFailure)
+                    _projectOpenTestGate->throwHistoryStage = mode == Mode::HistoryReset
+                                                                  ? DocumentHistory::PrepareStage::ReplacementReset
+                                                                  : DocumentHistory::PrepareStage::ReplacementSnapshot;
                 if (mode == Mode::Failure)
                     _projectOpenTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
                 std::wstring callerPath = project;
@@ -379,16 +697,20 @@ int Application::RunProjectOpenSelfTest() noexcept
                 State state{*this, mode, receipt, serial, revision, source, active};
                 const auto settled = SettleJobs(_jobs, 25000, dispatch, &state);
                 const auto actual = receipt.Read();
-                const auto expected = mode == Mode::Stale || mode == Mode::Generation ? HostOutcome::Stale
-                                      : mode == Mode::Cancel                          ? HostOutcome::Cancelled
-                                      : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission
+                const auto expected = mode == Mode::Stale || mode == Mode::Generation || scopeStale ? HostOutcome::Stale
+                                      : mode == Mode::Cancel ? HostOutcome::Cancelled
+                                      : mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission ||
+                                              mode == Mode::CaptureAllocation || historyFailure || liveFailure
                                           ? HostOutcome::Failed
                                           : HostOutcome::Succeeded;
-                bool correct = settled == SettleResult::Settled && actual.outcome == expected &&
-                               (mode == Mode::Admission ? !state.visited : state.visited && state.held) &&
-                               !_projectOpenStamp && !_projectOpenTicket && !_activeHostRequest &&
-                               !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 &&
-                               _hostInputBudget.Used() == 0 && _renderer.PresentCount() == presents;
+                bool correct =
+                    settled == SettleResult::Settled && actual.outcome == expected &&
+                    (mode == Mode::Admission || mode == Mode::CaptureAllocation || historyFailure ? !state.visited
+                     : liveFailure ? !state.visited
+                                   : state.visited && state.held) &&
+                    !_projectOpenStamp && !_projectOpenTicket && !_activeHostRequest && !_historyWork.Busy() &&
+                    _jobs.ReservedMemoryBytes() == 0 && _hostInputBudget.Used() == 0 &&
+                    _renderer.PresentCount() == presents;
                 if (expected == HostOutcome::Succeeded)
                     correct = correct && _session.Document().value().width == 2 &&
                               _session.Document().value().height == 1 && _session.ActiveLayerID() == fileId &&
@@ -407,6 +729,26 @@ int Application::RunProjectOpenSelfTest() noexcept
                 else
                     correct = correct && _session.Document() == std::optional(source) &&
                               _session.history.CurrentRevision() == revision && _documentPath == L"before-open.prism";
+                if (historyFailure || scopeStale || mode == Mode::CaptureAllocation)
+                    correct = correct && _session.history.UndoCount() == undoCount &&
+                              _session.history.RedoName() == redoName && !_session.history.IsModified();
+                if (mode == Mode::ActiveOnly)
+                    correct = correct && _session.ActiveLayerID() == source.layers.front().id;
+                if (mode == Mode::MaskOnly)
+                    correct = correct && !_session.IsMaskSelected();
+                if (mode == Mode::CropOnly)
+                    correct = correct && _session.CropFrame() == std::optional(CropRect{0, 0, 2, 1});
+                if (historyFailure)
+                    correct = correct && _projectOpenTestGate->historyFaultHits.load() == 1;
+                if (live)
+                    correct = correct && (liveFailure ? liveOpen() : !liveOpen()) &&
+                              (liveFailure ? _session.DocumentSerial() == serial : _session.DocumentSerial() != serial);
+                if (liveFailure)
+                    correct = correct && _projectOpenTestGate->historyFaultHits.load() == 1 &&
+                              _session.history.UndoCount() == undoCount && _session.history.RedoName() == redoName;
+                if (phase == ProjectOpenTestPhase::Decode && mode != Mode::Admission)
+                    correct = correct && _projectOpenTestGate->captureReservationHeld &&
+                              _projectOpenTestGate->retired.load() && _projectOpenTestGate->retiredOffOwner.load();
                 if (mode == Mode::Cancel)
                     correct = correct && state.cancellationPending;
                 if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)

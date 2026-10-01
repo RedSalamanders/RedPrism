@@ -196,6 +196,9 @@ class BrushStroke
                 BrushCoverageEngine* engine, BrushKind kind = BrushKind::Paint,
                 SpotHealingMode healingMode = SpotHealingMode::ContentAware);
     ~BrushStroke();
+    // Owner-only, once publication has discarded this stroke. Detach the borrowed engine before CPU state
+    // transfers to a worker; later destruction cannot mutate a graphics engine. No further stroke calls follow.
+    void ReleaseCoverageEngine() noexcept;
     BrushStroke(const BrushStroke&) = delete;
     BrushStroke& operator=(const BrushStroke&) = delete;
 
@@ -203,6 +206,8 @@ class BrushStroke
     {
         return _valid;
     }
+    // Conservative retained CPU storage bound for retirement/admission accounting; zero means unknown or overflow.
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
     void SetPixelLimit(std::int64_t pixels) noexcept
     {
         _pixelLimit = pixels;
@@ -370,6 +375,8 @@ class BrushStroke
     LayerTransform _paintTransform;
     LayerTransform _sourceTransform;
     Raster _source;
+    // Borrowed from the application; this stroke never owns or destroys the engine pointer. Its destructor only
+    // calls the engine's EndStroke lifetime hook when the stroke was begun.
     BrushCoverageEngine* _engine = nullptr;
     BrushKind _kind = BrushKind::Paint;
     SpotHealingMode _healingMode = SpotHealingMode::ContentAware;
