@@ -21,6 +21,7 @@
 #include "LiftReferenceTests.h"
 #include "PixelMoveStateTests.h"
 #include "PixelMoveWorkTests.h"
+#include "PreparedColorHistoryTests.h"
 #include "PreparedHistoryTests.h"
 #include "PreparedRasterHistoryTests.h"
 #include "ProjectSaveMemoryTests.h"
@@ -7349,6 +7350,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryPreparationFaultTests();
     gFailures += RunHistoryRetirementBoundTests();
     gFailures += RunPreparedRasterHistoryTests();
+    gFailures += RunPreparedColorHistoryTests();
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunColorEditWorkTests();

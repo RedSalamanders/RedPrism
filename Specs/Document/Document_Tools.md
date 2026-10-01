@@ -1,7 +1,7 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
@@ -624,6 +624,18 @@ It accounts for rounded pixel buffers, private sparse reads, coverage, kernel sc
 thumbnails and metadata. An exact resident preview avoids another filter/coverage reservation. Geometry producers
 cache selection point counts; querying the estimate does not traverse selection points or loops. The host submits
 this graph through the ordered commit engine and selected continuation described below.
+
+The destructive color/filter host also reserves complete history metadata/trim preparation before source capture.
+`ColorEditCommitMemoryBytes` reads borrowed opening metadata without copying settings or sparse pixels. An admitted
+record captures the current source/generation and immutable history view, then its worker binds the ready output
+to a complete after-layer/history publication. Owner application validates the opening token/settings, captured
+generation and exact history epoch before swapping pixels, mask, applied settings and panel owners. Retired
+panel lookup/coverage, old settings and source/history owners remain in the worker-release aggregate. Capture
+refusal keeps the panel unchanged; a worker preparation failure retains the existing commit-failure state and
+redo/source pixels. A stale prepared history epoch cannot publish or close a newer panel. Direct reference
+history and adjustment-layer OK/Cancel closure retain their current paths; their migrations remain H1 work.
+This boundary passes the full native configuration matrix
+([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); measured P1/G1 performance remains open.
 
 ### Deferred panel computation (P1.1c.1)
 

@@ -48,6 +48,27 @@ void Wait(HANDLE event) noexcept
     }
 }
 
+// A scheduler wake also carries memory/owner notifications. Only the hook event proves suspension;
+// an unrelated wake must drain and block again rather than waiting for an unpumped hook.
+void WaitForSuspension(JobScheduler& scheduler, HANDLE deferred) noexcept
+{
+    const auto deadline = GetTickCount64() + 10000;
+    while (WaitForSingleObject(deferred, 0) != WAIT_OBJECT_0)
+    {
+        (void)DrainCompletions(scheduler);
+        if (WaitForSingleObject(deferred, 0) == WAIT_OBJECT_0)
+            return;
+        const auto now = GetTickCount64();
+        if (now >= deadline ||
+            WaitForSingleObject(scheduler.WakeHandle(), static_cast<DWORD>(deadline - now)) != WAIT_OBJECT_0)
+        {
+            std::printf("FAIL job-stage.suspension-timeout\n");
+            std::fflush(stdout);
+            std::_Exit(1);
+        }
+    }
+}
+
 bool StableMemory(void*, MemorySnapshot& snapshot) noexcept
 {
     constexpr std::uint64_t available = 8ULL * 1024 * 1024 * 1024;
@@ -303,14 +324,12 @@ void TestDeferResumeFifoAndReadiness()
     Expect(scheduler.Submit(secondJob, {JobClass::Commit, 0x51, 0}, secondTicket) == S_OK,
            "resume.serial-younger-submit");
 
-    // Drain any submit wake before releasing the worker, so the next wake belongs to its published result.
+    // Consume submit readiness; later memory notifications can still precede the worker's result.
     (void)DrainCompletions(scheduler);
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
     (void)WaitForSingleObject(wake, 0);
     (void)SetEvent(releaseWorker.get());
-    Wait(wake);
-    (void)DrainCompletions(scheduler);
-    Wait(deferred.get());
+    WaitForSuspension(scheduler, deferred.get());
 
     pump.ticket = firstState.ticket;
     Expect(!scheduler.UnregisterOwnerWork(pump), "resume.unregister-pending-refused");
@@ -361,9 +380,7 @@ void TestCancellationBeforeResume()
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
     (void)WaitForSingleObject(wake, 0);
     (void)SetEvent(releaseWorker.get());
-    Wait(wake);
-    (void)DrainCompletions(scheduler);
-    Wait(deferred.get());
+    WaitForSuspension(scheduler, deferred.get());
 
     OwnerPump pump{scheduler};
     pump.ticket = ticket;
@@ -674,10 +691,14 @@ void TestCloseSuspendedDropsCallbacksAndDestroysOnce()
     (void)DrainCompletions(scheduler);
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
     (void)WaitForSingleObject(wake, 0);
-    (void)SetEvent(release.get());
+    scheduler.NotifyMemoryChanged();
     Wait(wake);
     (void)DrainCompletions(scheduler);
-    Wait(deferred.get());
+    Expect(WaitForSingleObject(deferred.get(), 0) != WAIT_OBJECT_0 &&
+               state.completions.load(std::memory_order_relaxed) == 0,
+           "suspended-close.memory-wake-does-not-prove-suspension");
+    (void)SetEvent(release.get());
+    WaitForSuspension(scheduler, deferred.get());
     scheduler.Close();
     Expect(state.completions.load(std::memory_order_relaxed) == 0 &&
                state.destructions.load(std::memory_order_relaxed) == 1,
@@ -737,9 +758,7 @@ void TestReservationRetainedUntilFinalApplyThenWaitingJobAdmitted()
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
     (void)WaitForSingleObject(wake, 0);
     (void)SetEvent(firstRelease.get());
-    Wait(wake);
-    (void)DrainCompletions(scheduler);
-    Wait(firstDeferred.get());
+    WaitForSuspension(scheduler, firstDeferred.get());
     Expect(scheduler.ReservedMemoryBytes() == 100 && successorState.runs.load(std::memory_order_relaxed) == 0,
            "reservation.suspended-stage-retains-capacity");
     Expect(scheduler.Resume(firstTicket), "reservation.resume-first");

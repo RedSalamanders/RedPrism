@@ -803,7 +803,7 @@ int Application::RunHostContinuationSelfTest() noexcept
         (void)RunUiActions(_jobs);
     }
     if (!ColorCommitBusy() || !_activeHostRequest || !_hostCommitStamp || ordinaryRuns > 1 ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 ||
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false) ||
         committed.Read().outcome != HostOutcome::Pending || _session.ActiveLayer()->asset->image != source)
     {
         return fail(L"A full ordinary action queue blocked host admission or prematurely completed its receipt.\n");
@@ -863,7 +863,7 @@ int Application::RunHostContinuationSelfTest() noexcept
     }
     const auto cancelled = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
     if (!RunUiActions(_jobs) || !ColorCommitBusy() ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false))
     {
         return fail(L"The cancelled host request did not reach the worker gate.\n");
     }
@@ -906,7 +906,7 @@ int Application::RunHostContinuationSelfTest() noexcept
     }
     const auto earlierOrdinal = _historyWork.NextOrdinal();
     if (!earlierOrdinal || StartColorCommit(earlierOrdinal.value()) != HostOutcome::Pending ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false))
     {
         return fail(L"The earlier independent commit did not start.\n");
     }
@@ -970,7 +970,8 @@ int Application::RunHostContinuationSelfTest() noexcept
         return fail(L"Could not prepare late successful host cancellation.\n");
     }
     const auto lateCancelled = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
-    if (!RunUiActions(_jobs) || !ColorCommitBusy())
+    if (!RunUiActions(_jobs) || !ColorCommitBusy() ||
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false))
     {
         return fail(L"The late-cancelled host commit did not start.\n");
     }
@@ -1037,7 +1038,8 @@ int Application::RunHostContinuationSelfTest() noexcept
         return fail(L"Could not prepare active host document replacement.\n");
     }
     const auto activeStale = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
-    if (!RunUiActions(_jobs) || !ColorCommitBusy())
+    if (!RunUiActions(_jobs) || !ColorCommitBusy() ||
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false))
     {
         return fail(L"The active stale host commit did not start.\n");
     }
@@ -1329,7 +1331,8 @@ int Application::RunHostFlowSelfTest() noexcept
                     return fail(L"A host prerequisite did not acknowledge before the color-worker gate.\n");
             }
             if (!ColorCommitBusy() || receipt.Read().outcome != HostOutcome::Pending ||
-                WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 ||
+                !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this,
+                                           false) ||
                 _session.DocumentSerial() != serial || _session.ActiveLayer()->asset->image != source ||
                 GetFileAttributesW(output.c_str()) != INVALID_FILE_ATTRIBUTES)
             {
@@ -1421,7 +1424,7 @@ int Application::RunHostFlowSelfTest() noexcept
     _session.BeginShape(Vec2{0, 0});
     const auto color = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
     if (!RunUiActions(_jobs) || !ColorCommitBusy() ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this, false))
         return fail(L"Shape release did not reach its preceding color gate.\n");
     DxUi::PointerEvent release{};
     release.action = DxUi::PointerAction::Up;

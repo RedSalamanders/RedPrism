@@ -94,6 +94,12 @@ Direct reference methods retain their existing behavior; caller migration remain
 boundary does not qualify constant-time document capture, incremental storage accounting, other operation
 groups or the measured G1 bound. These remain explicit H2/H3/H4 work.
 
+Destructive color/filter commits use this boundary. Their complete color result,
+candidate layer/history, captured generation and retired settings/panel form one private publication/release
+owner. Capturing their input follows full admission; no failure after mutation is caught. Other callers and
+adjustment-layer transaction closure remain open until their separate migration gates pass. The full native
+configuration matrix passes for destructive color; [evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md).
+
 ## Trim
 
 While `past.size + future.size > entryLimit` **or** retained bytes exceed the budget, drop the oldest past

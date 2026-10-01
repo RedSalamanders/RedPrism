@@ -1,31 +1,80 @@
 #include "Application.h"
 
 #include "ChromeHost.h"
+#include "ColorEditHistory.h"
 #include "ColorWorkTestGate.h"
 #include "resource.h"
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <new>
 #include <utility>
+
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ColorCommitPayload final : DeferredReleaseNode
+{
+    std::optional<ColorEditJobInput> input;
+    ColorEditJobResult result;
+    std::optional<CanvasDocument> source;
+    DocumentHistory::StateView history;
+    std::optional<PreparedColorEdit> publication;
+    std::shared_ptr<ColorWorkTestGate> gate;
+    DWORD ownerThread = 0;
+    std::uint64_t generation = 0;
+    ColorCommitPayload()
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ColorCommitPayload> owned(static_cast<ColorCommitPayload*>(node)); };
+    }
+    ~ColorCommitPayload()
+    {
+        if (gate)
+        {
+            gate->payloadRetiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->payloadRetired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+
+struct RetireColorCommitPayload final
+{
+    void operator()(ColorCommitPayload* payload) const noexcept
+    {
+        if (payload && !TryDeferRelease(*payload))
+        {
+            const std::unique_ptr<ColorCommitPayload> owned(payload);
+        }
+    }
+};
+
+} // namespace
 
 // Production OK/write callers enter this engine through the owned continuation source. Admission is Pending;
 // only validated apply/drop releases its shared history barrier and authorizes a dependent action.
 class Application::ColorCommitJob final : public Job
 {
   public:
-    ColorCommitJob(Application& owner, HistoryWorkStamp stamp, ColorEditJobInput input)
-        : _owner(owner), _stamp(stamp), _input(std::move(input)), _gate(owner._colorWorkTestGate)
+    ColorCommitJob(Application& owner, HistoryWorkStamp stamp, std::uint64_t opening, std::uint64_t sequence,
+                   std::uint64_t retirementBytes)
+        : _owner(owner), _stamp(stamp), _opening(opening), _sequence(sequence), _retirementBytes(retirementBytes),
+          _gate(owner._colorWorkTestGate), _ownerThread(GetCurrentThreadId())
     {
-        // Preserve request identity even if the runner fails before producing a result.
-        _result.token = _input.token;
-        _result.kind = _input.edit.kind;
-        _result.settings = _input.edit.settings;
     }
     JobResult Run(JobContext& context) override
     {
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (!_payload)
+            return {}; // reach admitted owner capture through this same suspended/resumed record
         if (const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Commit, context);
             gate.status != JobStatus::Finished)
         {
@@ -35,25 +84,95 @@ class Application::ColorCommitJob final : public Job
         {
             throw std::bad_alloc{}; // harness-only: reaches the actual scheduler runner's translation boundary
         }
-        _result = RunColorEditJob(_input, context.executor, context.cancellation);
+        _payload->result = RunColorEditJob(_payload->input.value(), context.executor, context.cancellation);
+        if (_payload->result.status == ColorEditJobStatus::Ready)
+        {
+            const DocumentHistory::PrepareObserver observer{[](void* context, DocumentHistory::PrepareStage stage)
+                                                            {
+                                                                auto* gate = static_cast<ColorWorkTestGate*>(context);
+                                                                if (gate && gate->historyFailure == stage)
+                                                                {
+                                                                    gate->historyFaultHits.fetch_add(1);
+                                                                    throw std::bad_alloc{};
+                                                                }
+                                                            },
+                                                            _gate.get()};
+            _payload->publication = PrepareColorEditPublication(
+                _payload->source, _payload->input->edit.layerID, _payload->generation, std::move(_payload->history),
+                _payload->result, context.cancellation, _gate ? observer : DocumentHistory::PrepareObserver{});
+            if (!_payload->publication)
+                _payload->result.status =
+                    context.cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
+        }
         if (_gate && _gate->kind == ColorWorkTestKind::Commit)
         {
-            _gate->unchangedCommit.store(_result.status == ColorEditJobStatus::Unchanged);
+            _gate->unchangedCommit.store(_payload->result.status == ColorEditJobStatus::Unchanged);
             (void)SetEvent(_gate->computed.get());
         }
         return {};
     }
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
+    {
+        const auto& panel = _owner._session.PendingColorEdit();
+        if (_payload || result.status != JobStatus::Finished || _owner._shutdownStarted ||
+            !_owner._historyWork.IsCurrent(_stamp) || _owner._historyWork.CancelRequested(_stamp) || !panel ||
+            panel->openingSequence != _opening || _owner._session.ColorEditSequence() != _sequence ||
+            _owner._session.DocumentSerial() != _stamp.documentSerial)
+            return false;
+        try
+        {
+            auto owned = std::make_unique<ColorCommitPayload>();
+            owned->bytes = (std::max)(_retirementBytes, kDeferredReleaseThreshold);
+            owned->gate = _gate;
+            owned->ownerThread = _ownerThread;
+            _payload.reset(owned.release());
+            if (_gate)
+            {
+                _gate->captureReservationHeld.store(_gate->reservationBytes != 0 &&
+                                                    _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes);
+                if (_gate->throwCaptureFailure)
+                    throw std::bad_alloc{};
+            }
+            _payload->input = _owner._session.PrepareColorEditCommit();
+            if (!_payload->input)
+            {
+                _captureError = E_ABORT;
+                return false;
+            }
+            _payload->result.token = _payload->input->token;
+            _payload->result.kind = _payload->input->edit.kind;
+            _payload->result.settings = _payload->input->edit.settings;
+            _payload->source = _owner._session.Document();
+            _payload->generation = _owner._session.Generation();
+            _payload->history = _owner._session.history.CaptureState();
+            if (_owner._jobs.Resume(ticket))
+                return true;
+            _captureError = E_UNEXPECTED;
+        }
+        catch (const std::bad_alloc&)
+        {
+            _captureError = E_OUTOFMEMORY; // owning noexcept capture boundary fails this whole operation
+        }
+        return false;
+    }
     void Completed(JobResult completion) noexcept override
     {
-        _owner.CompleteColorCommit(_stamp, _input.edit.openingSequence, _result, completion);
+        auto& result = _payload ? _payload->result : _failure;
+        auto* publication = _payload && _payload->publication ? &_payload->publication.value() : nullptr;
+        _owner.CompleteColorCommit(_stamp, _opening, result, completion, publication, _captureError);
     }
 
   private:
     Application& _owner; // UI completion only. Run cannot access the mutable owner.
     const HistoryWorkStamp _stamp;
-    const ColorEditJobInput _input;
-    ColorEditJobResult _result;
+    const std::uint64_t _opening;
+    const std::uint64_t _sequence;
+    const std::uint64_t _retirementBytes;
+    ColorEditJobResult _failure; // bounded preallocated failure header; no source snapshot before admission
     const std::shared_ptr<ColorWorkTestGate> _gate;
+    const DWORD _ownerThread;
+    std::int32_t _captureError = 0;
+    std::unique_ptr<ColorCommitPayload, RetireColorCommitPayload> _payload;
 };
 
 Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) noexcept
@@ -108,15 +227,39 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
     std::int32_t status = E_INVALIDARG;
     try
     {
-        auto input = _session.PrepareColorEditCommit();
-        const auto memory = input ? ColorEditJobMemoryBytes(input.value()) : std::nullopt;
-        if (input && memory)
+        const auto& edit = _session.PendingColorEdit();
+        const auto preparation =
+            edit ? ColorEditCommitMemoryBytes(edit.value(), _session.ColorEditSequence()) : std::nullopt;
+        const auto history = _session.history.EditMemoryBytes(_session.Document());
+        const auto held = _session.history.RetirementMemoryBytes(_session.Document());
+        const auto panel = edit ? ColorEditHeldMemoryBytes(edit.value()) : 0;
+        std::uint64_t memory = preparation.value_or(0);
+        std::uint64_t retirement = held;
+        const auto add = [](std::uint64_t& value, std::uint64_t more) noexcept
         {
-            const auto serial = input->token.documentSerial;
-            std::unique_ptr<Job> job =
-                std::make_unique<ColorCommitJob>(*this, _colorCommitStamp.value(), std::move(input.value()));
+            if (more > (std::numeric_limits<std::uint64_t>::max)() - value)
+                return false;
+            value += more;
+            return true;
+        };
+        bool valid = preparation && history && held && panel && add(memory, history) &&
+                     add(memory, sizeof(ColorCommitJob) + sizeof(ColorCommitPayload)) && add(retirement, panel);
+        for (const auto& channel : _session.filterSettings.curves.channels)
+        {
+            const auto capacity = static_cast<std::uint64_t>(channel.capacity());
+            valid = valid && capacity <= (std::numeric_limits<std::uint64_t>::max)() / sizeof(CurvePoint) &&
+                    add(retirement, capacity * sizeof(CurvePoint));
+        }
+        valid = valid && memory <= (std::numeric_limits<std::uint64_t>::max)() / 2 && add(retirement, memory * 2);
+        if (valid)
+        {
+            const auto serial = _session.DocumentSerial();
+            if (_colorWorkTestGate)
+                _colorWorkTestGate->reservationBytes = memory;
+            std::unique_ptr<Job> job = std::make_unique<ColorCommitJob>(
+                *this, _colorCommitStamp.value(), edit->openingSequence, _session.ColorEditSequence(), retirement);
             JobTicket ticket;
-            status = _jobs.Submit(job, {JobClass::Commit, serial, memory.value()}, ticket);
+            status = _jobs.Submit(job, {JobClass::Commit, serial, memory}, ticket);
             if (status >= 0)
             {
                 _colorCommitTicket = ticket;
@@ -164,7 +307,8 @@ void Application::CancelColorCommit() noexcept
 }
 
 void Application::CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
-                                      JobResult completion) noexcept
+                                      JobResult completion, PreparedColorEdit* publication,
+                                      std::int32_t captureError) noexcept
 {
     if (!_historyWork.IsCurrent(stamp) || _colorCommitStamp != stamp)
     {
@@ -179,14 +323,24 @@ void Application::CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t open
     {
         outcome = HostOutcome::Cancelled;
     }
+    else if (captureError < 0 && !_shutdownStarted && edit && edit->openingSequence == opening)
+    {
+        // Failed capture has not produced a complete input/result. Fail this request locally and retain the
+        // unchanged panel; never allocate an artificial result or partially publish history to report it.
+        outcome = captureError == E_ABORT ? HostOutcome::Stale : HostOutcome::Failed;
+    }
     else if (samePanel)
     {
         if (completion.status != JobStatus::Finished)
         {
             result.status = ColorEditJobStatus::Failed;
         }
-        const bool validTarget = _session.CanApplyJobResult(result.token, result.token.sequence);
-        const bool changed = _session.ApplyColorEditResult(result);
+        const bool validTarget = _session.CanApplyJobResult(result.token, result.token.sequence) &&
+                                 (result.status != ColorEditJobStatus::Ready ||
+                                  (publication && _session.IsPreparedColorEditCurrent(*publication)));
+        const bool changed = result.status == ColorEditJobStatus::Ready
+                                 ? (publication && _session.ApplyPreparedColorEditResult(*publication))
+                                 : _session.ApplyColorEditResult(result);
         outcome = !validTarget ? HostOutcome::Stale
                   : changed || (result.status == ColorEditJobStatus::Unchanged && !_session.HasColorEdit())
                       ? HostOutcome::Succeeded
@@ -198,7 +352,9 @@ void Application::CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t open
     _colorCommitStamp.reset();
     _colorCommitTicket.reset();
     _colorCommitOutcome = outcome;
-    _colorCommitError = outcome == HostOutcome::Failed ? (completion.error < 0 ? completion.error : E_FAIL)
+    _colorCommitError = outcome == HostOutcome::Failed ? (captureError < 0       ? captureError
+                                                          : completion.error < 0 ? completion.error
+                                                                                 : E_FAIL)
                         : outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale ? E_ABORT
                                                                                              : 0;
     ResumeHostHistory(stamp, outcome, _colorCommitError);
@@ -274,7 +430,7 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
     if (start() != HostOutcome::Pending ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The immutable color commit did not reach its worker gate.\n");
     }
@@ -318,7 +474,7 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
     if (start() != HostOutcome::Pending ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The late successful commit did not start.\n");
     }
@@ -344,7 +500,7 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     CancelColorEdit();
     if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels) || start() != HostOutcome::Pending ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The identity/stale commit fixture did not start.\n");
     }
@@ -424,7 +580,7 @@ int Application::RunColorCommitSelfTest() noexcept
     }
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
     if (start() != HostOutcome::Pending ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The document replacement commit fixture did not start.\n");
     }
@@ -445,6 +601,78 @@ int Application::RunColorCommitSelfTest() noexcept
     {
         return fail(L"An old completed commit crossed a document replacement with reused persisted IDs.\n");
     }
+
+    // Every history allocation boundary fails inside the real worker runner before owner publication. A seeded
+    // redo entry and complete literal source survive; release must include the captured history/panel graph.
+    _session.SetOpacity(0.75);
+    _session.Undo();
+    using HistoryStage = DocumentHistory::PrepareStage;
+    constexpr std::array stages{HistoryStage::BeforeSnapshot, HistoryStage::AfterSnapshot, HistoryStage::Entry,
+                                HistoryStage::StackGrowth, HistoryStage::TrimIndex};
+    for (const auto stage : stages)
+    {
+        if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
+            return fail(L"A prepared color history fault fixture could not open its panel.\n");
+        OnAdjustAction(AdjustAction::SetInputGamma, 2);
+        if (!settled())
+            return fail(L"A prepared color history fault fixture could not settle its opening preview.\n");
+        const auto revision = _session.history.CurrentRevision();
+        const auto historyCount = _session.history.UndoCount();
+        const auto redoName = _session.history.RedoName();
+        const auto sourceImage = _session.ActiveLayer()->asset->image;
+        _colorWorkTestGate->historyFailure = stage;
+        if (start() != HostOutcome::Pending)
+            return fail(L"A prepared color history fault fixture was not admitted.\n");
+        (void)SetEvent(_colorWorkTestGate->release.get());
+        if (!settled() || _colorCommitOutcome != HostOutcome::Failed || _colorCommitError != E_OUTOFMEMORY ||
+            _historyWork.Busy() || !_session.HasColorEdit() || !_session.PendingColorEdit()->commitFailed ||
+            _session.ActiveLayer()->asset->image != sourceImage || _session.history.CurrentRevision() != revision ||
+            _session.history.UndoCount() != historyCount || !_session.history.CanRedo() ||
+            _session.history.RedoName() != redoName || _colorWorkTestGate->historyFaultHits.load() != 1 ||
+            !_colorWorkTestGate->captureReservationHeld.load() || !_colorWorkTestGate->payloadRetired.load() ||
+            !_colorWorkTestGate->payloadRetiredOffOwner.load() || _jobs.ReservedMemoryBytes() != 0)
+            return fail(L"A color history allocation failure changed pixels/history or lost its release owner.\n");
+        std::fprintf(stderr, "PASS color-history-host.stage=%u\n", static_cast<unsigned int>(stage));
+        CancelColorEdit();
+    }
+    if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
+        return fail(L"The admitted color capture refusal fixture could not open its panel.\n");
+    OnAdjustAction(AdjustAction::SetInputGamma, 2);
+    if (!settled())
+        return fail(L"The admitted color capture refusal fixture could not settle its preview.\n");
+    const auto captureRevision = _session.history.CurrentRevision();
+    const auto captureSequence = _session.ColorEditSequence();
+    const auto captureImage = _session.ActiveLayer()->asset->image;
+    _colorWorkTestGate->throwCaptureFailure = true;
+    if (start() != HostOutcome::Pending || !settled() || _colorCommitOutcome != HostOutcome::Failed ||
+        _colorCommitError != E_OUTOFMEMORY || _historyWork.Busy() || !_session.HasColorEdit() ||
+        _session.PendingColorEdit()->commitFailed || _session.ColorEditSequence() != captureSequence ||
+        _session.ActiveLayer()->asset->image != captureImage || _session.history.CurrentRevision() != captureRevision ||
+        !_session.history.CanRedo() || !_colorWorkTestGate->captureReservationHeld.load() ||
+        !_colorWorkTestGate->payloadRetired.load() || !_colorWorkTestGate->payloadRetiredOffOwner.load() ||
+        _jobs.ReservedMemoryBytes() != 0)
+        return fail(L"Admitted color capture refusal did not retain the unchanged panel/history and owners.\n");
+    std::fprintf(stderr, "PASS color-history-host.capture-refusal\n");
+    CancelColorEdit();
+
+    if (!gate() || !BeginColorEdit(ChromeHost::kCommandLevels))
+        return fail(L"The stale color history epoch fixture could not open its panel.\n");
+    OnAdjustAction(AdjustAction::SetInputGamma, 2);
+    if (!settled() || start() != HostOutcome::Pending ||
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
+        return fail(L"The stale color history epoch fixture did not reach its admitted worker.\n");
+    const auto staleRevision = _session.history.CurrentRevision();
+    const auto staleImage = _session.ActiveLayer()->asset->image;
+    _session.history.Begin(L"Epoch only", _session.Document(), _session.ActiveLayerID());
+    _session.history.End(_session.Document(), _session.ActiveLayerID());
+    (void)SetEvent(_colorWorkTestGate->release.get());
+    if (!settled() || _colorCommitOutcome != HostOutcome::Stale || _historyWork.Busy() || !_session.HasColorEdit() ||
+        _session.PendingColorEdit()->commitFailed || _session.ActiveLayer()->asset->image != staleImage ||
+        _session.history.CurrentRevision() != staleRevision || !_session.history.CanRedo() ||
+        !_colorWorkTestGate->payloadRetiredOffOwner.load())
+        return fail(L"An old prepared color publication crossed a changed history epoch.\n");
+    std::fprintf(stderr, "PASS color-history-host.stale-history-epoch\n");
+    CancelColorEdit();
     _session.AddAdjustment(AdjustmentKind::Levels);
     const Guid adjustmentId = _session.ActiveLayerID().value();
     _session.SetAdjustmentEditingID(adjustmentId);

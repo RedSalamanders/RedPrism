@@ -85,23 +85,42 @@ Debug, Release and ASan Debug suites and all three ARM64 clean cross-builds pass
 inputs; [evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md). H1 remains open for the other caller groups and
 production Undo/Redo; H2/H3/H4 and every measured apply/G1 claim remain open.
 
-### Next H1.4 caller: color/filter commits
+### Qualified H1.4 caller: destructive color/filter commits
 
-- [ ] Borrow immutable panel metadata to estimate the whole color/history peak before copying worker inputs.
+- [x] Borrow immutable panel metadata to estimate the whole color/history peak before copying worker inputs.
   Capture the source document, opening token and history handles only after the full reservation exists.
-- [ ] Bind ready color output to its complete worker-built after-layer/history state and captured generation.
+- [x] Bind ready color output to its complete worker-built after-layer/history state and captured generation.
   Owner apply validates the panel/settings token and exact history epoch, then swaps layer/settings/panel owners.
   Unchanged, donorless, cancelled, failed, replaced and newer-panel outcomes retain their existing semantics.
-- [ ] Keep the retired panel lookup/coverage, old settings and source/history owners in the complete worker-release
+- [x] Keep the retired panel lookup/coverage, old settings and source/history owners in the complete worker-release
   aggregate, including failed capture and every history-allocation checkpoint.
-- [ ] Pump admitted capture in the native harness, inject all five history failures and capture refusal,
+- [x] Pump admitted capture in the native harness, inject all five history failures and capture refusal,
   preserve seeded redo and source pixels, reject changed epochs and run the complete frozen configuration matrix.
 - [ ] Migrate adjustment-layer OK/Cancel transaction closure separately; its live metadata semantics must remain
   intact. Production destructive-color activation alone cannot close this row or the other H1 caller groups.
 
-An isolated color draft passes strict syntax checks and 45 independent focused Debug assertions (literal Gamma 2,
-settings/Levels reopening, save independence, stale/foreign/moved authority, five-stage cancellation/allocation
-refusal and retired-panel ownership/capacity). It remains outside production while the foundation is frozen.
+The native full x64 suites and ARM64 clean cross-builds pass against the same 366 frozen inputs. All 45 independent
+prepared-color assertions and actual host fault/retirement cases pass; [evidence](../../TestRuns/ColorHistoryPublication_2026-10-01.md).
+The initial continuation raw-wait and Release scheduler-wake failures are preserved there. Suspension tests now
+check the actual hook and include an unrelated memory wake while the worker remains held. An intermediate run
+with changed inputs stopped and is excluded; only the final r3 six-configuration matrix qualifies this slice.
+Adjustment-layer closure, other H1 callers, H2/H3/H4 and measured P1/G1 performance remain open.
+
+### Next H1.4 caller: size-card commits
+
+- [ ] Reserve the whole resize/history peak before capturing the source, token, active id and history handles.
+- [ ] Bind the complete resized document to detached history publication; validate full document token and history
+  epoch before nonthrowing document/draft swaps. Preserve active layer, mask target, crop and existing C16 goldens.
+- [ ] Transfer retired document, lasso and selection-move owners into the job's worker-release aggregate, including
+  failed capture and cancelled/stale preparation. Include retained draft capacity in its pre-capture release bound.
+- [ ] Exercise all five history allocation failures, capture refusal and epoch-only invalidation through the host;
+  retain seeded redo, literal source pixels, barrier/reservation ownership and off-owner aggregate destruction.
+- [ ] Integrate the draft, pass the frozen native configuration matrix and update the owning C16 contract/evidence.
+
+The size draft lives under `.build/` while the color source remains frozen. Strict host/module syntax and a fresh
+isolated Debug compile pass 48 independent assertions: literal extension/nearest pixels, masks/selection/crop,
+Undo/Redo, resolution-only, nested/no-op history, moved/foreign authority, five allocation and five cancellation
+stages, and lasso capacity/owner transfer. This is preparation evidence only; the production size path is unchanged.
 
 ## Immediate implementation
 

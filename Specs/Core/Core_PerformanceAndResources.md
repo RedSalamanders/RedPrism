@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -161,6 +161,14 @@ moves currently use this path. Remaining history callers and production Undo/Red
 replace occurrence overcount with exact accounting and make history capture constant-time. The foundation's
 configuration evidence does not qualify complete H1, P1 or G1; remaining caller migration and owner
 capture/history/chrome/upload measurements remain outstanding.
+
+Destructive color/filter commits use the same prepared boundary. Their nonallocating admission
+query borrows opening settings and adds history preparation before owning capture. A suspended/resumed admitted
+record owns complete source/history and color input/result; its conservative release bound also includes current
+panel raster/selection/lookup capacities, spare settings capacity and replaced persistent settings. Owner apply
+swaps the retired panel and settings into that aggregate. The full native configuration matrix passes
+([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); adjustment-layer
+transaction closure and the other H1 callers remain open.
 
 Gradient events retain primitive endpoints/colors/settings in a one-active/latest-pending mailbox. Pixel/selection
 capture follows full admission in the same suspended/resumed record; no published stroke is borrowed by a worker.

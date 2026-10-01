@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-01
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -89,6 +89,16 @@ result is `E_OUTOFMEMORY`, unchanged document/history, and retirement of the agg
 thread. The required x64 Debug, Release and ASan Debug suites and all ARM64 clean cross-builds pass;
 [current evidence](../TestRuns/PreparedHistoryPublication_2026-10-01.md). Other H1 callers, production Undo/Redo,
 H2/H3/H4, P1 and G1 remain open.
+
+Destructive color/filter commits add `PreparedColorHistoryTests`: literal Gamma 2
+BGRA output and Undo/Redo, applied settings/identity Levels reopening, independent saved revision,
+stale generation/history epoch, foreign/moved/single-use authority, five-stage cancellation/allocation refusal,
+and retired lookup/capacity ownership. Its application gate adds five history-allocation failures, admitted
+capture refusal and a changed-history-epoch result, retaining source pixels and seeded redo. Harness waits pump
+real admission/capture/completion events; production commands do not wait. All 45 independent assertions and
+actual host cases pass the full x64 configuration matrix; ARM64 clean cross-builds pass
+([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)). Suspension tests include an unrelated memory
+wake while the worker remains held: a wake alone cannot prove that an owner continuation has suspended.
 
 `.\test.ps1 [-Platform x64|ARM64] [-Configuration Debug|Release|'ASan Debug'] [-Rebuild]` builds through `build.ps1`,
 then runs every assertion below. It MUST exit 0 only when all of them pass. Expected nonzero exits from isolated

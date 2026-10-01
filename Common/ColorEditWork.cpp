@@ -1,4 +1,5 @@
 #include "ColorEditWork.h"
+#include "ColorEditHistory.h"
 
 #include "Adjust.h"
 #include "RasterWork.h"
@@ -12,13 +13,17 @@
 
 namespace
 {
-bool CanReuseColorPreview(const ColorEditJobInput& input) noexcept
+bool CanReuseColorPreview(const ColorEdit& edit, std::uint64_t sequence) noexcept
 {
-    const ColorEdit& edit = input.edit;
-    return edit.previewSequence == input.token.sequence && edit.preview && !edit.previewFailed &&
-           edit.previewRaster.HasStorage() && edit.previewScale == 1.0 && edit.previewSource == edit.Source() &&
+    return edit.previewSequence == sequence && edit.preview && !edit.previewFailed && edit.previewRaster.HasStorage() &&
+           edit.previewScale == 1.0 && edit.previewSource == edit.Source() &&
            edit.previewTransform == edit.Placement() && edit.previewRaster.Format() == RasterFormat::Bgra8888 &&
            edit.previewRaster.Width() == edit.Source().Width() && edit.previewRaster.Height() == edit.Source().Height();
+}
+
+bool CanReuseColorPreview(const ColorEditJobInput& input) noexcept
+{
+    return CanReuseColorPreview(input.edit, input.token.sequence);
 }
 
 bool ValidColorGrid(const ColorEdit& edit) noexcept
@@ -187,9 +192,11 @@ bool ColorEditChangesNothing(FilterKind kind, const FilterSettings& settings) no
     return false;
 }
 
-std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& input) noexcept
+namespace
 {
-    const ColorEdit& edit = input.edit;
+std::optional<std::uint64_t> CommitMemoryBytes(const ColorEdit& edit, std::uint64_t sequence,
+                                               const std::optional<TargetIdentity>& target) noexcept
+{
     const Raster& source = edit.Source();
     if (!ValidColorGrid(edit))
     {
@@ -203,7 +210,7 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
     const std::uint64_t rgba = allocation(pixels * 4);
     const bool needsPadding = edit.grownGrid && !edit.grownImage.HasStorage();
     const std::uint64_t padding = needsPadding ? rgba : 0;
-    const bool reused = !needsPadding && CanReuseColorPreview(input);
+    const bool reused = !needsPadding && CanReuseColorPreview(edit, sequence);
     const std::uint64_t privateSource = needsPadding || source.IsMaterialized() ? 0 : rgba;
     const auto renderPeak = reused
                                 ? std::optional<std::uint64_t>(0)
@@ -222,9 +229,9 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
     std::uint64_t finishPeak =
         std::max(newImage + thumbnails + privatePreview, trim ? (reused ? rgba : rgba * 2) + privatePreview : 0);
     std::uint64_t metadata = 128 * 1024; // Bounded settings copies, stack, raster headers, small vectors/records.
-    if (input.token.target && input.token.target->mask)
+    if (target && target->mask)
     {
-        const LayerMask& mask = input.token.target->mask.value();
+        const LayerMask& mask = target->mask.value();
         if (mask.asset.image.Format() != RasterFormat::Gray8)
         {
             return std::nullopt;
@@ -257,6 +264,19 @@ std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& in
         return std::nullopt;
     }
     return metadata + peak;
+}
+} // namespace
+
+std::optional<std::uint64_t> ColorEditJobMemoryBytes(const ColorEditJobInput& input) noexcept
+{
+    return CommitMemoryBytes(input.edit, input.token.sequence, input.token.target);
+}
+
+std::optional<std::uint64_t> ColorEditCommitMemoryBytes(const ColorEdit& edit, std::uint64_t sequence) noexcept
+{
+    if (!edit.sourceToken)
+        return std::nullopt;
+    return CommitMemoryBytes(edit, sequence, edit.sourceToken->target);
 }
 
 std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept
@@ -755,6 +775,11 @@ bool DocumentSession::ApplyColorEditHistogram(const ColorEditHistogramResult& re
 
 bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
 {
+    return ApplyColorEditResultImpl(result, nullptr);
+}
+
+bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result, PreparedColorEdit* prepared)
+{
     if (!_colorEdit.has_value() || _adjustmentEditingID.has_value() ||
         result.token.sessionIdentity != _tokenIdentity.value || result.token.sequence != _colorEditSequence ||
         result.kind != _colorEdit->kind || result.settings != _colorEdit->settings ||
@@ -788,6 +813,8 @@ bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
     case ColorEditJobStatus::Ready:
         break;
     }
+    if (prepared && !IsPreparedColorEditCurrent(*prepared))
+        return false;
     if (!result.image.HasStorage() || result.image.Format() != RasterFormat::Bgra8888 ||
         !result.thumbnail.HasStorage() || !result.transform.IsValid())
     {
@@ -806,6 +833,17 @@ bool DocumentSession::ApplyColorEditResult(const ColorEditJobResult& result)
         return false;
     }
     ImageLayer* layer = MutableLayer(id); // CanApplyJobResult proved that this image layer still exists.
+    if (prepared)
+    {
+        if (!history.Publish(prepared->_history))
+            return false;
+        std::swap(*layer, prepared->_layer);
+        std::swap(filterSettings, prepared->_result.settings);
+        std::swap(_colorEdit, prepared->_retiredPanel);
+        ++_colorEditSequence;
+        NoteDocumentMutation();
+        return true;
+    }
     RasterAsset asset{result.image, result.thumbnail, layer->name};
     auto mask = result.mask;
     FilterSettings appliedSettings = result.settings;

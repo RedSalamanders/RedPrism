@@ -277,7 +277,8 @@ class Application final : public ChromeEvents
     }
     void CancelColorCommit() noexcept;
     void CompleteColorCommit(HistoryWorkStamp stamp, std::uint64_t opening, ColorEditJobResult& result,
-                             JobResult completion) noexcept;
+                             JobResult completion, PreparedColorEdit* publication = nullptr,
+                             std::int32_t captureError = 0) noexcept;
     int RunColorCommitSelfTest() noexcept;
     using HostRequestQueue = ContinuationQueue<HostRequest>;
     class ContinuationAction final : public UiAction

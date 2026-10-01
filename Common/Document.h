@@ -1202,6 +1202,7 @@ struct HueTargetDrag
 
 struct ColorEditJobInput;
 struct ColorEditJobResult;
+class PreparedColorEdit;
 struct ColorEditPreviewResult;
 struct ColorEditHistogramResult;
 
@@ -2120,6 +2121,8 @@ class DocumentSession
     }
     // No pixel kernels; rejects stale work, keeps failed/cancelled panels, records one successful edit.
     [[nodiscard]] bool ApplyColorEditResult(const ColorEditJobResult& result);
+    [[nodiscard]] bool IsPreparedColorEditCurrent(const PreparedColorEdit& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedColorEditResult(PreparedColorEdit& prepared) noexcept;
     void CommitColorEdit();
     void CancelColorEdit();
     void AutoLevels(LevelsAuto mode);
@@ -2341,6 +2344,7 @@ class DocumentSession
                                            bool gradientCommit, bool pixelMoveCommit = false,
                                            DocumentSelection* movedSelection = nullptr,
                                            PreparedRasterEdit* publication = nullptr);
+    [[nodiscard]] bool ApplyColorEditResultImpl(const ColorEditJobResult& result, PreparedColorEdit* prepared);
 
     TokenIdentity _tokenIdentity;
     std::optional<CanvasDocument> _document;
