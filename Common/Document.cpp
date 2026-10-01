@@ -1531,7 +1531,7 @@ void DocumentSession::Redo()
 
 void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (id != _activeLayerID)
     {
@@ -1549,7 +1549,7 @@ void DocumentSession::SelectLayer(const std::optional<Guid>& id)
 
 void DocumentSession::CreateDocument(int width, int height, bool emptyLayer)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (width < 1 || width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
     {
@@ -1591,7 +1591,7 @@ void DocumentSession::AddBlankLayer()
 
 void DocumentSession::InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!_document.has_value())
     {
@@ -1661,7 +1661,7 @@ std::wstring DocumentSession::UniqueLayerName(const std::wstring& prefix) const
 
 void DocumentSession::AddGroup()
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -1755,7 +1755,7 @@ bool DocumentSession::CanPlaceLayer(const Guid& id, const std::optional<Guid>& p
 bool DocumentSession::PlaceLayer(const Guid& id, const std::optional<Guid>& parent, const std::optional<Guid>& above,
                                  bool atBottom, bool before)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -1896,7 +1896,7 @@ void DocumentSession::MoveActiveLayer(int offset)
 
 void DocumentSession::GroupSelectedLayers()
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -2409,7 +2409,7 @@ bool DocumentSession::ApplyPreparedMerge(const MergePlan& plan, const PreparedMe
 
 bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -2480,7 +2480,7 @@ void DocumentSession::ChangeCropRatio() noexcept
 
 bool DocumentSession::CommitCrop()
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -2508,7 +2508,7 @@ bool DocumentSession::CommitCrop()
 
 void DocumentSession::DeleteLayer(const Guid& id)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -3109,7 +3109,7 @@ std::optional<LayerTransform> DocumentSession::GroupTransformBox() const
 
 void DocumentSession::BeginTransform(bool persistent)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!_transformEdit.has_value())
     {
@@ -3187,7 +3187,7 @@ void DocumentSession::PreviewCorners(const std::array<Vec2, 4>& corners)
 
 void DocumentSession::BeginDuplicateTransform()
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     // Alt-drag duplicates a single layer; several selected, or a folder, just move.
     if (_transformDuplicate.has_value() || TransformsAsGroup() || !_activeLayerID.has_value())
@@ -3700,7 +3700,7 @@ LayerTransform DocumentSession::SnappedMove(const LayerTransform& draft, const s
 
 void DocumentSession::FlipLayers(bool horizontally)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     CommitTransform();
     if (!ResolveGradient())
@@ -3755,7 +3755,7 @@ void DocumentSession::FlipLayers(bool horizontally)
 
 void DocumentSession::FlipCanvas(bool horizontally)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     // An open color or filter panel owns the document until OK or Cancel.
     if (!_document.has_value() || HasColorEdit())
@@ -3804,7 +3804,7 @@ void DocumentSession::FlipCanvas(bool horizontally)
 
 void DocumentSession::DuplicateActiveLayer()
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -3842,7 +3842,7 @@ void DocumentSession::DuplicateActiveLayer()
 
 void DocumentSession::SelectLayerTarget(const Guid& id, bool mask)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (id != _activeLayerID || mask != _maskSelected)
     {

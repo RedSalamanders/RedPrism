@@ -194,8 +194,11 @@ tables after one function. A following data symbol bounds the table; it is not i
 target a decoded instruction after the dispatch and before the table. Only complete instructions inside that
 verified DWORD span are counted separately as `inlineTableVectorData`. An observed linear-disassembly row starting
 inside that span may consume adjacent `INT3` alignment: the row must be at most 15 bytes, match the PE byte for
-byte, and have only `0xCC` outside the proved table. A row starting at or after the end, a nonpadding suffix or an
-unproved table stays gated. Other code in the function remains gated.
+byte, and have only `0xCC` outside the proved table. A row may cross directly touching tables only when each table
+has independently passed the dispatch, PDB, PE and decoded-target proof, belongs to the exact same owning module
+and contribution, and has no unresolved targets. Gaps and merely neighboring data symbols do not extend the
+proved span. A row starting at or after the end, a nonpadding suffix or an unproved table stays gated. Other code
+in the function remains gated.
 Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 
@@ -218,9 +221,11 @@ anonymous same-owner untyped 16-byte PDB data record and the same contribution/d
 Other bases, indices, targets, opcodes, intervening instructions or invalid PDB evidence receive no exemption.
 Adjacent executable vector code remains gated; the runtime allowlist is unchanged.
 
-The observed Debug `std::variant` RAX-base form requires exactly LEA RAX of image base,
-one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, and JMP RCX. It additionally requires
-the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned table start; all existing
+The observed Debug/ASan `std::variant` RAX-base form requires exactly LEA RAX of image base,
+one frame-relative RCX index load, MOV ECX through RAX + 4×RCX, ADD RCX/RAX, and JMP RCX. The index load is exactly
+`48 8B 8D <disp32>` from RBP or `48 8B 4C 24 <disp8>` from RSP; these contiguous byte forms alone are recognized.
+It additionally requires the same contribution's exact anonymous 16-byte `S_LDATA32`, `<no type>` and aligned
+table start; all existing
 decoded-target and table-bound checks apply. Corrupted registers, sequences, symbols, targets, and real vector
 instructions beside the table remain refused. This adds no object/function runtime exemption.
 

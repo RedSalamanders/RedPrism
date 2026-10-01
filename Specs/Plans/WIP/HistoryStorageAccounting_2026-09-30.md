@@ -34,6 +34,10 @@ this explicit construction/admission boundary is implemented and qualified; do n
   retained entry handles, pending/depth state, current revision and a mutation epoch. A worker must not borrow
   the live DocumentHistory. Saved revision is independent: a saved older revision cannot invalidate a valid edit
   or overwrite the owner's later saved state. Preserve existing names, entry limits and undo ordering.
+  Detached drafts now implement immutable entries/opening snapshots, state views and prepared edit/begin/end/restore containers.
+  Moving a view/publication explicitly removes the source's publication authority. Independent state, nested,
+  saved-revision, restore-after-trim, moved-from and construction-refusal controls pass isolated Debug execution
+  and strict syntax checks. The complete native configuration matrix and production activation remain open.
 - [ ] H1.2 — Prepare the before/after snapshots, entry/container growth, exact current-document storage
   exclusion, trim decision and retirement owners entirely before publication. Include all record/string/curve,
   storage-index and scratch capacity in admission. Preparation must fail locally on bad_alloc or cancellation;
@@ -47,6 +51,13 @@ this explicit construction/admission boundary is implemented and qualified; do n
   to the prepared boundary. Nested floating-selection transactions need explicit opening/finish/cancel state;
   they cannot use a catch after clearing pixels or inserting a temporary layer. Direct reference APIs retain
   their behavior, with production routing audited before closure.
+  Raster, gradient and lifted-pixel commit drafts bind their complete history publication to the prepared
+  target and captured token. Owner application swaps retired layer/selection/history owners into the job
+  aggregate, which retires on a worker. Pending gradient/move previews and brush-commit owners also transfer
+  instead of being destroyed during apply; independent weak-owner controls pass in the isolated draft.
+  Finishing a transaction reuses its immutable opening snapshot rather than copying layer records again.
+  Their value document capture remains an explicit H2 cost. Production
+  activation, all configuration gates and the other caller groups remain open.
 - [ ] H1.5 — Prepare Undo/Redo restore, destination stack capacity and trim before removing the source entry.
   Even when trim discards the destination entry, the independently owned restore survives. Test each allocation
   refusal boundary and stale history epoch against literal revision, name, redo, depth and pixel expectations.

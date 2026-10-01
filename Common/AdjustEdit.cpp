@@ -163,7 +163,7 @@ bool DocumentSession::CanContentAwareFill() const noexcept
 
 void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 {
-    if (_gradient && _gradient->deferred)
+    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
     {

@@ -126,6 +126,14 @@ struct HostGradientApplyInput final
 {
     std::uint64_t opening;
 };
+struct HostPixelMoveApplyInput final
+{
+    std::uint64_t opening;
+};
+struct HostPixelNudgeInput final
+{
+    Vec2 offset; // event-time Shift step; a queued press must not read newer keyboard state
+};
 struct HostNewInput final
 {
 };
@@ -145,7 +153,8 @@ using HostRequestInput =
     std::variant<HostCommandInput, HostToolInput, HostLayerSelectInput, HostLayerTargetInput, HostLayerInvokeInput,
                  HostLayerReorderInput, HostLayerRenameInput, HostLayerOpacityInput, HostWriteInput, HostPathsInput,
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
-                 HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput>;
+                 HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
+                 HostPixelNudgeInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

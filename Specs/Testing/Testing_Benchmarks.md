@@ -1,7 +1,7 @@
 # Application and image benchmarks
 
 Status: current normative diagnostic contract
-Last reviewed: 2026-09-27
+Last reviewed: 2026-10-01
 Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Build/bench/`
 
 ## Filter cancellation diagnostic
@@ -71,11 +71,29 @@ Clear Pixels is preceded by Select All during untimed preparation. At 100 MP, Ga
 refusal without a document or history change. It does not report that refusal as successful image processing.
 The colored Canvas Size extension is likewise `canvas-size-fill-refused-pixel-budget` wherever the fixture's
 existing layers plus the requested extension exceed the pixel ceiling (the current 45 MP and 100 MP fixtures), with the unchanged
-document/history required. The smoke gate covers all 21 operation rows, including `project-save`, which measures
+document/history required. The smoke gate covers all 26 operation rows, including `project-save`, which measures
 the production project-save continuation through worker completion and a presented frame, plus `png-export`
 and `jpeg-export` through their production graph. The saved result must
 reach its expected state. This row is a harness measurement only; no hardware timing result or threshold follows
 from smoke. Historical 18-row and 15-row reports remain evidence of their recorded version.
+
+`gradient-preview-coalesced` drives repeated endpoint changes through the Application gradient drag producer while an
+interactive preview is active. The latest metadata sequence must be the one published, while the committed layer
+raster and history remain unchanged. Its independent endpoint oracle reads one pixel from each already prepared
+preview tile image through `ReadRegion`; it does not assemble pixels or take a snapshot on the owner. `gradient-apply-ordered` invokes the Gradient header's `Apply` action, which
+queues `HostGradientApplyInput` through the production host continuation admission path, and accepts the sample only
+after its receipt succeeds, the pending gradient is
+gone, and one `Gradient` history entry replaces the source raster. Its independent pixel oracle reads the first and
+last pixels on the gradient row: opaque foreground BGRA `(39,100,147,255)` and white background BGRA
+`(255,255,255,255)`. These operations use the existing dispatch, message, completion-drain, result-apply, UI-action,
+frame, and outer elapsed metrics. Smoke timings remain correctness-only; no timing threshold is introduced.
+
+`Build/bench/run-gradient-bench.ps1` requires an immutable qualified Release snapshot, exact executable/runtime
+hashes and a matching `ui-gradient-ops-v1` capability declaration before launching the six hardware/WARP runs.
+Each run rechecks those files, preserves unique output logs, and retains the full benchmark presentation guard.
+`GradientBenchmarkRunnerTests.ps1` uses small invalid executable fixtures to prove refusals without running the
+product. Expected refusal exits do not leak into the ordinary suite's success status. Neither these controls nor
+the capability declaration alone qualifies performance.
 
 Each timed operation begins after its fixture and command setup have idle jobs and a submitted frame. The outer interval starts immediately
 before the command is posted and ends after worker jobs are idle and a subsequent frame has reached the renderer's

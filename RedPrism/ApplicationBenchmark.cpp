@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "BenchmarkMachine.h"
+#include "BrushStroke.h"
 #include "ChromeHost.h"
 #include "Kernels.h"
 #include "UiBenchmark.h"
@@ -31,7 +32,9 @@ enum class Expected
     JpegExported,
     ImportedProject,
     ImportedLayers,
-    ImportedLayersRefused
+    ImportedLayersRefused,
+    GradientPreview,
+    GradientApplied
 };
 
 struct Operation final
@@ -45,7 +48,7 @@ struct Operation final
     bool sizeAction = false;
 };
 
-constexpr std::array<Operation, 24> kOperations{{
+constexpr std::array<Operation, 26> kOperations{{
     {"zoom-actual", 0, ChromeHost::kCommandZoomActual, {}, 0, Expected::View},
     {"zoom-fit", 0, ChromeHost::kCommandZoomFit, {}, 0, Expected::View},
     {"levels-open", 0, ChromeHost::kCommandLevels, {}, 0, Expected::Histogram},
@@ -70,6 +73,8 @@ constexpr std::array<Operation, 24> kOperations{{
     {"image-import-new-canvas", 0, 0, {}, 0, Expected::ImportedProject},
     {"image-import-existing-layer", 0, 0, {}, 0, Expected::ImportedLayers},
     {"jpeg-export", 0, 0, {}, 0, Expected::JpegExported},
+    {"gradient-preview-coalesced", 0, 0, {}, 0, Expected::GradientPreview},
+    {"gradient-apply-ordered", 0, 0, {}, 0, Expected::GradientApplied},
 }};
 
 Operation CurrentOperation(const UiBenchmarkState& state) noexcept
@@ -164,6 +169,45 @@ Operation CurrentOperation(const UiBenchmarkState& state) noexcept
         }
     }
     return Raster::Adopt(width, height, mask ? RasterFormat::Gray8 : RasterFormat::Bgra8888, std::move(buffer));
+}
+
+[[nodiscard]] bool GradientEndpointPixelsMatch(const Raster& image, int row) noexcept
+{
+    if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || image.Width() < 2 || row < 0 ||
+        row >= image.Height())
+        return false;
+    std::array<std::uint8_t, 4> first{};
+    std::array<std::uint8_t, 4> last{};
+    image.ReadRegion(0, row, 1, 1, first.data(), 4, 0);
+    image.ReadRegion(image.Width() - 1, row, 1, 1, last.data(), 4, 0);
+    // Independent fixture oracle: opaque foreground #936427 at t=0 and white background at t=1.
+    constexpr std::array<std::uint8_t, 4> kForegroundBgra{0x27, 0x64, 0x93, 0xff};
+    constexpr std::array<std::uint8_t, 4> kBackgroundBgra{0xff, 0xff, 0xff, 0xff};
+    return first == kForegroundBgra && last == kBackgroundBgra;
+}
+
+[[nodiscard]] bool ReadGradientPreviewPixel(const BrushStroke& preview, int x, int y,
+                                            std::array<std::uint8_t, 4>& pixel) noexcept
+{
+    for (const auto& tile : preview.Tiles())
+    {
+        if (!tile.image.HasStorage() || x < tile.rect.x || y < tile.rect.y || x >= tile.rect.x + tile.rect.width ||
+            y >= tile.rect.y + tile.rect.height)
+            continue;
+        tile.image.ReadRegion(x - tile.rect.x, y - tile.rect.y, 1, 1, pixel.data(), 4, 0);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool GradientPreviewEndpointPixelsMatch(const BrushStroke& preview, int width, int row) noexcept
+{
+    std::array<std::uint8_t, 4> first{};
+    std::array<std::uint8_t, 4> last{};
+    return width >= 2 && ReadGradientPreviewPixel(preview, 0, row, first) &&
+           ReadGradientPreviewPixel(preview, width - 1, row, last) &&
+           first == std::array<std::uint8_t, 4>{0x27, 0x64, 0x93, 0xff} &&
+           last == std::array<std::uint8_t, 4>{0xff, 0xff, 0xff, 0xff};
 }
 
 HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState>& state) noexcept
@@ -486,6 +530,8 @@ void Application::PrepareUiBenchmarkStep() noexcept
         state.importReceipt.reset();
     if (operation.expected == Expected::PngExported || operation.expected == Expected::JpegExported)
         state.exportReceipt.reset();
+    if (operation.expected == Expected::GradientApplied)
+        state.gradientApplyReceipt.reset();
     _documentPath = operation.expected == Expected::Saved ? state.savePath : std::wstring{};
     if (operation.prepareCommand)
     {
@@ -524,6 +570,32 @@ void Application::PrepareUiBenchmarkStep() noexcept
     {
         OnCommand(ChromeHost::kCommandZoomActual);
     }
+    if (operation.expected == Expected::GradientPreview || operation.expected == Expected::GradientApplied)
+    {
+        // The direct session surface sets only deterministic fixture metadata. The real Application gradient
+        // producer creates the deferred edit and its asynchronous preview through Begin/DragGradient below.
+        _session.gradientSettings.shape = GradientShape::Linear;
+        _session.gradientSettings.style = GradientStyle::ForegroundToBackground;
+        _session.gradientSettings.reversed = false;
+        _session.gradientSettings.opacity = 1.0;
+        _session.SetForegroundColor(0xff936427);
+        _session.SetBackgroundColor(0xffffffff);
+        OnTool(EditorTool::Gradient);
+        // Keep one pixel of clamp range at both ends so inverse view/document rounding cannot perturb the oracle.
+        const Vec2 start{1.5, static_cast<double>(state.fixture.height / 2) + 0.5};
+        const Vec2 end{static_cast<double>(state.fixture.width) - 1.5, start.y};
+        BeginGradientDrag(_viewport.ViewFromDocument(start, DocumentSize()));
+        DragGradient(_viewport.ViewFromDocument(end, DocumentSize()), 0);
+        EndGradientDrag();
+        const auto* pending = _session.PendingGradient();
+        if (!pending || !pending->deferred || !pending->HasLine())
+        {
+            FailUiBenchmark("gradient-fixture-not-ready");
+            return;
+        }
+        state.gradientOpening = pending->opening;
+        state.gradientSequence = pending->sequence;
+    }
     DocumentChanged();
     state.previousPresents = _renderer.PresentCount();
     state.phase = UiBenchmarkState::Phase::Preparing;
@@ -536,7 +608,50 @@ void Application::ExecuteUiBenchmarkStep() noexcept
         return;
     }
     const auto operation = CurrentOperation(*_uiBenchmark);
-    if (operation.expected == Expected::Saved)
+    if (operation.expected == Expected::GradientPreview)
+    {
+        auto& state = *_uiBenchmark;
+        const double startX = 1.5;
+        const double endX = static_cast<double>(state.fixture.width) - 1.5;
+        const double y = static_cast<double>(state.fixture.height / 2) + 0.5;
+        const Vec2 end{endX, y};
+        BeginGradientDrag(_viewport.ViewFromDocument(end, DocumentSize()));
+        // Offer a burst while the first preview is still active. RefreshGradientJobs keeps only the newest
+        // pending request; no worker wait or synchronous raster operation is performed here.
+        for (int step = 1; step <= 8; ++step)
+        {
+            const double x = startX + (endX - startX) * step / 8.0;
+            DragGradient(_viewport.ViewFromDocument(Vec2{x, y}, DocumentSize()), 0);
+        }
+        EndGradientDrag();
+        const auto* pending = _session.PendingGradient();
+        if (!pending || pending->opening != state.gradientOpening || !pending->HasLine())
+        {
+            FailUiBenchmark("gradient-coalescing-admission");
+            return;
+        }
+        state.gradientSequence = pending->sequence;
+    }
+    else if (operation.expected == Expected::GradientApplied)
+    {
+        const auto* pending = _session.PendingGradient();
+        if (!pending || pending->opening != _uiBenchmark->gradientOpening || !pending->HasLine())
+        {
+            FailUiBenchmark("gradient-apply-admission");
+            return;
+        }
+        // Drive the same host action as the Gradient header. ReportHostAdmission captures the receipt created by
+        // CommitGradient's production HostGradientApplyInput path for terminal-state validation below.
+        _uiBenchmark->captureGradientApplyReceipt = true;
+        OnGradientAction(GradientAction::Apply, 0);
+        _uiBenchmark->captureGradientApplyReceipt = false;
+        if (!_uiBenchmark->gradientApplyReceipt)
+        {
+            FailUiBenchmark("gradient-apply-receipt-missing");
+            return;
+        }
+    }
+    else if (operation.expected == Expected::Saved)
     {
         _uiBenchmark->saveReceipt = QueueHostWrite(HostWriteFormat::Project, false);
         ReportHostAdmission(_uiBenchmark->saveReceipt.value());
@@ -612,6 +727,17 @@ void Application::AdvanceUiBenchmark() noexcept
         {
             FailUiBenchmark("png-export-not-ready");
             return;
+        }
+        if (operation.expected == Expected::GradientPreview || operation.expected == Expected::GradientApplied)
+        {
+            const auto* pending = _session.PendingGradient();
+            if (!pending || pending->opening != state.gradientOpening || pending->sequence != state.gradientSequence ||
+                !pending->raster || pending->publishedSequence != state.gradientSequence ||
+                pending->publishedGeneration != _session.Generation())
+            {
+                FailUiBenchmark("gradient-preview-not-ready");
+                return;
+            }
         }
         state.previousRevision = _session.history.CurrentRevision();
         state.previousSessionSerial = _session.DocumentSerial();
@@ -755,10 +881,27 @@ void Application::AdvanceUiBenchmark() noexcept
              : document->width == state.fixture.width / 2 && document->height == state.fixture.height / 2 && layer &&
                    layer->asset && layer->asset->image != state.previousImage &&
                    _session.history.UndoName() == L"Image Size");
+    const auto* pendingGradient = _session.PendingGradient();
+    const bool gradientPreviewReady =
+        expected == Expected::GradientPreview && pendingGradient && pendingGradient->opening == state.gradientOpening &&
+        pendingGradient->sequence == state.gradientSequence && pendingGradient->raster &&
+        pendingGradient->publishedSequence == state.gradientSequence &&
+        pendingGradient->publishedGeneration == _session.Generation() && layer && layer->asset &&
+        GradientPreviewEndpointPixelsMatch(*pendingGradient->raster, state.fixture.width, state.fixture.height / 2) &&
+        layer->asset->image == state.previousImage && _session.history.CurrentRevision() == state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount;
+    const auto gradientResult =
+        state.gradientApplyReceipt ? state.gradientApplyReceipt->Read() : ContinuationReceipt::Result{};
+    const bool gradientApplied =
+        expected == Expected::GradientApplied && state.gradientApplyReceipt &&
+        gradientResult.outcome == HostOutcome::Succeeded && pendingGradient == nullptr && layer && layer->asset &&
+        layer->asset->image != state.previousImage && _session.history.CurrentRevision() != state.previousRevision &&
+        _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Gradient" &&
+        GradientEndpointPixelsMatch(layer->asset->image, state.fixture.height / 2);
     if (!duration.has_value() || state.timing.clockFailures != 0 ||
         !(viewReady || refused || saved || opened || pngExported || jpegExported || importedProject || importedLayers ||
-          importRefused || sizeReady || histogramReady || (expected == Expected::Panel && panelReady) ||
-          (expected == Expected::Pixels && changedPixels)))
+          importRefused || sizeReady || histogramReady || gradientPreviewReady || gradientApplied ||
+          (expected == Expected::Panel && panelReady) || (expected == Expected::Pixels && changedPixels)))
     {
         FailUiBenchmark("command-result-or-clock");
         return;

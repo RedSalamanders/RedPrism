@@ -8,12 +8,20 @@
 - [ ] A4 — Ordered worker gradient rendering and application, copied palette/settings/endpoints, one active/latest pending preview and invalidation cancellation.
   - [x] A4.1–A4.5 — Preparation, deferred state, host producers/settlement and resource/outcome tests qualify in all configurations ([evidence](../../TestRuns/GradientWorkers_2026-10-01.md)).
   - [ ] A4.6 — Real-loop gradient timing and measured owner/first-upload costs; functional step committed separately.
+    The two production gradient timing scenarios, 26-operation correctness smoke and eight qualified-runner
+    refusal controls pass the full configuration matrix ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)).
+    A fresh binary/capability snapshot is preserved; full measurements remain open.
 - [ ] A5 — Lifted pixels, pixel move and floating selection Free Transform; atomic Cut preparation shared with F5, preserved private clipboard/origin and numeric goldens.
   - [x] A5.1 — Detached move/lift helper and missing numeric references qualify in all configurations; clean rebuilds resolve the initial incremental layout mismatch ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).
     Production pointer/nudge activation, Copy/Cut and floating transactions remain A5.2–A5.7.
-  - [ ] A5.2 — Deferred move model and production preview jobs, whole admission, owning tokens and caller-ownership refusal tests.
+  - [ ] A5.2 — Deferred move model, production preview jobs and reusable opening coverage/lifted pixels.
+    - [x] A5.2.1 — Functional model/host activation, whole admission, owning tokens and refusal/retirement
+      controls qualify in all configurations: 52 document assertions and 20 host scenarios
+      ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). Input-time Shift nudges are owned. The original
+      folder-save failure is preserved and unreproduced with bounded exact-stage diagnostics; F6 remains open.
+      ASan's two proven inline-table false positives have strict parser controls; the runtime allowlist is unchanged.
     - [ ] A5.2a — Cache immutable opening coverage/lifted pixels across preview ticks; displayed geometry is tracked with P1.6 and bounded first upload with P1.9.
-  - [ ] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry.
+  - [x] A5.3 — Owned pointer release/nudge jobs, exact latest commit, cancellation acknowledgement and one named history entry qualify in all configurations ([evidence](../../TestRuns/LiftedPixelsHost_2026-10-01.md)). History construction remains H1.
   - [ ] A5.4 — Worker Copy/Cut preparation with an atomic private clipboard and origin, before mirroring through the F5 OS clipboard graph.
   - [ ] A5.5 — Deferred floating-selection opening; preserve the nested history transaction.
   - [ ] A5.6 — Worker floating merge, carried masks/distorted outline, full opening restore on failure and owned input.

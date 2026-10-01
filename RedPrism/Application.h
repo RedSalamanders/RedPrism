@@ -51,6 +51,7 @@ struct ProjectOpenTestGate;
 struct ImageImportTestGate;
 struct RasterEditTestGate;
 struct GradientWorkTestGate;
+struct PixelMoveWorkTestGate;
 struct ExportWorkTestGate;
 struct TransformInspectorState;
 enum class SizeCardKind : std::uint8_t;
@@ -407,6 +408,24 @@ class Application final : public ChromeEvents
                                             std::optional<HistoryWorkStamp> commit) noexcept;
     [[nodiscard]] HRESULT StartGradientCommit(std::uint64_t ordinal) noexcept;
     int RunGradientWorkSelfTest() noexcept;
+    struct PixelMoveRequest final
+    {
+        Guid target;
+        std::uint64_t opening = 0;
+        std::uint64_t sequence = 0;
+        Vec2 offset;
+        bool duplicate = false;
+    };
+    class PixelMoveJob;
+    [[nodiscard]] PixelMoveRequest CapturePixelMoveRequest() const noexcept;
+    void RefreshPixelMoveJobs() noexcept;
+    void CancelPixelMoveJobs() noexcept;
+    void LaunchPixelMovePreview() noexcept;
+    [[nodiscard]] HRESULT SubmitPixelMoveJob(PixelMoveRequest request, std::optional<PreviewStamp> preview,
+                                             std::optional<HistoryWorkStamp> commit) noexcept;
+    [[nodiscard]] HRESULT StartPixelMoveCommit(std::uint64_t ordinal) noexcept;
+    void ExecutePixelNudge(Vec2 offset) noexcept;
+    int RunPixelMoveWorkSelfTest() noexcept;
     [[nodiscard]] bool AdjustPointer(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     // Brush and Eraser (C10, Specs/Rendering/Rendering_Brush.md): header actions, strokes through the compute
     // engine, the live preview in the composition, keys and the tip circle.
@@ -658,6 +677,7 @@ class Application final : public ChromeEvents
         Output,
         Settle,
         GradientSettle,
+        PixelMoveSettle,
         Write,
         Execute,
         FileComplete,
@@ -694,6 +714,16 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _gradientCommitTicket;
     std::optional<HistoryWorkStamp> _gradientCommitStamp;
     std::shared_ptr<GradientWorkTestGate> _gradientWorkTestGate;
+    PreviewMailbox<PixelMoveRequest> _pixelMovePreviews;
+    bool _pixelMoveMailboxOpen = false;
+    bool _pixelMoveCompleting = false;
+    std::uint64_t _pixelMovePreviewSerial = 0;
+    std::uint64_t _pixelMovePreviewOpening = 0;
+    std::uint64_t _pixelMoveSeenSequence = 0;
+    std::optional<JobTicket> _pixelMovePreviewTicket;
+    std::optional<JobTicket> _pixelMoveCommitTicket;
+    std::optional<HistoryWorkStamp> _pixelMoveCommitStamp;
+    std::shared_ptr<PixelMoveWorkTestGate> _pixelMoveWorkTestGate;
     bool _colorMailboxOpen = false;
     std::uint64_t _colorDocumentSerial = 0;
     std::uint64_t _colorOpening = 0;

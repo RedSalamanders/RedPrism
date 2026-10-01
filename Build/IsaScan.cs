@@ -46,6 +46,8 @@ namespace RedPrismBuild
         private sealed class InlineTable
         {
             public ulong Begin, End;
+            public ulong ContributionBegin, ContributionEnd;
+            public int Module;
             public readonly HashSet<ulong> PendingTargets = new HashSet<ulong>();
         }
         private static readonly Regex ModuleLine = new Regex(@"^\s*Mod (\d+) \| `(.+)`:", RegexOptions.Compiled);
@@ -105,12 +107,27 @@ namespace RedPrismBuild
             return true;
         }
 
-        private static bool IsTableData(InlineTable table, ulong address, string[] bytes, byte[] pe,
+        private static bool IsTableData(InlineTable table, List<InlineTable> tables, ulong address, string[] bytes, byte[] pe,
                                         List<Section> sections, ulong imageBase)
         {
             if (table.PendingTargets.Count != 0 || address < table.Begin || address >= table.End) return false;
             ulong end = checked(address + (ulong)bytes.Length);
             if (end <= table.End) return true;
+            // One decoded row can straddle two independently proved adjacent DWORD tables (OnCommand ASan).
+            // Extend only over an exact touching table in the same contribution whose dispatch and all target
+            // boundaries were proved. Missing proof, an intervening byte, or a different contribution stops it.
+            ulong provedEnd = table.End;
+            while (provedEnd < end)
+            {
+                InlineTable adjacent = null;
+                foreach (InlineTable candidate in tables)
+                    if (candidate.Begin == provedEnd && candidate.End > provedEnd && candidate.Module == table.Module &&
+                        candidate.ContributionBegin == table.ContributionBegin &&
+                        candidate.ContributionEnd == table.ContributionEnd && candidate.PendingTargets.Count == 0)
+                    { adjacent = candidate; break; }
+                if (adjacent == null) break;
+                provedEnd = adjacent.End;
+            }
             // Linear disassembly can consume INT3 alignment after a proven table (observed in DxUi.Menu).
             // Only a row starting in table data, no longer than an x64 instruction, may cross that end. Verify
             // every reported byte against the PE and require the complete outside suffix to be 0xCC. A vector
@@ -124,7 +141,7 @@ namespace RedPrismBuild
                     if (raw > pe.Length - bytes.Length) return false;
                     for (int i = 0; i < bytes.Length; ++i)
                         if (pe[raw + i] != Byte.Parse(bytes[i], NumberStyles.HexNumber) ||
-                            (address + (ulong)i >= table.End && pe[raw + i] != 0xcc)) return false;
+                            (address + (ulong)i >= provedEnd && pe[raw + i] != 0xcc)) return false;
                     return true;
                 }
             return false;
@@ -192,7 +209,8 @@ namespace RedPrismBuild
             if (requireDataSymbol && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module))
                 return null;
             if (!afterReturn && (!dataSymbols.TryGetValue(begin, out dataOwner) || dataOwner != owner.Module)) return null;
-            var table = new InlineTable { Begin = begin, End = begin };
+            var table = new InlineTable { Begin = begin, End = begin, Module = owner.Module,
+                ContributionBegin = owner.Begin, ContributionEnd = owner.End };
             for (int entry = 0; entry < 4096 && table.End + 4 <= owner.End && raw + 4 <= pe.Length; ++entry, raw += 4)
             {
                 if (entry != 0 && dataSymbols.ContainsKey(table.End)) break;
@@ -372,8 +390,10 @@ namespace RedPrismBuild
                             secondPreludeTarget = checked((ulong)((long)address + encoded.Length + unchecked((sbyte)encoded[1])));
                         ++preludeStep;
                     }
-                    else if (raxBase && dispatchStage == 1 && encoded.Length == 7 && StartsWith(encoded, 0x48, 0x8b, 0x8d))
-                        dispatchStage = 2; // one frame-relative RCX index load; RAX image base remains unchanged
+                    else if (raxBase && dispatchStage == 1 &&
+                        ((encoded.Length == 7 && StartsWith(encoded, 0x48, 0x8b, 0x8d)) ||
+                         (encoded.Length == 5 && StartsWith(encoded, 0x48, 0x8b, 0x4c, 0x24))))
+                        dispatchStage = 2; // exact RBP+disp32 or RSP+disp8 RCX load; RAX image base is unchanged
                     else if (!r8Base && !raxBase && !rdxBase && !r9Base && !signedByteIndex && dispatchStage == 1 && encoded.Length == 3 &&
                              StartsWith(encoded, 0x0f, 0xb6, 0xc2))
                     { dlByteIndex = true; dispatchStage = 2; } // MOVZX EAX,DL preserves the RCX image base
@@ -450,7 +470,7 @@ namespace RedPrismBuild
                 if (opcode != 0xc4 && opcode != 0xc5 && opcode != 0x62) continue;
                 bool inlineData = false;
                 foreach (InlineTable table in inlineTables)
-                    if (IsTableData(table, address, bytes, pe, sections, imageBase))
+                    if (IsTableData(table, inlineTables, address, bytes, pe, sections, imageBase))
                     { inlineData = true; break; }
                 if (inlineData) { ++result.InlineTableVectorData; continue; }
                 // Linear disassembly can encounter inline jump tables. An undecoded data byte is not an

@@ -49,6 +49,8 @@ struct UiBenchmarkState final
     Raster previousImage;
     Raster previousPreview;
     std::uint64_t previousPreviewSequence = 0;
+    std::uint64_t gradientOpening = 0;
+    std::uint64_t gradientSequence = 0;
     std::array<wchar_t, 32768> previousDocumentPath{};
     std::size_t previousDocumentPathUnits = 0;
     bool previousModified = false;
@@ -58,6 +60,7 @@ struct UiBenchmarkState final
     bool complete = false;
     bool failed = false;
     bool savedBaselineReady = false;
+    bool captureGradientApplyReceipt = false;
     std::uint64_t previousSessionSerial = 0;
     std::optional<Guid> previousActiveLayer;
     int previousUndoCount = 0;
@@ -74,4 +77,5 @@ struct UiBenchmarkState final
     std::optional<ContinuationReceipt> exportReceipt;
     std::optional<ContinuationReceipt> pngExportReceipt;
     std::optional<ContinuationReceipt> importReceipt;
+    std::optional<ContinuationReceipt> gradientApplyReceipt;
 };

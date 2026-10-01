@@ -10,7 +10,7 @@ if (-not ('RedPrismBuild.IsaScanner' -as [type])) {
 }
 
 # These byte arrays and listings are parser controls, not native code or CPU execution tests.
-    $imageBase = [UInt64]0x140000000
+$imageBase = [UInt64]0x140000000
 $sectionRva = [UInt32]0x0010f000
 $tableRva = [UInt32]($sectionRva + 0x1000)
 $dispatchRva = $sectionRva
@@ -47,6 +47,7 @@ function New-SyntheticCase {
         [switch]$R8Base,
         [switch]$HoistedR8Base,
         [switch]$RaxBase,
+        [switch]$RaxRspIndex,
         [switch]$RdxBase,
         [ValidateSet(0,1,2)] [int]$TargetRegister = 0,
         [switch]$PdbData
@@ -96,6 +97,9 @@ function New-SyntheticCase {
         throw 'DlByteIndex cannot be combined with another index form or base form.'
     }
     if ($RdxBase -and -not $PdbData) { throw 'RdxBase requires PdbData.' }
+    if ($RaxRspIndex -and (-not $RaxBase -or -not $PdbData)) {
+        throw 'RaxRspIndex requires both RaxBase and PdbData.'
+    }
     if ($HoistedR8Base -and (-not $R8Base -or -not $PdbData -or $OptionalByteIndex)) {
         throw 'HoistedR8Base requires R8Base and PdbData, without OptionalByteIndex.'
     }
@@ -178,16 +182,41 @@ function New-SyntheticCase {
         }
     }
     if ($RaxBase) {
-        $indexLoad = [byte[]]@(0x48,0x8b,0x8d,0,0,0,0)
-        if ($Fault -eq 'CorruptedIndexLoad') { $indexLoad[2] = 0x95 }
+        if ($RaxRspIndex) {
+            [byte[]]$indexLoad = [byte[]]@(0x48,0x8b,0x4c,0x24,0x20)
+            switch ($Fault) {
+                'RaxRspWrongRexDestination' { $indexLoad[0] = 0x4c }
+                'RaxRspWrongOpcode' { $indexLoad[1] = 0x89 }
+                'RaxRspWrongLoadSize' { $indexLoad[0] = 0x40 }
+                'RaxRspWrongFrameBase' { $indexLoad[3] = 0x25 }
+                'RaxRspWrongSib' { $indexLoad[3] = 0x44 }
+            }
+            $indexLoadText = switch ($Fault) {
+                'RaxRspWrongRexDestination' { 'mov r9, qword ptr [rsp+20h]' }
+                'RaxRspWrongOpcode' { 'mov qword ptr [rsp+20h], rcx' }
+                'RaxRspWrongLoadSize' { 'mov ecx, dword ptr [rsp+20h]' }
+                'RaxRspWrongFrameBase' { 'mov rcx, qword ptr [rbp+20h]' }
+                'RaxRspWrongSib' { 'mov rcx, qword ptr [rsp+rax*2+20h]' }
+                default { 'mov rcx, qword ptr [rsp+20h]' }
+            }
+        } else {
+            [byte[]]$indexLoad = [byte[]]@(0x48,0x8b,0x8d,0,0,0,0)
+            if ($Fault -eq 'CorruptedIndexLoad') { $indexLoad[2] = 0x95 }
+            $indexLoadText = 'mov rcx, qword ptr [rbp+index]'
+        }
         Put-Bytes $pe (0x400+$cursor-$sectionRva) $indexLoad
-        $instructions.Add(('{0:x}: {1} mov rcx, qword ptr [rbp+index]' -f ($imageBase+$cursor), (Hex-Bytes $indexLoad)))
+        $instructions.Add(('{0:x}: {1} {2}' -f ($imageBase+$cursor), (Hex-Bytes $indexLoad), $indexLoadText))
         $cursor += $indexLoad.Length
-        if ($Fault -eq 'ClobberedIndex') {
+        if ($Fault -in @('ClobberedIndex','RaxRspClobberedIndex')) {
             $clobber = [byte[]]@(0x48,0x89,0xd1)
             Put-Bytes $pe (0x400+$cursor-$sectionRva) $clobber
             $instructions.Add(('{0:x}: {1} mov rcx, rdx' -f ($imageBase+$cursor), (Hex-Bytes $clobber)))
             $cursor += $clobber.Length
+        }
+        if ($Fault -eq 'RaxRspNoncontiguous') {
+            $pe[0x400+$cursor-$sectionRva] = 0x90
+            $instructions.Add(('{0:x}: 90 nop' -f ($imageBase+$cursor)))
+            $cursor++
         }
     }
     $actualTableRva = $tableRva
@@ -398,7 +427,7 @@ function New-SyntheticCase {
     $targetStart = if ($Fault -eq 'MiddleOfInstruction') { $targetRva - 1 } else { $targetRva }
     Put-Bytes $pe (0x400+$targetStart-$sectionRva) $targetInstruction
     if ($Fault -eq 'UnknownTargetInstruction') { $pe[0x400+$targetStart-$sectionRva] = 0x06 }
-    $realVexRva = if ($RdxBase) { [UInt32]($actualTableRva + 28) } elseif ($SignedIndex -or $DlByteIndex) { [UInt32]($actualTableRva + 16) } elseif ($HoistedR8Base) { [UInt32]($actualTableRva + 0x20) } else { [UInt32]($caseDispatchRva + 0x20) }
+    $realVexRva = if ($RdxBase) { [UInt32]($actualTableRva + 28) } elseif ($SignedIndex -or $DlByteIndex -or $RaxRspIndex) { [UInt32]($actualTableRva + 16) } elseif ($HoistedR8Base) { [UInt32]($actualTableRva + 0x20) } else { [UInt32]($caseDispatchRva + 0x20) }
     [byte[]]$realVexBytes = if ($SignedIndex -or $DlByteIndex -or $RdxBase) { [byte[]]@(0xc5,0xf8,0x10,0x40,0x01) } else { [byte[]]@(0xc5,0xf8,0x10,0x00) }
     if ($RealVex) { Put-Bytes $pe (0x400+$realVexRva-$sectionRva) $realVexBytes }
     $rows = [Collections.Generic.List[string]]::new()
@@ -803,6 +832,38 @@ foreach ($fault in @('WrongImageBase','CorruptedIndexLoad','ClobberedIndex','Mis
     Invoke-Control $case $false
 }
 
+# Observed MSVC ASan std::visit form: LEA RAX,imagebase; MOV RCX,[RSP+20h];
+# MOV ECX,[RAX+4*RCX+table]; ADD RCX,RAX; JMP RCX. For this fixture, the
+# LEA begins at VA 0x14010f000, the stack load at 0x14010f007, and the table
+# lookup at 0x14010f00c (RVA 0x0010f00c).
+$case = New-SyntheticCase RaxRspIndex -RaxBase -RaxRspIndex -PdbData
+Invoke-Control $case $true 2 0
+$fixtureBytes = [IO.File]::ReadAllBytes($case.Binary)
+$expectedRspLoad = [byte[]]@(0x48,0x8b,0x4c,0x24,0x20)
+$actualRspLoad = [byte[]]$fixtureBytes[0x407..0x40b]
+if ((Hex-Bytes $actualRspLoad) -ne (Hex-Bytes $expectedRspLoad)) {
+    throw 'RaxRspIndex: PE bytes at RVA 0x0010f007 do not match the literal RSP qword load.'
+}
+$listingRows = [IO.File]::ReadAllLines($case.Disassembly)
+$expectedRspListing = '14010f007: 48 8b 4c 24 20 mov rcx, qword ptr [rsp+20h]'
+$expectedTableListing = '14010f00c: 8b 8c 88 00 00 11 00 mov ecx, dword ptr [rax+rcx*4+table]'
+if ($expectedRspListing -cnotin $listingRows -or $expectedTableListing -cnotin $listingRows) {
+    throw 'RaxRspIndex: listing bytes or instruction addresses do not match the literal PE layout.'
+}
+$case = New-SyntheticCase RaxRspIndexWithAdjacentRealVex -RaxBase -RaxRspIndex -PdbData -RealVex
+Invoke-Control $case $false 2 1
+foreach ($fault in @(
+        'RaxRspWrongRexDestination','RaxRspWrongOpcode','RaxRspWrongLoadSize',
+        'RaxRspWrongFrameBase','RaxRspWrongSib','RaxRspNoncontiguous','RaxRspClobberedIndex',
+        'WrongImageBase','MismatchedTableBase','MismatchedTableIndex','MismatchedTableDestination',
+        'WrongRaxAdd','WrongRaxJump','MissingDataSymbol','WrongDataOwner','WrongDataStart',
+        'WrongDataRecordSize','NamedDataSymbol','TypedDataSymbol','CrossContribution','ContributionBounds',
+        'MiddleOfInstruction','UndecodedTarget','UnknownTargetInstruction','TargetBeforeDispatch',
+        'TargetAtTable','TargetPastTable','InstructionExtendsPastTable')) {
+    $case = New-SyntheticCase "RaxRspIndex$fault" -RaxBase -RaxRspIndex -PdbData -Fault $fault
+    Invoke-Control $case $false
+}
+
 $case = New-SyntheticCase SignedByteIndex -SignedByteIndex
 Invoke-Control $case $true 4 0
 $case = New-SyntheticCase SignedByteIndexWithVexAfterTable -SignedByteIndex -RealVex
@@ -836,6 +897,123 @@ foreach ($name in @('WrongImageBase','BrokenSequence','CrossContribution','Contr
         'MiddleOfInstruction','UndecodedTarget','UnknownTargetInstruction','TargetBeforeDispatch','NoRet','InstructionExtendsPastTable')) {
     $case = New-SyntheticCase $name -Fault $name
     Invoke-Control $case $false
+}
+
+function New-AdjacentTablesCase([string]$Name, [string]$Fault = '', [switch]$RealVex) {
+    # Independent full-scan control using the observed seven EVEX-looking bytes across the table boundary.
+    # Only the PE/CodeView envelope is reused; dispatch, RVAs, symbols and listings below are explicit.
+    $case = New-SyntheticCase $Name -PdbData
+    $originalPe = [IO.File]::ReadAllBytes($case.Binary)
+    $pe = [byte[]]::new(0x3400)
+    [Array]::Copy($originalPe, 0, $pe, 0, 0x600)
+    [UInt32]$sectionStart = 0x00595000
+    [UInt32]$firstTable = 0x00597000
+    [UInt32]$secondTable = $firstTable + 8
+    if ($Fault -eq 'Gap') { $secondTable += 4 }
+    [UInt32]$firstTarget = 0x00596209
+    [UInt32]$secondTarget = 0x00595e09
+    $sectionHeader = 0x80 + 24 + 0xf0
+    Set-U32 $pe ($sectionHeader + 8) 0x3000
+    Set-U32 $pe ($sectionHeader + 12) $sectionStart
+    Set-U32 $pe ($sectionHeader + 16) 0x3000
+    Set-U32 $pe (0x98 + 56) ($sectionStart + 0x3000)
+    Set-U32 $pe (0x98 + 112 + 6*8) ($sectionStart + 0x180)
+    Set-U32 $pe (0x400 + 0x180 + 20) ($sectionStart + 0x1a0)
+    $rows = [Collections.Generic.List[string]]::new()
+    foreach ($index in 0,1) {
+        [UInt32]$cursor = $sectionStart + $index * 0x20
+        [UInt32]$table = if ($index -eq 0) { $firstTable } else { $secondTable }
+        [byte[]]$lea = @(0x48,0x8d,0x0d,0,0,0,0)
+        Put-Bytes $lea 3 ([BitConverter]::GetBytes([Int32](-[Int64]$cursor - 7)))
+        Put-Bytes $pe (0x400 + $cursor - $sectionStart) $lea
+        $rows.Add(('{0:x}: {1} lea rcx, [rip+imagebase]' -f ($imageBase+$cursor), (Hex-Bytes $lea)))
+        $cursor += 7
+        if ($index -eq 1 -and $Fault -eq 'SecondNoncontiguous') {
+            $pe[0x400 + $cursor - $sectionStart] = 0x90
+            $rows.Add(('{0:x}: 90 nop' -f ($imageBase+$cursor)))
+            $cursor++
+        }
+        [byte[]]$load = @(0x8b,0x84,0x81,0,0,0,0)
+        Put-Bytes $load 3 ([BitConverter]::GetBytes($table))
+        if ($index -eq 1 -and $Fault -eq 'SecondDispatchBroken') { $load[2] = 0x80 }
+        Put-Bytes $pe (0x400 + $cursor - $sectionStart) $load
+        $rows.Add(('{0:x}: {1} mov eax, dword ptr [rcx+4*rax+table]' -f ($imageBase+$cursor), (Hex-Bytes $load)))
+        $cursor += 7
+        [byte[]]$add = @(0x48,0x03,0xc1)
+        Put-Bytes $pe (0x400 + $cursor - $sectionStart) $add
+        $rows.Add(('{0:x}: {1} add rax, rcx' -f ($imageBase+$cursor), (Hex-Bytes $add)))
+        $cursor += 3
+        [byte[]]$jump = @(0xff,0xe0)
+        Put-Bytes $pe (0x400 + $cursor - $sectionStart) $jump
+        $rows.Add(('{0:x}: {1} jmp rax' -f ($imageBase+$cursor), (Hex-Bytes $jump)))
+    }
+    foreach ($target in $secondTarget,$firstTarget) {
+        [byte[]]$instruction = @(0x66,0x90)
+        $text = 'nop'
+        if ($Fault -eq 'SecondTargetUnknown' -and $target -eq $secondTarget) {
+            $instruction[0] = 0x06
+            $text = '<unknown>'
+        }
+        Put-Bytes $pe (0x400 + $target - $sectionStart) $instruction
+        $rows.Add(('{0:x}: {1} {2}' -f ($imageBase+$target), (Hex-Bytes $instruction), $text))
+    }
+    [UInt32]$firstEntry = if ($Fault -eq 'FirstTargetMiddle') { $firstTarget + 1 } else { $firstTarget }
+    [UInt32]$secondEntry = if ($Fault -eq 'SecondTargetMiddle') { $secondTarget + 1 } else { $secondTarget }
+    Set-U32 $pe (0x400 + $firstTable - $sectionStart) $firstEntry
+    Set-U32 $pe (0x400 + $firstTable - $sectionStart + 4) $firstTarget
+    Set-U32 $pe (0x400 + $secondTable - $sectionStart) $secondEntry
+    Set-U32 $pe (0x400 + $secondTable - $sectionStart + 4) $firstTarget
+    if ($Fault -eq 'Gap') {
+        Put-Bytes $pe (0x400 + $firstTable - $sectionStart + 8) ([byte[]]@(0xaa,0xaa,0xaa,0xaa))
+    }
+    [UInt32]$vectorAddress = $firstTable + 5
+    $vectorLength = 7
+    if ($Fault -eq 'Overlong') { $vectorLength = 16 }
+    if ($Fault -eq 'OutsideSuffix') {
+        $vectorLength = 12
+        $pe[0x400 + $firstTable - $sectionStart + 16] = 0x90
+    }
+    if ($Fault -eq 'StartsAtEnd') {
+        $vectorAddress = $secondTable + 8
+        $vectorLength = 4
+        Put-Bytes $pe (0x400 + $vectorAddress - $sectionStart) ([byte[]]@(0xc5,0xf8,0x10,0x00))
+    }
+    $vectorRaw = [int](0x400 + $vectorAddress - $sectionStart)
+    [byte[]]$vectorBytes = $pe[$vectorRaw..($vectorRaw+$vectorLength-1)]
+    if ($Fault -eq 'ByteMismatch') { $vectorBytes[$vectorLength-1] = 1 }
+    if ($Fault -eq '') {
+        if ((Hex-Bytes $vectorBytes) -cne '62 59 00 09 5e 59 00') {
+            throw 'Adjacent table control does not contain the literal observed EVEX-looking bytes.'
+        }
+    }
+    $rows.Add(('{0:x}: {1} vdivps xmm11 {{k1}}, xmm15, xmmword ptr [r25]' -f ($imageBase+$vectorAddress), (Hex-Bytes $vectorBytes)))
+    if ($RealVex) {
+        [UInt32]$ordinaryVector = $secondTable + 8
+        [byte[]]$ordinaryBytes = @(0xc5,0xf8,0x10,0x00)
+        Put-Bytes $pe (0x400 + $ordinaryVector - $sectionStart) $ordinaryBytes
+        $rows.Add(('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ($imageBase+$ordinaryVector), (Hex-Bytes $ordinaryBytes)))
+    }
+    [IO.File]::WriteAllBytes($case.Binary, $pe)
+    $metadata = "Age: $age`nGUID: {$guid}`nMod 0000 | ``SyntheticControl.obj``:`nObj: ``SyntheticControl.obj``:`n" +
+                "Section Contributions`nSC[.text] | mod = 0, 0001:0, size = 12288, data crc = 0, reloc crc = 0`n"
+    Set-Content -LiteralPath $case.Metadata -Value $metadata -Encoding utf8
+    $symbols = "Mod 0000 | ``SyntheticControl.obj``:`n0 | S_LDATA32 [size = 16] `````n" +
+               "type = <no type>, addr = 0001:$($firstTable-$sectionStart)`n" +
+               "16 | S_LDATA32 [size = 16] `````n" +
+               "type = <no type>, addr = 0001:$($secondTable-$sectionStart)`n"
+    Set-Content -LiteralPath $case.Symbols -Value $symbols -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value $rows -Encoding utf8
+    return $case
+}
+
+$adjacent = New-AdjacentTablesCase AdjacentProvedTables
+Invoke-Control $adjacent $true 1 0
+$adjacent = New-AdjacentTablesCase AdjacentProvedTablesWithRealVex -RealVex
+Invoke-Control $adjacent $false 1 1
+foreach ($fault in 'SecondDispatchBroken','SecondNoncontiguous','SecondTargetMiddle','SecondTargetUnknown',
+                    'FirstTargetMiddle','Gap','ByteMismatch','Overlong','OutsideSuffix','StartsAtEnd') {
+    $adjacent = New-AdjacentTablesCase "AdjacentTables$fault" -Fault $fault
+    Invoke-Control $adjacent $false
 }
 
 Write-Host "Synthetic ISA parser fixtures: $fixtureRoot"

@@ -416,6 +416,14 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return _session.PendingGradient() == nullptr;
             }
+            else if constexpr (std::is_same_v<Input, HostPixelMoveApplyInput>)
+            {
+                return _session.PendingPixelMove() == nullptr;
+            }
+            else if constexpr (std::is_same_v<Input, HostPixelNudgeInput>)
+            {
+                ExecutePixelNudge(value.offset);
+            }
             else if constexpr (std::is_same_v<Input, HostPathsInput>)
             {
                 if (_hostPathIndex < value.paths.size())
@@ -529,7 +537,8 @@ bool Application::ExecuteHostInput() noexcept
                 return false;
             }
             if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostGradientApplyInput> &&
-                          !std::is_same_v<Input, HostPathsInput> && !std::is_same_v<Input, HostWriteInput>)
+                          !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
+                          !std::is_same_v<Input, HostWriteInput>)
             {
                 return true;
             }
@@ -1240,9 +1249,46 @@ int Application::RunFilesSelfTest() noexcept
         const std::wstring exploded = scratch + L"exploded.prism";
         std::error_code error;
         std::filesystem::remove_all(exploded, error);
-        const bool written =
-            _session.Document().has_value() && SaveProject(exploded.c_str(), _session.Document().value(),
-                                                           _session.ActiveLayerID(), false) == ProjectIoStatus::Ok;
+        struct SaveTrace
+        {
+            struct Observation
+            {
+                ProjectIoStage stage;
+                unsigned int value;
+            };
+            std::array<Observation, 32> observations{};
+            std::size_t count = 0;
+            bool truncated = false;
+        } trace;
+        const ProjectIoObserver observer{[](void* context, ProjectIoStage stage, unsigned int value) noexcept
+                                         {
+                                             auto& recorded = *static_cast<SaveTrace*>(context);
+                                             if (recorded.count < recorded.observations.size())
+                                                 recorded.observations[recorded.count++] = {stage, value};
+                                             else
+                                                 recorded.truncated = true;
+                                         },
+                                         &trace};
+        const DocumentStatus validation =
+            _session.Document().has_value() ? ValidateDocument(_session.Document().value()) : DocumentStatus::Invalid;
+        const ProjectIoStatus writtenStatus = _session.Document().has_value()
+                                                  ? SaveProject(exploded.c_str(), _session.Document().value(),
+                                                                _session.ActiveLayerID(), false, {}, observer)
+                                                  : ProjectIoStatus::Invalid;
+        const bool written = writtenStatus == ProjectIoStatus::Ok;
+        if (!written)
+        {
+            std::wstring stages;
+            for (std::size_t index = 0; index < trace.count; ++index)
+                stages += std::format(L" {}:{}", static_cast<int>(trace.observations[index].stage),
+                                      trace.observations[index].value);
+            SelfTestFailure(std::format(L"Writing the initial folder-project fixture failed (status {}, "
+                                        L"validation {}, prior cleanup {}, trace truncated {}, stages [{}], "
+                                        L"path '{}').\n",
+                                        static_cast<int>(writtenStatus), static_cast<int>(validation), error.value(),
+                                        trace.truncated, stages, exploded));
+            return 5;
+        }
         _forcedDiscard = true;
         const std::optional<ContinuationReceipt::Result> opened =
             written

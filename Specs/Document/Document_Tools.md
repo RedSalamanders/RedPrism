@@ -468,8 +468,20 @@ shading remain P2/P3. Worker migration alone establishes no one-frame latency or
   Nonfinite/unrepresentable mapping, pixel-budget refusal, failed allocation or cancellation
   publishes no target/outline. `PixelMoveMemoryBytes` includes lifted pixels, landing/hole keys, all existing
   raster-edit planes/windows/masks and immutable moved geometry. Borrowed progress state is cleared before a
-  preview escapes. Production pointer/nudge callers remain inline until the deferred A5 host migration; this
-  detached helper alone is no whole-host nonblocking or performance claim.
+  preview escapes. Direct session APIs remain inline references. Production openings use `BeginDeferredPixelMove`:
+  target, original immutable selection, duplicate intent, opening generation and rounded offset/sequence are
+  metadata only. One active/latest pending preview privately prepares pixels under whole-graph admission;
+  publication checks the opening generation, source token and increasing completed sequence. Returning to zero
+  offset invalidates the mailbox and drops the preview. An invalidated opening cannot acquire a newer source.
+  Pointer release owns `HostPixelMoveApplyInput`; Ctrl-arrow owns its event-time document offset, including Shift.
+  Both prepare and apply under the selected history ordinal after prior color/gradient settlement, with the
+  exact opening/settings acquisition. Owner application moves the prepared image/mask/outline in one named edit.
+  Refusal retains caller ownership; zero/no-overlap leaves redo intact. Early/late cancellation keeps the ticket,
+  admission and history barrier until acknowledgement. Terminal commit failure drops only that opening's gesture
+  without changing its document; a newer opening survives. Tool/history termination keeps the existing drop rule.
+  Copy reads the unchanged original document during a move, as its direct reference does. Opening lift/coverage
+  reuse, displayed geometry caching, bounded history/upload costs and real-loop measurement remain open gates;
+  this functional migration alone is no whole-host nonblocking or performance claim.
 - **Masks from the selection** (`AddMask(revealing)`): with a selection, a mask on the layer's own pixel grid (the
   loops mapped through the layer transform and rasterized with the selection's antialiasing): revealing hides the
   selected area (`255 − coverage`), otherwise shows only it; the selection is dropped and the mask targeted, one

@@ -5,6 +5,7 @@
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "UiBenchmark.h"
 #include "resource.h"
 
 #include <array>
@@ -117,6 +118,8 @@ ContinuationReceipt Application::QueueHostWrite(HostWriteFormat format, bool sav
 
 void Application::ReportHostAdmission(const ContinuationReceipt& receipt) noexcept
 {
+    if (_uiBenchmark && _uiBenchmark->captureGradientApplyReceipt && !_uiBenchmark->gradientApplyReceipt)
+        _uiBenchmark->gradientApplyReceipt = receipt;
     if (receipt.Read().outcome == HostOutcome::Failed)
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
@@ -167,7 +170,10 @@ void Application::RunHostContinuation() noexcept
     // Preview completion rearms this source so the old record and its full reservation retire before the next
     // capture is admitted. Accepted host mutations take precedence over starting another pending preview.
     if (!_activeHostRequest && _hostRequests.Size() == 0)
+    {
         LaunchGradientPreview();
+        LaunchPixelMovePreview();
+    }
     if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {
         return; // consumed readiness stays disarmed until this prerequisite's exact UI completion
@@ -217,7 +223,8 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle ? HostStage::GradientSettle
+            _hostStage = _hostStage == HostStage::Settle           ? HostStage::GradientSettle
+                         : _hostStage == HostStage::GradientSettle ? HostStage::PixelMoveSettle
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -246,6 +253,16 @@ void Application::RunHostContinuation() noexcept
             {
                 const auto* pending = _session.PendingGradient();
                 if (!pending || pending->opening != gradient->opening)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Settle;
+            }
+            else if (const auto* move = std::get_if<HostPixelMoveApplyInput>(&input))
+            {
+                const auto* pending = _session.PendingPixelMove();
+                if (!pending || pending->opening != move->opening)
                 {
                     FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                     return;
@@ -421,6 +438,35 @@ void Application::RunHostContinuation() noexcept
                 if (_gradientCommitTicket)
                     return;
             }
+            _hostStage = HostStage::PixelMoveSettle;
+            break;
+        }
+        case HostStage::PixelMoveSettle:
+        {
+            // Pointer release alone commits a lifted-pixel gesture. Tool/history/lifetime termination keeps
+            // the existing cancel semantics; it must never silently turn a drag into a committed move.
+            if (const auto* apply = std::get_if<HostPixelMoveApplyInput>(&input))
+            {
+                const auto* pending = _session.PendingPixelMove();
+                if (!pending || pending->opening != apply->opening)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                const auto result = StartPixelMoveCommit(active.ordinal);
+                if (FAILED(result))
+                {
+                    ++_errorsShown;
+                    _lastErrorId =
+                        result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    CancelPixelDrag(); // admission failed; the released gesture cannot retain an unowned apply
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_pixelMoveCommitTicket)
+                    return;
+            }
             _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -567,6 +613,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_gradientCommitTicket.value());
+        }
+        else if (_pixelMoveCommitTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_pixelMoveCommitTicket.value());
         }
         else
             CancelColorCommit(); // retain the active receipt until apply/drop acknowledges cancellation

@@ -219,6 +219,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 $global:LASTEXITCODE = 0
 
+Write-Host 'Running qualified gradient benchmark runner controls...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\GradientBenchmarkRunnerTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "Gradient benchmark runner controls failed with exit code $LASTEXITCODE."
+}
+
 $foreignIsa = if ($Platform -eq 'x64') { 'neon' } else { 'sse2' }
 foreach ($isaCase in @(
     @{ Name = 'not-implemented'; Value = 'avx512'; Pattern = 'not implemented' },

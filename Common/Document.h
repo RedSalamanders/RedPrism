@@ -1092,6 +1092,17 @@ struct PixelMove
     DocumentSelection origin;
     bool duplicate = false;
     Vec2 offset;
+    Guid target;
+    bool deferred = false;
+    std::uint64_t opening = 0;
+    std::uint64_t sequence = 1;
+    std::uint64_t publishedSequence = 0;
+    std::uint64_t publishedGeneration = 0;
+    std::uint64_t openingGeneration = 0;
+    [[nodiscard]] bool HasOffset() const noexcept
+    {
+        return offset.x != 0 || offset.y != 0;
+    }
 };
 
 // Pixels copied from the canvas, with where they came from so Paste can put them back in place.
@@ -1814,6 +1825,12 @@ class DocumentSession
     // Ctrl-drag / Ctrl-arrow: the selected pixels (or a copy) move with the outline as one entry (`Move Pixels`,
     // `Duplicate Pixels`); false when there is nothing to move (no selection, a mask target, no pixels).
     bool BeginPixelMove(bool duplicate = false);
+    // Metadata-only production opening. Its workers own all lifted pixels/coverage and prepared previews.
+    [[nodiscard]] bool BeginDeferredPixelMove(bool duplicate = false);
+    [[nodiscard]] bool PublishPixelMovePreview(std::shared_ptr<BrushStroke>&& stroke, const JobToken& token,
+                                               std::uint64_t opening, std::uint64_t sequence) noexcept;
+    [[nodiscard]] bool ApplyPixelMoveIfCurrent(ImageLayer&& prepared, DocumentSelection&& movedSelection,
+                                               const JobToken& token, std::uint64_t opening, std::uint64_t sequence);
     // Previews the pixels `offset` whole document pixels away; the stored selection stays put until commit.
     void MovePixels(double dx, double dy);
     void FinishPixelMove();
@@ -2120,8 +2137,10 @@ class DocumentSession
         ++_editRevision;
     }
     [[nodiscard]] bool BeginGradientImpl(Vec2 point, bool deferred);
+    [[nodiscard]] bool BeginPixelMoveImpl(bool duplicate, bool deferred);
     [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
-                                           bool gradientCommit);
+                                           bool gradientCommit, bool pixelMoveCommit = false,
+                                           DocumentSelection* movedSelection = nullptr);
 
     TokenIdentity _tokenIdentity;
     std::optional<CanvasDocument> _document;
@@ -2169,6 +2188,7 @@ class DocumentSession
     std::uint64_t _gradientOpening = 0;
     std::optional<ShapeDraft> _shapeDraft;
     std::optional<PixelMove> _pixelMove;
+    std::uint64_t _pixelMoveOpening = 0;
     std::optional<PixelClipboard> _clipboard;
     std::optional<ColorEdit> _colorEdit;
     std::uint64_t _colorEditSequence = 0;

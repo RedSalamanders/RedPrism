@@ -384,7 +384,8 @@ bool Application::HandleKey(const KeyPress& press) noexcept
         return true;
     }
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
-        (_sizingTicket || _pathClassificationTicket || _rasterEditTicket || _gradientCommitTicket))
+        (_sizingTicket || _pathClassificationTicket || _rasterEditTicket || _gradientCommitTicket ||
+         _pixelMoveCommitTicket))
     {
         CancelHostContinuations(); // retain the selected request until worker acknowledgement
         return true;

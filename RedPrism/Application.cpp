@@ -1870,6 +1870,11 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONUP, 0, 60.0, 60.0);
         pointer(WM_LBUTTONDOWN, MK_CONTROL, 40.0, 40.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON | MK_CONTROL, 140.0, 40.0);
+        if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The selected-pixel preview did not acknowledge its worker.\n");
+            return 5;
+        }
         std::optional<SelectionBounds> box = bounds();
         std::optional<SelectionBounds> displayed = shown();
         if (!std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() == nullptr)
@@ -1898,6 +1903,11 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         pointer(WM_LBUTTONUP, MK_CONTROL, 140.0, 40.0);
+        if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The selected-pixel release did not acknowledge its ordered commit.\n");
+            return 5;
+        }
         box = bounds();
         if (std::holds_alternative<PixelDrag>(_drag) || _session.PendingPixelMove() != nullptr ||
             _composition.HasStroke() || _session.history.UndoName() != L"Move Pixels" || !box.has_value() ||
@@ -2172,6 +2182,8 @@ int Application::RunSelfTest() noexcept
         return rasterEdits;
     if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
         return gradientWork;
+    if (const int pixelMoveWork = RunPixelMoveWorkSelfTest(); pixelMoveWork != 0)
+        return pixelMoveWork;
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;
@@ -2577,6 +2589,7 @@ void Application::DocumentChanged() noexcept
 void Application::SyncChrome() noexcept
 {
     RefreshGradientJobs();
+    RefreshPixelMoveJobs();
     if (!_chrome)
     {
         return;
@@ -3026,6 +3039,7 @@ void Application::Shutdown() noexcept
     StopHostContinuations();
     CancelColorJobs();
     CancelGradientJobs();
+    CancelPixelMoveJobs();
     _jobs.RequestStop();
     _gpuWork.StopNotifications();
     if (_window)
@@ -3782,6 +3796,19 @@ void Application::OnCommand(int command) noexcept
     {
         return; // an open, uncommitted panel owns history until OK/Cancel
     }
+    if (!_hostExecuting && command >= ChromeHost::kCommandNudgePixelsLeft &&
+        command <= ChromeHost::kCommandNudgePixelsDown)
+    {
+        const double step = _acceleratorShift ? 10.0 : 1.0;
+        const Vec2 offset{command == ChromeHost::kCommandNudgePixelsLeft    ? -step
+                          : command == ChromeHost::kCommandNudgePixelsRight ? step
+                                                                            : 0.0,
+                          command == ChromeHost::kCommandNudgePixelsUp     ? -step
+                          : command == ChromeHost::kCommandNudgePixelsDown ? step
+                                                                           : 0.0};
+        ReportHostAdmission(QueueHostInput(HostPixelNudgeInput{offset}));
+        return;
+    }
     if (!_hostExecuting && !view && !file &&
         (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() || _activeHostRequest ||
          _hostRequests.Size()))
@@ -4007,9 +4034,7 @@ void Application::OnCommand(int command) noexcept
                 : 0.0;
         if (command >= ChromeHost::kCommandNudgePixelsLeft)
         {
-            _session.NudgePixels(x, y);
-            static_cast<void>(_session.TakeLastBrushCommit());
-            DocumentChanged();
+            ExecutePixelNudge(Vec2{x, y});
         }
         else if (command >= ChromeHost::kCommandNudgeLayerLeft)
         {
@@ -7670,7 +7695,7 @@ void Application::SyncToolOverlays() noexcept
 void Application::BeginPixelDrag(Vec2 pixel, bool duplicate) noexcept
 {
     static_cast<void>(_session.TakeLastBrushCommit());
-    if (!_session.BeginPixelMove(duplicate))
+    if (!_session.BeginDeferredPixelMove(duplicate))
     {
         return;
     }
@@ -7715,6 +7740,19 @@ void Application::DragPixels(Vec2 pixel, bool constrain) noexcept
 void Application::FinishPixelDrag() noexcept
 {
     DropDrag<PixelDrag>();
+    if (const auto* pending = _session.PendingPixelMove(); pending && pending->deferred)
+    {
+        if (pending->HasOffset())
+        {
+            const auto receipt = QueueHostInput(HostPixelMoveApplyInput{pending->opening});
+            ReportHostAdmission(receipt);
+            if (receipt.Read().outcome != HostOutcome::Pending)
+                CancelPixelDrag(); // local queue refusal drops the uncommitted gesture
+        }
+        else
+            CancelPixelDrag();
+        return;
+    }
     _session.FinishPixelMove();
     DocumentChanged();
 }
@@ -7723,6 +7761,9 @@ void Application::CancelPixelDrag() noexcept
 {
     DropDrag<PixelDrag>();
     _session.CancelPixelMove();
+    CancelPixelMoveJobs();
+    if (_pixelMoveCommitTicket)
+        CancelHostContinuations();
     static_cast<void>(_session.TakeLastBrushCommit()); // dropped pixels adopt nothing
     DocumentChanged();
 }

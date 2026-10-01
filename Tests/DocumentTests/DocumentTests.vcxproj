@@ -99,6 +99,7 @@
     <ClInclude Include="RasterEditWorkTests.h" />
     <ClInclude Include="GradientWorkTests.h" />
     <ClInclude Include="GradientStateTests.h" />
+    <ClInclude Include="PixelMoveStateTests.h" />
     <ClInclude Include="GradientResourceTests.h" />
     <ClInclude Include="LiftReferenceTests.h" />
     <ClInclude Include="PixelMoveWorkTests.h" />
@@ -122,6 +123,7 @@
     <ClCompile Include="RasterEditWorkTests.cpp" />
     <ClCompile Include="GradientWorkTests.cpp" />
     <ClCompile Include="GradientStateTests.cpp" />
+    <ClCompile Include="PixelMoveStateTests.cpp" />
     <ClCompile Include="GradientResourceTests.cpp" />
     <ClCompile Include="LiftReferenceTests.cpp" />
     <ClCompile Include="PixelMoveWorkTests.cpp" />

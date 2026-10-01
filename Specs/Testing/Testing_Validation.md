@@ -46,6 +46,23 @@ one named entry; Undo drops an uncommitted line. Existing GPU checks await ackno
 canvas-vs-raster tolerance and adoption count. Full x64 suites and ARM64 cross-builds are required. No event-gate
 deadline is a performance assertion; real-loop drag/settle timing and owner upload/history budgets remain open.
 
+### Detached lifted-pixel moves
+
+`pixelmovework.*`, `pixel-lift.*` and `pixelmovestate.*` keep the literal coverage/source-over, transformed
+landing, duplicate, transparent-source, mask-carry and outline expectations. Deferred openings allocate no
+pixels. Refused preview/apply candidates remain owned by their caller; exact opening/generation/settings checks
+prevent an older worker from changing a newer gesture or retargeting a changed source.
+
+`pixelmove-host.*` runs production preview and selected pointer-release/nudge jobs at event gates. It covers
+admission/capture/worker failure, early and late cancellation, stale source generation/selection/document,
+one named entry and Undo, and a younger Undo queued behind the commit. A younger Shift nudge retains its
+event-time ten-pixel offset after the modifier changes. Coalesced previews show an acknowledged active result
+and then the latest offset. Refused nudge admission posts one notice and preserves source/history. A canceled
+large graph proves retirement on a worker; graphs below the 16 MiB deferred-release threshold may retire inline.
+Empty source-region moves preserve history. All terminal states drop tickets, barriers, input and memory charges
+without hidden presentation. Full configuration qualification is required; immutable opening reuse, floating
+transactions, display geometry, owner history/first upload and real-loop bounds remain separate P1 work.
+
 ### Retained selection and history ownership
 
 `DocumentTests` runs `selectionstorage.*` and `history-accounting.*`: empty/shared/moved geometry, reserved

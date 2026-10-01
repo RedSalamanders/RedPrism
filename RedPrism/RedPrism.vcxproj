@@ -144,6 +144,7 @@
     <ClInclude Include="SizingWorkTestGate.h" />
     <ClInclude Include="RasterEditTestGate.h" />
     <ClInclude Include="GradientWorkTestGate.h" />
+    <ClInclude Include="PixelMoveWorkTestGate.h" />
     <ClInclude Include="CanvasViewport.h" />
     <ClInclude Include="CanvasRenderer.h" />
     <ClInclude Include="CanvasOverlay.h" />
@@ -223,7 +224,9 @@
     <ClCompile Include="ApplicationSizeJobs.cpp" />
     <ClCompile Include="ApplicationRasterEditJobs.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />
+    <ClCompile Include="ApplicationPixelMoveJobs.cpp" />
     <ClCompile Include="ApplicationGradientTests.cpp" />
+    <ClCompile Include="ApplicationPixelMoveTests.cpp" />
     <ClCompile Include="ApplicationRasterEditTests.cpp" />
     <ClCompile Include="AccessibilityRoot.cpp" />
     <ClCompile Include="ChromeHostAccessibility.cpp" />
