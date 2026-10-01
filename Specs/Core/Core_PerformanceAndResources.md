@@ -614,3 +614,14 @@ and the linked-image check in `Build_Toolchain.md`. New SIMD tables and measured
 `HostTests` asserts idle vs render vs occlusion-probe selection. `RedPrism.exe --self-test --warp` presents exactly one
 hidden frame and exits. Interactive idle is qualified by running the titled window: a settled visible window MUST not
 spin the CPU in `Renderer::Render`.
+
+### Memory encoder capacity and overlap
+
+Memory PNG/JPEG sinks enforce `EncodeMemoryCapacity` before growth, with a lower caller ceiling supported.
+Charge up to that capacity plus 64 KiB page-rounding allowance for the lazy committed stream and a separate
+capacity-sized final vector while both owners coexist. Bounded commit/write/read/zero/copy bands are 64 KiB.
+New pages are already zero; reserve/insert final copying avoids a redundant vector zero-fill pass. File encoding
+keeps its direct file stream. This bound does not include opaque WIC workspace, retained source/private document/
+history graphs, conversion rows, simultaneous PNG/DIB vectors/globals, receipt/hash owners or retirement.
+Complete clipboard admission must add those overlapping owners and retain codec/native headroom. The primitive
+cannot close F5b.2b, F5d or G1 by itself.

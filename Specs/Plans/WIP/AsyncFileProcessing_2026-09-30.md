@@ -29,14 +29,25 @@
     - [ ] F5b.2 — Whole-graph admission, worker decode/paste/private-copy publication and actual ordered host
       activation. The adapter primitive alone does not qualify Copy/Cut, Paste or New Canvas.
       - [x] F5b.2a — Registered receipt, worker payload fingerprint binding, truthful receipt/partial publication
-        and native origin controls. Private prototype passes 25 receipt, 45 fingerprint and 34 native binding
-        controls together with the 125 existing transfer checks; changed native qualification remains pending.
+        and native origin controls. All six configurations qualify the 456 frozen native inputs: 25 receipt,
+        45 fingerprint and 34 native binding controls plus the 125 existing transfer checks. See
+        [receipt binding evidence](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md).
+        Production host callers remain F5b.2b work.
       - [ ] F5b.2b — Actual selected Copy/Cut/Paste graphs, complete preparation/encoding/decode/history/retirement
         admission and private-origin authority at production application. Keep F5b.2 open after primitive proof.
-      - [ ] F5b.2b.1 — Enforce memory encoder ceilings before stream growth, exact/over-cap output proof and
-        full native qualification. The private prototype passes 160 stream/34 cap controls and all 103 existing
-        codec checks ([preparation record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)); whole-graph
+      - [x] F5b.2b.1 — Enforce memory encoder ceilings before stream growth, exact/over-cap output proof and
+        full native qualification. All six configurations pass 160 stream/34 cap controls and all 103 existing
+        codec checks ([qualification record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)); whole-graph
         host admission/callers and codec-internal headroom remain F5b.2b/F5d.
+      - [ ] F5b.2b.2 — Detached Paste core with complete candidate document/history and atomic guarded publication.
+        Private proof passes 62 controls, including exact 100 MP aggregate equality, negative floor centering,
+        group descendant insertion, serial/history staleness and cancellation/allocation refusal. Preserve all 128
+        inputs and seven artifacts under `.build/p1-clipboard-paste-draft/private-proof-r3/`; native activation and
+        qualification remain pending. Host admission and ordered OS transfer remain F5b.2b/F5c.2.
+      - [ ] F5b.2b.3 — Qualify selected production Copy/Cut/Paste callers with complete reservations, private origin,
+        acknowledged retries and worker retirement. The private host compiles with event gates at capture,
+        preparation, private application, encoding, transfer and Paste publication. Runtime proof, Copy Merged,
+        lifetime/shutdown cases and native qualification remain open; compile success is not behavioral proof.
   - [ ] F5c — Event-backed retries, ordered host callers and guarded metadata-only New Canvas prefill.
     - [x] F5c.1 — Eight persistent one-shot event/deadline waits on the existing scheduler wait pool; cancellation
       wakes the same wait, and no slot or receiver can be reused before callback acknowledgement. Native host
@@ -317,11 +328,11 @@ between 64 KiB bands. No owner-side payload hashing is allowed. The private prot
 prototype passes. Positive receipt controls now discriminate malformed receipt refusal, and native tamper controls
 change exactly one byte of the original encoded DIB while keeping its header and matching PNG unchanged.
 
-F5b.2b admission must also bound the encoding stream before growth. Current memory `EncodeToFormat` uses a
-growable `CreateStreamOnHGlobal`; the outgoing adapter's later 512 MiB block cap alone does not constrain this
-earlier stream or the simultaneous stream/vector/global peaks. Add a checked capped encoder destination and
-independent exact/over-cap controls, or account for an enforced earlier bound before activating the complete host
-graph. Codec-internal allocations and digest throughput remain measured headroom and F5d/G1 work.
+Qualified F5b.2b.1 replaces the growable encoder memory destination with a stream enforcing a derived/lower caller cap
+before growth. Its 160 stream/34 codec controls and 103 unchanged codec checks pass in all three x64 suites;
+all ARM64 clean cross-builds pass against the unchanged 462-input freeze. This still leaves simultaneous stream/vector/global/source/history
+peaks to F5b.2b whole-graph admission. Opaque codec allocations and digest throughput remain measured headroom
+and F5d/G1 work; do not credit the sink cap as complete host admission.
 
 The master table's short synchronous owner publication is insufficient as a guarantee: EmptyClipboard sends
 WM_DESTROYCLIPBOARD to the preceding owner and GetClipboardData can trigger delayed rendering. Execute these

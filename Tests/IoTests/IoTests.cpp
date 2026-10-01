@@ -1,7 +1,9 @@
+#include "CappedImageCodecTests.h"
 #include "ClipboardFingerprintTests.h"
 #include "ClipboardReceiptTests.h"
 #include "ClipboardTransferTests.h"
 #include "CodecFileStreamTests.h"
+#include "CodecMemoryStreamTests.h"
 #include "FileIoBench.h"
 
 #include "ClipboardDibWorkTests.h"
@@ -2729,6 +2731,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunClipboardFingerprintTests();
     gFailures += RunClipboardTransferTests();
     gFailures += RunCodecFileStreamTests();
+    gFailures += RunCappedImageCodecTests();
+    gFailures += RunCodecMemoryStreamTests();
     gFailures += RunProjectCancellationTests();
     gFailures += RunImageImportWorkTests();
     gFailures += RunProjectLoadWorkTests();

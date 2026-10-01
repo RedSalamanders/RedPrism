@@ -852,3 +852,13 @@ successful HEIF decoding on a host without its codec, RAW support, in-flight cod
 .\test.ps1 -Platform x64 -Configuration "ASan Debug"
 .\build.ps1 -Platform ARM64 -Configuration Debug
 ```
+
+### Capped memory encoder controls
+
+IoTests runs independent IStream controls for literal read/write bytes, exact/over-cap unchanged state, signed
+seeks, shrink/regrow/gap zeros, OS page rounding, bounded lazy commits, native reserve/commit failures, reached
+cancellation, sticky cap refusal and retained COM byte-view lifetime. Real WIC PNG/JPEG controls prove exact
+encoded-size limits and one-byte-short/one/zero refusal with empty public output, larger-ceiling clipping and
+unchanged premultiplied/sparse bytes. Existing ImageCodecWork pixel/file preservation goldens remain unchanged.
+Require full native x64 Debug/Release/ASan gates and ARM64 clean cross-builds before closing F5b.2b.1; full host
+reservation/caller/retry/retirement/measurement proof remains a separate gate.

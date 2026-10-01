@@ -132,6 +132,10 @@
         private-origin controls qualify in all six configurations against 456 frozen inputs: 25/45/34 new
         assertions plus all 125 transfer controls ([record](../../TestRuns/ClipboardReceiptBinding_2026-10-01.md)).
         Full host/codec admission, production callers, retries and G1 remain open.
+      - [x] F5b.2b.1 — Capped memory PNG/JPEG encoding with pre-growth derived/lower ceilings, bounded commits,
+        cancellation and exact/over-cap proof: 160 stream/34 cap controls and 103 existing codec checks pass all
+        six configurations against 462 frozen inputs ([record](../../TestRuns/CappedMemoryEncoding_2026-10-01.md)).
+        Detached Paste and production clipboard admission/callers/retries remain open in the file child.
       - [x] F5c.1 — Native one-shot retry waits and Application GPU/retry source routing; 117 retry controls,
         six additional transformed Copy fixtures and two routed GPU scenarios qualify in all six configurations
         ([record](../../TestRuns/RetryWaitRouting_2026-10-01.md)). Actual clipboard graphs remain F5c.2.

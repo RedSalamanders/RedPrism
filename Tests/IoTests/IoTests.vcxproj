@@ -89,6 +89,7 @@
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\ImageCodecs.h" />
     <ClInclude Include="..\..\Common\CodecFileStream.h" />
+    <ClInclude Include="..\..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\..\Common\ProjectStore.h" />
     <ClInclude Include="..\..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\..\Common\ImageImportWork.h" />
@@ -100,6 +101,8 @@
     <ClInclude Include="ClipboardDibWorkTests.h" />
     <ClInclude Include="..\..\Common\ClipboardDibWork.h" />
     <ClInclude Include="CodecFileStreamTests.h" />
+    <ClInclude Include="CappedImageCodecTests.h" />
+    <ClInclude Include="CodecMemoryStreamTests.h" />
     <ClInclude Include="ProjectCancellationTests.h" />
     <ClInclude Include="FileIoBench.h" />
     <ClInclude Include="..\..\Common\Utf8.h" />
@@ -168,6 +171,7 @@
     <ClCompile Include="..\..\Common\ImageImportHistory.cpp" />
     <ClCompile Include="..\..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\..\Common\CodecFileStream.cpp" />
+    <ClCompile Include="..\..\Common\CodecMemoryStream.cpp" />
     <ClCompile Include="..\..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\..\Common\PathClassificationWork.cpp" />
     <ClCompile Include="PathClassificationWorkTests.cpp" />
@@ -175,6 +179,8 @@
     <ClCompile Include="ClipboardDibWorkTests.cpp" />
     <ClCompile Include="..\..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="CodecFileStreamTests.cpp" />
+    <ClCompile Include="CappedImageCodecTests.cpp" />
+    <ClCompile Include="CodecMemoryStreamTests.cpp" />
     <ClCompile Include="ProjectCancellationTests.cpp" />
     <ClCompile Include="FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />

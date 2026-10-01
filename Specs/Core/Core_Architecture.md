@@ -329,3 +329,11 @@ back buffer; the composition then blits the document into the chrome hole. Those
 `Tests/DocumentTests` covers the document graph, validation, and history. `Tests/IoTests` covers `.prism` load/save.
 `Tests/CompositionTests` covers WARP blend goldens. `RedPrism.exe --self-test --warp` covers HWND + WARP Present. See
 [`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
+
+### Private bounded codec output stream
+
+`Common/CodecMemoryStream.*` owns one reserved virtual buffer through WIL and provides the capped WIC IStream
+implementation. Cursor/data access is confined to one caller; only COM reference counting is concurrent. It owns
+no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker; the current inline
+clipboard caller still awaits F5 host migration. A borrowed completed-byte view is retained only through exact
+worker copying, never exposed as a result. The final public result is an owning vector.

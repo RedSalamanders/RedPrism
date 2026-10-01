@@ -1470,3 +1470,197 @@ foreach ($fault in 'WrongCmp','WrongJa','WrongMovsxd','DifferentStackSlot','Shor
     ++$terminalDwordCount
 }
 Write-Host "Guarded terminal DWORD synthetic controls passed: $terminalDwordCount"
+# Bounded independent control for MOVZX ECX, byte [RAX]; CMP CL,imm8; JA rel8;
+# LEA RDX,imagebase; MOV EAX,[RDX+4*RCX+tableRva]; ADD RAX,RDX; JMP RAX.
+# Keep instruction bytes as numeric literals: these controls qualify parser evidence,
+# including when a disassembly mnemonic is deliberately generic or misleading.
+function New-MovzxGuardedTerminalDwordCase {
+    param(
+        [Parameter(Mandatory)] [string]$Name,
+        [string]$Fault = '',
+        [ValidateRange(1,127)] [int]$Maximum = 5
+    )
+    $case = New-SyntheticCase ($Name + 'Seed') -PdbData
+    $pe = [IO.File]::ReadAllBytes($case.Binary)
+    [UInt32]$section = [UInt32]0x0010f000
+    [UInt32]$prefix = $section + 0x870
+    [UInt32]$dispatch = $prefix + 8
+    [UInt32]$table = $section + 0x8e8
+    [int]$entryCount = $Maximum + 1
+    [UInt32]$end = $table + 4 * $entryCount
+    [UInt32]$default = $section + 0x8c4
+    [UInt32]$target = $section + 0x8c5
+    [UInt32]$defaultBranchTarget = $default
+
+    # Three independently encoded prefix instructions occupy exactly eight bytes.
+    [byte[]]$movzx = @(0x0f,0xb6,0x08)
+    [byte[]]$cmp = @(0x80,0xf9,0x05)
+    $cmp[2] = [byte]$Maximum
+    [byte[]]$ja = @(0x77,0x18)
+    [byte[]]$lea = @(0x48,0x8d,0x15,0,0,0,0)
+    [byte[]]$load = @(0x8b,0x84,0x8a,0,0,0,0)
+    [byte[]]$add = @(0x48,0x03,0xc2)
+    [byte[]]$jump = @(0xff,0xe0)
+
+    switch ($Fault) {
+        'WrongMovzxDestination' { $movzx[2] = 0x00 }
+        'WrongMovzxSource' { $movzx[2] = 0x0a }
+        'SignedMovsx' { $movzx[1] = 0xbe }
+        'WrongCmpRegister' { $cmp[1] = 0xf8 }
+        'RangeTooSmall' { $cmp[2] = [byte]($Maximum - 1) }
+        'RangeTooLarge' { $cmp[2] = [byte]($Maximum + 1) }
+        'WrongJa' { $ja[0] = 0x76 }
+        'DefaultMidInstruction' { $defaultBranchTarget = $prefix + 1 }
+        'DefaultOutsideProcedure' { $defaultBranchTarget = $prefix - 0x10 }
+        'DefaultInsideTable' { $defaultBranchTarget = $table + 4 }
+        'WrongImageBase' { }
+        'WrongLeaOpcode' { $lea[1] = 0x8c }
+        'WrongLeaDestination' { $lea[2] = 0x0d }
+        'WrongLoadOpcode' { $load[0] = 0x89 }
+        'WrongLoadDestination' { $load[1] = 0x8c }
+        'WrongLoadScale' { $load[2] = 0x4a }
+        'WrongLoadIndex' { $load[2] = 0x82 }
+        'WrongLoadBase' { $load[2] = 0x89 }
+        'WrongLoadAddress' { }
+        'WrongAddOpcode' { $add[1] = 0x01 }
+        'WrongAddRegisters' { $add[2] = 0xc1 }
+        'WrongJumpOpcode' { $jump[0] = 0xff; $jump[1] = 0xe1 }
+    }
+    [Int64]$branchDisplacement = [Int64]$defaultBranchTarget - [Int64]($prefix + 8)
+    $ja[1] = [byte]($branchDisplacement -band 0xff)
+
+    [Int64]$imageBase = [Int64]0x140000000
+    [Int32]$leaDisplacement = [Int32](-[Int64]($dispatch + 7))
+    if ($Fault -eq 'WrongImageBase') { ++$leaDisplacement }
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes($leaDisplacement))
+    [UInt32]$loadDisplacement = $table
+    if ($Fault -eq 'WrongLoadAddress') { $loadDisplacement += 4 }
+    Put-Bytes $load 3 ([BitConverter]::GetBytes($loadDisplacement))
+
+    Put-Bytes $pe (0x400 + $prefix - $section) $movzx
+    Put-Bytes $pe (0x400 + $prefix + 3 - $section) $cmp
+    Put-Bytes $pe (0x400 + $prefix + 6 - $section) $ja
+    Put-Bytes $pe (0x400 + $dispatch - $section) $lea
+    Put-Bytes $pe (0x400 + $dispatch + 7 - $section) $load
+    Put-Bytes $pe (0x400 + $dispatch + 14 - $section) $add
+    Put-Bytes $pe (0x400 + $dispatch + 17 - $section) $jump
+    # Both valid destinations are real PE instruction boundaries before the table.
+    $pe[0x400 + $default - $section] = 0x90
+    [byte[]]$targetNop = @(0x0f,0x1f,0x00)
+    Put-Bytes $pe (0x400 + $target - $section) $targetNop
+    # The bytes immediately before the anonymous table are data-adjacent sentinels.
+    $pe[0x400 + $table - $section - 2] = 0xc3
+    $pe[0x400 + $table - $section - 1] = 0x90
+
+    $rows = [Collections.Generic.List[string]]::new()
+    $prefixBytes = @($movzx,$cmp,$ja)
+    $prefixOffsets = @(0,3,6)
+    $prefixStarts = @('Prefix0','Prefix1','Prefix2')
+    for ($i=0; $i -lt 3; ++$i) {
+        if ($Fault -eq ('Missing' + $prefixStarts[$i])) { continue }
+        [byte[]]$shown = $prefixBytes[$i].Clone()
+        if ($Fault -eq ('ListingMismatch' + $prefixStarts[$i])) { $shown[0] = $shown[0] -bxor 1 }
+        $mnemonic = if ($Fault -eq ('Unknown' + $prefixStarts[$i])) { '<unknown>' } else { 'control' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($imageBase+$prefix+$prefixOffsets[$i]),(Hex-Bytes $shown),$mnemonic))
+        if ($Fault -eq ('Overlap' + $prefixStarts[$i])) {
+            $rows.Add(('{0:x}: 90 overlap' -f ($imageBase+$prefix+$prefixOffsets[$i]+1)))
+        }
+    }
+    $dispatchBytes = @($lea,$load,$add,$jump)
+    $dispatchOffsets = @(0,7,14,17)
+    $dispatchNames = @('Dispatch0','Dispatch1','Dispatch2','Dispatch3')
+    for ($i=0; $i -lt 4; ++$i) {
+        if ($Fault -eq ('Missing' + $dispatchNames[$i])) { continue }
+        [byte[]]$shown = $dispatchBytes[$i].Clone()
+        if ($Fault -eq ('ListingMismatch' + $dispatchNames[$i])) { $shown[$shown.Length-1] = $shown[$shown.Length-1] -bxor 1 }
+        $mnemonic = if ($Fault -eq ('Unknown' + $dispatchNames[$i])) { '<unknown>' } else { 'control' }
+        $rows.Add(('{0:x}: {1} {2}' -f ($imageBase+$dispatch+$dispatchOffsets[$i]),(Hex-Bytes $shown),$mnemonic))
+        if ($Fault -eq ('Overlap' + $dispatchNames[$i])) {
+            $rows.Add(('{0:x}: 90 overlap' -f ($imageBase+$dispatch+$dispatchOffsets[$i]+1)))
+        }
+    }
+    $rows.Add(('{0:x}: 90 destination' -f ($imageBase+$default)))
+    if ($target -ne $default) { $rows.Add(('{0:x}: {1} destination' -f ($imageBase+$target),(Hex-Bytes $targetNop))) }
+
+    [UInt32]$badEntry = $target
+    if ($Fault -eq 'BadLastTarget') { $badEntry = $target + 1 }
+    if ($Fault -eq 'OutsideTarget') { $badEntry = $prefix - 1 }
+    if ($Fault -eq 'MidTableTarget') { $badEntry = $table + 4 }
+    for ($i=0; $i -lt $entryCount; ++$i) {
+        [UInt32]$entry = if ($i -eq ($entryCount-1) -and $Fault -in @('BadLastTarget','OutsideTarget','MidTableTarget')) { $badEntry } else { $target }
+        if ($Fault -eq 'DefaultInTable') { $entry = $default }
+        Set-U32 $pe (0x400 + $table - $section + 4*$i) $entry
+        [byte[]]$dataBytes = $pe[(0x400+$table-$section+4*$i)..(0x400+$table-$section+4*$i+3)]
+        $rows.Add(('{0:x}: {1} table-data' -f ($imageBase+$table+4*$i),(Hex-Bytes $dataBytes)))
+    }
+
+    $procEnd = $end
+    if ($Fault -eq 'ProcedureEndsEarly') { $procEnd -= 4 }
+    if ($Fault -eq 'ProcedureEndsLate') { $procEnd += 4 }
+    $procOwner = if ($Fault -eq 'WrongProcedureOwner') { 1 } else { 0 }
+    $dataOwner = if ($Fault -eq 'WrongDataOwner') { 1 } else { 0 }
+    $symbols = "  Mod $procOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $symbols += "  0 | S_GPROC32 [size = 16] ``MovzxTerminal`` `n  addr = 0001:$($prefix-$section), code size = $($procEnd-$prefix)`n"
+    }
+    $symbols += "  Mod $dataOwner | ``SyntheticControl.obj``:`n"
+    if ($Fault -ne 'MissingData') {
+        [UInt32]$dataStart = if ($Fault -eq 'WrongDataStart') { $table+4 } else { $table }
+        $symbols += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($dataStart-$section)`n"
+    }
+    if ($Fault -eq 'EarlyDataSymbol') {
+        $symbols += "  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($table-$section+8)`n"
+    }
+    # The next anonymous datum belongs to a distinct procedure in the same contribution/module.
+    $laterProcedure = $end + 0x20
+    $laterData = $end + 0x40
+    $symbols += "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_GPROC32 [size = 16] ``LaterProcedure`` `n  addr = 0001:$($laterProcedure-$section), code size = 128`n"
+    $symbols += "  Mod 0 | ``SyntheticControl.obj``:`n  0 | S_LDATA32 [size = 16] `````n  type = <no type>, addr = 0001:$($laterData-$section)`n"
+    Set-Content -LiteralPath $case.Symbols -Value $symbols -Encoding utf8
+    Set-Content -LiteralPath $case.Disassembly -Value (@($rows | Sort-Object {
+        [UInt64]::Parse(($_ -split ':',2)[0],[Globalization.NumberStyles]::HexNumber)
+    }) -join "`n") -Encoding utf8
+    [IO.File]::WriteAllBytes($case.Binary,$pe)
+    $case.Name = $Name
+    return $case
+}
+
+$movzxTerminalCount = 0
+Invoke-Control (New-MovzxGuardedTerminalDwordCase 'MovzxTerminalDwordValid') $true 6 0
+++$movzxTerminalCount
+Invoke-Control (New-MovzxGuardedTerminalDwordCase 'MovzxTerminalDefaultInEntries' 'DefaultInTable') $true 6 0
+++$movzxTerminalCount
+Invoke-Control (New-MovzxGuardedTerminalDwordCase 'MovzxTerminalMaximumOne' '' 1) $true 2 0
+++$movzxTerminalCount
+Invoke-Control (New-MovzxGuardedTerminalDwordCase 'MovzxTerminalMaximum127' '' 127) $true 128 0
+++$movzxTerminalCount
+# Keep a real VEX instruction directly after the terminal table rejected.
+$case = New-MovzxGuardedTerminalDwordCase 'MovzxTerminalAdjacentVex'
+$pe = [IO.File]::ReadAllBytes($case.Binary)
+[UInt32]$vexAt = [UInt32]0x0010f900
+[byte[]]$vex = @(0xc5,0xf8,0x10,0x00)
+Put-Bytes $pe (0x400+$vexAt-[UInt32]0x0010f000) $vex
+$rows = [IO.File]::ReadAllText($case.Disassembly)
+$rows += "`n$('{0:x}: {1} vmovups xmm0, xmmword ptr [rax]' -f ([UInt64]0x140000000+$vexAt),(Hex-Bytes $vex))"
+[IO.File]::WriteAllBytes($case.Binary,$pe)
+Set-Content -LiteralPath $case.Disassembly -Value $rows -Encoding utf8
+Invoke-Control $case $false 6 1
+++$movzxTerminalCount
+
+foreach ($fault in 'WrongMovzxDestination','WrongMovzxSource','SignedMovsx','WrongCmpRegister','RangeTooSmall','RangeTooLarge',
+    'WrongJa','DefaultMidInstruction','DefaultOutsideProcedure','DefaultInsideTable','WrongImageBase','WrongLeaOpcode','WrongLeaDestination',
+    'WrongLoadOpcode','WrongLoadDestination','WrongLoadScale','WrongLoadIndex','WrongLoadBase','WrongLoadAddress',
+    'WrongAddOpcode','WrongAddRegisters','WrongJumpOpcode',
+    'MissingPrefix0','MissingPrefix1','MissingPrefix2','ListingMismatchPrefix0','ListingMismatchPrefix1','ListingMismatchPrefix2',
+    'UnknownPrefix0','UnknownPrefix1','UnknownPrefix2','OverlapPrefix0','OverlapPrefix1','OverlapPrefix2',
+    'MissingDispatch0','MissingDispatch1','MissingDispatch2','MissingDispatch3',
+    'ListingMismatchDispatch0','ListingMismatchDispatch1','ListingMismatchDispatch2','ListingMismatchDispatch3',
+    'UnknownDispatch0','UnknownDispatch1','UnknownDispatch2','UnknownDispatch3',
+    'OverlapDispatch0','OverlapDispatch1','OverlapDispatch2','OverlapDispatch3',
+    'MissingProcedure','WrongProcedureOwner','ProcedureEndsEarly','ProcedureEndsLate',
+    'MissingData','WrongDataOwner','WrongDataStart','EarlyDataSymbol',
+    'BadLastTarget','OutsideTarget','MidTableTarget') {
+    Invoke-Control (New-MovzxGuardedTerminalDwordCase ("MovzxTerminal$fault") $fault) $false
+    ++$movzxTerminalCount
+}
+Write-Host "MOVZX guarded terminal DWORD synthetic controls passed: $movzxTerminalCount"

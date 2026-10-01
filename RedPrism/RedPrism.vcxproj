@@ -139,6 +139,7 @@
     <ClInclude Include="..\Common\ImageCodecs.h" />
     <ClInclude Include="..\Common\ClipboardDibWork.h" />
     <ClInclude Include="..\Common\CodecFileStream.h" />
+    <ClInclude Include="..\Common\CodecMemoryStream.h" />
     <ClInclude Include="..\Common\ProjectStore.h" />
     <ClInclude Include="..\Common\ProjectLoadWork.h" />
     <ClInclude Include="..\Common\ImageImportWork.h" />
@@ -230,6 +231,7 @@
     <ClCompile Include="..\Common\ImageCodecs.cpp" />
     <ClCompile Include="..\Common\ClipboardDibWork.cpp" />
     <ClCompile Include="..\Common\CodecFileStream.cpp" />
+    <ClCompile Include="..\Common\CodecMemoryStream.cpp" />
     <ClCompile Include="..\Common\ProjectStore.cpp" />
     <ClCompile Include="..\Common\ImageImportWork.cpp" />
     <ClCompile Include="..\Common\SettingsStore.cpp" />

@@ -30,6 +30,27 @@ The project-file decoder additionally accepts a lower caller encoded-byte ceilin
 WIC decode interfaces. Project attachment passes the current remaining per-kind aggregate pixel ceiling;
 frame dimensions must fit before output allocation. A lower ceiling does not change accepted pixel conversion.
 
+## Bounded memory encoding (P1.7 F5b.2b.1)
+
+Memory `EncodePng`/`EncodeJpeg` enforce `min(512 MiB, 4 MiB + 2 * logical pixel bytes)` through
+`EncodeMemoryCapacity`; an empty raster has capacity zero. A caller may supply a smaller encoded-byte ceiling.
+The smallest limit reaches `CodecMemoryStream` before growth. Valid zero-ceiling or exceeded-ceiling encoding
+returns `TooLarge`; every failed/cancelled encode leaves the public byte vector empty. A larger caller ceiling
+cannot increase the derived/hard limit. Pixel formats, premultiplication, JPEG white matte, resolution and
+existing numeric expectations are unchanged. File forms retain their separate direct checked file destination.
+
+The private stream reserves bounded virtual address space once and commits pages lazily, at most 64 KiB per
+native commit call. Reads/writes/stale-gap clearing and final vector copying check cancellation between 64 KiB
+bands. Newly committed pages already contain zeros, avoiding a second clearing pass. Shrink/regrow clears stale
+committed bytes; cursor/size arithmetic and cap refusal precede growth. A sticky cap-refusal flag prevents
+publication even if a codec ignores a refused stream call. Borrow final bytes only with a retained COM owner
+and after successful encoder completion; no borrowed view escapes. COM stream methods allocate no C++ storage
+and allow no C++ exception; explicit noexcept creation admission translates only bad_alloc to E_OUTOFMEMORY.
+
+Whole host admission additionally charges stream/vector overlap, source/document/history roots, row/conversion
+buffers, movable blocks, receipt/hash owners, opaque codec workspace and aggregate retirement. The sink cap
+alone does not bound WIC workspace or qualify production clipboard activation. Existing inline clipboard callers
+remain F5b.2b/F5d work. Cancellation cannot interrupt an in-flight OS/WIC call.
 ## Import
 
 `ImportImageFile` / `ImportImageOnto` accept JPEG, PNG, TIFF, and HEIC/HEIF when WIC has a HEIF codec. Missing HEIF
