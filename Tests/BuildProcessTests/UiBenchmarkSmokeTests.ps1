@@ -24,6 +24,7 @@ Remove-Item -LiteralPath $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
 $process = Start-Process -WindowStyle Hidden -FilePath $ExecutablePath `
     -ArgumentList @('--warp', '--bench', 'ui-smoke', '--isa', 'scalar') -PassThru `
     -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+$null = $process.Handle # Retain exit-observation authority through the bounded wait on Windows PowerShell.
 $timeoutSeconds = 120
 if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
     throw "RedPrism.exe --warp --bench ui-smoke --isa scalar did not finish within $timeoutSeconds s (PID $($process.Id) is still running; report it, do not kill it)."

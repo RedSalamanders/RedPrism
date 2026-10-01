@@ -1695,12 +1695,59 @@ class DocumentSession
         friend class DocumentSession;
     };
     [[nodiscard]] std::optional<MergePlan> PlanMerge() const;
+    [[nodiscard]] const std::unordered_set<Guid>& SelectedLayerIDs() const noexcept
+    {
+        return _selected;
+    }
+    [[nodiscard]] static std::optional<MergePlan> PlanMergeForWork(const std::optional<CanvasDocument>& source,
+                                                                   const std::optional<Guid>& active,
+                                                                   const std::unordered_set<Guid>& selected,
+                                                                   CancelToken cancellation = {});
     // PrepareMerge is worker-safe and owns all pixel trimming and thumbnail work. ApplyPreparedMerge is the
     // session-owned validation/history step; MergeLayers remains the synchronous compatibility wrapper.
     [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite);
     [[nodiscard]] static std::optional<PreparedMerge> PrepareMerge(const MergePlan& plan, const Raster& composite,
                                                                    const class CancelToken& cancellation);
     [[nodiscard]] bool ApplyPreparedMerge(const MergePlan& plan, const PreparedMerge& prepared);
+    enum class MergePublicationStatus : std::uint8_t
+    {
+        Invalid,
+        Ready,
+        TooLarge,
+        Cancelled,
+    };
+    // Worker-bound pixels, survivor records, selection set and complete history. Owner publication swaps all
+    // replaced owners into this candidate; no caller can substitute pixels or history independently.
+    class PreparedMergePublication final
+    {
+      public:
+        PreparedMergePublication(const PreparedMergePublication&) = delete;
+        PreparedMergePublication& operator=(const PreparedMergePublication&) = delete;
+        PreparedMergePublication(PreparedMergePublication&&) noexcept = default;
+        PreparedMergePublication& operator=(PreparedMergePublication&&) noexcept = default;
+
+      private:
+        friend class DocumentSession;
+        PreparedMergePublication(JobToken token, std::optional<Guid> beforeActive, Guid merged, CanvasDocument document,
+                                 DocumentHistory::Publication history, std::unordered_set<Guid> selected)
+            : _token(std::move(token)), _beforeActive(std::move(beforeActive)), _active(merged),
+              _document(std::move(document)), _history(std::move(history)), _selected(std::move(selected))
+        {
+        }
+        JobToken _token;
+        std::optional<Guid> _beforeActive;
+        std::optional<Guid> _active;
+        std::optional<CanvasDocument> _document;
+        DocumentHistory::Publication _history;
+        std::unordered_set<Guid> _selected;
+        std::optional<CanvasDocument> _retiredDisplay;
+    };
+    [[nodiscard]] static std::optional<PreparedMergePublication> PrepareMergePublication(
+        const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
+        DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite,
+        MergePublicationStatus& status, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedMergeIfCurrent(PreparedMergePublication& prepared) noexcept;
+    [[nodiscard]] std::uint64_t MergeRetirementMemoryBytes() const noexcept;
     // `composite`: the plan's layers flattened as the canvas shows them (document-sized BGRA from the composition).
     // The trimmed result replaces them in their place, layers clipped to any of them clip to it, as one entry named
     // by the plan; false when the plan does not fit the document any more.

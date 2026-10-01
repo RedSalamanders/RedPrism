@@ -20,6 +20,8 @@
 #include "HistoryWorkTests.h"
 #include "ImageFilters.h"
 #include "LiftReferenceTests.h"
+#include "MergeHistoryTests.h"
+#include "MergePlanProbeTests.h"
 #include "PixelMoveOpeningTests.h"
 #include "PixelMoveOpeningWorkTests.h"
 #include "PixelMoveStateTests.h"
@@ -7354,6 +7356,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryRetirementBoundTests();
     gFailures += RunPreparedRasterHistoryTests();
     gFailures += RunPreparedColorHistoryTests();
+    gFailures += RunMergeHistoryTests();
+    gFailures += RunMergePlanProbeTests();
     gFailures += RunSessionGenerationTests();
     gFailures += RunHistoryWorkDocumentTests();
     gFailures += RunColorEditWorkTests();

@@ -215,34 +215,7 @@ void Application::MergeLayersCommand() noexcept
     // the gradient only inside MergeLayers, after the composite was read without it.
     (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     CommitGradient();
-    const std::optional<DocumentSession::MergePlan> plan = _session.PlanMerge();
-    if (!plan.has_value() || !_session.Document().has_value())
-    {
-        return;
-    }
-    // Only the merged layers, cut loose from anything outside the merge, composited as the canvas shows them.
-    CanvasDocument flat = _session.Document().value();
-    flat.layers.clear();
-    flat.selection.reset();
-    const std::unordered_set<Guid> kept(plan->ids.begin(), plan->ids.end());
-    for (const ImageLayer& layer : _session.Document().value().layers)
-    {
-        if (!kept.contains(layer.id))
-        {
-            continue;
-        }
-        ImageLayer copy = layer;
-        if (copy.parentID.has_value() && !kept.contains(copy.parentID.value()))
-        {
-            copy.parentID.reset();
-        }
-        if (copy.maskSourceID.has_value() && !kept.contains(copy.maskSourceID.value()))
-        {
-            copy.maskSourceID.reset();
-        }
-        flat.layers.push_back(std::move(copy));
-    }
-    _hostExecutionError = StartUtilityReadback(std::move(flat), UtilityReadbackKind::Merge, plan);
+    _hostExecutionError = StartMergeReadback();
     if (FAILED(_hostExecutionError))
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_FLATTEN);
 }

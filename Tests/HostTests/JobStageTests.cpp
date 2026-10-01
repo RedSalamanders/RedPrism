@@ -38,11 +38,12 @@ wil::unique_handle Event()
     return event;
 }
 
-void Wait(HANDLE event) noexcept
+void Wait(HANDLE event, const char* label = "unlabelled") noexcept
 {
-    if (!event || WaitForSingleObject(event, 10000) != WAIT_OBJECT_0)
+    const auto waited = event ? WaitForSingleObject(event, 10000) : WAIT_FAILED;
+    if (waited != WAIT_OBJECT_0)
     {
-        std::printf("FAIL job-stage.gate-timeout\n");
+        std::printf("FAIL job-stage.gate-timeout label=%s wait=0x%08lx\n", label, waited);
         std::fflush(stdout);
         std::_Exit(1);
     }
@@ -492,14 +493,18 @@ void CompleteFirstStageAsSuspended(JobScheduler& scheduler, StageState& state, J
                                    std::unique_ptr<Job>& job, const char* submitName)
 {
     Expect(scheduler.Submit(job, {JobClass::Background}, ticket) == S_OK, submitName);
-    Wait(state.entered);
+    Wait(state.entered, submitName);
     (void)DrainCompletions(scheduler);
-    const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
-    (void)WaitForSingleObject(wake, 0);
+    // A memory notification is deliberately unrelated to the held first worker stage. Suspension requires
+    // the hook itself, even if another such notification arrives after release and before worker completion.
+    scheduler.NotifyMemoryChanged();
+    Wait(static_cast<HANDLE>(scheduler.WakeHandle()), "generation.unrelated-memory-wake");
+    (void)DrainCompletions(scheduler);
+    Expect(WaitForSingleObject(state.deferred, 0) == WAIT_TIMEOUT && state.deferrals == 0 &&
+               state.runs.load(std::memory_order_relaxed) == 1,
+           "generation.unrelated-wake-does-not-prove-suspension");
     (void)SetEvent(state.release);
-    Wait(wake);
-    (void)DrainCompletions(scheduler);
-    Wait(state.deferred);
+    WaitForSuspension(scheduler, state.deferred);
 }
 
 void TestReusedSlotRejectsOlderGenerationResume()

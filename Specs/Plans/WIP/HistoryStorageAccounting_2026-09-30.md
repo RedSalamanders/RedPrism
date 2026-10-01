@@ -12,6 +12,22 @@
 - [ ] Incremental accounting, lazy image thumbnails and first uploads; complete the remaining P1.9 work before closure.
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.
     - [x] Immutable views, detached publication and complete aggregate release for basic raster, gradient and pixel-move commits; all profiles pass ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers remain open.
+    - [x] Destructive color/filter and size-card publication and complete retirement qualify in all configurations
+      ([color](../../TestRuns/ColorHistoryPublication_2026-10-01.md), [size](../../TestRuns/SizeHistoryPublication_2026-10-01.md)).
+    - [x] Merge: metadata-only worker probe, admitted readback/history capture, full survivor publication and CPU
+      retirement pass all profiles; 71 document assertions and 17 host modes
+      ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)).
+    - [ ] Production Undo/Redo: prepare restore, selected target and exact publication/retirement before history moves.
+      A primary-owned private implementation now has constant-sized authority (including no-document Redo), admitted
+      immutable-history capture, worker preparation and nonthrowing swaps. Document proof passes 63 assertions;
+      the host ordering, fault and retirement harness is drafted. Empty stacks/open transactions use a constant-time
+      no-op before capture, preserving crop/redo and the existing ignored-key rule. Native activation follows merge qualification.
+    - [ ] Imports: preconstruct new-document saved baseline, additional-image entry and retired session/history
+      owners before publication. A primary-owned replacement-history primitive passes private strict syntax and
+      55 independent baseline/Undo/Redo/fault assertions. The complete session candidate also passes strict syntax;
+      42 primary-reviewed session assertions also pass, including isolated active/mask/crop/epoch refusal and
+      later saved-revision behavior. The production host draft passes strict syntax; actual host fault/retirement
+      execution and native integration remain active.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
@@ -130,31 +146,47 @@ F6 work. The final distinct r2 six-configuration matrix qualifies the sizing sou
 
 ## Immediate implementation
 
+### H1.5 production Undo/Redo — private proof
+
+- [x] Capture constant-sized session/serial/generation/restore/active/mask/crop authority, including a session
+  without a document. Capture immutable history handles only after whole restore/trim admission.
+- [x] Prepare restored document, destination history and selected-id set on the worker. Check authority and exact
+  history epoch before nonthrowing history/document/display swaps; retain old owners in the release aggregate.
+- [x] Preserve mask targeting, actual-restore crop cancellation, no-entry crop retention, current/saved revisions,
+  single-use and moved/foreign refusal. Empty stacks and open transactions do not capture or prepare a restore.
+- [x] Pass 63 isolated document assertions and strict module/host syntax. Both directions exercise all three restore
+  allocation/cancellation checkpoints; later saved revisions and a newly begun unrecorded lasso cannot corrupt state.
+- [ ] Activate production command routing and the 28 actual host cases after merge qualification. Test a younger
+  edit, no-document Redo, selected receipt lineage after document removal, refusal/epoch/generation/target/crop/lasso,
+  late cancellation, no hidden Present and worker retirement. Qualify native suites and all ARM64 cross-builds.
+- [ ] Record exact frozen inputs/binaries, update the durable history/host contracts, commit and push this slice.
+  H2/H3/H4 and measured apply/G1 remain separate gates.
+
 ### Next H1.4 caller: merge readback and publication
 
-- [ ] Move merge source capture after metadata-probe admission, then plan on the worker. No plan succeeds without
+- [x] Move merge source capture after metadata-probe admission, then plan on the worker. No plan succeeds without
   pixel allocation or GPU work, including a 30,000-square blank canvas. A ready plan keeps its immutable source
   and selected ordinal while a separately admitted record reserves full readback, crop/thumbnail, survivor/clipping
   graph and history/trim peaks before history capture.
   Keep the selected ordinal and exact generation/token through admitted capture, GPU tiles and final apply/drop.
-- [ ] Prepare the complete survivor document, clipping-source rewrites, merged layer, active id, selected-id set
+- [x] Prepare the complete survivor document, clipping-source rewrites, merged layer, active id, selected-id set
   and history on the worker. Preserve D7 budget refusal, insertion anchor, parent/group and clipping goldens.
   No owner apply may allocate an unordered set, rebuild survivor records or call allocating Begin/End.
-- [ ] Retain CPU snapshot/readback/prepared result/history and retired document/selected owners in complete release
+- [x] Retain CPU snapshot/readback/prepared result/history and retired document/selected owners in complete release
   aggregates. GPU mapping and utility-target acknowledgement stay on the owner; job retirement cannot move D3D
   cleanup to a worker. Device restart releases CPU previous-attempt state on a worker and never publishes partial pixels.
 - [ ] Validate exact document generation/restore serial, history epoch, acquisition and readback device authority
   before nonthrowing publication. Explicitly define whether CPU-only processing occurs after final map acknowledgement;
   device changes after that detached boundary cannot invalidate already copied bytes. Update the existing rebind gate
   if its held-mapping predicate changes, preserving bounded restart and no writer restart requirements.
-- [ ] Add literal merged pixels, clipping/group survivors and Undo/Redo, all five history fault stages, source-capture
+- [x] Add literal merged pixels, clipping/group survivors and Undo/Redo, all five history fault stages, source-capture
   refusal, cancellation/epoch invalidation and off-owner aggregate retirement. Qualify full configurations and update
   the owning rendering/document/history contracts before checking this caller complete.
 
-Current `UtilityReadbackJob` captures a value source/token before submission, prepares only the merged pixels,
-and lets `ApplyPreparedMerge` allocate survivor sets/vectors and history on the owner. `DocumentReadbackJob` also
-owns value CPU document storage beside owner-only GPU cleanup. This is an implementation dependency, not a qualified
-merge path; its restructuring must preserve the shared export/adjustment readback lifecycle.
+At the start of this slice, `UtilityReadbackJob` captured a value source/token before submission, prepared only the merged pixels,
+and let `ApplyPreparedMerge` allocate survivor sets/vectors and history on the owner. `DocumentReadbackJob` also
+owned value CPU document storage beside owner-only GPU cleanup. Restructuring preserved the shared
+export/adjustment readback lifecycle.
 
 The primary-owned merge draft now passes strict module/host syntax with a cheap descriptor and admitted capture,
 complete detached survivor/history publication, nonthrowing owner swaps and separate CPU retirement. Existing
@@ -164,8 +196,34 @@ including group/transparent behavior and D7 refusal using a physically tiny larg
 adds 23 independent immutable-planner/no-plan/group/multiselection/cancellation assertions, reviewed and executed
 by the primary. The planner expands selected descendants once and validation indexes source ids once. The new
 metadata-only probe preserves one history ordinal across readback admission; its source/cancel/stale/refusal and
-huge no-plan host scenarios are drafted. This is draft proof; device/cancel/epoch/allocation/shutdown runtime gates
-and native matrix qualification remain unchecked.
+huge no-plan host scenarios were initially draft proof, with native runtime qualification still pending.
+The reviewed draft was integrated after `c2e2904`; native
+Debug preflight passes all 71 document assertions and 17 actual host scenarios. The first frozen matrix stops
+in Debug HostTests after `generation.old-submit` and a generic gate timeout, before merge tests. Its exact binary,
+source freeze and logs are preserved under `.build/p1-merge-history-first-Debug-failure/`. The old suspension helper
+still assumed one scheduler wake proved completion; memory notifications may arrive first. It now waits for the
+actual hook, retains the same 10-second failure bound and adds an unrelated-memory-wake control and labelled wait
+diagnostics. The original log does not identify which generic wait expired. The r2 matrix passes CPU suites and
+records all 17 merge host modes, then stops because Windows PowerShell reports an empty process ExitCode after
+the bounded self-test wait. The actual child result is unknown and that run is excluded. Its exact image, runtime
+DLLs, source freeze and logs are preserved under `.build/p1-merge-history-r2-Debug-observation-failure/`.
+The runner now retains each asynchronously waited process handle before waiting and explicitly rejects an empty
+crash-probe result. The preserved r2 image completes a fresh pinned-handle self-test with exit 0; this does not
+retroactively qualify the unknown first child result. The distinct r3 matrix then stops in Debug IoTests at
+`rotation-fault.timer-create-failure-keeps-native-child-lock-error-and-backup`, before the application self-test.
+Its image, runtime DLLs, freeze and logs are retained in `.build/p1-merge-history-r3-Debug-rotation-failure/`.
+Failure-only diagnostics now identify every status/native-error/hook/tree/staging predicate; the original assertions
+and policy are unchanged. All 12 focused full I/O runs pass without reproducing or explaining the original failure.
+That cause remains F6 work. The r4 matrix passes Debug CPU suites, WARP self-test and kernel smoke, then stops
+because the nested UI-smoke wrapper reports an empty process ExitCode. The exact image, runtime DLLs, freeze,
+wrapper and logs are preserved under `.build/p1-merge-history-r4-Debug-smoke-observation-failure/`; printed
+operation results do not qualify an unknown child exit. The UI-smoke and gradient benchmark wrappers now retain
+their process handles, and the CRT expected-failure control explicitly rejects a missing exit code. A fresh
+26-operation UI-smoke preflight passes. The distinct r5 frozen six-configuration matrix is next; only its final
+results may qualify the integrated merge slice. The final r5 matrix passes all three x64 gates and ARM64
+cross-builds against the same 379 inputs; [evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md).
+Both probe and readback use complete deferred aggregates. The worker builds the
+composition subset, avoiding another owner-side layer copy; cached display ownership also transfers on publish.
 
 Published selection loops already share immutable storage and cache point counts/bounds. Cache their vector
 object, outer retained capacity and inner retained capacities when the producer owns them. Opaque allocator

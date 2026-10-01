@@ -251,6 +251,15 @@ this cache; empty/moved-from handles report zero. History byte queries do not tr
   `ApplyPreparedMerge` checks those dimensions, plan metadata, live ids, pixel budget and resulting graphs before
   the same history insertion/clip repair. It refuses an unsettled gradient; the selected host continuation
   settles earlier edits before taking the snapshot and validates its complete document token before apply.
+  Production merge first admits a metadata-only record, captures immutable source/active/selected owners and
+  plans on its worker. A missing plan succeeds without canvas pixel allocation or GPU work. A ready plan retains
+  that source and worker-built composition subset while a separate full readback/history record retains the same
+  history acquisition. History capture follows its complete reservation. `PrepareMergePublication` builds the
+  survivor records, clipping rewrites, trimmed layer/thumbnail, active/selected ids and detached history before
+  either live state changes. `ApplyPreparedMergeIfCurrent` validates whole document token, active id, settled
+  edit state and exact history epoch, then publishes and swaps replaced document/selection/display owners.
+  Failure/cancellation/staleness preserves the existing document, revision and redo. The original direct methods
+  remain numeric references. This integration is undergoing native qualification under P1.9 H1.
 - `ClearDocument` drops the document, the active layer and selection, the collapsed set, every draft and pending
   edit, and the history (marked saved): the state after Close Project. `CreateDocument` starts the next one.
   `ReplaceDocument(document, active)` (File › Open, a new project from images) drops what `ClearDocument` drops and

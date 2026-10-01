@@ -111,6 +111,8 @@
     <ClInclude Include="PreparedColorHistoryTests.h" />
     <ClInclude Include="DocumentSizeHistoryTests.h" />
     <ClInclude Include="PixelMoveOpeningTests.h" />
+    <ClInclude Include="MergeHistoryTests.h" />
+    <ClInclude Include="MergePlanProbeTests.h" />
     <ClInclude Include="PixelMoveOpeningWorkTests.h" />
     <ClInclude Include="..\..\Common\Executor.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
@@ -148,6 +150,8 @@
     <ClCompile Include="PreparedColorHistoryTests.cpp" />
     <ClCompile Include="DocumentSizeHistoryTests.cpp" />
     <ClCompile Include="PixelMoveOpeningTests.cpp" />
+    <ClCompile Include="MergeHistoryTests.cpp" />
+    <ClCompile Include="MergePlanProbeTests.cpp" />
     <ClCompile Include="PixelMoveOpeningWorkTests.cpp" />
     <ClCompile Include="SessionGenerationTests.cpp" />
     <ClCompile Include="..\..\Common\Document.cpp" />

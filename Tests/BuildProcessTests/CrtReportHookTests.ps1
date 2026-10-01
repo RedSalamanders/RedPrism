@@ -27,8 +27,8 @@ try {
     $probe = Start-Process -WindowStyle Hidden -FilePath $HostTestsPath -ArgumentList @('--crt-report-probe') `
         -Wait -PassThru -RedirectStandardError $err
     $text = if (Test-Path -LiteralPath $err) { Get-Content -LiteralPath $err -Raw -ErrorAction SilentlyContinue } else { '' }
-    if ($probe.ExitCode -eq 0) {
-        throw 'HostTests.exe --crt-report-probe exited 0; the installed CRT report hook did not fail the run.'
+    if ($null -eq $probe.ExitCode -or $probe.ExitCode -eq 0) {
+        throw "HostTests.exe --crt-report-probe did not report a nonzero exit; the CRT report gate is unqualified (exit $($probe.ExitCode))."
     }
     if ([string]::IsNullOrEmpty($text) -or $text -notmatch 'RF-702 deliberate CRT report probe') {
         throw "HostTests.exe --crt-report-probe did not route the CRT report to stderr: '$text'"

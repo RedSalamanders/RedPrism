@@ -91,6 +91,7 @@ foreach ($case in $cases) {
     }
     $process = Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList $case.Arguments -PassThru `
         -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $null = $process.Handle
     if (-not $process.WaitForExit(7200000)) {
         throw "Benchmark $tag exceeded two hours (PID $($process.Id)); report it and do not terminate it."
     }

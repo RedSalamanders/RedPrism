@@ -45,6 +45,15 @@
     synchronous fixture, and reports receipt/IO/reload status and stage-native values on failure. The rerun passes
     this scenario without identifying its original cause; F6 stays open and failed evidence is retained.
 
+    Merge's r3 matrix reproduces `rotation-fault.timer-create-failure-keeps-native-child-lock-error-and-backup`
+    in Debug IoTests. Preserve `.build/p1-merge-history-r3-Debug-rotation-failure/` and its exact image/freeze/logs.
+    The recovery policy and assertion remain unchanged; failure-only diagnostics now report each status, captured
+    reader-open error, fault hook, stage-native value and destination/backup/staging fact before a focused rerun.
+    All 12 focused full I/O runs pass without reproducing that predicate. Its cause remains open; the distinct
+    r4 matrix stops on an unknown nested UI-smoke exit code. The r5 matrix passes all three x64 gates and ARM64
+    cross-builds after process-handle retention. These results do not explain or retroactively
+    qualify the failed r3 image.
+
 Status: ACTIVE, executable P1.7 child; no completion claim.
 Owner: `RedPrism/ApplicationFileJobs.cpp`, `ApplicationProjectSaveJobs.cpp`, file continuations,
 `Common/PathClassificationWork.*`, `ProjectSaveWork.h`, codecs/project store and clipboard.

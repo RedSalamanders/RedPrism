@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 #include <utility>
 
 namespace
@@ -29,6 +30,22 @@ DocumentReadbackJob::~DocumentReadbackJob()
     Acknowledge();
     if (_utilityAcquired)
         _composition.ReleaseUtility();
+}
+
+DocumentReadbackJob::DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
+                                         D3D11_BOX region) noexcept
+    : _scheduler(scheduler), _queue(queue), _composition(composition), _region(region), _phase(Phase::Capture)
+{
+}
+
+void DocumentReadbackJob::TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image) noexcept
+{
+    static_assert(std::is_nothrow_swappable_v<CanvasDocument>);
+    static_assert(std::is_nothrow_swappable_v<PixelBuffer>);
+    static_assert(std::is_nothrow_swappable_v<Raster>);
+    std::swap(_document, document);
+    std::swap(_pixels, pixels);
+    std::swap(_image, image);
 }
 
 std::uint64_t DocumentReadbackJob::RequiredMemory(const D3D11_BOX& region) noexcept
@@ -58,6 +75,8 @@ bool DocumentReadbackJob::LastTile() const noexcept
 JobResult DocumentReadbackJob::Run(JobContext& context)
 {
     _cancellation = context.cancellation;
+    if (_phase == Phase::Capture)
+        return {}; // no source capture before the owner's admitted continuation
     if (_phase == Phase::Error)
         return {JobStatus::Failed, _error};
     if (_phase == Phase::ProcessDetached)
@@ -146,6 +165,20 @@ void DocumentReadbackJob::RequestTile(JobTicket ticket) noexcept
 bool DocumentReadbackJob::DeferCompletion(JobResult, JobTicket ticket) noexcept
 {
     Acknowledge();
+    if (_phase == Phase::Capture)
+    {
+        const HRESULT captured = CaptureReadbackDocument(_document);
+        if (FAILED(captured))
+            ResumeError(ticket, captured);
+        else
+        {
+            _phase = captured == S_FALSE ? Phase::ProcessDetached : Phase::Prepare;
+            const bool resumed = _scheduler.Resume(ticket);
+            assert(resumed);
+            (void)resumed;
+        }
+        return true;
+    }
     if (_phase == Phase::ProcessDetached)
         return false; // all GPU rows were acknowledged before this CPU-only stage started
     if (_phase == Phase::Copy)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Document.h"
 #include "Jobs.h"
 
 #include <atomic>
@@ -17,4 +18,15 @@ struct UtilityWorkTestGate final
     wil::unique_handle release;
     std::atomic<unsigned int> visits{0};
     JobResult result;
+    bool throwCaptureFailure = false;
+    bool throwProbeCaptureFailure = false;
+    bool throwProbeAllocationFailure = false;
+    bool holdProbe = false;
+    std::optional<DocumentHistory::PrepareStage> throwHistoryStage;
+    std::atomic<bool> captured{false};
+    std::atomic<bool> retiredOffOwner{false};
+    std::atomic<unsigned int> retiredNodes{0}, retiredOwnerNodes{0};
+    std::atomic<unsigned int> probePreparations{0}, readbackCaptures{0};
+    std::uint64_t probeReservationBytes = 0;
+    bool probeReservationHeld = false;
 };

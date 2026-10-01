@@ -5,6 +5,7 @@
 #include "UtilityWorkTestGate.h"
 #include "resource.h"
 
+#include <array>
 #include <cstdio>
 #include <memory>
 #include <new>
@@ -194,7 +195,19 @@ int Application::RunUtilityReadbackSelfTest() noexcept
         Cancel,
         Failure,
         Stale,
-        Rebind
+        Rebind,
+        CaptureFailure,
+        BeforeSnapshotFailure,
+        AfterSnapshotFailure,
+        EntryFailure,
+        StackFailure,
+        TrimFailure,
+        Epoch,
+        ProbeCaptureFailure,
+        ProbeAllocationFailure,
+        ProbeCancel,
+        ProbeStale,
+        NoPlan
     };
     struct State final
     {
@@ -215,29 +228,49 @@ int Application::RunUtilityReadbackSelfTest() noexcept
             return;
         }
         state.visited = true;
-        state.held = owner._historyWork.Busy() && owner._gpuWork.LentCount() == 1 &&
+        state.held = owner._historyWork.Busy() && owner._gpuWork.LentCount() == 0 &&
                      state.merge.Read().outcome == HostOutcome::Pending;
-        if (state.mode == Mode::Cancel)
+        if (state.mode == Mode::Cancel || state.mode == Mode::ProbeCancel)
         {
             owner.CancelHostContinuations();
             state.cancelPending = state.merge.Read().outcome == HostOutcome::Pending;
         }
-        else if (state.mode == Mode::Stale)
+        else if (state.mode == Mode::Stale || state.mode == Mode::ProbeStale)
             owner._session.SetOpacity(0.5); // deliberate external mutation: a stale prepared merge must be dropped
         else if (state.mode == Mode::Rebind)
         {
             state.rebound = owner._renderer.RecoverDeviceForTest();
             owner.BindCompositionDevice();
         }
+        else if (state.mode == Mode::Epoch)
+        {
+            owner._session.history.Begin(L"Epoch-only", owner._session.Document(), owner._session.ActiveLayerID());
+            owner._session.history.End(owner._session.Document(), owner._session.ActiveLayerID());
+        }
         owner._composition.ReleaseDocumentSurfaces();
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._utilityWorkTestGate->release.get());
     };
-    for (const auto mode : {Mode::Ordered, Mode::Cancel, Mode::Failure, Mode::Stale, Mode::Rebind})
+    for (const auto mode : {Mode::Ordered, Mode::Cancel, Mode::Failure, Mode::Stale, Mode::Rebind, Mode::CaptureFailure,
+                            Mode::BeforeSnapshotFailure, Mode::AfterSnapshotFailure, Mode::EntryFailure,
+                            Mode::StackFailure, Mode::TrimFailure, Mode::Epoch, Mode::ProbeCaptureFailure,
+                            Mode::ProbeAllocationFailure, Mode::ProbeCancel, Mode::ProbeStale, Mode::NoPlan})
     {
-        _session.CreateDocument(16, 12);
-        (void)InsertPaintedLayer(_session, L"Red", 8, 8, {0, 0}, 0, 0xFFFF0000);
-        (void)InsertPaintedLayer(_session, L"Blue", 8, 8, {4, 0}, 0, 0xFF0000FF);
+        _session.CreateDocument(mode == Mode::NoPlan ? 30000 : 16, mode == Mode::NoPlan ? 30000 : 12);
+        if (mode != Mode::NoPlan)
+        {
+            (void)InsertPaintedLayer(_session, L"Red", 8, 8, {0, 0}, 0, 0xFFFF0000);
+            (void)InsertPaintedLayer(_session, L"Blue", 8, 8, {4, 0}, 0, 0xFF0000FF);
+        }
+        else
+            _session.history.Reset();
+        const bool constructionFailure = (mode >= Mode::CaptureFailure && mode <= Mode::TrimFailure) ||
+                                         mode == Mode::ProbeCaptureFailure || mode == Mode::ProbeAllocationFailure;
+        if (constructionFailure || mode == Mode::Epoch)
+        {
+            _session.SetOpacity(0.75);
+            _session.Undo();
+        }
         _session.history.MarkSaved();
         DocumentChanged();
         const auto layers = _session.Document()->layers.size();
@@ -249,6 +282,20 @@ int Application::RunUtilityReadbackSelfTest() noexcept
             return 5;
         if (mode == Mode::Failure)
             _utilityWorkTestGate->result = {JobStatus::Failed, E_ACCESSDENIED};
+        if (mode == Mode::CaptureFailure)
+            _utilityWorkTestGate->throwCaptureFailure = true;
+        _utilityWorkTestGate->throwProbeCaptureFailure = mode == Mode::ProbeCaptureFailure;
+        _utilityWorkTestGate->throwProbeAllocationFailure = mode == Mode::ProbeAllocationFailure;
+        _utilityWorkTestGate->holdProbe = mode == Mode::ProbeCancel || mode == Mode::ProbeStale;
+        if (mode >= Mode::BeforeSnapshotFailure && mode <= Mode::TrimFailure)
+        {
+            constexpr std::array stages{
+                DocumentHistory::PrepareStage::BeforeSnapshot, DocumentHistory::PrepareStage::AfterSnapshot,
+                DocumentHistory::PrepareStage::Entry, DocumentHistory::PrepareStage::StackGrowth,
+                DocumentHistory::PrepareStage::TrimIndex};
+            _utilityWorkTestGate->throwHistoryStage =
+                stages[static_cast<std::size_t>(mode) - static_cast<std::size_t>(Mode::BeforeSnapshotFailure)];
+        }
         State state{*this, mode, QueueHostInput(HostCommandInput{ChromeHost::kCommandMergeDown})};
         std::optional<ContinuationReceipt> invert;
         if (mode == Mode::Ordered)
@@ -259,11 +306,16 @@ int Application::RunUtilityReadbackSelfTest() noexcept
             return 5;
         }
         const auto outcome = state.merge.Read();
-        const auto expected = mode == Mode::Cancel    ? HostOutcome::Cancelled
-                              : mode == Mode::Failure ? HostOutcome::Failed
-                              : mode == Mode::Stale   ? HostOutcome::Stale
-                                                      : HostOutcome::Succeeded;
-        bool correct = state.visited && state.held && outcome.outcome == expected && _gpuWork.LentCount() == 0 &&
+        const auto expected = constructionFailure                                 ? HostOutcome::Failed
+                              : mode == Mode::Cancel || mode == Mode::ProbeCancel ? HostOutcome::Cancelled
+                              : mode == Mode::Failure                             ? HostOutcome::Failed
+                              : mode == Mode::Stale || mode == Mode::ProbeStale || mode == Mode::Epoch
+                                  ? HostOutcome::Stale
+                                  : HostOutcome::Succeeded;
+        bool correct = (constructionFailure || mode == Mode::NoPlan ? !state.visited : state.visited && state.held) &&
+                       outcome.outcome == expected && _utilityWorkTestGate->retiredNodes.load() != 0 &&
+                       _utilityWorkTestGate->retiredOwnerNodes.load() == 0 &&
+                       _utilityWorkTestGate->probeReservationHeld && _gpuWork.LentCount() == 0 &&
                        _gpuWork.InFlightCount() == 0 && !_gpuWork.HasPending() && _jobs.ReservedMemoryBytes() == 0 &&
                        _composition.UtilitySurfaceBytes() == 0 && !_historyWork.Busy() && !_utilityTicket &&
                        _renderer.PresentCount() == presents;
@@ -283,19 +335,31 @@ int Application::RunUtilityReadbackSelfTest() noexcept
             correct = correct && _session.history.UndoName() == L"Merge Down";
         }
         else if (mode == Mode::Rebind)
-            correct = correct && SUCCEEDED(state.rebound) && _utilityWorkTestGate->visits.load() == 2 &&
+            correct = correct && SUCCEEDED(state.rebound) && _utilityWorkTestGate->visits.load() == 1 &&
                       _session.Document()->layers.size() == layers - 1 && _session.history.UndoName() == L"Merge Down";
         else
         {
             correct = correct && _session.Document()->layers.size() == layers;
-            if (mode == Mode::Stale)
+            if (mode == Mode::Stale || mode == Mode::ProbeStale)
                 correct = correct && _session.ActiveLayer()->opacity == 0.5;
             else
                 correct = correct && _session.history.CurrentRevision() == revision;
-            if (mode == Mode::Cancel)
+            if (mode == Mode::Cancel || mode == Mode::ProbeCancel)
                 correct = correct && state.cancelPending;
             if (mode == Mode::Failure)
                 correct = correct && outcome.error == E_ACCESSDENIED;
+            if (constructionFailure || mode == Mode::Epoch)
+                correct = correct && _session.history.CanRedo() && _session.history.RedoName() == L"Layer Opacity";
+            if (constructionFailure)
+                correct = correct && outcome.error == E_OUTOFMEMORY;
+            if (mode == Mode::NoPlan)
+                correct = correct && _session.Document()->width == 30000 && _session.Document()->height == 30000 &&
+                          _session.history.UndoCount() == 0 && _utilityWorkTestGate->probePreparations.load() == 1 &&
+                          _utilityWorkTestGate->readbackCaptures.load() == 0 &&
+                          _utilityWorkTestGate->probeReservationBytes < 16 * 1024 * 1024;
+            if (mode == Mode::ProbeCaptureFailure || mode == Mode::ProbeAllocationFailure ||
+                mode == Mode::ProbeCancel || mode == Mode::ProbeStale)
+                correct = correct && _utilityWorkTestGate->readbackCaptures.load() == 0;
         }
         const auto gateVisits = _utilityWorkTestGate->visits.load();
         _utilityWorkTestGate.reset();
@@ -308,6 +372,7 @@ int Application::RunUtilityReadbackSelfTest() noexcept
             SelfTestFailure(L"Utility readback failed ordering, hidden ownership, exact drop or rebind validation.\n");
             return 5;
         }
+        std::fprintf(stderr, "PASS utility-history mode=%u\n", static_cast<unsigned int>(mode));
     }
     return 0;
 }

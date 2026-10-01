@@ -1699,6 +1699,7 @@ struct RollbackChildReader
     bool releaseOnRetry = false;
     bool opened = false;
     bool directory = false;
+    DWORD openFailureError = ERROR_SUCCESS;
 };
 
 void ObserveRollbackChildReader(void* context, ProjectIoStage stage, unsigned int value) noexcept
@@ -1707,9 +1708,11 @@ void ObserveRollbackChildReader(void* context, ProjectIoStage stage, unsigned in
     ObserveRotation(&reader.events, stage, value);
     if (stage == ProjectIoStage::StagingToDestinationFailed)
     {
-        reader.file.reset(CreateFileW(reader.manifest, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                      OPEN_EXISTING,
-                                      reader.directory ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL, nullptr));
+        const HANDLE handle =
+            CreateFileW(reader.manifest, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                        reader.directory ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL, nullptr);
+        reader.openFailureError = handle == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+        reader.file.reset(handle);
         reader.opened = static_cast<bool>(reader.file);
     }
     else if (stage == ProjectIoStage::RollbackRetryScheduled && reader.releaseOnRetry)
@@ -2023,6 +2026,9 @@ void TestProjectRotationFaultRecovery()
                 (faultStage == ProjectSaveFaultStage::RecoveryTimerCreate ? 0u : 1u) &&
             timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)] ==
                 (faultStage == ProjectSaveFaultStage::RecoveryTimerWait ? 1u : 0u);
+        const bool destinationExists = std::filesystem::exists(destination);
+        const bool backupTreeMatches = SnapshotProjectTree(backup) == originalTree;
+        const std::size_t stagingCount = CountOwnedStagingDirectories(root, destination.filename().wstring());
         const bool failedAsExpected =
             status == ProjectIoStatus::Encode && reader.opened && timerFault.visits[selectedFault] == 1 &&
             timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::StagingToDestinationRename)] == 1 &&
@@ -2031,8 +2037,38 @@ void TestProjectRotationFaultRecovery()
             reader.events.errors[publishFailure] == ERROR_ACCESS_DENIED && reader.events.visits[rollbackFailure] == 1 &&
             reader.events.errors[rollbackFailure] == nativeRenameError && reader.events.visits[published] == 0 &&
             reader.events.visits[retries] == (faultStage == ProjectSaveFaultStage::RecoveryTimerWait ? 1u : 0u) &&
-            !std::filesystem::exists(destination) && SnapshotProjectTree(backup) == originalTree &&
-            CountOwnedStagingDirectories(root, destination.filename().wstring()) == 0;
+            !destinationExists && backupTreeMatches && stagingCount == 0;
+        if (!failedAsExpected)
+        {
+            std::printf(
+                "DIAG %s status=%u expectedStatus=%u reader.opened=%u reader.openFailureError=%lu "
+                "selectedFault={stage:%u,visits:%u,expectedVisits:1,injectedError:%u} "
+                "faultVisits={destinationToBackup:%u,stagingToDestination:%u,rollbackRename:%u,backupCleanup:%u,"
+                "stagingCleanup:%u,recoveryTimerCreate:%u,recoveryTimerArm:%u,recoveryTimerWait:%u} "
+                "expectedHookOrder=%u publishFailure={visits:%u,error:%u,expectedError:%u} "
+                "rollbackFailure={visits:%u,error:%u,expectedNativeError:%u} "
+                "published={visits:%u,error:%u} retries={visits:%u,error:%u,expectedVisits:%u} "
+                "destExists=%u backupTreeMatches=%u stagingCount=%zu\n",
+                failureCase, static_cast<unsigned int>(status), static_cast<unsigned int>(ProjectIoStatus::Encode),
+                reader.opened ? 1u : 0u, static_cast<unsigned long>(reader.openFailureError),
+                static_cast<unsigned int>(faultStage), timerFault.visits[selectedFault],
+                static_cast<unsigned int>(injectedError),
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationToBackupRename)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::StagingToDestinationRename)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RollbackRename)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::BackupCleanup)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::StagingCleanup)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerCreate)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerArm)],
+                timerFault.visits[static_cast<std::size_t>(ProjectSaveFaultStage::RecoveryTimerWait)],
+                expectedHookOrder ? 1u : 0u, reader.events.visits[publishFailure], reader.events.errors[publishFailure],
+                static_cast<unsigned int>(ERROR_ACCESS_DENIED), reader.events.visits[rollbackFailure],
+                reader.events.errors[rollbackFailure], nativeRenameError, reader.events.visits[published],
+                reader.events.errors[published], reader.events.visits[retries], reader.events.errors[retries],
+                faultStage == ProjectSaveFaultStage::RecoveryTimerWait ? 1u : 0u, destinationExists ? 1u : 0u,
+                backupTreeMatches ? 1u : 0u, stagingCount);
+            std::fflush(stdout);
+        }
         Expect(failedAsExpected, failureCase);
 
         reader.file.reset();

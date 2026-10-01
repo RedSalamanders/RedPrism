@@ -360,10 +360,19 @@ publication and failure after two restarts. These are deliberate rebind tests, n
 An injected persistent busy second tile proves that an acknowledged first tile is never published as a partial
 Raster: exactly two copies, three Map attempts, one readiness barrier and one terminal failure, with no restart.
 
-The application WARP self-test holds a real Merge readback worker with owned events. A younger Invert must apply
-after exactly one merge history entry. Cancel stays pending until acknowledgement; injected failure, stale
-opacity and device replacement prove exact receipts, unchanged pixels on drop, hidden completion without Present,
-and release of utility, staging and scheduler ownership. Remaining readback callers and G1 timing remain open.
+The application WARP self-test holds a real Merge worker with owned events after final GPU acknowledgement.
+A younger Invert must apply after exactly one merge history entry. Cancel stays pending until acknowledgement;
+injected failure, stale opacity and device replacement prove exact receipts, unchanged pixels on drop, hidden
+completion without Present, and release of utility, staging and scheduler ownership. At the CPU gate lent mappings
+and utility targets are zero. Replacement after detachment retains authoritative bytes and performs one CPU
+preparation; the separate tiled-graph tests still prove bounded restart before acknowledgement. Merge adds all
+five history-allocation faults, readback/probe capture refusal, worker probe allocation refusal, epoch-only
+invalidation and probe cancellation/staleness with seeded redo preserved. A 30,000-square blank canvas completes
+its no-plan command with a metadata-only reservation, no readback capture and no history change. Every owned probe
+and readback aggregate retires off the owner; each terminal case leaves no barrier, GPU work or reservation.
+`MergeHistoryTests` and `MergePlanProbeTests` add 71 independent literal-pixel, trim/group/clip/budget, immutable
+planner, no-plan, exact-authority, moved/single-use, fault and cancellation assertions. Native qualification is
+tracked in P1.9 H1. Remaining readback callers and G1 timing remain open.
 
 `HostTests` command-line cases additionally prove bounded positional paths, `--` leading-dash paths, empty/null/
 overlong/count refusal, harness mode conflicts, marker-aware help/self-test preflight and atomic parse output.
@@ -545,6 +554,11 @@ Tests are in-process executables under `Tests/` with one `Expect(condition, "sui
 `PASS`/`FAIL` lines on stdout, and a nonzero exit on any failure. Goldens are numbers taken from the legacy Swift
 tests, never "looks fine". GPU tests create their own WARP device; nothing in `Tests/` opens a visible window. Fixture
 trees are materialized under `%TEMP%\RedPrism.IoTests`; a test that writes a file removes any stale copy first.
+
+For diagnostic children that are started and then waited with a deadline, `test.ps1` retains the process handle
+before waiting and reads the terminal exit code while it remains owned. A missing exit code never passes a gate,
+including a crash probe that left its dump. Timeout handling and product assertions are unchanged. Qualification
+records an unobserved process result as a failed run rather than inferring success from partial PASS output.
 
 ## Later gates (record now, implement with the feature)
 

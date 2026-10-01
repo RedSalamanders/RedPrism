@@ -255,14 +255,18 @@ stages allocate an aligned output, copy rows using the validated pitch, check ca
 the finished raster. Owner stages acknowledge each lease before the next tile and publish once. Full-image,
 region and 1×1 requests compose only their requested bounds, in tiles at most 2048 or half the lower device/test
 texture limit, retaining the synchronous traversal's guard room for transformed sampling footprints.
-An optional final worker step prepares Merge's trim/thumbnail under the same reservation. Export detaches the final
-mapping and utility targets before its worker encoding stage, which cannot restart after external publication.
+An optional final worker step prepares Merge's trim/thumbnail and complete survivor/history publication under the
+same reservation. Production merge admits and captures metadata first, then builds the plan/composition subset
+on a worker; a missing plan finishes without pixel/readback allocation. A ready plan keeps the same history ordinal
+through separate full-graph admission and history capture. Merge and export detach the final mapping and utility
+targets before their CPU publication/encoding stages. Device authority is validated before this detached boundary;
+later device changes cannot invalidate copied bytes or restart CPU history preparation/an external writer.
 A generation/device
 failure restarts the whole graph at most twice, releasing the previous attempt on a worker; it never publishes
 partial pixels. Unsupported completion, capacity, memory or persistent device failures fail locally.
 
 Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
-through apply/drop, and validate complete snapshot and device generations before use. Remaining clipboard/wand/clone/sampler
+through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Remaining clipboard/wand/clone/sampler
 consumers still migrate in P1.3. Synchronous readback remains their current path and the diagnostic numeric
 reference; application-wide nonblocking readbacks and G1 are not yet established.
 

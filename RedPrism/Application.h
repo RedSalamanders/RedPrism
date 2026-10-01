@@ -338,6 +338,14 @@ class Application final : public ChromeEvents
     class ColorHistogramJob;
     class ColorFailureAction;
     class UtilityReadbackJob;
+    class MergeReadbackJob;
+    class MergePlanProbeJob;
+    struct MergeProbePayload;
+    [[nodiscard]] HRESULT StartMergeReadback() noexcept;
+    [[nodiscard]] HRESULT StartPreparedMergeReadback(HistoryWorkStamp stamp, std::uint64_t generation,
+                                                     std::shared_ptr<MergeProbePayload> source) noexcept;
+    void FinishMergeWork(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error,
+                         bool budgetRefusal = false) noexcept;
     enum class UtilityReadbackKind
     {
         Merge,

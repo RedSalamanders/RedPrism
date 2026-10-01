@@ -95,6 +95,9 @@ foreach ($probeKind in @('main', 'worker')) {
     if ($probeKind -eq 'worker') { $probeArguments += '--crash-probe-worker' }
     $probe = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList $probeArguments -PassThru `
         -RedirectStandardError $crashErr
+    # Keep the process handle open until exit observation. Windows PowerShell can otherwise return an empty
+    # ExitCode after a bounded WaitForExit; an unobserved terminal result must never qualify a gate.
+    $null = $probe.Handle
     if (-not $probe.WaitForExit(30000)) {
         throw "The $probeKind crash probe timed out (PID $($probe.Id)); it was not terminated."
     }
@@ -102,7 +105,7 @@ foreach ($probeKind in @('main', 'worker')) {
     $dumps = @(Get-ChildItem -LiteralPath $crashRoot -Filter 'RedPrism-*.dmp' -ErrorAction SilentlyContinue)
     $pendingMarker = Join-Path $crashRoot 'pending.txt'
     $pendingText = if (Test-Path -LiteralPath $pendingMarker) { (Get-Content -LiteralPath $pendingMarker -Raw).Trim() } else { '' }
-    if ($probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
+    if ($null -eq $probe.ExitCode -or $probe.ExitCode -eq 0 -or $dumps.Count -ne 1 -or $dumps[0].Length -le 0 -or $pendingText -ne $dumps[0].FullName) {
         throw "The $probeKind crash probe did not leave one dump and marker in $crashRoot (exit $($probe.ExitCode), $($dumps.Count) dumps, marker '$pendingText')."
     }
     Write-Host "PASS $probeKind crash probe: $($dumps[0].Name) ($([math]::Round($dumps[0].Length / 1KB)) KB)"
@@ -144,6 +147,7 @@ Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
 $selfTestTimeoutSeconds = 1200
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
     -RedirectStandardError $selfTestErr
+$null = $selfTest.Handle
 if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).
@@ -160,6 +164,7 @@ $kernelSmokeErr = Join-Path $outputRoot 'RedPrism.kernels-smoke.err.log'
 Remove-Item -LiteralPath $kernelSmokeLog, $kernelSmokeErr -ErrorAction SilentlyContinue
 $kernelSmoke = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--bench', 'kernels-smoke', '--isa', 'scalar') `
     -PassThru -RedirectStandardOutput $kernelSmokeLog -RedirectStandardError $kernelSmokeErr
+$null = $kernelSmoke.Handle
 $kernelSmokeTimeoutSeconds = 60
 if (-not $kernelSmoke.WaitForExit($kernelSmokeTimeoutSeconds * 1000)) {
     throw "RedPrism.exe --bench kernels-smoke did not finish within $kernelSmokeTimeoutSeconds s (PID $($kernelSmoke.Id) is still running; report it, do not kill it)."
@@ -236,6 +241,7 @@ foreach ($isaCase in @(
     $isaProcess = Start-Process -WindowStyle Hidden -FilePath $executable `
         -ArgumentList @('--bench', 'kernels-smoke', '--isa', $isaCase.Value) -PassThru `
         -RedirectStandardOutput $isaOutput -RedirectStandardError $isaError
+    $null = $isaProcess.Handle
     if (-not $isaProcess.WaitForExit(30000)) {
         throw "ISA refusal did not exit (PID $($isaProcess.Id)); it was not terminated."
     }
@@ -362,6 +368,7 @@ foreach ($shotCase in @(@{ dpi = 96; demo = '' }, @{ dpi = 144; demo = '' }, @{ 
     if ($demo) { $shotArgs += @('--demo', $demo) }
     $shot = Start-Process -FilePath $executable -ArgumentList $shotArgs `
         -PassThru -RedirectStandardOutput $shotLog -RedirectStandardError $shotErr
+    $null = $shot.Handle
     if (-not $shot.WaitForExit(60000)) {
         $shot.Kill()
         throw "RedPrism.exe --screenshot ($shotName) did not exit within 60 seconds."

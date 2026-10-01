@@ -18,6 +18,7 @@
 #include <rpc.h>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <windows.h>
 
 #pragma comment(lib, "rpcrt4.lib")
@@ -2242,32 +2243,102 @@ bool DocumentSession::ApplyImportedDocument(CanvasDocument document, const std::
 
 std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
 {
-    const ImageLayer* active = ActiveLayer();
-    if (!_document.has_value() || active == nullptr)
+    return PlanMergeForWork(_document, _activeLayerID, _selected);
+}
+
+std::optional<DocumentSession::MergePlan> DocumentSession::PlanMergeForWork(const std::optional<CanvasDocument>& source,
+                                                                            const std::optional<Guid>& activeID,
+                                                                            const std::unordered_set<Guid>& selected,
+                                                                            CancelToken cancellation)
+{
+    if (cancellation.IsCancelled() || !source || !activeID)
+        return std::nullopt;
+    const ImageLayer* active = nullptr;
+    for (const auto& layer : source->layers)
+    {
+        if (cancellation.IsCancelled())
+            return std::nullopt;
+        if (layer.id == activeID.value())
+        {
+            active = &layer;
+            break;
+        }
+    }
+    if (active == nullptr)
     {
         return std::nullopt;
     }
-    const std::vector<ImageLayer>& layers = _document.value().layers;
-    MergePlan plan;
-    if (_selected.size() > 1)
+    const std::vector<ImageLayer>& layers = source.value().layers;
+    std::unordered_map<Guid, std::vector<Guid>> children;
+    if (selected.size() > 1 || active->isGroup)
     {
-        std::unordered_set<Guid> picked = _selected;
-        for (const Guid& id : _selected)
+        children.reserve(layers.size());
+        for (const auto& layer : layers)
         {
-            const std::unordered_set<Guid> below = DescendantIds(layers, id);
-            picked.insert(below.begin(), below.end());
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            if (layer.parentID)
+                children[layer.parentID.value()].push_back(layer.id);
+        }
+    }
+    const auto descendants = [&](const Guid& root) -> std::optional<std::unordered_set<Guid>>
+    {
+        std::unordered_set<Guid> result;
+        std::vector<Guid> pending{root};
+        while (!pending.empty())
+        {
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            const auto parent = pending.back();
+            pending.pop_back();
+            const auto found = children.find(parent);
+            if (found == children.end())
+                continue;
+            for (const auto& child : found->second)
+            {
+                if (cancellation.IsCancelled())
+                    return std::nullopt;
+                if (result.insert(child).second)
+                    pending.push_back(child);
+            }
+        }
+        return result;
+    };
+    MergePlan plan;
+    if (selected.size() > 1)
+    {
+        std::unordered_set<Guid> picked = selected;
+        std::vector<Guid> pending(selected.begin(), selected.end());
+        while (!pending.empty())
+        {
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            const auto parent = pending.back();
+            pending.pop_back();
+            const auto found = children.find(parent);
+            if (found == children.end())
+                continue;
+            for (const auto& child : found->second)
+            {
+                if (cancellation.IsCancelled())
+                    return std::nullopt;
+                if (picked.insert(child).second)
+                    pending.push_back(child);
+            }
         }
         bool pixels = false;
         const ImageLayer* top = nullptr;
         for (const ImageLayer& layer : layers)
         {
+            if (cancellation.IsCancelled())
+                return std::nullopt;
             if (!picked.contains(layer.id))
             {
                 continue;
             }
             plan.ids.push_back(layer.id);
             pixels = pixels || !layer.isGroup;
-            if (_selected.contains(layer.id))
+            if (selected.contains(layer.id))
             {
                 top = &layer;
             }
@@ -2285,14 +2356,18 @@ std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
     }
     if (active->isGroup)
     {
-        const std::unordered_set<Guid> inside = DescendantIds(layers, active->id);
+        const auto inside = descendants(active->id);
+        if (!inside)
+            return std::nullopt;
         bool pixels = false;
         for (const ImageLayer& layer : layers)
         {
-            if (inside.contains(layer.id) || layer.id == active->id)
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            if (inside->contains(layer.id) || layer.id == active->id)
             {
                 plan.ids.push_back(layer.id);
-                pixels = pixels || (inside.contains(layer.id) && !layer.isGroup);
+                pixels = pixels || (inside->contains(layer.id) && !layer.isGroup);
             }
         }
         if (!pixels)
@@ -2314,6 +2389,8 @@ std::optional<DocumentSession::MergePlan> DocumentSession::PlanMerge() const
     const ImageLayer* below = nullptr;
     for (std::size_t position = index.value(); position-- > 0;)
     {
+        if (cancellation.IsCancelled())
+            return std::nullopt;
         if (layers[position].parentID == active->parentID)
         {
             below = &layers[position];
@@ -2456,6 +2533,137 @@ bool DocumentSession::MergeLayers(const MergePlan& plan, const Raster& composite
         return false;
     const std::optional<PreparedMerge> prepared = PrepareMerge(plan, composite);
     return prepared.has_value() && ApplyPreparedMerge(plan, prepared.value());
+}
+
+std::optional<DocumentSession::PreparedMergePublication> DocumentSession::PrepareMergePublication(
+    const std::optional<CanvasDocument>& source, const std::optional<Guid>& active, JobToken token,
+    DocumentHistory::StateView history, const MergePlan& plan, const Raster& composite, MergePublicationStatus& status,
+    CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+{
+    status = MergePublicationStatus::Invalid;
+    const auto cancelled = [&]() noexcept
+    {
+        if (!cancellation.IsCancelled())
+            return false;
+        status = MergePublicationStatus::Cancelled;
+        return true;
+    };
+    if (cancelled() || !source || !active || token.target || token.canvasWidth != source->width ||
+        token.canvasHeight != source->height || composite.Width() != source->width ||
+        composite.Height() != source->height || ValidateDocument(source.value()) != DocumentStatus::Ok ||
+        !plan.removed.contains(active.value()))
+        return std::nullopt;
+    std::unordered_set<Guid> planIds;
+    planIds.reserve(plan.ids.size());
+    std::unordered_set<Guid> sourceIds;
+    sourceIds.reserve(source->layers.size());
+    for (const auto& layer : source->layers)
+    {
+        if (cancelled())
+            return std::nullopt;
+        sourceIds.insert(layer.id);
+    }
+    bool activeExists = false;
+    for (const auto& id : plan.ids)
+    {
+        if (cancelled() || !plan.removed.contains(id) || !planIds.insert(id).second || !sourceIds.contains(id))
+            return std::nullopt;
+        activeExists = activeExists || id == active.value();
+    }
+    if (!activeExists || planIds.empty() || plan.removed.size() != planIds.size() ||
+        !plan.removed.contains(plan.anchor))
+        return std::nullopt;
+    auto pixels = PrepareMerge(plan, composite, cancellation);
+    if (cancelled() || !pixels)
+        return std::nullopt;
+    const auto left = BudgetLeft(source, false, [&](const Guid& id) { return plan.removed.contains(id); });
+    if (static_cast<std::int64_t>(pixels->_layer.asset->image.PixelCount()) > left)
+    {
+        status = MergePublicationStatus::TooLarge;
+        return std::nullopt;
+    }
+    CanvasDocument after;
+    after.id = source->id;
+    after.width = source->width;
+    after.height = source->height;
+    after.resolution = source->resolution;
+    after.selection = source->selection;
+    after.layers.reserve(source->layers.size() - plan.removed.size() + 1);
+    std::size_t insertion = 0;
+    bool passedAnchor = false;
+    for (const auto& layer : source->layers)
+    {
+        if (cancelled())
+            return std::nullopt;
+        if (layer.id == plan.anchor)
+            passedAnchor = true;
+        if (plan.removed.contains(layer.id))
+            continue;
+        auto copy = layer;
+        if (copy.maskSourceID && plan.removed.contains(copy.maskSourceID.value()))
+            copy.maskSourceID = pixels->_layer.id;
+        after.layers.push_back(std::move(copy));
+        if (!passedAnchor)
+            ++insertion;
+    }
+    const Guid merged = pixels->_layer.id;
+    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(pixels->_layer));
+    if (cancelled() || ValidateDocument(after) != DocumentStatus::Ok)
+        return std::nullopt;
+    std::unordered_set<Guid> selected{merged};
+    std::optional<CanvasDocument> afterDocument{std::move(after)};
+    auto publication = DocumentHistory::PrepareEdit(std::move(history), source, active, afterDocument, merged,
+                                                    plan.action, cancellation, observer);
+    if (cancelled() || !publication)
+        return std::nullopt;
+    status = MergePublicationStatus::Ready;
+    return PreparedMergePublication(std::move(token), active, merged, std::move(afterDocument.value()),
+                                    std::move(publication.value()), std::move(selected));
+}
+
+bool DocumentSession::ApplyPreparedMergeIfCurrent(PreparedMergePublication& prepared) noexcept
+{
+    static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
+    static_assert(std::is_nothrow_swappable_v<std::unordered_set<Guid>>);
+    if (!prepared._document || _gradient || _pixelMove || _transformEdit || HasColorEdit() || _brush || _warp ||
+        _shapeDraft || _selectionMoveOrigin || _activeLayerID != prepared._beforeActive ||
+        !CanApplyJobResult(prepared._token, prepared._token.sequence) || !history.CanPublish(prepared._history))
+        return false;
+    if (!history.Publish(prepared._history))
+        return false;
+    std::swap(_document, prepared._document);
+    std::swap(_activeLayerID, prepared._active);
+    std::swap(_selected, prepared._selected);
+    std::swap(_displayCopy, prepared._retiredDisplay);
+    _maskSelected = false;
+    NoteDocumentMutation();
+    return true;
+}
+
+std::uint64_t DocumentSession::MergeRetirementMemoryBytes() const noexcept
+{
+    auto bytes = history.RetirementMemoryBytes(_document);
+    const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if (_displayCopy)
+    {
+        // Cached transform/panel records can outlive settlement; keep their last release in the publication.
+        // This deliberately overcounts history handles until H2/H3 supply immutable ownership indexes.
+        const auto display = history.RetirementMemoryBytes(_displayCopy);
+        if (!display || display > maximum - bytes)
+            return 0;
+        bytes += display;
+    }
+    // Include the selected-set buckets and conservative node allocator bookkeeping; ownership swaps into the
+    // publication instead of clearing a potentially large set on the owner. This is a release bound, not unique
+    // retained-history accounting.
+    constexpr auto nodeBytes = sizeof(Guid) + 4 * sizeof(void*) + 64;
+    if (!bytes || _selected.bucket_count() > maximum / sizeof(void*) || _selected.size() > maximum / nodeBytes)
+        return 0;
+    const auto buckets = static_cast<std::uint64_t>(_selected.bucket_count()) * sizeof(void*);
+    const auto nodes = static_cast<std::uint64_t>(_selected.size()) * nodeBytes;
+    if (buckets > maximum - bytes || nodes > maximum - bytes - buckets)
+        return 0;
+    return bytes + buckets + nodes;
 }
 
 void DocumentSession::SetCropFrame(std::optional<CropRect> rect) noexcept

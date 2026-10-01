@@ -107,6 +107,15 @@ target and crop semantics remain unchanged. The full configuration matrix passes
 
 ## Trim
 
+Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe
+and full readback record share one history ordinal; a no-plan command never reserves pixel output. Ready plans keep
+an immutable source and worker-built composition subset through separately admitted history capture. Publication
+checks active id, whole document generation/restore authority and exact history epoch before swapping live owners.
+Replaced document/selection/display and captured history/readback owners retain complete deferred release bounds.
+GPU mapping/target cleanup stays on the owner. Native qualification passes
+([evidence](../TestRuns/MergeHistoryPublication_2026-10-01.md)); shared metadata,
+incremental accounting and measured G1 are separate gates.
+
 While `past.size + future.size > entryLimit` **or** retained bytes exceed the budget, drop the oldest past
 entry, else the oldest future entry. A 256 MiB trim test MUST exist (`history.trim-256mib`).
 

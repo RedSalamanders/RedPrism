@@ -13,6 +13,10 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
   public:
     DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
                         CanvasDocument document, D3D11_BOX region) noexcept;
+    // Cheap descriptor: the first admitted owner continuation captures its document under the complete graph
+    // reservation. Existing direct callers keep the snapshot constructor until their own capture migration.
+    DocumentReadbackJob(JobScheduler& scheduler, GpuWorkQueue& queue, CanvasRenderer& composition,
+                        D3D11_BOX region) noexcept;
     ~DocumentReadbackJob() override;
     [[nodiscard]] static std::uint64_t RequiredMemory(const D3D11_BOX& region) noexcept;
     [[nodiscard]] JobResult Run(JobContext& context) final;
@@ -22,6 +26,13 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     void Completed(JobResult result) noexcept final;
 
   protected:
+    [[nodiscard]] virtual HRESULT CaptureReadbackDocument(CanvasDocument&) noexcept
+    {
+        return E_UNEXPECTED;
+    }
+    // Call only after worker acknowledgement/join. Destination owners must already exist and be empty; the
+    // derived release aggregate keeps every CPU owner off the UI destructor path while GPU cleanup stays here.
+    void TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image) noexcept;
     // Optional worker-only final processing under this graph's reservation (for example merge crop/thumbnail).
     [[nodiscard]] virtual JobResult ProcessReadback(Raster&, JobContext&)
     {
@@ -43,6 +54,7 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
   private:
     enum class Phase
     {
+        Capture,
         Prepare,
         Copy,
         ProcessDetached,
@@ -57,7 +69,7 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     JobScheduler& _scheduler;
     GpuWorkQueue& _queue;
     CanvasRenderer& _composition;
-    const CanvasDocument _document;
+    CanvasDocument _document;
     const D3D11_BOX _region;
     PixelBuffer _pixels;
     Raster _image;

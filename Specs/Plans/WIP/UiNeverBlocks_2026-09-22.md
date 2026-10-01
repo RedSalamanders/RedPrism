@@ -127,6 +127,12 @@
       - [x] P1.9 H1 foundation — Native immutable history views, preconstructed publication and aggregate release for basic raster, gradient and pixel-move commits pass all profiles ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers, production Undo/Redo, constant-time capture, incremental accounting and the measured G1 exit remain open.
       - [x] P1.9 H1 destructive color — Prepared after-layer/history, admitted capture and actual host failure gates pass all profiles ([evidence](../../TestRuns/ColorHistoryPublication_2026-10-01.md)). Adjustment-layer closure remains separate.
       - [x] P1.9 H1 size cards — Admitted capture, complete document/history publication and retirement pass all profiles; 50 independent assertions and 22 host scenarios ([evidence](../../TestRuns/SizeHistoryPublication_2026-10-01.md)). Measured apply remains open.
+      - [x] P1.9 H1 merge — Admitted metadata probe, full survivor/history publication and complete deferred CPU
+        retirement pass the frozen six-profile matrix; 71 document assertions and 17 host modes
+        ([evidence](../../TestRuns/MergeHistoryPublication_2026-10-01.md)). Failed scheduler-wait, process-exit
+        observation and IO rotation attempts remain preserved; the rotation cause, other callers and G1 remain open.
+      - [ ] P1.9 H1 Undo/Redo — Prepare complete restore and history before stack movement. The private prototype
+        passes document proof; actual host ordering/refusal/retirement gates and native qualification are next.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.
