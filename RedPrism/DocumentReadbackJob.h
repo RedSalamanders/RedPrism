@@ -30,6 +30,12 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     {
         return E_UNEXPECTED;
     }
+    // Worker-only preprocessing of the admitted snapshot before the first GPU tile. Called again on device
+    // restart: reuse the same immutable original or make preprocessing idempotent. No live owner access.
+    [[nodiscard]] virtual JobResult PrepareReadbackSnapshot(CanvasDocument&, JobContext&)
+    {
+        return {};
+    }
     // Call only after worker acknowledgement/join. Destination owners must already exist and be empty; the
     // derived release aggregate keeps every CPU owner off the UI destructor path while GPU cleanup stays here.
     void TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image) noexcept;

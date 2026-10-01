@@ -95,6 +95,10 @@ JobResult DocumentReadbackJob::Run(JobContext& context)
             _resetOutput = false;
             _copiedPixels = 0;
         }
+        if (const auto prepared = PrepareReadbackSnapshot(_document, context); prepared.status != JobStatus::Finished)
+            return prepared;
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
         const auto bytes = static_cast<std::size_t>(_region.right - _region.left) * (_region.bottom - _region.top) * 4;
         _pixels = PixelBuffer::TryAllocate(bytes);
         return _pixels ? JobResult{} : JobResult{JobStatus::Failed, E_OUTOFMEMORY};

@@ -1,4 +1,7 @@
 #include "Adjust.h"
+#include "AdjustmentClosureTests.h"
+#include "AdjustmentNestedTests.h"
+#include "AdjustmentOpeningTests.h"
 #include "BrushStroke.h"
 #include "CanvasSize.h"
 #include "ColorEditDeferredTests.h"
@@ -7369,6 +7372,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryRetirementBoundTests();
     gFailures += RunPreparedRasterHistoryTests();
     gFailures += RunPreparedColorHistoryTests();
+    gFailures += RunAdjustmentClosureTests();
+    gFailures += RunAdjustmentOpeningTests();
+    gFailures += RunAdjustmentNestedTests();
     gFailures += RunMergeHistoryTests();
     gFailures += RunMergePlanProbeTests();
     gFailures += RunSessionGenerationTests();

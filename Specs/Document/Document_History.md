@@ -103,8 +103,28 @@ groups or the measured G1 bound. These remain explicit H2/H3/H4 work.
 Destructive color/filter commits use this boundary. Their complete color result,
 candidate layer/history, captured generation and retired settings/panel form one private publication/release
 owner. Capturing their input follows full admission; no failure after mutation is caught. Other callers and
-adjustment-layer transaction closure remain open until their separate migration gates pass. The full native
+adjustment-layer cancellation routing remain open until their separate migration gates pass. The full native
 configuration matrix passes for destructive color; [evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md).
+
+Adjustment-layer opening and OK also prepare their complete history publication off the owner. Opening admits
+one descriptor/readback/history graph before source capture. Its worker retains the original records and builds
+the sampling-only visibility snapshot, leaving the live document unchanged. The final mapped tile is acknowledged
+and utility surfaces released before the worker prepares the panel, original parameters and named Begin. Only
+exact document lifetime/generation/sequence, pending adjustment id, active/mask/crop and history epoch may install
+that panel. A later device change cannot invalidate already copied opening pixels. Failed opening installs no
+panel or transaction; it clears only its own pending editor id.
+
+Metadata OK captures its exact opening/settings sequence, original parameters, source and immutable history under
+complete admission. Worker End reuses the retained opening snapshot and builds the final document with cancellable
+layer copies. Owner application validates all authority before nonthrowing document/history/panel/original/display
+swaps. Every acknowledged End advances the opaque mutation stamp, including unchanged or nested closure, so old
+whole-document tokens expire. Stored-record equality still preserves revision and redo; promoting omitted HSV or
+Exposure settings to explicit defaults retains its existing real-entry semantics. The global filter template and
+source pixel bytes remain unchanged. Capture/construction/cancellation/staleness preserve the panel, document,
+pending transaction and retained redo. Complete old owners retire on the worker lane.
+Explicit Cancel routing and dependent dismissal callers remain H1.6b work; the prepared cancellation API alone
+does not qualify them. Whole document capture/admission traversal, incremental accounting, first upload and measured
+G1 remain separate. Qualification is recorded in the [opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
 
 Size-card commits also bind their complete worker-prepared document and detached history to one private result.
 Their source/token/history capture follows complete admission. Apply checks the whole document token, captured

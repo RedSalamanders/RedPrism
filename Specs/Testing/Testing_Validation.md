@@ -108,6 +108,23 @@ actual host cases pass the full x64 configuration matrix; ARM64 clean cross-buil
 ([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)). Suspension tests include an unrelated memory
 wake while the worker remains held: a wake alone cannot prove that an owner continuation has suspended.
 
+Adjustment opening/closure add independent `AdjustmentClosureTests`, `AdjustmentOpeningTests` and
+`AdjustmentNestedTests`. Literal parameter records/source bytes cover every kind, preview on/off, stored-record
+no-op versus implicit-default promotion, nested named transactions, template/redo/saved-revision retention and
+single-use/moved/foreign/stale authority. Same-sequence mismatched settings are refused. The named allocation and
+cancellation checkpoints MUST be reached before unchanged-state assertions; closure reuses its opening and cannot
+claim the unreachable BeforeSnapshot stage. Every acknowledged End advances generation, including no-op/nested
+closure, and an old whole-document token is refused.
+
+The actual WARP host checks complete admitted capture/reservation, retained source/redo/transaction on failure,
+late cancellation drop, precise terminal receipt and off-owner retirement for all six kinds. Opening checks literal
+below-composite bytes, unchanged live visibility and history baseline, GPU mapping/target release before detached
+Begin preparation, device recovery after copied pixels and a younger queued rename that waits for opening and OK.
+An open transaction disables Undo/Redo commands; retention assertions therefore inspect its immutable redo stack,
+not `CanRedo()`. No production command pumps a nested wait. Explicit Cancel routing and dependent dismissal callers
+remain separate gates. Final identities and configuration results live in the
+[opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
+
 `DocumentSizeHistoryTests` adds 50 independent assertions for literal colored extension and nearest resize pixels,
 masks/selection/crop/active target, resolution-only Undo/Redo, nested/no-op history, moved/foreign/single-use
 authority, an active-layer-only change with a still-valid document token, five history allocation and cancellation

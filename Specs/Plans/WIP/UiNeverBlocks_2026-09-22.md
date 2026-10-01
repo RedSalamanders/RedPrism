@@ -151,8 +151,11 @@
         capture, incremental accounting, first uploads and measured G1 remain separate.
       - [ ] P1.9 H1 adjustment panels — Prepare Begin and OK/Cancel history before owner publication;
         coalesce Cancel, acknowledge prior OK drops, audit dependent callers and retire complete preview owners.
-        The private closure and opening modules compile with strict flags; independent runtime tests and host
-        integration remain pending. The [history child](HistoryStorageAccounting_2026-09-30.md) tracks H1.6a–e.
+        - [x] H1.6a/H1.6c — Production opening and metadata OK qualify in all six clean configurations:
+          515 closure, 210 opening and 58 nested assertions, plus 146 actual host cases in each x64 profile
+          ([evidence](../../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md)).
+        - [ ] H1.6b/H1.6d–e — Production Cancel routing, combined caller qualification and measured owner costs
+          remain pending. The [history child](HistoryStorageAccounting_2026-09-30.md) tracks the remaining gates.
     - [ ] G1 — Record every due operation against the UI/apply budgets on available hardware; keep unavailable hardware/Photoshop gates explicit.
 - [ ] P2 — Add exact SIMD and threaded CPU kernels; meet the G2 exit criteria.
 - [ ] P3 — Add sliced GPU work, previews and tiled residency; meet the phase exit criteria.

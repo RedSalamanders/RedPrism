@@ -109,6 +109,8 @@
   <ItemGroup>
     <ClInclude Include="..\Common\Version.h" />
     <ClInclude Include="..\Common\WindowCapture.h" />
+    <ClInclude Include="..\Common\AdjustmentClosureWork.h" />
+    <ClInclude Include="..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\Common\Document.h" />
     <ClInclude Include="..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\Common\ImageImportHistory.h" />
@@ -184,6 +186,8 @@
     <ClCompile Include="..\Common\Heal.cpp" />
     <ClCompile Include="..\Common\ImageFilters.cpp" />
     <ClCompile Include="..\Common\WarpStroke.cpp" />
+    <ClCompile Include="..\Common\AdjustmentClosureWork.cpp" />
+    <ClCompile Include="..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\Common\Adjust.cpp" />
     <ClCompile Include="..\Common\Kernels.cpp" />
     <ClCompile Include="..\Common\Kernels_Scalar_Adjust.cpp" />
@@ -223,6 +227,8 @@
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />
     <ClCompile Include="ApplicationCommitJobs.cpp" />
+    <ClCompile Include="ApplicationAdjustmentClosureJobs.cpp" />
+    <ClCompile Include="ApplicationAdjustmentOpeningJobs.cpp" />
     <ClCompile Include="ApplicationContinuations.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />

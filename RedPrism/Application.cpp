@@ -2215,6 +2215,14 @@ int Application::RunSelfTest() noexcept
     {
         return colorCommit;
     }
+    if (const int adjustmentClosure = RunAdjustmentClosureSelfTest(); adjustmentClosure != 0)
+    {
+        return adjustmentClosure;
+    }
+    if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
+    {
+        return adjustmentOpening;
+    }
     if (const int continuations = RunHostContinuationSelfTest(); continuations != 0)
     {
         return continuations;

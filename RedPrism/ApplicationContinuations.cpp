@@ -1096,7 +1096,7 @@ int Application::RunHostContinuationSelfTest() noexcept
     _session.SetAdjustmentEditingID(adjustment);
     if (!_session.BeginAdjustmentEditing(adjustment, source, true))
     {
-        return fail(L"Could not open the immediate adjustment metadata request.\n");
+        return fail(L"Could not open the admitted adjustment metadata request.\n");
     }
     DocumentChanged();
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
@@ -1105,8 +1105,11 @@ int Application::RunHostContinuationSelfTest() noexcept
         return fail(L"Could not settle metadata previews before host admission.\n");
     }
     const int beforeMetadataHistory = _session.history.UndoCount();
+    _colorWorkTestGate.reset();
     const auto metadata = QueuePanelCommit(_session.PendingColorEdit()->openingSequence);
     if (metadata.Read().outcome != HostOutcome::Pending || !RunUiActions(_jobs) ||
+        metadata.Read().outcome != HostOutcome::Pending || !_activeHostRequest || !ColorCommitBusy() ||
+        !_historyWork.Busy() || !_session.HasColorEdit() || !settled() ||
         metadata.Read() != ContinuationReceipt::Result{HostOutcome::Succeeded, 0} || _activeHostRequest ||
         _hostCommitStamp || _historyWork.Busy() || _session.HasColorEdit() ||
         _session.history.UndoCount() != beforeMetadataHistory + 1 ||
@@ -1114,9 +1117,9 @@ int Application::RunHostContinuationSelfTest() noexcept
         _session.Document()->layers.front().asset->image != source || !settled() || !_jobs.IsIdle() ||
         metadata.Read() != ContinuationReceipt::Result{HostOutcome::Succeeded, 0})
     {
-        return fail(L"Immediate host metadata settlement lost its receipt, history or idle state.\n");
+        return fail(L"Admitted host metadata settlement lost its acknowledgement, history or idle state.\n");
     }
-    std::printf("PASS continuation-host.immediate-metadata-settlement-and-terminal-receipt\n");
+    std::printf("PASS continuation-host.admitted-metadata-settlement-and-terminal-receipt\n");
 
     // A separate owner can close without ending this harness. Its source is ready, but shutdown cannot run it.
     auto closing = std::make_unique<Application>(_instance, true, nullptr, 0);

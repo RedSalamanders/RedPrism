@@ -1207,6 +1207,10 @@ class PreparedColorEdit;
 class PreparedDocumentSize;
 class PreparedHistoryRestore;
 class PreparedImageImport;
+struct AdjustmentClosureInput;
+class PreparedAdjustmentClosure;
+struct AdjustmentOpeningInput;
+class PreparedAdjustmentOpening;
 class ImageImportAuthority;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
@@ -1438,6 +1442,7 @@ class DocumentHistory
         RestoreSnapshot,
         ReplacementReset,
         ReplacementSnapshot,
+        AdjustmentSnapshot,
     };
     // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
     // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
@@ -2218,6 +2223,21 @@ class DocumentSession
     void UpdateHueSaturation(const HueSaturationSettings& settings, bool preview);
     // Owning immutable work; direct Commit runs the same graph with an InlineExecutor.
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditCommit() const;
+    // Metadata-only adjustment transactions: capture under complete admission, construct history on a worker,
+    // validate authority before nonthrowing publication, and retain replaced owners for aggregate retirement.
+    [[nodiscard]] std::optional<AdjustmentClosureInput> PrepareAdjustmentClosureInput(bool commit) const;
+    [[nodiscard]] static std::optional<PreparedAdjustmentClosure> PrepareAdjustmentClosurePublication(
+        AdjustmentClosureInput input, const std::optional<CanvasDocument>& source, DocumentHistory::StateView history,
+        CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedAdjustmentClosureCurrent(const PreparedAdjustmentClosure& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedAdjustmentClosureIfCurrent(PreparedAdjustmentClosure& prepared) noexcept;
+    [[nodiscard]] std::optional<AdjustmentOpeningInput> PrepareAdjustmentOpeningInput() const;
+    [[nodiscard]] static std::optional<PreparedAdjustmentOpening> PrepareAdjustmentOpeningPublication(
+        AdjustmentOpeningInput input, const std::optional<CanvasDocument>& source, Raster below,
+        DocumentHistory::StateView history, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool IsPreparedAdjustmentOpeningCurrent(const PreparedAdjustmentOpening& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedAdjustmentOpeningIfCurrent(PreparedAdjustmentOpening& prepared) noexcept;
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditPreview() const;
     [[nodiscard]] bool ApplyColorEditPreview(const ColorEditPreviewResult& result);
     [[nodiscard]] bool ApplyColorEditHistogram(const ColorEditHistogramResult& result);

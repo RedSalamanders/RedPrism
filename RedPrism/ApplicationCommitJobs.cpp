@@ -198,7 +198,8 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
     DropDrag<HueTargetDrag>();
     if (_session.AdjustmentEditingID())
     {
-        // Adjustment-layer OK settles live metadata/history. It does not run a destructive image kernel.
+        // Adjustment metadata and history are prepared on the admitted worker; this target check preserves
+        // immediate stale classification without constructing the input or a history snapshot.
         const auto& document = _session.Document();
         const auto& original = _session.AdjustmentOriginal();
         const Guid id = _session.AdjustmentEditingID().value();
@@ -215,14 +216,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
             DocumentChanged();
             return _colorCommitOutcome;
         }
-        _session.CommitColorEdit();
-        _hostFinishedStamp = _colorCommitStamp;
-        (void)_historyWork.Finish(_colorCommitStamp.value());
-        _colorCommitStamp.reset();
-        _colorCommitOutcome = _session.HasColorEdit() ? HostOutcome::Failed : HostOutcome::Succeeded;
-        _colorCommitError = _colorCommitOutcome == HostOutcome::Failed ? E_FAIL : 0;
-        DocumentChanged();
-        return _colorCommitOutcome;
+        return StartAdjustmentClosure(ordinal, true);
     }
     std::int32_t status = E_INVALIDARG;
     try
@@ -673,6 +667,8 @@ int Application::RunColorCommitSelfTest() noexcept
         return fail(L"An old prepared color publication crossed a changed history epoch.\n");
     std::fprintf(stderr, "PASS color-history-host.stale-history-epoch\n");
     CancelColorEdit();
+    if (!gate())
+        return fail(L"The adjustment metadata fixture could not create its worker gate.\n");
     _session.AddAdjustment(AdjustmentKind::Levels);
     const Guid adjustmentId = _session.ActiveLayerID().value();
     _session.SetAdjustmentEditingID(adjustmentId);
@@ -683,10 +679,15 @@ int Application::RunColorCommitSelfTest() noexcept
     DocumentChanged();
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
     const int metadataHistory = _session.history.UndoCount();
-    if (start() != HostOutcome::Succeeded || _historyWork.Busy() || ColorCommitBusy() || _session.HasColorEdit() ||
-        _session.history.UndoCount() != metadataHistory + 1 ||
+    if (start() != HostOutcome::Pending || !_historyWork.Busy() || !ColorCommitBusy() || !_session.HasColorEdit())
+        return fail(L"Adjustment metadata closure was not admitted before its owner capture.\n");
+    (void)SetEvent(_colorWorkTestGate->release.get());
+    if (!settled() || _colorCommitOutcome != HostOutcome::Succeeded || _historyWork.Busy() || ColorCommitBusy() ||
+        _session.HasColorEdit() || _session.history.UndoCount() != metadataHistory + 1 ||
         _session.ActiveLayer()->adjustment->levels.ranges[0].gamma != 2 ||
-        _session.Document()->layers.front().asset->image != replacement)
+        _session.Document()->layers.front().asset->image != replacement ||
+        !_colorWorkTestGate->captureReservationHeld.load() || !_colorWorkTestGate->payloadRetiredOffOwner.load() ||
+        _jobs.ReservedMemoryBytes() != 0)
     {
         return fail(L"Adjustment metadata settlement ran destructive work or did not record exactly one edit.\n");
     }

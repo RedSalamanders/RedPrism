@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <format>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include <UIAutomation.h>
@@ -215,31 +214,7 @@ void Application::OpenAdjustmentEditor() noexcept
         DocumentChanged();
         return;
     }
-    // Keep records for live-mask references and folder ancestry, but leave the adjustment itself and everything
-    // above it out of the sampling image.
-    CanvasDocument copy = _session.Document().value();
-    std::unordered_set<Guid> hidden;
-    bool above = false;
-    for (const Guid& layerId : RenderLayerIds(copy))
-    {
-        if (layerId == id.value())
-        {
-            above = true;
-        }
-        if (above)
-        {
-            hidden.insert(layerId);
-        }
-    }
-    for (ImageLayer& layer : copy.layers)
-    {
-        if (!layer.isGroup && (layer.id == id.value() || hidden.contains(layer.id)))
-        {
-            layer.visible = false;
-        }
-    }
-    _hostExecutionError =
-        StartUtilityReadback(std::move(copy), UtilityReadbackKind::AdjustmentOpening, std::nullopt, id);
+    _hostExecutionError = StartAdjustmentOpening();
     if (FAILED(_hostExecutionError))
     {
         _session.SetAdjustmentEditingID(std::nullopt);

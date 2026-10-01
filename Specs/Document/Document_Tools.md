@@ -597,8 +597,8 @@ cube of `HueSaturationFilter`, the exposure table, Hermite curves), the panels i
 
 `PrepareColorEditCommit` captures owning inputs for `RunColorEditJob` (`Common/ColorEditWork.*`), which has no
 session, HWND, chrome or device access. `ApplyColorEditResult` runs on the session owner and executes no pixel
-kernel. The direct `CommitColorEdit` API uses this same graph with an `InlineExecutor`; the production host still
-runs it synchronously in this slice. Preview grids, histogram arithmetic and committed kernel arithmetic retain
+kernel. The direct `CommitColorEdit` API uses this same graph with an `InlineExecutor`; the production host uses
+the admitted worker commit and prepared history boundary. Preview grids, histogram arithmetic and committed kernel arithmetic retain
 their existing contracts above.
 
 The opening token retains the image, placement, mask, selection, canvas size, document lifetime and restore epoch.
@@ -643,9 +643,28 @@ generation and exact history epoch before swapping pixels, mask, applied setting
 panel lookup/coverage, old settings and source/history owners remain in the worker-release aggregate. Capture
 refusal keeps the panel unchanged; a worker preparation failure retains the existing commit-failure state and
 redo/source pixels. A stale prepared history epoch cannot publish or close a newer panel. Direct reference
-history and adjustment-layer OK/Cancel closure retain their current paths; their migrations remain H1 work.
+history methods remain reference routes. Adjustment-layer opening and OK use the admitted preparation described
+below; explicit Cancel routing and dependent dismissal callers remain H1.6b work.
 This boundary passes the full native configuration matrix
 ([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); measured P1/G1 performance remains open.
+
+### Prepared adjustment opening and OK
+
+Production opening owns its descriptor and whole readback/history reservation before copying source records.
+The worker creates the below-composite visibility snapshot, keeping all records for ancestry and live mask sources.
+After final GPU row acknowledgement, worker preparation constructs the deferred panel, original settings and
+named Begin before the owner installs any of them. Opening preserves document pixels/visibility, generation,
+revision, global filter settings and retained redo. Failure installs no partial panel or transaction.
+
+OK is an admitted metadata job, including when Preview is off. It prepares the final record and End without a
+destructive pixel kernel. A selected OK receipt stays Pending until exact-authority publication or drop is
+acknowledged. True stored-record no-op preserves revision/redo; an old record whose absent HSV or Exposure settings
+become explicit keeps the existing real-entry behavior. Every successful End advances the mutation stamp and panel
+sequence. Original source bytes and the global filter template remain unchanged. Construction refusal, stale input
+or cancellation retains the current panel and its open history; complete retained preview/document/history owners
+retire off the UI thread. Synchronous reference APIs keep their goldens. Production Cancel and dependent dismissal
+callers remain a separate migration. See [history](Document_History.md) and the
+[qualification record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
 
 ### Deferred panel computation (P1.1c.1)
 

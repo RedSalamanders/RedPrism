@@ -263,10 +263,17 @@ class Application final : public ChromeEvents
     void AddAdjustmentLayer(int command) noexcept;
     void EditActiveAdjustment() noexcept;
     void OpenAdjustmentEditor() noexcept;
+    class AdjustmentOpeningJob;
+    [[nodiscard]] HRESULT StartAdjustmentOpening() noexcept;
+    int RunAdjustmentOpeningSelfTest() noexcept;
     void ApplyColorEdit() noexcept;
     using HostOutcome = ContinuationOutcome;
     class ColorCommitJob;
+    class AdjustmentClosureJob;
     [[nodiscard]] HostOutcome StartColorCommit(std::uint64_t ordinal) noexcept;
+    [[nodiscard]] HostOutcome StartAdjustmentClosure(std::uint64_t ordinal, bool commit) noexcept;
+    void CompleteAdjustmentClosure(HistoryWorkStamp stamp, bool current, JobResult completion,
+                                   PreparedAdjustmentClosure* publication, std::int32_t captureError) noexcept;
     [[nodiscard]] bool ColorCommitBusy() const noexcept
     {
         return _colorCommitStamp.has_value();
@@ -281,6 +288,7 @@ class Application final : public ChromeEvents
                              JobResult completion, PreparedColorEdit* publication = nullptr,
                              std::int32_t captureError = 0) noexcept;
     int RunColorCommitSelfTest() noexcept;
+    int RunAdjustmentClosureSelfTest() noexcept;
     using HostRequestQueue = ContinuationQueue<HostRequest>;
     class ContinuationAction final : public UiAction
     {
@@ -338,7 +346,6 @@ class Application final : public ChromeEvents
     class ColorPreviewJob;
     class ColorHistogramJob;
     class ColorFailureAction;
-    class UtilityReadbackJob;
     class MergeReadbackJob;
     class MergePlanProbeJob;
     struct MergeProbePayload;
@@ -347,15 +354,7 @@ class Application final : public ChromeEvents
                                                      std::shared_ptr<MergeProbePayload> source) noexcept;
     void FinishMergeWork(HistoryWorkStamp stamp, HostOutcome outcome, std::int32_t error,
                          bool budgetRefusal = false) noexcept;
-    enum class UtilityReadbackKind
-    {
-        Merge,
-        AdjustmentOpening
-    };
     [[nodiscard]] HRESULT PrepareUtilityDevice(HRESULT reason) noexcept;
-    [[nodiscard]] HRESULT StartUtilityReadback(CanvasDocument document, UtilityReadbackKind kind,
-                                               std::optional<DocumentSession::MergePlan> merge = std::nullopt,
-                                               std::optional<Guid> adjustment = std::nullopt) noexcept;
     int RunUtilityReadbackSelfTest() noexcept;
     void RefreshColorJobs() noexcept;
     void ConfigureColorLookupPreview(ColorEditJobInput& input) const;

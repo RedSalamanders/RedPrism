@@ -158,7 +158,7 @@ Worker preparation builds the complete candidate history state, including snapsh
 trim bookkeeping, before publication. The candidate is tied to the exact history owner, structural epoch and
 revision; owner publication revalidates all three and swaps the prepared state without allocating. Refusal leaves
 the candidate owned by the caller for aggregate retirement. Basic raster edits, gradient commits, pixel moves,
-destructive color and size cards use this path. Remaining history callers and production Undo/Redo migration are open. H2/H3 must
+destructive color, size cards, production Undo/Redo, merge and import/replacement use this path. Remaining history callers are open. H2/H3 must
 replace occurrence overcount with exact accounting and make history capture constant-time. The foundation's
 configuration evidence does not qualify complete H1, P1 or G1; remaining caller migration and owner
 capture/history/chrome/upload measurements remain outstanding.
@@ -168,8 +168,19 @@ query borrows opening settings and adds history preparation before owning captur
 record owns complete source/history and color input/result; its conservative release bound also includes current
 panel raster/selection/lookup capacities, spare settings capacity and replaced persistent settings. Owner apply
 swaps the retired panel and settings into that aggregate. The full native configuration matrix passes
-([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); adjustment-layer
-transaction closure and the other H1 callers remain open.
+([evidence](../TestRuns/ColorHistoryPublication_2026-10-01.md)); adjustment-layer cancellation
+routing and the other H1 callers remain open.
+
+Adjustment opening reserves complete readback, history/panel construction, original/sampling records and render-order
+storage before owner capture. Worker visibility preprocessing retains every source record; no hidden-subset copy or
+history Begin is built in the command callback. GPU tiles remain owner work. Final map acknowledgement and utility
+target release precede detached worker panel/Begin preparation, so a later device change cannot discard copied pixels.
+Metadata OK reserves history and complete original/settings/source/retirement graphs before capture. The worker
+constructs the final document and End; apply validates exact authority/settings/history epoch before nonthrowing
+ownership swaps. Every closed End expires whole-document mutation tokens. Failure preserves live document/panel,
+pending depth and redo handles. Owner source copy and conservative traversal remain H2/H3 costs; this caller does not
+qualify first upload, G1 or production Cancel routing. See the
+[opening/OK record](../TestRuns/AdjustmentOpeningAndOkHistoryPublication_2026-10-01.md).
 
 Size-card admission additionally includes complete history construction and trim scratch. Owner capture of its
 source/token/history happens under that reservation; the worker constructs the bound resized document/history.
