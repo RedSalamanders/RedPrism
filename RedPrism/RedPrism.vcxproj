@@ -206,6 +206,7 @@
     <ClCompile Include="..\Common\ClipboardCommandWork.cpp" />
     <ClCompile Include="..\Common\ClipboardPasteWork.cpp" />
     <ClCompile Include="..\Common\ShapeEditWork.cpp" />
+    <ClCompile Include="..\Common\MaskEditWork.cpp" />
     <ClCompile Include="..\Common\ClipboardReceipt.cpp" />
     <ClCompile Include="ClipboardFingerprint.cpp" />
     <ClCompile Include="..\Common\ColorDismissalWork.cpp" />
@@ -272,6 +273,8 @@
     <ClCompile Include="ApplicationSizeJobs.cpp" />
     <ClCompile Include="ApplicationRasterEditJobs.cpp" />
     <ClCompile Include="ApplicationShapeJobs.cpp" />
+    <ClCompile Include="ApplicationMaskJobs.cpp" />
+    <ClCompile Include="ApplicationMaskTests.cpp" />
     <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />
     <ClCompile Include="ApplicationPixelMoveJobs.cpp" />

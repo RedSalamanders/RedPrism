@@ -94,6 +94,14 @@ input through the original acknowledged record. Cancellation cannot release copi
 before acknowledgement; complete replaced CPU owners retire together off owner. Metadata capture and final
 chrome/display work remain measured P1.9 obligations; worker elapsed time alone does not establish UI latency.
 
+Mask creation from a settled session also runs as an admitted ordered Commit job. Whole reservation precedes
+source/history capture; worker preparation includes inverse-grid selection coverage, the Gray8 output, an eager
+semantic thumbnail whose longest side is at most 96 pixels, and prepared mask/selection/history publication.
+Cancellation retains the reservation and complete
+source/history graph through acknowledgement, then the aggregate retires off owner. Settled producers are covered;
+live brush, warp, selection and transform settlement remains P1.4/A6/S3 work. Functional qualification establishes
+no G1 timing bound; capture, history publication, chrome/display work and required measurements remain open.
+
 These numbers are binding as soon as the feature exists. C1 does not implement them; it MUST NOT choose a host shape
 that makes them impossible.
 

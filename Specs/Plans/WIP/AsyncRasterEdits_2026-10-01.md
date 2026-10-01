@@ -58,6 +58,13 @@
     `.build/p1-distort-draft/core-qualified-r1/`. Native activation, complete transform publication and G1 remain open.
   - [ ] A6.2 — Seal transform/group/floating authority and prepare complete pixel/mask/shape/history publication;
     preserve per-layer budget refusal, nested duplicate/floating history and unchanged-opening restoration.
+    The detached non-floating draft passes 31 pixel controls and 64 publication/history controls plus the 56 warp
+    controls and all existing DocumentTests goldens against 496 private inputs. Exact evidence is retained in
+    `.build/p1-distort-draft/transform-core-qualified-r1/` (image SHA-256
+    `E088D8A9C8DA694ECFA483AB1E8F3C8AF560977D6CC991CF898A9DFA603D4A20`). It closes duplicate history through
+    prepared End and rejects newer draft/source/replacement authority. Group budget planning reserves later
+    members' old rasters before accepting an earlier replacement; a virtual 99,990,000-pixel untouched source
+    proves no final document can exceed the cap. Floating opening/merge, host activation and native gates remain open.
   - [ ] A6.3 — Activate ordered preview, release, header and settlement callers; preserve pending controls,
     continuation outcomes and input-time geometry through acknowledgement and aggregate retirement.
   - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
@@ -78,8 +85,11 @@
     - [ ] A7.3a — Admitted selection-mask/uniform-mask preparation, transformed coverage with legacy
       hide/reveal bytes, eager edge thumbnail, exact mask target/selection/history publication and retirement.
       The complete isolated document suite passes 84 core/extra controls. The focused host proof passes 201
-      controls and the complete private WARP application run passes. Native qualification and live producer settlement remain
-      pending ([mask record](../../TestRuns/MaskWorkers_2026-10-01.md)).
+      controls and the complete private WARP application run passes. The subsequent native matrix qualifies settled
+      callers; live producer settlement and G1 remain open ([mask record](../../TestRuns/MaskWorkers_2026-10-01.md)).
+      - [x] A7.3a.1 — Settled-session native commands qualify in all six profiles against 496 frozen inputs,
+        with 84 document controls and 201 actual host checks. Contracts and exact archives accompany the commit.
+      - [ ] A7.3a.2 — Complete live producer/gesture settlement (P1.4/A6/S3) and measured capture/apply/upload/G1.
     - [ ] A7.3b — Layer via Copy with owned copied region/origin, no-selection duplicate semantics, complete
       inserted layer/history and target/mask state. Preserve clipboard identity and serial throughout.
       Detached preparation/publication and the full private document suite pass 34 independent controls. The

@@ -1229,6 +1229,10 @@ class ShapeEditInput;
 class PreparedShapeEdit;
 struct ShapeEditResult;
 struct ShapeWorkObserver;
+class MaskEditInput;
+class PreparedMaskEdit;
+struct MaskEditResult;
+struct MaskWorkObserver;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
@@ -2201,6 +2205,12 @@ class DocumentSession
     // only it), dropping the selection and targeting the mask (`Add Mask from Selection`); without one,
     // `AddLayerMask`.
     void AddMask(bool revealing = true);
+    [[nodiscard]] std::uint64_t MaskEditPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<MaskEditInput> PrepareMaskEditInput(bool revealing) const;
+    [[nodiscard]] static MaskEditResult PrepareMaskEditPublication(
+        MaskEditInput input, Executor& executor, CancelToken cancellation, MaskWorkObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedMaskEditIfCurrent(PreparedMaskEdit& prepared) noexcept;
     // Ctrl+T with a selection transforms the selected pixels on a floating layer; without one, the layer.
     [[nodiscard]] bool CanTransformSelection() const noexcept;
     void TransformCommand();

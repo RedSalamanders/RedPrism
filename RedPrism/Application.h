@@ -19,6 +19,7 @@
 #include "ImageImportWork.h"
 #include "JobActivity.h"
 #include "Jobs.h"
+#include "MaskEditWork.h"
 #include "OwnerWorkMultiplexer.h"
 #include "PathClassificationWork.h"
 #include "PreviewMailbox.h"
@@ -58,6 +59,7 @@ struct ProjectOpenTestGate;
 struct ImageImportTestGate;
 struct RasterEditTestGate;
 struct ShapeWorkTestGate;
+struct MaskWorkTestGate;
 struct GradientWorkTestGate;
 struct PixelMoveWorkTestGate;
 struct ExportWorkTestGate;
@@ -432,6 +434,9 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartSizing(std::variant<CanvasSizeOptions, ImageSizeOptions> options) noexcept;
     class RasterEditJob;
     class ShapeJob;
+    class MaskJob;
+    [[nodiscard]] HRESULT StartMask(bool revealing) noexcept;
+    int RunMaskWorkSelfTest() noexcept;
     [[nodiscard]] HRESULT StartShape(const ShapeDraft& draft, std::uint32_t foreground) noexcept;
     int RunShapeWorkSelfTest() noexcept;
     [[nodiscard]] HRESULT StartRasterEdit(RasterEditKind kind, FillSource fill = FillSource::Background) noexcept;
@@ -715,6 +720,9 @@ class Application final : public ChromeEvents
     std::shared_ptr<struct ClipboardWorkTestGate> _clipboardWorkTestGate;
     std::shared_ptr<RasterEditTestGate> _rasterEditTestGate;
     std::optional<JobTicket> _shapeTicket;
+    std::optional<JobTicket> _maskTicket;
+    std::optional<HistoryWorkStamp> _maskStamp;
+    std::shared_ptr<MaskWorkTestGate> _maskWorkTestGate;
     std::optional<HistoryWorkStamp> _shapeStamp;
     std::shared_ptr<ShapeWorkTestGate> _shapeWorkTestGate;
     std::optional<ShapeDraft> _shapeCommitPreview;

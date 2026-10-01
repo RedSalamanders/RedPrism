@@ -91,6 +91,8 @@
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
     <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="CopyPixelsTests.h" />
+    <ClInclude Include="MaskEditWorkTests.h" />
+    <ClInclude Include="..\..\Common\MaskEditWork.h" />
     <ClInclude Include="ClipboardCommandTests.h" />
     <ClInclude Include="ClipboardPasteTests.h" />
     <ClInclude Include="CopyPixelsTransformTests.h" />
@@ -150,6 +152,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
+    <ClCompile Include="MaskEditWorkTests.cpp" />
+    <ClCompile Include="MaskEditWorkExtraTests.cpp" />
     <ClCompile Include="CopyPixelsTests.cpp" />
     <ClCompile Include="ClipboardCommandTests.cpp" />
     <ClCompile Include="ClipboardPasteTests.cpp" />
@@ -218,6 +222,7 @@
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardPasteWork.cpp" />
     <ClCompile Include="..\..\Common\ShapeEditWork.cpp" />
+    <ClCompile Include="..\..\Common\MaskEditWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

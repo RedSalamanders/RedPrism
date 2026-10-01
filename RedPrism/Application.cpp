@@ -2204,6 +2204,11 @@ int Application::RunSelfTest() noexcept
         return restore;
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
+    if (const int maskWork = RunMaskWorkSelfTest(); maskWork != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: mask-work.\n");
+        return maskWork;
+    }
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
@@ -3119,6 +3124,8 @@ void Application::Shutdown() noexcept
     _clipboardStamp.reset();
     _clipboardTicket.reset();
     _shapeTicket.reset();
+    _maskTicket.reset();
+    _maskStamp.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3828,7 +3835,8 @@ void Application::OnCommand(int command) noexcept
                             command == ChromeHost::kCommandDeleteKey;
     const bool clipboard = command == ChromeHost::kCommandCut || command == ChromeHost::kCommandCopy ||
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
-    if (!_hostExecuting && (rasterEdit || clipboard))
+    const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4248,10 +4256,23 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandAddMask:
     case ChromeHost::kCommandAddBlackMask:
+    {
         EndSelectionInteraction(false);
-        _session.AddMask(command == ChromeHost::kCommandAddMask);
-        DocumentChanged();
+        const auto result = StartMask(command == ChromeHost::kCommandAddMask);
+        if (FAILED(result))
+        {
+            _hostExecutionError = result;
+            if (result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                ReportBudgetRefusal();
+            else
+            {
+                ++_errorsShown;
+                _lastErrorId = IDS_ERROR_PIXEL_EDIT;
+                _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+            }
+        }
         break;
+    }
     case ChromeHost::kCommandTargetLayerMask:
         // The active layer's mask, or its pixels when the mask is the target (RF-907).
         if (const ImageLayer* active = _session.ActiveLayer(); active != nullptr && active->mask.has_value())

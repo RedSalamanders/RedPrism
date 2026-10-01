@@ -38,6 +38,7 @@ borrows that device. It MUST NOT own a swap chain.
 | `Renderer` | One `ID3D11Device`, one `ID3D11DeviceContext`, one `IDXGISwapChain1`, RTV, frame-latency waitable, occlusion registration | A second device, a chrome HWND, GDI paint, DxUi library lifetime, document rasters |
 | Document | Layer graph, COW rasters, history budget | HWND, DXGI factory, DxUi host |
 | `ShapeEditWork` (Document) | Detached draft/source/history authority, CPU coverage and adopted pixels, complete prepared layer/history publication | Live session mutation, HWND, chrome, GPU engine/context |
+| `MaskEditWork` (Document) | Detached source, selected-layer IDs and history authority; inverse-grid coverage, Gray8 mask and semantic thumbnail; prepared mask-target/selection/history publication | Live session mutation, HWND, chrome, GPU engine/context |
 | `Kernels` (`Common/Kernels.*`) | Immutable process-lifetime CPU function tables and CPU/OS feature detection; noinline tier implementations in separate translation units | Document/session state, HWND, GPU context, scheduler |
 | `WorkerPool` (`Common/WorkerPool.*`) | Private fixed-size Windows pool, bounded payload-free dispatch wakeups, callback cleanup group, implicit MTA lifetime, cancellation and parallel helpers | HWND, document mutation, GPU context, a second scheduler |
 | `WaitPool` (`Common/WorkerPool.*`) | Dedicated one-thread pool and at most 32 one-shot event waits | Pixel work, waits inside callbacks, document mutation |

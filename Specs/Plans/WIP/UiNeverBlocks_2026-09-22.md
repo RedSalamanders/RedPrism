@@ -111,6 +111,10 @@
         document/history publication and actual pointer/cancellation/retirement controls qualifies in all six
         profiles: 76 document controls and 199 host checks against 487 frozen inputs
         ([record](../../TestRuns/ShapeWorkers_2026-10-01.md)). Redraw, masks, Layer via Copy and measured G1 remain open.
+      - [x] A7.3a.1 — Worker selection/uniform masks with eager semantic thumbnail and joint target/selection/
+        history publication qualify settled production callers in all six profiles: 84 document controls and
+        201 host checks against 496 inputs ([record](../../TestRuns/MaskWorkers_2026-10-01.md)). Live gesture
+        settlement and measured capture/apply/upload/G1 remain A7.3a.2/P1.4/A6/S3.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

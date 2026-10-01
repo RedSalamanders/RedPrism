@@ -869,6 +869,22 @@ late cancellation, same-ID replacement, younger Undo and complete off-owner aggr
 Present or residual tickets/barriers/charges. No focused-only bypass may enter native sources. Full native gates
 and exact passing images are recorded in `Specs/TestRuns/ShapeWorkers_2026-10-01.md`; timing qualification remains G1.
 
+### Mask worker matrix
+
+`MaskEditWorkTests` requires 84 document controls (57 core plus 27 extra) for selection coverage on the layer grid,
+reveal/hide polarity and explicit-empty behavior, fractional and invalid grids, eager semantic thumbnail, unchanged
+source bytes, complete selected-layer IDs, one mask/selection/history publication, cancellation and memory refusal.
+`RunMaskWorkSelfTest` requires 201 event-gated host checks for ordered admission and held view input,
+before/after-preparation cancellation acknowledgement, allocation/history faults, stale source/selection/history/
+replacement refusal, younger Undo, literal target/thumbnail/history results and complete off-owner retirement without
+hidden Present or residual tickets, barriers or charges. The immutable private evidence records these control counts
+and a passing full private WARP run (`Specs/TestRuns/MaskWorkers_2026-10-01.md`); they are private functional proof,
+not by itself a native matrix result. The subsequent native incremental matrix passes all three x64 full suites
+and all three ARM64 cross-builds against 496 frozen inputs, including 84 document and 201 host controls in each
+x64 profile. Exact receipts and the post-qualification XML whitespace-only verification are in the same record.
+Live brush/warp/selection/transform settlement remains P1.4/A6/S3;
+no G1 or native ARM64 runtime claim follows from these controls.
+
 ### Clipboard host matrix
 
 `Specs/TestRuns/ClipboardHost_2026-10-01.md` records the final private full-application run. The actual WARP host

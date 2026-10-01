@@ -553,6 +553,7 @@ int Application::RunLayerEditsSelfTest() noexcept
         _forcedDiscard.reset();
         const Guid masked = insert(L"Masked", 40, 20, Vec2{0, 0}, 0xFFFF0000u);
         OnCommand(ChromeHost::kCommandAddMask);
+        settle();
         const Guid other = insert(L"Other", 40, 20, Vec2{0, 40}, 0xFF0000FFu);
         DocumentChanged();
         settle();

@@ -3,9 +3,10 @@
 Status: current normative contract (created with C8; later tool phases extend it)
 Last reviewed: 2026-10-01
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
-members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
+members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
-`RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`
+`RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`, and the mask
+command job in `RedPrism/ApplicationMaskJobs.cpp`
 
 ## Scope
 
@@ -308,7 +309,8 @@ explicitly empty selection.
   refuses while a panel owns the document (`HasColorEdit`), as `StepBlendMode` does: the panel's entry stays open
   until OK or Cancel, and an opacity would fold into it (legacy `canEditAppearance`).
 - `AddLayerMask(revealing)` gives the active layer a uniform 1×1 mask (`Add Reveal-All Mask` / `Add Hide-All Mask`)
-  and selects it; `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
+  and selects it; production Add Mask / Add Black Mask commands use the ordered mask worker described below.
+  `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
 
 ## Retouch session (C11)
 
@@ -610,6 +612,18 @@ work; functional migration alone establishes no Photoshop speed or bounded nativ
   selected area (`255 − coverage`), otherwise shows only it; the selection is dropped and the mask targeted, one
   `Add Mask from Selection` entry. Without a selection, `AddLayerMask` (`Add Reveal-All Mask` / `Add Hide-All Mask`).
   Nothing on a layer that already has a mask, or during a transform.
+
+  Production Add Reveal-All Mask / Add Hide-All Mask and Add Mask from Selection are admitted ordered Commit jobs.
+  Complete memory admission precedes source, complete selected-layer IDs and history capture. Workers map selection
+  coverage through the inverse layer pixel-to-document grid, retain the existing reveal (`255 − coverage`) and hide
+  (`coverage`) bytes, and build the Gray8 mask plus its eager semantic thumbnail (longest side at most 96 pixels)
+  before preparing one publication that contains both.
+  The publication selects the mask, preserves the complete selected-layer ID set, and commits mask
+  target, selection removal (when present), and one named history entry together through the captured image-import
+  authority. The no-selection reveal/hide masks retain their 1 × 1 white/black representation. Cancellation keeps
+  the ordered record, reservation, history barrier and captured graph until acknowledgement; the complete retired CPU
+  aggregate is released off owner. Settled session producers are covered; settlement from a live brush, warp,
+  selection move/lasso or transform remains a later P1.4/A6/S3 qualification and is not established here.
 - **Floating selection transform** (`TransformEdit::floating`, `FloatingTransform`): `CanTransformSelection` needs a
   non-empty selection, a paintable image layer (not its mask) and no pending edit; `TransformCommand` (Ctrl+T)
   starts it, else `BeginTransform`. `BeginSelectionTransform` opens a `Transform Selection` entry, clears the

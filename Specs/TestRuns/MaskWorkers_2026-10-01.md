@@ -1,7 +1,7 @@
 # Mask worker preparation and publication
 
-Status: complete isolated document and full private WARP application qualification pass. Native activation,
-configuration qualification, live producer settlement and measured P1/G1 bounds remain open.
+Status: settled-session mask creation is qualified in all six native profiles. Live producer settlement and
+measured P1/G1 bounds remain open.
 
 ## Implementation checklist
 
@@ -15,7 +15,7 @@ configuration qualification, live producer settlement and measured P1/G1 bounds 
   cancellation/staleness/faults and aggregate retirement.
 - [x] Pass the complete private WARP application run, preserving the original mask-target and badge assertions.
 - [ ] Prove live stroke, transform, outline/lasso and younger input settlement through the required P1.4/A6/S3 paths.
-- [ ] Activate, pass all native x64 suites and ARM64 clean cross-builds, archive, reconcile contracts, commit/push.
+- [x] Activate, pass all native x64 suites and ARM64 cross-builds, archive, reconcile contracts, commit/push.
 - [ ] Measure capture, application, history/chrome/upload and required G1 scenarios.
 
 ## Independent reference
@@ -91,6 +91,24 @@ differs from r1 only at `RedPrism/ApplicationLayerEdits.cpp`: the original AddMa
 mask-host (201 checks), shape-host (199), clipboard-host (268), clipboard-prefill (61), clipboard-delayed (41)
 and clipboard-fault (88).
 
-Full private WARP qualification now passes in r2. Native activation, live producer/gesture settlement,
-configuration qualification and measured G1 bounds remain open. No performance claim follows from these
-functional results.
+Full private WARP qualification passes in r2. The later native matrix below qualifies the activated callers;
+live producer/gesture settlement and measured G1 bounds remain open.
+
+## Native qualification
+
+Activation follows the qualified Shape baseline `1504f92`. The incremental six-profile matrix completes at
+`2026-10-01T21:54:33.2351133Z`, process exit 0, against 496 frozen inputs. All x64 Debug, Release and ASan Debug
+full suites pass, including the 84 document controls and 201 mask-host checks with zero failures in each profile.
+All three ARM64 cross-builds pass; they establish no ARM64 runtime result. Skills validation reports 15 skills;
+formatting checks 445 files. This is an incremental matrix following the clean Shape baseline.
+
+`.build/p1-mask-r1-qualified/` preserves 496 exact source inputs and 297 evidence files, including all six
+profile images, dependencies, ISA evidence, logs and final receipts. Source-manifest SHA-256 is
+`5CAB65322706F35EFF71A65C44D738DA2F56D48788EAD50A838E1998BB73EB15`; evidence-manifest SHA-256 is
+`0120020039FB8FE286EBC2714AEA6D794A8BE31188C4CF135B71D94D6A5FBE83`.
+Before commit, one trailing blank line is removed from DocumentTests.vcxproj. Parsed XML trees compare equal;
+compiled inputs do not change. `.build/p1-mask-post-qualification-xml.json` records both hashes and the comparison;
+`.build/p1-mask-publication-freeze.json` retains the final 496-input identity. Formatting and diff checks pass again.
+
+Owner metadata capture, history/chrome/upload costs and real-loop timing remain P1.9/G1. No speed or Photoshop
+claim follows from this functional matrix.

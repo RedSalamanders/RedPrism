@@ -709,6 +709,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_shapeTicket.value());
         }
+        else if (_maskTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_maskTicket.value());
+        }
         else if (_gradientCommitTicket)
         {
             (void)_historyWork.RequestCancel();

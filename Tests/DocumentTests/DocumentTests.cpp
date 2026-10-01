@@ -32,6 +32,8 @@
 #include "ImportHistoryTests.h"
 #include "ImportPublicationTests.h"
 #include "LiftReferenceTests.h"
+#include "MaskEditWorkExtraTests.h"
+#include "MaskEditWorkTests.h"
 #include "MergeHistoryTests.h"
 #include "MergePlanProbeTests.h"
 #include "OptionalImageThumbnailTests.h"
@@ -7410,6 +7412,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunClipboardCommandTests();
     gFailures += RunClipboardPasteTests();
     gFailures += RunShapeEditWorkTests();
+    gFailures += RunMaskEditWorkTests();
+    gFailures += RunMaskEditWorkExtraTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();
