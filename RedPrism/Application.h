@@ -52,6 +52,7 @@
 class ChromeHost;
 struct UiBenchmarkState;
 struct ApplicationShutdownTestProbe;
+struct ApplicationProcessingTestProbe;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
@@ -105,6 +106,7 @@ class Application final : public ChromeEvents
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -735,6 +737,7 @@ class Application final : public ChromeEvents
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
     ApplicationShutdownTestProbe* _shutdownTestProbe = nullptr;
+    ApplicationProcessingTestProbe* _processingTestProbe = nullptr;
     JobScheduler _jobs;
     OwnerWorkMultiplexer _ownerWork;
     RetryWaitQueue _retryWait;

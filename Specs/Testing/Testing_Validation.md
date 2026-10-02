@@ -673,6 +673,19 @@ uninitialized Close. The joined owner hook follows wrapper destruction; final wo
 exactly once, off owner and on MTA while borrowed context, reservations and wake events remain alive. Repeated
 and uninitialized Close cannot run hooks.
 
+Before constructing the ordinary application, `RunStandaloneProcessingSelfTest` drives 26 independent Application
+owners: eight faults after successful owned-stage acquisition, sixteen faults at the existing retry observer
+seams (EventCreation/RegisterWait in all eight slots), successful initialization and never-started shutdown.
+Its 390 controls require the exact original HRESULT, each acquired checkpoint once with no later stage, exact
+retry observer prefix/reached fault, matching live pool/routing/source/sink state, first/second Shutdown, detached
+retry/GPU routes, empty ownership and unchanged caller apartment. Acquired pools acknowledge exactly one final
+off-owner MTA hook; a prefix with no scheduler runs no hook. Each case owns its own trace/pool/sink and supplies
+no window/device/chrome. The following complete graphics-host tests retain their separate scope.
+Full x64 logs must report `application-processing summary: 390 checks, 0 failures` and 390 named PASS controls.
+After-stage checkpoints test prefix cleanup, not failure inside those successful APIs. Retry seams return before
+the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
+scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
+
 Before ordinary Application processing initialization, `RunStandaloneShutdownSelfTest` constructs two actual
 hidden WARP/chrome owners with their own sink and pool. Its 52 controls cover lifecycle work held before/after
 preparation, a real 16 MiB document/history, private clipboard and a live graphics-backed gradient draft. Producer
@@ -687,7 +700,7 @@ Full x64 application logs must report `application-shutdown summary: 52 checks, 
 Preview and delayed-clipboard shutdown controls retain their exact original source/history authority checks at
 joined owner detachment, before CPU retirement, then assert empty session and independently retained literal pixels
 after acknowledgement. These suites require 112 preview and 45 delayed-clipboard controls; existing legacy goldens
-remain unchanged. Failed initialization, all live brush/warp/heal and GPU/event leases, residual hash capacity and
+remain unchanged. Unintercepted initialization API failures, all live brush/warp/heal and GPU/event leases, residual hash capacity and
 shutdown timing remain in P1.7 F5d A3.
 
 The application lifecycle controls cover 115 New/Close/order/state assertions, 58 accepted-dimension/refusal

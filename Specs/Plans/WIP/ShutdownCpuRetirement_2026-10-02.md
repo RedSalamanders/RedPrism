@@ -77,7 +77,7 @@
     `clear()`. That residual cleanup requires measurement or a complete ownership transfer before closing A3.
   - [ ] A3 — Cover failed initialization, undrained/suspended GPU/event/clipboard leases, live brush/warp/heal and
     first/second shutdown calls; qualify six profiles and measure remaining hidden owner cleanup.
-  - [ ] A3b — In a private draft, add eight startup-only checkpoints after successfully acquired processing
+  - [x] A3b — Add eight startup-only checkpoints after successfully acquired processing
     stages, sixteen reached retry event/registration faults (each of eight slots), full-success and never-started
     controls. Each standalone Application owns its own trace/pool/sink; prove exact HRESULT and visited prefix,
     no later stage, first/second Shutdown, once-only MTA hooks when a pool exists, empty ownership/routes and
@@ -85,7 +85,48 @@
     Retry controls use the existing queue fault seam before the selected native event/registration call after
     preceding slots succeed. Genuine scheduler/pool/GPU/allocation failures, graphics/lease/live-draft coverage
     and timing remain open. Primary owns this lifecycle implementation; preserve and review private proof before
-    native activation. Native root qualification remains frozen while this separate draft proceeds.
+    native activation. The complete private Debug WARP application passes all 390 processing controls and unchanged
+    application suites at `2026-10-02T13:14:02.7568114Z`. Exact 561 inputs and 23 evidence entries are byte/SHA
+    verified in `p1-processing-init-private-r1-qualified` before activation. Primary formatting refinement uses
+    bounded `format_to_n` labels and separate local declarations; case expectations and production default
+    startup behavior are unchanged. The reviewed six-file native candidate is activated; skills/format, all
+    x64 full gates and ARM64 cross-builds remain required before this slice can complete or commit.
+    Follow-up primary review found the older shutdown test configures stdout buffering after the new processing
+    suite has already written. Move harness buffering to Main before every standalone test and remove the late
+    reconfiguration. The correction is staged privately while r1 remains frozen; preserve r1 evidence before
+    activation and fresh qualification of the final candidate. No runtime failure or production image bug is
+    attributed to this test-logging issue.
+    Native r1's full x64 ASan and all ARM64 builds pass; Release's actual application self-test then crashes with
+    `0xC0000005`, and x64 Debug does not run. Before repair, retain 584 frozen inputs, 230 evidence files and the
+    actual PID 108148 dump in `p1-processing-init-native-r1-failure`, plus 162 supplementary build-tracking
+    entries. The dump faults in Shutdown's old-layout scheduler access; its PDB/disassembly and source/object
+    timestamps show the Release `Application.obj` predates this layout change. Private activation preserved
+    source timestamps older than the object, so incremental qualification was invalid for this mixed image.
+    No production lifecycle conclusion is drawn from that run. Activate early stdout configuration separately
+    and force fresh rebuilds of all six profiles before qualification; buffering is not the identified cause.
+    R2 stops at Main's formatting gate before any build/runtime; its 584 inputs and seven logs/receipts are
+    retained as `p1-processing-init-native-r2-format-failure` before formatting correction. R3 forces every
+    profile rebuild with unchanged native inputs throughout. The complete matrix passes at
+    `2026-10-02T14:17:48.4508939Z`: all full x64 suites and ARM64 cross-builds, 390 processing and unchanged
+    52 shutdown controls in each x64 application. Exact 584 inputs and 329 evidence entries are SHA/byte verified
+    before the next native change. The current Release PDB has one 44920-byte Application layout; its object
+    was rebuilt after matrix start. Only this acquired-prefix slice completes
+    ([record](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)); broader A3 remains open.
+  - [ ] A3c — Prepare separate standalone live-owner controls for ordinary/mask Paint and Erase, all three Heal
+    modes, Clone, image/mask Blur and both Warp modes, with own hidden WARP/chrome/pool/sink and lifecycle work
+    held before/after preparation. Weak observations must establish the exact draft remains alive through joined
+    owner detachment and expires on acknowledged final MTA retirement; do not retain a surrogate strong owner.
+    Preserve original source/history observations before retirement and independent literal pixels afterward.
+    Borrowed coverage engines must detach on owner before CPU destruction. This scope does not substitute for
+    the separate mapped GPU/event/clipboard lease and initialization API fault controls or measured shutdown cost.
+    Primary owns observation APIs and lifecycle hooks; delegate bounded case construction, then review/execute
+    private proof before native activation. Keep the running A3b native source freeze unchanged.
+    The cheaper agent repairs the isolated 12-case/two-phase draft. Primary review strengthens exact target,
+    transform/mask and history observations; clears the harness history handle while session roots still own
+    it; proves an engine is borrowed before owner detachment; and observes brush and Warp expiration inside
+    the actual final MTA hook with a weak-only probe. The planned 432 assertions retain independent literal
+    pixels and once-only/STA/source/ticket ordering checks. A separate private complete Debug build begins;
+    native activation and GUI execution wait for the frozen A3b run and its verified archive.
 - [ ] Run skills/format checks, full x64 Debug/Release/ASan suites and all ARM64 clean cross-builds; archive exact
   inputs/images/symbols/results, reconcile owning contracts and commit/push.
 - [ ] Measure shutdown owner cleanup and remaining CPU graph costs; keep the full P1 G1 gate separate.
@@ -93,9 +134,8 @@
 ### Next A3 execution order
 
 The reviewed residual-root inventory also identifies a document-sized ColorSampling raster in `_drag`, the
-cached `_overlaySelection` geometry, and benchmark-only `_uiBenchmark` document/raster roots. None is currently
-cleared by the final MTA hook; include explicit retirement and independent weak-owner/byte observations before
-closing A3. Primary caller review found that `RunUiBenchmark` reads completion metadata after `Run`, and its
+cached `_overlaySelection` geometry, and benchmark-only `_uiBenchmark` document/raster roots. Their explicit
+retirement is now qualified by A3a. Primary caller review found that `RunUiBenchmark` reads completion metadata after `Run`, and its
 stack `UiTimingCapture` borrows the state's timing storage. Retire only the benchmark's two document and two
 raster roots; retain its state, timing, result metadata and known-path cleanup until those callers finish.
 Resetting the whole benchmark state during Shutdown would invalidate these callers. Session hash bucket

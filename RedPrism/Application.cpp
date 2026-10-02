@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "ApplicationProcessingTestProbe.h"
 #include "ApplicationShutdownTestProbe.h"
 
 #include "PipelineTrace.h"
@@ -174,21 +175,40 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_FAIL;
     }
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
+    const auto checkpoint = [this](ApplicationProcessingStage stage) noexcept -> HRESULT
+    {
+        return _processingTestProbe && _processingTestProbe->afterStage
+                   ? static_cast<HRESULT>(_processingTestProbe->afterStage(_processingTestProbe->context, stage))
+                   : S_OK;
+    };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
     RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::OwnerWork));
     RETURN_IF_FAILED(_gpuWork.Initialize(_jobs, &_ownerWork));
     _gpuWorkInitialized = true;
-    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(_jobs, _ownerWork)));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::GpuWork));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(
+        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->retryWait : RetryWaitObserver{})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::RetryWait));
     if (!InitializeHostContinuations())
     {
         return E_UNEXPECTED;
     }
-    if (!_jobs.EnableDeferredRelease() || !_jobs.EnableMemoryRecycling())
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Continuations));
+    if (!_jobs.EnableDeferredRelease())
     {
         return E_OUTOFMEMORY;
     }
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::DeferredRelease));
+    if (!_jobs.EnableMemoryRecycling())
+    {
+        return E_OUTOFMEMORY;
+    }
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Recycling));
     return S_OK;
 }
 

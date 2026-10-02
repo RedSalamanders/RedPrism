@@ -260,6 +260,9 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     const bool forceWarp = parsed.warp || parsed.selfTest;
     if (parsed.selfTest)
     {
+        (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
+        if (const int failed = Application::RunStandaloneProcessingSelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
             return failed;
     }

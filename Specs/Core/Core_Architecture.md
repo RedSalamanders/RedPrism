@@ -266,6 +266,15 @@ releasing session inputs, chrome, renderer/device resources, the window, localiz
 Shutdown drops pending completion callbacks and UI actions after producers have joined. Calls made during a job UI
 callback defer teardown until the callback has returned.
 
+Processing startup acquires trace registration, scheduler, owner routing, GPU wait slots, retry wait slots,
+host continuation source, deferred-release binding and recycling in that order. `Main` calls Shutdown after
+an initialization failure as well as after success. Cleanup must stop/join acquired producers, detach borrowed
+routes and clear bindings before releasing their owners; a second Shutdown repeats no retirement hooks.
+Harness-only borrowed startup checkpoints run after each successful stage; retry initialization reuses the
+queue's event/registration observer seams. Their contexts outlive initialization and acknowledged shutdown.
+Default startup supplies no observer. These controls qualify acquired-prefix cleanup, not failures inside
+unintercepted scheduler/pool/GPU/allocation APIs. A prefix with no acquired scheduler runs no final worker hook.
+
 The scheduler's owner grants memory reservations before dispatch and holds them through UI application and
 payload destruction. Waiting admission uses records, never blocked workers; memory events and retirements retry
 from an OS snapshot. An independent intrusive release queue can return memory even at the scheduler record cap.

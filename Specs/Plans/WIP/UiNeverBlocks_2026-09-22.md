@@ -16,11 +16,23 @@
   suites in each x64 configuration, plus all ARM64 cross-builds. The benchmark state/timing/metadata remain valid
   ([qualification](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)).
   Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
-- [ ] Following shutdown slice — Acquired-prefix initialization: primary-owned private draft covers eight
+- [x] P1 shutdown acquired-prefix initialization: primary-owned controls cover eight
   successful-stage checkpoints, sixteen retry event/registration seams, successful and never-started processing.
-  Its complete private Debug build passes; review confirms the 26-case prefix/count/lifetime expectations.
-  Application runtime proof, native activation and six-profile qualification remain required. These controls
+  Its complete private Debug WARP application passes all 390 controls and unchanged suites; exact private proof
+  is archived before native activation. Review confirms the 26-case prefix/count/lifetime expectations.
+  The native candidate passes all six forced-rebuild profiles against 584 unchanged inputs, with 390 processing
+  and unchanged 52 shutdown controls in each full x64 suite. Exact sources/products/receipts are archived
+  ([qualification](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)). These controls
   do not qualify native allocation/pool/GPU API failures or broader A3.
+  Native r1 passes all ARM64 cross-builds and full x64 ASan, then Release's actual self-test crashes before
+  buffered output reaches its log; x64 Debug does not run. Exact 584 inputs, 230 evidence files and PID 108148's
+  dump are archived before repair. Symbol/disassembly and retained build timestamps show Release reused the
+  pre-probe `Application.obj` with the older member layout: private file copying preserved source timestamps
+  older than that object. A supplementary 162-entry tracking archive is retained. Move stdout configuration
+  before all standalone tests and force a six-profile rebuild; the buffering issue is not the crash cause.
+- [ ] Next shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
+  the reviewed isolated candidate compiles; 432 actual Application assertions await serialized private runtime
+  proof, archive and native qualification. GPU/event/clipboard leases, API faults and timing remain open.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

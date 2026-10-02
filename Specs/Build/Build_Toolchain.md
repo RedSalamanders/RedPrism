@@ -380,6 +380,13 @@ headers consumed by `CanvasRenderer`.
 
 ## Validation
 
+Activating a private candidate must produce current source timestamps and use `-Rebuild` for every qualification
+profile that may contain older objects. Copying files with their old timestamps can leave an object compiled
+against an earlier class layout even when the candidate's source hashes are correct. A passing source freeze
+alone does not prove that all linked objects were rebuilt from those inputs. Preserve failed images, matching
+PDBs, build tracking and source timestamps before repairing or rebuilding a mixed image. Ordinary incremental
+development builds remain available; a copied candidate with uncertain object provenance requires forced rebuilds.
+
 ```powershell
 .\validate-skills.ps1
 .\build.ps1 -Platform x64 -Configuration Debug

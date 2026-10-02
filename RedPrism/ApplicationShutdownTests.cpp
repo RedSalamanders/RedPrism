@@ -15,7 +15,6 @@
 
 int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
 {
-    (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
     unsigned int checks = 0;
     int failures = 0;
     const auto expect = [&](bool condition, const char* name, bool after) noexcept
