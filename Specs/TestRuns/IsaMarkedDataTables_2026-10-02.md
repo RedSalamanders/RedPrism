@@ -149,11 +149,12 @@ Seven mutants change no control:
 - `test.ps1` passes in x64 Debug (10,771 passing checks), Release (10,771) and ASan Debug (13,918), with the hidden WARP self-test
   and the ISA controls. As in the revision 3 record, three checks are skipped on this machine: `path.junction-load`, the absent
   gradient snapshot and the RAW corpus byte controls.
-- The `test.ps1` runs used two local patches, never committed and reverted afterwards:
+- The first `test.ps1` runs used two local patches, never committed and reverted afterwards:
   - the display-size patch of the revision 3 record;
   - a no-clipboard patch, so that the runs could not replace the user's clipboard. Neither clipboard scope
     (`SystemClipboard.cpp`, `ClipboardTransfer.cpp`) opens it. The self-test leaves out its five clipboard stages and the
     system-mirror checks of its pixel-edit block. IoTests leaves out `RunClipboardTransferTests` and
     `RunClipboardAvailabilityTests`.
-
-  This change touches no product code.
+- Then, with the user's agreement to the runs replacing their clipboard, `test.ps1` ran again with only the display-size patch,
+  so with every clipboard check. It passes in x64 Debug (10,975 passing checks), Release (10,975) and ASan Debug (14,122). That
+  includes the 125 `clipboardtransfer.*` checks and the self-test's five clipboard stages, with the same three skips.
