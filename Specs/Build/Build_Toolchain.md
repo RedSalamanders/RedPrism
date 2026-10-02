@@ -212,8 +212,29 @@ alone is insufficient. Undecoded prefixes in inline data are counted separately,
 not accepted as decoded instructions. The scan is a VEX/EVEX boundary gate; it does not prove safety of arbitrary
 third-party DLL dispatch or replace execution on baseline hardware. Those libraries need their own qualification.
 
-MSVC can put a switch table inside an executable contribution, and its DWORD RVAs can decode as VEX instructions.
-The scanner recognizes only the observed image-relative dispatch: contiguous decoded instructions load the image
+MSVC can put a switch table inside an executable contribution, and its DWORD RVAs or byte indices can decode as VEX
+or EVEX instructions. Whether they do depends only on the address at which the linker places the procedure, so any relink
+can turn an accepted table into a violation. MSVC emits each such table after all of its procedure's code and marks it
+in the PDB with an anonymous untyped 16-byte `S_LDATA32`. The scanner proves every marked range from that record and
+its content, whatever dispatch reads it:
+
+- The range runs from the record to the next such record of the same module, or to the end of the one PDB procedure of
+  that module and contribution that contains the record. A record in no procedure, or in more than one, proves nothing.
+- A DWORD table starts on a DWORD boundary, spans a whole number of DWORDs and holds at least two. Each DWORD is the
+  image-relative address of a known decoded instruction boundary of that procedure before its first marked range.
+- A byte index table directly follows such a proved DWORD table of the same procedure. Each of its bytes is an index
+  below that table's entry count, except the exact trailing alignment `90`, `66 90` or `0F 1F 00` of a range that ends
+  on a DWORD boundary.
+
+A range that is neither proves nothing. A range over 64 KiB is not examined. Every byte outside a proved range stays
+gated, including real vector code before, between or after the tables. A proved range takes part in the row
+checks below (an `INT3` suffix, directly touching proved tables) like a recognized table. The proof exempts no object,
+procedure or address, and the runtime allowlist is unchanged
+([record](../TestRuns/IsaMarkedDataTables_2026-10-02.md)).
+
+The dispatch recognizers below prove a table from its observed dispatch form, independently of the marked-range
+proof; their parser controls are evaluated with that proof both enabled and disabled. The basic form is the
+observed image-relative dispatch: contiguous decoded instructions load the image
 base into RCX, optionally remap a byte index, load an RVA through RCX + 4×RAX, add the base and jump through RAX.
 It also recognizes the observed R8-base forms with RAX/RCX index and RAX/RCX/RDX target, checking that remap, load,
 add and jump use the same registers. The aligned table must follow RET plus at most three alignment bytes, or
@@ -273,8 +294,9 @@ repeated padding, nonaligned end or empty index range receives no exemption. No 
 The byte table becomes proved data only after its associated DWORD table and every branch target pass. Rows crossing
 directly touching DWORD and byte-index spans keep the same 15-byte, byte-for-byte PE and contribution checks.
 No object, library or function runtime allowlist entry is added by either proof.
-Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
-compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
+A table of an unrecognized dispatch form is proved only by its PDB record and content, as described above. The
+synthetic parser controls are distinct from the compiled ISA controls. They cover broken dispatch, bounds, targets,
+trailing return, the marked-range rules and adjacent real VEX code.
 
 The observed DxUi typography form permits exactly one contiguous `MOVZX EAX,DL` between LEA RCX of image base
 and the DWORD EAX table load. RCX stays unchanged. This form requires the exact same-owner anonymous 16-byte

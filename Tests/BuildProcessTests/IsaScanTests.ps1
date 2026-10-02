@@ -11,6 +11,8 @@ Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaMarkedTableTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'PDB-marked table parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

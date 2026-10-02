@@ -464,6 +464,31 @@ table (6). A genuine VEX instruction in the procedure, in the alignment before t
 or in the next function (4) stays a violation while the two table rows stay data. The real Release images of the merged tree
 pass: [record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md).
 
+The PDB-marked table proof has 39 controls in `IsaMarkedTableTests.ps1`. Each builds a small image whose listing comes from the
+gate's own `llvm-objdump`, so a table decodes as it would at that address. They start from the switch of DxUi's
+`MenuPointerKindFromMessage` as linked into the Release image that the gate rejected on 2 October. Ten are accepted:
+
+- the observed image, whose vector-decoding entries the dispatch recognizers alone reject;
+- the switch at three other addresses, a second table in the procedure, and tables in two procedures;
+- valid byte indices that decode as VEX and EVEX, and each of the three alignment forms. With the three-byte form, a row
+  reaches from a proved DWORD table into the indices that the alignment ends.
+
+Each refusal changes one thing:
+
+- the record (6): absent, named, typed, one byte early or late, or another module's;
+- the procedure (5): absent, another module's, one byte short or long, or a second holder;
+- the range (2): a single entry, or not DWORD-aligned;
+- an entry (5): before the procedure, in the next one, inside the table, inside an earlier table, or inside an instruction;
+- the index bytes (7): an index at the entry count, unmarked, marked in another module, after a marked gap, starting the next
+  procedure, a trailing byte that is not a NOP, or a NOP that does not end on a DWORD boundary.
+
+A genuine VEX instruction in the marked range, in the procedure's code or after it stays a violation (3). So does a row that
+reaches from a proved DWORD table into unproved indices (1).
+
+The inline, AL-guard and RDX suites evaluate every control twice. Through the full gate, an accepted control stays accepted and a
+control that plants vector code stays refused. With the marked-range proof disabled, their dispatch-form assertions apply
+unchanged. [Record](../TestRuns/IsaMarkedDataTables_2026-10-02.md).
+
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.
 It checks the actual six scalar function entries and padded, odd-width alpha/transparent adjustment inputs.

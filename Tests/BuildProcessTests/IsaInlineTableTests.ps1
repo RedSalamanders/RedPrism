@@ -588,8 +588,19 @@ function New-TailPaddingCase([string]$Name) {
 }
 
 function Invoke-Control($Case, [bool]$ExpectedPass, [int]$ExpectedInline = -1, [int]$ExpectedVectors = -1) {
-    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
+    # These controls measure the dispatch recognizers alone. The gate also proves every PDB-marked table range from its
+    # content (IsaMarkedTableTests.ps1), which makes the dispatch form of a marked table irrelevant; under it a control
+    # accepted here stays accepted, and a control that plants a genuine vector instruction (its name says Vex or Evex) stays rejected.
+    $gate = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
         [string[]]@(), [string[]]@(), [string[]]@())
+    if ($ExpectedPass -and $gate.Violations.Count -ne 0) {
+        throw "$($Case.Name) violated the full ISA gate: $($gate.Violations -join '; ')"
+    }
+    if (-not $ExpectedPass -and $Case.Name -match 'vex' -and $gate.Violations.Count -eq 0) {
+        throw "$($Case.Name): the full ISA gate accepted a genuine vector instruction."
+    }
+    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and $result.Violations.Count -ne 0) {
         throw "$($Case.Name) unexpectedly violated the ISA gate: $($result.Violations -join '; ')"
     }

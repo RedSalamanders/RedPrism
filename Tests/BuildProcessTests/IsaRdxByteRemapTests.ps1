@@ -201,8 +201,16 @@ function New-Control([string]$Name, [string]$Fault = '') {
 }
 
 function Assert-Control($Case, [bool]$ExpectedPass) {
-    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
+    # The dispatch recognizer alone; the full gate's PDB-marked table proof is controlled in IsaMarkedTableTests.ps1. Under the
+    # full gate the valid control stays accepted and the genuine vector instruction (ActualVex) stays rejected.
+    $gate = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
         [string[]]@(), [string[]]@(), [string[]]@())
+    if ($ExpectedPass -and $gate.Violations.Count -ne 0) { throw "$($Case.Name) violated the full ISA gate: $($gate.Violations -join '; ')" }
+    if (-not $ExpectedPass -and $Case.Name -match 'vex' -and $gate.Violations.Count -eq 0) {
+        throw "$($Case.Name): the full ISA gate accepted a genuine vector instruction."
+    }
+    $result = [RedPrismBuild.IsaScanner]::Scan($Case.Binary, $Case.Metadata, $Case.Symbols, $Case.Disassembly,
+        [string[]]@(), [string[]]@(), [string[]]@(), $false)
     if ($ExpectedPass -and ($result.Violations.Count -ne 0 -or $result.InlineTableVectorData -ne 7)) {
         throw "$($Case.Name): expected seven proven inline DWORD rows and no violations; got $($result.InlineTableVectorData), $($result.Violations -join '; ')"
     }

@@ -109,3 +109,9 @@ without conflicts, as `63b6dac`. On that tree, on the same machine, with no wind
   it as six `vcvtsi2ss xmm8, xmm6, dword ptr [rax]` decodes four bytes apart (`0x1402a4ae8` to `0x1402a4b04`); unpatched, that
   table is among the four verified. The scan's data proof therefore depends on link layout, and an unrelated code change can trip
   it. That is recorded as a follow-up, not changed here.
+
+**Correction, 2 October.** The clause "unpatched, that table is among the four verified" is wrong. No dispatch recognizer covers
+that switch (`MenuPointerKindFromMessage`, which indexes through RDX from an R8 image base), so the scan verified it in neither
+image. Unpatched, its entries happened to decode as no vector instruction, and the four verified rows belong to other tables. The
+follow-up proves such tables from their PDB records whatever the layout:
+[IsaMarkedDataTables_2026-10-02.md](IsaMarkedDataTables_2026-10-02.md).

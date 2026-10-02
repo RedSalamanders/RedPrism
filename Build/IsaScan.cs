@@ -779,6 +779,89 @@ namespace RedPrismBuild
             return null;
         }
 
+        // MSVC marks each switch table it emits into .text with an anonymous untyped 16-byte S_LDATA32 (dataSymbols), after all
+        // of the procedure's code. The range from such a symbol to the next one of its module, or to the end of the one PDB
+        // procedure that holds it, is proved data when its content can be nothing else, whatever dispatch reads it and
+        // wherever the linker placed it:
+        //  - a DWORD table: at least two DWORDs on a DWORD boundary, every one the image-relative address of a decoded
+        //    instruction boundary of that procedure before its first marked table;
+        //  - a byte index table: it directly follows such a proved DWORD table of the same procedure, and every byte before
+        //    the alignment that ends a DWORD-aligned range (exactly 90, 66 90 or 0F 1F 00) indexes that DWORD table.
+        // The proof covers every table the compiler marked, not only the dispatch forms recognized below, so a table whose
+        // entries happen to decode as a vector instruction in one layout is proved in every layout. A range that is neither,
+        // a symbol outside one procedure of its module and contribution, and every byte outside a proved range stay gated.
+        private static List<InlineTable> ReadPdbProvenTables(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts)
+        {
+            var tables = new List<InlineTable>();
+            var starts = new List<ulong>(dataSymbols.Keys);
+            starts.Sort();
+            InlineTable previousDword = null;
+            for (int index = 0; index < starts.Count; ++index)
+            {
+                ulong begin = starts[index];
+                int module = dataSymbols[begin];
+                int ownerIndex = FindContribution(contributions, begin);
+                if (ownerIndex < 0 || contributions[ownerIndex].Module != module) continue;
+                Contribution owner = contributions[ownerIndex];
+                Function holder = null;
+                int holders = 0;
+                foreach (Function procedure in procedures)
+                    if (procedure.Module == module && procedure.ContributionBegin == owner.Begin &&
+                        procedure.ContributionEnd == owner.End && begin >= procedure.Begin && begin < procedure.End)
+                    { holder = procedure; ++holders; }
+                if (holders != 1) continue;
+                ulong end = holder.End;
+                for (int next = index + 1; next < starts.Count && starts[next] < end; ++next)
+                    if (dataSymbols[starts[next]] == module) { end = starts[next]; break; }
+                ulong code = begin;
+                for (int previous = index - 1; previous >= 0 && starts[previous] >= holder.Begin; --previous)
+                    if (dataSymbols[starts[previous]] == module) code = starts[previous];
+                if (begin < imageBase || end - imageBase > UInt32.MaxValue || end - begin > 65536) continue;
+                int raw;
+                try { raw = checked((int)Offset(checked((uint)(begin - imageBase)), sections, pe.Length)); }
+                catch (InvalidDataException) { continue; }
+                int length = checked((int)(end - begin));
+                if (raw > pe.Length - length) continue;
+                var table = new InlineTable { Begin = begin, End = end, Module = module,
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End };
+                if ((begin & 3) == 0 && (length & 3) == 0 && length >= 8)
+                {
+                    bool dword = true;
+                    for (int offset = 0; offset < length && dword; offset += 4)
+                    {
+                        ulong target = checked(imageBase + BitConverter.ToUInt32(pe, raw + offset));
+                        dword = target >= holder.Begin && target < code &&
+                                IsDecodedBoundary(target, module, contributions, decoded, decodedStarts);
+                        table.Targets.Add(target);
+                    }
+                    if (dword)
+                    {
+                        tables.Add(table);
+                        previousDword = table;
+                        continue;
+                    }
+                    table.Targets.Clear();
+                }
+                if (previousDword == null || previousDword.End != begin || previousDword.Module != module ||
+                    previousDword.ContributionBegin != owner.Begin || previousDword.ContributionEnd != owner.End ||
+                    previousDword.Begin < holder.Begin) continue;
+                int indexLength = length;
+                if ((end & 3) == 0)
+                {
+                    if (length >= 3 && pe[raw + length - 3] == 0x0f && pe[raw + length - 2] == 0x1f &&
+                        pe[raw + length - 1] == 0x00) indexLength -= 3;
+                    else if (length >= 2 && pe[raw + length - 2] == 0x66 && pe[raw + length - 1] == 0x90) indexLength -= 2;
+                    else if (length >= 1 && pe[raw + length - 1] == 0x90) indexLength -= 1;
+                }
+                bool indices = indexLength > 0;
+                for (int i = 0; i < indexLength && indices; ++i) indices = pe[raw + i] < previousDword.Targets.Count;
+                if (indices) tables.Add(table);
+            }
+            return tables;
+        }
+
         private static bool IsDecodedBoundary(ulong target, int module, List<Contribution> contributions,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts)
         {
@@ -822,8 +905,18 @@ namespace RedPrismBuild
             return false;
         }
 
+        // The gate: every proof, the PDB-marked data ranges included.
         public static IsaScanResult Scan(string binary, string metadata, string symbols, string disassembly,
                                          string[] runtimeObjects, string[] runtimeLibraries, string[] runtimeFunctions)
+        {
+            return Scan(binary, metadata, symbols, disassembly, runtimeObjects, runtimeLibraries, runtimeFunctions, true);
+        }
+
+        // `proveMarkedTables` false leaves only the dispatch recognizers, so their own controls can show what each of them
+        // proves alone; nothing that gates an image passes false.
+        public static IsaScanResult Scan(string binary, string metadata, string symbols, string disassembly,
+                                         string[] runtimeObjects, string[] runtimeLibraries, string[] runtimeFunctions,
+                                         bool proveMarkedTables)
         {
             byte[] pe = File.ReadAllBytes(binary);
             if (pe.Length < 64 || BitConverter.ToUInt16(pe, 0) != 0x5a4d)
@@ -1029,6 +1122,9 @@ namespace RedPrismBuild
                 else if (rowOwner >= 0) decoded[rowAddress].Unknown = true;
             }
             decodedStarts.Sort();
+            if (proveMarkedTables)
+                inlineTables.AddRange(ReadPdbProvenTables(pe, sections, contributions, dataSymbols, procedures, imageBase,
+                    decoded, decodedStarts));
             int dispatchStage = 0;
             bool r8Base = false;
             bool raxBase = false;
@@ -1054,8 +1150,6 @@ namespace RedPrismBuild
                 ++result.Instructions;
                 string[] bytes = match.Groups[2].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 ulong address = UInt64.Parse(match.Groups[1].Value, NumberStyles.HexNumber);
-                if (!match.Groups[3].Value.StartsWith("<unknown>", StringComparison.Ordinal))
-                    foreach (InlineTable table in inlineTables) table.PendingTargets.Remove(address);
                 // Only a handful of possible dispatch instructions need byte-array parsing. Keep the
                 // ordinary instruction scan cheap even for multi-million-instruction Debug images.
                 if (dispatchStage != 0 || (bytes.Length == 7 && bytes[1] == "8d" &&
