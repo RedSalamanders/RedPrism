@@ -159,6 +159,7 @@
     <ClInclude Include="Application.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
+    <ClInclude Include="WandLayerHostTestGate.h" />
     <ClInclude Include="DocumentLifecycleTestGate.h" />
     <ClInclude Include="ApplicationShutdownTestProbe.h" />
     <ClInclude Include="ApplicationProcessingTestProbe.h" />
@@ -244,6 +245,8 @@
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
     <ClCompile Include="ApplicationSelectionCommandSelfTest.cpp" />
+    <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
+    <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />

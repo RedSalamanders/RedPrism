@@ -222,6 +222,12 @@ allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 
+Settled active-layer New wand host jobs reserve the qualified phased source/flood/trace/history peak, including
+retirement and job metadata, before owner capture. Event-time settings and point are bounded owned input; source
+sampling, geometry and history construction run on workers. Rejected and applied graphs retire off owner. Queued
+coalescing preserves document/ordinal gaps and receipts. Metadata capture/planning traversal and chrome/display
+costs remain H2/H3/S5/G1 work; this migration does not itself qualify latency or broader live pointer routes.
+
 Settled Select All/Deselect host jobs reserve the complete selection-command/history peak before copying document
 records. The resumable admission boundary captures once on the owner, then constructs all geometry, after-document
 and history on the worker. Replaced and captured CPU owners remain in one deferred-release aggregate through

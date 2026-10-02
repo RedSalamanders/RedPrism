@@ -530,6 +530,12 @@ bool Application::ExecuteHostInput() noexcept
             {
                 OnCommand(value.command);
             }
+            else if constexpr (std::is_same_v<Input, HostWandLayerNewInput>)
+            {
+                _hostExecutionError = StartWandLayerSelection(value);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_WAND_MEMORY);
+            }
             else if constexpr (std::is_same_v<Input, HostToolInput>)
             {
                 OnTool(value.tool);

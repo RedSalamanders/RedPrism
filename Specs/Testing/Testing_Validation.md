@@ -305,6 +305,15 @@ unsuccessful OpenClipboard acquisition when available. These fixture waits do no
 
 ### Prepared selection publication (P1.6 core)
 
+The application WARP self-test's `wand-layer-host.*` controls exercise the settled active-layer New production
+actor. Independent placed-pixel clockwise literals, settings/AA changed before capture, no-op redo, unmatched
+sample deselection, queued outside/nonfinite/empty acknowledgement, actual younger Deselect/Undo, adjacent/full-
+ring coalescing with distinct latest output and a reached shared-ordinal gap are required. Held stale active/mask
+authority, cancellation acknowledgement, exact worker error, capture/entry allocation faults, real record-table
+refusal/recovery and complete aggregate retirement preserve document/history and release all ownership. Direct
+zoom and an actual window message are observed before held-worker release. These are structural controls; no
+additional physical pointer acceptance, broad gesture routing or G1 timing claim follows.
+
 The application WARP self-test's `selection-host.*` controls exercise the settled Select All/Deselect production
 actor. Literal clockwise full-canvas/nullopt output, complete layer/target preservation, no-op redo/revision,
 nested depth/title, updated saved marker and ordered younger opposite command/Undo are checked. A held worker

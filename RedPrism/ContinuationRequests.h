@@ -60,6 +60,12 @@ struct HostCommandInput final
 {
     int command;
 };
+struct HostWandLayerNewInput final
+{
+    Vec2 point;
+    WandSettings settings;
+    bool antialiased;
+};
 struct HostToolInput final
 {
     EditorTool tool;
@@ -180,7 +186,7 @@ using HostRequestInput =
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
-                 HostDuplicateBeginInput, HostDuplicateFinishInput>;
+                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

@@ -122,7 +122,7 @@
   archival retain 601 inputs and 2,858 evidence files, including a separately verified 45-file private runtime
   supplement for omitted archive log entries. Only the settled Select All/Deselect host boundary is complete;
   S2/S3b, broader P1 and measured G1 remain open.
-- [ ] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
+- [x] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
   are frozen. Own point/settings/AA at event time; use the qualified capacity planner before capture, worker
   sampling/flood/trace/history, current-only apply and aggregate retirement. Preserve queue coalescing/receipts,
   literal output, no-op/error/cancel semantics and the actual application caller. All Layers, Add/Subtract,
@@ -131,7 +131,19 @@
   Primary review strengthens the cheaper-agent test draft with distinct latest-click literals, a real shared-
   ordinal gap, a window message observed before worker release, event-time settings changed before capture,
   queued outside/nonfinite/empty acknowledgements and actual record-table refusal/recovery. The isolated source
-  has sixteen test modes; no wand host build/runtime qualification is claimed yet.
+  has sixteen test modes, independently qualified below.
+  The complete private Debug/WARP application now passes all 86 new controls, unchanged selection/compatibility
+  suites and all 49 registered stages. Exact 475 inputs and 197 evidence files are archived before nine reviewed
+  native activations. All six forced native rebuild profiles, full x64 suites and ARM64 cross-builds pass. Exact
+  control/source verification and independent archival retain 604 inputs and 877 evidence files; each x64 run
+  passes 86/16 wand-host controls and 162 retained selection-host controls. Only this settled host boundary is
+  complete ([record](../../TestRuns/WandLayerHost_2026-10-03.md)); all broader P1/G1 requirements stay open.
+- [ ] Outline-move event authority — S3b0 is the next private core prerequisite: a bounded scalar opening
+  identifies the exact gesture before capture and survives equal-geometry reopen/refusal cases. Preserve all
+  prepared End/Cancel generation/history semantics and account complete original-outline retirement. Private
+  source, reviewed literal/state-machine controls and full core/native qualification precede host closure;
+  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core and focused tests
+  now await fresh compile/runtime proof and archival; production outline closure remains the following slice.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

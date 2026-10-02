@@ -93,6 +93,27 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     exact acknowledged generation stamps in all x64 suites; all three ARM64 cross-builds pass.
   - [ ] S3b — Activate move/draft/gesture closure under the selected ordinal and exact retained input; the
     prepared core does not authorize synchronous host End/Cancel or altered live-stroke settlement.
+    - [ ] S3b0 — Qualify a session-local monotonically increasing outline-move opening before queue activation.
+      A bounded event-time scalar must refuse a closed/reopened gesture before owner capture, even when its
+      origin and current geometry are equal. Retain existing generation/history checks on prepared apply; bind
+      the opening as an additional requirement. Keep the counter across document replacement and expose no
+      owning document/history reference in the queued event. Complete retirement accounting must include the
+      retained original outline, document/display/history graphs and wrapper storage. Primary prepares this
+      isolated core source while S4c native inputs stay frozen; private literal/state-machine controls and full
+      DocumentTests, archival and native qualification precede production closure activation.
+    - [ ] S3b1 — Own the qualified opening and exact End/Cancel intent in a bounded typed host request at the
+      pointer/command boundary. Select the shared ordinal before capture; reject a replaced opening without
+      settling another gesture. Freeze subsequent outline samples while closure awaits acknowledgement. Reserve
+      construction and complete retirement before capturing the sealed closure input, prepare history on the
+      worker, and publish only the still-current opening/session/history aggregate. Retain receipt, draft and
+      history ownership through cancellation, failure or stale acknowledgement; no synchronous fallback on
+      admission failure. Keep click-without-move Deselect or New wand follow-up ordered ahead of younger writers
+      and own its point/settings/AA at the original event. First enumerate mouse-up, capture loss, tool/header,
+      Escape, Undo/Redo, replacement/save/close and shutdown callers and their direct reference semantics.
+      Actual production-route controls must hold the worker, send later pointer samples and younger writers,
+      assert independent literal End/Cancel/redo outcomes, and reach stale opening, record/memory refusal,
+      capture/history allocation faults and cancellation acknowledgement. Qualify exact retirement and full
+      configuration gates before claiming the host closure complete; lasso/boolean/All Layers and G1 stay open.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
   - [x] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
@@ -148,7 +169,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     The fresh combined r2 matrix, exact source/control verification and independent archive now pass against
     598 inputs and 7,223 evidence files. All 117 wand controls run in each full x64 suite, with unchanged goldens;
     ARM64 builds pass. This completes S4b core preparation ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)).
-  - [ ] S4c — Qualify the settled active-layer New production host route. Own point/settings/AA before queueing;
+  - [x] S4c — Qualify the settled active-layer New production host route. Own point/settings/AA before queueing;
     complete phased admission precedes capture/resume, worker source/flood/trace/history, current-only apply,
     receipt acknowledgement and aggregate retirement. Consecutive queued New requests retain the existing
     coalescing/ordinal-gap rules and superseded receipts; this does not imply accepting additional pointer presses
@@ -160,8 +181,15 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     refusal/recovery. Latest coalesced clicks sample a different pixel with a distinct literal outline; the shared-
     ordinal gap is reached between adjacent wand requests. Posted-window pumping holds the worker until the
     message is observed. Outside/nonfinite/empty cases use actual queued receipts and preserve whole geometry/
-    history. Settings/AA change before owner capture to prove event-time ownership. Compiler/runtime proof remains
-    pending, and helper assumptions are checked against the actual harness markers before execution.
+    history. Settings/AA change before owner capture to prove event-time ownership. Helper assumptions are checked
+    against the actual harness markers before execution.
+    The complete private Debug/WARP suite now passes all 86 unique checks across sixteen modes and all 49 source-
+    registered harness stages, with unchanged compatibility suites. Exact 475 inputs and 197 evidence files are
+    independently verified and archived before nine native activations. The fresh serial six-profile forced rebuild
+    passes full x64 suites and all ARM64 cross-builds. Exact control/source verification and independent archival
+    retain 604 inputs and 877 evidence files. Every x64 run passes 86/16 wand-host controls and all 162 predecessor
+    settled-selection host names; source-ordered 49-stage application execution and all core names are retained.
+    This completes only S4c's settled host boundary ([record](../../TestRuns/WandLayerHost_2026-10-03.md)).
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration
@@ -171,8 +199,9 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
 
 `OnCommand` routes settled Select All/Deselect through the qualified actor; existing live-gesture paths remain
 direct. Inverse and layer/mask selection remain direct. `OnSelectionAction` supplies Expand
-and Contract amounts; lasso/marquee completion calls ApplySelection booleans; wand may synchronously compose or
-render the source before flood/trace. The direct engine APIs stay as reference routes. Outline move is a live
+and Contract amounts; lasso/marquee completion calls ApplySelection booleans. Settled active-layer New wand uses
+the qualified actor; All Layers, booleans and live wand still synchronously compose or render the source before
+flood/trace. The direct engine APIs stay as reference routes. Outline move is a live
 gesture and must be explicitly ordered or suspended while a worker owns its base; leaving it outside a first
 kernel slice does not exempt its overlapping mutation from the host barrier.
 

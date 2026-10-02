@@ -101,9 +101,11 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
         (void)request.Finish(HostOutcome::Failed, !ordinal ? HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW) : E_ABORT);
         return receipt;
     }
-    const auto admission = _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), ContinuationKind::Command,
-                                                 request, RetireHostContinuation);
-    if (admission != ContinuationAdmission::Queued)
+    const auto kind = std::holds_alternative<HostWandLayerNewInput>(request.Input()) ? ContinuationKind::WandNew
+                                                                                     : ContinuationKind::Command;
+    const auto admission =
+        _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+    if (admission != ContinuationAdmission::Queued && admission != ContinuationAdmission::Coalesced)
     {
         (void)request.Finish(HostOutcome::Failed,
                              admission == ContinuationAdmission::Full ? HRESULT_FROM_WIN32(ERROR_BUSY) : E_UNEXPECTED);
@@ -843,6 +845,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionCommandTicket.value());
+        }
+        else if (_wandLayerHostTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_wandLayerHostTicket.value());
         }
         else if (_rasterEditTicket)
         {

@@ -409,6 +409,15 @@ Applied and rejected aggregates retain their owners for worker disposal; they mu
 path by a production caller. This core does not route application input. S2/S3b ordering, gesture closure, complete
 scheduler admission and All Layers/Add/Subtract remain separate prerequisites; no UI/G1 bound follows from it.
 
+Application routes settled active-layer New wand input through the owned host request and shared ordinal. Point,
+settings and AA are event-time values; complete phased memory admission precedes capture/resume. Worker source
+sampling/flood/trace and history preparation use only the captured graph. Current-only completion acknowledges
+success/refusal before younger work and retires its complete aggregate off owner. Outside/nonfinite clicks and
+empty documents acknowledge without a job or selection change; an in-canvas no-match publishes `Deselect`.
+Consecutive queued New requests obey the existing document/adjacent-ordinal coalescing rules and retire the
+superseded receipt. This route does not change the pointer busy guard, All Layers/Add/Subtract/Intersect or
+live-gesture routes. Broader pointer replay/closure, metadata/accounting and G1 qualification remain separate.
+
 ## Brush session (C10)
 
 The stroke model, the coverage engines, the commit and the live preview live in

@@ -1304,6 +1304,8 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Wand);
         pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
             _session.history.UndoName() != L"Magic Wand")
@@ -2278,6 +2280,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
+    std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
+    if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
+        return wand;
     std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
@@ -6395,6 +6400,13 @@ void Application::SelectionChanged() noexcept
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 {
+    if (mode == SelectionMode::New && !_session.wandSettings.sampleAllLayers &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    {
+        ReportHostAdmission(
+            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased}));
+        return;
+    }
     std::optional<Raster> composite;
     if (_session.wandSettings.sampleAllLayers)
     {
