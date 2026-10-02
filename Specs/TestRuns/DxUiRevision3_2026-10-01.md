@@ -2,8 +2,8 @@
 
 Status: implemented and qualified on the branch `dxui/revision-3-2026-10-01`, which carries `origin/main` `ca51108`. The unpatched
 x64 builds pass the ISA gate in Release, Debug and ASan Debug; `test.ps1` passes in all three with the checks that need the clipboard
-left out (and with the local-only patches listed below); the three ARM64 configurations build. The clipboard checks at the new pin
-and Tree multi-select (DxUi #35) remain open. RedPrism has no CI, so this record is the qualification. Plan:
+left out (and with the local-only patches listed below); the three ARM64 configurations build. The clipboard checks ran and passed on 2 October, after merging the
+newer `origin/main` (last section); Tree multi-select (DxUi #35) remains open. RedPrism has no CI, so this record is the qualification. Plan:
 [DxUiFollowUps_2026-10-01.md](../Plans/WIP/DxUiFollowUps_2026-10-01.md).
 
 ## What changed
@@ -94,3 +94,18 @@ after; nothing was committed with them). Both patch files are outside the reposi
 commit). The branch merges into it without conflicts, and an uncommitted merge of the two builds in x64 Release, Debug and ASan
 Debug with the ISA gate passing on all five images of each (186, 192 and 196 s; the merge was then abandoned). That is a build check
 only: the new code's tests were not run, and everything above is the qualification of the tree with `ca51108`.
+
+## 2 October: main merged and the clipboard checks run
+
+The branch merges `origin/main` `d08eedd` (eight commits after `ca51108`, among them clipboard Paste and host graphs on workers)
+without conflicts, as `63b6dac`. On that tree, on the same machine, with no window holding the clipboard open:
+
+- `format.ps1 -Check` passes (487 files), and the three ARM64 configurations build.
+- Unpatched, x64 Release builds and passes the ISA gate on all five images (`RedPrism.exe`: 459 VEX/EVEX instructions, 2 undecoded
+  data prefixes, 4 verified table data); `test.ps1` then stops at the self-test's display check, as described above.
+- With only the display-size patch (1 above, neither clipboard patch), `test.ps1` passes in x64 Debug and ASan Debug, the IoTests
+  clipboard suite and the self-test's system-clipboard checks included. The user agreed to the runs replacing their clipboard.
+- With that patch, x64 Release did not reach the tests. The relink moved a jump table in `DxUi.Menu.obj`, and the ISA scan rejected
+  it as six `vcvtsi2ss xmm8, xmm6, dword ptr [rax]` decodes four bytes apart (`0x1402a4ae8` to `0x1402a4b04`); unpatched, that
+  table is among the four verified. The scan's data proof therefore depends on link layout, and an unrelated code change can trip
+  it. That is recorded as a follow-up, not changed here.

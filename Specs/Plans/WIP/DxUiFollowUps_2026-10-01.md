@@ -40,8 +40,9 @@
   210 characters). Qualified in x64 Debug, Release and ASan Debug and in the three ARM64 builds, rollback pin recorded,
   `Core_DxUiIntegration.md` and `Build_Toolchain.md` updated
   ([record](../../TestRuns/DxUiRevision3_2026-10-01.md)).
-- [ ] Run the checks that need the user's clipboard at the new pin on a machine whose clipboard is free: IoTests'
-  `clipboardtransfer.*` and the self-test's system-clipboard checks. The record above explains why they were not run.
+- [x] Run the checks that need the user's clipboard at the new pin on a machine whose clipboard is free: IoTests'
+  `clipboardtransfer.*` and the self-test's system-clipboard checks. Run and passed on 2 October in x64 Debug and ASan Debug,
+  after merging `origin/main` `d08eedd` (the record's last section).
 - [ ] Move this plan to Done once the three open items are closed.
 
 Source: the DxUi plan `MergeAndHostHygiene_2026-10-01` (RedSalamanders/DxUi).
