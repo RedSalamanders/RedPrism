@@ -53,5 +53,9 @@ struct CopyPixelsResult final
 // source/outline owners are shared. Complete host capture/history/codec/OS transfer/retirement is separate.
 // Zero refuses invalid or overflowing input. No traversal/materialization/allocation occurs in this planner.
 [[nodiscard]] std::uint64_t CopyPixelsMemoryBytes(const CopyPixelsInput& input) noexcept;
+// Metadata-only composite preparation admission, before allocating or reading back the complete image.
+// Covers cropped BGRA output, selection coverage and scan scratch; readback/metadata/encoding are separate.
+[[nodiscard]] std::uint64_t CopyMergedPixelsMemoryBytes(int width, int height,
+                                                        const std::optional<DocumentSelection>& selection) noexcept;
 [[nodiscard]] CopyPixelsResult RunCopyPixels(const CopyPixelsInput& input, CancelToken cancellation = {},
                                              CopyPixelsObserver observer = {});

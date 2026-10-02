@@ -185,6 +185,7 @@ struct ClipboardHold
     wil::unique_event_nothrow opened;
     wil::unique_event_nothrow release;
     bool held = false;
+    DWORD released = WAIT_FAILED;
 };
 
 DWORD WINAPI HoldClipboard(void* context) noexcept
@@ -200,7 +201,7 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
         }
     }
     hold->opened.SetEvent();
-    (void)WaitForSingleObject(hold->release.get(), 10000);
+    hold->released = WaitForSingleObject(hold->release.get(), 10000);
     if (hold->held)
     {
         (void)CloseClipboard();
@@ -503,8 +504,15 @@ bool Application::ExecuteHostInput() noexcept
             }
             else if constexpr (std::is_same_v<Input, HostShapeFinishInput>)
             {
-                _session.CommitShape(value.draft, value.foregroundArgb);
-                DocumentChanged();
+                _hostExecutionError = StartShape(value.draft, value.foregroundArgb);
+                if (FAILED(_hostExecutionError))
+                {
+                    ++_errorsShown;
+                    _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                       ? IDS_ERROR_TOO_LARGE
+                                       : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
             }
             else if constexpr (std::is_same_v<Input, HostLayerSelectInput>)
             {
@@ -1482,6 +1490,15 @@ int Application::RunClipboardSelfTest() noexcept
     }
     const auto restoreClipboard =
         wil::scope_exit([&]() noexcept { (void)SystemClipboard::RestoreContents(_window.get(), userClipboard); });
+    const auto clipboardCommand = [&](int command) noexcept
+    {
+        OnCommand(command);
+        if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The clipboard operation did not acknowledge its asynchronous work.\n");
+            std::_Exit(5); // retain borrowed harness owners after a failed join
+        }
+    };
     _forcedDiscard = true;
     OnCommand(ChromeHost::kCommandNew);
     if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
@@ -1502,7 +1519,7 @@ int Application::RunClipboardSelfTest() noexcept
     }
     // A copy that reaches the system clipboard, then another app's image there.
     _session.ApplySelection(SelectionGeometry::Rect(10, 10, 20, 10), SelectionMode::New, L"Select");
-    OnCommand(ChromeHost::kCommandCopy);
+    clipboardCommand(ChromeHost::kCommandCopy);
     const Raster foreign = SolidRaster(3, 3, 0xFF00FF00u);
     // Other applications' clipboard listeners are still reading the copy: the test's own writes and reads wait them
     // out (SystemClipboard.h); the product's copy and paste keep their short wait.
@@ -1530,23 +1547,28 @@ int Application::RunClipboardSelfTest() noexcept
         SelfTestFailure(L"The clipboard self-test could not hold the clipboard open.\n");
         return 5;
     }
-    OnCommand(ChromeHost::kCommandCopy);
+    clipboardCommand(ChromeHost::kCommandCopy);
     hold.release.SetEvent();
     (void)WaitForSingleObject(holder.get(), 15000);
     Raster still;
-    const bool writeFailed =
-        SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still, SystemClipboard::kHarnessAttempts) &&
-        still.Width() == 3 && _session.Clipboard().has_value() && _session.Clipboard()->image.Width() == 30;
+    const bool systemRead =
+        SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still, SystemClipboard::kHarnessAttempts);
+    const DWORD systemReadError = GetLastError();
+    const bool writeFailed = systemRead && still.Width() == 3 && _session.Clipboard().has_value() &&
+                             _session.Clipboard()->image.Width() == 30;
     // Paste takes the session's copy, newer than the other app's image the system clipboard still holds.
-    OnCommand(ChromeHost::kCommandPaste);
+    clipboardCommand(ChromeHost::kCommandPaste);
     const ImageLayer* pasted = _session.ActiveLayer();
     const bool internal = pasted != nullptr && pasted->asset.has_value() && pasted->asset->image.Width() == 30 &&
                           pasted->asset->image.Height() == 15 && _session.history.UndoName() == L"Paste";
     if (!writeFailed || !internal)
     {
         SelfTestFailure(std::format(L"Paste after a copy that could not reach the system clipboard took an "
-                                    L"older image (write failed {}, pasted {} × {}).\n",
-                                    writeFailed, pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
+                                    L"older image (write failed {}, OS read {} {} × {}, native error {:#x}, "
+                                    L"holder release {:#x}, OS publication {}, pasted {} × {}).\n",
+                                    writeFailed, systemRead, still.Width(), still.Height(), systemReadError,
+                                    hold.released, _clipboardWriteSucceeded,
+                                    pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
                                     pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
         return 5;
     }
@@ -1569,7 +1591,7 @@ int Application::RunClipboardSelfTest() noexcept
         };
         const int before = _session.history.UndoCount();
         const bool copyPending = dragLine();
-        OnCommand(ChromeHost::kCommandCopy);
+        clipboardCommand(ChromeHost::kCommandCopy);
         const bool copyApplied = SettleJobs(_jobs, 10000, DispatchMessageThunk, this) == SettleResult::Settled &&
                                  _session.PendingGradient() == nullptr && !_composition.HasStroke() &&
                                  _session.history.UndoCount() == before + 1 &&
@@ -1579,7 +1601,13 @@ int Application::RunClipboardSelfTest() noexcept
         const bool mergedPending = dragLine();
         OnCommand(ChromeHost::kCommandCopyMerged);
         if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(std::format(L"Clipboard compatibility merged settlement failed: busy {}, ticket {}, "
+                                        L"reserved {}, releasing {}.\n",
+                                        _historyWork.Busy(), _clipboardTicket.has_value(), _jobs.ReservedMemoryBytes(),
+                                        _jobs.ReleasingMemoryBytes()));
             return 5;
+        }
         std::array<std::uint8_t, 4> start{};
         if (_session.Clipboard().has_value())
         {
@@ -1609,6 +1637,8 @@ int Application::RunSessionSelfTest() noexcept
         SelfTestFailure(L"The session self-test needs the chrome and the window.\n");
         return 5;
     }
+    SyncChrome();
+    (void)_chrome->Prepare(_renderer.Width(), _renderer.Height(), ChromeDpi());
     const float scale = static_cast<float>(GetDpiForWindow(_window.get())) / 96.0f;
     const LPARAM elsewhere = reinterpret_cast<LPARAM>(GetDesktopWindow());
     // A close that arrives inside a chrome callback (a modal loop a menu command or a card button runs) waits until

@@ -38,6 +38,8 @@ enum class Stage : std::uint8_t
     Closed,
     Inspected,
     Copied,
+    DibV5InspectRead,
+    DibInspectRead,
 };
 
 enum class Fault : std::uint8_t
@@ -54,13 +56,15 @@ enum class Fault : std::uint8_t
     ReceiptGlobal,
     ReceiptPlace,
     ReceiptRead,
+    Close,
 };
 
 struct Observer final
 {
     void* context = nullptr;
     void (*reached)(void*, Stage) noexcept = nullptr;
-    // Nonzero injects an error before the named native call. It never fakes a successful publication.
+    // Nonzero injects an error before the named native call. Close reports an error after actually closing,
+    // so a harness failure cannot leave the clipboard locked. Never fake a successful publication.
     std::uint32_t (*fault)(void*, Fault) noexcept = nullptr;
 };
 
@@ -119,6 +123,16 @@ struct FormatInfo final
     [[nodiscard]] bool operator==(const FormatInfo&) const noexcept = default;
 };
 
+// Metadata from one successfully closed inspection scope, even when offered image formats are malformed.
+// Paste may fall back to its private pixels only when no supported image format was offered. Busy, cancellation
+// and native close failure leave observed=false. No borrowed OS object or fresh post-close sequence escapes.
+struct Availability final
+{
+    std::uint32_t sequence = 0;
+    bool hasImageFormats = false;
+    bool observed = false;
+};
+
 class Inspection final
 {
   public:
@@ -155,7 +169,7 @@ class Inspection final
     FormatInfo _png;
     FormatInfo _dib;
     std::int64_t _pixelBudget = 0;
-    friend Status Inspect(std::int64_t, Inspection&, CancelToken, Observer);
+    friend Status Inspect(std::int64_t, Inspection&, CancelToken, Observer, Availability*);
     friend Status Copy(const Inspection&, class ImageCopy&, CancelToken, Observer);
 };
 
@@ -188,7 +202,7 @@ class ImageCopy final
 // Inspect locks borrowed global bytes only inside one open scope. PNG first, independently inspect DIBV5/DIB
 // for a permitted fallback. Hard encoded/pixel/side caps are checked before large owned allocation.
 [[nodiscard]] Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation = {},
-                             Observer observer = {});
+                             Observer observer = {}, Availability* availability = nullptr);
 // Reopen at the exact inspected sequence, size and metadata. Copy only inspected valid formats, in bounded
 // chunks, with no borrowed handle/pointer retained after CloseClipboard. Failed/cancelled output is empty.
 [[nodiscard]] Status Copy(const Inspection& inspected, ImageCopy& output, CancelToken cancellation = {},

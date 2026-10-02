@@ -151,19 +151,25 @@ if ($unknown.ExitCode -ne 2) {
 Write-Host 'Running hidden WARP self-test...' -ForegroundColor Cyan
 $selfTestErr = Join-Path $outputRoot 'RedPrism.self-test.err.log'
 Remove-Item -LiteralPath $selfTestErr -ErrorAction SilentlyContinue
+$selfTestLog = Join-Path $outputRoot 'RedPrism.self-test.log'
+Remove-Item -LiteralPath $selfTestLog -ErrorAction SilentlyContinue
 $selfTestTimeoutSeconds = 1200
 $selfTest = Start-Process -WindowStyle Hidden -FilePath $executable -ArgumentList @('--self-test', '--warp') -PassThru `
-    -RedirectStandardError $selfTestErr
+    -RedirectStandardOutput $selfTestLog -RedirectStandardError $selfTestErr
 $null = $selfTest.Handle
 if (-not $selfTest.WaitForExit($selfTestTimeoutSeconds * 1000)) {
     # AGENTS.md: never terminate a RedPrism.exe this script did not confirm is safe to close. Report the PID and
     # leave it running rather than kill it (RF-702).
     throw "RedPrism.exe --self-test --warp did not finish within $selfTestTimeoutSeconds s (PID $($selfTest.Id) is still running; report it, do not kill it)."
 }
+# The process has exited; finish asynchronous redirected-stream handlers before inspecting or archiving logs.
+$selfTest.WaitForExit()
 if ($selfTest.ExitCode -ne 0) {
-    $selfTestText = Get-Content -LiteralPath $selfTestErr -Raw -ErrorAction SilentlyContinue
-    throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). $selfTestText"
+    $selfTestText = (Get-Content -LiteralPath $selfTestErr -Tail 15 -ErrorAction SilentlyContinue) -join "`n"
+    $selfTestOutput = (Get-Content -LiteralPath $selfTestLog -Tail 15 -ErrorAction SilentlyContinue) -join "`n"
+    throw "RedPrism.exe --self-test --warp exited with code $($selfTest.ExitCode). Logs: $selfTestLog; $selfTestErr. $selfTestOutput`n$selfTestText"
 }
+Write-Host "PASS hidden WARP self-test: $selfTestLog" -ForegroundColor Green
 
 Write-Host 'Running kernel benchmark smoke...' -ForegroundColor Cyan
 $kernelSmokeLog = Join-Path $outputRoot 'RedPrism.kernels-smoke.log'

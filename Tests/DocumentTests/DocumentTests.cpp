@@ -6,17 +6,22 @@
 #include "BrushStroke.h"
 #include "CanvasSize.h"
 #include "ClipboardCommandTests.h"
+#include "ClipboardPasteTests.h"
 #include "ColorDismissalTests.h"
 #include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
 #include "CopyPixelsTests.h"
 #include "CopyPixelsTransformTests.h"
 #include "Crop.h"
+#include "DistortWorkTests.h"
 #include "Document.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
 #include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
+#include "FloatingMergeWorkTests.h"
+#include "FloatingOpeningWorkTests.h"
+#include "FloatingPixelsWorkTests.h"
 #include "GradientResourceTests.h"
 #include "GradientStateTests.h"
 #include "GradientWorkTests.h"
@@ -31,7 +36,10 @@
 #include "ImageFilters.h"
 #include "ImportHistoryTests.h"
 #include "ImportPublicationTests.h"
+#include "LayerCopyWorkTests.h"
 #include "LiftReferenceTests.h"
+#include "MaskEditWorkExtraTests.h"
+#include "MaskEditWorkTests.h"
 #include "MergeHistoryTests.h"
 #include "MergePlanProbeTests.h"
 #include "OptionalImageThumbnailTests.h"
@@ -40,6 +48,7 @@
 #include "PixelMoveStateTests.h"
 #include "PixelMoveWorkTests.h"
 #include "PreparedColorHistoryTests.h"
+#include "PreparedHistoryFollowingTests.h"
 #include "PreparedHistoryTests.h"
 #include "PreparedRasterHistoryTests.h"
 #include "ProjectSaveMemoryTests.h"
@@ -52,7 +61,12 @@
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
+#include "ShapeEditWorkTests.h"
+#include "TransformCancellationWorkTests.h"
+#include "TransformCommitWorkTests.h"
 #include "TransformEdit.h"
+#include "TransformPixelsWorkTests.h"
+#include "TransformPreviewWorkTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7391,6 +7405,20 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunFilterCancellationTests();
     gFailures += RunCopyPixelsTests();
     gFailures += RunClipboardCommandTests();
+    gFailures += RunClipboardPasteTests();
+    gFailures += RunShapeEditWorkTests();
+    gFailures += RunMaskEditWorkTests();
+    gFailures += RunMaskEditWorkExtraTests();
+    gFailures += RunLayerCopyWorkTests();
+    gFailures += RunDistortWorkTests();
+    gFailures += RunTransformPixelsWorkTests();
+    gFailures += RunTransformCommitWorkTests();
+    gFailures += RunTransformCancellationWorkTests();
+    gFailures += RunTransformPreviewWorkTests();
+    gFailures += RunFloatingOpeningWorkTests();
+    gFailures += RunFloatingMergeWorkTests();
+    gFailures += RunFloatingPixelsWorkTests();
+    gFailures += RunPreparedHistoryFollowingTests();
     gFailures += RunCopyPixelsTransformTests();
     gFailures += RunDocumentSizingWorkTests();
     gFailures += RunDocumentSizeHistoryTests();

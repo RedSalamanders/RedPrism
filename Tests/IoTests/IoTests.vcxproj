@@ -116,9 +116,11 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="..\..\Common\ClipboardReceipt.h" />
     <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
     <ClInclude Include="ClipboardTransferTests.h" />
+    <ClInclude Include="ClipboardAvailabilityTests.h" />
     <ClInclude Include="ClipboardReceiptTests.h" />
     <ClInclude Include="ClipboardFingerprintTests.h" />
     <ClInclude Include="ClipboardBindingTransferTests.h" />
@@ -127,10 +129,11 @@
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="IoTests.cpp" />
+    <ClCompile Include="IoTests.cpp" /><ClCompile Include="ClipboardEncodingBudgetTests.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />
     <ClCompile Include="..\..\RedPrism\ClipboardTransfer.cpp" />
     <ClCompile Include="..\..\RedPrism\SystemClipboard.cpp" />
     <ClCompile Include="ClipboardTransferTests.cpp" />
+    <ClCompile Include="ClipboardAvailabilityTests.cpp" />
     <ClCompile Include="ClipboardReceiptTests.cpp" />
     <ClCompile Include="ClipboardFingerprintTests.cpp" />
     <ClCompile Include="ClipboardBindingTransferTests.cpp" />
@@ -156,6 +159,7 @@
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardPasteWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardReceipt.cpp" />
     <ClCompile Include="..\..\RedPrism\ClipboardFingerprint.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />

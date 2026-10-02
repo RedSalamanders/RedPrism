@@ -348,7 +348,7 @@ class BrushStroke
   private:
     [[nodiscard]] bool Render(const std::vector<BrushSegment>& settled, const std::vector<BrushSegment>& tail);
     void TileKeys(std::span<const BrushSegment> segments, std::unordered_set<std::uint64_t>& keys) const;
-    [[nodiscard]] bool AllocateTile(std::uint64_t key);
+    [[nodiscard]] bool AllocateTile(std::uint64_t key, bool sourceOnly = false);
     // The tile's image from its base, coverage and the settings; false (the stroke fails) when the base cannot be read.
     [[nodiscard]] bool ComposeTile(Tile& tile);
     [[nodiscard]] double SelectionAt(Vec2 document) const noexcept;

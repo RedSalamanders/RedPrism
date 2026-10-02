@@ -1,4 +1,6 @@
 #include "CappedImageCodecTests.h"
+#include "ClipboardAvailabilityTests.h"
+#include "ClipboardEncodingBudgetTests.h"
 #include "ClipboardFingerprintTests.h"
 #include "ClipboardReceiptTests.h"
 #include "ClipboardTransferTests.h"
@@ -83,12 +85,22 @@ void Expect(bool condition, const char* name) noexcept
 
 [[nodiscard]] std::wstring ScratchRoot()
 {
-    // Per-process, not just per-suite: two concurrent IoTests.exe runs (different platforms/configurations, or two
-    // worktrees) must not collide on the same fixed path (RF-708).
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / L"RedPrism.IoTests" / std::to_wstring(GetCurrentProcessId());
-    std::error_code error;
-    std::filesystem::create_directories(root, error);
+    // A PID can be reused while old fixtures remain. Claim a fresh short directory exclusively; collision retries
+    // never reuse an earlier fixture. Keep enough path headroom for nested staging and codec temporary files.
+    static const std::filesystem::path root = []
+    {
+        const auto parent = std::filesystem::temp_directory_path() / L"RedPrism.IoTests";
+        std::filesystem::create_directories(parent);
+        for (unsigned attempt = 0; attempt < 16; ++attempt)
+        {
+            const auto candidate =
+                parent / (std::to_wstring(GetCurrentProcessId()) + L"-" + Guid::Generate().ToString().substr(0, 8));
+            if (std::filesystem::create_directory(candidate))
+                return candidate;
+        }
+        throw std::filesystem::filesystem_error("Could not claim an exclusive test directory", parent,
+                                                std::make_error_code(std::errc::file_exists));
+    }();
     return root;
 }
 
@@ -163,6 +175,9 @@ void WriteText(const std::filesystem::path& path, const std::string& text)
     {
         zip_source_free(inputSource);
     }
+    if (!inputRaw)
+        std::printf("  deflate fixture input-open zip=%d system=%d path=%ls\n", zip_error_code_zip(&inputError),
+                    zip_error_code_system(&inputError), sourcePath.c_str());
     zip_error_fini(&inputError);
     unique_zip input{inputRaw};
     if (!input)
@@ -225,6 +240,9 @@ void WriteText(const std::filesystem::path& path, const std::string& text)
     {
         zip_source_free(outputSource);
     }
+    if (!outputRaw)
+        std::printf("  deflate fixture output-open zip=%d system=%d path=%ls\n", zip_error_code_zip(&outputError),
+                    zip_error_code_system(&outputError), destinationPath.c_str());
     zip_error_fini(&outputError);
     unique_zip output{outputRaw};
     if (!output)
@@ -249,7 +267,15 @@ void WriteText(const std::filesystem::path& path, const std::string& text)
             return false;
         }
     }
-    return ZipCommit(output);
+    if (zip_close(output.get()) != 0)
+    {
+        const auto* error = zip_get_error(output.get());
+        std::printf("  deflate fixture close zip=%d system=%d path=%ls\n", zip_error_code_zip(error),
+                    zip_error_code_system(error), destinationPath.c_str());
+        return false; // The owning scope discards the still-open failed archive after reporting its exact error.
+    }
+    (void)output.release(); // Successful close consumed this archive.
+    return true;
 }
 
 [[nodiscard]] std::string ReadText(const std::filesystem::path& path)
@@ -1130,6 +1156,10 @@ void TestExplodedGolden()
         ExpectFixtureSemantics(zipAgain.document, "zip round trip");
     }
     const std::wstring deflatedPath = ScratchRoot() + L"\\legacy-deflated.prism";
+    const auto destinationAttributes = GetFileAttributesW(deflatedPath.c_str());
+    const auto destinationError = GetLastError();
+    Expect(destinationAttributes == INVALID_FILE_ATTRIBUTES && destinationError == ERROR_FILE_NOT_FOUND,
+           "v7.legacy-deflate-fixture-destination-is-fresh");
     Expect(RewriteZipDeflated(zipPath, deflatedPath), "v7.legacy-deflate-fixture-created");
     Expect(ZipCompressionMethod(deflatedPath, redEntry.c_str()) == ZIP_CM_DEFLATE, "v7.legacy-deflate-fixture-method");
     const ProjectLoadResult deflatedAgain = LoadProject(deflatedPath.c_str());
@@ -2711,6 +2741,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunClipboardReceiptTests();
     gFailures += RunClipboardFingerprintTests();
     gFailures += RunClipboardTransferTests();
+    gFailures += RunClipboardAvailabilityTests();
+    gFailures += RunClipboardEncodingBudgetTests();
     gFailures += RunCodecFileStreamTests();
     gFailures += RunCappedImageCodecTests();
     gFailures += RunCodecMemoryStreamTests();

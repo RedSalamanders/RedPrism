@@ -2192,9 +2192,10 @@ void DocumentSession::ReplaceDocument(CanvasDocument document, const std::option
     {
         return;
     }
+    const auto selected = active; // active may alias this session's ActiveLayerID(), cleared below
     ClearDocument();
     _document = std::move(document);
-    SetActiveLayerID(active.has_value() && FindLayer(active.value()) != nullptr ? active : std::nullopt);
+    SetActiveLayerID(selected.has_value() && FindLayer(selected.value()) != nullptr ? selected : std::nullopt);
     history.MarkSaved();
 }
 

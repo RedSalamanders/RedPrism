@@ -1,11 +1,13 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
-members), `Common/Heal.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
+members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
+`Common/LayerCopyWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
-`RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`
+`RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`, and the mask
+command job in `RedPrism/ApplicationMaskJobs.cpp`
 
 ## Scope
 
@@ -126,6 +128,34 @@ once.
 `BeginDuplicateTransform()` (Alt-drag) commits the pending edit, duplicates the active layer as `<name> copy`
 sharing its pixels (`DuplicateActiveLayer`, one `Duplicate Layer` entry that also spans the following move) and opens
 a non-persistent edit on the copy; cancelling removes the copy again and leaves no entry. Groups do not duplicate.
+
+### Detached transform preparation
+
+`TransformPixelsWork` prepares an immutable after-document for ordinary, mask, group and live-shape transforms.
+`TransformCommitWork` binds that document to captured session/lifetime/generation/active/mask/crop authority,
+the exact draft revision and duplicate state, and prepared history. Ordinary transforms preserve nested history;
+duplicate completion closes its existing outer entry once. Application validates all authority before history
+publication and nonthrowing swaps, retaining old edit, guides, document and duplicate ownership for worker release.
+For group distortion, each accepted replacement reserves the original image/mask budgets of later members;
+refused members retain their old pixels without permitting the completed document to exceed either aggregate cap.
+Groups follow the captured member order and reject duplicate member ids. Pixel sampling and mask semantics remain
+the numeric legacy references. The direct inline APIs remain references; production caller migration is A6.3.
+
+`TransformCancellationWork` binds cancellation to the captured draft, target, document lifetime/generation and
+history state. Ordinary cancellation swaps only draft/display/guides into its retired owner; document, generation,
+history and clipboard remain unchanged. Duplicate cancellation prepares removal of the duplicate and End of its
+own scope privately. An existing parent transaction keeps its depth, opening record and name. Publication refuses
+newer geometry, changed target/source/history, replacement, foreign-session or consumed results before any swap.
+
+`TransformPreviewWork` prepares a complete private display document. Affine previews share immutable pixels and
+change placements. Distorted color and linked/placed/standalone masks retain their transparent bounds and cap
+both dimensions at 1024 pixels; group members use their carried homographies. Mask edge tone comes from the
+original semantic thumbnail. Unlinked masks remain at their original document placement, and uniform masks
+retain their source identity. Invalid distortion corners fall back to the affine display, matching the direct
+warp reference. Sparse assembly is private and cancellable. A sealed, single-use publication validates the
+captured session, document, target, history and draft revision before swapping the display cache. It changes no
+document pixels, history, generation or private clipboard. Its replaced cache stays in the prepared owner for
+worker retirement. Production display coalescing and removal of inline reconstruction remain A6.3/T3.
 
 ## Free distortion (`DistortWarp`)
 
@@ -308,7 +338,8 @@ explicitly empty selection.
   refuses while a panel owns the document (`HasColorEdit`), as `StepBlendMode` does: the panel's entry stays open
   until OK or Cancel, and an opacity would fold into it (legacy `canEditAppearance`).
 - `AddLayerMask(revealing)` gives the active layer a uniform 1×1 mask (`Add Reveal-All Mask` / `Add Hide-All Mask`)
-  and selects it; `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
+  and selects it; production Add Mask / Add Black Mask commands use the ordered mask worker described below.
+  `ToggleLayerMask(id)` records `Enable Layer Mask` / `Disable Layer Mask`.
 
 ## Retouch session (C11)
 
@@ -363,6 +394,15 @@ composite)`; the kernels, the tile composition and the warp model live in
   shape drew, tracked by `ImageLayer::shapeImage`) and redraws at its new size when a transform commits, keeping a
   rounded corner's radius; a mask on its grid takes an explicit placement so it stays put. Loaded shape layers are
   live; painting on one makes it plain pixels.
+
+Production Shape release uses `ShapeEditWork` and one ordered Commit record. The action owns its input-time
+draft and foreground, and retains its outline while preparation is pending. Whole admission precedes source
+document/history capture. Workers prepare exact coverage, adopted BGRA pixels, unique layer name, insertion,
+selection/live-shape identity and complete history publication together. Checked owner swaps publish once;
+cancelled, failed or stale work publishes no layer or history. The ordinal, reservation and history barrier
+survive until acknowledgement, and the complete replaced CPU graph retires off owner. Capture loss cancels the
+live gesture; ordinary pointer leave commits the owned release. Synchronous session primitives remain numeric
+references. Transform-time live-shape redraw remains a separate P1.5/A6 migration.
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
   document pixel (nullopt outside or over transparency); the host shows the comparison ring while View › Sample Ring
   (the `sampleRing` setting, [`Core_Settings.md`](../Core/Core_Settings.md), default on) is checked.
@@ -471,7 +511,7 @@ semantic outside tone; cropped output avoids a redundant full-canvas BGRA mask p
 Source/coverage/row/publication checkpoints reject cancellation without publishing partial pixels. The cached
 memory plan covers private source assembly, sampling planes, exact coverage workspace, cropped pixels and rows;
 it excludes already shared inputs and separate host/history/codec/clipboard/retirement owners. No session is
-mutated by this primitive. Atomic Cut publication, clipboard authority and production routing remain A5.4b–c.
+mutated by this primitive. Atomic command publication and host transfer are defined below.
 
 ### Sealed clipboard command preparation (P1.5 A5.4b)
 
@@ -495,8 +535,63 @@ Prepared publication retains replaced document/display/history/brush-commit/priv
 aggregate retirement on a worker. Its new copy remains separately available for later admitted OS encoding.
 Preparation includes token mask names/adjustment vectors and all private sampling/clear/history allocations;
 retirement includes token color, mask, semantic thumbnail and shared selection owners even for a mask copy.
-Existing full document capture is still charged and remains H2 work. This boundary activates no production
-clipboard graph; codec/OS admission, receipt binding, retry stages and host ordering remain A5.4c/F5b.2–F5d.
+Existing full document capture is still charged and remains H2 work. The production host graph is defined below;
+this primitive alone does not establish its qualification or G1 timing.
+
+### Detached clipboard Paste preparation (F5b.2b.2)
+
+Deferred Paste callers MUST admit the complete preparation and retirement graph before capturing document,
+history and clipboard owners. `ClipboardPasteWork` captures one source document, active layer, history view,
+Paste authority, private clipboard and private-copy serial. Capture currently copies layer metadata on the
+owner thread; constant-time capture and G1 timing remain separate P1.9 work.
+
+Workers construct the complete candidate document and one prepared `Paste` history entry without mutating
+the live owner. Private-origin Paste preserves the captured pixels and document origin exactly and refuses
+publication after a newer private copy. Foreign Paste uses only the supplied raster and floor-centers it at
+`(floor((canvasWidth-imageWidth)/2), floor((canvasHeight-imageHeight)/2))`, including negative half offsets.
+A newer private copy does not invalidate an already prepared foreign Paste or determine its placement.
+
+Use the first unused `Layer N` name. Insert above an active non-group as its sibling; with an active group,
+insert as its child after the entire descendant subtree. Without an active layer, append at top level. Expand
+the new layer's parent on successful application. The new layer becomes active/selected, the document selection
+is cleared and the mask target is cleared. Enforce the existing 10,000-layer and 100 M aggregate image-pixel
+limits against the complete result; equality is allowed. Sharing a sparse source MUST NOT materialize it.
+
+Publication MUST validate captured session/document identity, document serial, generation, restore serial,
+active/mask target, crop, prepared history lineage/epoch and, for private origin, private-copy serial. Stale,
+foreign-session, moved-from and consumed inputs refuse without partial mutation. One non-allocating owner
+publication swaps the complete document/history/selection state; Undo/Redo restore complete before/after states.
+Cancellation, allocation failure and invalid/over-budget sources publish nothing. Large replaced/captured owners
+remain in the admitted retirement aggregate and retire off the owner thread. Production caller and full graph
+qualification remain tracked separately from this core API's validation.
+
+### Ordered clipboard host processing
+
+Production Copy/Cut/Paste/Copy Merged enter the shared selected-input history barrier. Acquire committed sources
+after required panel/gradient/transform settlement, keep the selected ordinal until apply/drop acknowledges and
+prevent younger mutations from starting. View commands continue dispatching. Copy preserves live brush/warp/shape
+owners and samples committed pixels. Cut that cannot paint mirrors its previous private copy without a Clear
+or new serial, as the direct route does.
+
+Copy/Cut apply their complete private publication before OS encoding. Encoding, pre-Empty refusal, retry
+exhaustion or later cancellation cannot roll back that completed private operation. Record the source sequence
+before encoding. Bind the private session/serial to worker fingerprints and the registered receipt; use the
+held transfer sequence and exact partial-publication truth, never a later owner-window sequence. Before Empty,
+failure leaves the previous OS clipboard intact. After Empty, finish independent format offers and do not retry.
+
+Paste first admits a fixed metadata probe, then admits its full capture/decode/history/retirement graph under
+the same ordinal. An unchanged source sequence can prefer the current private copy; otherwise inspect offered
+formats and copy bytes only while their source scope is held. No offered image permits private fallback;
+malformed/over-budget offered images fail locally. A valid owned receipt and exact fingerprints can retain private
+origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
+owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
+The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+
+Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
+and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or
+the OS writer. Memory admission includes full readback, selected coverage/crop, capped encoding/global blocks,
+history and retirement. Opaque codec workspace and owner metadata/chrome/upload costs remain measured P1.9/F5d/G1
+work; functional migration alone establishes no Photoshop speed or bounded native-call cancellation claim.
 
 ### Other selection pixel edits
 
@@ -546,6 +641,18 @@ clipboard graph; codec/OS admission, receipt binding, retry stages and host orde
   selected area (`255 − coverage`), otherwise shows only it; the selection is dropped and the mask targeted, one
   `Add Mask from Selection` entry. Without a selection, `AddLayerMask` (`Add Reveal-All Mask` / `Add Hide-All Mask`).
   Nothing on a layer that already has a mask, or during a transform.
+
+  Production Add Reveal-All Mask / Add Hide-All Mask and Add Mask from Selection are admitted ordered Commit jobs.
+  Complete memory admission precedes source, complete selected-layer IDs and history capture. Workers map selection
+  coverage through the inverse layer pixel-to-document grid, retain the existing reveal (`255 − coverage`) and hide
+  (`coverage`) bytes, and build the Gray8 mask plus its eager semantic thumbnail (longest side at most 96 pixels)
+  before preparing one publication that contains both.
+  The publication selects the mask, preserves the complete selected-layer ID set, and commits mask
+  target, selection removal (when present), and one named history entry together through the captured image-import
+  authority. The no-selection reveal/hide masks retain their 1 × 1 white/black representation. Cancellation keeps
+  the ordered record, reservation, history barrier and captured graph until acknowledgement; the complete retired CPU
+  aggregate is released off owner. Settled session producers are covered; settlement from a live brush, warp,
+  selection move/lasso or transform remains a later P1.4/A6/S3 qualification and is not established here.
 - **Floating selection transform** (`TransformEdit::floating`, `FloatingTransform`): `CanTransformSelection` needs a
   non-empty selection, a paintable image layer (not its mask) and no pending edit; `TransformCommand` (Ctrl+T)
   starts it, else `BeginTransform`. `BeginSelectionTransform` opens a `Transform Selection` entry, clears the
@@ -556,6 +663,16 @@ clipboard graph; codec/OS admission, receipt binding, retry stages and host orde
   layer and a mask on its grid where they extend past it (a uniform mask stays), moves the outline with them,
   removes the floating layer and reactivates the source, one entry. `CancelTransform` (Escape, Undo) restores the
   document and the active layer.
+  Detached `FloatingOpeningWork` prepares cleared/copied pixels, the opening Begin, sole floating target and a
+  complete original-document/selection/active/history restoration before exposing either temporary layer or hole.
+  The restoration is bound to the opening's exact prepared history predecessor and retained before-document owner.
+  `FloatingMergeWork` captures that restoration with the complete source, draft and revision, prepares merge pixels,
+  carried mask/eager thumbnail, moved outline and one outer End on workers, then validates before atomic publication.
+  An unchanged/refused/cancelled merge returns a sealed resolution using the prebuilt restoration; it cannot discard
+  newer geometry, a replaced source or newer history. Explicit Escape may restore newer preview geometry from the
+  same opening after acknowledgement. No failure-path document/history construction is needed on the owner.
+  Worker allocation failures leave the live opening and prebuilt restoration intact. Clipboard authority stays
+  unchanged. These core boundaries do not yet qualify production floating callers; A5.5/A5.6/A6.3 track activation.
 - **Clipboard** (`PixelClipboard`: the pixels and their document origin): `SelectionCopyRegion` is the selection's
   bounds (the canvas without one) rounded with a 0.001 tolerance and clipped to the canvas; `CanCopyPixels` needs
   an image layer or a targeted mask and no explicitly empty selection; `RenderSelectedPixels(layer, mask)` crops the
@@ -569,6 +686,34 @@ clipboard graph; codec/OS admission, receipt binding, retry stages and host orde
   another app's pixels; `LayerViaCopy` copies the selection to a new layer without the clipboard (`Layer via Copy`),
   or `DuplicateActiveLayer` without one. `NextLayerName` is the first unused `Layer N`. `BeginSelectionTransform`
   restores the document and records nothing when `ClearSelectedPixels` does not paint.
+
+### Layer via Copy worker preparation
+
+Production Layer via Copy is a selected Commit input on the shared `HistoryWork` stream. The host admits its complete
+scheduler-memory reservation before capturing the immutable source document, active layer, image-or-mask target,
+displayed placement, selection and history authority. The admitted record and reservation stay owned through worker
+preparation and owner apply/drop acknowledgement; view input remains dispatchable while it runs.
+
+With a selection, the worker uses the captured image or mask placement and the existing `CopyPixelsWork` path to
+prepare cropped pixels and their exact document origin. It creates the first unused `Layer N` as a pixel layer
+immediately above the source, under the same parent. Successful publication makes that layer the sole selected
+layer, clears the selection outline and clears the mask target. Without a selection, the worker duplicates the full
+source layer record immediately above it under the same parent, preserves its asset, mask, shape and adjustment or
+clipping data and shared raster identities, assigns a fresh Guid, and appends ` copy` to its name. Publication makes
+the duplicate the sole selected layer and clears the mask target. Each branch prepares the complete after-document
+and its one history entry before publication (`Layer via Copy` or `Duplicate Layer`).
+
+The operation leaves the private clipboard pixels, origin, session identity and serial unchanged and does not call
+the OS clipboard. Group sources, explicitly empty selections and selected sources without pixels for the captured
+target do not publish. Admission enforces the layer limit and independent aggregate image- and mask-pixel budgets.
+Owner apply revalidates the captured session/document authority, active and mask target, generation and history
+state before its nonallocating publication. Stale, cancelled, failed or over-budget work adds no layer or history.
+Cancellation retains the record, reservation and captured graph through worker acknowledgement; the complete
+retired CPU aggregate is released off owner.
+
+These settled-source controls do not qualify settlement of a live brush, warp, selection outline/move or transform;
+that remains P1.4/A6/S3 work. Owner metadata capture remains H2, and history/chrome/display costs and the full G1
+measurements remain open. Functional controls establish no G1 bound.
 
 ## Color adjustments and filters (C12)
 
@@ -810,7 +955,8 @@ owning migration; this slice does not establish whole-application G1.
 A Shape pointer release or ordinary pointer leave during admitted history work captures its draft and foreground
 color in the same bounded host queue, then removes the live gesture without writing history. Its layer is added
 only after preceding work finishes, using those captured values. Lost-pointer cancellation still drops a draft.
-Worker rasterization of this owned Shape action remains P1.5.
+Its production worker rasterization/publication follows the Shape contract above. Complete owner capture,
+chrome synchronization and first-upload timings remain P1.9/G1.
 
 `ApplicationCommitJobs.cpp` implements the production commit engine. Normal OK and dependent write/discard
 requests enter it through the owned continuation source.

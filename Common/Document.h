@@ -1060,6 +1060,8 @@ enum class ClipboardCommandKind : std::uint8_t;
 class ClipboardCommandInput;
 struct CopyPixelsInput;
 class PreparedClipboardCommand;
+class ClipboardPasteInput;
+class PreparedClipboardPaste;
 struct GridRect;
 class BrushCoverageEngine;
 class WarpStroke;
@@ -1223,6 +1225,36 @@ class PreparedAdjustmentOpening;
 struct ColorDismissalInput;
 class PreparedColorDismissal;
 class ImageImportAuthority;
+class ShapeEditInput;
+class PreparedShapeEdit;
+class TransformCommitInput;
+class TransformPreviewInput;
+class PreparedTransformPreview;
+struct TransformPreviewResult;
+struct TransformPreviewObserver;
+class TransformCancellationInput;
+class PreparedTransformCancellation;
+class FloatingOpeningInput;
+class PreparedFloatingOpening;
+class PreparedFloatingRestore;
+class FloatingMergeInput;
+class PreparedFloatingMerge;
+struct FloatingMergeResult;
+struct FloatingMergeObserver;
+struct FloatingOpeningResult;
+struct FloatingOpeningObserver;
+class PreparedTransformCommit;
+struct TransformCommitResult;
+struct ShapeEditResult;
+struct ShapeWorkObserver;
+class MaskEditInput;
+class PreparedMaskEdit;
+struct MaskEditResult;
+struct MaskWorkObserver;
+class LayerCopyInput;
+class PreparedLayerCopy;
+struct LayerCopyResult;
+struct LayerCopyObserver;
 struct ImageImportBatchResult;
 class HistoryRestoreAuthority;
 struct ColorEditPreviewResult;
@@ -1388,7 +1420,10 @@ class DocumentHistory
         StateView(StateView&& source) noexcept
             : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
               owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
-              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit)
+              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit),
+              requirePredecessor(std::exchange(source.requirePredecessor, false)),
+              precedingPast(std::move(source.precedingPast)), precedingFuture(std::move(source.precedingFuture)),
+              precedingPending(std::move(source.precedingPending)), precedingDepth(source.precedingDepth)
         {
         }
         StateView& operator=(StateView&& source) noexcept
@@ -1404,6 +1439,11 @@ class DocumentHistory
                 depth = source.depth;
                 entryLimit = source.entryLimit;
                 byteLimit = source.byteLimit;
+                requirePredecessor = std::exchange(source.requirePredecessor, false);
+                precedingPast = std::move(source.precedingPast);
+                precedingFuture = std::move(source.precedingFuture);
+                precedingPending = std::move(source.precedingPending);
+                precedingDepth = source.precedingDepth;
             }
             return *this;
         }
@@ -1437,6 +1477,13 @@ class DocumentHistory
         int depth = 0;
         int entryLimit = 0;
         std::uint64_t byteLimit = 0;
+        // A dependent publication owns the exact predecessor roots, preventing another publication at
+        // the same epoch/revision from satisfying its authority. Capturing these handles never allocates.
+        bool requirePredecessor = false;
+        HistoryEntries<EntryHandle> precedingPast;
+        HistoryEntries<EntryHandle> precedingFuture;
+        std::shared_ptr<const Pending> precedingPending;
+        int precedingDepth = 0;
     };
     [[nodiscard]] StateView CaptureState() const noexcept;
     [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
@@ -1536,6 +1583,9 @@ class DocumentHistory
                                                                CancelToken cancellation = {},
                                                                PrepareObserver observer = {});
     [[nodiscard]] bool CanPublish(const Publication& publication) const noexcept;
+    // Prepare a dependent closure before the first publication becomes visible. The resulting view belongs to
+    // the exact next structural epoch and can publish only after this predecessor successfully publishes.
+    [[nodiscard]] static std::optional<StateView> FollowingPreparedState(const Publication& publication) noexcept;
     [[nodiscard]] bool Publish(Publication& publication) noexcept;
 
     // A new document has its own saved baseline. Additional images make one entry relative to that baseline.
@@ -1894,6 +1944,47 @@ class DocumentSession
     void PreviewCorners(const std::array<Vec2, 4>& corners);
     void BeginDuplicateTransform();
     void CommitTransform();
+    [[nodiscard]] std::uint64_t FloatingOpeningPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<FloatingOpeningInput> PrepareFloatingOpeningInput() const;
+    [[nodiscard]] static FloatingOpeningResult PrepareFloatingOpeningPublication(
+        FloatingOpeningInput input, Executor& executor, CancelToken cancellation,
+        DocumentHistory::PrepareObserver observer, FloatingOpeningObserver openingObserver);
+    [[nodiscard]] bool ApplyPreparedFloatingOpeningIfCurrent(PreparedFloatingOpening& prepared) noexcept;
+    [[nodiscard]] bool ApplyPreparedFloatingRestoreIfCurrent(PreparedFloatingRestore& prepared) noexcept;
+    [[nodiscard]] bool IsFloatingRestoreCurrent(const PreparedFloatingRestore& prepared) const noexcept;
+    [[nodiscard]] std::uint64_t FloatingMergePreparationMemoryBytes(
+        const PreparedFloatingRestore& restore) const noexcept;
+    [[nodiscard]] std::optional<FloatingMergeInput> PrepareFloatingMergeInput(
+        std::shared_ptr<PreparedFloatingRestore> restore) const;
+    [[nodiscard]] static FloatingMergeResult PrepareFloatingMergePublication(FloatingMergeInput input,
+                                                                             Executor& executor,
+                                                                             CancelToken cancellation,
+                                                                             DocumentHistory::PrepareObserver observer,
+                                                                             FloatingMergeObserver mergeObserver);
+    [[nodiscard]] bool ApplyPreparedFloatingMergeIfCurrent(PreparedFloatingMerge& prepared) noexcept;
+    [[nodiscard]] std::uint64_t TransformCommitPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<TransformCommitInput> PrepareTransformCommitInput() const;
+    [[nodiscard]] static TransformCommitResult PrepareTransformCommitPublication(
+        TransformCommitInput input, Executor& executor, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedTransformCommitIfCurrent(PreparedTransformCommit& prepared) noexcept;
+    [[nodiscard]] std::uint64_t TransformCancellationPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<TransformCancellationInput> PrepareTransformCancellationInput() const;
+    [[nodiscard]] static std::optional<PreparedTransformCancellation> PrepareTransformCancellationPublication(
+        TransformCancellationInput input, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedTransformCancellationIfCurrent(PreparedTransformCancellation& prepared) noexcept;
+    [[nodiscard]] std::uint64_t TransformDraftRevision() const noexcept
+    {
+        return _transformEdit ? _editRevision : 0;
+    }
+    [[nodiscard]] std::uint64_t TransformPreviewPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<TransformPreviewInput> PrepareTransformPreviewInput() const;
+    [[nodiscard]] static TransformPreviewResult PrepareTransformPreviewPublication(TransformPreviewInput input,
+                                                                                   Executor& executor,
+                                                                                   CancelToken cancellation,
+                                                                                   TransformPreviewObserver observer);
+    [[nodiscard]] bool ApplyPreparedTransformPreviewIfCurrent(PreparedTransformPreview& prepared) noexcept;
     void CancelTransform();
     // Arrow keys: a pending edit moves its draft; without one the move commits at once.
     void NudgeLayer(double dx, double dy);
@@ -2122,6 +2213,13 @@ class DocumentSession
     void ToggleShapeKind();
     void FinishShape();
     void CommitShape(const ShapeDraft& draft, std::uint32_t foregroundArgb);
+    [[nodiscard]] std::uint64_t ShapeEditPreparationMemoryBytes(const ShapeDraft& draft) const noexcept;
+    [[nodiscard]] std::optional<ShapeEditInput> PrepareShapeEditInput(const ShapeDraft& draft,
+                                                                      std::uint32_t foregroundArgb) const;
+    [[nodiscard]] static ShapeEditResult PrepareShapeEditPublication(
+        ShapeEditInput input, Executor& executor, CancelToken cancellation, ShapeWorkObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedShapeEditIfCurrent(PreparedShapeEdit& prepared) noexcept;
     [[nodiscard]] const std::optional<ShapeDraft>& PendingShape() const noexcept
     {
         return _shapeDraft;
@@ -2188,6 +2286,12 @@ class DocumentSession
     // only it), dropping the selection and targeting the mask (`Add Mask from Selection`); without one,
     // `AddLayerMask`.
     void AddMask(bool revealing = true);
+    [[nodiscard]] std::uint64_t MaskEditPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<MaskEditInput> PrepareMaskEditInput(bool revealing) const;
+    [[nodiscard]] static MaskEditResult PrepareMaskEditPublication(
+        MaskEditInput input, Executor& executor, CancelToken cancellation, MaskWorkObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedMaskEditIfCurrent(PreparedMaskEdit& prepared) noexcept;
     // Ctrl+T with a selection transforms the selected pixels on a floating layer; without one, the layer.
     [[nodiscard]] bool CanTransformSelection() const noexcept;
     void TransformCommand();
@@ -2216,6 +2320,24 @@ class DocumentSession
                                                             const Raster& composite = {}) const;
     [[nodiscard]] std::uint64_t ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind kind,
                                                                       const Raster& composite = {}) const;
+    // Admitted owner capture after gradient/pixel-move settlement. Workers own the snapshot and never
+    // consult the live private clipboard. Private origin uses its sealed serial; foreign pixels are centered.
+    [[nodiscard]] std::optional<ClipboardPasteInput> PrepareClipboardPasteInput() const;
+    [[nodiscard]] static std::optional<PreparedClipboardPaste> PrepareClipboardPastePublication(
+        ClipboardPasteInput input, bool privateOrigin, const Raster& foreignImage = {}, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedClipboardPasteIfCurrent(PreparedClipboardPaste& prepared) noexcept;
+    [[nodiscard]] std::int64_t ClipboardPastePixelLimit() const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardPastePreparationMemoryBytes(std::int64_t additionalPixels) const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardPasteRetirementMemoryBytes() const noexcept;
+    [[nodiscard]] std::uint64_t ClipboardSerial() const noexcept
+    {
+        return _clipboardSerial;
+    }
+    [[nodiscard]] Guid ClipboardSessionIdentity() const noexcept
+    {
+        return _tokenIdentity.value;
+    }
     bool CopySelection();
     bool CopyMergedSelection(const Raster& composite);
     void CutSelection();
@@ -2227,6 +2349,12 @@ class DocumentSession
     // Pixels from another app, centered on the canvas (`Paste`).
     void PasteImage(const Raster& image);
     void LayerViaCopy();
+    [[nodiscard]] std::uint64_t LayerCopyPreparationMemoryBytes() const;
+    [[nodiscard]] std::optional<LayerCopyInput> PrepareLayerCopyInput() const;
+    [[nodiscard]] static LayerCopyResult PrepareLayerCopyPublication(
+        LayerCopyInput input, Executor& executor, CancelToken cancellation, LayerCopyObserver observer,
+        DocumentHistory::PrepareObserver historyObserver = {});
+    [[nodiscard]] bool ApplyPreparedLayerCopyIfCurrent(PreparedLayerCopy& prepared) noexcept;
     [[nodiscard]] const std::optional<PixelClipboard>& Clipboard() const noexcept
     {
         return _clipboard;

@@ -90,8 +90,14 @@
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
+    <ClInclude Include="..\..\Common\ClipboardPasteWork.h" />
     <ClInclude Include="CopyPixelsTests.h" />
+    <ClInclude Include="MaskEditWorkTests.h" />
+    <ClInclude Include="..\..\Common\MaskEditWork.h" />
+    <ClInclude Include="..\..\Common\LayerCopyWork.h" />
+    <ClInclude Include="LayerCopyWorkTests.h" />
     <ClInclude Include="ClipboardCommandTests.h" />
+    <ClInclude Include="ClipboardPasteTests.h" />
     <ClInclude Include="CopyPixelsTransformTests.h" />
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
@@ -149,8 +155,22 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
+    <ClCompile Include="MaskEditWorkTests.cpp" />
+    <ClCompile Include="LayerCopyWorkTests.cpp" />
+    <ClCompile Include="DistortWorkTests.cpp" />
+    <ClCompile Include="TransformPixelsWorkTests.cpp" />
+    <ClCompile Include="TransformCommitWorkTests.cpp" />
+    <ClCompile Include="TransformCancellationWorkTests.cpp" />
+    <ClCompile Include="TransformPreviewWorkTests.cpp" />
+    <ClCompile Include="FloatingPixelsWorkTests.cpp" />
+    <ClCompile Include="FloatingOpeningWorkTests.cpp" />
+    <ClCompile Include="FloatingMergeWorkTests.cpp" />
+    <ClCompile Include="PreparedHistoryFollowingTests.cpp" />
+    <ClCompile Include="MaskEditWorkExtraTests.cpp" />
     <ClCompile Include="CopyPixelsTests.cpp" />
     <ClCompile Include="ClipboardCommandTests.cpp" />
+    <ClCompile Include="ClipboardPasteTests.cpp" />
+    <ClCompile Include="ShapeEditWorkTests.cpp" />
     <ClCompile Include="CopyPixelsTransformTests.cpp" />
     <ClCompile Include="ColorEditWorkTests.cpp" />
     <ClCompile Include="ColorEditDeferredTests.cpp" />
@@ -213,6 +233,18 @@
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\ClipboardPasteWork.cpp" />
+    <ClCompile Include="..\..\Common\ShapeEditWork.cpp" />
+    <ClCompile Include="..\..\Common\MaskEditWork.cpp" />
+    <ClCompile Include="..\..\Common\LayerCopyWork.cpp" />
+    <ClCompile Include="..\..\Common\DistortWork.cpp" />
+    <ClCompile Include="..\..\Common\TransformPixelsWork.cpp" />
+    <ClCompile Include="..\..\Common\TransformCommitWork.cpp" />
+    <ClCompile Include="..\..\Common\TransformCancellationWork.cpp" />
+    <ClCompile Include="..\..\Common\TransformPreviewWork.cpp" />
+    <ClCompile Include="..\..\Common\FloatingPixelsWork.cpp" />
+    <ClCompile Include="..\..\Common\FloatingOpeningWork.cpp" />
+    <ClCompile Include="..\..\Common\FloatingMergeWork.cpp" />
     <ClCompile Include="..\..\Common\ColorDismissalWork.cpp" />
     <ClCompile Include="..\..\Common\Adjust.cpp" />
     <ClCompile Include="..\..\Common\Kernels.cpp" />

@@ -1,4 +1,6 @@
 #include "ClipboardTransfer.h"
+#include "ClipboardEncodingBudget.h"
+#include "CodecMemoryStream.h"
 
 #include "ClipboardDibWork.h"
 #include "ImageCodecs.h"
@@ -116,7 +118,7 @@ Status GlobalCopy(std::span<const std::uint8_t> bytes, wil::unique_hglobal& outp
         const auto allocated = GlobalSize(local.get());
         if (allocated < bytes.size())
             return Status::NativeFailure;
-        if (allocated > kMaxImageEncodedBytes)
+        if (allocated > kMaxImageEncodedBytes || allocated - bytes.size() > 64 * 1024)
             return Status::TooLarge;
         for (std::size_t offset = 0; offset < bytes.size();)
         {
@@ -263,6 +265,8 @@ struct PreparedImage::Storage final
     std::optional<ClipboardFingerprint::Binding> binding;
 };
 
+static_assert(sizeof(CodecMemoryStream) <= 256);
+
 PreparedImage::PreparedImage() noexcept = default;
 PreparedImage::~PreparedImage() = default;
 PreparedImage::PreparedImage(PreparedImage&&) noexcept = default;
@@ -293,6 +297,10 @@ std::uint32_t PreparedImage::SourceSequence() const noexcept
 Status Prepare(const Raster& image, double resolution, std::uint32_t sourceSequence, PreparedImage& output,
                CancelToken cancellation, Observer observer, const std::optional<ClipboardReceipt::Key>& receipt)
 {
+    static_assert(sizeof(PreparedImage::Storage) <= 256);
+    static_assert(kClipboardEncodingFixedMetadataBytes >= sizeof(PreparedImage::Storage) + sizeof(CodecMemoryStream) +
+                                                              4 * sizeof(std::vector<std::uint8_t>) + 128 +
+                                                              16 * sizeof(void*));
     output = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
@@ -473,9 +481,11 @@ Publication Publish(PreparedImage& image, CancelToken cancellation, Observer obs
         result.nativeError = error ? error : Error();
     result.sequence = GetClipboardSequenceNumber();
     result.status = result.pngPlaced && result.dibPlaced ? Status::Ok : Status::NativeFailure;
-    if (!scope.Close() && result.nativeError == 0)
+    const bool closed = scope.Close();
+    const DWORD closeError = closed ? Injected(observer, Fault::Close) : Error();
+    if (closeError && result.nativeError == 0)
     {
-        result.nativeError = Error();
+        result.nativeError = closeError;
         result.status = Status::NativeFailure;
     }
     Reached(observer, Stage::Closed);
@@ -514,9 +524,12 @@ std::uint64_t ImageCopy::RetainedBytes() const noexcept
     return _png.capacity() + _dib.capacity();
 }
 
-Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation, Observer observer)
+Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancellation, Observer observer,
+               Availability* availability)
 {
     output = {};
+    if (availability)
+        *availability = {};
     if (cancellation.IsCancelled())
         return Status::Cancelled;
     if (pixelBudget < 0)
@@ -530,31 +543,64 @@ Status Inspect(std::int64_t pixelBudget, Inspection& output, CancelToken cancell
     const UINT png = PngFormat();
     if (png == 0)
         return Status::NativeFailure;
+    const bool hasPng = IsClipboardFormatAvailable(png) != FALSE;
+    const bool hasV5 = IsClipboardFormatAvailable(CF_DIBV5) != FALSE;
+    const bool hasDib = IsClipboardFormatAvailable(CF_DIB) != FALSE;
     Status pngStatus = Status::Invalid;
-    if (IsClipboardFormatAvailable(png))
+    if (hasPng)
     {
         pngStatus = InspectFormat(png, true, pixelBudget, inspected._png, cancellation);
         if (pngStatus == Status::Ok)
             inspected._pngFormat = png;
     }
-    Status dibStatus = Status::Invalid;
-    const UINT dib = IsClipboardFormatAvailable(CF_DIBV5) ? CF_DIBV5 : IsClipboardFormatAvailable(CF_DIB) ? CF_DIB : 0;
-    if (dib != 0)
+    // The first enumerated DIB variant is the producer's representation. Windows enumerates synthesized
+    // variants after it; requesting one can run native bitmap conversion before our size/header validation.
+    // In particular, never request a conversion of an invalid or over-budget source as a fallback.
+    UINT dib = 0;
+    if (hasV5 || hasDib)
     {
+        UINT format = 0;
+        for (;;)
+        {
+            if (cancellation.IsCancelled())
+                return Status::Cancelled;
+            SetLastError(ERROR_SUCCESS);
+            format = EnumClipboardFormats(format);
+            if (!format)
+            {
+                if (GetLastError() != ERROR_SUCCESS)
+                    return Status::NativeFailure;
+                break;
+            }
+            if (format == CF_DIBV5 || format == CF_DIB)
+            {
+                dib = format;
+                break;
+            }
+        }
+    }
+    Status dibStatus = Status::Invalid;
+    if (dib)
+    {
+        Reached(observer, dib == CF_DIBV5 ? Stage::DibV5InspectRead : Stage::DibInspectRead);
         dibStatus = InspectFormat(dib, false, pixelBudget, inspected._dib, cancellation);
+        if (dibStatus == Status::Cancelled)
+            return dibStatus;
         if (dibStatus == Status::Ok)
             inspected._dibFormat = dib;
     }
     if (cancellation.IsCancelled())
         return Status::Cancelled;
-    if (inspected._pngFormat == 0 && inspected._dibFormat == 0)
-        return pngStatus == Status::TooLarge || dibStatus == Status::TooLarge ? Status::TooLarge : Status::Invalid;
     inspected._sequence = GetClipboardSequenceNumber();
     if (!scope.Close())
         return Status::NativeFailure;
     Reached(observer, Stage::Inspected);
     if (cancellation.IsCancelled())
         return Status::Cancelled;
+    if (availability)
+        *availability = {inspected._sequence, hasPng || hasV5 || hasDib, true};
+    if (inspected._pngFormat == 0 && inspected._dibFormat == 0)
+        return pngStatus == Status::TooLarge || dibStatus == Status::TooLarge ? Status::TooLarge : Status::Invalid;
     inspected._valid = true;
     output = std::move(inspected);
     return Status::Ok;

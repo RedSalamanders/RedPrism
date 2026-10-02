@@ -1,7 +1,7 @@
 # Application chrome
 
 Status: current normative chrome contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `RedPrism/ChromeHost.*`, `RedPrism/EditorTool.h`, `RedPrism/resource.h`, `RedPrism/RedPrism.rc`,
 `Application` file/session commands
 
@@ -234,14 +234,19 @@ Selection for the active layer; an outline the tracer refuses says why, as the w
 while a layer or mask with nothing to trace loads nothing without a word. Pixel edits: Ctrl+arrows nudge the selected pixels in any tool (one entry each);
 Delete clears them, and without a selection deletes the targeted mask, or the layer; Shift+Delete opens
 Content-Aware Fill on them ([`Document_Tools.md`](../Document/Document_Tools.md)); Ctrl+X, Ctrl+C, Ctrl+Shift+C
-and Ctrl+V cut, copy, copy merged and paste (`RedPrism/SystemClipboard.*` mirrors a copy to the system clipboard as
-PNG and a 32-bit DIB with straight alpha and reads another app's PNG or DIB, centered on the canvas, when the
-system clipboard changed since that copy; a copy that could not reach the system clipboard, because another app held
-it open, is still the newest, so Paste keeps taking it until the system clipboard changes again; Copy and Copy
+and Ctrl+V cut, copy, copy merged and paste (`ApplicationClipboardJobs` admits the selected command and
+`ClipboardTransfer` publishes PNG and a 32-bit DIB with straight alpha or reads another app's owned PNG/DIB on a
+worker. Foreign pixels are centered on the canvas; a sealed receipt binds the private copy to system content.
+A private copy that could not reach the system clipboard remains the newest until the system changes again.
+Acquisition retries retain the original job and reservation, with at most six total Inspect/Copy acquisitions.
+Copy and Copy
 Merged take the pixels the canvas shows, so a pending gradient applies first as its own entry and its preview ends
 with it); Alt+Backspace and
 Ctrl+Backspace fill with the foreground and background
-colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. The selection contract itself lives in
+colors; Ctrl+I inverts; Ctrl+J is Layer via Copy. Ctrl+J uses the ordered worker path: with a selection it adds
+the copied pixels at their document origin as a sibling layer and clears the outline; without one it duplicates
+the active layer record. The new layer is selected and the mask target clears in either case. The operation leaves
+the private and OS clipboards untouched. The selection and publication contract itself lives in
 [`Document_Tools.md`](../Document/Document_Tools.md).
 
 ## Crop tool
@@ -330,7 +335,9 @@ and so does the brush header's Paint choice for a line on a mask.
 The Shape header (`BuildShapeHeader`, `ShapeInspectorState`): Rectangle / Ellipse, Radius (px, rectangles only) and
 Fill (the foreground swatch). A drag draws the shape as a draft on the overlay, filled with the foreground color and
 outlined (Shift squares, Alt grows from the center); release adds the layer; Escape or a tool switch drops the
-draft; Shift-U switches the kind (U alone selects the tool).
+draft; Shift-U switches the kind (U alone selects the tool). Release owns its draft and foreground and queues one
+worker commit. Its outline remains visible until acknowledged apply/drop while view input dispatches; younger
+mutations wait behind that record. Ordinary pointer leave commits, and capture loss cancels the live gesture.
 
 The Eyedropper (I), or Alt with the Brush, Spot Healing and Gradient between strokes, reads the composited canvas
 under the pointer while pressed into the foreground color, or into the open color picker; the overlay shows the
@@ -403,7 +410,7 @@ origin DxUi assumed (`DipPointToScreenPoint` of the view's origin); the self-tes
 | File | New (Ctrl+N), New Canvas…, Open… (Ctrl+O), Import Images…; Save (Ctrl+S), Save As… (Ctrl+Shift+S); Export PNG… (Ctrl+Shift+E), Export JPEG… (Ctrl+Alt+Shift+S); Close Project (Ctrl+W); Exit |
 | Edit | Undo <name> (Ctrl+Z), Redo <name> (Ctrl+Shift+Z, Ctrl+Y); captions carry the history entry name and gray out when unavailable; Cut (Ctrl+X), Copy (Ctrl+C), Copy Merged (Ctrl+Shift+C), Paste (Ctrl+V); Fill with Foreground Color (Alt+Backspace), Fill with Background Color (Ctrl+Backspace), Clear Selection Pixels, Content-Aware Fill… (Shift+Delete); Invert / Invert Mask (Ctrl+I); Free Transform / Transform Selection (Ctrl+T); the Invert and transform captions follow the target and the selection (`SetEditTargets`) |
 | Image | Curves… (Ctrl+M), Levels… (Ctrl+L), Hue/Saturation… (Ctrl+U), Exposure…, Gradient Map…, Grain…; Canvas Size… (Ctrl+Alt+C), Image Size… (Ctrl+Alt+I); Flip Canvas Horizontal, Flip Canvas Vertical |
-| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one), Target Layer Mask / Target Layer Pixels, Unlink / Link Layer Mask, Disable / Enable Layer Mask (the active layer's mask: the captions follow it, grayed without one; no default chords, as legacy had none); Flip Layer Horizontal, Flip Layer Vertical |
+| Layer | New Layer (Ctrl+Shift+N), New Folder (Ctrl+G), Layer via Copy (Ctrl+J), New Adjustment Layer › Levels / Curves / Hue/Saturation / Exposure / Gradient Map / Grain, Edit Adjustment…; Group Selected Layers (the active layer, or an empty folder, wrapped in a new `Folder N`), Move Out of Folder (Ctrl+Shift+G), Rename Layer… (F2), Delete Layer / Delete Layer Mask (the caption follows the target; the Delete key clears selected pixels first, canvas focused), Toggle Visibility, Move Layer Up (Ctrl+]), Move Layer Down (Ctrl+[) (a swap with the next sibling, `Reorder Layers`); Create Clipping Mask / Release Clipping Mask (Ctrl+Alt+G; the caption follows the active layer: a non-folder layer clips to the sibling below it, sharing that sibling's base when it is clipped itself), Merge Down / Merge Group / Merge Layers (Ctrl+E; the caption follows the plan); Add Mask, Add Black Mask (from the selection when there is one; production commands use one ordered Commit whose apply/drop acknowledgement gates younger mutations), Target Layer Mask / Target Layer Pixels, Unlink / Link Layer Mask, Disable / Enable Layer Mask (the active layer's mask: the captions follow it, grayed without one; no default chords, as legacy had none); Flip Layer Horizontal, Flip Layer Vertical |
 | Select | All (Ctrl+A), Deselect (Ctrl+D), Inverse (Ctrl+Shift+I), Load Layer Selection, Load Mask Selection |
 | Filter | Gaussian Blur…, Motion Blur…, Add Noise…, Lens Correction… |
 | View | Fit on Screen (Ctrl+0), Actual Pixels (Ctrl+1), Zoom In (Ctrl+=), Zoom Out (Ctrl+-), Sample Ring (a check, on by default) |
@@ -767,7 +774,12 @@ the single named history entry occur only when its result is successfully applie
 job requests cancellation; the busy/history state remains until acknowledged drop. Reopening a card invalidates
 the earlier result and its completion leaves the new card open. Size failures are posted localized notices from
 outside the completion callback. The job's dimensions, resolution, sampling, anchor and color come from its copied
-request; subsequent draft/palette changes cannot alter that work. New Canvas keeps its existing route.
+request; subsequent draft/palette changes cannot alter that work. New Canvas opens immediately with its current
+draft and requests a metadata-only worker clipboard suggestion. It decodes no pixels for this hint. Publish only
+for the same card invocation, session and document lifetime while the user has not edited Width or Height.
+Typing either dimension, closing/reopening the card or admitting its copied Create draft invalidates the older
+suggestion. Optional failure leaves the draft unchanged; it creates no notice or history barrier. Busy inspection
+uses at most six acquisition attempts with acknowledged one-shot waits under the original job reservation.
 
 | Card | Rows |
 | --- | --- |

@@ -3,7 +3,6 @@
 #include "CanvasSize.h"
 #include "ChromeHost.h"
 #include "Resources.h"
-#include "SystemClipboard.h"
 #include "resource.h"
 
 #include <algorithm>
@@ -58,19 +57,12 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
         return;
     }
     ++_sizeInvocation;
+    CancelClipboardPrefill();
     _sizeDialog.kind = kind;
     if (kind == SizeCardKind::NewCanvas)
     {
-        // An image on the clipboard suggests its size, as the Mac sheet does.
-        Raster clipboard;
-        if (_window && SystemClipboard::HasImage() &&
-            SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, clipboard) && clipboard.HasStorage() &&
-            clipboard.Width() >= 1 && clipboard.Width() <= kMaxCanvasSide && clipboard.Height() >= 1 &&
-            clipboard.Height() <= kMaxCanvasSide)
-        {
-            _sizeDialog.newWidth = static_cast<double>(clipboard.Width());
-            _sizeDialog.newHeight = static_cast<double>(clipboard.Height());
-        }
+        _newCanvasEdited = false;
+        StartClipboardPrefill(); // metadata only; the card opens immediately without decoded clipboard pixels
     }
     else
     {
@@ -86,6 +78,7 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
 
 void Application::CancelSizeCard() noexcept
 {
+    CancelClipboardPrefill();
     if (_sizingTicket)
     {
         (void)_historyWork.RequestCancel();
@@ -108,6 +101,7 @@ void Application::ApplySizeCard() noexcept
     }
     if (!_hostExecuting)
     {
+        CancelClipboardPrefill(); // the queued apply owns its copied draft; a later prefill cannot edit it
         ReportHostAdmission(QueueHostInput(HostSizeApplyInput{_sizeDialog, _sizeInvocation}));
         return;
     }
@@ -224,6 +218,11 @@ void Application::OnSizeAction(SizeAction action, double value) noexcept
     switch (_sizeDialog.kind)
     {
     case SizeCardKind::NewCanvas:
+        if (action == SizeAction::SetWidth || action == SizeAction::SetHeight)
+        {
+            _newCanvasEdited = true;
+            CancelClipboardPrefill();
+        }
         if (action == SizeAction::SetWidth)
         {
             _sizeDialog.newWidth = value;

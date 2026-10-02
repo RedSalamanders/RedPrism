@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -88,6 +88,29 @@ per input.
 
 ## Budgets that later phases inherit
 
+Shape release rasterization, complete layer insertion and prepared history construction run on workers after
+whole admission. The owner publishes checked handles, retains pending outline metadata and dispatches view
+input through the original acknowledged record. Cancellation cannot release copied source/history or reservation
+before acknowledgement; complete replaced CPU owners retire together off owner. Metadata capture and final
+chrome/display work remain measured P1.9 obligations; worker elapsed time alone does not establish UI latency.
+
+Mask creation from a settled session also runs as an admitted ordered Commit job. Whole reservation precedes
+source/history capture; worker preparation includes inverse-grid selection coverage, the Gray8 output, an eager
+semantic thumbnail whose longest side is at most 96 pixels, and prepared mask/selection/history publication.
+Cancellation retains the reservation and complete
+source/history graph through acknowledgement, then the aggregate retires off owner. Settled producers are covered;
+live brush, warp, selection and transform settlement remains P1.4/A6/S3 work. Functional qualification establishes
+no G1 timing bound; capture, history publication, chrome/display work and required measurements remain open.
+
+Layer via Copy also admits its whole scheduler-memory reservation before owner capture of document, active/mask
+target, displayed placement, selection and history. The reservation covers detached pixel, after-document and
+prepared-history work; admission applies the layer limit and independent 100 M aggregate image- and mask-pixel
+budgets. The held-document retirement estimate is included in the deferred-release charge. Stale or cancelled work
+publishes no layer/history and retains its record, reservation and source graph through acknowledgement; its
+complete retired CPU aggregate releases off owner. Source/history metadata capture remains H2, and live brush,
+warp, selection-outline/move and transform settlement remains P1.4/A6/S3. The private functional controls do not
+establish G1 timing; capture, apply, history, chrome/display and full-loop measurements remain open.
+
 These numbers are binding as soon as the feature exists. C1 does not implement them; it MUST NOT choose a host shape
 that makes them impossible.
 
@@ -119,18 +142,32 @@ unbounded scheduler queue growth; capacity exhaustion fails submission locally.
 
 The owner router serves one ready leaf per pump, with at most eight leaves. Application's retry source adds
 eight startup event/wait registrations to the existing shared 32-slot wait pool (GPU uses eight and memory
-pressure uses two). A busy transfer MUST release its compute callback while retaining its admitted job and
-whole-graph reservation. Relative deadlines and cancellation share one event wait; no extra pool, periodic timer,
-sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published acknowledgement.
-Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not establish a
-maximum OS clipboard delay or G1 latency. Production retry attempt accounting remains F5c.2.
-Clipboard receipt encoding is fixed 40-byte metadata. Payload SHA-256 runs only on workers, with a checked
+pressure uses two). Clipboard Inspect/Copy retries retain their admitted record, reservation and receiver while
+waiting; Paste shares a limit of six total Inspect plus owned-Copy acquisitions. A busy transfer MUST release its
+compute callback while retaining that state. Relative deadlines and cancellation share one event wait; no extra
+pool, periodic timer, sleep, callback allocation or hot-path join is permitted. Slot reuse waits for published
+acknowledgement. Idle registrations neither claim readiness nor create wake-ups. These structural bounds do not
+establish a maximum OS clipboard delay or G1 latency.
+
+Clipboard host work captures the selected ordinal and complete admission before worker allocations or native
+clipboard calls. `GetClipboardData` and other OS transfer calls run on workers. Copy/Cut publish their private
+document result before encoding and mirroring; a later encoder or OS publication failure therefore preserves
+that private result. Copy Merged retains its opening document authority through utility readback, releases utility
+targets and mapped owners, then performs CPU pixel copying, private publication, encoding and transfer from the
+detached pixels. Receipt encoding is fixed 40-byte metadata. Payload SHA-256 runs only on workers, with a checked
 4096-byte stack object and cancellation between 64 KiB bands. Hash full initialized exposed global blocks,
-including any zeroed padding. Neither receipt parsing nor digest comparison allocates a payload on the owner.
-Complete admission must account for encoding stream, encoded vector, both globals, copied incoming bytes,
-codec/internal decode, document/history preparation and aggregate retirement; the adapter's partial byte report
-cannot authorize the host graph. A post-encoding block cap does not constrain earlier memory-stream growth.
-Digest throughput, native codec/OS interruption and full owner/first-upload costs remain F5d/G1 qualification.
+including zeroed padding. Neither receipt parsing nor digest comparison allocates a payload on the owner.
+
+`ClipboardEncodingBudget` is a checked, dimension-based phased peak estimate, not a measurement. It plans PNG
+encode and PNG global-copy/hash peaks, then the later DIB global-copy/hash peak, and charges the larger PNG/DIB
+stage rather than summing sequential stages. The estimate includes capped memory sink and returned-vector
+overlap, allocation/page-rounding slack, the conversion band, PNG/DIB/receipt globals, hash workspace and fixed
+metadata. It rejects invalid dimensions and canvases above 100 million pixels. Its 16 MiB WIC workspace allowance
+is not a proven hard bound on opaque codec memory. Complete host admission also covers incoming clipboard bytes,
+decode, document/history preparation, Copy Merged readback/CPU owners where applicable, and aggregate retirement;
+an adapter's partial byte report cannot authorize the graph, and a post-encoding block cap does not constrain
+earlier memory-stream growth. Digest throughput, opaque codec/native-call interruption, process headroom and full
+owner/first-upload costs remain native F5d/G1 qualification.
 
 Basic raster-edit admission declares metadata/token/result names, private tile bases and result images,
 tile/index/patch vector growth, sparse-window split scratch, selection coverage and its antialias/crossing
@@ -519,8 +556,9 @@ bounded staging files; they are not retained as one encoded vector per asset. In
 overflow refuse admission without submitting work. The scheduler's one complete-graph reservation remains held
 through worker completion and owner apply/drop, while immutable raster/selection storage already resident is not charged
 again. Global available-memory admission still uses the physical/commit ceiling less 1 GiB headroom and existing
-reservations. Image import and clipboard worker graphs remain later P1.7 work; this
-save slice does not establish G1 or a hardware timing result.
+reservations. Image import has its separately qualified host graph; clipboard host integration has a private
+full-application pass and is undergoing frozen native qualification. This save slice does not establish G1 or a
+hardware timing result.
 
 ### Project-open graph admission (P1.7 F3b.3a)
 
@@ -589,7 +627,8 @@ Cancellation retains the selected request, barrier and reservation until acknowl
 publication fact records external-file truth even if a later stop changes the receipt to Cancelled. Completion
 revalidates token, lineage, stamp and ordinal; exports never change project path or saved revision. A current failure
 posts one localized notice; a cancelled/stale prerequisite cannot proceed to a dependent close/replacement.
-Open/import/clipboard migrations, fault injection and measured G1 costs remain required.
+Open/import migrations, remaining fault injection and measured G1 costs remain required. Clipboard host paths and
+their private fault matrix are implemented; native frozen qualification and measured G1 costs remain pending.
 
 ## CPU instruction dispatch
 

@@ -166,6 +166,10 @@ RF-216). The session's `PixelMove` keeps the raster; the host shows it through t
 so a move never re-uploads the layer per pointer update. Synchronous session pixel edits upload through the
 sparse path. Production Fill, Clear and Invert use `RasterEditWork`: a detached CPU `BrushStroke` mode with no
 segment/permanent-density/coverage-engine buffers, cancellation between rows/tiles and private sparse reads.
+Worker Clear clips temporary tile rectangles to the existing source grid: clearing cannot grow the committed
+image. The document pixel limit still checks that retained grid, while complete admission covers temporary
+coverage and patch storage. Canvas tile padding must not cause an otherwise valid near-cap clear to refuse.
+The source mapping, selection coverage, destination-out rounding and sparse replacement bytes remain unchanged.
 The pointer brush's compute engine, including the required WARP compute path, is unchanged. Prepared sparse
 handles and eager mask thumbnails publish once through the token-checked owner API in `Document_Tools`.
 Production gradients use that same private CPU path, with metadata-only owner updates and one active/latest

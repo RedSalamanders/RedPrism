@@ -1,7 +1,7 @@
 # RedPrism architecture ownership
 
 Status: current normative product contract
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-02
 Owner: `Application`, `Renderer`, Document (`Common/Document.*`), and DxUi adapters
 
 ## Scope
@@ -37,6 +37,9 @@ borrows that device. It MUST NOT own a swap chain.
 | `GpuWorkQueue` (optional registered owner pump, `RedPrism/GpuWork.*`) | Bounded staging/copy records, events/fences and mapped-row leases, old context/texture references through acknowledgement | Swap chain, Present, new device creation, worker pixel computation, document mutation |
 | `Renderer` | One `ID3D11Device`, one `ID3D11DeviceContext`, one `IDXGISwapChain1`, RTV, frame-latency waitable, occlusion registration | A second device, a chrome HWND, GDI paint, DxUi library lifetime, document rasters |
 | Document | Layer graph, COW rasters, history budget | HWND, DXGI factory, DxUi host |
+| `ShapeEditWork` (Document) | Detached draft/source/history authority, CPU coverage and adopted pixels, complete prepared layer/history publication | Live session mutation, HWND, chrome, GPU engine/context |
+| `MaskEditWork` (Document) | Detached source, selected-layer IDs and history authority; inverse-grid coverage, Gray8 mask and semantic thumbnail; prepared mask-target/selection/history publication | Live session mutation, HWND, chrome, GPU engine/context |
+| `LayerCopyWork` (Document) | Detached source/target/placement/selection/history authority; selected pixels or a complete duplicated layer; prepared document/history publication | Live session mutation, HWND, chrome, GPU engine/context, private or OS clipboard |
 | `Kernels` (`Common/Kernels.*`) | Immutable process-lifetime CPU function tables and CPU/OS feature detection; noinline tier implementations in separate translation units | Document/session state, HWND, GPU context, scheduler |
 | `WorkerPool` (`Common/WorkerPool.*`) | Private fixed-size Windows pool, bounded payload-free dispatch wakeups, callback cleanup group, implicit MTA lifetime, cancellation and parallel helpers | HWND, document mutation, GPU context, a second scheduler |
 | `WaitPool` (`Common/WorkerPool.*`) | Dedicated one-thread pool and at most 32 one-shot event waits | Pixel work, waits inside callbacks, document mutation |
@@ -106,6 +109,14 @@ creates/closes/destroys its own built-in message-only window on the calling work
 application window. It publishes fully rendered immediate formats. OS open/get/empty/close calls can invoke an
 external clipboard owner and belong on a worker. The adapter does not schedule or retry work; production
 admission, source/history ordering, event retries and caller activation remain F5b.2–F5d.
+
+While open, inspection MUST enumerate and read only the first CF_DIBV5/CF_DIB representation, retaining the
+producer's order. Windows lists synthesized formats after their source. Requesting an alternate representation
+can invoke native conversion before validation; an invalid or over-budget first DIB MUST NOT trigger that request.
+PNG remains preferred independently. Availability is a fixed record of the held source, published only after
+successful close and cancellation validation, even when offered bytes are invalid. Malformed offered images
+MUST NOT be treated as an empty clipboard for private fallback. See
+[Microsoft's format enumeration contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumclipboardformats).
 
 `ClipboardReceipt` is a standard-only fixed-packet codec with no allocation or platform ownership.
 `ClipboardFingerprint` owns one CNG SHA-256 hash through WIL on its calling worker, using a borrowed algorithm
@@ -334,6 +345,32 @@ back buffer; the composition then blits the document into the chrome hole. Those
 
 `Common/CodecMemoryStream.*` owns one reserved virtual buffer through WIL and provides the capped WIC IStream
 implementation. Cursor/data access is confined to one caller; only COM reference counting is concurrent. It owns
-no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker; the current inline
-clipboard caller still awaits F5 host migration. A borrowed completed-byte view is retained only through exact
+no document, HWND, scheduler or GPU device. Admitted clipboard encoding uses it on the worker. A borrowed completed-byte view is retained only through exact
 worker copying, never exposed as a result. The final public result is an owning vector.
+
+### Ordered clipboard host graphs
+
+`ApplicationClipboardJobs.cpp` owns selected Copy/Cut/Paste/Copy Merged jobs and independent New Canvas metadata
+suggestions. Fixed descriptors precede complete admission; source document/history/pixel owners are captured
+only afterwards. Workers prepare core publication, capped encoding, global blocks, receipts and owned decode.
+Owner stages validate authority and apply complete publication; they perform no OS clipboard transfer, codec
+work, nested completion drain or wait. An acknowledged one-shot retry retains the same ticket and reservation.
+Each command allows at most six clipboard acquisitions; Paste shares that total between Inspect and Copy.
+
+Copy Merged holds its opening whole-document authority across utility tiles, releases maps and utility targets,
+then runs the CPU/private-copy/encoding/transfer stages under the same scheduler record and reservation. A device
+change after owned CPU bytes exist cannot recompose or replay the transfer. Large captured/replaced CPU owners
+retire as one aggregate off owner. Session shutdown keeps receivers, wait slots, windows and borrowed OS-call
+state alive through worker acknowledgement; an external delayed renderer cannot be interrupted by a stop token.
+The normal final join happens after the application hides its confirmed-close window.
+
+### Layer-copy host graph
+
+`ApplicationLayerCopyJobs.cpp` owns the ordered Layer via Copy Commit job. It reserves the complete scheduler-memory
+graph before owner-thread capture of the source document, active/mask target, displayed placement and history;
+worker stages prepare selected pixels/origin or the complete duplicate, after-document and prepared history. Owner
+completion validates the captured host/session/history authority and publishes atomically or drops the result.
+Cancellation and staleness retain the record, reservation and payload until acknowledgement, after which the
+aggregate CPU owners retire off owner. This graph neither reads nor writes the private clipboard and makes no OS
+clipboard calls. Live producer settlement and H2/G1 qualification remain open; see `Document_Tools.md` and
+`Core_PerformanceAndResources.md`.

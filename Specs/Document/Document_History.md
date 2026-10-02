@@ -75,6 +75,15 @@ Begin, End (including nested/no-op completion), Undo, Redo, Reset and prepared p
 `MarkSaved` remains independent and does not invalidate a prepared edit or allow it to replace a later saved
 revision. A view from another history owner, or a moved-from view, has no publication authority.
 
+`FollowingPreparedState` prepares a closure against the exact state that an unpublished predecessor would install.
+It advances the expected structural epoch by one and retains the predecessor's completed past/future roots,
+pending-record owner and depth. These witnesses must match at `IsCurrent` and `CanPublish`; a transaction with
+different roots, pending owner or depth cannot authorize the closure even at the same epoch/revision. Identical
+nested states are structurally equivalent; session publication also validates its document and target authority.
+Already published, invalid or epoch-overflowing
+predecessors refuse. Owning moves preserve these witnesses and invalidate the moved-from view. This permits a
+floating opening and its complete rollback history to be allocated before either reaches the live session.
+
 Detached edit/begin/end/restore preparation performs all snapshot, entry, stack-growth and trim allocations
 before changing live state. Cancellation or `bad_alloc` fails the selected operation with its document, revision,
 redo and pending transaction intact. A prepared nested edit preserves the opening transaction and its name;
