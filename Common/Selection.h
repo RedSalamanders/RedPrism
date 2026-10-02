@@ -3,6 +3,7 @@
 #include "Document.h"
 #include "Executor.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -45,19 +46,47 @@ namespace SelectionGeometry
 
 namespace MagicWand
 {
+// Worker cancellation checkpoints. Observers are borrowed, optional, noexcept and cannot publish document state.
+// Offsets count work in that stage; explicit loops poll at least every 4096 steps. Allocator/OS latency is separate.
+enum class WorkStage : std::uint8_t
+{
+    Source,
+    MaskInitialize,
+    Sample,
+    MatchScan,
+    FloodSeeds,
+    FloodRun,
+    FloodNeighbors,
+    TraceInitialize,
+    TraceEdges,
+    TraceStarts,
+    TraceWalk,
+    Complete,
+};
+struct WorkObserver
+{
+    void* context = nullptr;
+    void (*checkpoint)(void*, WorkStage, std::size_t) noexcept = nullptr;
+};
+inline constexpr long kCancelledMaskCount = -2;
 // 255 where a premultiplied BGRA pixel matches the color averaged over the sample square around (`x`, `y`);
-// `count` receives the number selected, or -1 when memory runs out. Empty when the image has no storage.
+// `count` receives the number selected, -1 when memory runs out, or kCancelledMaskCount on cancellation.
+// Cancellation discards the whole output. Sparse reads use a private contiguous view, never the source cache.
 [[nodiscard]] std::vector<std::uint8_t> Mask(const Raster& image, int x, int y, const WandSettings& settings,
-                                             long& count);
+                                             long& count, CancelToken cancellation = {}, WorkObserver observer = {});
 // Outline of a mask's nonzero pixels along exact pixel edges: outer loops clockwise and holes counterclockwise in
 // top-left coordinates, so the nonzero rule fills exactly those pixels. nullopt when empty or too detailed.
 [[nodiscard]] std::optional<std::vector<SelectionLoop>> Trace(const std::vector<std::uint8_t>& mask, int width,
-                                                              int height, WandFailure* failure = nullptr);
+                                                              int height, WandFailure* failure = nullptr,
+                                                              CancelToken cancellation = {},
+                                                              WorkObserver observer = {});
 // The outline of the pixels matching the one at `point` (image pixel coordinates); nullopt when nothing matches
 // or the point lies outside the image.
 [[nodiscard]] std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point,
                                                                const WandSettings& settings,
-                                                               WandFailure* failure = nullptr);
+                                                               WandFailure* failure = nullptr,
+                                                               CancelToken cancellation = {},
+                                                               WorkObserver observer = {});
 } // namespace MagicWand
 
 namespace MaskTracing
@@ -65,10 +94,14 @@ namespace MaskTracing
 // Outline of a Gray8 mask's pixels darker than 50 %, in the mask's pixel coordinates; nullopt when none, or when the
 // outline is refused (`failure`: TooDetailed past 8 000 000 pixel edges, Memory when the pixels cannot be read or the
 // outline allocated).
-[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure = nullptr);
+[[nodiscard]] std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure = nullptr,
+                                                                   CancelToken cancellation = {},
+                                                                   MagicWand::WorkObserver observer = {});
 // Outline of a BGRA image's pixels at least 50 % opaque; nullopt when none or refused, as DarkPixels.
 [[nodiscard]] std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image,
-                                                                     WandFailure* failure = nullptr);
+                                                                     WandFailure* failure = nullptr,
+                                                                     CancelToken cancellation = {},
+                                                                     MagicWand::WorkObserver observer = {});
 } // namespace MaskTracing
 
 // The map from an image's pixel coordinates to the document for a layer placed by `transform` (legacy
@@ -80,4 +113,5 @@ namespace MaskTracing
 // collapsing High to the same single bilinear tap since this is a transient sample, not a resample). Transparent
 // beyond the placed box, or whole when the transform is invalid. What the wand reads for one layer, and what Clone
 // Stamp, Blur, Liquify/Smudge and Copy read as "the layer as shown". Empty when the image's pixels cannot be read.
-[[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height);
+[[nodiscard]] Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height,
+                                       const CancelToken& cancellation = {});

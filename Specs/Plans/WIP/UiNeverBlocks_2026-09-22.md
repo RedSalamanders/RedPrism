@@ -60,11 +60,30 @@
   and 54 new strict ISA controls, with existing goldens unchanged. Independent source/evidence verification
   retains 587 inputs and 325 evidence files
   ([qualification](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). Broader A3/P1/G1 remain open.
-- [ ] Next selection slice — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
+- [x] P1 wand/trace cancellation foundation — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
   prepares sparse reads without source-cache publication and bounded explicit-loop cancellation checkpoints.
   Primary reviews the cheaper agent's literal/checkpoint tests, fixes the actual corner-touch case and adds
   owner-driven local/shutdown cancellation. Private full DocumentTests and paired Release kernel measurements
   precede activation and a fresh native matrix. Ordered host/GPU caller migration and G1 remain separate.
+  Private Release r1 passes all 54 cancellation checks and existing document goldens, but paired 45 MP medians
+  regress by 34% matching, 39% flood and 19% trace. Exact inputs, image/PDB, compiler tracking, logs and machine
+  metadata are preserved before tuning. Chunked r2 passes again; matching/trace regress by about 3%, flood by
+  18%, so it also stays private and is archived. Further tuning and reviewed odd-width/tail checkpoint tests
+  precede qualification; no production selection route has changed.
+  Private r6 now passes all 54 cancellation and 17 boundary checks, unchanged document goldens and two paired
+  measurements. Final matching medians add 2.9–4.2%; flood varies from 5.4% faster to 4.7% slower, solid trace
+  adds 0.6–1.6%, and fragmented stripe trace varies from 3.1% faster to 1.3% slower. Retain shared-desktop outliers;
+  these are kernel costs, not G1 qualification. Exact 289 inputs and 199 evidence entries are archived before
+  activating nine reviewed native files with current write timestamps. The fresh six-profile forced rebuild is
+  running; S4a remains unchecked until its native matrix and archive pass.
+  The native matrix now passes all six profiles at `2026-10-02T17:49:56.7560093Z`: each full x64 suite passes
+  all 71 named controls and unchanged goldens; ARM64 is build-only. Exact 591 frozen inputs and 328 evidence
+  files are independently SHA-verified before another build
+  ([qualification](../../TestRuns/WandCancellation_2026-10-02.md)). This completes S4a only.
+- [ ] Next selection publication slice — Private S4b prepares settled active-layer New sampling/trace and
+  complete history publication with captured point/settings/AA. A transparent-source rectangle shortcut and
+  cheaper-agent literal/authority/history tests are drafted; review, capacity/retirement proof, private runtime
+  and native qualification remain pending. All Layers, booleans, live gestures, host ordering and G1 stay open.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

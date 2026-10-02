@@ -322,6 +322,24 @@ copied/moved-session and moved-from/single-use candidates are refused. No timing
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 
+### Cancellable wand and trace kernels (P1.6 S4a)
+
+`wand-cancel.*` covers pre-cancelled local/shutdown tokens, reached Source/MaskInitialize/Sample/MatchScan/
+FloodSeeds/FloodRun/FloodNeighbors/TraceInitialize/TraceEdges/TraceStarts/TraceWalk/Complete checkpoints and
+whole-output refusal. Owner-driven event gates hold a real worker at matching step 4096 before local or shutdown
+stop; acknowledgement precedes join, and a fresh token recovers complete literal bytes. Literal references cover
+channel/alpha tolerance, rounded clipped sampling, disconnected stripes, holes, actual diagonal corner contact,
+sparse reads without source-cache publication, nearest placement and transparent blank-layer sampling.
+
+`wand-chunk.*` records fixed-size checkpoint arrays with overflow rejection. Odd-width 257-by-65 and skinny/
+8193-by-1 inputs prove exact ordered 4096-step boundaries across rows and tails, cumulative flood run/neighbor
+counts, literal full masks and clockwise rectangles. Late matching/vertex-start cancellation must reach its
+final chunk boundary exactly once, discard partial output and recover with a fresh token. Existing `wand.*`,
+`wandsession.*`, `loadrefused.*`, selection and coverage goldens remain unchanged; no elapsed threshold is asserted.
+Paired Release CPU measurements retain the pre-change source as a performance reference only, with validation
+outside timing. Native configuration qualification, host activation, full admission/Clipper/GPU/history lifetimes
+and UI/G1 measurements are distinct gates.
+
 ## Gates
 
 The pipeline foundation adds `DocumentTests.exe --stress`: 256 rounds of eight simultaneous readers of shared

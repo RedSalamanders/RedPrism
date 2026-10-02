@@ -133,6 +133,17 @@ under repository `.build/`. C1 does not yet create that tree.
 
 ## Worker execution cost and lifetime
 
+Wand/mask-trace preparation uses 4096-unit cancellation spans and a separate checkpoint call so optional
+observer/token call state does not remain in each scalar pixel loop. Matching, flood neighbor scans and vertex
+starts retain their numeric/visit order. Empty boundary vertices can be skipped with scalar 64-bit unaligned-safe
+loads within the already checked span. Sparse sources use a private cancellable copy without cache publication.
+The accepted private Release cost comparison records two runs at 45 MP and a fragmented-stripe trace: matching
+median overhead is 2.9–4.2%, flood ranges from 5.4% faster to 4.7% slower, and solid trace adds 0.6–1.6%. This
+bounded checkpoint/cancellation cost is accepted for the S4a foundation; first per-pixel candidates with 19–39%
+overhead were retained and replaced. Shared-desktop outliers remain in evidence. These scalar CPU measurements
+qualify no UI deadline or host activation. Complete admission, source/history lifetime and GPU sampling migration
+remain P1.3/P1.6 obligations; SIMD/GPU throughput and RAW/Photoshop qualification remain later phases.
+
 `Application` owns a bounded `JobScheduler`: at most 128 records across queued, running and undrained states, and
 eight pending UI actions. The seven job classes share three OS priorities. The serial classes (`Stroke`,
 `Selection`, `Commit`, `Io`) preserve FIFO within each class and key through apply or drop. Each record has two

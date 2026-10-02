@@ -334,6 +334,29 @@ where loops meet so touching corners stay apart; more than 8 000 000 edges is `W
 allocation failure `WandFailure::Memory`. `MagicWand::Select(image, point, settings)` floors the point to a pixel,
 masks and traces; nullopt when nothing matches or the point is outside the image.
 
+### Cancellable wand and trace preparation (P1.6 S4a)
+
+`Mask`, `Trace`, `Select`, `MaskTracing::DarkPixels` and `OpaquePixels` accept an optional cancellation token;
+direct callers use an empty token. Cancellation discards the entire private output. `Mask` reports count `-2`
+(`MagicWand::kCancelledMaskCount`); selection/tracing report `WandFailure::Cancelled`. The existing `None`,
+`Memory` and `TooDetailed` results and numeric/topological rules remain unchanged. A noncancelled empty result
+retains the existing nullopt/zero-count behavior. Observers are optional borrowed `noexcept` checkpoint callbacks;
+their lifetime ends with the call and they cannot publish document state.
+
+Already materialized input pixels are shared read-only. Otherwise the kernel uses a private cancellable contiguous
+copy; it never publishes the source's lazy cache. Mask and vertex storage are initialized in spans of at most
+4096 bytes. Explicit matching/edge construction visits, flood seeds/run/neighbor steps, vertex starts and directed
+edge walks check cancellation at no more than 4096 steps **in each stage**. Sampling retains the clipped sample
+square and rounded four-channel reference. Flood visitation/seed order, right-turn corner separation, outline
+order/winding and the eight-million-edge refusal are unchanged. Vertex-start scans can skip all-zero scalar
+64-bit words within the checked span using unaligned-safe `memcpy`; they still find nonzero vertices in order.
+
+`RenderLayerPixels` forwards cancellation to its placed rasterizer, including transparent blank/invalid-transform
+results. Its sampling and placement rules below remain unchanged. Kernel checkpoints do not bound allocator,
+OS call, vector growth, loop-vector compaction or Clipper latency. These APIs prepare worker migration; the host's
+wand/clone/sampler and selection command/pointer routes remain synchronous until ordered source acquisition,
+complete admission, history publication and lifetime qualification land. S4a establishes no UI/G1 time bound.
+
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
 the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
 flattened composition readback; a missing or wrongly sized composite makes the click do nothing), otherwise the

@@ -6,6 +6,10 @@ per x64 suite. The 39 strict RDX controls and unchanged failed Release image pas
 unchanged. The initial parser failure and r2 ASan baseline-save failure retain exact images/source/logs;
 the original baseline cause remains unknown. The r3 full matrix passes. Host commands, gesture routing,
 general geometry admission and measured G1 remain unqualified.
+S4a cancellable wand/trace/sampling also qualifies in six forced-rebuild profiles against 591 unchanged inputs:
+all 71 named cancellation/chunk controls pass in each full x64 suite, with legacy goldens unchanged. Exact
+sources, products and evidence are archived ([record](../../TestRuns/WandCancellation_2026-10-02.md)).
+S4b active-layer New preparation is a private, uncompiled prototype; admission/retirement proof and tests remain pending.
 The owning selection behavior is [Document_Tools](../../Document/Document_Tools.md); existing legacy numeric
 expectations remain unchanged. This plan does not add a Smooth command, which the current product does not expose.
 
@@ -31,7 +35,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     prepared core does not authorize synchronous host End/Cancel or altered live-stroke settlement.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
-  - [ ] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
+  - [x] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
     Primary prepares a private candidate while the preceding native lease-shutdown matrix remains frozen.
     Share already contiguous pixels; otherwise read sparse pixels into private cancellable storage without
     publishing a source cache. Initialize mask/vertex storage in 4096-byte spans, and poll explicit matching,
@@ -41,6 +45,33 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     Compile/runtime proof, paired kernel costs, original failure retention and all six native profiles remain
     required before activation/qualification. Allocator/OS latency, Clipper workspace, host ordinal/barrier
     integration, GPU all-layer sampling, memory admission and measured UI/G1 remain separate requirements.
+    Private Release r1 passes all 54 deterministic/literal cancellation controls and unchanged document tests;
+    paired 45 MP costs regress by 34%/39%/19% for matching/flood/trace. Its exact sources, executable/PDB,
+    124 compiler tracking products, logs and machine metadata are preserved before tuning. Chunked r2 again
+    passes all tests, reducing matching/trace overhead to about 3% while flood remains 18% slower; its exact
+    287 inputs and 161 evidence files are archived. It is not activated. Primary reviews the cheaper agent's
+    odd-width/tail controls and corrects the cumulative neighbor checkpoint count before r3 compilation.
+    The revised r6 candidate passes all 71 controls and unchanged document tests. Two paired Release runs
+    retain near-baseline matching/flood/trace costs, including fragmented stripes; kernel medians and shared-
+    desktop outliers are recorded separately from UI timing. Exact 289 inputs and 199 evidence files are
+    archived before nine native source/test activations; a fresh serial six-profile forced rebuild is running.
+    The native matrix passes all six profiles at `2026-10-02T17:49:56.7560093Z`. All 71 named controls pass
+    in each full x64 suite; ARM64 cross-builds pass without a runtime claim. Independent manifest/byte hashes
+    retain 591 exact inputs and 328 evidence files before the next build. Only S4a is complete.
+  - [ ] S4b — Prepare a sealed New selection from a settled active layer, with private sampling/trace and the
+    complete after-document/history publication. Build privately while S4a native inputs are frozen. Preserve
+    event-time point/settings/AA, exact active/mask/crop/document/history authority, `Magic Wand` versus no-match
+    `Deselect` titles, no-op/redo and whole-graph retirement. Blank/folder sources can produce the exact full-canvas
+    rectangle directly because every sample is transparent; prove this shortcut with independent literals.
+    This core preparation excludes All Layers, Add/Subtract and live gestures, and cannot activate until its
+    complete reservation/retirement bounds and tests qualify. No existing authority rule is weakened.
+    Capacity proof must cover private sparse source and sampling overlap, mask/vertex buffers, scanline stack,
+    coordinate/loop-vector growth and old/new allocation overlap, semantic selection roots, document/history
+    construction and releasing owners. The eight-million-edge limit bounds accepted traces; Clipper booleans
+    retain S0b's separate requirements. Opaque allocator/process headroom and observed latency stay distinct.
+    Host activation then requires S2/S3b ordered inputs and move closure plus P1.3 utility readback for All Layers;
+    retain drafts through acknowledgement and gate every overlapping writer. Direct New requests and clicks
+    inside the selection must keep their current order and error behavior.
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration

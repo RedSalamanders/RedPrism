@@ -211,6 +211,8 @@
     <ClCompile Include="AdjustmentClosureTests.cpp" />
     <ClCompile Include="AdjustmentOpeningTests.cpp" />
     <ClCompile Include="SelectionCommandTests.cpp" />
+    <ClCompile Include="WandCancellationTests.cpp" />
+    <ClCompile Include="WandChunkBoundaryTests.cpp" />
     <ClCompile Include="SelectionMoveClosureTests.cpp" />
     <ClCompile Include="ColorDismissalTests.cpp" />
     <ClCompile Include="AdjustmentNestedTests.cpp" />

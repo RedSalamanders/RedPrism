@@ -824,6 +824,7 @@ enum class WandFailure : std::uint8_t
     None,
     TooDetailed,
     Memory,
+    Cancelled,
 };
 
 struct ImageLayer

@@ -72,6 +72,8 @@
 #include "TransformEdit.h"
 #include "TransformPixelsWorkTests.h"
 #include "TransformPreviewWorkTests.h"
+#include "WandCancellationTests.h"
+#include "WandChunkBoundaryTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7385,6 +7387,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
+    gFailures += RunWandCancellationTests();
+    gFailures += RunWandChunkBoundaryTests();
     gFailures += RunSelectionMoveClosureTests();
     gFailures += RunColorDismissalTests();
     gFailures += RunAdjustmentNestedTests();

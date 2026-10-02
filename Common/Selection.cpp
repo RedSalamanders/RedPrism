@@ -1,6 +1,7 @@
 #include "Selection.h"
 
 #include "CanvasSize.h"
+#include "RasterWork.h"
 
 #include <algorithm>
 #include <cmath>
@@ -22,6 +23,80 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr int kClipperPrecision = 2; // hundredths of a document pixel
 // Outlines with more pixel edges than this are refused: the path would be too slow to draw (legacy limit).
 constexpr std::size_t kWandEdgeLimit = 8'000'000;
+
+class WandProgress final
+{
+  public:
+    WandProgress(CancelToken cancellation, MagicWand::WorkObserver observer) noexcept
+        : _cancellation(cancellation), _observer(observer)
+    {
+    }
+    // Keep token/observer call state outside the tight scalar pixel loops, including its register live ranges.
+    [[nodiscard]] __declspec(noinline) bool Checkpoint(MagicWand::WorkStage stage,
+                                                       std::size_t offset = 0) const noexcept
+    {
+        if (_cancellation.IsCancelled())
+            return false;
+        if (_observer.checkpoint)
+            _observer.checkpoint(_observer.context, stage, offset);
+        return !_cancellation.IsCancelled();
+    }
+    [[nodiscard]] bool Step(MagicWand::WorkStage stage, std::size_t offset) const noexcept
+    {
+        return offset % Quantum != 0 || Checkpoint(stage, offset);
+    }
+    [[nodiscard]] static std::size_t Remaining(std::size_t offset) noexcept
+    {
+        return Quantum - offset % Quantum;
+    }
+    static constexpr std::size_t Quantum = 4096;
+
+  private:
+    CancelToken _cancellation;
+    MagicWand::WorkObserver _observer;
+};
+
+class WandPixels final
+{
+  public:
+    [[nodiscard]] const std::uint8_t* Read(const Raster& image, CancelToken cancellation) noexcept
+    {
+        if (cancellation.IsCancelled())
+            return nullptr;
+        // The immutable cache is already published; Data cannot enter its assembly path here.
+        if (image.IsMaterialized())
+            return image.Data();
+        _privateCopy = CopyRasterPixelsForWork(image, cancellation);
+        return _privateCopy.Data();
+    }
+
+  private:
+    PixelBuffer _privateCopy;
+};
+
+// Reserve once, then initialize bounded spans. Allocation itself has no cancellation latency guarantee.
+[[nodiscard]] bool InitializeWandBytes(std::vector<std::uint8_t>& bytes, std::size_t count,
+                                       const WandProgress& progress, MagicWand::WorkStage stage)
+{
+    if (!progress.Checkpoint(stage))
+        return false;
+    bytes.reserve(count);
+    for (std::size_t offset = 0; offset < count;)
+    {
+        if (!progress.Checkpoint(stage, offset))
+            return false;
+        const std::size_t size = offset + std::min(WandProgress::Quantum, count - offset);
+        bytes.resize(size, 0);
+        offset = size;
+    }
+    return true;
+}
+
+void CancelledWand(WandFailure* failure) noexcept
+{
+    if (failure)
+        *failure = WandFailure::Cancelled;
+}
 
 [[nodiscard]] Clipper2Lib::PathsD ToClipper(const std::vector<SelectionLoop>& loops)
 {
@@ -406,6 +481,23 @@ enum Heading : std::uint8_t
     return static_cast<std::uint8_t>(bits & static_cast<std::uint8_t>(-static_cast<int>(bits)));
 }
 
+// Zero vertices cannot start a loop. Skip them in scalar words within the already polled span; memcpy keeps
+// unaligned reads and aliasing valid, including odd-width rows. Never read beyond the span's final byte.
+[[nodiscard]] const std::uint8_t* NextEdgeVertex(const std::uint8_t* begin, const std::uint8_t* end) noexcept
+{
+    while (end - begin >= static_cast<std::ptrdiff_t>(sizeof(std::uint64_t)))
+    {
+        std::uint64_t bits = 0;
+        std::memcpy(&bits, begin, sizeof(bits));
+        if (bits != 0)
+            break;
+        begin += sizeof(bits);
+    }
+    while (begin != end && *begin == 0)
+        ++begin;
+    return begin;
+}
+
 [[nodiscard]] bool WandMatches(const std::uint8_t* pixel, const int reference[4], int tolerance) noexcept
 {
     for (int channel = 0; channel < 4; ++channel)
@@ -424,11 +516,18 @@ enum Heading : std::uint8_t
 // Where two loops meet at a corner, turning right keeps them apart.
 template <typename Selected>
 [[nodiscard]] std::optional<std::vector<SelectionLoop>> TraceEdges(int width, int height, Selected selected,
-                                                                   WandFailure* failure)
+                                                                   WandFailure* failure, CancelToken cancellation = {},
+                                                                   MagicWand::WorkObserver observer = {})
 {
     if (failure)
     {
         *failure = WandFailure::None;
+    }
+    const WandProgress progress(cancellation, observer);
+    if (cancellation.IsCancelled())
+    {
+        CancelledWand(failure);
+        return std::nullopt;
     }
     if (width <= 0 || height <= 0)
     {
@@ -439,7 +538,11 @@ template <typename Selected>
     std::vector<std::uint8_t> out;
     try
     {
-        out.assign(vertices, 0);
+        if (!InitializeWandBytes(out, vertices, progress, MagicWand::WorkStage::TraceInitialize))
+        {
+            CancelledWand(failure);
+            return std::nullopt;
+        }
     }
     catch (const std::bad_alloc&)
     {
@@ -450,35 +553,48 @@ template <typename Selected>
         return std::nullopt;
     }
     std::size_t edges = 0;
+    std::size_t scanned = 0;
     for (int y = 0; y < height; ++y)
     {
-        for (int x = 0; x < width; ++x)
+        for (int x = 0; x < width;)
         {
-            if (!selected(x, y))
+            if (!progress.Step(MagicWand::WorkStage::TraceEdges, scanned))
             {
-                continue;
+                CancelledWand(failure);
+                return std::nullopt;
             }
-            const std::size_t sy = static_cast<std::size_t>(y);
-            const std::size_t sx = static_cast<std::size_t>(x);
-            if (y == 0 || !selected(x, y - 1))
+            const int size =
+                static_cast<int>(std::min(WandProgress::Remaining(scanned), static_cast<std::size_t>(width - x)));
+            const int end = x + size;
+            scanned += static_cast<std::size_t>(size);
+            for (; x < end; ++x)
             {
-                out[sy * stride + sx] |= East;
-                ++edges;
-            }
-            if (x + 1 == width || !selected(x + 1, y))
-            {
-                out[sy * stride + sx + 1] |= South;
-                ++edges;
-            }
-            if (y + 1 == height || !selected(x, y + 1))
-            {
-                out[(sy + 1) * stride + sx + 1] |= West;
-                ++edges;
-            }
-            if (x == 0 || !selected(x - 1, y))
-            {
-                out[(sy + 1) * stride + sx] |= North;
-                ++edges;
+                if (!selected(x, y))
+                {
+                    continue;
+                }
+                const std::size_t sy = static_cast<std::size_t>(y);
+                const std::size_t sx = static_cast<std::size_t>(x);
+                if (y == 0 || !selected(x, y - 1))
+                {
+                    out[sy * stride + sx] |= East;
+                    ++edges;
+                }
+                if (x + 1 == width || !selected(x + 1, y))
+                {
+                    out[sy * stride + sx + 1] |= South;
+                    ++edges;
+                }
+                if (y + 1 == height || !selected(x, y + 1))
+                {
+                    out[(sy + 1) * stride + sx + 1] |= West;
+                    ++edges;
+                }
+                if (x == 0 || !selected(x - 1, y))
+                {
+                    out[(sy + 1) * stride + sx] |= North;
+                    ++edges;
+                }
             }
         }
         if (edges > kWandEdgeLimit)
@@ -492,68 +608,89 @@ template <typename Selected>
     }
     if (edges == 0)
     {
+        if (!progress.Checkpoint(MagicWand::WorkStage::Complete))
+            CancelledWand(failure);
         return std::nullopt;
     }
     std::vector<SelectionLoop> loops;
+    std::size_t walked = 0;
     try
     {
-        for (std::size_t start = 0; start < vertices; ++start)
+        for (std::size_t start = 0; start < vertices;)
         {
-            while (out[start] != 0)
+            if (!progress.Checkpoint(MagicWand::WorkStage::TraceStarts, start))
             {
-                SelectionLoop loop;
-                std::size_t v = start;
-                std::uint8_t heading = 0;
-                std::uint8_t initial = 0;
-                do
+                CancelledWand(failure);
+                return std::nullopt;
+            }
+            const std::size_t end = start + std::min(WandProgress::Quantum, vertices - start);
+            while (start < end)
+            {
+                start = static_cast<std::size_t>(NextEdgeVertex(out.data() + start, out.data() + end) - out.data());
+                if (start == end)
+                    break;
+                while (out[start] != 0)
                 {
-                    const std::uint8_t bits = out[v];
-                    std::uint8_t d = 0;
-                    if (heading == 0)
+                    SelectionLoop loop;
+                    std::size_t v = start;
+                    std::uint8_t heading = 0;
+                    std::uint8_t initial = 0;
+                    do
                     {
-                        d = LowestBit(bits);
-                    }
-                    else if (bits & TurnRight(heading))
+                        if (!progress.Step(MagicWand::WorkStage::TraceWalk, walked++))
+                        {
+                            CancelledWand(failure);
+                            return std::nullopt;
+                        }
+                        const std::uint8_t bits = out[v];
+                        std::uint8_t d = 0;
+                        if (heading == 0)
+                        {
+                            d = LowestBit(bits);
+                        }
+                        else if (bits & TurnRight(heading))
+                        {
+                            d = TurnRight(heading);
+                        }
+                        else if (bits & heading)
+                        {
+                            d = heading;
+                        }
+                        else if (bits & TurnLeft(heading))
+                        {
+                            d = TurnLeft(heading);
+                        }
+                        else
+                        {
+                            d = LowestBit(bits);
+                        }
+                        if (d == 0)
+                        {
+                            break;
+                        }
+                        out[v] = static_cast<std::uint8_t>(out[v] & static_cast<std::uint8_t>(~d));
+                        if (d != heading)
+                        {
+                            loop.push_back(Vec2{static_cast<double>(v % stride), static_cast<double>(v / stride)});
+                        }
+                        if (heading == 0)
+                        {
+                            initial = d;
+                        }
+                        heading = d;
+                        v = d == East ? v + 1 : d == West ? v - 1 : d == South ? v + stride : v - stride;
+                    } while (v != start);
+                    // The start is a corner unless the loop arrives on the heading it left with.
+                    if (heading == initial && !loop.empty())
                     {
-                        d = TurnRight(heading);
+                        loop.erase(loop.begin());
                     }
-                    else if (bits & heading)
+                    if (loop.size() >= 3)
                     {
-                        d = heading;
+                        loops.push_back(std::move(loop));
                     }
-                    else if (bits & TurnLeft(heading))
-                    {
-                        d = TurnLeft(heading);
-                    }
-                    else
-                    {
-                        d = LowestBit(bits);
-                    }
-                    if (d == 0)
-                    {
-                        break;
-                    }
-                    out[v] = static_cast<std::uint8_t>(out[v] & static_cast<std::uint8_t>(~d));
-                    if (d != heading)
-                    {
-                        loop.push_back(Vec2{static_cast<double>(v % stride), static_cast<double>(v / stride)});
-                    }
-                    if (heading == 0)
-                    {
-                        initial = d;
-                    }
-                    heading = d;
-                    v = d == East ? v + 1 : d == West ? v - 1 : d == South ? v + stride : v - stride;
-                } while (v != start);
-                // The start is a corner unless the loop arrives on the heading it left with.
-                if (heading == initial && !loop.empty())
-                {
-                    loop.erase(loop.begin());
                 }
-                if (loop.size() >= 3)
-                {
-                    loops.push_back(std::move(loop));
-                }
+                ++start;
             }
         }
     }
@@ -567,6 +704,11 @@ template <typename Selected>
     }
     if (loops.empty())
     {
+        return std::nullopt;
+    }
+    if (!progress.Checkpoint(MagicWand::WorkStage::Complete))
+    {
+        CancelledWand(failure);
         return std::nullopt;
     }
     return loops;
@@ -819,10 +961,19 @@ SelectionBounds DragBox(Vec2 anchor, Vec2 point, bool square, bool fromCenter) n
 
 namespace MagicWand
 {
-std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const WandSettings& settings, long& count)
+std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const WandSettings& settings, long& count,
+                               CancelToken cancellation, WorkObserver observer)
 {
     count = 0;
     std::vector<std::uint8_t> mask;
+    const WandProgress progress(cancellation, observer);
+    const auto cancelled = [&]()
+    {
+        count = kCancelledMaskCount;
+        return std::vector<std::uint8_t>{};
+    };
+    if (!progress.Checkpoint(WorkStage::Source))
+        return cancelled();
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
         return mask;
@@ -830,7 +981,10 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
     const int width = image.Width();
     const int height = image.Height();
     const std::size_t stride = static_cast<std::size_t>(image.Stride());
-    const std::uint8_t* rgba = image.Data();
+    WandPixels source;
+    const std::uint8_t* rgba = source.Read(image, cancellation);
+    if (!progress.Checkpoint(WorkStage::Source, 1))
+        return cancelled();
     if (rgba == nullptr)
     {
         count = -1;
@@ -838,7 +992,9 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
     }
     try
     {
-        mask.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), 0);
+        if (!InitializeWandBytes(mask, static_cast<std::size_t>(width) * static_cast<std::size_t>(height), progress,
+                                 WorkStage::MaskInitialize))
+            return cancelled();
     }
     catch (const std::bad_alloc&)
     {
@@ -861,6 +1017,8 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
     {
         for (int x = x0; x <= x1; ++x, ++samples)
         {
+            if (!progress.Step(WorkStage::Sample, samples))
+                return cancelled();
             const std::uint8_t* pixel = rgba + static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x) * 4u;
             for (int channel = 0; channel < 4; ++channel)
             {
@@ -879,28 +1037,41 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
     { return mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)]; };
     if (!settings.contiguous)
     {
+        std::size_t scanned = 0;
         for (int y = 0; y < height; ++y)
         {
-            for (int x = 0; x < width; ++x)
+            for (int x = 0; x < width;)
             {
-                if (WandMatches(pixelAt(x, y), reference, tolerance))
+                if (!progress.Step(WorkStage::MatchScan, scanned))
+                    return cancelled();
+                const int size =
+                    static_cast<int>(std::min(WandProgress::Remaining(scanned), static_cast<std::size_t>(width - x)));
+                const int end = x + size;
+                scanned += static_cast<std::size_t>(size);
+                for (; x < end; ++x)
                 {
-                    maskAt(x, y) = 255;
-                    ++count;
+                    if (WandMatches(pixelAt(x, y), reference, tolerance))
+                    {
+                        maskAt(x, y) = 255;
+                        ++count;
+                    }
                 }
             }
         }
-        return mask;
+        return progress.Checkpoint(WorkStage::Complete) ? std::move(mask) : cancelled();
     }
     // Scanline flood fill: each popped seed fills its whole horizontal run, then pushes one seed per matching run
     // in the rows directly above and below it.
     std::vector<std::pair<int, int>> stack;
+    std::size_t seeds = 0, runs = 0, neighbors = 0;
     try
     {
         stack.reserve(4096);
         stack.emplace_back(seedX, seedY);
         while (!stack.empty())
         {
+            if (!progress.Step(WorkStage::FloodSeeds, seeds++))
+                return cancelled();
             const auto [x, y] = stack.back();
             stack.pop_back();
             if (maskAt(x, y) != 0 || !WandMatches(pixelAt(x, y), reference, tolerance))
@@ -911,12 +1082,32 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
             int right = x;
             while (left > 0 && maskAt(left - 1, y) == 0 && WandMatches(pixelAt(left - 1, y), reference, tolerance))
             {
-                --left;
+                if (!progress.Step(WorkStage::FloodRun, runs))
+                    return cancelled();
+                const int begin = left;
+                const int end =
+                    left - static_cast<int>(std::min(WandProgress::Remaining(runs), static_cast<std::size_t>(left)));
+                do
+                {
+                    --left;
+                } while (left > end && maskAt(left - 1, y) == 0 &&
+                         WandMatches(pixelAt(left - 1, y), reference, tolerance));
+                runs += static_cast<std::size_t>(begin - left);
             }
             while (right + 1 < width && maskAt(right + 1, y) == 0 &&
                    WandMatches(pixelAt(right + 1, y), reference, tolerance))
             {
-                ++right;
+                if (!progress.Step(WorkStage::FloodRun, runs))
+                    return cancelled();
+                const int begin = right;
+                const int end = right + static_cast<int>(std::min(WandProgress::Remaining(runs),
+                                                                  static_cast<std::size_t>(width - right - 1)));
+                do
+                {
+                    ++right;
+                } while (right < end && maskAt(right + 1, y) == 0 &&
+                         WandMatches(pixelAt(right + 1, y), reference, tolerance));
+                runs += static_cast<std::size_t>(right - begin);
             }
             std::memset(&maskAt(left, y), 255, static_cast<std::size_t>(right - left + 1));
             count += right - left + 1;
@@ -928,14 +1119,24 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
                 }
                 const int ny = side == 0 ? y - 1 : y + 1;
                 bool inRun = false;
-                for (int nx = left; nx <= right; ++nx)
+                for (int nx = left; nx <= right;)
                 {
-                    const bool candidate = maskAt(nx, ny) == 0 && WandMatches(pixelAt(nx, ny), reference, tolerance);
-                    if (candidate && !inRun)
+                    if (!progress.Step(WorkStage::FloodNeighbors, neighbors))
+                        return cancelled();
+                    const int size = static_cast<int>(
+                        std::min(WandProgress::Remaining(neighbors), static_cast<std::size_t>(right - nx + 1)));
+                    const int end = nx + size;
+                    neighbors += static_cast<std::size_t>(size);
+                    for (; nx < end; ++nx)
                     {
-                        stack.emplace_back(nx, ny);
+                        const bool candidate =
+                            maskAt(nx, ny) == 0 && WandMatches(pixelAt(nx, ny), reference, tolerance);
+                        if (candidate && !inRun)
+                        {
+                            stack.emplace_back(nx, ny);
+                        }
+                        inRun = candidate;
                     }
-                    inRun = candidate;
                 }
             }
         }
@@ -945,12 +1146,17 @@ std::vector<std::uint8_t> Mask(const Raster& image, int seedX, int seedY, const 
         count = -1;
         return {};
     }
-    return mask;
+    return progress.Checkpoint(WorkStage::Complete) ? std::move(mask) : cancelled();
 }
 
 std::optional<std::vector<SelectionLoop>> Trace(const std::vector<std::uint8_t>& mask, int width, int height,
-                                                WandFailure* failure)
+                                                WandFailure* failure, CancelToken cancellation, WorkObserver observer)
 {
+    if (cancellation.IsCancelled())
+    {
+        CancelledWand(failure);
+        return std::nullopt;
+    }
     if (width <= 0 || height <= 0 || mask.size() != static_cast<std::size_t>(width) * static_cast<std::size_t>(height))
     {
         if (failure)
@@ -966,15 +1172,20 @@ std::optional<std::vector<SelectionLoop>> Trace(const std::vector<std::uint8_t>&
             return mask[static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x)] !=
                    0;
         },
-        failure);
+        failure, cancellation, observer);
 }
 
 std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point, const WandSettings& settings,
-                                                 WandFailure* failure)
+                                                 WandFailure* failure, CancelToken cancellation, WorkObserver observer)
 {
     if (failure)
     {
         *failure = WandFailure::None;
+    }
+    if (cancellation.IsCancelled())
+    {
+        CancelledWand(failure);
+        return std::nullopt;
     }
     if (!image.HasStorage() || !std::isfinite(point.x) || !std::isfinite(point.y))
     {
@@ -988,12 +1199,12 @@ std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point
     }
     long count = 0;
     const std::vector<std::uint8_t> mask =
-        Mask(image, static_cast<int>(floorX), static_cast<int>(floorY), settings, count);
+        Mask(image, static_cast<int>(floorX), static_cast<int>(floorY), settings, count, cancellation, observer);
     if (count < 0)
     {
         if (failure)
         {
-            *failure = WandFailure::Memory;
+            *failure = count == kCancelledMaskCount ? WandFailure::Cancelled : WandFailure::Memory;
         }
         return std::nullopt;
     }
@@ -1001,7 +1212,7 @@ std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point
     {
         return std::nullopt;
     }
-    return Trace(mask, image.Width(), image.Height(), failure);
+    return Trace(mask, image.Width(), image.Height(), failure, cancellation, observer);
 }
 } // namespace MagicWand
 
@@ -1009,18 +1220,30 @@ std::optional<std::vector<SelectionLoop>> Select(const Raster& image, Vec2 point
 
 namespace MaskTracing
 {
-std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure)
+std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFailure* failure, CancelToken cancellation,
+                                                     MagicWand::WorkObserver observer)
 {
     if (failure)
     {
         *failure = WandFailure::None;
     }
+    const WandProgress progress(cancellation, observer);
+    if (!progress.Checkpoint(MagicWand::WorkStage::Source))
+    {
+        CancelledWand(failure);
+        return std::nullopt;
+    }
     if (!mask.HasStorage() || mask.Format() != RasterFormat::Gray8)
     {
         return std::nullopt;
     }
-    // A sparse mask assembles its pixels here; when that fails there is nothing to read.
-    const std::uint8_t* data = mask.Data();
+    WandPixels source;
+    const std::uint8_t* data = source.Read(mask, cancellation);
+    if (!progress.Checkpoint(MagicWand::WorkStage::Source, 1))
+    {
+        CancelledWand(failure);
+        return std::nullopt;
+    }
     if (data == nullptr)
     {
         if (failure)
@@ -1031,21 +1254,35 @@ std::optional<std::vector<SelectionLoop>> DarkPixels(const Raster& mask, WandFai
     }
     const std::size_t stride = static_cast<std::size_t>(mask.Stride());
     return TraceEdges(
-        mask.Width(), mask.Height(), [&](int x, int y)
-        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x)] < 128; }, failure);
+        mask.Width(), mask.Height(),
+        [&](int x, int y) { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x)] < 128; },
+        failure, cancellation, observer);
 }
 
-std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image, WandFailure* failure)
+std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image, WandFailure* failure,
+                                                       CancelToken cancellation, MagicWand::WorkObserver observer)
 {
     if (failure)
     {
         *failure = WandFailure::None;
     }
+    const WandProgress progress(cancellation, observer);
+    if (!progress.Checkpoint(MagicWand::WorkStage::Source))
+    {
+        CancelledWand(failure);
+        return std::nullopt;
+    }
     if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888)
     {
         return std::nullopt;
     }
-    const std::uint8_t* data = image.Data();
+    WandPixels source;
+    const std::uint8_t* data = source.Read(image, cancellation);
+    if (!progress.Checkpoint(MagicWand::WorkStage::Source, 1))
+    {
+        CancelledWand(failure);
+        return std::nullopt;
+    }
     if (data == nullptr)
     {
         if (failure)
@@ -1057,7 +1294,8 @@ std::optional<std::vector<SelectionLoop>> OpaquePixels(const Raster& image, Wand
     const std::size_t stride = static_cast<std::size_t>(image.Stride());
     return TraceEdges(
         image.Width(), image.Height(), [&](int x, int y)
-        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x) * 4u + 3u] >= 128; }, failure);
+        { return data[static_cast<std::size_t>(y) * stride + static_cast<std::size_t>(x) * 4u + 3u] >= 128; }, failure,
+        cancellation, observer);
 }
 } // namespace MaskTracing
 
@@ -1070,9 +1308,10 @@ Affine2 PixelToDocument(const LayerTransform& transform, int width, int height) 
     return Affine2::Scale(1.0 / w, 1.0 / h).Concat(transform.UnitToDocument());
 }
 
-Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height)
+Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, int width, int height,
+                         const CancelToken& cancellation)
 {
-    if (width < 1 || height < 1)
+    if (cancellation.IsCancelled() || width < 1 || height < 1)
     {
         return {};
     }
@@ -1080,14 +1319,14 @@ Raster RenderLayerPixels(const Raster& image, const LayerTransform& transform, i
     {
         if (!image.HasStorage() || image.Format() != RasterFormat::Bgra8888 || !transform.IsValid())
         {
-            return Raster::Make(width, height, RasterFormat::Bgra8888);
+            return RenderPlacedImage({}, {}, width, height, LayerSampling::Smooth, cancellation);
         }
         // A transient sample, not a resample: High collapses to Smooth's single bilinear tap (no supersampling),
         // and only Nearest changes what a stroke reads, matching legacy LayerRenderer.draw's interpolation choice.
         const LayerSampling sampling =
             transform.sampling == LayerSampling::Nearest ? LayerSampling::Nearest : LayerSampling::Smooth;
         const Affine2 pixelToTarget = PixelToDocument(transform, image.Width(), image.Height());
-        return RenderPlacedImage(image, pixelToTarget, width, height, sampling);
+        return RenderPlacedImage(image, pixelToTarget, width, height, sampling, cancellation);
     }
     catch (const std::bad_alloc&)
     {
