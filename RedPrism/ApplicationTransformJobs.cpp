@@ -420,6 +420,7 @@ HRESULT Application::StartTransformWork(TransformWorkKind kind) noexcept
 {
     if (!_activeHostRequest || _transformWorkTicket || _historyWork.Busy())
         return E_UNEXPECTED;
+    CancelTransformPreviewJobs();
     const auto& pending = _session.PendingTransformEdit();
     if (!_session.Document() || (kind != TransformWorkKind::OpenFloating && !pending) ||
         (kind == TransformWorkKind::OpenFloating && !_session.CanTransformSelection()))

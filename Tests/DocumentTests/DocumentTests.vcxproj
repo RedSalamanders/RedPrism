@@ -161,6 +161,8 @@
     <ClCompile Include="TransformCommitWorkTests.cpp" />
     <ClCompile Include="TransformCancellationWorkTests.cpp" />
     <ClCompile Include="TransformPreviewWorkTests.cpp" />
+    <ClCompile Include="TransformDeferredTests.cpp" />
+    <ClCompile Include="TransformDeferredGuardTests.cpp" />
     <ClCompile Include="FloatingPixelsWorkTests.cpp" />
     <ClCompile Include="FloatingOpeningWorkTests.cpp" />
     <ClCompile Include="FloatingMergeWorkTests.cpp" />

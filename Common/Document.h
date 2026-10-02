@@ -958,6 +958,8 @@ struct TransformEdit
     std::optional<TransformGroup> group;
     // Set when transforming selected pixels (Ctrl+T with a selection) rather than a layer.
     std::optional<FloatingTransform> floating;
+    bool deferred = false;
+    std::uint64_t opening = 0; // Stable across settings ticks; assigned when owner policy becomes deferred.
 };
 
 // Document positions a move has just snapped to, drawn as guides while it lasts.
@@ -1939,6 +1941,8 @@ class DocumentSession
         return _transformEdit;
     }
     void BeginTransform(bool persistent = true);
+    [[nodiscard]] bool BeginDeferredTransform(bool persistent = true);
+    [[nodiscard]] bool DeferTransform() noexcept;
     void PreviewTransform(const LayerTransform& value);
     void BeginDistort();
     void PreviewCorners(const std::array<Vec2, 4>& corners);
@@ -2590,6 +2594,10 @@ class DocumentSession
     }
 
   private:
+    [[nodiscard]] bool HasDeferredTransform() const noexcept
+    {
+        return _transformEdit && _transformEdit->deferred;
+    }
     // A session copy/move is a different owner even if all document counters match. Moves also retire the
     // source identity because a moved-from optional document can remain engaged with moved-out layer storage.
     struct TokenIdentity
@@ -2662,6 +2670,7 @@ class DocumentSession
     std::uint64_t _restoreSerial = 0;
     std::uint64_t _editRevision = 0;
     mutable std::uint64_t _displayRevision = 0;
+    mutable std::uint64_t _displayTransformOpening = 0, _displaySourceGeneration = 0;
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::optional<DocumentSelection> _selectionMoveOrigin;

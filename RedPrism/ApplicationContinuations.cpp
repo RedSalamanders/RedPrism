@@ -205,6 +205,7 @@ void Application::RunHostContinuation() noexcept
     {
         LaunchGradientPreview();
         LaunchPixelMovePreview();
+        LaunchTransformPreview();
     }
     if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {
@@ -264,9 +265,10 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle            ? HostStage::GradientSettle
-                         : _hostStage == HostStage::GradientSettle  ? HostStage::PixelMoveSettle
-                         : _hostStage == HostStage::PixelMoveSettle ? HostStage::TransformSettle
+            _hostStage = _hostStage == HostStage::Settle             ? HostStage::GradientSettle
+                         : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
+                         : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
+                         : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -437,9 +439,10 @@ void Application::RunHostContinuation() noexcept
                                           std::holds_alternative<HostEndSessionInput>(input) ||
                                           (std::get_if<HostSizeApplyInput>(&input) &&
                                            std::get<HostSizeApplyInput>(input).draft.kind == SizeCardKind::NewCanvas);
-            _hostAfterPanelCancel = HostStage::Execute;
+            _hostAfterPanelCancel = localReplacement ? HostStage::TransformDiscard : HostStage::Execute;
             _hostStage = _hostSaveBeforeAction                         ? HostStage::Output
                          : localReplacement && _session.HasColorEdit() ? HostStage::CancelPanel
+                         : localReplacement                            ? HostStage::TransformDiscard
                                                                        : HostStage::Execute;
             break;
         }
@@ -596,6 +599,29 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
+            break;
+        }
+        case HostStage::TransformDiscard:
+        {
+            // The confirmed discard owns cancellation and waits for its exact acknowledgement before any
+            // local replacement/teardown. The save-prompt Cancel never enters this stage.
+            DropDrag<MoveToolDrag>();
+            if (_session.PendingTransformEdit())
+            {
+                const auto result = StartTransformWork(TransformWorkKind::Cancel);
+                if (FAILED(result))
+                {
+                    ++_errorsShown;
+                    _lastErrorId =
+                        result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_transformWorkTicket)
+                    return;
+            }
+            _hostStage = HostStage::Execute;
             break;
         }
         case HostStage::Write:

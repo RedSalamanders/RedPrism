@@ -176,6 +176,22 @@ commit, while an existing persistent draft changes metadata and waits for Apply.
 ordinary opening and creates no history entry. Deferred display, remaining inline-bypass/pointer-loss/duplicate
 callers and the complete measured phase exit remain explicit A6.3/A6.4 work.
 
+### Deferred transform API and display ownership
+
+`BeginDeferredTransform` / `DeferTransform` explicitly opt an opening into prepared publication. Direct
+Commit/Cancel and unrelated document/history/target writers refuse that unresolved opening; prepared results
+retain their authority and checked, nonthrowing publication. The direct reference API remains available for
+numeric tests. Application production opt-in waits for the complete caller migration in A6.3.
+
+A deferred display read returns the last complete preview from the same opening/source generation, or the
+committed source if none is current. It reconstructs no warp, shape, mask or floating outline inline. Prepared
+preview jobs own one active/latest pending graph, reserve before capture, and publish the complete document and
+selection only while opening, settings, source and history authority remain current. Both color and mask previews
+are bounded to 1024 on the longest side. Floating outlines are mapped on workers with per-point cancellation and
+published together with their matching pixels. Failed/newer work retains the last complete display; cancellation
+retains the active ticket until acknowledgement, including a closed/reopened mailbox epoch. CPU display/source
+payloads retire off owner. Confirmed local discard cancels its transform prerequisite before replacement;
+save-prompt Cancel preserves the draft. Ephemeral pointer capture loss queues cancellation and acknowledges it.
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted

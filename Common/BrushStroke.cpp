@@ -1129,7 +1129,7 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     // A pending gradient applies first, so the stroke paints over it and never drops it (Decision D3).
     if (!ResolveGradient())
@@ -1394,7 +1394,7 @@ int DocumentSession::TypedOpacityPercent(int digit, double timeSeconds) noexcept
 
 void DocumentSession::AddLayerMask(bool revealing)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     // Targeting the new mask is a target switch: a pending gradient applies first.
     if (!ResolveGradient())
@@ -1907,7 +1907,7 @@ Raster DocumentSession::BlurSample(bool mask) const
 
 bool DocumentSession::BeginWarp(Vec2 point)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -2123,7 +2123,7 @@ bool DocumentSession::BeginGradientImpl(Vec2 point, bool deferred)
         RefreshGradient();
         return _gradient.has_value();
     }
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false; // a host must acknowledge settlement before opening on another target
     if (!ResolveGradient())
         return false;
@@ -2250,7 +2250,7 @@ bool DocumentSession::ApplyGradientIfCurrent(ImageLayer&& prepared, const JobTok
 
 bool DocumentSession::ResolveGradient()
 {
-    if (_gradient && _gradient->deferred)
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred))
         return false;
     if (_gradient)
     {
@@ -2387,7 +2387,7 @@ void DocumentSession::CommitShape(const ShapeDraft& draft, std::uint32_t foregro
 void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstring name, const std::wstring& editName,
                                     bool dropsSelection, std::optional<LayerShapeStyle> shape)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -2415,6 +2415,9 @@ void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstri
 
 void DocumentSession::RedrawShape(std::size_t index)
 {
+    if (HasDeferredTransform())
+        return;
+
     if (!_document.has_value() || index >= _document->layers.size())
     {
         return;
@@ -2923,7 +2926,7 @@ std::shared_ptr<BrushStroke> DocumentSession::MakeRasterEdit(const ImageLayer& l
 
 bool DocumentSession::FillSelection(FillSource source)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     // Pixel edits apply a pending gradient first (Decision D3; legacy refuses them while one is pending).
     if (!ResolveGradient())
@@ -2961,7 +2964,7 @@ bool DocumentSession::FillSelection(FillSource source)
 
 bool DocumentSession::ClearSelectedPixels()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -3079,7 +3082,7 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
 
 void DocumentSession::DeleteLayerMask()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -3149,7 +3152,7 @@ bool DocumentSession::CanInvert() const noexcept
 
 void DocumentSession::InvertPixels()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!CanInvert())
     {
@@ -3190,7 +3193,7 @@ bool DocumentSession::BeginDeferredPixelMove(bool duplicate)
 
 bool DocumentSession::BeginPixelMoveImpl(bool duplicate, bool deferred)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     if (!ResolveGradient())
         return false;
@@ -3253,6 +3256,11 @@ void DocumentSession::MovePixels(double dx, double dy)
 
 std::optional<DocumentSelection> DocumentSession::DisplayedSelection() const
 {
+    if (HasDeferredTransform())
+    {
+        const auto* display = DisplayDocument();
+        return display ? display->selection : std::nullopt;
+    }
     if (!_document.has_value())
     {
         return std::nullopt;
@@ -3353,7 +3361,7 @@ void DocumentSession::NudgePixels(double dx, double dy)
 
 void DocumentSession::AddMask(bool revealing)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -3452,7 +3460,7 @@ void DocumentSession::TransformCommand()
 
 void DocumentSession::BeginSelectionTransform()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     // Before the snapshot Escape restores, so a pending gradient is never part of what a cancel undoes.
     if (!ResolveGradient())
@@ -3889,6 +3897,9 @@ bool DocumentSession::CopySelection()
 
 bool DocumentSession::CopyMergedSelection(const Raster& composite)
 {
+    if (HasDeferredTransform())
+        return false;
+
     if (!CanCopyMerged())
     {
         return false;
@@ -3905,7 +3916,7 @@ bool DocumentSession::CopyMergedSelection(const Raster& composite)
 
 void DocumentSession::CutSelection()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;
@@ -3928,6 +3939,9 @@ void DocumentSession::CutSelection()
 
 void DocumentSession::Paste()
 {
+    if (HasDeferredTransform())
+        return;
+
     if (!CanPaste())
     {
         return;
@@ -3938,6 +3952,9 @@ void DocumentSession::Paste()
 
 void DocumentSession::PasteImage(const Raster& image)
 {
+    if (HasDeferredTransform())
+        return;
+
     if (!_document.has_value() || !image.HasStorage())
     {
         return;
@@ -3949,7 +3966,7 @@ void DocumentSession::PasteImage(const Raster& image)
 
 void DocumentSession::LayerViaCopy()
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!ResolveGradient())
         return;

@@ -20,7 +20,7 @@ bool AddPasteBytes(std::uint64_t& total, std::uint64_t amount) noexcept
 
 std::int64_t DocumentSession::ClipboardPastePixelLimit() const noexcept
 {
-    if (!_document || _gradient || _pixelMove || _document->layers.size() >= kMaxLayerCount)
+    if (!_document || _transformEdit || _gradient || _pixelMove || _document->layers.size() >= kMaxLayerCount)
         return 0;
     return PixelBudgetLeft(false);
 }

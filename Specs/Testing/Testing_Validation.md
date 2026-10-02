@@ -68,6 +68,19 @@ across modifier transitions, persistent draft metadata, one-entry publication an
 Ctrl+T retains the opening/draft with no entry. Full native profiles remain required; deferred preview coalescing,
 remaining bypass/duplicate/pointer-loss routes, device/shutdown and measured G1 are separate follow-ups.
 
+Deferred-model tests add 47 controls for opt-in display ownership, inline Commit/Cancel refusal, same-opening
+cache retention, source-generation invalidation and prepared single-use publication. Deferred writer/outline tests
+add 100 controls: every direct writer must leave the opening intact, and independent analytic homographies
+verify affine/projective floating outlines, reflections and asymmetric geometry. Cancellation never installs a
+partial outline; literal selection handles remain with the displayed pixel snapshot.
+
+The opt-in `transform-preview-host.*` test uses actual event-gated jobs before/after preparation: 90 controls
+cover admission before capture, latest-pending replacement, exact committed/history/clipboard preservation,
+view input while gated, changed source/history, close/reopen acknowledgement, reached admission/capture/worker
+failures, retained complete previews, queued full-resolution Apply and draft-only Undo cancellation, and payload
+retirement off owner. The existing capture-loss fixture awaits cancellation acknowledgement before applying its
+unchanged document/history assertions. Full native clean qualification remains required before closing this
+foundation. Production opt-in, Alt-duplicate, complete caller/device/shutdown and G1 remain separate gates.
 ### Clipboard and copy preparation
 
 `clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent
@@ -399,6 +412,15 @@ same-owner data start, guard-derived entry count equal to the exact PDB procedur
 same-procedure decoded boundary. An unrelated later data symbol does not extend the table. Missing/changed
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
+
+The Release clipboard status switch additionally has 91 AL-guard controls. Its exact contiguous MOVZX EAX from
+RSI+disp32, CMP AL/unsigned JA, RDX image-base/load/ADD/JMP rows require matching PE bytes and decoded listing.
+The anonymous same-owner PDB start and guard-derived table end must match the containing procedure; all default
+and table targets must be decoded boundaries inside it before the terminal table. RET and at most three standard
+alignment bytes precede the data. Bounds 1/6/127 and a changed source displacement remain valid; malformed
+registers, scales, bounds, instructions, listing/PE evidence, PDB ownership, targets and alignment refuse. Real
+VEX and EVEX after the table remain rejected. This is parser evidence; it does not execute synthetic code or
+grant an object/procedure exemption.
 
 HostTests validates every required AVX2 feature/OS-state bit independently, irrelevant-bit tolerance, host
 baseline detection, Scalar/Auto selection, unavailable-tier refusal and preservation of the previous table.

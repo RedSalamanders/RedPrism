@@ -63,6 +63,8 @@
 #include "ShapeEditWorkTests.h"
 #include "TransformCancellationWorkTests.h"
 #include "TransformCommitWorkTests.h"
+#include "TransformDeferredGuardTests.h"
+#include "TransformDeferredTests.h"
 #include "TransformEdit.h"
 #include "TransformPixelsWorkTests.h"
 #include "TransformPreviewWorkTests.h"
@@ -7430,6 +7432,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunTransformCommitWorkTests();
     gFailures += RunTransformCancellationWorkTests();
     gFailures += RunTransformPreviewWorkTests();
+    gFailures += RunTransformDeferredTests();
+    gFailures += RunTransformDeferredGuardTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();
     gFailures += RunFloatingPixelsWorkTests();

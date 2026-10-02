@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
-& (Join-Path $PSScriptRoot 'IsaInlineTableTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }

@@ -2229,6 +2229,11 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
         return transformWork;
     }
+    if (const int transformPreview = RunTransformPreviewSelfTest(); transformPreview != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: transform-preview.\n");
+        return transformPreview;
+    }
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
@@ -2679,6 +2684,7 @@ void Application::SyncChrome() noexcept
 {
     RefreshGradientJobs();
     RefreshPixelMoveJobs();
+    RefreshTransformPreviewJobs();
     if (!_chrome)
     {
         return;
@@ -3129,6 +3135,7 @@ void Application::Shutdown() noexcept
     CancelColorJobs();
     CancelGradientJobs();
     CancelPixelMoveJobs();
+    CancelTransformPreviewJobs();
     _jobs.RequestStop();
     RetireFloatingRestore();
     if (_window)
@@ -3745,7 +3752,7 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
         const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
         if (edit.has_value() && !edit->persistent)
         {
-            _session.CancelTransform();
+            (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Escape);
         }
         else if (edit.has_value() && edit->corners.has_value() && drag.originalCorners.has_value())
         {
@@ -4577,6 +4584,15 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         return true;
     case CanvasEdit::Transform:
         DropDrag<MoveToolDrag>();
+        if (!_session.PendingTransformEdit())
+            return true;
+        if (_hostExecuting && _session.PendingTransformEdit()->deferred)
+        {
+            // Selected production requests must settle through their preceding host stage. Refuse an
+            // unexpected direct dispatch instead of running a reference kernel or removing its draft.
+            _hostExecutionError = E_ABORT;
+            return true;
+        }
         if (!_hostExecuting)
         {
             const auto& pending = _session.PendingTransformEdit();

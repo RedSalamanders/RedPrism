@@ -10,6 +10,7 @@ enum class TransformPreviewStage : std::uint8_t
 {
     Snapshot,
     Layer,
+    Selection,
     Publication,
 };
 

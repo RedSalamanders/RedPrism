@@ -104,6 +104,23 @@
         document/generation/history/clipboard unchanged; child closures retain the parent's depth/name and redo.
         The private r1 mask-target fixture failure and its exact binary remain preserved; r2 corrects the fixture
         before native activation. Persistent host restoration ownership and production caller gates remain open.
+      - [ ] Duplicate opening — Prepare the complete duplicated document, Begin scope and prepaid exact rollback
+        on a worker before exposing an Alt-drag copy; retain shared pixels/mask/shape metadata, same-parent
+        insertion, source selection and parent depth/name. Qualify independent opening/restore/commit,
+        cancellation, construction/history faults and stale authority before production gesture routing.
+        - [x] Private duplicate opening core — 82 independent controls and the complete DocumentTests suite
+          pass against 532 frozen inputs. Exact-cap color/mask budgets, grouped insertion, original shared pixels,
+          one-entry commit/Undo, prepaid restore, nested parent scope/redo, stale authority and reached checkpoint
+          faults qualify. `.build/p1-distort-draft/duplicate-opening-core-qualified-r1/` retains 532 sources and
+          210 evidence entries. Opening/rollback deliberately advance generations and structural epochs;
+          original visible document/history/clipboard state is restored. Host gesture migration is still open.
+        - [ ] Private duplicate gesture host — Implement a same-ordinal source-settlement/opening job,
+          coalesced pointer metadata, event-time release/Escape inputs and prepaid restore on failed settlement.
+          The draft builds against 533 inputs. Its first full run reaches 131 controls with one failure: admission
+          refusal omitted its error notice. The 534-source/222-evidence failure is preserved before adding that
+          notice without changing the assertion. A fresh full run is in progress. No host pass or
+          native production activation is claimed. Qualification must cover fast release, before/after-ready
+          cancellation, newer input, source/history faults, retirement and the prior transform/preview goldens.
     - [ ] T2 — Route Ctrl+T, Apply/Cancel, pointer release/leave/capture loss, header/nudge/flip, tool/layer changes,
       writes and lifetime changes through an opening-specific owned host input and same-ordinal settlement stage.
       Worker failure cannot discard newer geometry; explicit Escape restores only its still-current opening after
@@ -135,6 +152,20 @@
         sources and evidence. Production caller activation and native qualification remain open.
       - [ ] Guard all direct document/history/target writers while the deferred opening owns its source; prepare
         floating preview outlines on workers and retain the complete outline with the displayed pixel snapshot.
+      - [x] Private preview host — 90 event-gated controls plus the existing 344 settlement controls and complete
+        WARP application self-test pass against 528 frozen inputs in r3. The r1 compile failure and r2 capture-loss
+        fixture failure remain archived. The fixture now waits for cancellation acknowledgement without changing
+        its original state assertions. `.build/p1-distort-draft/transform-preview-host-qualified-r3/` retains the
+        528-source/203-evidence proof. Native clean qualification now passes; production deferred policy is not enabled.
+      - [x] Native deferred preview foundation — The clean r1 matrix passes all ARM64 builds and the complete
+        x64 ASan suite, then Release's ISA scan rejects a DWORD jump-table entry decoded as AVX. The exact
+        547-input/294-evidence candidate remains in `.build/p1-transform-deferred-r1-failure/`. Strict PE/PDB
+        proof over the unchanged preserved image passes, with 91 new AL-guard parser controls plus the existing
+        parser suite. The two failed new fixture revisions remain archived before repair. The clean r2 matrix
+        passes all three full x64 suites and all three ARM64 cross-builds against 548 frozen inputs;
+        `.build/p1-transform-deferred-r2-qualified/` retains 548 sources and 297 evidence entries
+        ([record](../../TestRuns/DeferredTransformPreview_2026-10-02.md)). Production policy and complete P1
+        performance/device/shutdown closeout remain open.
       - [ ] Activate one active/latest pending preview graph and route discard/capture-loss before enabling the
         deferred policy in production. Qualify real host coalescing, failure, cancellation and lifetime controls.
     - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,

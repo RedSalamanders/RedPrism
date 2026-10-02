@@ -604,6 +604,7 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optiona
 // new document, not even when the reopened active layer has the same id and a mask of its own.
 void Application::FinishPreparedDocumentReplacement() noexcept
 {
+    CancelTransformPreviewJobs();
     RetireFloatingRestore();
     // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
     // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
@@ -1790,6 +1791,11 @@ int Application::RunSessionSelfTest() noexcept
         (void)SendMessageW(_window.get(), WM_CAPTURECHANGED, 0, elsewhere);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, center.x + 80.0, center.y + 50.0);
         pointer(WM_LBUTTONUP, 0, center.x + 80.0, center.y + 50.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The capture-loss cancellation did not acknowledge its transform worker.\n");
+            return 5;
+        }
         layer = _session.ActiveLayer();
         if (layer == nullptr || !dragging || std::holds_alternative<MoveToolDrag>(_drag) ||
             _session.PendingTransformEdit().has_value() || !(layer->transform == start) ||

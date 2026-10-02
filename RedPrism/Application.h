@@ -453,6 +453,16 @@ class Application final : public ChromeEvents
     void RetireFloatingRestore() noexcept;
     void ExecuteLayerNudge(Vec2 offset) noexcept;
     int RunTransformWorkSelfTest() noexcept;
+    struct TransformPreviewRequest final
+    {
+        std::uint64_t opening = 0, revision = 0, generation = 0;
+    };
+    class TransformPreviewJob;
+    void RefreshTransformPreviewJobs() noexcept;
+    void CancelTransformPreviewJobs() noexcept;
+    void LaunchTransformPreview() noexcept;
+    [[nodiscard]] HRESULT SubmitTransformPreview(TransformPreviewRequest request, PreviewStamp stamp) noexcept;
+    int RunTransformPreviewSelfTest() noexcept;
     class LayerCopyJob;
     [[nodiscard]] HRESULT StartLayerCopy() noexcept;
     int RunLayerCopyWorkSelfTest() noexcept;
@@ -746,6 +756,12 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _transformWorkStamp;
     std::shared_ptr<FloatingRestoreOwner> _floatingRestoreOwner;
     std::shared_ptr<TransformWorkTestGate> _transformWorkTestGate;
+    PreviewMailbox<TransformPreviewRequest> _transformPreviews;
+    bool _transformPreviewMailboxOpen = false;
+    std::uint64_t _transformPreviewSeenRevision = 0, _transformPreviewSerial = 0;
+    std::uint64_t _transformPreviewOpening = 0, _transformPreviewGeneration = 0;
+    std::optional<JobTicket> _transformPreviewTicket;
+    std::shared_ptr<struct TransformPreviewTestGate> _transformPreviewTestGate;
     std::optional<JobTicket> _layerCopyTicket;
     std::optional<HistoryWorkStamp> _layerCopyStamp;
     std::shared_ptr<LayerCopyWorkTestGate> _layerCopyWorkTestGate;
@@ -784,6 +800,7 @@ class Application final : public ChromeEvents
         GradientSettle,
         PixelMoveSettle,
         TransformSettle,
+        TransformDiscard,
         Write,
         Execute,
         FileComplete,

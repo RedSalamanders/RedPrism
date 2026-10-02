@@ -1,5 +1,7 @@
 #include "TransformPreviewWork.h"
 
+#include "FloatingPixelsWork.h"
+
 #include <algorithm>
 #include <limits>
 #include <type_traits>
@@ -61,6 +63,12 @@ std::uint64_t TransformDisplayMemoryBytes(const CanvasDocument& source, const Tr
         !IndexOf(source.layers, edit.layerID))
         return 0;
     std::uint64_t bytes = 8192 + sizeof(TransformDisplayResult);
+    if (edit.floating && (edit.mask || edit.group || !edit.floating->original.IsValid() ||
+                          edit.floating->pixelWidth < 1 || edit.floating->pixelHeight < 1 ||
+                          edit.floating->pixelWidth > kMaxCanvasSide || edit.floating->pixelHeight > kMaxCanvasSide ||
+                          (edit.corners && !DistortWarp::IsUsable(edit.corners.value())) ||
+                          (source.selection && !Add(bytes, source.selection->loops.StorageBytes(), 3))))
+        return 0;
     if (edit.group && !Add(bytes, edit.group->originals.size(), sizeof(std::pair<Guid, LayerTransform>) * 2ull))
         return 0;
     for (const auto& layer : source.layers)
@@ -202,6 +210,11 @@ TransformDisplayResult PrepareTransformDisplay(const CanvasDocument& source, con
                 layer.mask->placement = MaskPlacementMoving(layer.mask.value(), original, pending.value());
         }
     }
+    if (!Checkpoint(observer, TransformPreviewStage::Selection, cancellation))
+        return {DistortWorkStatus::Cancelled};
+    if (edit.floating && display.selection &&
+        !PrepareFloatingSelectionOutline(display.selection.value(), edit, cancellation))
+        return {cancellation.IsCancelled() ? DistortWorkStatus::Cancelled : DistortWorkStatus::Invalid};
     if (!Checkpoint(observer, TransformPreviewStage::Publication, cancellation))
         return {DistortWorkStatus::Cancelled};
     return {DistortWorkStatus::Ready, std::move(display)};
@@ -256,6 +269,8 @@ bool DocumentSession::ApplyPreparedTransformPreviewIfCurrent(PreparedTransformPr
         return false;
     std::swap(_displayCopy, prepared._display);
     _displayRevision = _editRevision;
+    _displayTransformOpening = _transformEdit->opening;
+    _displaySourceGeneration = Generation();
     prepared._consumed = true;
     return true;
 }

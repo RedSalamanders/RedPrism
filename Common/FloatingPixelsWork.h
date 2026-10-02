@@ -35,6 +35,9 @@ struct FloatingMergePixels final
 [[nodiscard]] std::uint64_t FloatingOpeningPixelsMemoryBytes(const CanvasDocument& source, Guid active) noexcept;
 [[nodiscard]] FloatingOpeningPixels PrepareFloatingOpeningPixels(const CanvasDocument& source, Guid active,
                                                                  Executor& executor, CancelToken cancellation = {});
+// Detached complete outline mapping. Failure/cancellation leaves the retained input loops unchanged.
+[[nodiscard]] bool PrepareFloatingSelectionOutline(DocumentSelection& selection, const TransformEdit& edit,
+                                                   CancelToken cancellation = {});
 [[nodiscard]] std::uint64_t FloatingMergePixelsMemoryBytes(const CanvasDocument& source,
                                                            const TransformEdit& edit) noexcept;
 // Unchanged returns the exact opening graph. Other failure/cancellation returns no after-document: the caller

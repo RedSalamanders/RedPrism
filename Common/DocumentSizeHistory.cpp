@@ -29,7 +29,7 @@ std::optional<PreparedDocumentSize> PrepareDocumentSizePublication(const std::op
 
 bool DocumentSession::ApplyPreparedDocumentSizeIfCurrent(PreparedDocumentSize& prepared) noexcept
 {
-    if (!prepared._document || _activeLayerID != prepared._active ||
+    if (HasDeferredTransform() || !prepared._document || _activeLayerID != prepared._active ||
         !CanApplyJobResult(prepared._token, prepared._token.sequence) || !history.CanPublish(prepared._history))
         return false;
     if (!history.Publish(prepared._history))

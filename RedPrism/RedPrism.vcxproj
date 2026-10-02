@@ -287,6 +287,8 @@
     <ClCompile Include="ApplicationLayerCopyJobs.cpp" />
     <ClCompile Include="ApplicationTransformJobs.cpp" />
     <ClCompile Include="ApplicationTransformTests.cpp" />
+    <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
+    <ClCompile Include="ApplicationTransformPreviewTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyTests.cpp" />
     <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />

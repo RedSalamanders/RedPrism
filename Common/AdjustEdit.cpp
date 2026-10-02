@@ -163,7 +163,7 @@ bool DocumentSession::CanContentAwareFill() const noexcept
 
 void DocumentSession::BeginColorEdit(FilterKind kind, bool deferred)
 {
-    if ((_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
+    if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return;
     if (!CanAdjustColors() || (kind == FilterKind::ContentAwareFill && !CanContentAwareFill()))
     {
@@ -526,6 +526,9 @@ void DocumentSession::EndHueTargeting() noexcept
 
 void DocumentSession::AddAdjustment(AdjustmentKind kind)
 {
+    if (HasDeferredTransform())
+        return;
+
     if (!_document.has_value() || static_cast<int>(_document->layers.size()) >= kMaxLayerCount || HasColorEdit())
     {
         return;
@@ -569,6 +572,8 @@ bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& va
 
 bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below, bool deferred)
 {
+    if (HasDeferredTransform())
+        return false;
     if (!_adjustmentEditingID.has_value() || !(_adjustmentEditingID.value() == id) || _adjustmentOriginal.has_value() ||
         HasColorEdit() || !_document.has_value())
     {

@@ -170,6 +170,15 @@ bool MoveOutline(DocumentSelection& selection, const TransformEdit& edit, Cancel
 }
 } // namespace
 
+bool PrepareFloatingSelectionOutline(DocumentSelection& selection, const TransformEdit& edit, CancelToken cancellation)
+{
+    if (cancellation.IsCancelled() || !edit.floating || !edit.draft.IsValid() || !edit.floating->original.IsValid() ||
+        edit.floating->pixelWidth < 1 || edit.floating->pixelHeight < 1 || edit.floating->pixelWidth > kMaxCanvasSide ||
+        edit.floating->pixelHeight > kMaxCanvasSide || (edit.corners && !DistortWarp::IsUsable(edit.corners.value())))
+        return false;
+    return MoveOutline(selection, edit, cancellation);
+}
+
 std::uint64_t FloatingOpeningPixelsMemoryBytes(const CanvasDocument& source, Guid active) noexcept
 {
     const auto* layer = OpeningLayer(source, active);
@@ -359,7 +368,7 @@ FloatingMergePixels PrepareFloatingMergePixels(const CanvasDocument& source, con
         mask->asset.thumbnail = std::move(thumb);
     }
     auto selection = source.selection;
-    if (selection && !MoveOutline(selection.value(), edit, cancellation))
+    if (selection && !PrepareFloatingSelectionOutline(selection.value(), edit, cancellation))
         return {FloatingPixelsStatus::Cancelled};
     auto after = source;
     const auto floatingIndex = IndexOf(after.layers, edit.layerID);
