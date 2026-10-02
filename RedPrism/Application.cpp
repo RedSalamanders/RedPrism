@@ -34,6 +34,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 #include <windowsx.h>
@@ -3266,6 +3267,21 @@ void Application::Shutdown() noexcept
              // MSVC hash-container move construction can allocate. Release every large owning root
              // directly on the final worker instead; shutdown must remain safe under allocation refusal.
              owner._session.RetireCpuForShutdown();
+             // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
+             // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
+             owner._drag.emplace<std::monostate>();
+             owner._overlaySelection.reset();
+             if (owner._uiBenchmark)
+             {
+                 // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
+                 // timing/path metadata alive; release only its immutable document and raster ownership here.
+                 static_assert(std::is_nothrow_default_constructible_v<CanvasDocument> &&
+                               std::is_nothrow_move_assignable_v<CanvasDocument>);
+                 owner._uiBenchmark->fixture = {};
+                 owner._uiBenchmark->imageImportBaseline = {};
+                 owner._uiBenchmark->previousImage = {};
+                 owner._uiBenchmark->previousPreview = {};
+             }
              if (auto* probe = owner._shutdownTestProbe)
              {
                  APTTYPE apartment{};
@@ -3273,6 +3289,12 @@ void Application::Shutdown() noexcept
                  probe->mta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA);
                  probe->offOwner.store(GetCurrentThreadId() != probe->owner);
                  probe->draftRetired.store(probe->draft.expired());
+                 probe->hostCpuRootsRetired.store(
+                     std::holds_alternative<std::monostate>(owner._drag) && !owner._overlaySelection &&
+                     (!owner._uiBenchmark || (owner._uiBenchmark->fixture.layers.empty() &&
+                                              owner._uiBenchmark->imageImportBaseline.layers.empty() &&
+                                              !owner._uiBenchmark->previousImage.HasStorage() &&
+                                              !owner._uiBenchmark->previousPreview.HasStorage())));
                  probe->workerCalls.fetch_add(1);
              }
          },

@@ -5,6 +5,7 @@
 #include "ChromeHost.h"
 #include "DeferredRelease.h"
 #include "DocumentLifecycleTestGate.h"
+#include "UiBenchmark.h"
 #include "resource.h"
 
 #include <array>
@@ -100,18 +101,71 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         if (owner->_session.PendingGradient())
             draft = owner->_session.PendingGradient()->raster;
         expect(gradient && !draft.expired(), "graphics-backed-draft-alive-before-shutdown", after);
+        Raster rootStorage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_drag = ColorSampling{0xFF123456u, rootStorage, Vec2{2, 3}};
+        owner->_overlaySelection =
+            DocumentSelection{false, SelectionLoops{SelectionLoop{Vec2{4, 5}, Vec2{44, 5}, Vec2{44, 35}, Vec2{4, 35}}}};
+        owner->_uiBenchmark = std::make_unique<UiBenchmarkState>();
+        const CanvasDocument& currentDocument = owner->_session.Document().value();
+        owner->_uiBenchmark->fixture = currentDocument;
+        owner->_uiBenchmark->imageImportBaseline = currentDocument;
+        owner->_uiBenchmark->previousImage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_uiBenchmark->previousPreview = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
+        owner->_uiBenchmark->complete = true;
+        owner->_uiBenchmark->failed = false;
+        owner->_uiBenchmark->runs = 7;
+        owner->_uiBenchmark->ownsSaveDirectory = false;
+        UiBenchmarkState* const benchmarkIdentity = owner->_uiBenchmark.get();
+        UiTimingStats* const benchmarkTimingIdentity = &owner->_uiBenchmark->timing;
+        const ColorSampling* const sampling = std::get_if<ColorSampling>(&owner->_drag);
+        expect(sampling && sampling->composite && sampling->composite->Identity() == rootStorage.Identity() &&
+                   rootStorage.ByteSize() == 16ull * 1024 * 1024 && rootStorage.PixelCount() == 2048 * 2048 &&
+                   sampling->point == Vec2{2, 3},
+               "sampling-root-identity-size-count-and-point-before-shutdown", after);
+        expect(owner->_overlaySelection && !owner->_overlaySelection->IsEmpty() &&
+                   owner->_overlaySelection->loops.PointCount() == 4,
+               "explicit-overlay-selection-before-shutdown", after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
+                   owner->_uiBenchmark->fixture == currentDocument &&
+                   owner->_uiBenchmark->imageImportBaseline == currentDocument &&
+                   owner->_uiBenchmark->previousImage.HasStorage() &&
+                   owner->_uiBenchmark->previousPreview.HasStorage() &&
+                   owner->_uiBenchmark->previousImage.Identity() != owner->_uiBenchmark->previousPreview.Identity() &&
+                   owner->_uiBenchmark->previousImage.Identity() != rootStorage.Identity() &&
+                   owner->_uiBenchmark->previousPreview.Identity() != rootStorage.Identity() &&
+                   owner->_uiBenchmark->previousImage.ByteSize() == 16ull * 1024 * 1024 &&
+                   owner->_uiBenchmark->previousPreview.ByteSize() == 16ull * 1024 * 1024 &&
+                   owner->_uiBenchmark->complete && !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
+                   !owner->_uiBenchmark->ownsSaveDirectory,
+               "benchmark-roots-and-complete-metadata-before-shutdown", after);
+        // The fixture must not retain the last pixel owner across Shutdown. Identity/size checks above finish
+        // while the temporary exists; the ColorSampling variant owns its sole raster reference from here.
+        rootStorage = {};
         ApplicationShutdownTestProbe probe;
         probe.draft = draft;
         owner->_shutdownTestProbe = &probe;
         owner->Shutdown();
         expect(owner->_shutdownComplete && !owner->_window && !owner->_chrome && !owner->_rendererReady,
                "actual-application-shutdown-complete", after);
+        expect(std::holds_alternative<std::monostate>(owner->_drag) && !owner->_overlaySelection,
+               "host-drag-and-outline-roots-retired-after-shutdown", after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
+                   &owner->_uiBenchmark->timing == benchmarkTimingIdentity && owner->_uiBenchmark->complete &&
+                   !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
+                   !owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
+                   owner->_uiBenchmark->imageImportBaseline.layers.empty() &&
+                   !owner->_uiBenchmark->previousImage.HasStorage() &&
+                   !owner->_uiBenchmark->previousPreview.HasStorage(),
+               "benchmark-metadata-preserved-and-document-image-roots-retired-after-shutdown", after);
         expect(draft.expired(), "complete-session-cpu-graph-retired-before-shutdown-ack", after);
         expect(probe.ownerCalls == 1 && probe.draftAliveAtDetach && probe.graphicsDetachedOnOwner &&
                    probe.reservationAndWakeAlive,
                "owner-detaches-graphics-after-join-with-cpu-and-reservation-alive", after);
         expect(probe.workerCalls.load() == 1 && probe.mta.load() && probe.offOwner.load() && probe.draftRetired.load(),
                "whole-session-retired-once-on-final-mta-worker", after);
+        expect(probe.workerCalls.load() == 1 && probe.mta.load() && probe.offOwner.load() &&
+                   probe.hostCpuRootsRetired.load(),
+               "host-cpu-roots-retired-on-acknowledged-final-mta-worker", after);
         expect(!owner->_session.Clipboard() || !owner->_session.Clipboard()->image.HasStorage(),
                "private-clipboard-pixels-retired-with-session", after);
         expect(gate->retired.load() == 1 && gate->retiredOffOwner.load(), "job-payload-retired-once-off-owner", after);
@@ -131,6 +185,14 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         expect(gate->retired.load() == 1 && owner->_shutdownComplete, "second-shutdown-is-idempotent", after);
         expect(probe.ownerCalls == 1 && probe.workerCalls.load() == 1, "second-shutdown-cannot-repeat-retirement-hooks",
                after);
+        expect(owner->_uiBenchmark && owner->_uiBenchmark.get() == benchmarkIdentity &&
+                   &owner->_uiBenchmark->timing == benchmarkTimingIdentity && owner->_uiBenchmark->complete &&
+                   !owner->_uiBenchmark->failed && owner->_uiBenchmark->runs == 7 &&
+                   !owner->_uiBenchmark->ownsSaveDirectory && owner->_uiBenchmark->fixture.layers.empty() &&
+                   owner->_uiBenchmark->imageImportBaseline.layers.empty() &&
+                   !owner->_uiBenchmark->previousImage.HasStorage() &&
+                   !owner->_uiBenchmark->previousPreview.HasStorage() && probe.workerCalls.load() == 1,
+               "second-shutdown-preserves-empty-benchmark-and-single-callback", after);
         owner->_shutdownTestProbe = nullptr;
         owner.reset();
         // DestroyWindow posts this fixture's WM_QUIT. Drain the full queue so pending window messages cannot

@@ -19,4 +19,5 @@ struct ApplicationShutdownTestProbe final
     void* checkContext = nullptr;
     std::atomic<unsigned int> workerCalls{0};
     std::atomic<bool> mta{false}, offOwner{false}, draftRetired{false};
+    std::atomic<bool> hostCpuRootsRetired{false};
 };

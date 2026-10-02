@@ -396,8 +396,11 @@ the release lane. Close clears the sink and acknowledges a preallocated final MT
 and recycled pixels before releasing reservations, pool/apartment ownership and events. Cancellation cannot skip
 this final callback. After producer join and wrapper destruction, Application's borrowed owner hook detaches
 coverage engines and joined graphics/retry resources; its final worker hook clears the large document, history,
-display, draft and private-clipboard owners before release/recycle drain. These hooks allocate no application
-storage. Empty selected/collapsed hash bucket arrays survive until host destruction. Broader failed-initialization,
+display, draft and private-clipboard owners before release/recycle drain. It also clears the application sampling
+raster, cached selection and benchmark document/image roots. Benchmark timing/results and known-path cleanup remain
+owned by the same benchmark object until its callers finish. Nonthrowing document construction/assignment guards
+the reset; these hooks allocate no application storage. Empty selected/collapsed hash bucket arrays survive until
+host destruction. Broader failed-initialization,
 live-draft/lease coverage and hidden owner cleanup costs require separate proof and measurement.
 
 Measured fresh-page overhead justifies a process recycle pool for buffers of at least 16 MiB. It has at most 32

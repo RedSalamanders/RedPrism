@@ -10,9 +10,17 @@
   staging publication pass the clean x64 matrix and all ARM64 cross-builds. Strict CL/R8, compact RCX and R10/AL
   ISA proofs preserve the runtime allowlist. Exact 582 inputs and 327 evidence files are byte/SHA verified
   ([qualification](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)); original failures remain preserved.
-- [ ] Next P1 shutdown slice — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
-  are preserved before repair; the separate candidate builds and awaits private runtime/native qualification.
+- [x] P1 shutdown CPU roots — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
+  are preserved before repair; the complete private WARP candidate passes all 52 and existing application suites.
+  The fresh native matrix passes all six profiles against 582 unchanged inputs: 52 shutdown controls and full
+  suites in each x64 configuration, plus all ARM64 cross-builds. The benchmark state/timing/metadata remain valid
+  ([qualification](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)).
   Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
+- [ ] Following shutdown slice — Acquired-prefix initialization: primary-owned private draft covers eight
+  successful-stage checkpoints, sixteen retry event/registration seams, successful and never-started processing.
+  Its complete private Debug build passes; review confirms the 26-case prefix/count/lifetime expectations.
+  Application runtime proof, native activation and six-profile qualification remain required. These controls
+  do not qualify native allocation/pool/GPU API failures or broader A3.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

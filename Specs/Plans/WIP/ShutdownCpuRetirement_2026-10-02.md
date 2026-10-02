@@ -77,6 +77,15 @@
     `clear()`. That residual cleanup requires measurement or a complete ownership transfer before closing A3.
   - [ ] A3 — Cover failed initialization, undrained/suspended GPU/event/clipboard leases, live brush/warp/heal and
     first/second shutdown calls; qualify six profiles and measure remaining hidden owner cleanup.
+  - [ ] A3b — In a private draft, add eight startup-only checkpoints after successfully acquired processing
+    stages, sixteen reached retry event/registration faults (each of eight slots), full-success and never-started
+    controls. Each standalone Application owns its own trace/pool/sink; prove exact HRESULT and visited prefix,
+    no later stage, first/second Shutdown, once-only MTA hooks when a pool exists, empty ownership/routes and
+    preserved caller apartment. Checkpoints prove prefix cleanup, not actual failures inside the eight stages.
+    Retry controls use the existing queue fault seam before the selected native event/registration call after
+    preceding slots succeed. Genuine scheduler/pool/GPU/allocation failures, graphics/lease/live-draft coverage
+    and timing remain open. Primary owns this lifecycle implementation; preserve and review private proof before
+    native activation. Native root qualification remains frozen while this separate draft proceeds.
 - [ ] Run skills/format checks, full x64 Debug/Release/ASan suites and all ARM64 clean cross-builds; archive exact
   inputs/images/symbols/results, reconcile owning contracts and commit/push.
 - [ ] Measure shutdown owner cleanup and remaining CPU graph costs; keep the full P1 G1 gate separate.
@@ -93,17 +102,25 @@ Resetting the whole benchmark state during Shutdown would invalidate these calle
 capacities remain a separate measured cleanup cost. This inventory establishes ownership from code; it does
 not establish a leak or a timing result.
 
-- [ ] A3a — Retire application sampling/overlay CPU roots and benchmark image roots on the acknowledged final
+- [x] A3a — Retire application sampling/overlay CPU roots and benchmark image roots on the acknowledged final
   worker. The private draft preserves the benchmark object, timing address, completion flags and known-path
   cleanup. The cheaper agent's draft and primary review add 14 controls to the existing 38 standalone application checks; primary review
   removes the fixture's extra sampling-raster reference before Shutdown so the test can exercise its last owner.
   The original session retirement assertion remains separate from the new host-root/MTA observation.
-  Preserve a failing original run, then qualify the candidate and fresh native matrix before activation.
+  Preserve a failing original run, activate only the reviewed private candidate, then qualify fresh native
+  profiles before completing this slice or committing it.
   The isolated original Debug application reproduces eight failures among 52 controls; all original 38 checks
   pass. Exact 559 inputs and 23 evidence entries are byte/SHA verified in
   `p1-shutdown-roots-original-r1-failure` before candidate repair. The candidate builds with nonthrowing document
-  construction/assignment checks; its runtime is queued after native GUI/clipboard qualification. No activation
-  or runtime completion is claimed.
+  construction/assignment checks. Its complete private Debug WARP application passes all 52 shutdown controls
+  and unchanged application suites at `2026-10-02T12:44:05.0987339Z`. Exact 559 inputs and 39 evidence entries
+  are byte/SHA verified in `p1-shutdown-roots-candidate-r1-qualified` before native activation. The reviewed
+  three-file candidate passes the fresh six-profile native matrix at `2026-10-02T13:08:31.6078117Z` against
+  582 unchanged inputs. Full x64 Debug/Release/ASan suites pass all 52 application shutdown controls;
+  all three ARM64 cross-builds pass. Only these application sources/header change, so standard incremental
+  builds qualify this slice; no dependency, project, build property or ABI pin changes. Exact sources/products/
+  receipts are archived before another native edit
+  ([record](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)). Initialization/lease/live-draft/timing A3 stays open.
 
 1. Add independent suspended-record and prequeued-release controls, each with a standalone scheduler/sink and
    real 16 MiB byte ownership. Hold a single worker by an event so queue ordering is deterministic; cancellation

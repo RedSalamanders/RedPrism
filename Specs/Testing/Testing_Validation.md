@@ -674,12 +674,16 @@ exactly once, off owner and on MTA while borrowed context, reservations and wake
 and uninitialized Close cannot run hooks.
 
 Before ordinary Application processing initialization, `RunStandaloneShutdownSelfTest` constructs two actual
-hidden WARP/chrome owners with their own sink and pool. Its 38 controls cover lifecycle work held before/after
+hidden WARP/chrome owners with their own sink and pool. Its 52 controls cover lifecycle work held before/after
 preparation, a real 16 MiB document/history, private clipboard and a live graphics-backed gradient draft. Producer
 join precedes owner graphics detachment and final MTA CPU-root retirement; callbacks remain suppressed and tickets,
 barriers, events, reservations and sink retire before acknowledgement. The caller's STA survives and second Shutdown
 cannot repeat hooks. Each destroyed fixture's full message queue must consume its quit before constructing the next
-owner. Full x64 application logs must report `application-shutdown summary: 38 checks, 0 failures`.
+owner. Fourteen added controls retain real 16 MiB sampling pixels, explicit four-point overlay geometry and
+independent benchmark image roots before Shutdown, then require their retirement on the acknowledged final MTA
+worker. Benchmark object identity, timing address, completion/result metadata and known-path cleanup survive;
+second Shutdown cannot repeat the callback. The original 38 controls remain unchanged and separate.
+Full x64 application logs must report `application-shutdown summary: 52 checks, 0 failures`.
 Preview and delayed-clipboard shutdown controls retain their exact original source/history authority checks at
 joined owner detachment, before CPU retirement, then assert empty session and independently retained literal pixels
 after acknowledgement. These suites require 112 preview and 45 delayed-clipboard controls; existing legacy goldens

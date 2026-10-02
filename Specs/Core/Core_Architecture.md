@@ -276,8 +276,10 @@ after wrapper destruction while the sink remains installed. Close clears the bin
 which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or
 reenter Close; their context outlives acknowledgement. Uninitialized or repeated Close runs neither hook.
 Application detaches session coverage engines, brush/composition resources and joined GPU/retry receivers on the
-owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Reservations,
-events and the pool apartment remain alive through acknowledgement. Empty selected/collapsed hash bucket capacity
+owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Application's
+sampling raster, cached selection geometry and benchmark document/image roots also retire on that worker.
+The benchmark object, timing address, result metadata and known-path cleanup remain alive for callers after Run.
+Reservations, events and the pool apartment remain alive through acknowledgement. Empty selected/collapsed hash bucket capacity
 remains until host destruction; broader initialization/lease/draft coverage and shutdown timing remain separate
 qualification. The process recycle pool holds only unowned pixel
 allocations, so detaching it cannot invalidate live images. Low/high physical-memory events use one-shot waits on
