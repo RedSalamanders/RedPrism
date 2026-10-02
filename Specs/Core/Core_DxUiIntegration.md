@@ -1,8 +1,8 @@
 # DxUi integration
 
 Status: current normative consumer contract
-Last reviewed: 2026-09-21
-Owner: `restore-dxui.ps1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
+Last reviewed: 2026-10-01
+Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
 
@@ -14,13 +14,31 @@ Library behavior remains in DxUi's own contracts. Splitter, ColorPicker, and Num
 ## Pin and restore
 
 `Dependencies/DxUi.lock.json` identifies `https://github.com/RedSalamanders/DxUi`, commit
-`c403052bad26c97ba23995e136672c32c85ccbfc`, API revision 2, and lock target `["DxUi"]`. That commit is the merge of
-[DxUi pull request 19](https://github.com/RedSalamanders/DxUi/pull/19) on `main` (tree row drag reports one drop; splitter
-drag survives sibling layout). `build.ps1` runs
+`271bd54be24eadf3f03ba5221d1be7be069860f2`, API revision 3, and lock target `["DxUi"]`. That commit is the merge of
+[DxUi pull request 45](https://github.com/RedSalamanders/DxUi/pull/45) on `main` (API revision 3, the registered window
+messages, the 150-character tracked-path budget), 153 commits after the previous pin. The previous pin is the rollback:
+`c403052bad26c97ba23995e136672c32c85ccbfc`, API revision 2, the merge of
+[pull request 19](https://github.com/RedSalamanders/DxUi/pull/19) (tree row drag reports one drop; splitter drag survives
+sibling layout). Rolling back restores the lock, the constant `$requiredApiRevision` in `restore-dxui.ps1` (the one place that
+names the revision this code is written against; the pinned `capabilities.json` must carry it) and the two Tree model
+names in `ChromeHost.h`. `build.ps1` runs
 `restore-dxui.ps1` for the selected platform after vcpkg. Restore clones that exact commit under
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
 sibling `Z:\src\DxUi` working tree. A mismatched or dirty pin fails restore.
+
+The clone (`Build/DxUiRestore.psm1`) is a sparse checkout of the pinned commit that leaves out `Measurements/`,
+`docs/gallery` and `Specs/`. A build, `Tools/validate_consumer.ps1`, `Tools/ConsumerBuild.psm1` and DxUi's `vcpkg-install.ps1`
+read none of them, they hold most of the library's files (about 180 of 1,650 are checked out at the previous pin), and pins
+before API revision 3 kept tracked paths of up to 164 characters in them (176 on DxUi `main` between its #22 and the
+150-character budget). Git gets `core.longpaths=true` for the clone and the checkout, and the
+clone keeps it in its own configuration, which the clean-tree check of the pin validation needs as much as the checkout does.
+A clone from the public repository is blobless, so only the files the checkout names are downloaded (about 2 MB instead of
+35 MB at the previous pin). A root deep enough that a kept file's Win32 path passes 259 characters therefore restores, which a
+plain restore did not: from a 121-character root it left 39 files of the previous pin uncreated and the checkout dirty, and the
+pin validation failed. `Tests/BuildProcessTests/DxUiRestoreTests.ps1` restores a fixture repository into a destination of about
+210 characters (from a checkout at `D:\RedPrism-dxui`), which puts a 107-character kept path past 259; `-RealPin` restores the
+locked commit the same way, from the sibling checkout or the public repository.
 
 `build.ps1` passes `-CheckUpdates`. `Show-DxUiUpdateNotice` from the pinned `Tools/ConsumerUpdate.psm1` then compares
 the lock with DxUi `main`. The notice is build output only: yellow when a newer `main` commit has a successful
@@ -35,6 +53,24 @@ Release `/MD`, matching DxUi. There is no `DxUi.dll` to stage.
 Builds produce `DxUi.provenance.json` beside `RedPrism.exe`: exact source/API, public-header tree, archive hash, build
 identity, and the `RedPrism.exe` module hash. `test.ps1` rejects wrong pins, profiles, missing/duplicate modules, and
 replaced binaries. The sidecar is product evidence, not a separate release system.
+
+## Window messages and the API revision
+
+DxUi registers its private window messages by name (`RedSalamanders.DxUi.<Component>.<Purpose>.v1`), so their values lie in
+0xC000–0xFFFF, and it reserves no `WM_APP` or `WM_USER` value (DxUi `Changes/2026-10-01-api-revision-3.md`). A consumer forwards
+every message, registered ones included, to `HandleMessage` of each window it attaches a `DxUi::WindowHost` to, copies no DxUi
+`WM_APP` value, and posts a menu-bar hover with `DxUi::ContextMenu::PostMenuBarHover`. API revision 3 also renamed the model and
+delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel` and `ITreeDelegate`; `ChromeHost` implements the last two for the
+layers list and the Command List.
+
+RedPrism attaches no `WindowHost`. Its main window is a plain HWND that hosts one `EmbeddedHost` (`ChromeHost`), which the
+application prepares and composites on its own frame path. `Application::WindowProcedure` hands every message, registered ones
+included, to `Application::HandleMessage`, which ends in `DefWindowProcW`, so nothing of the product's sits between a DxUi
+message and the system's default handling. The product's own messages (`Application.h` `WM_APP + 8`, `+ 9` and `+ 10`,
+`Renderer.h` `+ 1`, the test gates and `ApplicationAdjustJobs.cpp`'s `+ 0x7D0`) stay its own, and none equals a value DxUi
+used before (`+ 0x06A` to `+ 0x06D`, `+ 0x214` to `+ 0x219`, `+ 0x539`). Its native menus run through
+`ShowNativeHMenuContextMenu`, whose modal loop is DxUi's, and the product posts no menu-bar hover. A window that attaches a
+`WindowHost` later forwards every message and is recorded here.
 
 ## Host boundary
 
@@ -64,7 +100,7 @@ Facts about the pinned library that the host designs around (verified against th
 - `Toggle` paints a switch regardless of `ButtonVariant::IconOnly`; a latched tool button is an icon-only `Button`
   with `SetPressedVisual(true)`.
 - Icon-only buttons draw their text with `FontRole::Icon` (Segoe Fluent Icons); Latin letters do not render there.
-- `Tree` reports expander toggles through `IDxTreeDelegate::OnTreeToggleExpanded` and has no drag API.
+- `Tree` reports expander toggles through `ITreeDelegate::OnTreeToggleExpanded` and has no drag API.
 - `Splitter` hit-tests only its separator plus 2 DIP of slop; the host sizes it over both panes and places the pane
   controls itself from the committed position. `NumericStepper` and `ColorPicker` are Panels with their own children;
   `ColorPicker` ships no strings, so every caption comes from the RedPrism STRINGTABLE.

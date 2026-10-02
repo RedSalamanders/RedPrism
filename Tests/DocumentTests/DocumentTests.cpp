@@ -1,3 +1,4 @@
+#include "../Support/FailureReports.h"
 #include "Adjust.h"
 #include "AdjustmentClosureTests.h"
 #include "AdjustmentNestedTests.h"
@@ -6146,11 +6147,14 @@ void TestCrop()
         }
     }
     const CropDrag resize{Vec2{70, 50}, frame, CropDrag::Mode::Resize, cornerIndex};
-    const Vec2 near{146, 83};
-    Expect(snap.Apply(resize.Updated(near, std::nullopt), resize, near, std::nullopt) == CropRect{10, 10, 140, 70},
+    // Not "near" and "far": <windows.h>, which the failure-report routing includes, defines both as empty macros.
+    const Vec2 nearCorner{146, 83};
+    Expect(snap.Apply(resize.Updated(nearCorner, std::nullopt), resize, nearCorner, std::nullopt) ==
+               CropRect{10, 10, 140, 70},
            "crop.snap-resize-corner");
-    const Vec2 far{120, 60};
-    Expect(snap.Apply(resize.Updated(far, std::nullopt), resize, far, std::nullopt) == CropRect{10, 10, 110, 50},
+    const Vec2 farCorner{120, 60};
+    Expect(snap.Apply(resize.Updated(farCorner, std::nullopt), resize, farCorner, std::nullopt) ==
+               CropRect{10, 10, 110, 50},
            "crop.snap-too-far");
     const CropRect ratioRect{10, 10, 138, 69};
     Expect(snap.Apply(ratioRect, resize, Vec2{148, 79}, 2.0) == ratioRect, "crop.snap-keeps-ratio");
@@ -6430,22 +6434,6 @@ void TestPendingEdits()
     }
 }
 
-std::atomic<int> gCrtReportFailures = 0; // CRT reports can arrive on concurrent raster readers.
-
-#if defined(_DEBUG)
-// Counts _CRT_ERROR / _CRT_ASSERT reports instead of trusting the CRT's own default handling to abort: a debug-heap
-// corruption report does not always abort by itself, so a run could otherwise print the report and still exit 0
-// (RF-702, Specs/Testing/Testing_Validation.md). _CRTDBG_MODE_FILE / _CRTDBG_FILE_STDERR (installed alongside this
-// hook, in wmain) still write the report text to stderr; this hook only has to observe it.
-int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*returnValue*/) noexcept
-{
-    if (reportType == _CRT_ERROR || reportType == _CRT_ASSERT)
-    {
-        ++gCrtReportFailures;
-    }
-    return 0;
-}
-#endif
 // ── Review fixes (Specs/Plans/WIP/ReviewFixes_2026-09-23.md, WP2) ──────────
 
 void TestMaskFillAcrossCommits()
@@ -7180,9 +7168,9 @@ void TestPixelMoveTiles()
     path.MovePixels(299.8, 10.4);
     Expect(raster.TakeChanged().empty(), "movetiles.same-offset-rebuilds-nothing");
     path.MovePixels(900, 200);
-    const std::vector<std::size_t> far = raster.TakeChanged();
-    bool onlyLandings = !far.empty() && far.size() <= 4;
-    for (const std::size_t index : far)
+    const std::vector<std::size_t> farTiles = raster.TakeChanged();
+    bool onlyLandings = !farTiles.empty() && farTiles.size() <= 4;
+    for (const std::size_t index : farTiles)
     {
         // The hole's tile (the first column) is never rebuilt again, nor anything between the landings.
         onlyLandings = onlyLandings && raster.Tiles()[index].rect.x >= 256;
@@ -7325,16 +7313,13 @@ void TestGradientAppliesFirst()
 
 int wmain(int argc, wchar_t** argv)
 {
-#if defined(_DEBUG)
-    // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
-    // counts it so this run fails even when the CRT's own default handling would just continue.
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
-    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &CountCrtReportFailures);
-#endif
-    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
+    // Before anything can fail a check: a CRT report, which can arrive on a concurrent raster reader, ends the run
+    // with exit code 3 and no dialog (RF-702, Tests/Support/FailureReports.h).
+    RedPrismTestFailureReports::RouteAwayFromDialogs();
+    if (argc == 2 && std::wstring_view(argv[1]) == L"--failure-report-self-test")
+    {
+        return RedPrismTestFailureReports::RunSelfTest();
+    }
     if (argc > 1)
     {
         if (argc != 2 || std::wstring_view(argv[1]) != L"--stress")
@@ -7343,7 +7328,7 @@ int wmain(int argc, wchar_t** argv)
             return 2;
         }
         const int failures = RunRasterConcurrencyTests(256);
-        return failures != 0 || gCrtReportFailures.load() != 0 ? 1 : 0;
+        return failures != 0 ? 1 : 0;
     }
     TestHierarchy();
     TestLiveMask();
@@ -7496,9 +7481,9 @@ int wmain(int argc, wchar_t** argv)
     TestDistortMasks();
     TestDocumentPixelBudget();
     TestPixelMoveTiles();
-    if (gFailures != 0 || gCrtReportFailures != 0)
+    if (gFailures != 0)
     {
-        std::printf("%d document tests failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures.load());
+        std::printf("%d document tests failed.\n", gFailures);
         return 1;
     }
     std::printf("All document tests passed.\n");

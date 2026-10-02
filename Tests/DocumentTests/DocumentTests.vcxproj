@@ -83,6 +83,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />

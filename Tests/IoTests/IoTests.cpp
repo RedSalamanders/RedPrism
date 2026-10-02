@@ -8,6 +8,7 @@
 #include "CodecMemoryStreamTests.h"
 #include "FileIoBench.h"
 
+#include "../Support/FailureReports.h"
 #include "ClipboardDibWorkTests.h"
 #include "Document.h"
 #include "ImageCodecWorkTests.h"
@@ -2690,35 +2691,15 @@ void TestSettingsStore()
     std::filesystem::remove_all(root, error);
 }
 
-int gCrtReportFailures = 0; // incremented only in Debug / ASan Debug; see CountCrtReportFailures below.
-
-#if defined(_DEBUG)
-// Counts _CRT_ERROR / _CRT_ASSERT reports instead of trusting the CRT's own default handling to abort: a debug-heap
-// corruption report does not always abort by itself, so a run could otherwise print the report and still exit 0
-// (RF-702, Specs/Testing/Testing_Validation.md). _CRTDBG_MODE_FILE / _CRTDBG_FILE_STDERR (installed alongside this
-// hook, in wmain) still write the report text to stderr; this hook only has to observe it.
-int __cdecl CountCrtReportFailures(int reportType, char* /*message*/, int* /*returnValue*/) noexcept
-{
-    if (reportType == _CRT_ERROR || reportType == _CRT_ASSERT)
-    {
-        ++gCrtReportFailures;
-    }
-    return 0;
-}
-#endif
-
 int wmain(int argc, wchar_t** argv)
 {
-#if defined(_DEBUG)
-    // A Debug assertion or error report goes to stderr, not a dialog no harness can click, and the hook above
-    // counts it so this run fails even when the CRT's own default handling would just continue.
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
-    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, &CountCrtReportFailures);
-#endif
-    (void)_set_abort_behavior(0, _WRITE_ABORT_MSG);
+    // Before anything can fail a check: a CRT report ends the run with exit code 3 and no dialog (RF-702,
+    // Tests/Support/FailureReports.h).
+    RedPrismTestFailureReports::RouteAwayFromDialogs();
+    if (argc == 2 && std::wstring_view{argv[1]} == L"--failure-report-self-test")
+    {
+        return RedPrismTestFailureReports::RunSelfTest();
+    }
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(com) && com != RPC_E_CHANGED_MODE)
     {
@@ -2769,9 +2750,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunImageImportWorkTests();
     gFailures += RunProjectLoadWorkTests();
     TestSettingsStore();
-    if (gFailures != 0 || gCrtReportFailures != 0)
+    if (gFailures != 0)
     {
-        std::printf("%d test(s) failed (%d CRT report(s)).\n", gFailures, gCrtReportFailures);
+        std::printf("%d test(s) failed.\n", gFailures);
         return 1;
     }
     std::printf("All I/O tests passed.\n");

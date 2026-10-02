@@ -1815,3 +1815,357 @@ foreach ($fault in 'WrongMovzxDestination','WrongMovzxSource','SignedMovsx','Wro
     ++$movzxTerminalCount
 }
 Write-Host "MOVZX guarded terminal DWORD synthetic controls passed: $movzxTerminalCount"
+
+# The observed Release std::variant destruction dispatch (ApplicationFileJobs.obj in RedPrism.exe, 2026-10-01): the signed byte
+# index makes the byte table biased by one entry. At the observed addresses:
+#   140096290 MOVSX RAX,byte [RCX+0x80]          14009629f MOVZX EAX,byte [R8+RAX+0x962ed]   1400962b0 ADD RDX,R8
+#   140096298 LEA   R8,imagebase                  1400962a8 MOV EDX,[R8+4*RAX+0x962dc]        1400962b3 JMP RDX
+# A four-entry DWORD table at 0x962dc and the 22-byte index table at 0x962ec (index -1 first) end the 114-byte procedure and
+# its contribution. The DWORD table's first entry, 0x962c4, is the byte sequence c4 62 09 00 that the linear decoder reads as
+# VPSHUFB. This control rebuilds those bytes at those addresses (the section is placed at the observed RVA 0x96000), with the
+# neighbouring functions as separate contributions of the same object, and the objdump rows around the tables. Every fault
+# changes one thing about this otherwise accepted image.
+function New-SignedBiasedR8Case {
+    param([Parameter(Mandatory)] [string]$Name, [string]$Fault = '', [UInt32]$SectionRva = 0x00096000)
+    [UInt32]$s = $SectionRva
+    [UInt32]$functionRva = $s + 0x290
+    [UInt32]$nextRva = $s + 0x310
+    $directory = Join-Path $fixtureRoot $Name
+    [void](New-Item -ItemType Directory -Path $directory -Force)
+    $binary = Join-Path $directory 'SyntheticBiasedR8Control.exe'
+    $metadata = Join-Path $directory 'contributions.txt'
+    $symbols = Join-Path $directory 'symbols.txt'
+    $disassembly = Join-Path $directory 'disassembly.txt'
+
+    # One PE32+ image with a single executable section (the observed RVA 0x96000 unless relocated) and an embedded RSDS identity.
+    $pe = [byte[]]::new(0x2400)
+    $pe[0] = 0x4d; $pe[1] = 0x5a
+    Set-U32 $pe 0x3c 0x80
+    Set-U32 $pe 0x80 0x00004550
+    Set-U16 $pe 0x84 0x8664
+    Set-U16 $pe 0x86 1
+    Set-U16 $pe 0x94 0xf0
+    Set-U16 $pe 0x98 0x20b
+    Set-U64 $pe (0x98+24) $imageBase
+    Set-U32 $pe (0x98+56) ($s + 0x2000)
+    Set-U32 $pe (0x98+60) 0x400
+    Set-U32 $pe (0x98+112+6*8) ($s + 0x180)
+    Set-U32 $pe (0x98+116+6*8) 28
+    $sectionHeader = 0x80 + 24 + 0xf0
+    Put-Bytes $pe $sectionHeader ([Text.Encoding]::ASCII.GetBytes('.text' + [char]0 + [char]0 + [char]0))
+    Set-U32 $pe ($sectionHeader+8) 0x2000
+    Set-U32 $pe ($sectionHeader+12) $s
+    Set-U32 $pe ($sectionHeader+16) 0x2000
+    Set-U32 $pe ($sectionHeader+20) 0x400
+    Set-U32 $pe ($sectionHeader+36) 0x60000020
+    Set-U32 $pe (0x400+0x180+12) 2
+    Set-U32 $pe (0x400+0x180+16) 24
+    Set-U32 $pe (0x400+0x180+20) ($s + 0x1a0)
+    Set-U32 $pe (0x400+0x180+24) 0x5a0
+    Put-Bytes $pe 0x5a0 ([Text.Encoding]::ASCII.GetBytes('RSDS'))
+    Put-Bytes $pe 0x5a4 $guid.ToByteArray()
+    Set-U32 $pe 0x5b4 $age
+
+    # The six dispatch instructions, each one fault away from the observed encoding.
+    $dispatchIds = @('movsx', 'lea', 'movzx', 'mov', 'add', 'jmp')
+    $gapAfter = ''
+    if ($Fault -match '^GapAfter(?<id>Movsx|Lea|Movzx|Mov|Add)$') { $gapAfter = $Matches['id'].ToLowerInvariant() }
+    [byte[]]$movsx = @(0x48,0x0f,0xbe,0x81,0x80,0x00,0x00,0x00)
+    [byte[]]$lea = @(0x4c,0x8d,0x05,0,0,0,0)
+    [byte[]]$movzx = @(0x41,0x0f,0xb6,0x84,0x00,0,0,0,0)
+    [byte[]]$mov = @(0x41,0x8b,0x94,0x80,0,0,0,0)
+    [byte[]]$add = @(0x49,0x03,0xd0)
+    [byte[]]$jmp = @(0xff,0xe2)
+    $movsxText = 'movsx rax, byte ptr [rcx + 0x80]'
+    switch ($Fault) {
+        'MovsxUnsigned' { $movsx[2] = 0xb6; $movsxText = 'movzx rax, byte ptr [rcx + 0x80]' }
+        'UnsignedUnbiasedEdx' { $movsx[2] = 0xb6; $movsxText = 'movzx rax, byte ptr [rcx + 0x80]' }
+        'MovsxWord' { $movsx[2] = 0xbf; $movsxText = 'movsx rax, word ptr [rcx + 0x80]' }
+        'MovsxWrongDestination' { $movsx[0] = 0x4c; $movsxText = 'movsx r8, byte ptr [rcx + 0x80]' }
+        'MovsxWrongBase' { $movsx[3] = 0x85; $movsxText = 'movsx rax, byte ptr [rbp + 0x80]' }
+        'MovsxWrongRex' { $movsx[0] = 0x49; $movsxText = 'movsx rax, byte ptr [r9 + 0x80]' }
+        'MovsxShortDisplacement' { $movsx = [byte[]]@(0x48,0x0f,0xbe,0x41,0x30); $movsxText = 'movsx rax, byte ptr [rcx + 0x30]' }
+        'LeaWrongDestination' { $lea[0] = 0x48 }
+        'LeaWrongBase' { $lea[2] = 0x0d }
+        'ByteLoadWrongDestination' { $movzx[3] = 0x8c }
+        'ByteLoadWrongIndex' { $movzx[3] = 0x8c; $movzx[4] = 0x08 }
+        'ByteLoadSigned' { $movzx[2] = 0xbe }
+        'ByteLoadWrongPrefix' { $movzx[0] = 0x49 }
+        'DwordLoadWrongDestination' { $mov[2] = 0x8c }
+        'DwordLoadWrongBase' { $mov[3] = 0x88 }
+        'DwordLoadWrongScale' { $mov[3] = 0x40 }
+        'DwordLoadWrongOpcode' { $mov[1] = 0x89 }
+        'AddWrongRegister' { $add[2] = 0xc8 }
+        'AddWrongOpcode' { $add[1] = 0x01 }
+        'JumpWrongRegister' { $jmp[1] = 0xe1 }
+        'ConsistentEcxTarget' { $mov[2] = 0x8c; $add[2] = 0xc8; $jmp[1] = 0xe1 }
+    }
+    $items = [Collections.Generic.List[hashtable]]::new()
+    function Add-Item([string]$Id, [byte[]]$Bytes, [string]$Text) {
+        $items.Add(@{ Id = $Id; Bytes = $Bytes; Text = $Text; Rva = [UInt32]0 })
+    }
+    if ($Fault -eq 'LeadingInstruction') { Add-Item 'lead' ([byte[]]@(0x90)) 'nop' }
+    # A fault that shortens the dispatch gets NOPs in front of it, so the body and both tables keep the observed addresses and the
+    # first table entry keeps its VEX-looking bytes: the control then fails for its fault alone, never because no row is left.
+    $dispatchLength = $movsx.Length + $lea.Length + $mov.Length + $add.Length + $jmp.Length
+    if ($Fault -ne 'ByteLoadMissing') { $dispatchLength += $movzx.Length }
+    if ($gapAfter -ne '') { $dispatchLength += 1 }
+    for ($i = $dispatchLength; $i -lt 37; ++$i) { Add-Item 'compensation' ([byte[]]@(0x90)) 'nop' }
+    Add-Item 'movsx' $movsx $movsxText
+    if ($gapAfter -eq 'movsx') { Add-Item 'gap' ([byte[]]@(0x90)) 'nop' }
+    Add-Item 'lea' $lea 'lea r8, [rip + 0xfff69d61]     # 0x140000000'
+    if ($gapAfter -eq 'lea') { Add-Item 'gap' ([byte[]]@(0x90)) 'nop' }
+    if ($Fault -ne 'ByteLoadMissing') {
+        Add-Item 'movzx' $movzx 'movzx eax, byte ptr [r8 + rax + byte-table + 1]'
+        if ($gapAfter -eq 'movzx') { Add-Item 'gap' ([byte[]]@(0x90)) 'nop' }
+    }
+    Add-Item 'mov' $mov 'mov edx, dword ptr [r8 + 4*rax + dword-table]'
+    if ($gapAfter -eq 'mov') { Add-Item 'gap' ([byte[]]@(0x90)) 'nop' }
+    Add-Item 'add' $add 'add rdx, r8'
+    if ($gapAfter -eq 'add') { Add-Item 'gap' ([byte[]]@(0x90)) 'nop' }
+    Add-Item 'jmp' $jmp 'jmp rdx'
+    # The procedure body the table entries name, as observed.
+    [byte[]]$b2 = @(0x48,0x83,0xc1,0x10)
+    $b2Text = 'add rcx, 0x10'
+    if ($Fault -eq 'RealVexInBody') { $b2 = [byte[]]@(0xc5,0xf8,0x10,0x00); $b2Text = 'vmovups xmm0, xmmword ptr [rax]' }
+    Add-Item 'b0' ([byte[]]@(0x80,0x79,0x30,0x00)) 'cmp byte ptr [rcx + 0x30], 0x0'
+    Add-Item 'b1' ([byte[]]@(0x74,0x09)) 'je b4'
+    Add-Item 'b2' $b2 $b2Text
+    Add-Item 'b3' ([byte[]]@(0xe9,0,0,0,0)) 'jmp 0x140007c50'
+    Add-Item 'b4' ([byte[]]@(0xc3)) 'ret'
+    Add-Item 'b5' ([byte[]]@(0x80,0x79,0x28,0x00)) 'cmp byte ptr [rcx + 0x28], 0x0'
+    Add-Item 'b6' ([byte[]]@(0x74,0xf9)) 'je b4'
+    Add-Item 'b7' ([byte[]]@(0x48,0x83,0xc1,0x08)) 'add rcx, 0x8'
+    Add-Item 'b8' ([byte[]]@(0xe9,0,0,0,0)) 'jmp 0x140007c50'
+    Add-Item 'b9' ([byte[]]@(0xe9,0,0,0,0)) 'jmp 0x140096310'
+    [UInt32]$cursor = $functionRva
+    foreach ($item in $items) { $item.Rva = $cursor; $cursor += [UInt32]$item.Bytes.Length }
+    # DWORD alignment before the table: the observed three-byte NOP, shorter after a longer body.
+    [int]$padLength = [int]((4 - ($cursor % 4)) % 4)
+    [byte[]]$pad = [byte[]]::new($padLength)
+    $padText = 'nop'
+    if ($padLength -eq 1) { $pad[0] = 0x90 }
+    elseif ($padLength -eq 2) { $pad[0] = 0x66; $pad[1] = 0x90 }
+    elseif ($padLength -eq 3) { $pad[0] = 0x0f; $pad[1] = 0x1f; $pad[2] = 0x00; $padText = 'nop dword ptr [rax]' }
+    if ($Fault -eq 'RealVexInPad') {
+        if ($padLength -ne 3) { throw 'RealVexInPad needs the observed three-byte alignment.' }
+        $pad[0] = 0xc5; $pad[1] = 0xf8; $pad[2] = 0x77; $padText = 'vzeroupper'
+    }
+    [UInt32]$padRva = $cursor
+    [UInt32]$dwordRva = $cursor + [UInt32]$padLength
+    [UInt32]$byteStartRva = $dwordRva + 16
+    [UInt32]$endRva = $byteStartRva + 22
+    $byId = @{}
+    foreach ($item in $items) { $byId[$item.Id] = $item }
+
+    # Fields that depend on the layout.
+    $leaDisplacement = [Int32](-[Int64]($byId['lea'].Rva + 7))
+    if ($Fault -eq 'LeaWrongImageBase') { ++$leaDisplacement }
+    Put-Bytes $lea 3 ([BitConverter]::GetBytes($leaDisplacement))
+    $byteBias = 1
+    if ($Fault -eq 'BiasNone' -or $Fault -eq 'UnsignedUnbiasedEdx') { $byteBias = 0 }
+    if ($Fault -eq 'BiasTwo') { $byteBias = 2 }
+    if ($Fault -eq 'BiasNegative') { $byteBias = -1 }
+    $dwordBias = 0
+    if ($Fault -eq 'DwordLoadBiasedByOneEntry') { $dwordBias = 4 }
+    Put-Bytes $movzx 5 ([BitConverter]::GetBytes([UInt32]([Int64]$byteStartRva + $byteBias)))
+    Put-Bytes $mov 4 ([BitConverter]::GetBytes([UInt32]([Int64]$dwordRva + $dwordBias)))
+    foreach ($id in 'b3', 'b8') {
+        $jumpBytes = $byId[$id].Bytes
+        Put-Bytes $jumpBytes 1 ([BitConverter]::GetBytes([Int32](0x7c50 - [Int64]($byId[$id].Rva + 5))))
+    }
+    $nextJump = $byId['b9'].Bytes
+    Put-Bytes $nextJump 1 ([BitConverter]::GetBytes([Int32]([Int64]$nextRva - [Int64]($byId['b9'].Rva + 5))))
+
+    # The tables: four entries, then the 22 index bytes (index -1 first, the observed values).
+    [UInt32[]]$targets = @($byId['b4'].Rva, $byId['b0'].Rva, $byId['b5'].Rva, $byId['b9'].Rva)
+    if ($Fault -eq 'TargetBeforeFunction') { $targets[3] = $s + 0x260 }
+    if ($Fault -eq 'TargetAfterFunction') { $targets[3] = $nextRva }
+    if ($Fault -eq 'TargetInsideInstruction') { $targets[3] = $byId['b0'].Rva + 1 }
+    if ($Fault -eq 'TargetInDwordTable') { $targets[3] = $dwordRva }
+    if ($Fault -eq 'TargetInByteTable') { $targets[3] = $byteStartRva + 7 }
+    [byte[]]$indexBytes = @(0,0,0,0,0,0,0,1,0,2,3,0,0,0,0,0,0,0,0,0,0,0)
+    if ($Fault -eq 'ByteValueTooLarge') { $indexBytes[7] = 4 }
+    if ($Fault -eq 'ByteValueTooLargeLast') { $indexBytes[21] = 4 }
+
+    # Bytes: INT3 padding and the neighbours first, then the procedure, then the tables.
+    for ($i = $s + 0x260; $i -lt $nextRva + 0x10; ++$i) { $pe[0x400 + $i - $s] = 0xcc }
+    # A contribution that runs past the procedure must be refused for that alone, so its extra bytes are valid index values.
+    if ($Fault -eq 'ContributionLonger') { for ($i = $endRva; $i -lt $nextRva; ++$i) { $pe[0x400 + $i - $s] = 0 } }
+    # The neighbouring functions are runs of NOPs ending in RET: only their instruction boundaries matter to the proof.
+    $neighbourItems = [Collections.Generic.List[hashtable]]::new()
+    foreach ($neighbour in @(@{ Rva = [UInt32]($s + 0x260); Length = 14; Vex = $false },
+                             @{ Rva = [UInt32]($s + 0x270); Length = 22; Vex = $false },
+                             @{ Rva = $nextRva; Length = 16; Vex = ($Fault -eq 'RealVexAfterFunction') })) {
+        [UInt32]$at = $neighbour.Rva
+        [int]$remaining = $neighbour.Length
+        if ($neighbour.Vex) {
+            $neighbourItems.Add(@{ Rva = $at; Bytes = [byte[]]@(0xc5,0xf8,0x10,0x00); Text = 'vmovups xmm0, xmmword ptr [rax]' })
+            $at += 4; $remaining -= 4
+        }
+        while ($remaining -gt 2) {
+            $neighbourItems.Add(@{ Rva = $at; Bytes = [byte[]]@(0x66,0x90); Text = 'nop' })
+            $at += 2; $remaining -= 2
+        }
+        $neighbourItems.Add(@{ Rva = $at; Bytes = [byte[]]@(0x90); Text = 'nop' })
+        $neighbourItems.Add(@{ Rva = $at + 1; Bytes = [byte[]]@(0xc3); Text = 'ret' })
+    }
+    foreach ($item in $neighbourItems) { Put-Bytes $pe (0x400 + $item.Rva - $s) $item.Bytes }
+    foreach ($item in $items) { Put-Bytes $pe (0x400 + $item.Rva - $s) $item.Bytes }
+    if ($padLength -ne 0) { Put-Bytes $pe (0x400 + $padRva - $s) $pad }
+    for ($i = 0; $i -lt 4; ++$i) { Set-U32 $pe (0x400 + $dwordRva - $s + 4*$i) $targets[$i] }
+    Put-Bytes $pe (0x400 + $byteStartRva - $s) $indexBytes
+    if ($Fault -eq 'RealVexAtProcedureEnd') { Put-Bytes $pe (0x400 + $endRva - $s) ([byte[]]@(0xc5,0xf8,0x10,0x00)) }
+
+    # The objdump listing: the neighbours, the procedure's instructions, then the tables as a linear decoder reads them.
+    $rows = [Collections.Generic.List[string]]::new()
+    $overlapRows = [Collections.Generic.List[string]]::new()
+    function Add-Row([UInt32]$Rva, [byte[]]$Bytes, [string]$Text) {
+        $rows.Add(('{0:x}: {1} {2}' -f ($imageBase + $Rva), (Hex-Bytes $Bytes), $Text))
+    }
+    function Add-Slice([UInt32]$Rva, [int]$Length, [string]$Text) {
+        [byte[]]$slice = $pe[(0x400 + $Rva - $s)..(0x400 + $Rva - $s + $Length - 1)]
+        Add-Row $Rva $slice $Text
+    }
+    foreach ($item in $neighbourItems) { Add-Row $item.Rva $item.Bytes $item.Text }
+    $listingKind = ''
+    $listingId = ''
+    if ($Fault -match '^(?<kind>ListingMismatch|Unknown|Overlap|Missing)(?<index>[0-5])$') {
+        $listingKind = $Matches['kind']
+        $listingId = $dispatchIds[[int]$Matches['index']]
+    }
+    foreach ($item in $items) {
+        [byte[]]$shown = $item.Bytes
+        $text = $item.Text
+        $listed = $true
+        if ($listingId -eq $item.Id) {
+            if ($listingKind -eq 'Missing') { $listed = $false }
+            elseif ($listingKind -eq 'Unknown') { $text = '<unknown>' }
+            elseif ($listingKind -eq 'ListingMismatch') { $shown = [byte[]]$item.Bytes.Clone(); $shown[$shown.Length-1] = $shown[$shown.Length-1] -bxor 1 }
+            elseif ($listingKind -eq 'Overlap') { $overlapRows.Add(('{0:x}: 90 nop' -f ($imageBase + $item.Rva + 1))) }
+        }
+        if ($Fault -eq 'TargetUnknown' -and $item.Id -eq 'b9') { $text = '<unknown>' }
+        if ($listed) { Add-Row $item.Rva $shown $text }
+    }
+    if ($padLength -ne 0) { Add-Row $padRva $pad $padText }
+    Add-Slice $dwordRva 9 'vpshufb xmm14, xmm14, xmmword ptr [rbp - 0x3afff69e]'
+    Add-Slice ($dwordRva + 9) 6 '<unknown>'
+    Add-Slice ($byteStartRva + 7) 2 'add dword ptr [rax], eax'
+    Add-Slice ($byteStartRva + 9) 2 'add al, byte ptr [rbx]'
+    Add-Slice ($byteStartRva + 19) 2 'add byte ptr [rax], al'
+    # The observed last row reads the INT3 after the procedure as its second byte; a VEX instruction there needs a row of its own.
+    Add-Slice ($byteStartRva + 21) $(if ($Fault -eq 'RealVexAtProcedureEnd') { 1 } else { 2 }) 'add ah, cl'
+
+    if ($Fault -eq 'RealVexAtProcedureEnd') {
+        $rows.Add(('{0:x}: c5 f8 10 00 vmovups xmm0, xmmword ptr [rax]' -f ($imageBase + $endRva)))
+    }
+    $ordered = @($rows | Sort-Object { [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber) })
+    Set-Content -LiteralPath $disassembly -Value ((@($ordered) + @($overlapRows)) -join "`n") -Encoding utf8
+
+    # The PDB: three neighbours and the procedure in one object, the contributions, and the two anonymous data records.
+    [UInt32]$contributionEnd = $endRva
+    if ($Fault -eq 'ContributionLonger') { $contributionEnd = $nextRva }
+    [UInt32]$procedureBegin = $functionRva
+    [UInt32]$procedureEnd = $endRva
+    if ($Fault -eq 'ProcedureEndsEarly') { $procedureEnd = $endRva - 1 }
+    if ($Fault -eq 'ProcedureEndsLate') { $procedureEnd = $endRva + 1 }
+    if ($Fault -eq 'ProcedureStartsAfterPrefix') { $procedureBegin = $byId['lea'].Rva }
+    $procedureOwner = 0
+    if ($Fault -eq 'ProcedureWrongOwner') { $procedureOwner = 1 }
+    $metadataText = "  Age: $age`n  GUID: {$guid}`n  Mod 0 | ``Synthetic.obj``:`n  Obj: ``Synthetic.obj``:`n  Mod 1 | ``Other.obj``:`n  Obj: ``Other.obj``:`n`nSection Contributions`n" +
+        "  SC[.text] | mod = 0, 0001:608, size = 14, data crc = 0, reloc crc = 0`n" +
+        "  SC[.text] | mod = 0, 0001:624, size = 22, data crc = 0, reloc crc = 0`n" +
+        "  SC[.text] | mod = 0, 0001:656, size = $($contributionEnd - $functionRva), data crc = 0, reloc crc = 0`n" +
+        "  SC[.text] | mod = 0, 0001:784, size = 16, data crc = 0, reloc crc = 0`n"
+    Set-Content -LiteralPath $metadata -Value $metadataText -Encoding utf8
+    $symbolText = "  Mod 0 | ``Synthetic.obj``:`n" +
+        "  0 | S_GPROC32 [size = 16] ``Previous`` `n  addr = 0001:608, code size = 14`n" +
+        "  0 | S_GPROC32 [size = 16] ``PreviousTwo`` `n  addr = 0001:624, code size = 22`n" +
+        "  0 | S_GPROC32 [size = 16] ``Next`` `n  addr = 0001:784, code size = 16`n"
+    if ($Fault -ne 'MissingProcedure') {
+        $symbolText += "  Mod $procedureOwner | ``Synthetic.obj``:`n  0 | S_GPROC32 [size = 16] ``std::_Variant_base::_Destroy`` `n  addr = 0001:$($procedureBegin - $s), code size = $($procedureEnd - $procedureBegin)`n"
+    }
+    function New-DataRecord([int]$ModuleIndex, [string]$RecordName, [string]$RecordType, [int]$RecordSize, [UInt32]$Rva) {
+        return "  Mod $ModuleIndex | ``Synthetic.obj``:`n  0 | S_LDATA32 [size = $RecordSize] ``$RecordName```n  type = $RecordType, addr = 0001:$($Rva - $s)`n"
+    }
+    [UInt32]$dwordSymbol = $dwordRva
+    [UInt32]$byteSymbol = $byteStartRva
+    if ($Fault -eq 'DwordSymbolOneByteLate') { ++$dwordSymbol }
+    if ($Fault -eq 'DwordSymbolOneByteEarly') { --$dwordSymbol }
+    if ($Fault -eq 'ByteSymbolOneByteLate') { ++$byteSymbol }
+    if ($Fault -eq 'ByteSymbolOneByteEarly') { --$byteSymbol }
+    $dwordOwner = 0; $dwordName = ''; $dwordType = '<no type>'; $dwordSize = 16
+    if ($Fault -eq 'DwordSymbolWrongOwner') { $dwordOwner = 1 }
+    if ($Fault -eq 'NamedDwordSymbol') { $dwordName = 'dispatchTable' }
+    if ($Fault -eq 'TypedDwordSymbol') { $dwordType = '0x1000' }
+    if ($Fault -eq 'DwordSymbolWrongSize') { $dwordSize = 15 }
+    $byteOwner = 0; $byteName = ''; $byteType = '<no type>'; $byteSize = 16
+    if ($Fault -eq 'ByteSymbolWrongOwner') { $byteOwner = 1 }
+    if ($Fault -eq 'NamedByteSymbol') { $byteName = 'indexTable' }
+    if ($Fault -eq 'TypedByteSymbol') { $byteType = '0x1000' }
+    if ($Fault -eq 'ByteSymbolWrongSize') { $byteSize = 15 }
+    if ($Fault -ne 'MissingDwordSymbol') { $symbolText += New-DataRecord $dwordOwner $dwordName $dwordType $dwordSize $dwordSymbol }
+    if ($Fault -ne 'MissingByteSymbol') { $symbolText += New-DataRecord $byteOwner $byteName $byteType $byteSize $byteSymbol }
+    if ($Fault -eq 'SymbolInsideDwordTable') { $symbolText += New-DataRecord 0 '' '<no type>' 16 ($dwordRva + 8) }
+    if ($Fault -eq 'SymbolInsideByteTable') { $symbolText += New-DataRecord 0 '' '<no type>' 16 ($byteStartRva + 5) }
+    Set-Content -LiteralPath $symbols -Value $symbolText -Encoding utf8
+    [IO.File]::WriteAllBytes($binary, $pe)
+    return @{ Name=$Name; Binary=$binary; Metadata=$metadata; Symbols=$symbols; Disassembly=$disassembly }
+}
+
+$biasedR8Count = 0
+$case = New-SignedBiasedR8Case 'SignedBiasedR8Valid'
+Invoke-Control $case $true 2 0
+++$biasedR8Count
+# The observed layout is not the only one the proof allows: the dispatch need not be the procedure's first instruction.
+$case = New-SignedBiasedR8Case 'SignedBiasedR8LeadingInstruction' 'LeadingInstruction'
+Invoke-Control $case $true 2 0
+++$biasedR8Count
+# Nothing depends on the observed addresses: the same image in a section at another RVA (its first table row now reads as VEX,
+# its second as a legacy prefix) is accepted too.
+$case = New-SignedBiasedR8Case 'SignedBiasedR8Relocated' '' 0x0010f000
+Invoke-Control $case $true 1 0
+++$biasedR8Count
+foreach ($fault in 'MovsxUnsigned','MovsxWord','MovsxWrongDestination','MovsxWrongBase','MovsxWrongRex','MovsxShortDisplacement',
+        'LeaWrongDestination','LeaWrongBase','LeaWrongImageBase',
+        'ByteLoadWrongDestination','ByteLoadWrongIndex','ByteLoadSigned','ByteLoadWrongPrefix','ByteLoadMissing',
+        'DwordLoadWrongDestination','DwordLoadWrongBase','DwordLoadWrongScale','DwordLoadWrongOpcode',
+        'AddWrongRegister','AddWrongOpcode','JumpWrongRegister','ConsistentEcxTarget','UnsignedUnbiasedEdx',
+        'GapAfterMovsx','GapAfterLea','GapAfterMovzx','GapAfterMov','GapAfterAdd') {
+    $case = New-SignedBiasedR8Case "SignedBiasedR8$fault" $fault
+    Invoke-Control $case $false
+    ++$biasedR8Count
+}
+foreach ($kind in 'ListingMismatch','Unknown','Overlap','Missing') {
+    foreach ($index in 0..5) {
+        $case = New-SignedBiasedR8Case "SignedBiasedR8$kind$index" "$kind$index"
+        Invoke-Control $case $false
+        ++$biasedR8Count
+    }
+}
+# A table whose PDB start is one byte off, in either direction and for either table, and a byte table whose bias does not match.
+foreach ($fault in 'MissingDwordSymbol','MissingByteSymbol',
+        'DwordSymbolOneByteLate','DwordSymbolOneByteEarly','ByteSymbolOneByteLate','ByteSymbolOneByteEarly',
+        'DwordSymbolWrongOwner','ByteSymbolWrongOwner','NamedDwordSymbol','NamedByteSymbol','TypedDwordSymbol','TypedByteSymbol',
+        'DwordSymbolWrongSize','ByteSymbolWrongSize','SymbolInsideDwordTable','SymbolInsideByteTable',
+        'BiasNone','BiasTwo','BiasNegative','DwordLoadBiasedByOneEntry') {
+    $case = New-SignedBiasedR8Case "SignedBiasedR8$fault" $fault
+    Invoke-Control $case $false
+    ++$biasedR8Count
+}
+# Procedure and contribution bounds, index values, and targets outside the function or not on a decoded instruction.
+foreach ($fault in 'MissingProcedure','ProcedureWrongOwner','ProcedureEndsEarly','ProcedureEndsLate','ProcedureStartsAfterPrefix','ContributionLonger',
+        'ByteValueTooLarge','ByteValueTooLargeLast',
+        'TargetBeforeFunction','TargetAfterFunction','TargetInsideInstruction','TargetInDwordTable','TargetInByteTable','TargetUnknown') {
+    $case = New-SignedBiasedR8Case "SignedBiasedR8$fault" $fault
+    Invoke-Control $case $false
+    ++$biasedR8Count
+}
+# A genuine VEX instruction outside any proven table stays a violation while the two table rows stay data: inside the
+# procedure, right before the DWORD table, on the first byte after the procedure and in the next function.
+foreach ($fault in 'RealVexInBody','RealVexInPad','RealVexAtProcedureEnd','RealVexAfterFunction') {
+    $case = New-SignedBiasedR8Case "SignedBiasedR8$fault" $fault
+    Invoke-Control $case $false 2 1
+    ++$biasedR8Count
+}
+Write-Host "Signed biased R8 byte-index synthetic controls passed: $biasedR8Count"

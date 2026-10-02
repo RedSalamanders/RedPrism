@@ -2,7 +2,7 @@
 
 Status: current normative repository contract
 Last reviewed: 2026-10-01
-Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `format.ps1`
+Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
 
@@ -12,7 +12,9 @@ lives in [`Core/Core_Architecture.md`](../Core/Core_Architecture.md). Test orche
 [`Testing/Testing_Validation.md`](../Testing/Testing_Validation.md).
 
 DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxUi.lock.json` into
-`.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. See [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
+`.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. The clone keeps Git long paths and leaves out the directories a
+build never reads (`Measurements/`, `docs/gallery`, `Specs/`), so a deep checkout root restores. See
+[`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
 
 Lucide is the tool-rail picture source. It is not a vcpkg port and not an icon font. `Dependencies/Lucide.lock.json`
 names `https://github.com/lucide-icons/lucide` and one commit. `ThirdParty/Lucide/icons/` holds only the tool SVGs
@@ -55,6 +57,7 @@ MUST refuse to run on a non-ARM64 host.
 | Binaries | `.build/<Platform>/<Configuration>/` |
 | Intermediates | `.build/Intermediate/<Platform>/<Configuration>/<Project>/` |
 | vcpkg install tree | `.build/vcpkg_installed/<x64\|arm64\|x64-asan\|arm64-asan>/` |
+| vcpkg overlay triplets | `.build/vcpkg-triplets/` |
 | vcpkg tool checkout | `.build/vcpkg-tool/` |
 | MSBuild logs | `.build/logs/` |
 
@@ -110,8 +113,33 @@ application and DxUi objects and links cleanly. The MSBuild vcpkg integration is
 are wired from that tree. `Directory.Build.targets` copies `yyjson.dll`, `zip.dll`, and the zlib runtime (`z.dll` /
 `zd.dll` or `zlib1.dll`) next to `RedPrism.exe`, `HostTests.exe`, `IoTests.exe`, and `CompositionTests.exe`.
 
-`build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform before MSBuild, then
-`restore-dxui.ps1 -CheckUpdates`. That check compares the lock with DxUi `main` and prints one advisory. It does
+vcpkg builds with the Visual Studio installation and the default MSVC toolset that MSBuild compiles RedPrism with, never with
+the newest toolset it finds. `vcpkg-install.ps1` takes the installation from the MSBuild that `build.ps1` discovered
+(`-MSBuildPath`; the installation holding its `MSBuild\Current\Bin`, so `MSBUILD_EXE_PATH` and `PATH` are honored, and a
+standalone run finds the MSBuild `build.ps1` would), and the toolset from that installation's
+`VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt` (MSBuild reaches the same version for `v145` through
+`Microsoft.VCToolsVersion.v145.default.props`; the two agree on the installation this was written against, and the choice
+follows DxUi's `Get-DxUiDefaultToolset`). Neither is hard-coded, and a missing or malformed version file
+fails before anything is cloned, naming the file and the repair. The two differ when a newer toolset is installed beside the
+default: VS 18 Insiders' 14.52, beside the default 14.51, has no x64-hosted ARM64 compiler, so every fresh ARM64 restore failed
+while configuring its first library (`LNK1104` on `MSVCRTD.lib`), and compiled libraries from a toolset newer than the one that
+links them are a link hazard.
+
+Every triplet vcpkg can build here (`x64-windows` and `arm64-windows`, as target or as host, and the two sanitizer triplets)
+gets an overlay in `.build/vcpkg-triplets/` (`Build/VcpkgToolset.psm1`): the pinned vcpkg checkout's triplet, or RedPrism's own,
+copied unchanged, then `set(VCPKG_VISUAL_STUDIO_PATH "<installation>")` and `set(VCPKG_PLATFORM_TOOLSET_VERSION "<major.minor>")`.
+vcpkg receives only that directory as `--overlay-triplets`. The sanitizer overlays bring `asan-toolchain.cmake` beside them,
+which reaches the managed checkout through `..\..\.build\vcpkg-tool`, so the overlay directory stays two levels below the
+repository root (`vcpkg-install.ps1` refuses a layout where it does not). A file is rewritten only when its bytes change. A
+different triplet is a different package ABI hash, so the first restore after a change of the installation, the default
+major.minor, the vcpkg pin or a triplet rebuilds the packages; vcpkg's per-user binary cache serves a repeat. The logic mirrors
+DxUi's `Tools/VcpkgTriplet.psm1`, which pins DxUi's own restore the same way, but depends on neither a restored DxUi checkout
+nor its pin, because `vcpkg-install.ps1` runs before `restore-dxui.ps1` and on its own.
+`Tests/BuildProcessTests/VcpkgToolsetTests.ps1` covers it, and requires the same overlay text and the same toolset (and
+failures) as the pinned DxUi modules whenever the pin is restored, so a drift shows at the next pin move.
+
+`build.ps1` (except `-Clean`) MUST run `vcpkg-install.ps1` for the selected platform, with the MSBuild it found, before
+MSBuild, then `restore-dxui.ps1 -CheckUpdates`. That check compares the lock with DxUi `main` and prints one advisory. It does
 not change the pin and does not fail a restore whose pin is valid. A newer `main` commit with a successful completed
 `ci.yml` push run is yellow (`DxUi update available: pinned <old>, available <new>`). A newer `main` commit without
 that validation is red. A pin ahead of or diverged from `main`, and a lookup that cannot run, are dark yellow. The
@@ -128,8 +156,8 @@ The version resource MUST keep `OriginalFilename=RedPrism.exe` and `ProductName=
 
 | Script | Duty |
 | --- | --- |
-| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan]` | Restore WIL, yyjson, libzip, and Clipper2 (`-Asan`: the sanitized x64 tree) |
-| `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
+| `.\vcpkg-install.ps1 [-Platform x64\|ARM64\|All] [-Asan] [-MSBuildPath <path>]` | Restore WIL, yyjson, libzip, and Clipper2 with the Visual Studio installation and default toolset of the MSBuild in use (`-Asan`: the sanitized tree of the platform) |
+| `.\restore-dxui.ps1 [-Platform x64\|ARM64] [-CheckUpdates]` | Restore the exact DxUi pin as a sparse, long-path-safe checkout; `-CheckUpdates` prints one advisory when DxUi `main` is not the pin |
 | `.\build.ps1 [-Platform] [-Configuration] [-Clean\|-Rebuild] [-Analyze] [-Run]` | Preflight, restore, MSBuild, provenance; `-Analyze` runs native MSVC code analysis |
 | `.\test.ps1` | Build, then the validation in `Testing_Validation.md` |
 | `.\format.ps1 [-Check]` | clang-format over `Common/`, `RedPrism/`, `Tests/` |
@@ -283,6 +311,19 @@ the first/default entry. Only the exact contiguous MOVSX/LEA/load/ADD/JMP form a
 symbol prove that bias. The complete table, including its default entry, must target decoded body instructions
 after the jump and before the table. Different registers, noncontiguity, greater bias, invalid PDB records and
 invalid default/other targets receive no exemption. This adds no runtime allowlist entry.
+
+The observed Release `std::variant` destruction dispatch (`_Variant_base<...>::_Destroy` of 21 alternatives) is exactly six
+contiguous instructions, 37 bytes: `MOVSX RAX,byte [RCX+disp32]`, `LEA R8,imagebase`, `MOVZX EAX,byte [R8+RAX+disp32]`,
+`MOV EDX,[R8+4*RAX+disp32]`, `ADD RDX,R8` and `JMP RDX`. The index is signed (-1 is the valueless state), so the byte load's
+displacement is the table start plus one. Each row must equal the PE bytes, have its reported length and overlap no other decoded
+row. The DWORD table starts at the exact anonymous same-owner untyped 16-byte `S_LDATA32` of its load. The byte table starts at
+the exact such record one byte before its load displacement (a record at the displacement, or anywhere else, proves nothing),
+which is also where the DWORD table ends. The byte table ends at the end its owning PDB procedure shares with its executable
+contribution, no other data symbol lies inside either table, every byte is an index below the DWORD entry count, and every entry
+is a decoded instruction boundary of that procedure before the tables. The procedure may begin before the MOVSX. Another bias,
+register, displacement width, index extension, row, symbol, bound or target receives no exemption, and nothing is exempted by
+address, object or procedure name. This adds no runtime allowlist entry
+([record](../TestRuns/IsaSignedBiasedByteTable_2026-10-01.md)).
 
 For the observed hoisted R8 setup in the inlined clipboard switch, only the exact contiguous eight-instruction
 prelude is recognized: move EAX to EDX, store EAX at an RSP+disp8 address, move EAX to R12D, test EAX, forward JE,
