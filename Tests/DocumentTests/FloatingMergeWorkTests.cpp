@@ -31,7 +31,7 @@ struct Fixture final
     std::shared_ptr<PreparedFloatingRestore> restore;
 };
 
-bool Open(Fixture& fixture, InlineExecutor& executor, bool mask = false)
+bool Open(Fixture& fixture, InlineExecutor& executor, bool mask = false, bool nested = false)
 {
     CanvasDocument document;
     document.id = Guid::Generate();
@@ -60,6 +60,8 @@ bool Open(Fixture& fixture, InlineExecutor& executor, bool mask = false)
     fixture.clipboard = fixture.session.Clipboard();
     fixture.clipboardSerial = fixture.session.ClipboardSerial();
     fixture.priorUndoCount = fixture.session.history.UndoCount();
+    if (nested)
+        fixture.session.BeginEdit(L"Outer floating owner");
     auto input = fixture.session.PrepareFloatingOpeningInput();
     if (!input)
         return false;
@@ -470,6 +472,34 @@ void MaskGrowsWithSealedPublication()
     Expect(fixture.session.Document().value() == fixture.before,
            "carried-mask-undo-restores-exact-image-mask-and-outline");
 }
+void NestedMergeClosesOnlyChild()
+{
+    Fixture fixture;
+    InlineExecutor executor;
+    const auto opened = Open(fixture, executor, false, true);
+    Expect(opened, "nested-merge-fixture-ready");
+    if (!opened)
+        return;
+    const auto revision = fixture.session.history.CurrentRevision();
+    Preview(fixture, 1);
+    auto result = Prepare(fixture, executor);
+    Expect(result.status == FloatingPixelsStatus::Ready && result.publication, "nested-merge-prepares-at-depth-two");
+    if (!result.publication)
+        return;
+    Expect(fixture.session.ApplyPreparedFloatingMergeIfCurrent(result.publication.value()) &&
+               fixture.session.history.CaptureState().Depth() == 1 &&
+               fixture.session.history.UndoCount() == fixture.priorUndoCount &&
+               fixture.session.history.CurrentRevision() == revision && !fixture.session.PendingTransformEdit(),
+           "nested-merge-publishes-pixels-with-parent-history-still-open");
+    fixture.session.EndEdit();
+    Expect(fixture.session.history.CaptureState().Depth() == 0 &&
+               fixture.session.history.UndoCount() == fixture.priorUndoCount + 1 &&
+               fixture.session.history.UndoName() == L"Outer floating owner",
+           "nested-merge-parent-close-keeps-original-parent-name");
+    fixture.session.Undo();
+    Expect(fixture.session.Document().value() == fixture.before,
+           "nested-merge-parent-undo-restores-exact-original-source");
+}
 } // namespace
 
 int RunFloatingMergeWorkTests()
@@ -481,6 +511,7 @@ int RunFloatingMergeWorkTests()
     StaleCapsulesProtectNewerState();
     MovedInputLosesAuthority();
     MaskGrowsWithSealedPublication();
+    NestedMergeClosesOnlyChild();
     std::printf("FLOATING MERGE WORK TESTS checks=%d failures=%d\n", gAssertions, gFailures);
     return gFailures;
 }

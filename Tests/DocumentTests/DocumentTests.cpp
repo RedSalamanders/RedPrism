@@ -61,6 +61,7 @@
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
 #include "ShapeEditWorkTests.h"
+#include "TransformCancellationWorkTests.h"
 #include "TransformCommitWorkTests.h"
 #include "TransformEdit.h"
 #include "TransformPixelsWorkTests.h"
@@ -7426,6 +7427,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunDistortWorkTests();
     gFailures += RunTransformPixelsWorkTests();
     gFailures += RunTransformCommitWorkTests();
+    gFailures += RunTransformCancellationWorkTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();
     gFailures += RunFloatingPixelsWorkTests();

@@ -35,7 +35,7 @@ bool DocumentSession::IsFloatingRestoreCurrent(const PreparedFloatingRestore& pr
 std::uint64_t DocumentSession::FloatingMergePreparationMemoryBytes(
     const PreparedFloatingRestore& restore) const noexcept
 {
-    if (!IsFloatingRestoreCurrent(restore) || history.CaptureState().Depth() != 1)
+    if (!IsFloatingRestoreCurrent(restore) || history.CaptureState().Depth() != restore._publication._view.Depth())
         return 0;
     // Invalid/oversized geometry still needs an admitted worker resolution and the prebuilt rollback.
     // A zero pixel plan does not authorize pixel allocation; PrepareFloatingMergePixels refuses it.
@@ -66,7 +66,8 @@ FloatingMergeResult DocumentSession::PrepareFloatingMergePublication(FloatingMer
                                                                      FloatingMergeObserver mergeObserver)
 {
     cancellation = cancellation.WithShutdown(executor.ShutdownToken());
-    if (!input._valid || !input._restore || !input._edit.floating || input._history.Depth() != 1)
+    if (!input._valid || !input._restore || !input._edit.floating || input._history.Depth() < 1 ||
+        input._history.Depth() != input._restore->_publication._view.Depth())
         return {};
     FloatingMergeResult result;
     result.publication.emplace(PreparedFloatingMerge(std::move(input._authority), std::move(input._source),

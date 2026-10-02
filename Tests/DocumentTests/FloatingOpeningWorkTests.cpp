@@ -147,6 +147,37 @@ void StaleAuthority()
                "restore-refuses-new-history-source-or-session");
     }
 }
+void NestedOpeningRestoration()
+{
+    DocumentSession session;
+    Initialize(session);
+    const auto parentOpening = session.Document().value();
+    session.BeginEdit(L"Outer edit");
+    session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+    const auto childOpening = session.Document().value();
+    const auto parentState = session.history.CaptureState();
+    InlineExecutor executor;
+    auto opening = Prepare(session, executor);
+    Expect(opening.status == FloatingPixelsStatus::Ready && opening.publication,
+           "nested-opening-prepared-under-existing-outer-transaction");
+    if (!opening.publication)
+        return;
+    const auto restore = opening.publication->Restoration();
+    Expect(session.ApplyPreparedFloatingOpeningIfCurrent(opening.publication.value()) &&
+               session.history.CaptureState().Depth() == 2,
+           "nested-opening-adds-only-inner-depth");
+    Expect(restore && session.ApplyPreparedFloatingRestoreIfCurrent(*restore) &&
+               session.Document().value() == childOpening && session.history.CaptureState().Depth() == 1 &&
+               session.history.CurrentRevision() == parentState.Revision() &&
+               session.history.UndoCount() == static_cast<int>(parentState.PastCount()),
+           "nested-restoration-preserves-parent-changes-and-pending-lineage");
+    session.EndEdit();
+    Expect(session.history.UndoCount() == static_cast<int>(parentState.PastCount()) + 1 &&
+               session.history.UndoName() == L"Outer edit",
+           "nested-cancel-then-parent-close-records-only-outer-name");
+    session.Undo();
+    Expect(session.Document().value() == parentOpening, "nested-cancel-parent-undo-restores-parent-opening");
+}
 struct FaultState final
 {
     FloatingOpeningStage stage;
@@ -216,6 +247,7 @@ int RunFloatingOpeningWorkTests()
     gFailures = gAssertions = 0;
     OpeningAndRestore();
     StaleAuthority();
+    NestedOpeningRestoration();
     FaultsAndMoves();
     std::printf("FLOATING OPENING WORK TESTS checks=%d failures=%d\n", gAssertions, gFailures);
     return gFailures;

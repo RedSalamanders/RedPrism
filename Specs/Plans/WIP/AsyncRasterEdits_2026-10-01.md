@@ -98,6 +98,12 @@
       Ordinary cancellation is draft-only; duplicate and floating closures preserve an existing parent's depth/name.
       Floating rollback remains preallocated for failure after exposing the temporary layer. Retain its complete
       CPU node until merge/cancel/replacement acknowledgement and release it off owner before scheduler teardown.
+      - [x] T1 core — Sealed ordinary/duplicate cancellation and nested floating opening/merge/restoration
+        qualify in all six profiles against 533 frozen inputs: 467 independent transform/floating/history controls
+        per x64 suite ([record](../../TestRuns/TransformCancellation_2026-10-02.md)). Ordinary cancellation leaves
+        document/generation/history/clipboard unchanged; child closures retain the parent's depth/name and redo.
+        The private r1 mask-target fixture failure and its exact binary remain preserved; r2 corrects the fixture
+        before native activation. Persistent host restoration ownership and production caller gates remain open.
     - [ ] T2 — Route Ctrl+T, Apply/Cancel, pointer release/leave/capture loss, header/nudge/flip, tool/layer changes,
       writes and lifetime changes through an opening-specific owned host input and same-ordinal settlement stage.
       Worker failure cannot discard newer geometry; explicit Escape restores only its still-current opening after

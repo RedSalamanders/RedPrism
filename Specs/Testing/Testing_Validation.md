@@ -42,9 +42,15 @@ complete prebuilt rollback, unchanged/cancelled/oversized resolution, one outer 
 premultiplied bytes/outline, carried-mask growth/eager thumbnail, clipboard identity, newer-draft/history/source/reopen
 refusal and reached worker/history fault boundaries. Near-cap tests use a virtual 9999-square sibling: a one-pixel
 clear on a 512-square canvas keeps the exact 2-square source; Clear crossing a tile boundary with a four-pixel limit
-preserves placement and untouched bytes. A committed grid beyond its caller limit still refuses.
+preserves placement and untouched bytes. A committed grid beyond its caller limit still refuses. Nested floating
+opening, merge and prebuilt restoration close only their child scope, preserving an existing parent's name/depth.
+`transform-cancellation.*` proves ordinary draft-only cancellation, duplicate removal, nested parent/redo retention,
+single-use/moved-input authority and changed draft/source/active/history/replacement/foreign refusals. Snapshot,
+entry, stack-growth and trim faults must be reached and leave the live opening intact.
 These are core qualification gates. Production transform/opening/preview/settlement and aggregate retirement,
-all native configurations and measured G1 remain explicit A5/A6 follow-ups until their own evidence lands.
+and measured G1 remain explicit A5/A6 follow-ups. Core native configuration results are recorded separately in
+[`TransformWorkerCore_2026-10-02.md`](../TestRuns/TransformWorkerCore_2026-10-02.md) and
+[`TransformCancellation_2026-10-02.md`](../TestRuns/TransformCancellation_2026-10-02.md).
 
 ### Clipboard and copy preparation
 

@@ -123,8 +123,12 @@
         and exact-predecessor history qualify in all six clean profiles against 529 frozen inputs, including
         409 independent controls per x64 suite and unchanged legacy goldens
         ([record](../../TestRuns/TransformWorkerCore_2026-10-02.md)). Worker Clear preserves committed pixel
-        limits without charging source-external scratch tiles. Production transform callers, nested floating
-        extensions, bounded previews, settlement and G1 remain open.
+        limits without charging source-external scratch tiles. Production transform callers, bounded previews,
+        settlement and G1 remain open.
+      - [x] A6.3 T1 core — Sealed transform cancellation and nested floating closures qualify in all six
+        profiles against 533 inputs: 467 core controls per x64 suite
+        ([record](../../TestRuns/TransformCancellation_2026-10-02.md)). Persistent host rollback ownership,
+        production routing, preview/settlement, retirement gates and G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

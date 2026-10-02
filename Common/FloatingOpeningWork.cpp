@@ -27,7 +27,8 @@ std::uint64_t DocumentSession::FloatingOpeningPreparationMemoryBytes() const noe
 {
     if (!CanTransformSelection() || !_document || !_activeLayerID || _transformDuplicate || _gradient || _pixelMove ||
         _brush || _warp || _colorEdit || _shapeDraft || _lassoDraft || _selectionMoveOrigin ||
-        history.CaptureState().Depth() != 0 || _generation == (std::numeric_limits<std::uint64_t>::max)())
+        history.CaptureState().Depth() == (std::numeric_limits<int>::max)() ||
+        _generation == (std::numeric_limits<std::uint64_t>::max)())
         return 0;
     auto bytes = FloatingOpeningPixelsMemoryBytes(_document.value(), _activeLayerID.value());
     const auto historyBytes = history.EditMemoryBytes(_document);
@@ -54,7 +55,7 @@ FloatingOpeningResult DocumentSession::PrepareFloatingOpeningPublication(Floatin
                                                                          FloatingOpeningObserver openingObserver)
 {
     cancellation = cancellation.WithShutdown(executor.ShutdownToken());
-    if (!input._valid || input._history.Depth() != 0 ||
+    if (!input._valid || input._history.Depth() < 0 || input._history.Depth() == (std::numeric_limits<int>::max)() ||
         input._authority._generation == (std::numeric_limits<std::uint64_t>::max)())
         return {};
     if (cancellation.IsCancelled())

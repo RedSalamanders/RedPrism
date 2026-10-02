@@ -1228,6 +1228,8 @@ class ImageImportAuthority;
 class ShapeEditInput;
 class PreparedShapeEdit;
 class TransformCommitInput;
+class TransformCancellationInput;
+class PreparedTransformCancellation;
 class FloatingOpeningInput;
 class PreparedFloatingOpening;
 class PreparedFloatingRestore;
@@ -1962,6 +1964,12 @@ class DocumentSession
         TransformCommitInput input, Executor& executor, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool ApplyPreparedTransformCommitIfCurrent(PreparedTransformCommit& prepared) noexcept;
+    [[nodiscard]] std::uint64_t TransformCancellationPreparationMemoryBytes() const noexcept;
+    [[nodiscard]] std::optional<TransformCancellationInput> PrepareTransformCancellationInput() const;
+    [[nodiscard]] static std::optional<PreparedTransformCancellation> PrepareTransformCancellationPublication(
+        TransformCancellationInput input, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
+    [[nodiscard]] bool ApplyPreparedTransformCancellationIfCurrent(PreparedTransformCancellation& prepared) noexcept;
     void CancelTransform();
     // Arrow keys: a pending edit moves its draft; without one the move commits at once.
     void NudgeLayer(double dx, double dy);

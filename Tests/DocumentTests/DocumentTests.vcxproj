@@ -159,6 +159,7 @@
     <ClCompile Include="DistortWorkTests.cpp" />
     <ClCompile Include="TransformPixelsWorkTests.cpp" />
     <ClCompile Include="TransformCommitWorkTests.cpp" />
+    <ClCompile Include="TransformCancellationWorkTests.cpp" />
     <ClCompile Include="FloatingPixelsWorkTests.cpp" />
     <ClCompile Include="FloatingOpeningWorkTests.cpp" />
     <ClCompile Include="FloatingMergeWorkTests.cpp" />
@@ -237,6 +238,7 @@
     <ClCompile Include="..\..\Common\DistortWork.cpp" />
     <ClCompile Include="..\..\Common\TransformPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\TransformCommitWork.cpp" />
+    <ClCompile Include="..\..\Common\TransformCancellationWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingMergeWork.cpp" />

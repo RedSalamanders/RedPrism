@@ -141,6 +141,12 @@ refused members retain their old pixels without permitting the completed documen
 Groups follow the captured member order and reject duplicate member ids. Pixel sampling and mask semantics remain
 the numeric legacy references. The direct inline APIs remain references; production caller migration is A6.3.
 
+`TransformCancellationWork` binds cancellation to the captured draft, target, document lifetime/generation and
+history state. Ordinary cancellation swaps only draft/display/guides into its retired owner; document, generation,
+history and clipboard remain unchanged. Duplicate cancellation prepares removal of the duplicate and End of its
+own scope privately. An existing parent transaction keeps its depth, opening record and name. Publication refuses
+newer geometry, changed target/source/history, replacement, foreign-session or consumed results before any swap.
+
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted
