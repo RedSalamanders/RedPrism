@@ -34,6 +34,7 @@
 #include "TransformEdit.h"
 #include "TransformOverlay.h"
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -50,6 +51,7 @@
 
 class ChromeHost;
 struct UiBenchmarkState;
+struct ApplicationShutdownTestProbe;
 struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
@@ -102,6 +104,7 @@ class Application final : public ChromeEvents
 
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
+    static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
@@ -437,6 +440,13 @@ class Application final : public ChromeEvents
     int RunSizeSelfTest() noexcept;
     int RunSizingWorkSelfTest() noexcept;
     class SizingJob;
+    class DocumentLifecycleJob;
+    [[nodiscard]] static std::optional<std::array<int, 2>> NewCanvasDimensions(const HostSizeDraft& draft) noexcept;
+    [[nodiscard]] HRESULT StartDocumentLifecycle(std::optional<std::array<int, 2>> dimensions,
+                                                 std::optional<std::uint64_t> invocation = {}) noexcept;
+    int RunDocumentLifecycleSelfTest() noexcept;
+    int RunDocumentLifecycleRefusalSelfTest() noexcept;
+    int RunDocumentLifecycleCloseSelfTest() noexcept;
     class HistoryRestoreJob;
     [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
     int RunHistoryRestoreSelfTest() noexcept;
@@ -461,6 +471,7 @@ class Application final : public ChromeEvents
     void ExecuteLayerNudge(Vec2 offset) noexcept;
     int RunTransformWorkSelfTest() noexcept;
     int RunDuplicateGestureSelfTest() noexcept;
+    int RunTransformPolicySelfTest() noexcept;
     struct TransformPreviewRequest final
     {
         std::uint64_t opening = 0, revision = 0, generation = 0;
@@ -723,6 +734,7 @@ class Application final : public ChromeEvents
     // Declared before the session: a pending stroke tells its engine when the session drops it.
     GpuBrushCoverage _brushEngine;
     DocumentSession _session;
+    ApplicationShutdownTestProbe* _shutdownTestProbe = nullptr;
     JobScheduler _jobs;
     OwnerWorkMultiplexer _ownerWork;
     RetryWaitQueue _retryWait;
@@ -746,6 +758,9 @@ class Application final : public ChromeEvents
     std::shared_ptr<HistoryRestoreTestGate> _historyRestoreTestGate;
     std::optional<JobTicket> _sizingTicket;
     std::shared_ptr<SizingWorkTestGate> _sizingWorkTestGate;
+    std::optional<JobTicket> _documentLifecycleTicket;
+    std::optional<HistoryWorkStamp> _documentLifecycleStamp;
+    std::shared_ptr<struct DocumentLifecycleTestGate> _documentLifecycleTestGate;
     std::optional<HistoryWorkStamp> _rasterEditStamp;
     std::optional<JobTicket> _rasterEditTicket;
     std::optional<HistoryWorkStamp> _clipboardStamp;

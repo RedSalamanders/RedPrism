@@ -102,6 +102,8 @@
     <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="JobCloseHookTests.h" />
+    <ClInclude Include="JobSuspendedRetirementTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
@@ -161,6 +163,9 @@
     <ClCompile Include="DeferredReleaseTests.cpp" />
     <ClCompile Include="PipelineTraceTests.cpp" />
     <ClCompile Include="JobMemoryTests.cpp" />
+    <ClCompile Include="JobShutdownRetirementTests.cpp" />
+    <ClCompile Include="JobCloseHookTests.cpp" />
+    <ClCompile Include="JobSuspendedRetirementTests.cpp" />
     <ClCompile Include="PixelRecycleTests.cpp" />
     <ClCompile Include="PerfRootTests.cpp" />
     <ClCompile Include="..\..\Common\PerfRoot.cpp" />

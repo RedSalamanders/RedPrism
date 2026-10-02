@@ -30,7 +30,8 @@ inline thread_local Sink sink;
 } // namespace DeferredReleaseDetail
 
 // Install/clear on the same owning thread. Exactly one sink per thread; its context outlives Clear followed by
-// joining/draining the consumer. Callers clear before pool teardown, so subsequent owner-thread frees run inline.
+// joining/draining the consumer. Shutdown clears after owner cleanup and before final worker retirement/pool
+// teardown, so no retired node outlives its consumer and subsequent owner-thread frees run inline.
 [[nodiscard]] inline bool InstallDeferredReleaseSink(void (*enqueue)(void*, DeferredReleaseNode&) noexcept,
                                                      void* context) noexcept
 {

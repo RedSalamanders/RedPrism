@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -469,6 +470,60 @@ void BrushStroke::ReleaseCoverageEngine() noexcept
     auto* engine = std::exchange(_engine, nullptr);
     if (_valid && engine != nullptr)
         engine->EndStroke();
+}
+
+void DocumentSession::DetachCoverageForShutdown() noexcept
+{
+    const auto detach = [](const std::shared_ptr<BrushStroke>& stroke) noexcept
+    {
+        if (stroke)
+            stroke->ReleaseCoverageEngine();
+    };
+    detach(_brush);
+    if (_gradient)
+        detach(_gradient->raster);
+    if (_pixelMove)
+        detach(_pixelMove->raster);
+    _brushEngine = nullptr;
+}
+
+void DocumentSession::RetireCpuForShutdown() noexcept
+{
+    assert(!_brushEngine);
+    _document.reset();
+    _displayCopy.reset();
+    history.Reset();
+    _transformEdit.reset();
+    _lassoDraft.reset();
+    _selectionMoveOrigin.reset();
+    _brush.reset();
+    _warp.reset();
+    _gradient.reset();
+    _shapeDraft.reset();
+    _pixelMove.reset();
+    _colorEdit.reset();
+    _clipboard.reset();
+    _lastBrushCommit.reset();
+    _adjustmentOriginal.reset();
+    _warpSource.image = {};
+    _selected.clear();
+    _collapsed.clear();
+    std::vector<double>{}.swap(_snapGuides.xs);
+    std::vector<double>{}.swap(_snapGuides.ys);
+    for (auto& channel : filterSettings.curves.channels)
+        std::vector<CurvePoint>{}.swap(channel);
+    _activeLayerID.reset();
+    _transformDuplicate.reset();
+    _cropRect.reset();
+    _adjustmentEditingID.reset();
+    _lastBrushPoint.reset();
+    _pendingOpacityDigit.reset();
+    _cloneOffset.reset();
+    _maskSelected = false;
+    _tokenIdentity.value = Guid::Generate();
+    ++_documentSerial;
+    ++_restoreSerial;
+    NoteDocumentMutation();
 }
 
 std::uint64_t BrushStroke::RetirementMemoryBytes() const noexcept

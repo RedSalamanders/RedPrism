@@ -419,6 +419,19 @@ preview off while the worker is held and cancellation of late lookup work.
 
 ### CPU dispatch and instruction boundary (P0.8)
 
+The 56 `isa-compact-rcx-byte-remap.*` controls prove the compact ASan stack guard, same-displacement EAX reload
+and eight contiguous PE/listing rows; both anonymous tables, exact procedure end, literal index range and decoded
+body/default targets are required. Missing/unknown/duplicate/overlapping or PE-mismatched rows fail independently.
+Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
+and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
+
+The 183 `isa-inline-table.R10AlGuard*` controls prove the exact non-clobbering R10 prelude and AL-bound dispatch:
+every protected row independently rejects missing, duplicate, unknown, overlap and PE/listing mismatch; valid
+extreme bounds, separate default, backward table target and direct entry at the base definition pass. Bypassing
+that definition fails. Same-owner table/procedure ends, decoded body targets and terminal return/security-failure
+rows are required. Real VEX/EVEX in the body and immediately after the table remain violations with the proved
+table data count intact. The original archived Release image is rechecked independently of a rebuild.
+
 The synthetic ISA parser controls cover DxUi typography's exact `LEA RCX,imagebase; MOVZX EAX,DL; DWORD load;
 ADD; JMP` form. They require the anonymous same-owner untyped PDB start and retain negative controls for wrong
 register/opcode, extra or missing instructions, invalid symbols, contribution/decoded-target bounds and real
@@ -648,6 +661,38 @@ The WARP self-test also simulates an early mode failure with a worker waiting on
 destroy its payload after Run returns, and leave the caller's STA alive. `Main.cpp` calls that same shutdown
 before clearing the resource satellite or leaving its COM scope on every mode return, including failures.
 
+Standalone `JobShutdownRetirementTests` owns its own TLS sink. Its 28 independent controls use real 16 MiB CPU
+owners and running, queued, memory-waiting, undrained jobs plus an owned UI action. Producer join precedes wrapper
+destruction on owner; CPU destruction is exactly once on an MTA worker while reservations/events remain alive.
+Useful callbacks stay suppressed. Stopped idle pools still run the ordered final hooks; repeated Close does not
+repeat them, and invalid initialization/restart refuses safely. This primitive proof does not qualify the full
+application's remaining live session/graphics graph or shutdown timing.
+
+`JobCloseHookTests` adds 26 assertion records (excluding its summary): stopped idle pool, gated producer and
+uninitialized Close. The joined owner hook follows wrapper destruction; final worker retirement is ordered,
+exactly once, off owner and on MTA while borrowed context, reservations and wake events remain alive. Repeated
+and uninitialized Close cannot run hooks.
+
+Before ordinary Application processing initialization, `RunStandaloneShutdownSelfTest` constructs two actual
+hidden WARP/chrome owners with their own sink and pool. Its 38 controls cover lifecycle work held before/after
+preparation, a real 16 MiB document/history, private clipboard and a live graphics-backed gradient draft. Producer
+join precedes owner graphics detachment and final MTA CPU-root retirement; callbacks remain suppressed and tickets,
+barriers, events, reservations and sink retire before acknowledgement. The caller's STA survives and second Shutdown
+cannot repeat hooks. Each destroyed fixture's full message queue must consume its quit before constructing the next
+owner. Full x64 application logs must report `application-shutdown summary: 38 checks, 0 failures`.
+Preview and delayed-clipboard shutdown controls retain their exact original source/history authority checks at
+joined owner detachment, before CPU retirement, then assert empty session and independently retained literal pixels
+after acknowledgement. These suites require 112 preview and 45 delayed-clipboard controls; existing legacy goldens
+remain unchanged. Failed initialization, all live brush/warp/heal and GPU/event leases, residual hash capacity and
+shutdown timing remain in P1.7 F5d A3.
+
+The application lifecycle controls cover 115 New/Close/order/state assertions, 58 accepted-dimension/refusal
+assertions and 85 Close cancellation/fault assertions. They test actual selected host inputs, pending-to-ACK
+receipts, literal saved New Undo/Redo and empty Close state, palette/private clipboard retention, reached admission,
+capture and history allocation faults, stale authority and younger input retirement. Invalid New Canvas dimensions
+refuse before destroying a live draft; changing the card after admission cannot change the copied request. Existing
+typed-opacity replacement goldens MUST still pass. Event-gated failure bounds detect hangs and assert no timing.
+
 `HostTests.exe --bench-jobs` measures scheduler overhead with eight warmups and 200 single Commit jobs. It reports
 submission and full submit-to-drain median/p95/max in microseconds, with an independently checked worker result.
 Payload construction is outside the timed intervals; admission, cancellation-state allocation, worker dispatch,
@@ -694,7 +739,15 @@ and each timer resource failure require the exact old tree and initiating native
 retry observation leaves the original destination intact. Healthy and injected final rename failures require
 zero destination timer create/arm/wait visits. Every case checks publication count, no rollback before rotation
 and complete owned-staging cleanup. These controls bound attempts and preserve ownership; they do not identify
-an external reader/filter or assert wall-clock timer latency.
+  an external reader/filter or assert wall-clock timer latency.
+
+Native `publication-retry.*` controls hold the owned staging manifest or directory without delete sharing,
+after all writers close. First-save and replacement cases separately verify release/retry, exhaustion,
+pre-rotation cancellation, late cancellation with successful publication or rollback, Published count,
+literal pixels, byte-identical original trees, earlier backup preservation, and owned staging cleanup.
+Timer create/arm/wait faults retain the immediate native error; injected rename errors remain final with no
+timer hook visits. A healthy native rename creates no timer. These are independently controlled filesystem
+and cancellation transitions; no observer sleeps or asserts nominal timer latency.
 
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5
@@ -1057,5 +1110,23 @@ producer-order DIB selection, refusal to request synthesized variants of malform
 malformed PNG fallback, cleared Busy/cancel/native-close output and a deliberate
 post-close clipboard replacement. Its availability and inspection retain the held sequence, and Copy rejects
 the replacement. Fixture helpers use bounded event waits for external listeners; injected Busy remains one
-attempt. Full frozen native qualification is required before closing these foundations. Production host,
+  attempt. Pixel-preservation observations use the independent C9b `SystemClipboard::ReadImage` reference,
+  holding one clipboard acquisition through decode; direct Inspect/Copy/Stale authority assertions stay separate.
+  Literal dimensions and every expected channel byte remain unchanged. This prevents a verification-only
+  gap between metadata Inspect and Copy from invalidating an otherwise coherent preservation observation.
+  Direct Copy Busy diagnostics retain the immediate native error, attempt, clipboard-holder process and sealed
+  inspection sequence. The foreign-replacement refusal check additionally reports its exact returned status,
+  held sequence at the Opened observation, acquisition count and retained output bytes on failure. Diagnostics
+  do not renew inspection authority, accept Busy as Stale or weaken the assertion.
+  Fixture source-sequence acquisition also reports immediate failed Open/Close errors, holder/caller process,
+  attempt and owner-window validity. Test fixture acquisition now uses the existing C9b harness allowance:
+  at most 30 attempts with lazy 100 ms one-shot event waits between contention results (about 3 s scheduled
+  waits; 200 ms per timer wait is a deadlock failure bound). Source capture, Inspect, Copy and Publish use this
+  test-only policy; Copy retains its sealed Inspection and Publish retains the same PreparedImage. Stale,
+  cancellation, partial publication and failed timer waits stop retries. Fourteen deterministic supplied-trace
+  controls verify immediate success without a wait, success after five Busy results, exact 30/29 exhaustion,
+  failed wait, Stale refusal, cancellation and partial publication. Existing 125 transfer controls, literal
+  dimensions/channel bytes and direct one-attempt Busy fault checks remain unchanged. Production's admitted
+  transfer retry budget is unchanged. Exhausted fixture acquisition still fails the original assertion.
+  Full frozen native qualification is required before closing these foundations. Production host,
 retry/lifetime, G1 and native ARM64 runtime claims remain separate.

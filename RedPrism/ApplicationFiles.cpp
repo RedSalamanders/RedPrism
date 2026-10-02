@@ -635,8 +635,10 @@ void Application::FinishPreparedDocumentReplacement() noexcept
     _duplicateGesture.reset();
     // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
     // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
+    if (_opacityEdit)
+        _opacityRecorded = _opacityEdit->shown;
     _opacityEdit.reset();
-    _opacityRecorded.reset();
+    // A field's late Enter/focus-loss commit must still acknowledge the value closed on the old document.
     _sizeDialog.kind = SizeCardKind::None;
     CloseRenameCard();
     _drag = PointerDrag{};
@@ -692,11 +694,13 @@ void Application::CloseProject() noexcept
     {
         return;
     }
-    SettleInteractions(false);
-    _session.ClearDocument();
-    _documentPath.clear();
-    _viewport.followsFit = true;
-    DocumentChanged();
+    _hostExecutionError = StartDocumentLifecycle(std::nullopt);
+    if (FAILED(_hostExecutionError))
+    {
+        ++_errorsShown;
+        _lastErrorId = IDS_ERROR_DOCUMENT_LIFECYCLE;
+        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+    }
 }
 
 // ── Close, session end, capture and focus loss (Specs/UI/UI_Windowing.md) ─────────────────────────────────────────

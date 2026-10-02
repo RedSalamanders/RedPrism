@@ -8,9 +8,13 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
 & (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

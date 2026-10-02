@@ -284,6 +284,20 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
+                size && size->draft.kind == SizeCardKind::NewCanvas)
+            {
+                if (size->invocation != _sizeInvocation || !SizeCardOpen())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (!NewCanvasDimensions(size->draft))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+            }
             if (const auto* duplicate = std::get_if<HostDuplicateBeginInput>(&input);
                 duplicate &&
                 (!_duplicateGesture || _duplicateGesture->serial != duplicate->gesture ||
@@ -809,6 +823,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_utilityTicket.value());
+        }
+        else if (_documentLifecycleTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_documentLifecycleTicket.value());
         }
         else if (_sizingTicket)
         {

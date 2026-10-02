@@ -300,6 +300,7 @@ class Application::TransformJob final : public Job
                         _owner._session.ApplyPreparedFloatingOpeningIfCurrent(_payload->opening->publication.value());
                     if (changed)
                     {
+                        (void)_owner._session.DeferTransform();
                         std::swap(_owner._transformRestoreOwner, _payload->openingOwner);
                     }
                     else
@@ -469,7 +470,7 @@ void Application::ExecuteLayerNudge(Vec2 offset) noexcept
 {
     const bool editing = _session.PendingTransformEdit().has_value();
     if (!editing)
-        _session.BeginTransform(false);
+        (void)_session.BeginDeferredTransform(false);
     if (!_session.PendingTransformEdit())
         return;                              // Nontransformable targets preserve their existing no-op command behavior.
     _session.NudgeLayer(offset.x, offset.y); // An existing draft changes metadata only; it cannot commit inline.

@@ -390,8 +390,15 @@ owner validation/history costs remain measured separately and are subject to the
 The owner installs a thread-local deferred-release sink. Last-reference storage or directly owned pixel buffers
 of at least 16 MiB transfer an intrusive node to a non-cancellable NORMAL worker lane. This path allocates nothing,
 needs no job slot/reservation, and cannot be refused by a full job queue. Smaller or non-owner-thread frees run
-inline. Queued and executing releases count toward outstanding work. Close clears the sink, joins event sources
-and workers, then drains leftovers while hidden, before destroying events or the receiving owner.
+inline. Queued and executing releases count toward outstanding work. Close joins event sources and producers,
+then destroys owner-affine job/action wrappers while their sink remains installed. Their CPU owners transfer to
+the release lane. Close clears the sink and acknowledges a preallocated final MTA callback that drains releases
+and recycled pixels before releasing reservations, pool/apartment ownership and events. Cancellation cannot skip
+this final callback. After producer join and wrapper destruction, Application's borrowed owner hook detaches
+coverage engines and joined graphics/retry resources; its final worker hook clears the large document, history,
+display, draft and private-clipboard owners before release/recycle drain. These hooks allocate no application
+storage. Empty selected/collapsed hash bucket arrays survive until host destruction. Broader failed-initialization,
+live-draft/lease coverage and hidden owner cleanup costs require separate proof and measurement.
 
 Measured fresh-page overhead justifies a process recycle pool for buffers of at least 16 MiB. It has at most 32
 slots, uses 16 MiB size classes and initially retains at most one eighth of the sampled admission ceiling, capped

@@ -677,7 +677,8 @@ stays open while the field edits: the preview changes the document outside histo
 the typed value as its own entry — a command (menu, key, Command List), a tool switch, a press on the canvas,
 another layer selected or a row dragged, a save, or the document replaced — so no other edit folds into it or bakes
 the preview in; the field's later commit of that same value adds nothing, to another layer or another document
-alike. The stepper is disabled for folders or without an active layer and is never rewritten while the user is
+alike. Replacement retains that acknowledged value until the old field's late commit is consumed; clearing its
+pending edit MUST NOT erase this suppression marker. The stepper is disabled for folders or without an active layer and is never rewritten while the user is
 typing in it. While a panel owns the document (an adjustment layer's or an Image menu panel, `HasColorEdit`), the
 layer opacity waits for its OK or Cancel, as legacy `canEditAppearance`: the stepper is disabled, the Move tool's
 digits change nothing and `DocumentSession::SetOpacity` refuses, so no opacity folds into the panel's entry and its
@@ -802,6 +803,14 @@ utility readback and detached worker encoding under the same owned continuation.
 inspect/decode on workers. Clipboard processing awaits its later P1.7 slice.
 
 New creates a 1280×800 blank layer and marks history saved; New Canvas… opens its size card (below).
+New, accepted New Canvas Create and Close Project retain their selected request and history ordinal through
+cancellable worker preparation and owner apply/drop acknowledgement. New Canvas owns the accepted dimensions and
+card invocation. Nonfinite, overflow or rounded dimensions outside 1…30 000 fail before settling destructive
+prerequisites; the card, old document/drafts, path and history stay intact. A failure or cancellation after
+preparation likewise leaves the old document and path. Successful publication alone clears the path, applies Fit
+and closes the submitted New Canvas card. Private clipboard, palette and settings survive replacement. Close
+without a document is a no-op that preserves an existing redo lineage. A younger input captured for the replaced
+lifetime becomes stale; fresh Undo after New returns to no document and Redo returns its saved blank canvas.
 Open and Save use `IFileDialog`. Import Images… opens a multi-select image dialog and adds every chosen image as a
 layer above the active one, in one `Import Images` history entry (`Import Image` for a single file); with no
 document open the first image becomes the document (see below) and the rest join it.

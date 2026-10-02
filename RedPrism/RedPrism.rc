@@ -461,6 +461,7 @@ BEGIN
     IDS_SIZE_IMAGE_INVALID          "Use 1–30,000 pixels per side, up to 100 megapixels, and 1–9,600 pixels/inch."
     IDS_SIZE_RESIZE                 "Resize"
     IDS_ERROR_RESIZE                "RedPrism could not resize the document."
+    IDS_ERROR_DOCUMENT_LIFECYCLE    "RedPrism could not create or close the document."
     IDS_SIZE_MEGABYTES              "{0} MB"
     IDS_SIZE_KILOBYTES              "{0} KB"
     IDS_CROP_RATIO                  "Ratio"

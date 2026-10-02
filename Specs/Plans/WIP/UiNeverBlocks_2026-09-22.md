@@ -2,6 +2,18 @@
 
 ## Implementation checklist
 
+- [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions
+  pass in x64 Debug/Release/ASan. Fixture helpers follow the existing 30-attempt/100 ms event-wait policy;
+  production retry limits, sealed authority and literal assertions remain unchanged.
+- [x] Current P1 functional integration, 2026-10-02 — Ordinary deferred transforms, admitted worker
+  New/New Canvas/Close, acknowledged session CPU retirement, suspended/prequeued shutdown and bounded folder
+  staging publication pass the clean x64 matrix and all ARM64 cross-builds. Strict CL/R8, compact RCX and R10/AL
+  ISA proofs preserve the runtime allowlist. Exact 582 inputs and 327 evidence files are byte/SHA verified
+  ([qualification](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)); original failures remain preserved.
+- [ ] Next P1 shutdown slice — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
+  are preserved before repair; the separate candidate builds and awaits private runtime/native qualification.
+  Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
+
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.
@@ -192,6 +204,8 @@
       - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all
         six configurations with 52 real reader/fault assertions per x64 profile. Old bytes and injected final
         failures are preserved ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
+      - [x] F6a.4 — Bounded native staging-publication retry and complete backup/foreign-destination preservation;
+        269 controls pass in every x64 profile and all ARM64 clean builds qualify ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
       - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
       - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
@@ -223,6 +237,9 @@
         561 frozen inputs ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). Production default
         New, New Canvas card and Close Project activation remains in
         [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md); H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H1 lifecycle host — Production New/New Canvas/Close, sealed admitted capture, saved optional
+        history and worker retirement qualify in all six profiles: 115/58/85 actual application controls
+        ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader live contexts, H2/H3/H4 and G1 remain open.
       - [x] P1.9 H2.1 / H4.1 — Immutable history-container roots and optional image thumbnails qualify in the
         frozen six-configuration matrix: 28 root/30 producer assertions and 331 parser controls per x64 suite
         ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
@@ -1001,17 +1018,20 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 **Deferred release**:
 
 - Large frees move off the UI thread through a thread-local release sink in `Common/`. `Application` registers
-  the function/context pair on its UI thread after the lanes start and clears it on that thread before stopping
-  them. Other threads have no sink and free inline. This implementation decision (2026-09-27) removes the race
+  the function/context pair on its UI thread after the lanes start. Shutdown retains it through producer join and
+  owner wrapper/resource detachment, then clears it before the final worker callback and pool teardown.
+  Other threads have no sink and free inline. This implementation decision (2026-09-27) removes the race
   between loading a process-global function and its separately retired context, with no per-release lock or
   reference count.
 - `Storage`'s deleter and a directly owned `PixelBuffer` transfer allocations of 16 MiB or more to that sink.
   The buffer's allocation carries its own aligned intrusive header, so cancelled/unadopted results also avoid a
-  large UI-thread free. Normal worker destruction and final shutdown destruction remain inline.
+  large UI-thread free. Normal worker destruction and the final MTA shutdown callback free inline on their worker.
 - The node is intrusive inside `Storage`, so queuing never allocates.
 - A NORMAL-priority Background callback drains the list. Frees are never dropped or cancelled.
-- With no sink registered (tests, shutdown, non-UI threads), the deleter frees inline.
-- Shutdown drains the list after the pool stops. Admission counts queued-free bytes as releasing.
+- With no sink registered, the deleter frees inline on its calling thread. Standalone ownership tests install
+  their own sink; shutdown clears the owner's sink only after joined owner cleanup.
+- Shutdown drains the list through a preallocated, non-cancellable final MTA callback after producer join and
+  before reservation/event/pool/apartment teardown. Admission counts queued-free bytes as releasing.
 
 ### 4.5 Data-parallel execution
 

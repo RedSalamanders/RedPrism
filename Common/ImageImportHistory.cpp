@@ -151,12 +151,24 @@ std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePubl
     DocumentHistory::PrepareObserver observer)
 {
     if (!authority._valid || cancellation.IsCancelled() ||
-        (source ? std::optional(source->id) : std::optional<Guid>{}) != authority._documentID ||
+        (source ? std::optional(source->id) : std::optional<Guid>{}) != authority._documentID)
+        return std::nullopt;
+    auto result = PrepareDocumentLifecyclePublication(std::move(authority), std::move(state), std::move(replacement),
+                                                      active, std::move(name), cancellation, observer);
+    if (result)
+        result->_source = std::move(source);
+    return result;
+}
+
+std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(
+    ImageImportAuthority authority, DocumentHistory::StateView state, std::optional<CanvasDocument> replacement,
+    std::optional<Guid> active, std::wstring name, CancelToken cancellation, DocumentHistory::PrepareObserver observer)
+{
+    if (!authority._valid || cancellation.IsCancelled() ||
         (replacement && ValidateDocument(*replacement) != DocumentStatus::Ok) || (!replacement && active))
         return std::nullopt;
     PreparedImageImport result(std::move(authority), std::move(state));
-    result._source = std::move(source);
-    if (!result._source && !replacement)
+    if (!result._authority._documentID && !replacement)
         return result; // Close on an already absent document preserves its existing redo/saved lineage.
     if (active && !std::any_of(replacement->layers.begin(), replacement->layers.end(),
                                [&](const ImageLayer& layer) { return layer.id == *active; }))

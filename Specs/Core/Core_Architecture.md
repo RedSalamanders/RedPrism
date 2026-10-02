@@ -231,7 +231,8 @@ specified below; operation-specific input recording, snapshot preparation and wo
 `UiNeverBlocks_2026-09-22.md`.
 
 `WorkerPool::Initialize` creates a private pool with equal minimum and maximum thread counts (logical processor
-count by default), a cleanup group and one reusable work object for each of HIGH, NORMAL and LOW priority. A
+count by default), a cleanup group, one reusable work object for each of HIGH, NORMAL and LOW priority, and one
+preallocated final retirement work object outside that cleanup group. A
 dispatch callback carries only its owner/lane, never a job payload. Each lane coalesces outstanding wakeups at the
 thread count; `JobScheduler` drains its bounded records and owns job admission and state. No callbacks poll when idle.
 
@@ -243,8 +244,10 @@ back to the caller. Tile bodies allocate nothing and never wait on jobs, I/O, or
 `ParallelFor` uses the same cancel-before-join rule. The UI thread MUST NOT call this synchronous join.
 
 `WorkerPool::Close` requests cancellation, stops dispatch admission, cancels queued dispatch callbacks and joins running ones.
-It also waits on a condition variable for external parallel callers to release their helpers. Only then are the
-cleanup group, private pool and COM cookie released. Close is idempotent and runs on the owning teardown thread,
+It also waits on a condition variable for external parallel callers to release their helpers. Its optional owner
+cleanup hook then drops owner-affine wrappers. The final work object acknowledges non-cancellable CPU retirement
+on the existing MTA pool before releasing work ownership, cleanup group, private pool and COM cookie. No allocation
+or new thread is needed during Close. Close is idempotent and runs on the owning teardown thread,
 never inside a callback. Initialization precedes publication; closed pools cannot restart. Cancellation does not
 forcibly interrupt a body: it checks its token per row or a measured smaller interval.
 
@@ -267,7 +270,16 @@ The scheduler's owner grants memory reservations before dispatch and holds them 
 payload destruction. Waiting admission uses records, never blocked workers; memory events and retirements retry
 from an OS snapshot. An independent intrusive release queue can return memory even at the scheduler record cap.
 `Raster` and `PixelBuffer` own their release nodes. A thread-local sink binds only the application owner to the
-queue; Close clears that binding before joining/draining. The process recycle pool holds only unowned pixel
+queue. Close joins producers while retaining the sink, then drops owner-affine job/action wrappers outside locks
+so their admitted CPU aggregates enqueue retirement. Borrowed `CloseHooks` may detach external owner resources
+after wrapper destruction while the sink remains installed. Close clears the binding before the final MTA hook,
+which runs the external CPU retirement hook before deferred/recycle drain. Hooks cannot submit, pump, wait or
+reenter Close; their context outlives acknowledgement. Uninitialized or repeated Close runs neither hook.
+Application detaches session coverage engines, brush/composition resources and joined GPU/retry receivers on the
+owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Reservations,
+events and the pool apartment remain alive through acknowledgement. Empty selected/collapsed hash bucket capacity
+remains until host destruction; broader initialization/lease/draft coverage and shutdown timing remain separate
+qualification. The process recycle pool holds only unowned pixel
 allocations, so detaching it cannot invalidate live images. Low/high physical-memory events use one-shot waits on
 the separate wait pool. Exact budgets, cache caps and trace gates live in `Core_PerformanceAndResources.md`.
 

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "ApplicationShutdownTestProbe.h"
+
 #include "ChromeHost.h"
 #include "ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
@@ -356,6 +358,27 @@ int Application::RunClipboardDelayedSelfTest() noexcept
                    "declined-early-read-preserves-delayed-format");
         }
         State state{*owner, scenario, producer, gate, {}, owner->_session.history.CurrentRevision()};
+        struct ShutdownAuthority final
+        {
+            Application& owner;
+            Raster source;
+            const Guid& revision;
+            bool unchanged = false;
+        } authority{*owner, source, state.revision};
+        ApplicationShutdownTestProbe probe;
+        probe.checkContext = &authority;
+        probe.checkOwner = [](void* opaque) noexcept
+        {
+            auto& check = *static_cast<ShutdownAuthority*>(opaque);
+            const auto* layer = check.owner._session.ActiveLayer();
+            check.unchanged = layer && layer->asset && layer->asset->image == check.source &&
+                              check.owner._session.Document() && check.owner._session.Document()->layers.size() == 1 &&
+                              check.owner._session.history.CurrentRevision() == check.revision &&
+                              check.owner._session.history.UndoCount() == 0;
+        };
+        if (scenario.mode == Mode::Shutdown)
+            owner->_shutdownTestProbe = &probe;
+        const auto clearProbe = wil::scope_exit([owner]() noexcept { owner->_shutdownTestProbe = nullptr; });
         if (scenario.action == Action::Paste)
             state.receipt = owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandPaste});
         else
@@ -393,12 +416,14 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         }
         else
         {
-            expect(owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->asset &&
-                       owner->_session.ActiveLayer()->asset->image == source &&
-                       owner->_session.Document()->layers.size() == 1 &&
-                       owner->_session.history.CurrentRevision() == state.revision &&
-                       owner->_session.history.UndoCount() == 0,
-                   scenario.name, "no-document-publication-after-cancel-stale-or-prefill");
+            const bool unchanged = scenario.mode == Mode::Shutdown
+                                       ? probe.ownerCalls == 1 && authority.unchanged
+                                       : owner->_session.ActiveLayer() && owner->_session.ActiveLayer()->asset &&
+                                             owner->_session.ActiveLayer()->asset->image == source &&
+                                             owner->_session.Document()->layers.size() == 1 &&
+                                             owner->_session.history.CurrentRevision() == state.revision &&
+                                             owner->_session.history.UndoCount() == 0;
+            expect(unchanged, scenario.name, "no-document-publication-after-cancel-stale-or-prefill");
             if (scenario.action == Action::Paste)
                 expect(state.receipt.Read().outcome ==
                            (scenario.mode == Mode::Replacement ? HostOutcome::Stale : HostOutcome::Cancelled),
@@ -410,8 +435,15 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         if (scenario.mode == Mode::Cancel)
             expect(state.retainedUntilAcknowledged, scenario.name, "cancel-keeps-reservation-until-native-return");
         if (scenario.mode == Mode::Shutdown)
+        {
+            expect(!owner->_session.Document() && !owner->_session.ActiveLayer() && !owner->_session.Clipboard(),
+                   scenario.name, "shutdown-retires-session-after-source-preservation-check");
+            std::array<std::uint8_t, 4> retainedSourcePixel{};
+            source.ReadRegion(0, 0, 1, 1, retainedSourcePixel.data(), 4, 0);
+            expect(retainedSourcePixel == basePixel, scenario.name, "shutdown-preserves-retained-source-pixel");
             expect(owner->QueueHostInput(HostCommandInput{ChromeHost::kCommandPaste}).Read().error == E_ABORT,
                    scenario.name, "closed-owner-refuses-new-command");
+        }
         if (owner->SizeCardOpen())
             owner->CancelSizeCard();
     }

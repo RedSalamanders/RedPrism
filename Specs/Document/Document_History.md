@@ -184,7 +184,14 @@ is marked saved. Undo returns to no document and Redo returns to the saved canva
 to an absent, saved document with no entries. Closing an already absent document leaves its existing redo
 lineage intact. `PrepareSavedReplacement` and `PrepareDocumentLifecyclePublication` construct these optional
 states and the replacement owners privately before publication. Cancellation, invalid input and stale
-authority preserve the live state. Production lifecycle caller migration is tracked separately in
+authority preserve the live state. Host New/New Canvas/Close now capture sealed session authority and immutable
+history roots after complete admission, without copying the old document records. Workers prepare the optional
+replacement; owner publication transfers the old records and drafts into its prepaid retirement holder. The
+source-owning preparation overload remains a compatibility wrapper. The selected host ordinal, captured card
+invocation/dimensions and exact history epoch remain authoritative through apply/drop acknowledgement. Path
+clearing, viewport Fit and rebinding that selected input to the new lifetime follow successful publication only.
+Already queued inputs for the old lifetime become stale. Admission traversal and measured G1 remain open;
+combined production qualification is tracked in
 [`DocumentLifecycleWorkers`](../Plans/WIP/DocumentLifecycleWorkers_2026-10-02.md).
 
 Prepared selection commands and outline-move closure bind complete worker-built history to their sealed owning

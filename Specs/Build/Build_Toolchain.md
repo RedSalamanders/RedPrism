@@ -273,10 +273,42 @@ repeated padding, nonaligned end or empty index range receives no exemption. No 
 The byte table becomes proved data only after its associated DWORD table and every branch target pass. Rows crossing
 directly touching DWORD and byte-index spans keep the same 15-byte, byte-for-byte PE and contribution checks.
 No object, library or function runtime allowlist entry is added by either proof.
-Unrecognized table/dispatch forms receive no exemption. The synthetic parser controls are distinct from the
+Unrecognized table/dispatch forms receive no exemption.
+
+The observed terminal CL/R8 dispatch controls live in `IsaClGuardTests.ps1`. That exact form is contiguous
+`MOVZX ECX,byte [RBX+disp8]; CMP CL,max; JA rel32; MOVZX ECX,CL; LEA R8,imagebase;
+MOV ECX,[R8+4*RCX+table]; ADD RCX,R8; JMP RCX`. Every row's exact bytes/length agree with the PE, with no unknown
+or overlapping boundaries. The unsigned maximum is 1…127. The aligned same-owner anonymous PDB table starts at
+the load displacement, and its maximum+1 DWORDs end exactly at the owning PDB procedure end. No intervening data
+symbol is allowed. Every entry and the JA default target is a decoded boundary of that procedure before the
+table. The observed `JMP rel8; NOP` suffix immediately before the table is also corroborated against the PE and
+its jump target. The 99 independent controls prove accepted bounds and displacements and refusal of malformed
+guard/register/PE/listing/PDB/target/suffix rows, plus real adjacent VEX/EVEX instructions. This adds no runtime
+allowlist exception. These parser controls remain distinct from the
 compiled ISA controls and cover broken dispatch, bounds, targets, trailing return and adjacent real VEX code.
 
-The observed DxUi typography form permits exactly one contiguous `MOVZX EAX,DL` between LEA RCX of image base
+  The compact ASan menu byte remap permits exactly `CMP dword [RSP+disp32],imm8; JA rel32;
+  MOV EAX,[RSP+the same disp32]` followed by the contiguous RCX image-base byte/DWORD dispatch, ADD and JMP RAX.
+  All eight rows, 48 bytes, must match PE bytes and decoded nonoverlapping boundaries. The sign-extended imm8
+  maximum is 1…127. The adjacent same-owner anonymous PDB DWORD/byte tables have max+1 byte indices ending exactly
+  at their owning PDB procedure end inside the larger contribution. Every index is below the DWORD entry count;
+  every DWORD/default target is a decoded body boundary before the tables. A later data symbol cannot rescue a
+  missing/malformed compact guard. The 56 independent controls include extreme valid bounds/displacements,
+  PE/listing/PDB/target/guard mismatches and adjacent real VEX/EVEX. This adds no runtime allowlist exemption.
+
+The observed Release continuation switch uses an image-base LEA into R10, 83 bytes of exact non-clobbering
+prelude rows, and `MOVZX EAX,byte [RBX+disp32]; CMP AL,imm8; JA rel32; MOV EAX,[R10+4*RAX+table]; ADD RAX,R10;
+JMP RAX`. All 24 prelude/guard/dispatch rows must match PE bytes, decoded lengths and nonoverlapping boundaries;
+the unsigned maximum is 1…127. Prelude branches must reach decoded procedure boundaries, and direct entries
+cannot bypass the base definition or guard. The same-owner anonymous DWORD table ends exactly at its PDB
+procedure end, with no intervening data symbol. Every target, including backward body targets and the separate
+default, is a decoded boundary before the table; table entries cannot enter the protected prelude/guard.
+The preceding RET/NOP or RET/security-failure-CALL/INT3/NOP rows are also corroborated against PE and listing.
+The 183 independent controls include every protected row's missing/duplicate/unknown/overlapping/PE/listing
+refusal, extreme bounds, direct-entry and backward-target cases, metadata/target/tail refusals, and real VEX/EVEX
+in the body or adjacent to the table. This proof adds no runtime instruction, module or allowlist exemption.
+
+  The observed DxUi typography form permits exactly one contiguous `MOVZX EAX,DL` between LEA RCX of image base
 and the DWORD EAX table load. RCX stays unchanged. This form requires the exact same-owner anonymous 16-byte
 untyped `S_LDATA32` at the aligned table start, even if RET/alignment precede it; decoded targets and full bounds
 still apply. A changed byte register, opcode, repeated move, intervening instruction or invalid PDB symbol gets

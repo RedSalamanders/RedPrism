@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "ApplicationShutdownTestProbe.h"
+
 #include "ChromeHost.h"
 #include "TransformCancellationWork.h"
 #include "TransformPreviewTestGate.h"
@@ -23,7 +25,9 @@ int Application::RunTransformPreviewSelfTest() noexcept
         ReplaceHistory,
         QueueUndo,
         QueueApply,
-        CancelReopen
+        CancelReopen,
+        RecoverDevice,
+        Shutdown
     };
     struct State final
     {
@@ -50,6 +54,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         bool queued = false;
         bool displayRetained = false;
         bool clipboardPresent = false;
+        bool deviceRecovered = false;
         std::optional<ContinuationReceipt> receipt;
     };
 
@@ -169,6 +174,20 @@ int Application::RunTransformPreviewSelfTest() noexcept
             {
             case Action::View:
                 break;
+            case Action::RecoverDevice:
+            {
+                const auto generation = owner._renderer.DeviceGeneration();
+                const HRESULT recovered = owner._renderer.RecoverDeviceForTest();
+                if (SUCCEEDED(recovered))
+                    owner.BindCompositionDevice();
+                state.deviceRecovered = SUCCEEDED(recovered) && owner._renderer.DeviceGeneration() != generation &&
+                                        owner._composition.Device() == owner._renderer.Device() &&
+                                        owner._brushEngine.Ready();
+                break;
+            }
+            case Action::Shutdown:
+                owner.Shutdown(); // The worker gate observes the scheduler stop event; no test-side release.
+                return;
             case Action::LatestTicks:
                 state.queued = state.gate->visits.load() == 1;
                 for (const double right : {6.0, 7.0, 8.0})
@@ -278,6 +297,37 @@ int Application::RunTransformPreviewSelfTest() noexcept
         expect(value->retired.load() && value->retiredOffOwner.load(), "success-payload-retires-off-owner");
         expect(_errorsShown == state.errors && terminal(),
                "success-has-no-notice-and-reaches-terminal-reservation-state");
+        _transformPreviewTestGate.reset();
+    }
+
+    // A CPU snapshot is independent of the D3D device. Replace it while the worker is gated both before
+    // computation and after it has built a complete result; publication must still use the captured source.
+    for (const bool after : {false, true})
+    {
+        if (!prepare())
+            return 5;
+        auto gate = std::make_shared<TransformPreviewTestGate>();
+        if (!gate->release)
+            return 5;
+        gate->afterPreparation = after;
+        _transformPreviewTestGate = gate;
+        State state{*this, gate};
+        state.action = Action::RecoverDevice;
+        snapshot(state);
+        RefreshTransformPreviewJobs();
+        if (SettleJobs(_jobs, 15000, dispatch, &state) != SettleResult::Settled)
+            return 5;
+        expect(state.visited && state.deviceRecovered, "device-replacement-reaches-held-preview-and-rebinds");
+        expect(_session.DisplayDocument() && _session.DisplayDocument() != &_session.Document().value() &&
+                   _session.DisplayDocument()->layers.front().asset->image != state.source,
+               "device-replacement-keeps-complete-cpu-preview-publication");
+        expect(_session.Document().value() == state.document && _session.Generation() == state.generation &&
+                   _session.history.CurrentRevision() == state.historyRevision,
+               "device-replacement-preserves-captured-source-generation-and-history");
+        expect(gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load() && terminal(),
+               "device-replacement-does-not-replay-or-retain-preview-owners");
+        expect(_errorsShown == state.errors && _renderer.PresentCount() == state.presents,
+               "device-replacement-completes-hidden-without-notice-or-present");
         _transformPreviewTestGate.reset();
     }
 
@@ -499,6 +549,84 @@ int Application::RunTransformPreviewSelfTest() noexcept
     expect(_session.Document().value() == undo.document && _session.ActiveLayer()->asset->image == undo.source,
            "younger-undo-preserves-exact-document-and-source-raster");
     expect(!_transformPreviewTicket && !_jobs.ReservedMemoryBytes(), "younger-undo-retires-preview-ownership");
+
+    if (!settle() || !closeDeferred() || !settle())
+        return 5;
+    // Borrowed CPU/session owners survive shutdown until the gated callback and deferred payload acknowledge.
+    // Use an independent host so the rest of the full application self-test continues on its original owner.
+    for (const bool after : {false, true})
+    {
+        Application closing(_instance, true, nullptr, 0);
+        const auto closeOwner = wil::scope_exit([&]() noexcept { closing.Shutdown(); });
+        if (FAILED(closing._jobs.Initialize(1)) || !closing._jobs.RegisterOwnerWork(closing._ownerWork) ||
+            FAILED(closing._retryWait.Initialize(closing._jobs, closing._ownerWork)) ||
+            !closing.InitializeHostContinuations())
+            return 5;
+        CanvasDocument document;
+        document.id = Guid::Generate();
+        document.width = 8;
+        document.height = 8;
+        constexpr std::array<std::uint8_t, 4> bytes{11, 21, 31, 255};
+        ImageLayer layer = ImageLayer::Blank(L"Shutdown preview source", Vec2{1, 1});
+        layer.asset =
+            RasterAsset{Raster::Make(1, 1, RasterFormat::Bgra8888, bytes.data(), bytes.size()), {}, layer.name};
+        const auto active = layer.id;
+        const auto source = layer.asset->image;
+        document.layers.push_back(std::move(layer));
+        closing._session.ReplaceDocument(std::move(document), active);
+        if (!closing._session.BeginDeferredTransform(true))
+            return 5;
+        auto draft = closing._session.PendingTransformEdit()->draft;
+        draft.origin = {2, 3};
+        closing._session.PreviewTransform(draft);
+        auto gate = std::make_shared<TransformPreviewTestGate>();
+        if (!gate->release)
+            return 5;
+        gate->afterPreparation = after;
+        closing._transformPreviewTestGate = gate;
+        State state{closing, gate};
+        state.action = Action::Shutdown;
+        const auto generation = closing._session.Generation();
+        const auto revision = closing._session.history.CurrentRevision();
+        struct AuthorityCheck final
+        {
+            Application& owner;
+            std::uint64_t generation;
+            Guid revision;
+            Raster source;
+            bool unchanged = false;
+        } authority{closing, generation, revision, source};
+        ApplicationShutdownTestProbe probe;
+        probe.checkContext = &authority;
+        probe.checkOwner = [](void* opaque) noexcept
+        {
+            auto& check = *static_cast<AuthorityCheck*>(opaque);
+            const auto* layer = check.owner._session.ActiveLayer();
+            check.unchanged = check.owner._session.Generation() == check.generation &&
+                              check.owner._session.history.CurrentRevision() == check.revision && layer &&
+                              layer->asset && layer->asset->image == check.source &&
+                              layer->transform.origin == Vec2{0, 0};
+        };
+        closing._shutdownTestProbe = &probe;
+        const auto clearProbe = wil::scope_exit([&closing]() noexcept { closing._shutdownTestProbe = nullptr; });
+        closing.RefreshTransformPreviewJobs();
+        const auto result = SettleJobs(closing._jobs, 15000, dispatch, &state);
+        expect(result == SettleResult::Settled && state.visited && state.reserved && closing._shutdownComplete,
+               "shutdown-joins-before-and-after-preparation-gated-preview");
+        expect(gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
+               "shutdown-retires-complete-preview-payload-once-off-owner");
+        expect(probe.ownerCalls == 1 && authority.unchanged,
+               "shutdown-never-publishes-cancelled-preview-or-changes-source-authority");
+        expect(!closing._session.Document() && !closing._session.PendingTransformEdit() &&
+                   !closing._session.history.CanUndo() && closing._session.Generation() > generation,
+               "shutdown-retires-live-session-only-after-source-authority-check");
+        std::array<std::uint8_t, 4> retainedSourcePixel{};
+        source.ReadRegion(0, 0, 1, 1, retainedSourcePixel.data(), 4, 0);
+        expect(retainedSourcePixel == bytes, "shutdown-preserves-independent-retained-source-pixel");
+        expect(!closing._transformPreviewTicket && !closing._transformPreviewMailboxOpen &&
+                   !closing._jobs.ReservedMemoryBytes() && !closing._jobs.ReleasingMemoryBytes(),
+               "shutdown-releases-ticket-mailbox-and-complete-reservation");
+    }
 
     std::printf("transform-preview-host assertions=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;

@@ -384,8 +384,8 @@ bool Application::HandleKey(const KeyPress& press) noexcept
         return true;
     }
     if (press.virtualKey == VK_ESCAPE && !press.ctrl && !press.alt &&
-        (_sizingTicket || _pathClassificationTicket || _rasterEditTicket || _gradientCommitTicket ||
-         _pixelMoveCommitTicket))
+        (_documentLifecycleTicket || _sizingTicket || _pathClassificationTicket || _rasterEditTicket ||
+         _gradientCommitTicket || _pixelMoveCommitTicket))
     {
         CancelHostContinuations(); // retain the selected request until worker acknowledgement
         return true;
@@ -622,11 +622,24 @@ int Application::RunKeyboardSelfTest() noexcept
         ApplySettings(changed);
     };
     const auto binding = [](const wchar_t* commandId, KeyChord chord) { return ShortcutBinding{commandId, chord}; };
-    const auto undoTo = [this](int count)
+    const auto undoTo = [this, &settle](int count)
     {
+        const int allowance = (std::max)(0, _session.history.UndoCount() - count) + 2;
+        int attempts = 0;
         while (_session.history.CanUndo() && _session.history.UndoCount() > count)
         {
-            _session.Undo();
+            if (attempts++ >= allowance)
+            {
+                SelfTestFailure(L"The keyboard Undo fixture made no bounded progress toward its original history.\n");
+                std::_Exit(5);
+            }
+            OnCommand(ChromeHost::kCommandUndo);
+            settle();
+        }
+        if (_session.history.UndoCount() != count)
+        {
+            SelfTestFailure(L"The keyboard Undo fixture did not restore its original entry count.\n");
+            std::_Exit(5);
         }
         DocumentChanged();
     };

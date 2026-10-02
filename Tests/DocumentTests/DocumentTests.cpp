@@ -18,6 +18,7 @@
 #include "DocumentLifecycleTests.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
+#include "DuplicateOpeningLimitTests.h"
 #include "DuplicateOpeningWorkTests.h"
 #include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
@@ -7422,6 +7423,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunTransformDeferredTests();
     gFailures += RunTransformDeferredGuardTests();
     gFailures += RunDuplicateOpeningWorkTests();
+    gFailures += RunDuplicateOpeningLimitTests();
     gFailures += internal::RunDocumentLifecycleTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();

@@ -19,8 +19,11 @@
 #include "HostPathReadTests.h"
 #include "JobActivityTests.h"
 #include "JobBenchmark.h"
+#include "JobCloseHookTests.h"
 #include "JobMemoryTests.h"
+#include "JobShutdownRetirementTests.h"
 #include "JobStageTests.h"
+#include "JobSuspendedRetirementTests.h"
 #include "JobTests.h"
 #include "JobUiPolicyTests.h"
 #include "KernelCliTests.h"
@@ -634,7 +637,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 484> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 485> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -1041,6 +1044,7 @@ void TestStringTable() noexcept
                                          IDS_SIZE_IMAGE_INVALID,
                                          IDS_SIZE_RESIZE,
                                          IDS_ERROR_RESIZE,
+                                         IDS_ERROR_DOCUMENT_LIFECYCLE,
                                          IDS_SIZE_MEGABYTES,
                                          IDS_SIZE_KILOBYTES,
                                          IDS_CROP_RATIO,
@@ -1798,6 +1802,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPerfRootTests();
     gFailures += RunPipelineTraceTests();
     gFailures += RunJobMemoryTests();
+    gFailures += RunJobShutdownRetirementTests();
+    gFailures += RunJobCloseHookTests();
+    gFailures += RunJobSuspendedRetirementTests();
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();

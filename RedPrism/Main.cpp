@@ -258,6 +258,11 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
     wil::unique_couninitialize_call comScope{SUCCEEDED(com)};
 
     const bool forceWarp = parsed.warp || parsed.selfTest;
+    if (parsed.selfTest)
+    {
+        if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
+            return failed;
+    }
     const std::unique_ptr<Application> application{new (std::nothrow) Application(
         instance, forceWarp, parsed.screenshotPath, parsed.screenshotDpi, parsed.demo, parsed.bench)};
     if (!application)

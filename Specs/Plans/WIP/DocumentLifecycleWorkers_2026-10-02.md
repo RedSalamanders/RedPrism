@@ -14,27 +14,75 @@
     and preserve Close's empty saved history. Reuse the current direct methods as compatibility references.
   - [x] Validate dimensions, active id, source/session/generation/structural identity and exact history epoch;
     refuse invalid, stale, cancelled and moved-from publications before changing any live state.
-- [ ] N2 — Admit and activate production lifecycle callers under their existing selected host ordinal.
-  Private host candidate: copied dimensions, selected ordinal/acknowledgement and path/Fit-after-success routing
-  are implemented. Capture now retains only sealed authority and immutable history roots; source record copies
-  are unnecessary for replacement. The original source-owning API remains a compatibility/testing wrapper.
-  Admission/retirement traversal, actual caller tests and native activation are still unqualified.
-  - [ ] Capture source/history only after whole-graph admission; reserve prepared documents/history and aggregate retirement.
-  - [ ] Retain confirmed discard/save decisions; failed prerequisite work prevents replacement and path changes.
-  - [ ] Publish document/history/targets/drafts by nonthrowing transfers, then clear the path and apply Fit once.
-  - [ ] Keep the private clipboard/palette and existing settings; detach borrowed brush coverage engines on owner.
-  - [ ] Retire the complete replaced CPU graph away from the owner before scheduler destruction.
+- [x] N2 — Admit and activate production lifecycle callers under their existing selected host ordinal.
+  The complete private WARP application run passes 258 controls (115 lifecycle, 58 accepted-dimension/refusal,
+  85 Close cancellation/fault), with existing application goldens unchanged. Its exact 547 inputs, image/symbols
+  and 91 evidence entries are retained in `.build/p1-host-draft/lifecycle-host-qualified-r5/`.
+  The reviewed production candidate qualifies in the six-profile r9 matrix at N4; broader N3 and timing remain open.
+  Capture retains only sealed authority and immutable history roots after admission; replacement needs no copy
+  of the old document records. The source-owning API remains a compatibility/testing wrapper. Admission and
+  retirement traversal remain H2 costs. The first receipt fixture failure and the later genuine typed-opacity
+  replacement regression are preserved before repair. Replacement now retains the old field's acknowledged
+  value until its late commit is consumed, as the existing opacity contract requires.
+  - [x] Private host proof: capture authority/history after whole-graph admission; reserve prepared documents/history and aggregate retirement.
+  - [x] Private host proof: retain discard/save decisions; failed prerequisite work prevents replacement and path changes.
+  - [x] Private host proof: publish by nonthrowing transfers, then clear the path and apply Fit once.
+  - [x] Private host proof: keep private clipboard/palette/settings and detach borrowed coverage engines on owner.
+  - [x] Private host proof: retire replaced CPU payloads away from owner after apply/drop acknowledgement.
 - [ ] N3 — Independent primitive and real-host controls; preserve original failures before repairs.
-  - [ ] Literal dimensions, names, blank layer, optional document, active/selected ids, saved state,
+  - [x] Private host proof: literal dimensions, names, blank layer, optional document, active/selected ids, saved state,
     New Undo/Redo and Close's empty history; exact clipboard/palette preservation.
   - [ ] Existing nested transaction, redo branch, collapsed rows, masks, retained selection/display,
     every live draft and prepaid restore owners; no dangling borrowed graphics engine on retirement.
   - [ ] Before/after-ready cancel, source/target/history/replacement staleness, repeated/younger requests,
     reached allocation/history checkpoints, admission refusal, hidden completion and shutdown.
-  - [ ] New Canvas card owns the accepted dimensions despite later card edits; invalid/overflow dimensions
+  - [x] Private host proof: New Canvas card owns accepted dimensions despite later edits; invalid/overflow dimensions
     cannot close the card, clear the path, lose the old document or create a history revision.
-- [ ] N4 — Skills/formatting and complete x64 Debug/Release/ASan gates plus all three ARM64 cross-builds.
-  Archive frozen inputs, original failures, exact images/symbols/results; reconcile contracts and commit/push.
+- [x] N4 — Skills/formatting and complete x64 Debug/Release/ASan gates plus all three ARM64 cross-builds.
+  Exact frozen inputs, original failures and images/symbols/results are archived; contracts are reconciled for
+  the integration commit. Fresh r9 passes all six profiles against 582 inputs
+  ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
+  The first combined matrix stops on ARM64 ASan compilation: the 485-entry string catalog still declared a
+  484-element array. Its 572 inputs and 284 evidence entries are preserved on the qualification archive volume
+  as `p1-lifecycle-policy-shutdown-native-r1-ARM64-compile-failure`. Correcting the explicit count changes no
+  catalog expectation. No profile qualifies in that run; the fresh r2 matrix must complete every gate.
+  The r2 matrix passes all three ARM64 profiles and x64 ASan build/ISA/host/document/composition gates, then stops
+  at IoTests' delayed clipboard inspection/copy/decode assertions. Its 572 inputs and 292 evidence entries are
+  retained as `p1-lifecycle-policy-shutdown-native-r2-ASan-io-failure`. The cause is unconfirmed; failure-only
+  native render/sequence/format diagnostics precede a fresh matrix without changing expected pixels or status.
+  The r3 matrix passes all three ARM64 builds and x64 ASan through IoTests, then fails in the application
+  `clipboard-work` stage before its first reported host control. Its 572 inputs and 292 evidence entries are
+  retained as `p1-lifecycle-policy-shutdown-native-r3-ASan-clipboard-host-failure`. Diagnostic-only early-return
+  reporting now distinguishes user-clipboard preservation from fixture private-copy failure; the cause remains
+  unconfirmed and no complete combined matrix is claimed.
+  R4 passes all three clean ARM64 builds and both full x64 ASan/Release suites. Debug's build, ISA, host,
+  document and composition gates pass, but IoTests fails the exact foreign clipboard-content preservation
+  observation; sequence diagnostics show a later value differs from the value held during publication.
+  Its 572 inputs and 295 evidence entries are retained as
+  `p1-lifecycle-policy-shutdown-native-r4-Debug-clipboard-preservation-failure`. Failure-only fixture-read
+  diagnostics now identify Inspect/Copy/Decode failure without changing the expected bytes or retry policy.
+  No six-profile qualification or production clipboard fix is claimed by this partial run.
+  The fixture's verification helper now uses the independent C9b reader, keeping one clipboard open through
+  decode instead of releasing between Inspect and Copy. Direct primitive status/refusal tests, literal expected
+  bytes and product behavior are unchanged. The focused Debug I/O run passes; the original intermittent causes
+  remain unconfirmed. Reviewed actual Application shutdown hooks are integrated. Combined clean r5 passes all
+  three ARM64 builds, then stops before x64 ASan runtime at a decoded EVEX row in the pinned DxUi menu's inline
+  switch table. Its exact 576 inputs and 292 evidence entries are retained as
+  `p1-lifecycle-policy-shutdown-native-r5-ASan-isa-failure`. An exact compact stack-guard proof passes 56 new
+  independent controls and all existing parser controls; it rechecks the original archived image without a
+  rebuild or runtime allowlist change. Combined r6 passes every ARM64 build and the complete x64 ASan suite,
+  then stops at Release IoTests' `destination-retry.baseline`: mode 4, Encode, native error 5 at staging
+  publication, before the fixture opens its replacement reader or installs faults. Its exact 577 inputs and
+  294 evidence entries are retained as `p1-lifecycle-policy-shutdown-native-r6-Release-destination-retry-failure`.
+  New bounded staging-publication recovery and independent source-reader controls remain under qualification;
+  the original external cause is unproven. No full native qualification is claimed by r6. The focused Release r4
+  build/ISA/HostTests/IoTests pass 34 suspended/prequeued retirement and 269 publication controls after exact R10/AL
+  switch-table proof. Its 582 inputs and 292 evidence entries are retained. R7 then stops in ASan IoTests at the
+  clipboard replacement refusal; r8 passes all ARM64 builds and the complete x64 ASan suite, then Release stops
+  at clipboard source-sequence fixture acquisition and its dependent publication assertion. Debug does not run.
+  The exact 582-input r7/r8 failures retain 292/294 evidence entries before further edits/rebuilds
+  ([record](../../TestRuns/P1LifecycleShutdownFailure_2026-10-02.md)). Native six-profile qualification stays open;
+  fixture diagnostics retain the original retry budget and expected assertions.
 - [ ] N5 — Measure owner admission/capture/apply/history/chrome/resource retirement and first upload;
   finish H2/H3/H4 and the full P1 G1 exit before claiming constant-time capture or a timing target.
 
@@ -43,9 +91,10 @@ Owner: `DocumentSession`, prepared history/replacement, host continuations, life
 
 ## Current code and required compatibility
 
-`NewDocument` and New Canvas card Apply settle interactions, call `ClearDocument`, call `CreateDocument`
-and mark the final history revision saved on the owner. Close Project clears the document/history/drafts on
-the owner. These paths allocate history and can destroy large retained graphs synchronously.
+The direct `ClearDocument`/`CreateDocument` methods remain compatibility references. The activated host New,
+New Canvas Apply and Close Project routes prepare optional replacement documents/history on a Commit worker
+under the selected host ordinal; their combined native qualification passes
+([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
 
 The compatibility reference is `Document_Model.md` and the direct `ClearDocument`/`CreateDocument` behavior:
 New has one blank `Layer 1`, the requested dimensions, no pixels until painting, one `New Canvas` entry from
@@ -61,8 +110,9 @@ Replacement publication must select an absent document too; a null output is a r
 
 ## Preparation and application
 
-An accepted lifecycle job captures the current source, exact history view and import-style session authority
-after admission. Workers construct the new optional document, selected-id owner and replacement history.
+An accepted lifecycle job captures the exact immutable history view and sealed import-style session authority
+after admission. It does not copy old document records; publication transfers their live owner into retirement.
+Workers construct the new optional document, selected-id owner and replacement history.
 New uses an absent baseline, one named entry and a saved after-revision. Close uses an absent baseline/after
 and no entry. Closing an already absent document remains a successful no-op with no new authority or history.
 Every replacement allocates its retirement holders before publication, including an empty Close.

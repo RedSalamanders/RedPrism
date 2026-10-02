@@ -53,6 +53,20 @@ preserve the existing destination and clean only the owned staging tree. This ex
 recorded Windows error 5 in `save-durability.folder-rotation`; it does not identify the external reader or filter.
 The added worst-case scheduled wait is 125 ms on that error path, with no busy polling or UI-thread wait.
 
+Staging-to-destination publication also permits at most three native rename attempts, only after
+`ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION`, with one-shot worker timer waits of 25 ms and 100 ms
+and a 1 s failure bound per event wait. `PublicationRetryScheduled` reports the immediate native refusal.
+Before destination rotation succeeds, cancellation at the next boundary returns Cancelled and leaves any
+earlier destination/recovery backup intact. After rotation succeeds, a late stop cannot abandon publication:
+finish the rename or restore the complete backup using the existing recovery policy. The rename never replaces
+an unexpected destination. A successful rename reports Published exactly once and returns Ok, including when
+stop arrives afterward. Exhaustion reports the actual final staging rename error before rollback/cleanup.
+Injected staging-rename errors remain final and visit no publication timer hooks. Separate
+`PublicationTimerCreate/Arm/Wait` faults stop recovery and retain the initiating native rename error.
+Healthy native publication creates no timer. This policy follows the recorded r6 first-save error 5;
+the responsible reader/filter or other external cause remains unproven. It adds at most 125 ms of nominal
+scheduled wait on that publication error path; filesystem calls already in flight remain outside these bounds.
+
 Recovery from a **native** rollback rename error `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` permits at
 most three attempts. Between attempts, the calling IO worker blocks on a one-shot waitable timer with nominal
 25 ms then 100 ms delays; each event wait has a 1 s failure bound. There is no busy polling, healthy-save timer

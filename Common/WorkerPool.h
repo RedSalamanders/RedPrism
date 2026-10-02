@@ -13,6 +13,7 @@ namespace WorkerResources
 using UniquePool = wil::unique_any<PTP_POOL, decltype(&CloseThreadpool), CloseThreadpool>;
 using UniqueCleanupGroup =
     wil::unique_any<PTP_CLEANUP_GROUP, decltype(&CloseThreadpoolCleanupGroup), CloseThreadpoolCleanupGroup>;
+using UniqueWork = wil::unique_any<PTP_WORK, decltype(&CloseThreadpoolWork), CloseThreadpoolWork>;
 
 // The pinned WIL guard has no concurrency SAL annotations. Describe its real acquire/release effects here,
 // retaining WIL ownership. The analysis gate also compiles a deliberate unguarded access as a negative control.
@@ -52,6 +53,12 @@ class WorkerPool final : public Executor
 {
   public:
     using Dispatch = void (*)(void*, WorkPriority, CancelToken) noexcept;
+    struct CloseWork final
+    {
+        void (*owner)(void*) noexcept = nullptr;
+        void (*worker)(void*) noexcept = nullptr;
+        void* context = nullptr;
+    };
     WorkerPool() = default;
     ~WorkerPool() override;
     WorkerPool(const WorkerPool&) = delete;
@@ -60,7 +67,9 @@ class WorkerPool final : public Executor
                                      void* context = nullptr) noexcept;
     [[nodiscard]] bool Wake(WorkPriority priority) noexcept;
     void RequestStop() noexcept;
-    void Close() noexcept;
+    // Join all producers, run owner cleanup, then retire its CPU owners on a preallocated MTA callback.
+    // The pool/apartment survive both hooks. A failed initialization has no worker hook or retained work.
+    void Close(CloseWork work = {}) noexcept;
     [[nodiscard]] unsigned int Concurrency() const noexcept override
     {
         return _threadCount;
@@ -80,6 +89,7 @@ class WorkerPool final : public Executor
     };
     static void CALLBACK DispatchCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
     static void CALLBACK ParallelCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
+    static void CALLBACK CloseCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept;
     void FinishParallel() noexcept;
 
     SRWLOCK _lock = SRWLOCK_INIT;
@@ -95,6 +105,8 @@ class WorkerPool final : public Executor
     wil::unique_mta_usage_cookie _mta;
     WorkerResources::UniquePool _pool;
     WorkerResources::UniqueCleanupGroup _cleanup;
+    WorkerResources::UniqueWork _closeCallback;
+    CloseWork _closeWork{};
     std::array<Lane, 3> _lanes{};
 };
 

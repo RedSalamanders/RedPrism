@@ -17,6 +17,7 @@
 #include "PathClassificationWorkTests.h"
 #include "ProjectCancellationTests.h"
 #include "ProjectLoadWorkTests.h"
+#include "ProjectPublicationRetryTests.h"
 #include "ProjectStore.h"
 #include "SettingsStore.h"
 #include "ZipOwner.h"
@@ -1696,14 +1697,14 @@ struct RotationFaultPlan
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::DestinationToBackupRename;
     std::uint32_t error = ERROR_ACCESS_DENIED;
     unsigned int failOnVisit = 1;
-    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
 };
 
 struct RecoveryTimerFaultPlan
 {
     ProjectSaveFaultStage stage = ProjectSaveFaultStage::RecoveryTimerCreate;
     std::uint32_t error = ERROR_NOT_ENOUGH_MEMORY;
-    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
 };
 
 std::uint32_t FailPublishAndRecoveryTimerAt(void* context, ProjectSaveFaultStage stage) noexcept
@@ -1739,8 +1740,8 @@ std::uint32_t FailRotationAt(void* context, ProjectSaveFaultStage stage) noexcep
 
 struct RotationEventLog
 {
-    unsigned int visits[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled) + 1]{};
-    unsigned int errors[static_cast<std::size_t>(ProjectIoStage::DestinationRetryScheduled) + 1]{};
+    unsigned int visits[static_cast<std::size_t>(ProjectIoStage::PublicationRetryScheduled) + 1]{};
+    unsigned int errors[static_cast<std::size_t>(ProjectIoStage::PublicationRetryScheduled) + 1]{};
     std::stop_source* stopOnStagingPublishFailure = nullptr;
 };
 
@@ -1883,7 +1884,7 @@ void TestNativeDestinationRotation()
             RotationEventLog events;
             wil::unique_hfile reader;
             CancelSource cancellation;
-            std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1>
+            std::array<unsigned int, static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1>
                 visits{};
         } control{mode};
         const bool needsReader = mode != Mode::InjectedFinal && mode != Mode::Healthy;
@@ -2327,7 +2328,7 @@ void TestProjectRotationFaultRecovery()
     // The fault callback can select one stage at a time, so use a context that fails the second requested point.
     struct TwoFaults
     {
-        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
     } twoFaults;
     const auto failPublishAndRollback = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2459,7 +2460,7 @@ void TestProjectRotationFaultRecovery()
     RotationEventLog stagingCleanupEvents{};
     struct RenameAndCleanupFaults
     {
-        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::DestinationTimerWait) + 1]{};
+        unsigned int visits[static_cast<std::size_t>(ProjectSaveFaultStage::PublicationTimerWait) + 1]{};
     } renameAndCleanupFaults;
     const auto failRenameAndStagingCleanup = [](void* context, ProjectSaveFaultStage stage) noexcept -> std::uint32_t
     {
@@ -2735,6 +2736,7 @@ int wmain(int argc, wchar_t** argv)
     TestProjectSaveDurability();
     TestNativeDestinationRotation();
     TestProjectRotationFaultRecovery();
+    gFailures += RunProjectPublicationRetryTests();
     gFailures += RunPathClassificationWorkTests();
     gFailures += RunImageCodecWorkTests();
     gFailures += RunClipboardDibWorkTests();

@@ -72,11 +72,12 @@ enum class ProjectIoStage
     StagingCleanupFailed,
     RollbackRetryScheduled,    // Immediate native rename error; a bounded worker timer wait follows.
     DestinationRetryScheduled, // Before rotation: native error, then one bounded worker wait; cancellation allowed.
+    PublicationRetryScheduled, // Staging rename: native error, then a bounded worker wait; finish after rotation.
 };
 
 // Optional bounded observer on the calling worker. It must not touch UI or throw. The context remains borrowed
 // until the operation returns. value is completed assets, percentage for ArchiveWriting, or the immediate
-// Win32 error for a failure stage, RollbackRetryScheduled or DestinationRetryScheduled; otherwise zero. Failure reports
+// Win32 error for a failure or retry stage; otherwise zero. Failure reports
 // precede cleanup that may change LastError.
 struct ProjectIoObserver
 {
@@ -86,11 +87,12 @@ struct ProjectIoObserver
 
 // Optional deterministic failure seam for exploded-directory publication. The callback returns a Win32 error
 // value for the named operation or zero to run the real operation. It is borrowed for one SaveProject call;
-// there is no process-wide test state. Injected operation errors are final; only native rollback errors get the
+// there is no process-wide test state. Injected operation errors are final; only native rename errors get the
 // bounded recovery attempts. DestinationTimerCreate/Arm/Wait apply only after a native prepublication rename
 // refusal; cancellation can stop there with the current destination intact. RecoveryTimerCreate/Arm/Wait fault results
-// stop that recovery operation while the observer still receives the native rollback rename error. ZIP saves do not
-// consult this policy.
+// stop that recovery operation while the observer still receives the native rollback rename error. Publication
+// timer faults preserve the native staging rename error; cancellation stops publication only before rotation.
+// ZIP saves do not consult this policy.
 enum class ProjectSaveFaultStage : std::uint8_t
 {
     DestinationToBackupRename,
@@ -104,6 +106,9 @@ enum class ProjectSaveFaultStage : std::uint8_t
     DestinationTimerCreate,
     DestinationTimerArm,
     DestinationTimerWait,
+    PublicationTimerCreate,
+    PublicationTimerArm,
+    PublicationTimerWait,
 };
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RollbackRename) == 2);
 static_assert(static_cast<std::uint8_t>(ProjectSaveFaultStage::RecoveryTimerCreate) == 5);

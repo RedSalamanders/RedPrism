@@ -85,6 +85,7 @@
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
+    <ClInclude Include="DuplicateOpeningLimitTests.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
@@ -157,6 +158,7 @@
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="DocumentLifecycleTests.cpp" />
+    <ClCompile Include="DuplicateOpeningLimitTests.cpp" />
     <ClCompile Include="MaskEditWorkTests.cpp" />
     <ClCompile Include="LayerCopyWorkTests.cpp" />
     <ClCompile Include="DistortWorkTests.cpp" />

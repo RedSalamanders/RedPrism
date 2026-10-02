@@ -157,6 +157,8 @@
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
+    <ClInclude Include="DocumentLifecycleTestGate.h" />
+    <ClInclude Include="ApplicationShutdownTestProbe.h" />
     <ClInclude Include="ColorWorkTestGate.h" />
     <ClInclude Include="SizingWorkTestGate.h" />
     <ClInclude Include="RasterEditTestGate.h" />
@@ -292,6 +294,12 @@
     <ClCompile Include="ApplicationTransformTests.cpp" />
     <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
     <ClCompile Include="ApplicationTransformPreviewTests.cpp" />
+    <ClCompile Include="ApplicationTransformPolicyTests.cpp" />
+    <ClCompile Include="ApplicationLifecycleJobs.cpp" />
+    <ClCompile Include="ApplicationLifecycleTests.cpp" />
+    <ClCompile Include="ApplicationLifecycleRefusalTests.cpp" />
+    <ClCompile Include="ApplicationLifecycleCloseTests.cpp" />
+    <ClCompile Include="ApplicationShutdownTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyTests.cpp" />
     <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />

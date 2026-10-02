@@ -1766,6 +1766,12 @@ class DocumentSession
         ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
         std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name,
         CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    // Lifecycle preparation depends only on sealed lifetime authority, history roots and the new state.
+    // Publication itself transfers the actual old document into retirement without an owner-side record copy.
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(
+        ImageImportAuthority authority, DocumentHistory::StateView history, std::optional<CanvasDocument> replacement,
+        std::optional<Guid> active, std::wstring name, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] ImageImportAuthority CaptureImageImportAuthority() const noexcept;
     [[nodiscard]] bool CanApplyImageImport(const ImageImportAuthority& authority) const noexcept;
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
@@ -2152,6 +2158,12 @@ class DocumentSession
     {
         _brushEngine = engine;
     }
+    // Owner-only after all producers join. Detach borrowed graphics engines without dropping the CPU graph;
+    // the final retirement callback then releases the session's large CPU owners away from the owner thread.
+    void DetachCoverageForShutdown() noexcept;
+    // Final worker only after owner detachment and producer join. Drop all pixel/history/draft/settings owners
+    // without allocating or reconstructing a session; empty hash bucket capacity survives until host destruction.
+    void RetireCpuForShutdown() noexcept;
     // Starts a stroke at `point` (document pixels): the foreground color, or `erase`; on a mask, black or white
     // per `maskPaintWhite`. False when painting cannot start (or the stroke exceeded the pixel budget).
     bool BeginBrush(Vec2 point, bool erase = false);

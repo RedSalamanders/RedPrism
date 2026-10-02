@@ -163,7 +163,8 @@ class JobScheduler final
     [[nodiscard]] std::int32_t Initialize(unsigned int threads = 0, JobObserver observer = {},
                                           MemorySource memory = {}) noexcept;
     // Explicitly bind large last-reference releases on this owner thread to this scheduler. Only one scheduler
-    // per owner may bind. Clear happens before Close joins; a full job queue cannot refuse a release.
+    // per owner may bind. Close retains the sink through owner cleanup after join, then acknowledges final
+    // worker retirement before teardown; a full job queue cannot refuse a release.
     [[nodiscard]] bool EnableDeferredRelease() noexcept;
     [[nodiscard]] bool EnableMemoryRecycling() noexcept;
     [[nodiscard]] std::uint64_t ReservedMemoryBytes() const noexcept;
@@ -202,7 +203,17 @@ class JobScheduler final
     void RequestStop() noexcept;
     // Owner thread, outside every UI callback. Hides/cancel coordination belongs to Application. Close joins
     // producers before destroying their inputs, results, intrusive nodes, events or COM pool lifetime.
-    void Close() noexcept;
+    struct CloseHooks final
+    {
+        void (*owner)(void*) noexcept = nullptr;
+        void (*worker)(void*) noexcept = nullptr;
+        void* context = nullptr;
+    };
+    // Borrowed context outlives this call. Hooks cannot submit, pump, wait or reenter Close. After producer join
+    // and job-wrapper destruction, owner detaches borrowed resources while the release sink remains installed.
+    // The preallocated final MTA callback runs worker before release/recycle drain and teardown. No hook is run
+    // for an uninitialized/already closed scheduler, and useful-work cancellation cannot suppress retirement.
+    void Close(CloseHooks hooks = {}) noexcept;
     [[nodiscard]] bool IsIdle() const noexcept;
     // Actual initialized pool size for diagnostics; zero before initialization or after Close. Owner thread.
     [[nodiscard]] unsigned int WorkerCount() const noexcept;
