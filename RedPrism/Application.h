@@ -57,6 +57,7 @@ struct ColorWorkTestGate;
 struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
+struct SelectionCommandTestGate;
 struct FileWorkTestGate;
 struct ProjectSaveTestGate;
 struct ProjectOpenTestGate;
@@ -451,6 +452,9 @@ class Application final : public ChromeEvents
     int RunDocumentLifecycleSelfTest() noexcept;
     int RunDocumentLifecycleRefusalSelfTest() noexcept;
     int RunDocumentLifecycleCloseSelfTest() noexcept;
+    class SelectionCommandJob;
+    [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
+    int RunSelectionCommandSelfTest() noexcept;
     class HistoryRestoreJob;
     [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
     int RunHistoryRestoreSelfTest() noexcept;
@@ -758,6 +762,9 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _utilityTicket;
     std::shared_ptr<UtilityWorkTestGate> _utilityWorkTestGate;
     std::optional<HistoryWorkStamp> _sizingStamp;
+    std::optional<HistoryWorkStamp> _selectionCommandStamp;
+    std::optional<JobTicket> _selectionCommandTicket;
+    std::shared_ptr<SelectionCommandTestGate> _selectionCommandTestGate;
     std::optional<HistoryWorkStamp> _historyRestoreStamp;
     std::optional<JobTicket> _historyRestoreTicket;
     std::shared_ptr<HistoryRestoreTestGate> _historyRestoreTestGate;

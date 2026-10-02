@@ -839,6 +839,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_historyRestoreTicket.value());
         }
+        else if (_selectionCommandTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionCommandTicket.value());
+        }
         else if (_rasterEditTicket)
         {
             (void)_historyWork.RequestCancel();

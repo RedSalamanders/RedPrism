@@ -222,6 +222,14 @@ allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 
+Settled Select All/Deselect host jobs reserve the complete selection-command/history peak before copying document
+records. The resumable admission boundary captures once on the owner, then constructs all geometry, after-document
+and history on the worker. Replaced and captured CPU owners remain in one deferred-release aggregate through
+apply/drop. Already resident immutable pixels are shared, while complete aggregate retirement receives its own
+conservative release charge. Queue/cancel refusal retains the selected request until exact acknowledgement.
+The value-record capture and memory/history planners still traverse document/history metadata; H2/H3 and measured
+owner apply, chrome and G1 remain open. Message pumping is a structural test, not a frame or latency measurement.
+
 Preserving selection-command authority owns only weak brush/warp identities. The memory charge also includes
 the inline BrushStroke/WarpStroke records and combined control storage: after a strong owner drops, weak
 references can retain the combined allocation even though its vectors, rasters and engine ownership have been

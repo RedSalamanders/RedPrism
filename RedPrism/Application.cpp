@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ApplicationShutdownTestProbe.h"
+#include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
 
@@ -2274,6 +2275,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunHistoryRestoreSelfTest\n");
     if (const int restore = RunHistoryRestoreSelfTest(); restore != 0)
         return restore;
+    std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
+    if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
+        return selection;
     std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
@@ -4058,8 +4062,11 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    if (!_hostExecuting &&
-        (rasterEdit || clipboard || maskEdit || layerCopy || command == ChromeHost::kCommandFreeTransform))
+    const bool settledSelection =
+        (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect) &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection ||
+                            command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -4569,14 +4576,25 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandSelectAll:
-        EndSelectionInteraction(false);
-        _session.SelectAll();
-        SelectionChanged();
-        break;
     case ChromeHost::kCommandDeselect:
-        EndSelectionInteraction(false);
-        _session.Deselect();
-        SelectionChanged();
+        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+        {
+            _hostExecutionError =
+                StartSelectionCommand(command == ChromeHost::kCommandSelectAll ? SelectionCommandKind::SelectAll
+                                                                               : SelectionCommandKind::Deselect);
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+        }
+        else
+        {
+            // Live selection/stroke closure keeps its qualified legacy route until ordered replay lands.
+            EndSelectionInteraction(false);
+            if (command == ChromeHost::kCommandSelectAll)
+                _session.SelectAll();
+            else
+                _session.Deselect();
+            SelectionChanged();
+        }
         break;
     case ChromeHost::kCommandInverse:
         EndSelectionInteraction(false);
@@ -7899,6 +7917,8 @@ int Application::RunRefusalSelfTest() noexcept
         // A Gaussian Blur whose grown grid would not fit names the budget, not the layer.
         _session.filterSettings.radius = 10;
         OnCommand(ChromeHost::kCommandGaussianBlur);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         const bool blurRefused = !_session.HasColorEdit() && _budgetNotices == notices + 3;
         // Merge Down of B onto A spans 200 × 200: the budget refuses it, and IDS_ERROR_FLATTEN is not raised.
         _session.SelectLayer(b);

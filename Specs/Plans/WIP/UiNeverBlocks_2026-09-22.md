@@ -98,10 +98,40 @@
   this core share the fresh native qualification matrix. Production pointer buffering and writer barriers stay open.
   Combined native r2 now qualifies all 136 named controls in each full x64 suite and all ARM64 cross-builds;
   exact source parity and independent evidence hashes pass ([record](../../TestRuns/SelectionPreservation_2026-10-02.md)).
-- [ ] Settled selection host route — S2b is an isolated implementation candidate: admit before owner capture,
+- [x] Settled selection host route — S2b is qualified: admit before owner capture,
   prepare history on the worker, retain the selected ordinal/input until apply/drop, and retire the aggregate
   off owner. Actual Application ordering/fault/pump/authority tests precede native activation. Header inputs,
   live brush/warp/shape, lasso/move closure, broader writer barriers and G1 remain separate requirements.
+  Private r1 compiler failure, r2's unreached mask-target fixture and r3's clipboard setup ordering failure are
+  archived before each correction. The r3 selection stage passes 162 exact named checks, but the full application
+  suite fails: its pending-gradient fixture began pointer input before queued Deselect acknowledged. The fixture
+  now waits through the existing asynchronous command helper; production clipboard/gradient logic is unchanged.
+  The revised full private Debug suite must pass and be archived before native activation.
+  Private r4 now passes the full WARP application suite and all 162 named selection checks across 28 modes.
+  Exact 471 inputs and 188 evidence files are independently SHA-verified and archived before eleven native
+  activations. A fresh serialized six-profile forced rebuild is running; S2b remains unchecked until exact native
+  controls, source parity and archival pass ([record](../../TestRuns/SelectionHost_2026-10-02.md)).
+  Native r1 stops in ARM64 ASan HostTests: its string catalogue's declared size omits the newly added ID. No
+  complete profile qualifies. Exact 601 inputs and 3,850 evidence files are retained before a single-byte test
+  count correction; private application inputs/qualification are unchanged. Native r2 runs the full fresh matrix.
+  All ARM64 cross-builds and the complete x64 ASan suite now pass, including actual sanitizer detection,
+  full WARP application controls and corpus/screenshot gates. x64 Release/Debug, independent verification and
+  archival remain required before checking S2b.
+  Native r2 now passes all six profiles at `2026-10-02T21:48:10.2541344Z`. Each full x64 suite passes the exact
+  162 unique actor checks; ARM64 is cross-build only. Independent source/control verification and immutable
+  archival retain 601 inputs and 2,858 evidence files, including a separately verified 45-file private runtime
+  supplement for omitted archive log entries. Only the settled Select All/Deselect host boundary is complete;
+  S2/S3b, broader P1 and measured G1 remain open.
+- [ ] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
+  are frozen. Own point/settings/AA at event time; use the qualified capacity planner before capture, worker
+  sampling/flood/trace/history, current-only apply and aggregate retirement. Preserve queue coalescing/receipts,
+  literal output, no-op/error/cancel semantics and the actual application caller. All Layers, Add/Subtract,
+  outline/lasso closure, broader pointer acceptance/writer barriers and G1 remain separate migrations. Private
+  code review, full application proof, archival and native qualification precede activation.
+  Primary review strengthens the cheaper-agent test draft with distinct latest-click literals, a real shared-
+  ordinal gap, a window message observed before worker release, event-time settings changed before capture,
+  queued outside/nonfinite/empty acknowledgements and actual record-table refusal/recovery. The isolated source
+  has sixteen test modes; no wand host build/runtime qualification is claimed yet.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

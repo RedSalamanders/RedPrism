@@ -305,6 +305,18 @@ unsuccessful OpenClipboard acquisition when available. These fixture waits do no
 
 ### Prepared selection publication (P1.6 core)
 
+The application WARP self-test's `selection-host.*` controls exercise the settled Select All/Deselect production
+actor. Literal clockwise full-canvas/nullopt output, complete layer/target preservation, no-op redo/revision,
+nested depth/title, updated saved marker and ordered younger opposite command/Undo are checked. A held worker
+proves reservation before one capture, pending receipt/history ownership, direct zoom and a posted window message
+before acknowledgement, and aggregate retirement off owner. Reached generation/active/mask/crop/epoch/replacement/
+lasso/brush changes refuse stale output. Capture and six history-stage allocation faults preserve live state;
+actual full scheduler records refuse admission and a later command recovers after drain. The mask fixture MUST
+begin on image pixels with an existing mask, so its held target switch is a reached change.
+These 162 unique checks across 28 modes run inside the full application suite; they do not qualify live gesture
+or header routing, every retained raster's last-release thread, allocator/API faults, constant-time capture or G1.
+Harness setup/cleanup waits for queued selection acknowledgement before starting later pointer gestures.
+
 `selection-preserve.*` adds literal 4-by-4 source, mask and clockwise selection controls for the separate
 preserving-command boundary. Live brush/warp/shape opening identity and continued input survive publication;
 reached cancellation/replacement and identical-geometry shape reopening refuse old output. Weak authority does

@@ -1616,7 +1616,7 @@ int Application::RunClipboardSelfTest() noexcept
     // Copy and Copy Merged take the pixels the canvas shows (RF-1104, Decision D3): a pending gradient commits first
     // as its own entry and its preview ends with it; the merged copy holds the gradient, not the layers beneath it.
     {
-        OnCommand(ChromeHost::kCommandDeselect);
+        clipboardCommand(ChromeHost::kCommandDeselect);
         OnCommand(ChromeHost::kCommandNewLayer);
         OnTool(EditorTool::Gradient);
         _session.SetForegroundColor(0xFF000000u);
@@ -1667,7 +1667,7 @@ int Application::RunClipboardSelfTest() noexcept
             return 5;
         }
     }
-    OnCommand(ChromeHost::kCommandDeselect);
+    clipboardCommand(ChromeHost::kCommandDeselect);
     return 0;
 }
 

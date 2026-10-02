@@ -302,8 +302,17 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   Capture owns the whole document/history after admission; worker preparation builds complete changed
   geometry/history, and exact session/generation/active/mask/crop/epoch validation precedes nonthrowing apply.
   Geometrically unchanged commands preserve revision, redo, epoch and generation. Explicit empty remains
-  distinct from absent selection. This factory refuses pending gestures and edits; direct command eligibility
-  remains unchanged until ordered production callers and exact live-gesture authority qualify.
+    distinct from absent selection. This factory refuses pending gestures and edits.
+  - Application routes settled Select All/Deselect through its owned host request and history ordinal. The full
+    command/history reservation precedes snapshot capture; the same suspended job resumes for worker preparation.
+    Completion validates the exact stamp, settled session authority and sealed publication before apply. Cancel,
+    stale authority, capture/history allocation faults and scheduler refusal acknowledge without partial geometry
+    or history publication. The request survives until that acknowledgement; younger document commands wait,
+    while view commands and messages continue. Replaced CPU owners retire in the worker release aggregate.
+    Empty-document requests acknowledge without a worker. True no-ops retain redo/revision/generation; nested
+    history joins its original outer entry and saved-marker changes during preparation survive publication.
+    Existing live brush/warp/shape, lasso, outline-move and selection-header routes remain separate migrations.
+    This settled route does not authorize synchronous gesture closure or establish the measured G1 exit.
 - `PreparePreservingSelectionCommandInput` is a separate Select All/Deselect boundary for an existing brush,
   warp or shape opening. It preserves mutable gesture owners and captured stroke coverage. Opaque authority
   binds weak brush/warp control-block identities and the shape opening counter, plus the same document/history/

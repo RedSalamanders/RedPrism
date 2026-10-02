@@ -4,7 +4,7 @@ Status: active execution child of [UiNeverBlocks](UiNeverBlocks_2026-09-22.md). 
 qualifies in all six clean configurations against 423 frozen inputs: 127 command and 185 move-closure checks
 per x64 suite. The 39 strict RDX controls and unchanged failed Release image pass with the runtime allowlist
 unchanged. The initial parser failure and r2 ASan baseline-save failure retain exact images/source/logs;
-the original baseline cause remains unknown. The r3 full matrix passes. Host commands, gesture routing,
+the original baseline cause remains unknown. The r3 full matrix passes. Broader host commands, gesture routing,
 general geometry admission and measured G1 remain unqualified.
 S4a cancellable wand/trace/sampling also qualifies in six forced-rebuild profiles against 591 unchanged inputs:
 all 71 named cancellation/chunk controls pass in each full x64 suite, with legacy goldens unchanged. Exact
@@ -18,7 +18,11 @@ The strict RDI-index proof passes 23 controls against the unchanged failed image
 Combined S4b/S2a native r2 passes all six profiles at `2026-10-02T20:13:23.3037530Z`: every full x64 suite contains
 the exact 117 wand, 136 preserving-selection, 71 cancellation/chunk and 23 ISA controls. ARM64 is cross-build only.
 Independent control/source verification and immutable archival retain 598 exact inputs and 7,223 evidence files.
-Only the S4b/S2a core boundaries qualify; settled host routing is the next private slice and G1 remains open.
+That matrix qualifies only the S4b/S2a core boundaries. S2b's settled Select All/Deselect host now qualifies in
+all six forced-rebuild profiles, with 162 unique Application controls in each x64 suite. Independent source/
+control verification and archival retain 601 exact inputs and 2,858 evidence files, including the supplementary
+private runtime logs ([record](../../TestRuns/SelectionHost_2026-10-02.md)). Active-layer New host routing is next;
+broader gesture/writer routes, general geometry and G1 remain open.
 Its first attempt failed before compilation because the workspace disk was full. The exact 296 inputs and
 five failure receipts/logs are archived on the local disk before any edit/retry. Generated native intermediates
 were copied, hash-verified and relocated recoverably; no source or qualified image was removed.
@@ -55,13 +59,33 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     The combined native r2 matrix and independent verification/archive now pass: 136 exact unique controls run
     in every full x64 suite, and all three ARM64 cross-builds pass. This completes the preserving authority core
     ([evidence](../../TestRuns/SelectionPreservation_2026-10-02.md)); production input/gesture routing stays open.
-  - [ ] S2b — Route settled Select All/Deselect through the production host ordinal, whole-graph admission,
+  - [x] S2b — Route settled Select All/Deselect through the production host ordinal, whole-graph admission,
     worker history preparation, exact completion acknowledgement and off-owner retirement. Capture only after
     reservation; preserve no-op/redo, nested title/depth, saved markers and cancellation/fault refusal. Queue
     younger document commands and keep view/chrome pumping. Qualify actual Application controls privately,
     then all native configurations. Live brush/warp/shape, selection move/lasso/lifted pixels and header inputs
     keep their current routes until separate pointer replay/closure/writer barriers qualify; this bounded slice
     does not complete S2/S3b or G1. Primary owns the host integration and reviews cheaper-agent test sidecars.
+    Private r1 fails compilation; r2's mask fixture never changes target because Add Mask already selected it.
+    An explicit image-target precondition corrects that fixture. In r3 all 162 selection actor checks pass, but
+    the full clipboard suite starts a gradient pointer drag while its newly asynchronous Deselect is pending.
+    Both failure attempts retain exact sources, compiler products and runtime logs before correction. The
+    existing harness command-settlement helper now orders setup/cleanup; production clipboard code is unchanged.
+    A fresh complete private Debug run and immutable archival precede native activation.
+    The r4 complete WARP application suite passes all 162 named actor checks across 28 modes and unchanged
+    compatibility suites. Exact 471 inputs and 188 evidence files are archived before eleven source activations.
+    The fresh native six-profile forced rebuild is running; qualification remains pending
+    ([record](../../TestRuns/SelectionHost_2026-10-02.md)).
+    Native r1 fails the ARM64 ASan HostTests catalogue array size before any complete profile. Exact 601 inputs
+    and 3,850 evidence files are archived before correcting only the declared count to 486. The private application
+    proof is unchanged; native r2 restarts the full forced matrix. S2b remains unchecked.
+    All ARM64 cross-builds and the complete x64 ASan suite pass in r2. Release/Debug and independent native
+    verification/archive remain pending.
+    Native r2 now passes every profile at `2026-10-02T21:48:10.2541344Z`. All 162 exact unique Application checks
+    run in each full x64 suite; ARM64 cross-builds pass. Independent source/control verification and immutable
+    archival preserve 601 inputs and 2,858 evidence files. Original runtime logs omitted by the archive helper's
+    array construction are verified in a separately retained 45-file supplement; original archives stay intact.
+    This completes the settled host boundary only; S2/S3b and G1 remain open.
 - [ ] S3 — Move committed marquee/lasso booleans and layer/mask traces; own gesture arguments and exact source
   authority, retaining drafts until apply/drop. Preserve outline-move cancellation and undo semantics.
   - [x] S3a — Prepare outline-move End/Cancel history and retirement separately. The qualified native core passes
@@ -124,6 +148,20 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     The fresh combined r2 matrix, exact source/control verification and independent archive now pass against
     598 inputs and 7,223 evidence files. All 117 wand controls run in each full x64 suite, with unchanged goldens;
     ARM64 builds pass. This completes S4b core preparation ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)).
+  - [ ] S4c — Qualify the settled active-layer New production host route. Own point/settings/AA before queueing;
+    complete phased admission precedes capture/resume, worker source/flood/trace/history, current-only apply,
+    receipt acknowledgement and aggregate retirement. Consecutive queued New requests retain the existing
+    coalescing/ordinal-gap rules and superseded receipts; this does not imply accepting additional pointer presses
+    through the current busy guard. Ignore outside/nonfinite clicks as the direct reference does; in-canvas
+    no-match deselects. Prove the actual RunMagicWand caller, literal source/output, captured settings, no-op redo,
+    ordered younger history, cancellation, reached faults/stale authority and structural message pumping privately
+    before activation. All Layers, Add/Subtract/Intersect, gesture closure and complete pointer replay remain S4/S3b.
+    The primary-reviewed isolated source has sixteen Application modes, including actual scheduler record-table
+    refusal/recovery. Latest coalesced clicks sample a different pixel with a distinct literal outline; the shared-
+    ordinal gap is reached between adjacent wand requests. Posted-window pumping holds the worker until the
+    message is observed. Outside/nonfinite/empty cases use actual queued receipts and preserve whole geometry/
+    history. Settings/AA change before owner capture to prove event-time ownership. Compiler/runtime proof remains
+    pending, and helper assumptions are checked against the actual harness markers before execution.
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration
@@ -131,7 +169,8 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
 
 ## Current routes and parity
 
-`OnCommand` calls direct Select All/Deselect/Inverse and layer/mask selection. `OnSelectionAction` supplies Expand
+`OnCommand` routes settled Select All/Deselect through the qualified actor; existing live-gesture paths remain
+direct. Inverse and layer/mask selection remain direct. `OnSelectionAction` supplies Expand
 and Contract amounts; lasso/marquee completion calls ApplySelection booleans; wand may synchronously compose or
 render the source before flood/trace. The direct engine APIs stay as reference routes. Outline move is a live
 gesture and must be explicitly ordered or suspended while a worker owns its base; leaving it outside a first

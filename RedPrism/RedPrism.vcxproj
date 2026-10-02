@@ -158,6 +158,7 @@
     <ClInclude Include="AdapterSelection.h" />
     <ClInclude Include="Application.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
+    <ClInclude Include="SelectionCommandTestGate.h" />
     <ClInclude Include="DocumentLifecycleTestGate.h" />
     <ClInclude Include="ApplicationShutdownTestProbe.h" />
     <ClInclude Include="ApplicationProcessingTestProbe.h" />
@@ -241,6 +242,8 @@
     <ClCompile Include="ApplicationProjectSaveJobs.cpp" />
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
+    <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
+    <ClCompile Include="ApplicationSelectionCommandSelfTest.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />
     <ClCompile Include="..\Common\Crop.cpp" />
