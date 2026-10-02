@@ -238,6 +238,17 @@ bool DocumentHistory::CanPublishReplacement(const ReplacementPublication& public
     return CanPublish(publication.history);
 }
 
+std::optional<DocumentHistory::ReplacementPublication> DocumentHistory::PrepareSavedReplacement(
+    StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive,
+    std::wstring name, CancelToken cancellation, PrepareObserver observer)
+{
+    auto result = PrepareReplacement(std::move(view), std::nullopt, std::nullopt, after, afterActive, std::move(name),
+                                     cancellation, observer);
+    if (result)
+        result->savedRevision = result->history.state.revision;
+    return result;
+}
+
 bool DocumentHistory::PublishReplacement(ReplacementPublication& publication) noexcept
 {
     if (!Publish(publication.history))

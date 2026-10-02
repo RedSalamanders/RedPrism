@@ -188,7 +188,14 @@
           exact typed/nudge/body geometry, ephemeral/persistent pointer loss, real Ctrl-corner distortion/Undo
           and floating opening/cancel. Event-gated preview tests replace the device and shut down independent
           hosts before/after preparation. The initial build refusal for discarded nodiscard results is preserved;
-          full private host qualification is running before native activation.
+          the r3/r4 full runs expose obsolete direct-Undo fixture loops. Sources, binaries and diagnostic
+          evidence are preserved; the running disposable processes await explicit termination authorization.
+          The r5 bounded harness exposes a floating-outline assertion reading before preview acknowledgement;
+          its failure is preserved before adding the acknowledgement wait. The r6 full private run is pending.
+          The r6 run finds an owner preview ticket retained after scheduler shutdown suppresses callbacks;
+          its exact failure is preserved before clearing that ticket after the join. The r7 complete private
+          WARP self-test passes 29 policy and 108 preview controls, with all existing application suites,
+          against 542 private inputs. Production policy activation and all native gates remain open.
     - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,
       refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
       reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation

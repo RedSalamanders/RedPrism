@@ -218,6 +218,11 @@
         ([evidence](../../TestRuns/ImageImportHistoryPublication_2026-10-01.md)). Separate file-operation authority
         preserves live edits on failure and retires them on successful replacement; Undo remains settled-only.
         The history child retains original host/fixture/ISA failure evidence. Other H1 callers, H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H1 lifecycle primitive — Optional New/Close saved history, preallocated retirement and exact
+        refusal/publication pass 65 independent controls per x64 suite and all six clean profiles against
+        561 frozen inputs ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). Production default
+        New, New Canvas card and Close Project activation remains in
+        [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md); H2/H3/H4 and G1 remain open.
       - [x] P1.9 H2.1 / H4.1 — Immutable history-container roots and optional image thumbnails qualify in the
         frozen six-configuration matrix: 28 root/30 producer assertions and 331 parser controls per x64 suite
         ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).

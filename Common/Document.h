@@ -1623,6 +1623,10 @@ class DocumentHistory
         const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive, std::wstring name,
         CancelToken cancellation = {}, PrepareObserver observer = {});
     [[nodiscard]] bool CanPublishReplacement(const ReplacementPublication& publication) const noexcept;
+    // New/Close save the final replacement state, including New's one entry from an absent baseline.
+    [[nodiscard]] static std::optional<ReplacementPublication> PrepareSavedReplacement(
+        StateView view, const std::optional<CanvasDocument>& after, const std::optional<Guid>& afterActive,
+        std::wstring name, CancelToken cancellation = {}, PrepareObserver observer = {});
     [[nodiscard]] bool PublishReplacement(ReplacementPublication& publication) noexcept;
 
     void Begin(std::wstring name, const std::optional<CanvasDocument>& document, const std::optional<Guid>& selection);
@@ -1758,6 +1762,10 @@ class DocumentSession
         CanvasDocument replacement, std::optional<Guid> active, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] std::uint64_t ImageImportRetirementMemoryBytes() const noexcept;
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(
+        ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
+        std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name,
+        CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] ImageImportAuthority CaptureImageImportAuthority() const noexcept;
     [[nodiscard]] bool CanApplyImageImport(const ImageImportAuthority& authority) const noexcept;
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to

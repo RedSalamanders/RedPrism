@@ -145,6 +145,37 @@ std::optional<PreparedImageImport> DocumentSession::PrepareDocumentReplacementPu
     return result;
 }
 
+std::optional<PreparedImageImport> DocumentSession::PrepareDocumentLifecyclePublication(
+    ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView state,
+    std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name, CancelToken cancellation,
+    DocumentHistory::PrepareObserver observer)
+{
+    if (!authority._valid || cancellation.IsCancelled() ||
+        (source ? std::optional(source->id) : std::optional<Guid>{}) != authority._documentID ||
+        (replacement && ValidateDocument(*replacement) != DocumentStatus::Ok) || (!replacement && active))
+        return std::nullopt;
+    PreparedImageImport result(std::move(authority), std::move(state));
+    result._source = std::move(source);
+    if (!result._source && !replacement)
+        return result; // Close on an already absent document preserves its existing redo/saved lineage.
+    if (active && !std::any_of(replacement->layers.begin(), replacement->layers.end(),
+                               [&](const ImageLayer& layer) { return layer.id == *active; }))
+        return std::nullopt;
+    result._retiredDrafts = std::make_unique<PreparedImageImport::RetiredDrafts>();
+    if (!BeginReplacementSnapshot(cancellation, observer))
+        return std::nullopt;
+    result._document = std::move(replacement);
+    result._active = active;
+    if (active)
+        result._selected.insert(*active);
+    result._replacement = DocumentHistory::PrepareSavedReplacement(std::move(result._view), result._document, active,
+                                                                   std::move(name), cancellation, observer);
+    if (!result._replacement || cancellation.IsCancelled())
+        return std::nullopt;
+    result._changesDocument = true;
+    return result;
+}
+
 bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& prepared) noexcept
 {
     static_assert(std::is_nothrow_swappable_v<std::optional<CanvasDocument>>);
@@ -170,7 +201,7 @@ bool DocumentSession::ApplyPreparedImageImportIfCurrent(PreparedImageImport& pre
     }
     else if (prepared._history && !history.Publish(prepared._history.value()))
         return false;
-    if (prepared._document)
+    if (prepared._document || prepared._replacement)
     {
         std::swap(_document, prepared._document);
         std::swap(_activeLayerID, prepared._active);

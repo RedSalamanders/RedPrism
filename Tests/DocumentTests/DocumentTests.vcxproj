@@ -84,6 +84,7 @@
 
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
+    <ClInclude Include="DocumentLifecycleTests.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
@@ -155,6 +156,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
+    <ClCompile Include="DocumentLifecycleTests.cpp" />
     <ClCompile Include="MaskEditWorkTests.cpp" />
     <ClCompile Include="LayerCopyWorkTests.cpp" />
     <ClCompile Include="DistortWorkTests.cpp" />

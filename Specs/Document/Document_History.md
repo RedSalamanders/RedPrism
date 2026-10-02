@@ -179,6 +179,14 @@ Cancellation, construction refusal and stale authority preserve live state and p
 six-configuration matrix qualifies this caller ([evidence](../TestRuns/ImageImportHistoryPublication_2026-10-01.md));
 shared metadata capture and measured apply remain separate.
 
+New preserves one `New Canvas` entry from an absent document to the requested blank canvas; its final revision
+is marked saved. Undo returns to no document and Redo returns to the saved canvas. Close Project resets history
+to an absent, saved document with no entries. Closing an already absent document leaves its existing redo
+lineage intact. `PrepareSavedReplacement` and `PrepareDocumentLifecyclePublication` construct these optional
+states and the replacement owners privately before publication. Cancellation, invalid input and stale
+authority preserve the live state. Production lifecycle caller migration is tracked separately in
+[`DocumentLifecycleWorkers`](../Plans/WIP/DocumentLifecycleWorkers_2026-10-02.md).
+
 Prepared selection commands and outline-move closure bind complete worker-built history to their sealed owning
 input. Select All/Deselect preserve history epoch/revision/redo on geometric equality; changed commands prepare
 one named entry or preserve an existing outer transaction. Outline End always acknowledges its transaction,

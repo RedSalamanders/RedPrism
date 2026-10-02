@@ -15,6 +15,7 @@
 #include "Crop.h"
 #include "DistortWorkTests.h"
 #include "Document.h"
+#include "DocumentLifecycleTests.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
 #include "DuplicateOpeningWorkTests.h"
@@ -7421,6 +7422,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunTransformDeferredTests();
     gFailures += RunTransformDeferredGuardTests();
     gFailures += RunDuplicateOpeningWorkTests();
+    gFailures += internal::RunDocumentLifecycleTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();
     gFailures += RunFloatingPixelsWorkTests();
