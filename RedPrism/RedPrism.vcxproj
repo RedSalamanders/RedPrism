@@ -212,6 +212,7 @@
     <ClCompile Include="..\Common\TransformPixelsWork.cpp" />
     <ClCompile Include="..\Common\TransformCommitWork.cpp" />
     <ClCompile Include="..\Common\TransformCancellationWork.cpp" />
+    <ClCompile Include="..\Common\TransformPreviewWork.cpp" />
     <ClCompile Include="..\Common\FloatingPixelsWork.cpp" />
     <ClCompile Include="..\Common\FloatingOpeningWork.cpp" />
     <ClCompile Include="..\Common\FloatingMergeWork.cpp" />

@@ -147,6 +147,16 @@ history and clipboard remain unchanged. Duplicate cancellation prepares removal 
 own scope privately. An existing parent transaction keeps its depth, opening record and name. Publication refuses
 newer geometry, changed target/source/history, replacement, foreign-session or consumed results before any swap.
 
+`TransformPreviewWork` prepares a complete private display document. Affine previews share immutable pixels and
+change placements. Distorted color and linked/placed/standalone masks retain their transparent bounds and cap
+both dimensions at 1024 pixels; group members use their carried homographies. Mask edge tone comes from the
+original semantic thumbnail. Unlinked masks remain at their original document placement, and uniform masks
+retain their source identity. Invalid distortion corners fall back to the affine display, matching the direct
+warp reference. Sparse assembly is private and cancellable. A sealed, single-use publication validates the
+captured session, document, target, history and draft revision before swapping the display cache. It changes no
+document pixels, history, generation or private clipboard. Its replaced cache stays in the prepared owner for
+worker retirement. Production display coalescing and removal of inline reconstruction remain A6.3/T3.
+
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted

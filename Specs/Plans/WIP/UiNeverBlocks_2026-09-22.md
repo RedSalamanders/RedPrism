@@ -129,6 +129,10 @@
         profiles against 533 inputs: 467 core controls per x64 suite
         ([record](../../TestRuns/TransformCancellation_2026-10-02.md)). Persistent host rollback ownership,
         production routing, preview/settlement, retirement gates and G1 remain open.
+      - [x] A6.3 T3 core — Complete sealed display-only previews qualify in all six profiles against 537 inputs:
+        44 new assertions plus the prior 467 core controls per x64 suite
+        ([record](../../TestRuns/TransformPreviewCore_2026-10-02.md)). Color and mask previews cap both dimensions
+        at 1024; sparse assembly stays private. Production coalescing, deferred display, settlement and G1 remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

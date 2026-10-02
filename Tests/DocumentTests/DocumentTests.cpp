@@ -65,6 +65,7 @@
 #include "TransformCommitWorkTests.h"
 #include "TransformEdit.h"
 #include "TransformPixelsWorkTests.h"
+#include "TransformPreviewWorkTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7428,6 +7429,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunTransformPixelsWorkTests();
     gFailures += RunTransformCommitWorkTests();
     gFailures += RunTransformCancellationWorkTests();
+    gFailures += RunTransformPreviewWorkTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();
     gFailures += RunFloatingPixelsWorkTests();

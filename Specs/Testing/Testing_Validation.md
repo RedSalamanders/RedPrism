@@ -47,10 +47,16 @@ opening, merge and prebuilt restoration close only their child scope, preserving
 `transform-cancellation.*` proves ordinary draft-only cancellation, duplicate removal, nested parent/redo retention,
 single-use/moved-input authority and changed draft/source/active/history/replacement/foreign refusals. Snapshot,
 entry, stack-growth and trim faults must be reached and leave the live opening intact.
+`transform-preview.*` adds 44 independent controls for complete display-only publication, affine raster sharing,
+bounded color/mask distortion, carried groups, placed/unlinked/uniform mask semantics, literal standalone-mask
+bytes, private sparse reads, invalid-corner fallback, allocation/cancellation boundaries and consumed/stale
+draft/target/document/history/reopen/replacement/foreign authority. The prior 467 core controls and all legacy
+numeric goldens remain required. Production coalescing, host routing and measured G1 qualify separately.
 These are core qualification gates. Production transform/opening/preview/settlement and aggregate retirement,
 and measured G1 remain explicit A5/A6 follow-ups. Core native configuration results are recorded separately in
 [`TransformWorkerCore_2026-10-02.md`](../TestRuns/TransformWorkerCore_2026-10-02.md) and
-[`TransformCancellation_2026-10-02.md`](../TestRuns/TransformCancellation_2026-10-02.md).
+[`TransformCancellation_2026-10-02.md`](../TestRuns/TransformCancellation_2026-10-02.md) and
+[`TransformPreviewCore_2026-10-02.md`](../TestRuns/TransformPreviewCore_2026-10-02.md).
 
 ### Clipboard and copy preparation
 

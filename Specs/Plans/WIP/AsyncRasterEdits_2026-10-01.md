@@ -112,6 +112,17 @@
       linked/placed mask, shape and outline owners. Publish only the captured opening/settings/source authority.
       Bound both color and mask preview dimensions; rendering retains the last complete preview while work runs.
       Remove synchronous warp/shape/outline reconstruction from the production display path.
+      - [x] Preview core — A complete detached display document and sealed publication pass 44 independent
+        controls plus the prior 467 transform/floating/history controls and all DocumentTests goldens against
+        519 frozen private inputs. `.build/p1-distort-draft/transform-preview-core-qualified-r1/` retains the proof.
+        Affine work shares pixels; color and linked/placed/standalone mask distortion cap both dimensions at 1024.
+        This does not activate production display jobs. The first 537-input
+        matrix passed ASan and Release, then failed the existing Debug clipboard DIB inspection. Its exact I/O
+        executable passes a rerun without rebuilding; the cause is unestablished. The original matrix is retained
+        in `.build/p1-transform-preview-core-r1-failure/`. A fresh complete matrix passes all three x64 suites and
+        all three ARM64 cross-builds against the same 537 inputs
+        ([record](../../TestRuns/TransformPreviewCore_2026-10-02.md)). Native preview core qualifies; production
+        coalescing, deferred display and measured costs remain open.
     - [ ] T4 — Guard deferred session callers against inline commit/cancel/redraw bypass while preserving direct
       numeric reference APIs. Audit every writer, including Alt-duplicate, BeginTransform/selection transform,
       SetActiveLayerID, selection commands, flips, New/Close/Reset, source sampling and already selected requests.
@@ -119,6 +130,15 @@
       refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
       reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation
       closeout; capture/apply/history/chrome/upload and frame distributions remain measured A6.4/H2/H3/H4/G1.
+      Private host progress: 180 new transform/floating assertions pass in r5, including reached history faults,
+      before/after-ready cancellation, stale inputs, one-entry undo and off-owner aggregate retirement. The full
+      run subsequently failed the existing Alt-press/Undo session scenario. Its 521-input proof is preserved in
+      `.build/p1-distort-draft/transform-host-failure-r5/`. Production admission now ends the old pointer drag
+      before acknowledging queued Undo. The subsequent session-generation fixture also required awaiting that
+      acknowledged cancellation before its next scenario. The full private WARP run passes in r7 against 521
+      inputs (180 new assertions, unchanged existing host tests); `.build/p1-distort-draft/transform-host-qualified-r7/`
+      preserves its exact proof. Additional floating admission/capture/history faults, deferred preview guards and
+      complete native caller activation remain open.
   - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
   - [x] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare
