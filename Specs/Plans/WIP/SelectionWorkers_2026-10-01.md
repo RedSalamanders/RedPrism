@@ -93,7 +93,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     exact acknowledged generation stamps in all x64 suites; all three ARM64 cross-builds pass.
   - [ ] S3b — Activate move/draft/gesture closure under the selected ordinal and exact retained input; the
     prepared core does not authorize synchronous host End/Cancel or altered live-stroke settlement.
-    - [ ] S3b0 — Qualify a session-local monotonically increasing outline-move opening before queue activation.
+    - [x] S3b0 — Qualify a session-local monotonically increasing outline-move opening before queue activation.
       A bounded event-time scalar must refuse a closed/reopened gesture before owner capture, even when its
       origin and current geometry are equal. Retain existing generation/history checks on prepared apply; bind
       the opening as an additional requirement. Keep the counter across document replacement and expose no
@@ -101,6 +101,14 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
       retained original outline, document/display/history graphs and wrapper storage. Primary prepares this
       isolated core source while S4c native inputs stay frozen; private literal/state-machine controls and full
       DocumentTests, archival and native qualification precede production closure activation.
+      The reviewed private r4 source passes all 66 unique opening controls and complete DocumentTests, retaining
+      the exact 185 closure/127 command/136 preserve/117 wand named multisets and original goldens. Preflight and
+      failed compiler/runtime/verifier attempts are preserved before correction. Final proof retains 554 inputs
+      and 145 evidence files before eight byte-identical native activations; the fresh six-profile matrix runs
+      against 606 frozen inputs. All six profiles pass at `2026-10-02T23:17:48.9451202Z`; exact control/source
+      verification and immutable archival retain 606 inputs and 913 evidence files
+      ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). S3b0 completes the opening core prerequisite;
+      production closure and G1 remain open.
     - [ ] S3b1 — Own the qualified opening and exact End/Cancel intent in a bounded typed host request at the
       pointer/command boundary. Select the shared ordinal before capture; reject a replaced opening without
       settling another gesture. Freeze subsequent outline samples while closure awaits acknowledgement. Reserve
@@ -114,6 +122,19 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
       assert independent literal End/Cancel/redo outcomes, and reach stale opening, record/memory refusal,
       capture/history allocation faults and cancellation acknowledgement. Qualify exact retirement and full
       configuration gates before claiming the host closure complete; lasso/boolean/All Layers and G1 stay open.
+      - [ ] S3b1a — Activate moved-pointer release and direct Escape/first Undo cancellation through the exact
+        opening request. Bypass unrelated edit settlement so a coexisting outer edit keeps its reference depth
+        and name. Stop further outline samples at admission; retain the opening/origin/history on admission,
+        capture, worker failure or cancellation until a successful End/Cancel publication. Prove actual held
+        worker receipts, posted-window-message/zoom handling, literal geometry/history, younger-writer ordering,
+        stale opening/session/target and reservation/retirement behavior. Primary prepares this host source in
+        a separate private folder while S3b0 native inputs remain frozen; a cheaper agent drafts its bounded
+        Application controls. No host activation or runtime claim is made yet.
+      - [ ] S3b1b — Own no-move Deselect/New wand follow-ups and every remaining reference End/Cancel caller.
+        Preserve Enter/Save/Export's live outline and operations that intentionally nest under its history entry.
+        Tool/header/capture loss, selected Undo/Redo, replacement/close and shutdown need concrete caller/result
+        controls before migration. A queued closure alone does not authorize its dependent command to run before
+        acknowledgement, and settlement must not silently change the previous nested transaction semantics.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
   - [x] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.

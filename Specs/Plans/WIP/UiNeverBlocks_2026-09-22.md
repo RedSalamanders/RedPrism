@@ -138,12 +138,21 @@
   control/source verification and independent archival retain 604 inputs and 877 evidence files; each x64 run
   passes 86/16 wand-host controls and 162 retained selection-host controls. Only this settled host boundary is
   complete ([record](../../TestRuns/WandLayerHost_2026-10-03.md)); all broader P1/G1 requirements stay open.
-- [ ] Outline-move event authority — S3b0 is the next private core prerequisite: a bounded scalar opening
+- [x] Outline-move opening core authority — S3b0 qualifies the private core prerequisite: a bounded scalar opening
   identifies the exact gesture before capture and survives equal-geometry reopen/refusal cases. Preserve all
   prepared End/Cancel generation/history semantics and account complete original-outline retirement. Private
   source, reviewed literal/state-machine controls and full core/native qualification precede host closure;
-  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core and focused tests
-  now await fresh compile/runtime proof and archival; production outline closure remains the following slice.
+  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core passes 66 unique
+  new checks and the complete DocumentTests suite, retaining all 185 closure controls and original goldens.
+  Failed attempts are archived before corrections; final proof retains 554 inputs and 145 evidence files before
+  eight reviewed native activations. The fresh forced six-profile matrix passes at `2026-10-02T23:17:48.9451202Z`;
+  exact native controls/source verification and archival retain 606 inputs and 913 evidence files
+  ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). Production outline closure remains open.
+- [ ] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
+  under the shared ordinal, stops later pointer samples and retains draft/history until acknowledgement.
+  Primary prepares isolated host code; a cheaper agent drafts Application controls for review. S3b1b still
+  requires no-move follow-ups and the concrete remaining End/Cancel callers while preserving Save/Enter and
+  nested history semantics. No host/runtime, broader P1 or G1 completion claim is made by the core prerequisite.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

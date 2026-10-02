@@ -2112,6 +2112,11 @@ class DocumentSession
     {
         return _selectionMoveOrigin.has_value();
     }
+    // Session-local event authority. Closing and reopening an equal outline is a distinct move.
+    [[nodiscard]] std::optional<std::uint64_t> SelectionMoveOpening() const noexcept
+    {
+        return _selectionMoveOrigin ? std::optional(_selectionMoveOpening) : std::nullopt;
+    }
     // Arrow keys: 1 px, or 10 with Shift; each press is one entry.
     void NudgeSelection(double dx, double dy);
     // Expand / Contract need a non-empty selection and no outline in progress.
@@ -2137,13 +2142,15 @@ class DocumentSession
     [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
         Vec2 point, WandSettings settings) const noexcept;
-    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(bool cancel) const;
+    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
+        bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
         SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
         const PreparedSelectionMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionMoveClosureMemoryBytes() const noexcept;
+    [[nodiscard]] std::uint64_t SelectionMoveClosureRetirementMemoryBytes() const noexcept;
     void SelectAll();
     void Deselect();
     void InvertSelection();
@@ -2737,6 +2744,7 @@ class DocumentSession
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::optional<DocumentSelection> _selectionMoveOrigin;
+    std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;
     BrushCoverageEngine* _brushEngine = nullptr;
     struct LastBrushPoint

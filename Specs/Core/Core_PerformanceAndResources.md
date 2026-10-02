@@ -17,6 +17,14 @@ the affected configuration and justified in the owning contract or an active WIP
 "Zero CPU while idle" means RedPrism owns no polling loop or periodic wake-up when no frame, input, I/O completion, or
 state change is pending. Operating-system scheduling noise is outside this contract.
 
+Outline-move closure event authority is a bounded session-local scalar opening. An expected opening is checked
+before document/history capture; reopening equal geometry cannot authorize a delayed closure. Prepared apply
+retains all generation/history/target checks and also binds that opening. Admission's complete retirement bound
+includes construction-cached original loops, their control allowance, and the existing document/history/display
+graph bound; future host jobs additionally charge wrappers and construction peak. Reading the original-loop
+cache never walks paths or materializes rasters. Existing history/metadata traversals remain H2/H3 work, and the
+core APIs alone establish no host closure, frame latency or G1 qualification.
+
 ## Mandatory runtime rules (C1 host)
 
 - Idle, hidden, minimized, suspended, display-off, and occluded execution MUST block on events. Busy polling is

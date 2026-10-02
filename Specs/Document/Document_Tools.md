@@ -323,6 +323,10 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   This core API does not activate application commands or authorize synchronous gesture closure; host ordinals,
   retained pointer arguments and writer barriers remain S2/S3b/P1.4.
 - `SelectionMoveWork` prepares active outline-move End/Cancel history before removing the original outline.
+  A successful Begin owns a session-local monotonic opening; `SelectionMoveOpening` is absent after closure or
+  document removal. Replacement and clear/recreate preserve the counter. Exhaustion refuses Begin before
+  history opens. An expected event-time opening refuses a closed/reopened move before capture, including equal
+  geometry. Prepared apply additionally binds that same opening; existing whole-document/history checks remain.
   End retains moved geometry and acknowledges one generation. Cancel restores the original and acknowledges
   two generations (restoration plus End), including a no-op. Changed history and named outer transaction depth
   follow the direct reference methods. Whole-document authority, original outline identity, active/mask/crop and

@@ -350,6 +350,16 @@ A fully undone Cancel proves that changed-history construction checkpoints are a
 retains the live move and complete history; a separate clean candidate can still close. Pre-cancelled, foreign,
 copied/moved-session and moved-from/single-use candidates are refused. No timing threshold is asserted.
 
+`selection-move-opening.*` adds 66 unique checks for absent/explicit-empty eligibility, stable opening through
+samples, nonfinite input, duplicate Begin, wrong zero/maximum/real prior-gesture End and Cancel capture, and
+equal-geometry reopen. Stale prepared apply preserves the entire reopened state. Fresh End/Cancel, no-op redo
+and their generation acknowledgements use literal geometry and named history expectations. Replacement and
+clear during an active move never reuse its opening. The cached original-outline retirement contribution and
+complete session bound preserve moved geometry and never materialize a sparse fixture. Counter exhaustion is
+source-reviewed; maximum expected opening is a mismatch control, not a forced private-counter overflow test.
+Retained table-driven suites may repeat labels; qualification compares their exact named multiset, including
+repetitions. New opening labels are unique. Application closure/order/retirement and G1 remain separate gates.
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 

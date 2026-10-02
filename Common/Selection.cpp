@@ -1565,12 +1565,14 @@ bool DocumentSession::CanMoveSelection(Vec2 point) const
 bool DocumentSession::BeginSelectionMove()
 {
     const std::optional<DocumentSelection>& selection = Selection();
-    if (_selectionMoveOrigin.has_value() || !selection.has_value() || selection->IsEmpty() || !CanEditSelection())
+    if (_selectionMoveOrigin.has_value() || !selection.has_value() || selection->IsEmpty() || !CanEditSelection() ||
+        _selectionMoveOpening == (std::numeric_limits<std::uint64_t>::max)())
     {
         return false;
     }
     BeginEdit(L"Move Selection");
     _selectionMoveOrigin = selection;
+    ++_selectionMoveOpening;
     return true;
 }
 
