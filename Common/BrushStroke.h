@@ -199,6 +199,11 @@ class BrushStroke
     // Owner-only, once publication has discarded this stroke. Detach the borrowed engine before CPU state
     // transfers to a worker; later destruction cannot mutate a graphics engine. No further stroke calls follow.
     void ReleaseCoverageEngine() noexcept;
+    // Owner-only harness observation; the engine remains borrowed.
+    [[nodiscard]] bool HasCoverageEngineForTest() const noexcept
+    {
+        return _engine != nullptr;
+    }
     BrushStroke(const BrushStroke&) = delete;
     BrushStroke& operator=(const BrushStroke&) = delete;
 

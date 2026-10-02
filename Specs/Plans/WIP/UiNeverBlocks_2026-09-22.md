@@ -30,9 +30,22 @@
   pre-probe `Application.obj` with the older member layout: private file copying preserved source timestamps
   older than that object. A supplementary 162-entry tracking archive is retained. Move stdout configuration
   before all standalone tests and force a six-profile rebuild; the buffering issue is not the crash cause.
-- [ ] Next shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
-  the reviewed isolated candidate compiles; 432 actual Application assertions await serialized private runtime
-  proof, archive and native qualification. GPU/event/clipboard leases, API faults and timing remain open.
+- [x] P1 live shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
+  the reviewed isolated Debug WARP candidate passes all 432 controls, unchanged 390 processing/52 shutdown checks
+  and the full existing application suite at `2026-10-02T14:26:05.1417394Z`. Exact 562 private inputs and 25 evidence
+  entries are archived before native activation. Eight reviewed files are activated with current write timestamps;
+  six forced-rebuild profiles are required before completion/commit. GPU/event/clipboard leases, API faults and
+  timing remain open.
+  The fresh six-profile forced rebuild passes at `2026-10-02T15:06:20.9478751Z`; each full x64 suite passes
+  all 432 live-owner controls and unchanged startup/shutdown checks. Exact 585 inputs and 327 evidence files
+  are byte/SHA verified before the next private build
+  ([qualification](../../TestRuns/P1LiveShutdown_2026-10-02.md)). This closes A3c only.
+- [ ] Next shutdown slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
+  standalone Application cases, with 56 event-gated assertions, in a private tree. Observe mapped-row
+  acknowledgement before queue fallback cleanup, retain literal bytes through cancellation and device
+  retirement, and join held/ready-undrained retry producers before receiver destruction. Preserve the first
+  private link failure before serializing shared DxUi builds. Clipboard leases, actual API faults and timings
+  remain separate; private runtime and native qualification are pending.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

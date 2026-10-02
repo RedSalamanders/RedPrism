@@ -302,6 +302,7 @@
     <ClCompile Include="ApplicationLifecycleCloseTests.cpp" />
     <ClCompile Include="ApplicationShutdownTests.cpp" />
     <ClCompile Include="ApplicationProcessingTests.cpp" />
+    <ClCompile Include="ApplicationLiveShutdownTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyTests.cpp" />
     <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />

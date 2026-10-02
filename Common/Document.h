@@ -2197,6 +2197,11 @@ class DocumentSession
     {
         return _warp.get();
     }
+    // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
+    [[nodiscard]] std::weak_ptr<WarpStroke> WeakPendingWarpForTest() const noexcept
+    {
+        return _warp;
+    }
     [[nodiscard]] WarpStroke* MutableWarp() noexcept
     {
         return _warp.get();
@@ -2518,6 +2523,11 @@ class DocumentSession
     [[nodiscard]] const BrushStroke* PendingBrush() const noexcept
     {
         return _brush.get();
+    }
+    // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
+    [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept
+    {
+        return _brush;
     }
     [[nodiscard]] BrushStroke* MutableBrush() noexcept
     {

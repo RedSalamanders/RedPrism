@@ -3274,6 +3274,7 @@ void Application::Shutdown() noexcept
              {
                  ++probe->ownerCalls;
                  probe->draftAliveAtDetach = !probe->draft.expired();
+                 probe->liveDraftAliveAtDetach = !probe->liveDraft.expired();
                  probe->graphicsDetachedOnOwner =
                      GetCurrentThreadId() == probe->owner && !owner._brushEngine.Ready() && owner._renderer.Device();
                  probe->reservationAndWakeAlive = owner._jobs.WakeHandle() && owner._jobs.ReservedMemoryBytes() != 0;
@@ -3309,6 +3310,7 @@ void Application::Shutdown() noexcept
                  probe->mta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA);
                  probe->offOwner.store(GetCurrentThreadId() != probe->owner);
                  probe->draftRetired.store(probe->draft.expired());
+                 probe->liveDraftRetired.store(probe->liveDraft.expired());
                  probe->hostCpuRootsRetired.store(
                      std::holds_alternative<std::monostate>(owner._drag) && !owner._overlaySelection &&
                      (!owner._uiBenchmark || (owner._uiBenchmark->fixture.layers.empty() &&

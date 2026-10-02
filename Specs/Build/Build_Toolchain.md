@@ -63,6 +63,11 @@ MUST refuse to run on a non-ARM64 host.
 
 `.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
 
+Builds sharing a mutable dependency output MUST be serialized, including private candidate builds. A separate
+application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes the same resolved library path.
+Parallel compilation requires isolated dependency outputs or an already-built immutable dependency; preserve
+failed source/object/link evidence before retrying a candidate affected by shared-output rebuilds.
+
 ## Build presentation
 
 `build.ps1` MUST begin with the framed RedPrism pixel-art banner before any target, preflight, or MSBuild line. The

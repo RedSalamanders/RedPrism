@@ -112,7 +112,7 @@
     before the next native change. The current Release PDB has one 44920-byte Application layout; its object
     was rebuilt after matrix start. Only this acquired-prefix slice completes
     ([record](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)); broader A3 remains open.
-  - [ ] A3c — Prepare separate standalone live-owner controls for ordinary/mask Paint and Erase, all three Heal
+  - [x] A3c — Prepare separate standalone live-owner controls for ordinary/mask Paint and Erase, all three Heal
     modes, Clone, image/mask Blur and both Warp modes, with own hidden WARP/chrome/pool/sink and lifecycle work
     held before/after preparation. Weak observations must establish the exact draft remains alive through joined
     owner detachment and expires on acknowledged final MTA retirement; do not retain a surrogate strong owner.
@@ -127,6 +127,35 @@
     the actual final MTA hook with a weak-only probe. The planned 432 assertions retain independent literal
     pixels and once-only/STA/source/ticket ordering checks. A separate private complete Debug build begins;
     native activation and GUI execution wait for the frozen A3b run and its verified archive.
+    The complete private Debug WARP application passes all 432 live-owner, unchanged 390 processing/52 shutdown
+    controls and existing suites. Exact 562 inputs and 25 evidence entries are byte/SHA verified in
+    `p1-live-shutdown-private-r1-qualified` at `2026-10-02T14:28:34.7702547Z` before native activation. The reviewed
+    eight-file candidate is activated with current write timestamps and relative native project registration.
+    All six forced-rebuild profiles and exact native control verification remain required before this slice
+    completes or commits. Other live owners, lease/API fault coverage, hash capacity and timings remain open.
+    The final native matrix passes all six forced-rebuild profiles at `2026-10-02T15:06:20.9478751Z` against
+    585 unchanged inputs. Each full x64 suite passes the 432 live-owner, 390 startup and 52 original shutdown
+    controls; all ARM64 cross-builds pass. Exact sources, images, PDBs, harness captures, controls and receipts
+    are byte/SHA verified in `p1-live-shutdown-native-r1-qualified`: 585 inputs and 327 evidence entries,
+    archived at `2026-10-02T15:07:11.8094238Z` before further builds. Only this scoped A3c gate completes
+    ([record](../../TestRuns/P1LiveShutdown_2026-10-02.md)); full A3 and G1 remain open.
+  - [ ] A3d — Drive real standalone Application shutdown while a DocumentReadbackJob worker holds its actual
+    mapped GPU rows, both on the bound device and after device retirement; verify literal bytes before/after
+    cancellation, joined worker before owner acknowledgement, stale lease refusal and off-owner CPU retirement.
+    Also cover the actual RetryWaitQueue callback held before readiness publication and ready-but-undrained work.
+    Release the held callback from a separately entered worker on the scheduler shutdown event, without pumping
+    from Shutdown or its hooks. Verify producer/receiver order, original ticket/reservation, suppressed useful
+    callbacks, empty routes and repeated shutdown. Primary prepares this in a separate private tree while A3c
+    remains frozen. Queue-only tests and test-owned surrogate mappings cannot qualify this application gate.
+    Clipboard transfer leases, genuine initialization API faults and measured shutdown cost remain separate.
+    The first complete private compilation reaches link, then fails with `LNK1104` opening the shared Debug
+    `DxUi.lib` while the native Debug profile rebuilds that same dependency. No private application ran.
+    Exact 563 inputs, 171 evidence entries and object/link tracking are preserved before repair in
+    `p1-lease-shutdown-private-r1-link-failure` at `2026-10-02T15:00:36.2808967Z`.
+    Serialize dependency-mutating builds as well as GUI runs; the native Debug build links successfully and
+    continues its gates. Primary review also consumes the auto-reset scheduler wake while the retry producer
+    is held, so the ready-undrained assertion observes its actual new readiness signal, and uses the stop token
+    acknowledgement rather than racing the earlier shutdown event signal. Private r2 remains pending.
 - [ ] Run skills/format checks, full x64 Debug/Release/ASan suites and all ARM64 clean cross-builds; archive exact
   inputs/images/symbols/results, reconcile owning contracts and commit/push.
 - [ ] Measure shutdown owner cleanup and remaining CPU graph costs; keep the full P1 G1 gate separate.

@@ -686,6 +686,20 @@ After-stage checkpoints test prefix cleanup, not failure inside those successful
 the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
 scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
 
+`RunStandaloneLiveShutdownSelfTest` constructs 24 independent hidden WARP/chrome Application owners: ordinary
+and mask Paint/Erase, three healing modes, Clone, ordinary/mask Blur, Liquify and Smudge, each with lifecycle work
+held before/after preparation. Its 432 controls require real 16 MiB source pixels, actual brush tiles or Warp
+points, exact original target/transform/mask/history authority at joined owner detachment, then weak-only draft
+expiration observed on the final off-owner MTA callback. Borrowed brush engines are live before shutdown and
+detached on owner before CPU destruction. A separately retained literal BGRA source remains unchanged afterward.
+Useful lifecycle publication stays suppressed; reservations/events/apartment survive the acknowledgement;
+second Shutdown repeats no hooks and each destroyed owner consumes its quit before the next fixture.
+The complete x64 application must report `application-live-shutdown summary: 432 checks, 0 failures` and 432
+named PASS controls. The fresh six-profile forced rebuild qualifies these 432 controls in every complete x64
+suite, with all ARM64 cross-builds and exact archived inputs/receipts
+([record](../TestRuns/P1LiveShutdown_2026-10-02.md)). Mapped GPU/event/clipboard leases, other live owners,
+initialization API faults and shutdown timing remain separate.
+
 Before ordinary Application processing initialization, `RunStandaloneShutdownSelfTest` constructs two actual
 hidden WARP/chrome owners with their own sink and pool. Its 52 controls cover lifecycle work held before/after
 preparation, a real 16 MiB document/history, private clipboard and a live graphics-backed gradient draft. Producer
@@ -700,7 +714,7 @@ Full x64 application logs must report `application-shutdown summary: 52 checks, 
 Preview and delayed-clipboard shutdown controls retain their exact original source/history authority checks at
 joined owner detachment, before CPU retirement, then assert empty session and independently retained literal pixels
 after acknowledgement. These suites require 112 preview and 45 delayed-clipboard controls; existing legacy goldens
-remain unchanged. Unintercepted initialization API failures, all live brush/warp/heal and GPU/event leases, residual hash capacity and
+remain unchanged. Unintercepted initialization API failures, other live owners and GPU/event leases, residual hash capacity and
 shutdown timing remain in P1.7 F5d A3.
 
 The application lifecycle controls cover 115 New/Close/order/state assertions, 58 accepted-dimension/refusal

@@ -11,6 +11,9 @@ struct ApplicationShutdownTestProbe final
 {
     DWORD owner = GetCurrentThreadId();
     std::weak_ptr<BrushStroke> draft;
+    std::weak_ptr<void> liveDraft;
+    bool liveDraftAliveAtDetach = false;
+    std::atomic<bool> liveDraftRetired{false};
     unsigned int ownerCalls = 0;
     bool draftAliveAtDetach = false;
     bool graphicsDetachedOnOwner = false;

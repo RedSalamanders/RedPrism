@@ -263,6 +263,8 @@ int RunApplication(HINSTANCE instance, int showCommand) noexcept
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
         if (const int failed = Application::RunStandaloneProcessingSelfTest(instance); failed != 0)
             return failed;
+        if (const int failed = Application::RunStandaloneLiveShutdownSelfTest(instance); failed != 0)
+            return failed;
         if (const int failed = Application::RunStandaloneShutdownSelfTest(instance); failed != 0)
             return failed;
     }

@@ -288,6 +288,10 @@ Application detaches session coverage engines, brush/composition resources and j
 owner, then releases document/history/display/draft/private-clipboard CPU roots on the final worker. Application's
 sampling raster, cached selection geometry and benchmark document/image roots also retire on that worker.
 The benchmark object, timing address, result metadata and known-path cleanup remain alive for callers after Run.
+Harness observations of live brush/Warp ownership hold only weak handles. They observe the same draft at joined
+owner detachment and its expiration inside final MTA retirement; observation cannot keep the CPU graph alive.
+Borrowed engines detach on owner before that destruction. Temporary history observations end while the session
+still owns its roots, so a test cannot substitute its own retained history graph for the application's lifetime.
 Reservations, events and the pool apartment remain alive through acknowledgement. Empty selected/collapsed hash bucket capacity
 remains until host destruction; broader initialization/lease/draft coverage and shutdown timing remain separate
 qualification. The process recycle pool holds only unowned pixel
