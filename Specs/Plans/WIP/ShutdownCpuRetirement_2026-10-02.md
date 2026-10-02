@@ -139,7 +139,7 @@
     are byte/SHA verified in `p1-live-shutdown-native-r1-qualified`: 585 inputs and 327 evidence entries,
     archived at `2026-10-02T15:07:11.8094238Z` before further builds. Only this scoped A3c gate completes
     ([record](../../TestRuns/P1LiveShutdown_2026-10-02.md)); full A3 and G1 remain open.
-  - [ ] A3d — Drive real standalone Application shutdown while a DocumentReadbackJob worker holds its actual
+  - [x] A3d — Drive real standalone Application shutdown while a DocumentReadbackJob worker holds its actual
     mapped GPU rows, both on the bound device and after device retirement; verify literal bytes before/after
     cancellation, joined worker before owner acknowledgement, stale lease refusal and off-owner CPU retirement.
     Also cover the actual RetryWaitQueue callback held before readiness publication and ready-but-undrained work.
@@ -156,6 +156,35 @@
     continues its gates. Primary review also consumes the auto-reset scheduler wake while the retry producer
     is held, so the ready-undrained assertion observes its actual new readiness signal, and uses the stop token
     acknowledgement rather than racing the earlier shutdown event signal. Private r2 remains pending.
+    The serialized r2 rebuild and complete private Debug WARP application now pass: 56 map/retry checks,
+    unchanged 432 live-owner, 390 startup and 52 shutdown controls, plus all existing application suites.
+    Exact 563 inputs and 40 evidence entries are byte/SHA verified in
+    `p1-lease-shutdown-private-r2-qualified` at `2026-10-02T15:15:18.6037552Z` before activation. Seven reviewed
+    native files are activated with current timestamps and relative project registration; all six forced-rebuild
+    profiles are required before A3d completes or commits. Queue retirement is controlled explicitly; no real
+    driver device-loss is claimed.
+    Native r1 passes all ARM64 cross-builds, then stops at the x64 ASan linked ISA check before runtime.
+    Release/Debug do not build or run. Exact 586 inputs and 243 evidence entries, including the ASan image,
+    PDB, objects, tracking and extracted listings, are preserved before repair in
+    `p1-lease-shutdown-native-r1-ASan-isa-failure` at `2026-10-02T15:29:28.6539347Z`.
+    The reported bytes are a DWORD target inside `Application::EndCanvasEdit`'s eleven-entry terminal switch
+    table. Its observed CMP/MOVSXD uses matching RSP+disp32 slots; the scanner previously proved only disp8
+    terminal guards. A private narrow extension passes 54 independent positive/refusal controls; original-image
+    recheck, native activation and fresh six-profile qualification remain required. No runtime allowlist changes.
+    Original-image r2 has zero ISA violations but fails an overly narrow recheck expectation: two `<unknown>`
+    prefix rows also become proved data. Its ten proof inputs and five evidence entries are retained before
+    correcting the check. A row trace identifies exactly two tables: EndCanvasEdit's 44-byte table and
+    OnSelectionAction's 52-byte table. R3 passes all existing parser controls, all 54 new controls and the exact
+    original-image recheck: three additional data rows, vector count 11691→11690, undecoded prefixes 6→4,
+    runtime count 11690, tier/EVEX counts zero, and the unchanged allowlist. Eleven proof inputs and nine evidence
+    entries are archived at `2026-10-02T15:51:57.4090880+00:00` before scanner/test activation. Fresh native r2
+    starts at `2026-10-02T15:51:58.8860516Z`; six forced-rebuild profiles remain required.
+    Native r2 passes all six forced-rebuild profiles at `2026-10-02T16:25:25.7852876Z` against 587 unchanged inputs.
+    Each full x64 suite passes the exact 56 lease controls, 54 strict wide-stack ISA controls and unchanged
+    application/legacy suites; ARM64 qualifies builds only. Independent verification retains 587 sources and
+    325 evidence files in `p1-lease-shutdown-native-r2-qualified`, acknowledged at `2026-10-02T16:27:57.1089287Z`
+    ([record](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). This closes the scoped A3d GPU/retry cases only;
+    clipboard leases, other live owners, actual initialization API failures and measured shutdown/G1 remain open.
 - [ ] Run skills/format checks, full x64 Debug/Release/ASan suites and all ARM64 clean cross-builds; archive exact
   inputs/images/symbols/results, reconcile owning contracts and commit/push.
 - [ ] Measure shutdown owner cleanup and remaining CPU graph costs; keep the full P1 G1 gate separate.

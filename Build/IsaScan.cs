@@ -267,8 +267,8 @@ namespace RedPrismBuild
 
         // DxUi's ASan grid switch ends with six DWORDs inside a much larger contribution. Its next
         // anonymous data symbol belongs to another procedure. Application::EditUnderWay uses the same
-        // terminal dispatch with a long JA. Prove only those two exact stack guards and RCX dispatches,
-        // including every reported/PE byte and the exact terminal procedure end.
+        // terminal dispatch with a long JA; EndCanvasEdit uses its disp32 stack form. Prove only these
+        // exact stack guards and RCX dispatches, every reported/PE byte and the exact terminal procedure end.
         private static InlineTable ReadGuardedTerminalDwordTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
@@ -278,18 +278,21 @@ namespace RedPrismBuild
             return ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
                 imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, false) ??
                 ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
-                imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true);
+                imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true) ??
+                ReadGuardedTerminalDwordTableForm(pe, sections, contributions, dataSymbols, procedures,
+                    imageBase, dispatch, afterJump, tableRva, decoded, decodedStarts, guardRows, true, true);
         }
 
         private static InlineTable ReadGuardedTerminalDwordTableForm(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, ulong afterJump, uint tableRva,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
-            Dictionary<ulong, byte[]> guardRows, bool longJa)
+            Dictionary<ulong, byte[]> guardRows, bool longJa, bool wideFrame = false)
         {
-            int guardLength = longJa ? 16 : 12;
+            int stackLength = wideFrame ? 8 : 5;
+            int guardLength = 2 * stackLength + (longJa ? 6 : 2);
             int branchLength = longJa ? 6 : 2;
-            int indexStart = 5 + branchLength;
+            int indexStart = stackLength + branchLength;
             if (dispatch < imageBase + (ulong)guardLength || dispatch - imageBase > UInt32.MaxValue || afterJump != dispatch + 19)
                 return null;
             int ownerIndex = FindContribution(contributions, dispatch);
@@ -302,20 +305,21 @@ namespace RedPrismBuild
             try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
             catch (InvalidDataException) { return null; }
             if (raw > pe.Length - (guardLength + 19) ||
-                !StartsWithAt(pe, raw, 0x83, 0x7c, 0x24) ||
-                (longJa ? !StartsWithAt(pe, raw + 5, 0x0f, 0x87) : pe[raw + 5] != 0x77) ||
-                !StartsWithAt(pe, raw + indexStart, 0x48, 0x63, 0x44, 0x24) ||
-                pe[raw + 3] != pe[raw + indexStart + 4] ||
+                !StartsWithAt(pe, raw, 0x83, wideFrame ? (byte)0xbc : (byte)0x7c, 0x24) ||
+                (longJa ? !StartsWithAt(pe, raw + stackLength, 0x0f, 0x87) : pe[raw + stackLength] != 0x77) ||
+                !StartsWithAt(pe, raw + indexStart, 0x48, 0x63, wideFrame ? (byte)0x84 : (byte)0x44, 0x24) ||
+                (wideFrame ? BitConverter.ToUInt32(pe, raw + 3) != BitConverter.ToUInt32(pe, raw + indexStart + 4) :
+                 pe[raw + 3] != pe[raw + indexStart + 4]) ||
                 !StartsWithAt(pe, raw + guardLength, 0x48, 0x8d, 0x0d) ||
                 (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + guardLength + 3) != (long)imageBase ||
                 !StartsWithAt(pe, raw + guardLength + 7, 0x8b, 0x84, 0x81) ||
                 BitConverter.ToUInt32(pe, raw + guardLength + 10) != tableRva ||
                 !StartsWithAt(pe, raw + guardLength + 14, 0x48, 0x03, 0xc1) ||
                 !StartsWithAt(pe, raw + guardLength + 17, 0xff, 0xe0)) return null;
-            uint maximum = pe[raw + 4];
+            uint maximum = pe[raw + stackLength - 1];
             if (maximum == 0 || maximum >= 128) return null; // CMP imm8 must be nonnegative
-            int[] starts = { 0, 5, indexStart, guardLength, guardLength + 7, guardLength + 14, guardLength + 17 };
-            int[] lengths = { 5, branchLength, 5, 7, 7, 3, 2 };
+            int[] starts = { 0, stackLength, indexStart, guardLength, guardLength + 7, guardLength + 14, guardLength + 17 };
+            int[] lengths = { stackLength, branchLength, stackLength, 7, 7, 3, 2 };
             for (int i = 0; i < starts.Length; ++i)
             {
                 ulong address = prefix + (ulong)starts[i];
@@ -327,8 +331,8 @@ namespace RedPrismBuild
             if (end > owner.End) return null;
             foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
                 if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
-            long defaultAddress = longJa ? (long)prefix + 11 + BitConverter.ToInt32(pe, raw + 7) :
-                (long)prefix + 7 + unchecked((sbyte)pe[raw + 6]);
+            long defaultAddress = longJa ? (long)prefix + stackLength + 6 + BitConverter.ToInt32(pe, raw + stackLength + 2) :
+                (long)prefix + stackLength + 2 + unchecked((sbyte)pe[raw + stackLength + 1]);
             foreach (Function procedure in procedures)
             {
                 if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
@@ -1288,7 +1292,7 @@ namespace RedPrismBuild
                 }
                 if (candidateBytes[2] == "0d")
                 {
-                    int[] offsets = { -25, -21, -17, -16, -13, -12, -11, -7, -5, 0, 7, 14, 15, 17, 22, 25 };
+                    int[] offsets = { -25, -22, -21, -17, -16, -13, -12, -11, -7, -5, 0, 7, 14, 15, 17, 22, 25 };
                     foreach (int offset in offsets) rdxGuardCandidates.Add(checked((ulong)((long)candidateAddress + offset)));
                     continue;
                 }

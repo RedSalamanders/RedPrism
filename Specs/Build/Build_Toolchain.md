@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -312,6 +312,17 @@ The preceding RET/NOP or RET/security-failure-CALL/INT3/NOP rows are also corrob
 The 183 independent controls include every protected row's missing/duplicate/unknown/overlapping/PE/listing
 refusal, extreme bounds, direct-entry and backward-target cases, metadata/target/tail refusals, and real VEX/EVEX
 in the body or adjacent to the table. This proof adds no runtime instruction, module or allowlist exemption.
+
+The ASan `Application::EndCanvasEdit` terminal switch uses exactly `CMP dword [RSP+disp32],imm8;
+JA rel32; MOVSXD RAX,dword [RSP+the same disp32]`, followed by the contiguous RCX image-base DWORD dispatch,
+ADD and JMP RAX. All seven guard/dispatch rows must match their PE bytes, decoded lengths and nonoverlapping
+boundaries. All four displacement bytes must agree; the unsigned maximum is 1…127. The aligned anonymous
+same-owner PDB table starts at the load displacement, and max+1 DWORDs end exactly at the containing procedure
+end. Every table/default target is a decoded boundary within that procedure before the table. Intervening
+data symbols or unrelated later symbols cannot supply a larger extent. The 54 independent controls cover
+accepted bounds/separate default, malformed registers/SIB/opcodes, high-byte displacement mismatches,
+missing/unknown/overlapping/PE-mismatched rows, metadata/bounds/targets and adjacent real vector rejection.
+Existing disp8 terminal proofs remain required. This is data recognition with no runtime allowlist exemption.
 
   The observed DxUi typography form permits exactly one contiguous `MOVZX EAX,DL` between LEA RCX of image base
 and the DWORD EAX table load. RCX stays unchanged. This form requires the exact same-owner anonymous 16-byte

@@ -455,6 +455,15 @@ same-procedure decoded boundary. An unrelated later data symbol does not extend 
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
 
+`IsaWideStackGuardTests.ps1` reruns the original inline-table controls and adds 54 independent
+`isa-inline-table.TerminalDwordWideStack*` controls for the observed ASan EndCanvasEdit switch. The seven
+contiguous CMP/JA/MOVSXD/RCX-dispatch rows require exact PE/listing agreement, full disp32 stack-slot equality,
+unsigned bound 1…127, same-owner anonymous table start, exact terminal PDB procedure end and decoded body/default
+targets. Every high displacement byte is tested independently; malformed opcodes/SIB/registers, missing/unknown/
+overlapping/mismatched rows, incorrect metadata/end/targets and an unrelated later symbol refuse the data proof.
+Adjacent real VEX remains a violation while all eleven DWORD data rows are still recognized. Recheck the exact
+archived failing image before rebuilding, with the runtime allowlist and executable/runtime/tier counts preserved.
+
 The Release clipboard status switch additionally has 91 AL-guard controls. Its exact contiguous MOVZX EAX from
 RSI+disp32, CMP AL/unsigned JA, RDX image-base/load/ADD/JMP rows require matching PE bytes and decoded listing.
 The anonymous same-owner PDB start and guard-derived table end must match the containing procedure; all default
@@ -685,6 +694,21 @@ Full x64 logs must report `application-processing summary: 390 checks, 0 failure
 After-stage checkpoints test prefix cleanup, not failure inside those successful APIs. Retry seams return before
 the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
 scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
+
+`RunStandaloneLeaseShutdownSelfTest` constructs four independent hidden WARP/chrome Application owners with
+their own pool/sink. Two actual DocumentReadbackJob workers hold real 2048-squared mapped rows through shutdown
+cancellation, one after explicit queue device retirement. Literal BGRA rows must remain readable until worker
+return; joined wrappers acknowledge the exact lease on owner before queue cleanup, where a stale release fails.
+The other cases hold an actual RetryWaitQueue callback before readiness publication, or leave its readiness
+undrained. A separately entered worker releases the callback after the actual shutdown stop token is signalled;
+Shutdown and close hooks never pump or wait on a test gate. Callback join precedes receiver destruction, useful
+callbacks stay suppressed, and the real 16 MiB CPU graph is destroyed once on MTA. Original ticket/reservation,
+queue/event retirement, repeated Shutdown, caller apartment and consumed quit are independent observations.
+The complete application must report `application-lease-shutdown summary: 56 checks, 0 failures` and 56 named
+PASS controls. The complete private Debug WARP candidate passes these and unchanged application suites;
+the fresh six-profile native matrix passes all three complete x64 suites and all ARM64 cross-builds
+([qualification](../TestRuns/P1LeaseShutdown_2026-10-02.md)). Explicit queue retirement does not inject a driver/device-loss
+failure. Clipboard leases, other live owners, initialization API faults and timing remain separate.
 
 `RunStandaloneLiveShutdownSelfTest` constructs 24 independent hidden WARP/chrome Application owners: ordinary
 and mask Paint/Erase, three healing modes, Clone, ordinary/mask Blur, Liquify and Smudge, each with lifecycle work

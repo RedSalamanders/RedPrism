@@ -40,12 +40,31 @@
   all 432 live-owner controls and unchanged startup/shutdown checks. Exact 585 inputs and 327 evidence files
   are byte/SHA verified before the next private build
   ([qualification](../../TestRuns/P1LiveShutdown_2026-10-02.md)). This closes A3c only.
-- [ ] Next shutdown slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
+- [x] P1 shutdown GPU/retry lease slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
   standalone Application cases, with 56 event-gated assertions, in a private tree. Observe mapped-row
   acknowledgement before queue fallback cleanup, retain literal bytes through cancellation and device
   retirement, and join held/ready-undrained retry producers before receiver destruction. Preserve the first
   private link failure before serializing shared DxUi builds. Clipboard leases, actual API faults and timings
   remain separate; private runtime and native qualification are pending.
+  The complete private Debug WARP application now passes all 56 actual map/retry controls and unchanged suites;
+  exact 563 inputs and 40 evidence entries are archived before activating seven reviewed native files.
+  Native r1 passes all ARM64 cross-builds, then stops at x64 ASan's linked ISA check before runtime;
+  x64 Release/Debug do not build or run. Exact 586 inputs and 243 evidence files are preserved before repair.
+  The reported instruction bytes belong to an eleven-entry terminal DWORD switch table; the observed matching
+  RSP+disp32 guard needs a narrow data proof. Private controls pass without changing the runtime allowlist.
+  Original-image recheck and fresh six-profile qualification remain required; A3d/P1/G1 stay open.
+  The private proof now passes the exact original image and all parser controls: only three rows inside two
+  bounded terminal tables change classification; runtime/tier/EVEX policy is unchanged. Exact proof sources and
+  evidence are archived before activation. Fresh native r2 is running all six forced-rebuild profiles.
+  Native r2 now passes all six profiles against 587 unchanged inputs; each full x64 suite passes all 56 lease
+  and 54 new strict ISA controls, with existing goldens unchanged. Independent source/evidence verification
+  retains 587 inputs and 325 evidence files
+  ([qualification](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). Broader A3/P1/G1 remain open.
+- [ ] Next selection slice — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
+  prepares sparse reads without source-cache publication and bounded explicit-loop cancellation checkpoints.
+  Primary reviews the cheaper agent's literal/checkpoint tests, fixes the actual corner-touch case and adds
+  owner-driven local/shutdown cancellation. Private full DocumentTests and paired Release kernel measurements
+  precede activation and a fresh native matrix. Ordered host/GPU caller migration and G1 remain separate.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

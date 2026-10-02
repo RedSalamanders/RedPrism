@@ -15,6 +15,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.
 & (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"
 $source = [Security.SecurityElement]::Escape((Join-Path $PSScriptRoot 'IsaProbe.cpp'))
 

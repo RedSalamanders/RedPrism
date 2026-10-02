@@ -3260,6 +3260,8 @@ void Application::Shutdown() noexcept
          {
              auto& owner = *static_cast<Application*>(opaque);
              // Producer callbacks and their wrappers have joined; graphics ownership remains here.
+             if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
+                 probe->checkJoined(probe->checkContext);
              // Detach engines without CancelBrush's synchronous CPU-graph destruction.
              owner._session.DetachCoverageForShutdown();
              owner._brushEngine.Release();

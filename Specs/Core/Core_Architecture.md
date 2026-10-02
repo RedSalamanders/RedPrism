@@ -292,6 +292,10 @@ Harness observations of live brush/Warp ownership hold only weak handles. They o
 owner detachment and its expiration inside final MTA retirement; observation cannot keep the CPU graph alive.
 Borrowed engines detach on owner before that destruction. Temporary history observations end while the session
 still owns its roots, so a test cannot substitute its own retained history graph for the application's lifetime.
+A borrowed harness callback may observe joined wrappers before queue cleanup, without pumping, submitting or
+waiting. It proves mapped-row acknowledgement before GPU fallback cleanup and native retry callback join
+before receiver teardown. Row observations are borrowed POD values; only the worker reads them while its
+lease is live, and no test reads mapped bytes after producer return or owner acknowledgement.
 Reservations, events and the pool apartment remain alive through acknowledgement. Empty selected/collapsed hash bucket capacity
 remains until host destruction; broader initialization/lease/draft coverage and shutdown timing remain separate
 qualification. The process recycle pool holds only unowned pixel

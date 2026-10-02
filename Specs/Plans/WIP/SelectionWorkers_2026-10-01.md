@@ -31,6 +31,16 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     prepared core does not authorize synchronous host End/Cancel or altered live-stroke settlement.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
+  - [ ] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
+    Primary prepares a private candidate while the preceding native lease-shutdown matrix remains frozen.
+    Share already contiguous pixels; otherwise read sparse pixels into private cancellable storage without
+    publishing a source cache. Initialize mask/vertex storage in 4096-byte spans, and poll explicit matching,
+    flood, vertex and edge walks at no more than 4096 work steps. Cancel returns no partial mask/geometry and
+    a distinct cancellation result; retain existing None/Memory/TooDetailed and legacy numeric expectations.
+    A cheaper agent supplies deterministic reached-checkpoint and literal parity tests; primary reviews them.
+    Compile/runtime proof, paired kernel costs, original failure retention and all six native profiles remain
+    required before activation/qualification. Allocator/OS latency, Clipper workspace, host ordinal/barrier
+    integration, GPU all-layer sampling, memory admission and measured UI/G1 remain separate requirements.
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration

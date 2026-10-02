@@ -18,6 +18,7 @@ struct ApplicationShutdownTestProbe final
     bool draftAliveAtDetach = false;
     bool graphicsDetachedOnOwner = false;
     bool reservationAndWakeAlive = false;
+    void (*checkJoined)(void*) noexcept = nullptr;
     void (*checkOwner)(void*) noexcept = nullptr;
     void* checkContext = nullptr;
     std::atomic<unsigned int> workerCalls{0};

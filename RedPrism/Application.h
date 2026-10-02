@@ -108,6 +108,7 @@ class Application final : public ChromeEvents
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
     // `--bench brush`: the legacy 4K stroke benchmark on this device; prints BRUSH BENCH lines to stdout.
     int RunBenchmark() noexcept;
     [[nodiscard]] HRESULT InitializeProcessing() noexcept;
