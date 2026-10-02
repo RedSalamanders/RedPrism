@@ -427,6 +427,30 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return !_session.PendingTransformEdit();
             }
+            else if constexpr (std::is_same_v<Input, HostDuplicateBeginInput>)
+            {
+                if (!_duplicateGesture || _duplicateGesture->serial != value.gesture ||
+                    _duplicateGesture->documentSerial != _session.DocumentSerial() ||
+                    _session.ActiveLayerID() != value.layer || _session.PendingTransformEdit())
+                {
+                    _hostExecutionError = E_ABORT;
+                    return false;
+                }
+                _hostExecutionError = StartTransformWork(TransformWorkKind::OpenDuplicate);
+                if (FAILED(_hostExecutionError))
+                {
+                    ++_errorsShown;
+                    _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                       ? IDS_ERROR_TOO_LARGE
+                                       : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                }
+                return SUCCEEDED(_hostExecutionError);
+            }
+            else if constexpr (std::is_same_v<Input, HostDuplicateFinishInput>)
+            {
+                return !_session.PendingTransformEdit();
+            }
             else if constexpr (std::is_same_v<Input, HostPixelNudgeInput>)
             {
                 ExecutePixelNudge(value.offset);
@@ -557,6 +581,8 @@ bool Application::ExecuteHostInput() noexcept
             if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostPanelCancelInput> &&
                           !std::is_same_v<Input, HostGradientApplyInput> &&
                           !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
+                          !std::is_same_v<Input, HostDuplicateBeginInput> &&
+                          !std::is_same_v<Input, HostDuplicateFinishInput> &&
                           !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput>)
             {
                 return true;
@@ -605,7 +631,8 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optiona
 void Application::FinishPreparedDocumentReplacement() noexcept
 {
     CancelTransformPreviewJobs();
-    RetireFloatingRestore();
+    RetireTransformRestore();
+    _duplicateGesture.reset();
     // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
     // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
     _opacityEdit.reset();

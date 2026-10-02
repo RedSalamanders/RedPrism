@@ -16,7 +16,8 @@ enum class TransformWorkTestKind : std::uint8_t
 {
     OpenFloating,
     Commit,
-    Cancel
+    Cancel,
+    OpenDuplicate
 };
 
 struct TransformWorkTestGate final

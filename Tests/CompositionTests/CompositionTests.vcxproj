@@ -85,6 +85,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\RasterWork.h" />
     <ClInclude Include="..\..\Common\RasterEditWork.h" />
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />

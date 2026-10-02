@@ -11,15 +11,23 @@ the pin. Do not float onto sibling `main`.
 ## Pin
 
 - Lock `Dependencies/DxUi.lock.json` with repository `https://github.com/RedSalamanders/DxUi`, a 40-character
-  commit, `apiRevision` 2, and `targets: ["DxUi"]`. Current pin: `c403052bad26c97ba23995e136672c32c85ccbfc` (merge of
-  DxUi pull request 19 on `main`).
+  commit, `apiRevision` 3, and `targets: ["DxUi"]`. Current pin: `271bd54be24eadf3f03ba5221d1be7be069860f2` (merge of
+  DxUi pull request 45 on `main`). Rollback pin: `c403052bad26c97ba23995e136672c32c85ccbfc` (API revision 2, merge of pull
+  request 19). `restore-dxui.ps1` names the revision this code is written against in one constant.
+- Call or import only what the pinned `capabilities.json` lists under `consumerInterface` (scripts, module functions with their
+  parameters, MSBuild files, the header root); `restore-dxui.ps1` imports `Tools/ConsumerBuild.psm1` and
+  `Tools/ConsumerUpdate.psm1`. Revision 3 renamed the model and delegate interfaces `IGridModel`, `IGridDelegate`, `ITreeModel`
+  and `ITreeDelegate`, and registers DxUi's private window messages by name: forward every message, registered ones included,
+  to `HandleMessage` of a window that attaches a `DxUi::WindowHost` (RedPrism attaches none: `Core_DxUiIntegration.md`).
 - `build.ps1` passes `-CheckUpdates` to `restore-dxui.ps1`. The pinned `Show-DxUiUpdateNotice` prints one advisory
   when DxUi `main` is not the lock. It does not edit the lock or fail a valid restore. Yellow means a validated
   newer `main`; red means `main` moved without a successful `ci.yml` run; dark yellow means the pin is ahead,
   diverged, or the lookup failed. The same pin is quiet.
 - Restore into an isolated `.build/dependencies/DxUi/` fingerprint. Restore clones from `Z:\src\DxUi` when that
   checkout already contains the commit, so a library commit made locally is consumable before it is pushed. Do not
-  checkout, reset, or edit `Z:\src\DxUi` from RedPrism restore.
+  checkout, reset, or edit `Z:\src\DxUi` from RedPrism restore. The clone is a sparse checkout with Git long paths (no
+  `Measurements/`, `docs/gallery` or `Specs/`; `Build/DxUiRestore.psm1`): read the library's headers and sources in the
+  pinned checkout and its specifications in the DxUi repository.
 - Bump the pin only after the library commit is green under DxUi `test.ps1`; then requalify RedPrism with
   `test.ps1` in Debug, Release and ASan Debug and update `Core_DxUiIntegration.md` and this file.
 - Import consumer props/targets and reference `src/DxUi.vcxproj` once. Do not enumerate library `.cpp` files.
@@ -35,7 +43,7 @@ the pin. Do not float onto sibling `main`.
   during a press.
 - `Panel` paints no background; the embedded surface is cleared transparent and composited with premultiplied
   alpha. Composite chrome after the canvas blit so tooltips and popups over the hole stay visible.
-- `Tree` expects a borrowed `IDxTreeModel` (`GetVisibleItem` fills `TreeItemData` with `id`, `text`, `depth`,
+- `Tree` expects a borrowed `ITreeModel` (`GetVisibleItem` fills `TreeItemData` with `id`, `text`, `depth`,
   `hasChildren`, `expanded`, `iconText`) and reports `OnTreeSelectionChanged` / `OnTreeToggleExpanded`.
   `SetReorderEnabled` lets a row drag call `OnTreeReorder` once; the library does not move the model.
 - Icon-only buttons draw `_text` with `FontRole::Icon` when Segoe Fluent Icons is installed, and with `FontRole::Body`

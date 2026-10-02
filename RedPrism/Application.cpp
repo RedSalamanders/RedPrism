@@ -2234,6 +2234,11 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-preview.\n");
         return transformPreview;
     }
+    if (const int duplicateGesture = RunDuplicateGestureSelfTest(); duplicateGesture != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: duplicate-gesture.\n");
+        return duplicateGesture;
+    }
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
@@ -3137,7 +3142,8 @@ void Application::Shutdown() noexcept
     CancelPixelMoveJobs();
     CancelTransformPreviewJobs();
     _jobs.RequestStop();
-    RetireFloatingRestore();
+    RetireTransformRestore();
+    _duplicateGesture.reset();
     if (_window)
     {
         ShowWindow(_window.get(), SW_HIDE);
@@ -3744,7 +3750,13 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
             FinishShapeDraft();
         }
     }
-    if (const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag); move != nullptr && lost)
+    if (_duplicateGesture && _duplicateGesture->pointerDown && lost)
+    {
+        DropDrag<MoveToolDrag>();
+        (void)FinishDuplicateGesture(true); // The duplicate can be opening with no live TransformEdit yet.
+        DocumentChanged();
+    }
+    else if (const MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag); move != nullptr && lost)
     {
         // The box goes back to where the drag started: a drag-only edit drops, an Alt-drag's duplicate with it.
         const TransformDrag drag = move->drag;
@@ -3944,6 +3956,8 @@ void Application::OnCommand(int command) noexcept
         (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
          _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
+        if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
+            _duplicateGesture->pointerDown = false;
         if (_session.PendingTransformEdit() &&
             (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             DropDrag<MoveToolDrag>(); // The admitted history request ends pointer input before worker acknowledgement.
@@ -4584,6 +4598,8 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         return true;
     case CanvasEdit::Transform:
         DropDrag<MoveToolDrag>();
+        if (!_hostExecuting && FinishDuplicateGesture(drops))
+            return true;
         if (!_session.PendingTransformEdit())
             return true;
         if (_hostExecuting && _session.PendingTransformEdit()->deferred)
@@ -5562,7 +5578,7 @@ std::optional<Guid> Application::LayerUnderPointer(Vec2 pixel) const
 
 void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
 {
-    if (!_session.Document().has_value())
+    if (!_session.Document().has_value() || _duplicateGesture)
     {
         return;
     }
@@ -5620,6 +5636,25 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
 
 void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
 {
+    if (_duplicateGesture)
+    {
+        auto& gesture = _duplicateGesture.value();
+        if (!gesture.pointerDown || gesture.finishQueued || gesture.abandoned ||
+            gesture.documentSerial != _session.DocumentSerial() || _hostRequests.Size() ||
+            !std::holds_alternative<MoveToolDrag>(_drag))
+            return;
+        gesture.latest = _viewport.DocumentFromView(view, DocumentSize());
+        gesture.modifiers = modifiers;
+        gesture.alt = KeyboardState::Held(VK_MENU);
+        if (gesture.copy && !_historyWork.Busy() && !_activeHostRequest && _session.PendingTransformEdit() &&
+            _session.PendingTransformEdit()->layerID == gesture.copy &&
+            _session.PendingTransformEdit()->opening == gesture.copyOpening)
+        {
+            ApplyTransformDragGeometry(gesture.drag, gesture.latest, gesture.modifiers, gesture.alt);
+            DocumentChanged();
+        }
+        return;
+    }
     if (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size())
         return; // Released or queued geometry cannot mutate a captured worker input.
     MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
@@ -5629,13 +5664,20 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
     }
     const TransformDrag drag = move->drag;
     const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const bool shift = (modifiers & MK_SHIFT) != 0;
-    const bool control = (modifiers & MK_CONTROL) != 0;
     const bool alt = KeyboardState::Held(VK_MENU);
     if (std::exchange(move->duplicateOnMove, false))
     {
-        _session.BeginDuplicateTransform();
+        if (StartDuplicateGesture(drag, pixel, modifiers, alt))
+            return;
     }
+    ApplyTransformDragGeometry(drag, pixel, modifiers, alt);
+    DocumentChanged();
+}
+
+void Application::ApplyTransformDragGeometry(const TransformDrag& drag, Vec2 pixel, UINT modifiers, bool alt) noexcept
+{
+    const bool shift = (modifiers & MK_SHIFT) != 0;
+    const bool control = (modifiers & MK_CONTROL) != 0;
     const std::optional<std::array<Vec2, 4>> corners = drag.Corners(pixel, shift);
     if (corners.has_value())
     {
@@ -5668,13 +5710,17 @@ void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
         }
         _session.PreviewTransform(draft);
     }
-    DocumentChanged();
 }
 
 void Application::EndTransformDrag() noexcept
 {
     DropDrag<MoveToolDrag>();
     _session.ClearSnapGuides();
+    if (FinishDuplicateGesture(false))
+    {
+        DocumentChanged();
+        return;
+    }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     if (edit.has_value() && !edit->persistent)
     {

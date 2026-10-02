@@ -114,13 +114,28 @@
           faults qualify. `.build/p1-distort-draft/duplicate-opening-core-qualified-r1/` retains 532 sources and
           210 evidence entries. Opening/rollback deliberately advance generations and structural epochs;
           original visible document/history/clipboard state is restored. Host gesture migration is still open.
-        - [ ] Private duplicate gesture host — Implement a same-ordinal source-settlement/opening job,
+        - [x] Private duplicate gesture host — Implement a same-ordinal source-settlement/opening job,
           coalesced pointer metadata, event-time release/Escape inputs and prepaid restore on failed settlement.
           The draft builds against 533 inputs. Its first full run reaches 131 controls with one failure: admission
           refusal omitted its error notice. The 534-source/222-evidence failure is preserved before adding that
-          notice without changing the assertion. A fresh full run is in progress. No host pass or
-          native production activation is claimed. Qualification must cover fast release, before/after-ready
-          cancellation, newer input, source/history faults, retirement and the prior transform/preview goldens.
+          notice without changing the assertion. The full r2 application run passes all 131 controls plus the
+          prior 344 settlement and 90 preview controls against 534 inputs. The exact archive
+          `.build/p1-distort-draft/duplicate-gesture-host-qualified-r2/` retains 534 sources and 230 evidence entries.
+          Its image SHA-256 is `FF4755384F864E08903AAF0C140FC72FAFE4895DF1432063053ABC27EBB578EA`.
+          - [x] Native duplicate migration — The qualified source/core/test files are activated selectively;
+            native project imports and the remote failure-report hooks are retained. Remote main's API-revision-3
+            DxUi update is integrated; its parser controls and the AL controls pass together. The combined clean
+            matrix passes all three full x64 suites and all three ARM64 cross-builds against 559 frozen inputs:
+            82 core, 131 duplicate host, 90 preview and 344 settlement controls; unchanged goldens
+            ([record](../../TestRuns/DuplicateGestureWorkers_2026-10-02.md)). The byte/hash-verified archive contains
+            559 sources and 297 evidence entries. Remaining qualification includes distortion,
+            stale source/history/replacement and device/shutdown.
+          - [x] Private exact layer-count cap — 13 additional independent controls pass the complete
+            DocumentTests run against 540 inputs: 9,999→10,000 layers, refusal at 10,000, shape/shared-pixel
+            metadata, unchanged preparation checkpoints, group refusal and prepaid restoration.
+            The original warnings-as-errors compile failure and original agent files remain preserved;
+            the fixture now stores history container counts as size_t. The complete private proof is retained in
+            `.build/p1-distort-draft/transform-policy-core-qualified-r2/`. Native activation is separate.
     - [ ] T2 — Route Ctrl+T, Apply/Cancel, pointer release/leave/capture loss, header/nudge/flip, tool/layer changes,
       writes and lifetime changes through an opening-specific owned host input and same-ordinal settlement stage.
       Worker failure cannot discard newer geometry; explicit Escape restores only its still-current opening after
@@ -168,6 +183,12 @@
         performance/device/shutdown closeout remain open.
       - [ ] Activate one active/latest pending preview graph and route discard/capture-loss before enabling the
         deferred policy in production. Qualify real host coalescing, failure, cancellation and lifetime controls.
+        - [ ] Ordinary policy candidate — Privately route Ctrl+T, typed headers, body drag and layer nudge through
+          BeginDeferredTransform; mark worker-opened floating drafts deferred. Reviewed interaction tests cover
+          exact typed/nudge/body geometry, ephemeral/persistent pointer loss, real Ctrl-corner distortion/Undo
+          and floating opening/cancel. Event-gated preview tests replace the device and shut down independent
+          hosts before/after preparation. The initial build refusal for discarded nodiscard results is preserved;
+          full private host qualification is running before native activation.
     - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,
       refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
       reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation

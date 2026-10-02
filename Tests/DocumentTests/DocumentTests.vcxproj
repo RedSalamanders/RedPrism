@@ -83,6 +83,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
@@ -162,6 +163,7 @@
     <ClCompile Include="TransformCancellationWorkTests.cpp" />
     <ClCompile Include="TransformPreviewWorkTests.cpp" />
     <ClCompile Include="TransformDeferredTests.cpp" />
+    <ClCompile Include="DuplicateOpeningWorkTests.cpp" />
     <ClCompile Include="TransformDeferredGuardTests.cpp" />
     <ClCompile Include="FloatingPixelsWorkTests.cpp" />
     <ClCompile Include="FloatingOpeningWorkTests.cpp" />
@@ -243,6 +245,7 @@
     <ClCompile Include="..\..\Common\TransformCommitWork.cpp" />
     <ClCompile Include="..\..\Common\TransformCancellationWork.cpp" />
     <ClCompile Include="..\..\Common\TransformPreviewWork.cpp" />
+    <ClCompile Include="..\..\Common\DuplicateOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\FloatingMergeWork.cpp" />

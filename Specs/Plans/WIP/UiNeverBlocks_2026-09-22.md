@@ -142,6 +142,12 @@
         controls, 90 preview host controls and the existing 344 settlement controls
         ([record](../../TestRuns/DeferredTransformPreview_2026-10-02.md)). Production ordinary-transform policy,
         Alt-duplicate/device/shutdown/G1 and the complete P1 exit remain open.
+      - [x] A6.3 duplicate gesture — Same-ordinal worker source settlement/opening, latest pointer metadata,
+        event-time release/Escape and prepaid rollback qualify in six clean profiles against 559 frozen inputs:
+        82 core and 131 duplicate host controls plus the prior preview/settlement/goldens
+        ([record](../../TestRuns/DuplicateGestureWorkers_2026-10-02.md)). The approved DxUi API-revision-3
+        update and both strict ISA parser patterns qualify together. Ordinary deferred policy, remaining
+        duplicate stale/distort/lifetime scenarios and measured G1 are separate unfinished gates.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

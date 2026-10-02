@@ -166,6 +166,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelOpening.reset();
         _pendingCancelReceipt = {};
     }
+    CompleteDuplicateGestureInput(result.outcome);
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
     if (std::holds_alternative<HostShapeFinishInput>(_activeHostRequest->input.Input()))
     {
@@ -283,6 +284,16 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (const auto* duplicate = std::get_if<HostDuplicateBeginInput>(&input);
+                duplicate &&
+                (!_duplicateGesture || _duplicateGesture->serial != duplicate->gesture ||
+                 _duplicateGesture->abandoned || _duplicateGesture->documentSerial != _session.DocumentSerial() ||
+                 _session.ActiveLayerID() != duplicate->layer ||
+                 _session.TransformDraftRevision() != duplicate->revision))
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
             if (const auto* cancel = std::get_if<HostPanelCancelInput>(&input))
             {
                 const auto& panel = _session.PendingColorEdit();
@@ -559,6 +570,47 @@ void Application::RunHostContinuation() noexcept
         }
         case HostStage::TransformSettle:
         {
+            const auto* duplicateFinish = std::get_if<HostDuplicateFinishInput>(&input);
+            if (duplicateFinish)
+            {
+                if (!_duplicateGesture || _duplicateGesture->serial != duplicateFinish->gesture ||
+                    _duplicateGesture->documentSerial != _session.DocumentSerial())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                const auto& edit = _session.PendingTransformEdit();
+                const bool matches =
+                    !edit ||
+                    (_duplicateGesture->copy
+                         ? edit->layerID == _duplicateGesture->copy && edit->opening == _duplicateGesture->copyOpening
+                         : edit->layerID == _duplicateGesture->source &&
+                               edit->opening == _duplicateGesture->sourceOpening &&
+                               _session.TransformDraftRevision() == _duplicateGesture->sourceRevision);
+                if (!matches)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (edit)
+                {
+                    const auto result = StartTransformWork(duplicateFinish->cancel ? TransformWorkKind::Cancel
+                                                                                   : TransformWorkKind::Commit);
+                    if (FAILED(result))
+                    {
+                        ++_errorsShown;
+                        _lastErrorId = result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
+                                                                                          : IDS_ERROR_PIXEL_EDIT;
+                        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                        FinishHostContinuation({HostOutcome::Failed, result});
+                        return;
+                    }
+                    if (_transformWorkTicket)
+                        return;
+                }
+                _hostStage = HostStage::Complete;
+                break;
+            }
             const auto* finish = std::get_if<HostTransformFinishInput>(&input);
             const auto* command = std::get_if<HostCommandInput>(&input);
             const auto& pending = _session.PendingTransformEdit();

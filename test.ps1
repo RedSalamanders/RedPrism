@@ -44,6 +44,13 @@ if ($info.OriginalFilename -ne 'RedPrism.exe' -or $info.ProductName -ne 'RedPris
     throw 'RedPrism.exe is missing its Windows version identity.'
 }
 
+# First, so that every later run is known to end on a failed runtime check instead of opening a dialog on the desktop.
+Write-Host 'Running failure report self-tests...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\FailureReportTests.ps1') -OutputRoot $outputRoot -Configuration $Configuration
+if ($LASTEXITCODE -ne 0) {
+    throw "Failure report self-tests failed with exit code $LASTEXITCODE."
+}
+
 foreach ($suite in @(
         @{ Name = 'HostTests'; Path = $hostTests; Label = 'host contract' },
         @{ Name = 'DocumentTests'; Path = (Join-Path $outputRoot 'DocumentTests.exe'); Label = 'document model' },
@@ -257,12 +264,6 @@ foreach ($isaCase in @(
     Write-Host "PASS kernel-isa.$($isaCase.Name)"
 }
 
-Write-Host 'Running CRT report hook probe...' -ForegroundColor Cyan
-& (Join-Path $repoRoot 'Tests\BuildProcessTests\CrtReportHookTests.ps1') -HostTestsPath $hostTests -Configuration $Configuration
-if ($LASTEXITCODE -ne 0) {
-    throw "CRT report hook tests failed with exit code $LASTEXITCODE."
-}
-
 Write-Host 'Validating DxUi provenance...' -ForegroundColor Cyan
 Import-Module (Join-Path $repoRoot 'Build\DxUiProvenance.psm1') -Force
 Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repoRoot 'Dependencies\DxUi.lock.json') `
@@ -288,6 +289,19 @@ Write-Host 'Validating tool discovery...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\ToolDiscoveryTests.ps1')
 if ($LASTEXITCODE -ne 0) {
     throw "Tool discovery tests failed with exit code $LASTEXITCODE."
+}
+
+Write-Host 'Validating the vcpkg toolset pin...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\VcpkgToolsetTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "vcpkg toolset pin tests failed with exit code $LASTEXITCODE."
+}
+
+
+Write-Host 'Validating the DxUi source restore from a deep root...' -ForegroundColor Cyan
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiRestoreTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "DxUi source restore tests failed with exit code $LASTEXITCODE."
 }
 
 Write-Host 'Validating ARM64 ASan wiring...' -ForegroundColor Cyan

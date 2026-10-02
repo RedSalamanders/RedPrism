@@ -80,7 +80,7 @@ WIL, yyjson, libzip, Clipper2, DxUi, and modern C++.
 - Caches keyed by `Raster::Identity()` hold the `Raster`; a freed storage address may be reused by another image.
 - Screenshots for specs and docs come from the application harness. Never Computer Use or a desktop screenshot tool.
 - `build.ps1` rejects a running `RedPrism.exe` whose path is the selected output and MUST NOT terminate it.
-- Consume DxUi only as pinned `DxUi.lib` (API revision 2). Do not enumerate library sources. Do not reset
+- Consume DxUi only as pinned `DxUi.lib` (API revision 3). Do not enumerate library sources. Do not reset
   `Z:\src\DxUi` from restore. Design against the pinned library as it is (see `consumer-dxui` for the facts that
   matter: `Toolbar` has no layout, `Toggle` is a switch, icon-only buttons draw with the icon font).
 - Keep DxUi C++ inside `RedPrism.exe`. If a plugin ABI appears later, it is COM/POD only.

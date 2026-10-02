@@ -219,6 +219,11 @@ class Application final : public ChromeEvents
     void BeginTransformDrag(Vec2 view, UINT modifiers) noexcept;
     void ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept;
     void EndTransformDrag() noexcept;
+    void ApplyTransformDragGeometry(const TransformDrag& drag, Vec2 pixel, UINT modifiers, bool alt) noexcept;
+    [[nodiscard]] bool StartDuplicateGesture(const TransformDrag& drag, Vec2 pixel, UINT modifiers, bool alt) noexcept;
+    [[nodiscard]] bool FinishDuplicateGesture(bool cancel) noexcept;
+    void PublishDuplicateGesture() noexcept;
+    void CompleteDuplicateGestureInput(ContinuationOutcome outcome) noexcept;
     // What a Move-tool press picks: the session's part of the rule (the pending edit, the active layer and whether it
     // can transform alone, the group box, auto-select), then the pointer's (RF-1002: the cursor keeps one rule per
     // `_cursorRevision`, as building it walks every layer).
@@ -445,14 +450,17 @@ class Application final : public ChromeEvents
     {
         OpenFloating,
         Commit,
-        Cancel
+        Cancel,
+        OpenDuplicate
     };
     class TransformJob;
-    struct FloatingRestoreOwner;
+    struct TransformRestoreOwner;
     [[nodiscard]] HRESULT StartTransformWork(TransformWorkKind kind) noexcept;
-    void RetireFloatingRestore() noexcept;
+    void RetireTransformRestore() noexcept;
+    [[nodiscard]] bool RestoreTransformOpening() noexcept;
     void ExecuteLayerNudge(Vec2 offset) noexcept;
     int RunTransformWorkSelfTest() noexcept;
+    int RunDuplicateGestureSelfTest() noexcept;
     struct TransformPreviewRequest final
     {
         std::uint64_t opening = 0, revision = 0, generation = 0;
@@ -754,7 +762,7 @@ class Application final : public ChromeEvents
     std::shared_ptr<MaskWorkTestGate> _maskWorkTestGate;
     std::optional<JobTicket> _transformWorkTicket;
     std::optional<HistoryWorkStamp> _transformWorkStamp;
-    std::shared_ptr<FloatingRestoreOwner> _floatingRestoreOwner;
+    std::shared_ptr<TransformRestoreOwner> _transformRestoreOwner;
     std::shared_ptr<TransformWorkTestGate> _transformWorkTestGate;
     PreviewMailbox<TransformPreviewRequest> _transformPreviews;
     bool _transformPreviewMailboxOpen = false;
@@ -926,6 +934,24 @@ class Application final : public ChromeEvents
         TransformDrag drag;
         bool duplicateOnMove = false; // an Alt-drag duplicates the layer once the pointer moves
     };
+    struct DuplicateGesture final
+    {
+        std::uint64_t serial, documentSerial;
+        Guid source;
+        std::uint64_t sourceRevision, sourceOpening;
+        TransformDrag drag;
+        Vec2 latest;
+        UINT modifiers;
+        bool alt;
+        bool pointerDown = true;
+        bool finishQueued = false;
+        bool finishCancel = false;
+        bool abandoned = false;
+        std::optional<Guid> copy;
+        std::uint64_t copyOpening = 0;
+    };
+    std::optional<DuplicateGesture> _duplicateGesture;
+    std::uint64_t _duplicateGestureSerial = 0;
     struct OutlineDrag
     {
         Vec2 start{};  // document point where the selection outline was grabbed

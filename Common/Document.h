@@ -1236,6 +1236,11 @@ struct TransformPreviewResult;
 struct TransformPreviewObserver;
 class TransformCancellationInput;
 class PreparedTransformCancellation;
+class DuplicateOpeningInput;
+class PreparedDuplicateOpening;
+class PreparedDuplicateRestore;
+struct DuplicateOpeningResult;
+struct DuplicateOpeningObserver;
 class FloatingOpeningInput;
 class PreparedFloatingOpening;
 class PreparedFloatingRestore;
@@ -1948,6 +1953,14 @@ class DocumentSession
     void PreviewCorners(const std::array<Vec2, 4>& corners);
     void BeginDuplicateTransform();
     void CommitTransform();
+    [[nodiscard]] std::uint64_t DuplicateOpeningPreparationMemoryBytes() const;
+    [[nodiscard]] std::optional<DuplicateOpeningInput> PrepareDuplicateOpeningInput() const;
+    [[nodiscard]] static DuplicateOpeningResult PrepareDuplicateOpeningPublication(
+        DuplicateOpeningInput input, Executor& executor, CancelToken cancellation,
+        DocumentHistory::PrepareObserver historyObserver, DuplicateOpeningObserver observer);
+    [[nodiscard]] bool ApplyPreparedDuplicateOpeningIfCurrent(PreparedDuplicateOpening& prepared) noexcept;
+    [[nodiscard]] bool IsDuplicateRestoreCurrent(const PreparedDuplicateRestore& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedDuplicateRestoreIfCurrent(PreparedDuplicateRestore& prepared) noexcept;
     [[nodiscard]] std::uint64_t FloatingOpeningPreparationMemoryBytes() const noexcept;
     [[nodiscard]] std::optional<FloatingOpeningInput> PrepareFloatingOpeningInput() const;
     [[nodiscard]] static FloatingOpeningResult PrepareFloatingOpeningPublication(

@@ -211,6 +211,7 @@
     <ClCompile Include="..\Common\DistortWork.cpp" />
     <ClCompile Include="..\Common\TransformPixelsWork.cpp" />
     <ClCompile Include="..\Common\TransformCommitWork.cpp" />
+    <ClCompile Include="..\Common\DuplicateOpeningWork.cpp" />
     <ClCompile Include="..\Common\TransformCancellationWork.cpp" />
     <ClCompile Include="..\Common\TransformPreviewWork.cpp" />
     <ClCompile Include="..\Common\FloatingPixelsWork.cpp" />
@@ -286,6 +287,8 @@
     <ClCompile Include="ApplicationMaskTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyJobs.cpp" />
     <ClCompile Include="ApplicationTransformJobs.cpp" />
+    <ClCompile Include="ApplicationDuplicateGesture.cpp" />
+    <ClCompile Include="ApplicationDuplicateGestureTests.cpp" />
     <ClCompile Include="ApplicationTransformTests.cpp" />
     <ClCompile Include="ApplicationTransformPreviewJobs.cpp" />
     <ClCompile Include="ApplicationTransformPreviewTests.cpp" />

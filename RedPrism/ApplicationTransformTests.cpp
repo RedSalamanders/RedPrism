@@ -357,7 +357,7 @@ int Application::RunTransformWorkSelfTest() noexcept
     snapshot(opening);
     if (SettleJobs(_jobs, 15000, dispatch, &opening) != SettleResult::Settled || !opening.visited || !opening.held ||
         opening.receipt.Read().outcome != HostOutcome::Succeeded || !_session.PendingTransformEdit() ||
-        !_session.PendingTransformEdit()->floating || !_floatingRestoreOwner)
+        !_session.PendingTransformEdit()->floating || !_transformRestoreOwner)
         return 5;
     expect(_session.history.UndoCount() == 0 && _session.PendingTransformEdit() &&
                _session.PendingTransformEdit()->floating && _session.Document()->layers.size() == 2,
@@ -381,8 +381,8 @@ int Application::RunTransformWorkSelfTest() noexcept
                 _session.DocumentSerial()};
     snapshot(merge);
     if (SettleJobs(_jobs, 15000, dispatch, &merge) != SettleResult::Settled || !merge.visited || !merge.held ||
-        finish.Read().outcome != HostOutcome::Succeeded || _session.history.UndoCount() != 1 || _floatingRestoreOwner ||
-        !_transformWorkTestGate->retired || !_transformWorkTestGate->retiredOffOwner)
+        finish.Read().outcome != HostOutcome::Succeeded || _session.history.UndoCount() != 1 ||
+        _transformRestoreOwner || !_transformWorkTestGate->retired || !_transformWorkTestGate->retiredOffOwner)
         return 5;
     expect(!_session.PendingTransformEdit() && _session.Document()->layers.size() == 1,
            "floating-merge-publishes-once-and-retires-restore", Case::Success, true, TransformWorkTestKind::Commit);
@@ -413,7 +413,7 @@ int Application::RunTransformWorkSelfTest() noexcept
     snapshot(secondOpening);
     if (SettleJobs(_jobs, 15000, dispatch, &secondOpening) != SettleResult::Settled ||
         secondOpening.receipt.Read().outcome != HostOutcome::Succeeded || !_session.PendingTransformEdit() ||
-        !_session.PendingTransformEdit()->floating || !_floatingRestoreOwner)
+        !_session.PendingTransformEdit()->floating || !_transformRestoreOwner)
         return 5;
     _transformWorkTestGate.reset();
     auto preview = _session.PendingTransformEdit()->draft;
@@ -438,7 +438,7 @@ int Application::RunTransformWorkSelfTest() noexcept
     if (SettleJobs(_jobs, 15000, dispatch, &rollback) != SettleResult::Settled || !rollback.visited || !rollback.held ||
         !rollback.retained || failedFloatingCommit.Read().outcome != HostOutcome::Cancelled ||
         _session.PendingTransformEdit() || _session.ActiveLayer()->asset->image != originalRollbackSource ||
-        _session.history.UndoCount() != 0 || _floatingRestoreOwner || !_transformWorkTestGate->retired ||
+        _session.history.UndoCount() != 0 || _transformRestoreOwner || !_transformWorkTestGate->retired ||
         !_transformWorkTestGate->retiredOffOwner)
         return 5;
     expect(terminal(), "floating-cancel-restores-prepaid-opening-after-ack", Case::CancelAfterReady, true,
@@ -459,7 +459,7 @@ int Application::RunTransformWorkSelfTest() noexcept
     snapshot(thirdOpening);
     if (SettleJobs(_jobs, 15000, dispatch, &thirdOpening) != SettleResult::Settled ||
         thirdOpening.receipt.Read().outcome != HostOutcome::Succeeded || !_session.PendingTransformEdit() ||
-        !_session.PendingTransformEdit()->floating || !_floatingRestoreOwner)
+        !_session.PendingTransformEdit()->floating || !_transformRestoreOwner)
         return 5;
     _transformWorkTestGate.reset();
     auto idlePreview = _session.PendingTransformEdit()->draft;
@@ -470,7 +470,7 @@ int Application::RunTransformWorkSelfTest() noexcept
         HostTransformFinishInput{_session.PendingTransformEdit()->layerID, _session.TransformDraftRevision(), true});
     if (!settle() || idleCancel.Read().outcome != HostOutcome::Succeeded || _session.PendingTransformEdit() ||
         _session.ActiveLayer()->asset->image != originalRollbackSource || _session.history.UndoCount() != 0 ||
-        _jobs.ReservedMemoryBytes() != reservationBeforeIdleCancel || _floatingRestoreOwner)
+        _jobs.ReservedMemoryBytes() != reservationBeforeIdleCancel || _transformRestoreOwner)
         return 5;
     expect(terminal(), "idle-floating-cancel-restores-without-new-work", Case::Success, true,
            TransformWorkTestKind::Cancel);
@@ -515,10 +515,10 @@ int Application::RunTransformWorkSelfTest() noexcept
                     std::_Exit(5);
                 expect(setup.visited && setup.held && setup.receipt.Read().outcome == HostOutcome::Succeeded &&
                            _session.PendingTransformEdit() && _session.PendingTransformEdit()->floating &&
-                           _floatingRestoreOwner,
+                           _transformRestoreOwner,
                        "fault-fixture-opened-through-worker", test, true, kind);
                 if (!_session.PendingTransformEdit() || !_session.PendingTransformEdit()->floating ||
-                    !_floatingRestoreOwner)
+                    !_transformRestoreOwner)
                     return 5;
                 restorationGate = _transformWorkTestGate;
                 expect(restorationGate->retired && restorationGate->retiredOffOwner && !restorationGate->restoreRetired,
@@ -563,7 +563,7 @@ int Application::RunTransformWorkSelfTest() noexcept
                    "floating-fault-held-reservation-and-view-input", test, after, kind);
             expect(_session.Document() && _session.Document().value() == before && _session.ActiveLayerID() == target &&
                        _session.ActiveLayer()->asset->image == original && !_session.PendingTransformEdit() &&
-                       !_floatingRestoreOwner && _session.history.UndoCount() == 0 &&
+                       !_transformRestoreOwner && _session.history.UndoCount() == 0 &&
                        _session.history.CaptureState().Depth() == 0,
                    "floating-fault-restores-exact-document-selection-source-and-depth", test, after, kind);
             expect(_session.ClipboardSerial() == fault.clipboardSerial &&

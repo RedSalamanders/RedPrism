@@ -148,6 +148,17 @@ struct HostTransformFinishInput final
     std::uint64_t revision;
     bool cancel;
 };
+struct HostDuplicateBeginInput final
+{
+    Guid layer;
+    std::uint64_t revision;
+    std::uint64_t gesture;
+};
+struct HostDuplicateFinishInput final
+{
+    std::uint64_t gesture;
+    bool cancel;
+};
 struct HostNewInput final
 {
 };
@@ -168,7 +179,8 @@ using HostRequestInput =
                  HostLayerReorderInput, HostLayerRenameInput, HostLayerOpacityInput, HostWriteInput, HostPathsInput,
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
-                 HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput>;
+                 HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
+                 HostDuplicateBeginInput, HostDuplicateFinishInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

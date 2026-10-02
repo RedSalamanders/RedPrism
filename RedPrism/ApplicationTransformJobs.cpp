@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "DuplicateOpeningWork.h"
 #include "FloatingMergeWork.h"
 #include "FloatingOpeningWork.h"
 #include "TransformCancellationWork.h"
@@ -42,18 +43,19 @@ HRESULT StatusError(TransformPixelsStatus status) noexcept
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
-struct Application::FloatingRestoreOwner final : DeferredReleaseNode
+struct Application::TransformRestoreOwner final : DeferredReleaseNode
 {
     std::shared_ptr<PreparedFloatingRestore> restore;
+    std::shared_ptr<PreparedDuplicateRestore> duplicateRestore;
     std::shared_ptr<TransformWorkTestGate> gate;
     DWORD ownerThread = 0;
-    FloatingRestoreOwner() noexcept
+    TransformRestoreOwner() noexcept
     {
         bytes = kDeferredReleaseThreshold;
         destroy = [](DeferredReleaseNode* value) noexcept
-        { const std::unique_ptr<FloatingRestoreOwner> owned(static_cast<FloatingRestoreOwner*>(value)); };
+        { const std::unique_ptr<TransformRestoreOwner> owned(static_cast<TransformRestoreOwner*>(value)); };
     }
-    ~FloatingRestoreOwner()
+    ~TransformRestoreOwner()
     {
         if (gate)
         {
@@ -73,15 +75,17 @@ class Application::TransformJob final : public Job
     struct Payload final : DeferredReleaseNode
     {
         std::optional<FloatingOpeningInput> openingInput;
+        std::optional<DuplicateOpeningInput> duplicateInput;
         std::optional<TransformCommitInput> commitInput;
         std::optional<FloatingMergeInput> mergeInput;
         std::optional<TransformCancellationInput> cancelInput;
         std::optional<FloatingOpeningResult> opening;
+        std::optional<DuplicateOpeningResult> duplicated;
         std::optional<TransformCommitResult> committed;
         std::optional<FloatingMergeResult> merged;
         std::optional<PreparedTransformCancellation> cancelled;
-        std::shared_ptr<FloatingRestoreOwner> openingOwner;
-        std::shared_ptr<FloatingRestoreOwner> restoreOwner;
+        std::shared_ptr<TransformRestoreOwner> openingOwner;
+        std::shared_ptr<TransformRestoreOwner> restoreOwner;
         std::shared_ptr<TransformWorkTestGate> gate;
         DWORD ownerThread = 0;
         Payload() noexcept
@@ -104,7 +108,7 @@ class Application::TransformJob final : public Job
   public:
     [[nodiscard]] static constexpr std::uint64_t MetadataBytes() noexcept
     {
-        return sizeof(TransformJob) + sizeof(Payload) + sizeof(FloatingRestoreOwner) + 8192;
+        return sizeof(TransformJob) + sizeof(Payload) + sizeof(TransformRestoreOwner) + 8192;
     }
 
     TransformJob(Application& owner, TransformWorkKind kind, HistoryWorkStamp stamp, std::uint64_t retirement)
@@ -149,13 +153,29 @@ class Application::TransformJob final : public Job
             _payload->openingInput.reset();
             if (_payload->opening->publication)
             {
-                std::unique_ptr<FloatingRestoreOwner, RetireTransformOwner<FloatingRestoreOwner>> node(
-                    std::make_unique<FloatingRestoreOwner>().release());
+                std::unique_ptr<TransformRestoreOwner, RetireTransformOwner<TransformRestoreOwner>> node(
+                    std::make_unique<TransformRestoreOwner>().release());
                 node->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
                 node->restore = _payload->opening->publication->Restoration();
                 node->gate = _gate;
                 node->ownerThread = _ownerThread;
-                _payload->openingOwner = std::shared_ptr<FloatingRestoreOwner>(std::move(node));
+                _payload->openingOwner = std::shared_ptr<TransformRestoreOwner>(std::move(node));
+            }
+        }
+        else if (_kind == TransformWorkKind::OpenDuplicate)
+        {
+            _payload->duplicated.emplace(DocumentSession::PrepareDuplicateOpeningPublication(
+                std::move(_payload->duplicateInput.value()), context.executor, context.cancellation, observer, {}));
+            _payload->duplicateInput.reset();
+            if (_payload->duplicated->publication)
+            {
+                std::unique_ptr<TransformRestoreOwner, RetireTransformOwner<TransformRestoreOwner>> node(
+                    std::make_unique<TransformRestoreOwner>().release());
+                node->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+                node->duplicateRestore = _payload->duplicated->publication->Restoration();
+                node->gate = _gate;
+                node->ownerThread = _ownerThread;
+                _payload->openingOwner = std::shared_ptr<TransformRestoreOwner>(std::move(node));
             }
         }
         else if (_kind == TransformWorkKind::Cancel)
@@ -211,6 +231,12 @@ class Application::TransformJob final : public Job
                 if (input)
                     _payload->openingInput.emplace(std::move(input.value()));
             }
+            else if (_kind == TransformWorkKind::OpenDuplicate)
+            {
+                auto input = _owner._session.PrepareDuplicateOpeningInput();
+                if (input)
+                    _payload->duplicateInput.emplace(std::move(input.value()));
+            }
             else if (_kind == TransformWorkKind::Cancel)
             {
                 auto input = _owner._session.PrepareTransformCancellationInput();
@@ -219,7 +245,7 @@ class Application::TransformJob final : public Job
             }
             else if (_owner._session.PendingTransformEdit() && _owner._session.PendingTransformEdit()->floating)
             {
-                _payload->restoreOwner = _owner._floatingRestoreOwner;
+                _payload->restoreOwner = _owner._transformRestoreOwner;
                 if (_payload->restoreOwner)
                 {
                     auto input = _owner._session.PrepareFloatingMergeInput(_payload->restoreOwner->restore);
@@ -229,11 +255,13 @@ class Application::TransformJob final : public Job
             }
             else
             {
+                _payload->restoreOwner = _owner._transformRestoreOwner;
                 auto input = _owner._session.PrepareTransformCommitInput();
                 if (input)
                     _payload->commitInput.emplace(std::move(input.value()));
             }
-            if (!_payload->openingInput && !_payload->cancelInput && !_payload->mergeInput && !_payload->commitInput)
+            if (!_payload->openingInput && !_payload->duplicateInput && !_payload->cancelInput &&
+                !_payload->mergeInput && !_payload->commitInput)
             {
                 _captureError = E_ABORT;
                 return false;
@@ -271,7 +299,9 @@ class Application::TransformJob final : public Job
                     changed =
                         _owner._session.ApplyPreparedFloatingOpeningIfCurrent(_payload->opening->publication.value());
                     if (changed)
-                        std::swap(_owner._floatingRestoreOwner, _payload->openingOwner);
+                    {
+                        std::swap(_owner._transformRestoreOwner, _payload->openingOwner);
+                    }
                     else
                         outcome = HostOutcome::Stale;
                 }
@@ -279,6 +309,31 @@ class Application::TransformJob final : public Job
                 {
                     outcome = status == FloatingPixelsStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
                     error = StatusError(status);
+                }
+            }
+            else if (_kind == TransformWorkKind::OpenDuplicate)
+            {
+                const auto status =
+                    _payload && _payload->duplicated ? _payload->duplicated->status : DuplicateOpeningStatus::Invalid;
+                if (status == DuplicateOpeningStatus::Ready && _payload->duplicated->publication &&
+                    _payload->openingOwner)
+                {
+                    changed = _owner._session.ApplyPreparedDuplicateOpeningIfCurrent(
+                        _payload->duplicated->publication.value());
+                    if (changed)
+                    {
+                        std::swap(_owner._transformRestoreOwner, _payload->openingOwner);
+                        _owner.PublishDuplicateGesture();
+                    }
+                    else
+                        outcome = HostOutcome::Stale;
+                }
+                else
+                {
+                    outcome =
+                        status == DuplicateOpeningStatus::Cancelled ? HostOutcome::Cancelled : HostOutcome::Failed;
+                    error = status == DuplicateOpeningStatus::TooLarge ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                       : E_INVALIDARG;
                 }
             }
             else if (_kind == TransformWorkKind::Cancel)
@@ -297,7 +352,7 @@ class Application::TransformJob final : public Job
                     outcome = HostOutcome::Stale;
                 else
                 {
-                    _owner._floatingRestoreOwner
+                    _owner._transformRestoreOwner
                         .reset(); // Payload retains the complete owner until off-owner retirement.
                     if (status != FloatingPixelsStatus::Ready && status != FloatingPixelsStatus::Unchanged)
                     {
@@ -318,6 +373,8 @@ class Application::TransformJob final : public Job
                         _owner._session.ApplyPreparedTransformCommitIfCurrent(_payload->committed->publication.value());
                     if (!changed)
                         outcome = HostOutcome::Stale;
+                    else if (_payload->restoreOwner)
+                        _owner.RetireTransformRestore();
                 }
                 else
                 {
@@ -329,11 +386,9 @@ class Application::TransformJob final : public Job
         // A reached worker/capture allocation failure or acknowledged cancellation can always restore the exact
         // floating opening without allocation. A newer draft or replacement fails Current and remains untouched.
         if (current && outcome != HostOutcome::Succeeded && _kind == TransformWorkKind::Commit &&
-            _owner._floatingRestoreOwner && _owner._floatingRestoreOwner->restore &&
-            _owner._session.ApplyPreparedFloatingRestoreIfCurrent(*_owner._floatingRestoreOwner->restore))
+            _owner.RestoreTransformOpening())
         {
             changed = true;
-            _owner.RetireFloatingRestore();
         }
         if (outcome == HostOutcome::Failed && !refusalReportedByModel && !_owner._shutdownStarted)
         {
@@ -371,9 +426,11 @@ class Application::TransformJob final : public Job
     }
     bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._transformWorkStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._activeHostRequest &&
-               _owner._activeHostRequest->ordinal == _stamp.ordinal &&
+        return !_owner._shutdownStarted &&
+               (_kind != TransformWorkKind::OpenDuplicate || !_owner._duplicateGesture ||
+                !_owner._duplicateGesture->abandoned) &&
+               _owner._transformWorkStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
+               _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
                _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&
                _owner._session.TransformDraftRevision() == _revision && _owner._session.CanApplyImageImport(_authority);
     }
@@ -389,9 +446,23 @@ class Application::TransformJob final : public Job
     HRESULT _captureError = S_OK;
 };
 
-void Application::RetireFloatingRestore() noexcept
+void Application::RetireTransformRestore() noexcept
 {
-    _floatingRestoreOwner.reset(); // Custom CPU-node deleter schedules destruction on the release lane.
+    _transformRestoreOwner.reset(); // Custom CPU-node deleter schedules destruction on the release lane.
+}
+
+bool Application::RestoreTransformOpening() noexcept
+{
+    if (!_transformRestoreOwner)
+        return false;
+    const bool changed =
+        _transformRestoreOwner->restore
+            ? _session.ApplyPreparedFloatingRestoreIfCurrent(*_transformRestoreOwner->restore)
+            : _transformRestoreOwner->duplicateRestore &&
+                  _session.ApplyPreparedDuplicateRestoreIfCurrent(*_transformRestoreOwner->duplicateRestore);
+    if (changed)
+        RetireTransformRestore();
+    return changed;
 }
 
 void Application::ExecuteLayerNudge(Vec2 offset) noexcept
@@ -422,27 +493,27 @@ HRESULT Application::StartTransformWork(TransformWorkKind kind) noexcept
         return E_UNEXPECTED;
     CancelTransformPreviewJobs();
     const auto& pending = _session.PendingTransformEdit();
-    if (!_session.Document() || (kind != TransformWorkKind::OpenFloating && !pending) ||
+    const bool opening = kind == TransformWorkKind::OpenFloating || kind == TransformWorkKind::OpenDuplicate;
+    if (!_session.Document() || (!opening && !pending) ||
         (kind == TransformWorkKind::OpenFloating && !_session.CanTransformSelection()))
         return S_FALSE;
-    if (kind != TransformWorkKind::OpenFloating && pending->floating &&
-        (!_floatingRestoreOwner || !_floatingRestoreOwner->restore))
+    if (!opening && pending->floating && (!_transformRestoreOwner || !_transformRestoreOwner->restore))
         return E_ABORT;
-    if (kind == TransformWorkKind::Cancel && pending->floating)
+    if (kind == TransformWorkKind::Cancel &&
+        (pending->floating || (_transformRestoreOwner && _transformRestoreOwner->duplicateRestore)))
     {
         // Cancellation of an exposed floating layer uses its already prepared restoration after preceding
         // history work acknowledged. No new graph, reservation, document copy or history allocation is needed.
-        if (!_floatingRestoreOwner || !_floatingRestoreOwner->restore ||
-            !_session.ApplyPreparedFloatingRestoreIfCurrent(*_floatingRestoreOwner->restore))
+        if (!RestoreTransformOpening())
             return E_ABORT;
-        RetireFloatingRestore();
         DocumentChanged();
         return S_FALSE;
     }
-    const auto prepared = kind == TransformWorkKind::OpenFloating ? _session.FloatingOpeningPreparationMemoryBytes()
+    const auto prepared = kind == TransformWorkKind::OpenFloating    ? _session.FloatingOpeningPreparationMemoryBytes()
+                          : kind == TransformWorkKind::OpenDuplicate ? _session.DuplicateOpeningPreparationMemoryBytes()
                           : kind == TransformWorkKind::Cancel ? _session.TransformCancellationPreparationMemoryBytes()
-                          : pending->floating && _floatingRestoreOwner && _floatingRestoreOwner->restore
-                              ? _session.FloatingMergePreparationMemoryBytes(*_floatingRestoreOwner->restore)
+                          : pending->floating && _transformRestoreOwner && _transformRestoreOwner->restore
+                              ? _session.FloatingMergePreparationMemoryBytes(*_transformRestoreOwner->restore)
                               : _session.TransformCommitPreparationMemoryBytes();
     const auto held = _session.ImageImportRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
@@ -483,10 +554,8 @@ HRESULT Application::StartTransformWork(TransformWorkKind kind) noexcept
         (void)_historyWork.Finish(_transformWorkStamp.value());
         _hostFinishedStamp = _transformWorkStamp;
         _transformWorkStamp.reset();
-        if (kind == TransformWorkKind::Commit && _floatingRestoreOwner && _floatingRestoreOwner->restore &&
-            _session.ApplyPreparedFloatingRestoreIfCurrent(*_floatingRestoreOwner->restore))
+        if (kind == TransformWorkKind::Commit && RestoreTransformOpening())
         {
-            RetireFloatingRestore();
             DocumentChanged();
         }
         return result;

@@ -192,6 +192,21 @@ published together with their matching pixels. Failed/newer work retains the las
 retains the active ticket until acknowledgement, including a closed/reopened mailbox epoch. CPU display/source
 payloads retire off owner. Confirmed local discard cancels its transform prerequisite before replacement;
 save-prompt Cancel preserves the draft. Ephemeral pointer capture loss queues cancellation and acknowledges it.
+
+For an Alt body drag of a single image layer, the application captures the duplicate intent and owns source
+settlement and opening under one input ordinal. A worker prepares the complete duplicated document, the
+`Duplicate Layer` Begin scope and exact prepaid rollback before exposing the copy. Image/mask storage is shared;
+both pixel budgets count the copy again. Group and non-image targets retain their ordinary move behavior.
+The new copy's opening is deferred. While opening is held, pointer metadata coalesces without changing the
+captured source; publication rebases the drag onto the settled pixel grid and applies the latest owned point
+and modifiers. Release and Escape take their ordinals at input time, including before preparation finishes.
+Capture loss before release cancels; release followed by Win32 capture loss keeps the accepted commit. Queue,
+admission, capture, worker or history failures expose no incomplete copy or restore the still-current copy from
+its prepaid state. Failure reports use the existing localized notice. Commit closes one duplicate entry;
+rollback preserves visible document/history/clipboard state while advancing generation and structural epochs.
+Complete CPU rollback owners retire off owner, including replacement and shutdown. Qualification is tracked in
+A6.3; ordinary transform production policy is a separate migration.
+
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted
