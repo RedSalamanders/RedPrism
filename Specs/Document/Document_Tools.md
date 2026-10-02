@@ -157,6 +157,25 @@ captured session, document, target, history and draft revision before swapping t
 document pixels, history, generation or private clipboard. Its replaced cache stays in the prepared owner for
 worker retirement. Production display coalescing and removal of inline reconstruction remain A6.3/T3.
 
+### Ordered transform settlement foundation
+
+Application transform jobs share the selected host input's history ordinal with its prerequisites and subsequent
+write or action. Whole-graph admission precedes document/history capture; workers prepare ordinary/group/mask
+commits, floating opening/merge or ordinary cancellation privately. Release and Apply/Cancel own the exact layer
+and draft revision. Validation, publication or drop and history acknowledgement precede dependent input execution.
+Queued Undo ends the armed transform drag immediately and cancels that opening after worker acknowledgement.
+Tool/layer/target/reorder changes settle their transform prerequisite before changing the target.
+
+A successful floating opening retains a preallocated CPU restoration node. Merge cancellation and reached
+admission, capture, worker or history allocation failure restore the exact original document and selection only
+while that opening is current. Newer geometry or replacement cannot be discarded by an old completion. Idle
+floating Cancel uses that prepaid restoration without a new job or reservation. Payloads and retained restoration
+nodes retire off owner, including small graphs; replacement and shutdown release the application reference before
+scheduler teardown. Layer nudge requests own their event-time Shift offset: a fresh nudge prepares one worker
+commit, while an existing persistent draft changes metadata and waits for Apply. Repeated Ctrl+T keeps an existing
+ordinary opening and creates no history entry. Deferred display, remaining inline-bypass/pointer-loss/duplicate
+callers and the complete measured phase exit remain explicit A6.3/A6.4 work.
+
 ## Free distortion (`DistortWarp`)
 
 `BeginDistort()` turns a pending edit into a distortion whose four corners move freely (`PreviewCorners`; a twisted

@@ -285,6 +285,8 @@
     <ClCompile Include="ApplicationMaskJobs.cpp" />
     <ClCompile Include="ApplicationMaskTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyJobs.cpp" />
+    <ClCompile Include="ApplicationTransformJobs.cpp" />
+    <ClCompile Include="ApplicationTransformTests.cpp" />
     <ClCompile Include="ApplicationLayerCopyTests.cpp" />
     <ClCompile Include="ApplicationShapeTests.cpp" />
     <ClCompile Include="ApplicationGradientJobs.cpp" />

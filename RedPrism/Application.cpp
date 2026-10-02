@@ -1100,6 +1100,11 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, center.x, center.y);
         pointer(WM_MOUSEMOVE, center.x + 40.0, center.y + 24.0);
         pointer(WM_LBUTTONUP, center.x + 40.0, center.y + 24.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The transform pointer release did not acknowledge its worker.\n");
+            return 5;
+        }
         layer = _session.ActiveLayer();
         if (std::holds_alternative<MoveToolDrag>(_drag) || layer == nullptr ||
             layer->transform.origin.x <= before.origin.x || layer->transform.origin.y <= before.origin.y ||
@@ -1117,6 +1122,11 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         OnTransformAction(TransformAction::Apply, 0.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The transform header Apply did not acknowledge its worker.\n");
+            return 5;
+        }
         if (_session.PendingTransformEdit().has_value() || _session.ActiveLayer()->transform.rotation != 30.0)
         {
             SelfTestFailure(L"Apply did not commit the typed rotation.\n");
@@ -2214,6 +2224,11 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: layer-copy.\n");
         return layerCopy;
     }
+    if (const int transformWork = RunTransformWorkSelfTest(); transformWork != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
+        return transformWork;
+    }
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
@@ -2500,7 +2515,7 @@ HRESULT Application::InitializeChrome() noexcept
 void Application::OnLayerSelected(Guid id) noexcept
 {
     if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _activeHostRequest || _hostRequests.Size()))
+                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
@@ -2515,7 +2530,7 @@ void Application::OnLayerSelected(Guid id) noexcept
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
     if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _activeHostRequest || _hostRequests.Size()))
+                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
@@ -2555,7 +2570,7 @@ void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid>
                                    DxUi::TreeDropPlace place) noexcept
 {
     if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _activeHostRequest || _hostRequests.Size()))
+                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
@@ -3115,6 +3130,7 @@ void Application::Shutdown() noexcept
     CancelGradientJobs();
     CancelPixelMoveJobs();
     _jobs.RequestStop();
+    RetireFloatingRestore();
     if (_window)
     {
         ShowWindow(_window.get(), SW_HIDE);
@@ -3133,6 +3149,8 @@ void Application::Shutdown() noexcept
     _maskStamp.reset();
     _layerCopyTicket.reset();
     _layerCopyStamp.reset();
+    _transformWorkTicket.reset();
+    _transformWorkStamp.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3773,7 +3791,7 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     }
 }
 
-[[nodiscard]] bool SkipsTransformSettle(int command) noexcept
+bool Application::SkipsTransformSettle(int command) noexcept
 {
     switch (command)
     {
@@ -3819,7 +3837,7 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     case ChromeHost::kCommandToggleShapeKind:
         return true;
     default:
-        return ChromeHost::ToolForSelectCommand(command) != EditorTool::Count;
+        return false;
     }
 }
 
@@ -3844,7 +3862,8 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy))
+    if (!_hostExecuting &&
+        (rasterEdit || clipboard || maskEdit || layerCopy || command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -3901,10 +3920,26 @@ void Application::OnCommand(int command) noexcept
         ReportHostAdmission(QueueHostInput(HostPixelNudgeInput{offset}));
         return;
     }
-    if (!_hostExecuting && !view && !file &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() || _activeHostRequest ||
-         _hostRequests.Size()))
+    if (!_hostExecuting && command >= ChromeHost::kCommandNudgeLayerLeft &&
+        command <= ChromeHost::kCommandNudgeLayerDown)
     {
+        const double step = _acceleratorShift ? 10.0 : 1.0;
+        const Vec2 offset{command == ChromeHost::kCommandNudgeLayerLeft    ? -step
+                          : command == ChromeHost::kCommandNudgeLayerRight ? step
+                                                                           : 0.0,
+                          command == ChromeHost::kCommandNudgeLayerUp     ? -step
+                          : command == ChromeHost::kCommandNudgeLayerDown ? step
+                                                                          : 0.0};
+        ReportHostAdmission(QueueHostInput(HostLayerNudgeInput{offset}));
+        return;
+    }
+    if (!_hostExecuting && !view && !file &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    {
+        if (_session.PendingTransformEdit() &&
+            (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
+            DropDrag<MoveToolDrag>(); // The admitted history request ends pointer input before worker acknowledgement.
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
     }
@@ -4130,8 +4165,7 @@ void Application::OnCommand(int command) noexcept
         }
         else if (command >= ChromeHost::kCommandNudgeLayerLeft)
         {
-            _session.NudgeLayer(x, y);
-            DocumentChanged();
+            ExecuteLayerNudge(Vec2{x, y});
         }
         else
         {
@@ -4184,8 +4218,22 @@ void Application::OnCommand(int command) noexcept
             OnTool(EditorTool::Move);
         }
         // With a selection the selected pixels float and transform; otherwise the layer.
-        _session.TransformCommand();
-        DocumentChanged();
+        if (_session.CanTransformSelection())
+        {
+            _hostExecutionError = StartTransformWork(TransformWorkKind::OpenFloating);
+            if (FAILED(_hostExecutionError))
+            {
+                ++_errorsShown;
+                _lastErrorId = _hostExecutionError == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
+                                                                                               : IDS_ERROR_PIXEL_EDIT;
+                _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+            }
+        }
+        else
+        {
+            _session.BeginTransform(true);
+            DocumentChanged();
+        }
         break;
     case ChromeHost::kCommandFlipLayerHorizontal:
         _session.FlipLayers(true);
@@ -4529,6 +4577,15 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         return true;
     case CanvasEdit::Transform:
         DropDrag<MoveToolDrag>();
+        if (!_hostExecuting)
+        {
+            const auto& pending = _session.PendingTransformEdit();
+            const HostTransformFinishInput input{pending->layerID, _session.TransformDraftRevision(), drops};
+            if (drops)
+                CancelHostContinuations();
+            ReportHostAdmission(QueueHostInput(input));
+            return true;
+        }
         if (drops)
         {
             _session.CancelTransform();
@@ -4588,8 +4645,8 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() || _activeHostRequest ||
-         _hostRequests.Size()))
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -5241,6 +5298,11 @@ void Application::ApplyDemo() noexcept
 
 void Application::OnTransformAction(TransformAction action, double value) noexcept
 {
+    if (!_hostExecuting && (action == TransformAction::Apply || action == TransformAction::Cancel))
+    {
+        (void)EndCanvasEdit(CanvasEdit::Transform, action == TransformAction::Apply ? EditEnd::Enter : EditEnd::Escape);
+        return;
+    }
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()) &&
         action != TransformAction::AutoSelect && action != TransformAction::ShowControls &&
         action != TransformAction::LockRatio)
@@ -5542,6 +5604,8 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
 
 void Application::ContinueTransformDrag(Vec2 view, UINT modifiers) noexcept
 {
+    if (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size())
+        return; // Released or queued geometry cannot mutate a captured worker input.
     MoveToolDrag* move = std::get_if<MoveToolDrag>(&_drag);
     if (move == nullptr || !_session.Document().has_value())
     {
@@ -5598,7 +5662,7 @@ void Application::EndTransformDrag() noexcept
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     if (edit.has_value() && !edit->persistent)
     {
-        _session.CommitTransform();
+        (void)EndCanvasEdit(CanvasEdit::Transform, EditEnd::Enter);
     }
     DocumentChanged();
 }

@@ -133,6 +133,10 @@
         44 new assertions plus the prior 467 core controls per x64 suite
         ([record](../../TestRuns/TransformPreviewCore_2026-10-02.md)). Color and mask previews cap both dimensions
         at 1024; sparse assembly stays private. Production coalescing, deferred display, settlement and G1 remain open.
+      - [x] A6.3 settlement foundation — Selected transform release/header/command, input-time nudge and
+        floating opening/merge/cancel routes qualify against 540 frozen inputs in all six profiles: 344 real
+        host controls and unchanged existing tests ([record](../../TestRuns/TransformSettlement_2026-10-02.md)).
+        Deferred preview/inline-bypass/Alt-duplicate/device/shutdown/G1 and the full P1 clean exit remain open.
     - [ ] P1.6 — Ordered selection jobs and bounded coverage/display caches; stale-result and cancellation tests;
       [execution child](SelectionWorkers_2026-10-01.md) covers geometry/history, every overlapping writer,
       gesture/source acquisition and required admission/cancellation proof.

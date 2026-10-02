@@ -62,6 +62,7 @@ struct RasterEditTestGate;
 struct ShapeWorkTestGate;
 struct MaskWorkTestGate;
 struct LayerCopyWorkTestGate;
+struct TransformWorkTestGate;
 struct GradientWorkTestGate;
 struct PixelMoveWorkTestGate;
 struct ExportWorkTestGate;
@@ -200,6 +201,7 @@ class Application final : public ChromeEvents
         }
     }
     void OnCommand(int command) noexcept override;
+    [[nodiscard]] static bool SkipsTransformSettle(int command) noexcept;
     void OnTool(EditorTool tool) noexcept;
     // The chrome's layers panel, color picker and layout events (next to InitializeChrome).
     void OnLayerSelected(Guid id) noexcept override;
@@ -439,6 +441,18 @@ class Application final : public ChromeEvents
     class MaskJob;
     [[nodiscard]] HRESULT StartMask(bool revealing) noexcept;
     int RunMaskWorkSelfTest() noexcept;
+    enum class TransformWorkKind : std::uint8_t
+    {
+        OpenFloating,
+        Commit,
+        Cancel
+    };
+    class TransformJob;
+    struct FloatingRestoreOwner;
+    [[nodiscard]] HRESULT StartTransformWork(TransformWorkKind kind) noexcept;
+    void RetireFloatingRestore() noexcept;
+    void ExecuteLayerNudge(Vec2 offset) noexcept;
+    int RunTransformWorkSelfTest() noexcept;
     class LayerCopyJob;
     [[nodiscard]] HRESULT StartLayerCopy() noexcept;
     int RunLayerCopyWorkSelfTest() noexcept;
@@ -728,6 +742,10 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _maskTicket;
     std::optional<HistoryWorkStamp> _maskStamp;
     std::shared_ptr<MaskWorkTestGate> _maskWorkTestGate;
+    std::optional<JobTicket> _transformWorkTicket;
+    std::optional<HistoryWorkStamp> _transformWorkStamp;
+    std::shared_ptr<FloatingRestoreOwner> _floatingRestoreOwner;
+    std::shared_ptr<TransformWorkTestGate> _transformWorkTestGate;
     std::optional<JobTicket> _layerCopyTicket;
     std::optional<HistoryWorkStamp> _layerCopyStamp;
     std::shared_ptr<LayerCopyWorkTestGate> _layerCopyWorkTestGate;
@@ -765,6 +783,7 @@ class Application final : public ChromeEvents
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,
+        TransformSettle,
         Write,
         Execute,
         FileComplete,

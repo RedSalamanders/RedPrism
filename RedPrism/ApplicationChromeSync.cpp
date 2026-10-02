@@ -283,6 +283,8 @@ int Application::RunChromeSyncSelfTest() noexcept
 
         // The brush tip following the pointer, then a stroke: the overlay alone.
         OnTool(EditorTool::Brush);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return fail(L"The transform release and brush tool switch did not settle.\n");
         start = layerCenter();
         const Tally hover =
             measure(label(L"brush hover"), kMoves, [&](int index) noexcept

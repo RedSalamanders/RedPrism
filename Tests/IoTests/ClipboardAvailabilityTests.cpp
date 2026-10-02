@@ -22,6 +22,9 @@
 
 namespace
 {
+// Fixture-only 100 ms event waits match the existing approximately three-second harness bound.
+constexpr unsigned kFixtureAttempts = static_cast<unsigned>(SystemClipboard::kHarnessAttempts / 10);
+static_assert(kFixtureAttempts >= 4);
 int gFailures = 0;
 unsigned gChecks = 0;
 HWND gOwner = nullptr;
@@ -50,27 +53,120 @@ bool OpenFixture() noexcept
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return false;
-    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    for (unsigned int attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
         if (OpenClipboard(gOwner))
             return true;
-        if (attempt == 3 || !HarnessWait(timer.get()))
+        if (attempt + 1 == kFixtureAttempts || !HarnessWait(timer.get()))
             return false;
     }
     return false;
 }
+
+struct InspectDiagnostic final
+{
+    unsigned attempts = 0;
+    ClipboardTransfer::Status status = ClipboardTransfer::Status::NativeFailure;
+    DWORD nativeError = ERROR_SUCCESS;
+    DWORD sequenceAfterCall = 0;
+    DWORD busyError = 0, busyProcess = 0;
+};
+
+void DumpClipboardFormats(const char* label, DWORD inspectError, DWORD heldSequence, DWORD inspectedSequence) noexcept
+{
+    const DWORD sequenceBefore = GetClipboardSequenceNumber();
+    if (!OpenClipboard(gOwner))
+    {
+        const DWORD openError = GetLastError();
+        const HWND opener = GetOpenClipboardWindow();
+        DWORD openerProcess = 0;
+        const DWORD openerThread = opener ? GetWindowThreadProcessId(opener, &openerProcess) : 0;
+        std::printf("clipboard-diagnostic openerProcess=%lu openerThread=%lu callerProcess=%lu\n", openerProcess,
+                    openerThread, GetCurrentProcessId());
+        std::printf("clipboardavailability.diag %s inspectError=%lu heldSequence=%lu inspectedSequence=%lu "
+                    "sequenceBefore=%lu open=0 openError=%lu formats=<unavailable>\n",
+                    label, static_cast<unsigned long>(inspectError), static_cast<unsigned long>(heldSequence),
+                    static_cast<unsigned long>(inspectedSequence), static_cast<unsigned long>(sequenceBefore),
+                    static_cast<unsigned long>(openError));
+        return;
+    }
+
+    bool closed = false;
+    DWORD closeError = ERROR_SUCCESS;
+    auto close = wil::scope_exit(
+        [&]() noexcept
+        {
+            SetLastError(ERROR_SUCCESS);
+            closed = CloseClipboard() != FALSE;
+            closeError = closed ? ERROR_SUCCESS : GetLastError();
+        });
+    const DWORD heldNow = GetClipboardSequenceNumber();
+    std::array<UINT, 32> formats{};
+    unsigned count = 0;
+    DWORD enumError = ERROR_SUCCESS;
+    UINT format = 0;
+    for (;;)
+    {
+        SetLastError(ERROR_SUCCESS);
+        format = EnumClipboardFormats(format);
+        enumError = GetLastError();
+        if (!format || count == formats.size())
+            break;
+        formats[count++] = format;
+    }
+    const DWORD sequenceAfterEnum = GetClipboardSequenceNumber();
+    close.reset();
+    const DWORD sequenceAfterClose = GetClipboardSequenceNumber();
+    std::printf("clipboardavailability.diag %s inspectError=%lu heldSequence=%lu inspectedSequence=%lu "
+                "sequenceBefore=%lu heldNow=%lu sequenceAfterEnum=%lu sequenceAfterClose=%lu "
+                "enumError=%lu enumTruncated=%u close=%u closeError=%lu formats=",
+                label, static_cast<unsigned long>(inspectError), static_cast<unsigned long>(heldSequence),
+                static_cast<unsigned long>(inspectedSequence), static_cast<unsigned long>(sequenceBefore),
+                static_cast<unsigned long>(heldNow), static_cast<unsigned long>(sequenceAfterEnum),
+                static_cast<unsigned long>(sequenceAfterClose), static_cast<unsigned long>(enumError),
+                count == formats.size() ? 1u : 0u, closed ? 1u : 0u, static_cast<unsigned long>(closeError));
+    for (unsigned i = 0; i < count; ++i)
+        std::printf("%s%u", i ? "," : "", static_cast<unsigned>(formats[i]));
+    std::printf("\n");
+}
+
 ClipboardTransfer::Status InspectSettled(std::int64_t limit, ClipboardTransfer::Inspection& output,
                                          CancelToken cancellation = {}, ClipboardTransfer::Observer observer = {},
-                                         ClipboardTransfer::Availability* availability = nullptr)
+                                         ClipboardTransfer::Availability* availability = nullptr,
+                                         InspectDiagnostic* diagnostic = nullptr)
 {
+    InspectDiagnostic localDiagnostic;
+    if (!diagnostic)
+        diagnostic = &localDiagnostic;
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return ClipboardTransfer::Status::NativeFailure;
-    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    for (unsigned int attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
+        SetLastError(ERROR_SUCCESS);
         const auto status = ClipboardTransfer::Inspect(limit, output, cancellation, observer, availability);
-        if (status != ClipboardTransfer::Status::Busy || attempt == 3 || !HarnessWait(timer.get()))
+        if (diagnostic)
+        {
+            ++diagnostic->attempts;
+            diagnostic->status = status;
+            diagnostic->nativeError = GetLastError();
+            diagnostic->sequenceAfterCall = GetClipboardSequenceNumber();
+            if (status == ClipboardTransfer::Status::Busy)
+            {
+                diagnostic->busyError = diagnostic->nativeError;
+                if (const HWND opener = GetOpenClipboardWindow())
+                    (void)GetWindowThreadProcessId(opener, &diagnostic->busyProcess);
+            }
+        }
+        if (status != ClipboardTransfer::Status::Busy || attempt + 1 == kFixtureAttempts || !HarnessWait(timer.get()))
+        {
+            if (diagnostic->busyError)
+                std::printf("clipboardavailability.listener-settle attempts=%u status=%u busyError=%lu busyProcess=%lu "
+                            "callerProcess=%lu sequence=%lu\n",
+                            diagnostic->attempts, static_cast<unsigned>(status), diagnostic->busyError,
+                            diagnostic->busyProcess, GetCurrentProcessId(), diagnostic->sequenceAfterCall);
             return status;
+        }
     }
     return ClipboardTransfer::Status::Busy;
 }
@@ -81,10 +177,10 @@ ClipboardTransfer::Status CopySettled(const ClipboardTransfer::Inspection& inspe
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return ClipboardTransfer::Status::NativeFailure;
-    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    for (unsigned int attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
         const auto status = ClipboardTransfer::Copy(inspected, output);
-        if (status != ClipboardTransfer::Status::Busy || attempt == 3 || !HarnessWait(timer.get()))
+        if (status != ClipboardTransfer::Status::Busy || attempt + 1 == kFixtureAttempts || !HarnessWait(timer.get()))
             return status;
     }
     return ClipboardTransfer::Status::Busy;
@@ -181,14 +277,28 @@ bool SetClipboard(std::span<const std::uint8_t> png, std::span<const std::uint8_
 struct Observation final
 {
     std::uint32_t inspectedSequence = 0;
+    std::uint32_t heldSequence = 0;
     unsigned inspectedStages = 0;
     unsigned dibReads = 0, v5Reads = 0;
     ClipboardTransfer::Fault failAt = static_cast<ClipboardTransfer::Fault>(255);
 };
 
+struct CopyDiagnostic final
+{
+    DWORD heldSequence = 0;
+};
+
+void CopyReached(void* raw, ClipboardTransfer::Stage stage) noexcept
+{
+    if (stage == ClipboardTransfer::Stage::Opened)
+        static_cast<CopyDiagnostic*>(raw)->heldSequence = GetClipboardSequenceNumber();
+}
+
 void Reached(void* raw, ClipboardTransfer::Stage stage) noexcept
 {
     auto& observation = *static_cast<Observation*>(raw);
+    if (stage == ClipboardTransfer::Stage::Opened)
+        observation.heldSequence = GetClipboardSequenceNumber();
     if (stage == ClipboardTransfer::Stage::DibInspectRead)
         ++observation.dibReads;
     if (stage == ClipboardTransfer::Stage::DibV5InspectRead)
@@ -228,17 +338,26 @@ bool HasPixels(const ClipboardTransfer::Inspection& inspection, const std::array
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return false;
+    CopyDiagnostic copyDiagnostic;
+    const ClipboardTransfer::Observer observer{&copyDiagnostic, CopyReached, nullptr};
     auto copied = ClipboardTransfer::Status::Busy;
-    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    DWORD copyNativeError = ERROR_SUCCESS;
+    for (unsigned int attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
-        copied = ClipboardTransfer::Copy(inspection, copy);
-        if (copied != ClipboardTransfer::Status::Busy || attempt == 3 || !HarnessWait(timer.get()))
+        SetLastError(ERROR_SUCCESS);
+        copied = ClipboardTransfer::Copy(inspection, copy, {}, observer);
+        copyNativeError = GetLastError();
+        if (copied != ClipboardTransfer::Status::Busy || attempt + 1 == kFixtureAttempts || !HarnessWait(timer.get()))
             break;
     }
     if (copied != ClipboardTransfer::Status::Ok)
     {
-        std::printf("clipboardavailability.pixel-copy-status=%u inspected-sequence=%u current-sequence=%lu\n",
-                    static_cast<unsigned int>(copied), inspection.Sequence(), GetClipboardSequenceNumber());
+        std::printf("clipboardavailability.diag pixel-copy status=%u nativeError=%lu heldSequence=%lu "
+                    "inspectedSequence=%u copySequence=%u currentSequence=%lu\n",
+                    static_cast<unsigned int>(copied), static_cast<unsigned long>(copyNativeError),
+                    static_cast<unsigned long>(copyDiagnostic.heldSequence), inspection.Sequence(), copy.Sequence(),
+                    static_cast<unsigned long>(GetClipboardSequenceNumber()));
+        DumpClipboardFormats("pixel-copy", copyNativeError, copyDiagnostic.heldSequence, inspection.Sequence());
         return false;
     }
     Raster decoded;
@@ -247,9 +366,16 @@ bool HasPixels(const ClipboardTransfer::Inspection& inspection, const std::array
                        decoded.Format() == RasterFormat::Bgra8888 && decoded.Data() != nullptr;
     const bool matches = valid && std::equal(expected.begin(), expected.end(), decoded.Data());
     if (!matches)
+    {
         std::printf("clipboardavailability.pixel-decode-status=%u dimensions=%dx%d first-pixel=%u,%u,%u,%u\n",
                     static_cast<unsigned int>(status), decoded.Width(), decoded.Height(), valid ? decoded.Data()[0] : 0,
                     valid ? decoded.Data()[1] : 0, valid ? decoded.Data()[2] : 0, valid ? decoded.Data()[3] : 0);
+        std::printf("clipboardavailability.diag pixel-result copySequence=%u inspectionSequence=%u "
+                    "currentSequence=%lu decodeStatus=%u valid=%u expected=%u,%u,%u,%u\n",
+                    copy.Sequence(), inspection.Sequence(), static_cast<unsigned long>(GetClipboardSequenceNumber()),
+                    static_cast<unsigned>(status), valid ? 1u : 0u, expected[0], expected[1], expected[2], expected[3]);
+        DumpClipboardFormats("pixel-result", ERROR_SUCCESS, copyDiagnostic.heldSequence, inspection.Sequence());
+    }
     return matches;
 }
 
@@ -338,7 +464,24 @@ void TestDibFallbacks()
 
     Expect(SetClipboard({}, kValidDibV5, kDib, true), "producer-first-dib.fixture-installed");
     Observation firstDib;
-    const auto producerFirst = InspectSettled(1, inspected, {}, MakeObserver(firstDib), &available);
+    InspectDiagnostic producerDiagnostic;
+    const auto producerFirst =
+        InspectSettled(1, inspected, {}, MakeObserver(firstDib), &available, &producerDiagnostic);
+    if (producerFirst != ClipboardTransfer::Status::Ok || firstDib.dibReads != 1 || firstDib.v5Reads != 0)
+    {
+        std::printf("clipboardavailability.diag producer-first status=%u attempts=%u nativeError=%lu "
+                    "sequenceAfterCall=%lu observerHeldSequence=%u observerInspectedSequence=%u "
+                    "inspectionValid=%u inspectionSequence=%u dibReads=%u v5Reads=%u availabilityObserved=%u "
+                    "availabilitySequence=%u hasImageFormats=%u\n",
+                    static_cast<unsigned>(producerDiagnostic.status), producerDiagnostic.attempts,
+                    static_cast<unsigned long>(producerDiagnostic.nativeError),
+                    static_cast<unsigned long>(producerDiagnostic.sequenceAfterCall), firstDib.heldSequence,
+                    firstDib.inspectedSequence, inspected ? 1u : 0u, inspected.Sequence(), firstDib.dibReads,
+                    firstDib.v5Reads, available.observed ? 1u : 0u, available.sequence,
+                    available.hasImageFormats ? 1u : 0u);
+        DumpClipboardFormats("producer-first", producerDiagnostic.nativeError, firstDib.heldSequence,
+                             inspected.Sequence());
+    }
     Expect(producerFirst == ClipboardTransfer::Status::Ok && firstDib.dibReads == 1 && firstDib.v5Reads == 0,
            "producer-first-dib-never-requests-synthesized-v5");
     Expect(HasPixels(inspected, {9, 20, 140, 255}), "producer-first-dib-preserves-literal-pixels");

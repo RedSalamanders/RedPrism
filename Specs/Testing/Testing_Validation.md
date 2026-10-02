@@ -58,6 +58,16 @@ and measured G1 remain explicit A5/A6 follow-ups. Core native configuration resu
 [`TransformCancellation_2026-10-02.md`](../TestRuns/TransformCancellation_2026-10-02.md) and
 [`TransformPreviewCore_2026-10-02.md`](../TestRuns/TransformPreviewCore_2026-10-02.md).
 
+The WARP application self-test adds `transform-host.*`: 344 assertions in the settlement foundation. Its gates
+before and after preparation prove held input/history/reservation, responsive view input, acknowledged cancellation,
+exact failure errors, reached history stages, stale ordinary geometry/source/history/same-ID replacement, younger
+Undo and aggregate off-owner retirement. Floating controls prove exact prepaid rollback for admission, capture,
+worker and reached opening/merge history faults, silent cancellation or one failure notice, idle Cancel without
+new work and retirement of the persistent restoration owner. Layer nudge controls use literal 10/1-pixel offsets
+across modifier transitions, persistent draft metadata, one-entry publication and younger Undo order. Repeated
+Ctrl+T retains the opening/draft with no entry. Full native profiles remain required; deferred preview coalescing,
+remaining bypass/duplicate/pointer-loss routes, device/shutdown and measured G1 are separate follow-ups.
+
 ### Clipboard and copy preparation
 
 `clipboardtransfer.*` runs a dedicated MTA test worker and restores saved user clipboard contents. Its independent
@@ -247,6 +257,12 @@ exports return as cancelled. The self-test's clipboard steps borrow the machine'
 applications' clipboard listeners open for tens of milliseconds after every change: the test's own reads, writes and
 the set-aside wait them out (`SystemClipboard::kHarnessAttempts`, about 3 s), and it waits for a free clipboard
 before a copy whose mirror it checks, while the product's copy and paste keep their short wait.
+
+The IoTests availability and receipt-binding fixtures share that roughly 3 s acquisition budget: at most 30
+acquisitions with 100 ms event waits, retrying only Busy. Fault-injected Busy still uses one acquisition, and
+assertions are never retried. Failure diagnostics enumerate offered format IDs without calling GetClipboardData;
+they record inspection status, attempts, clipboard sequence, immediate native error and the process holding an
+unsuccessful OpenClipboard acquisition when available. These fixture waits do not change production retry limits.
 
 ### Prepared selection publication (P1.6 core)
 

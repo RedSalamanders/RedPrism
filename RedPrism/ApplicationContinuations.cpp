@@ -264,8 +264,9 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle           ? HostStage::GradientSettle
-                         : _hostStage == HostStage::GradientSettle ? HostStage::PixelMoveSettle
+            _hostStage = _hostStage == HostStage::Settle            ? HostStage::GradientSettle
+                         : _hostStage == HostStage::GradientSettle  ? HostStage::PixelMoveSettle
+                         : _hostStage == HostStage::PixelMoveSettle ? HostStage::TransformSettle
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -550,6 +551,48 @@ void Application::RunHostContinuation() noexcept
                 if (_pixelMoveCommitTicket)
                     return;
             }
+            _hostStage = HostStage::TransformSettle;
+            break;
+        }
+        case HostStage::TransformSettle:
+        {
+            const auto* finish = std::get_if<HostTransformFinishInput>(&input);
+            const auto* command = std::get_if<HostCommandInput>(&input);
+            const auto& pending = _session.PendingTransformEdit();
+            if (finish && finish->cancel && !pending)
+            {
+                FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                return; // Its acknowledged cancelled merge may already have restored the exact opening.
+            }
+            if (finish && (!pending || pending->layerID != finish->layer ||
+                           _session.TransformDraftRevision() != finish->revision))
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            const bool historyCancel =
+                pending && command &&
+                (command->command == ChromeHost::kCommandUndo || command->command == ChromeHost::kCommandRedo);
+            if (historyCancel)
+                _hostAfterPrerequisite = HostStage::Complete;
+            if (pending && !std::holds_alternative<HostLayerNudgeInput>(input) &&
+                (finish || historyCancel || !command || !SkipsTransformSettle(command->command)))
+            {
+                const auto result =
+                    StartTransformWork((finish && finish->cancel) || historyCancel ? TransformWorkKind::Cancel
+                                                                                   : TransformWorkKind::Commit);
+                if (FAILED(result))
+                {
+                    ++_errorsShown;
+                    _lastErrorId =
+                        result == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_transformWorkTicket)
+                    return;
+            }
             _hostStage = _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -713,6 +756,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_maskTicket.value());
+        }
+        else if (_transformWorkTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_transformWorkTicket.value());
         }
         else if (_layerCopyTicket)
         {

@@ -423,9 +423,17 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return _session.PendingPixelMove() == nullptr;
             }
+            else if constexpr (std::is_same_v<Input, HostTransformFinishInput>)
+            {
+                return !_session.PendingTransformEdit();
+            }
             else if constexpr (std::is_same_v<Input, HostPixelNudgeInput>)
             {
                 ExecutePixelNudge(value.offset);
+            }
+            else if constexpr (std::is_same_v<Input, HostLayerNudgeInput>)
+            {
+                ExecuteLayerNudge(value.offset);
             }
             else if constexpr (std::is_same_v<Input, HostPathsInput>)
             {
@@ -549,7 +557,7 @@ bool Application::ExecuteHostInput() noexcept
             if constexpr (!std::is_same_v<Input, HostPanelOkInput> && !std::is_same_v<Input, HostPanelCancelInput> &&
                           !std::is_same_v<Input, HostGradientApplyInput> &&
                           !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
-                          !std::is_same_v<Input, HostWriteInput>)
+                          !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput>)
             {
                 return true;
             }
@@ -596,6 +604,7 @@ void Application::OpenPaths(const std::vector<std::wstring>& paths, std::optiona
 // new document, not even when the reopened active layer has the same id and a mask of its own.
 void Application::FinishPreparedDocumentReplacement() noexcept
 {
+    RetireFloatingRestore();
     // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
     // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
     _opacityEdit.reset();
@@ -1852,6 +1861,11 @@ int Application::RunSessionSelfTest() noexcept
         OnCommand(ChromeHost::kCommandUndo);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, middle.x + 30.0, middle.y + 20.0);
         pointer(WM_LBUTTONUP, 0, middle.x + 30.0, middle.y + 20.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The Alt-press/Undo cancellation did not acknowledge before the next session scenario.\n");
+            return 5;
+        }
         if (!haveKeys || !armed || _session.Document().value().layers.size() != layersBefore ||
             _session.history.UndoName() == L"Duplicate Layer")
         {

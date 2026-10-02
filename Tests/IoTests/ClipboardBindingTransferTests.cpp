@@ -3,6 +3,7 @@
 #include "ClipboardFingerprint.h"
 #include "ClipboardReceipt.h"
 #include "ClipboardTransfer.h"
+#include "SystemClipboard.h"
 
 #include <Windows.h>
 #include <ole2.h>
@@ -26,6 +27,9 @@
 
 namespace
 {
+// Fixture-only 100 ms event waits match the existing approximately three-second harness bound.
+constexpr unsigned kFixtureAttempts = static_cast<unsigned>(SystemClipboard::kHarnessAttempts / 10);
+static_assert(kFixtureAttempts >= 4);
 using ClipboardTransfer::Fault;
 using ClipboardTransfer::ImageCopy;
 using ClipboardTransfer::Inspection;
@@ -117,14 +121,82 @@ bool OpenClipboardBounded(HWND owner) noexcept
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return false;
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
+    for (unsigned attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
         if (OpenClipboard(owner))
             return true;
-        if (attempt == 3 || !WaitOneShot(timer.get()))
+        if (attempt + 1 == kFixtureAttempts || !WaitOneShot(timer.get()))
             return false;
     }
     return false;
+}
+
+struct InspectDiagnostic final
+{
+    unsigned attempts = 0;
+    Status status = Status::NativeFailure;
+    DWORD nativeError = ERROR_SUCCESS;
+    DWORD sequenceAfterCall = 0;
+    DWORD busyError = 0, busyProcess = 0;
+};
+
+void DumpClipboardFormats(HWND owner, const char* label, DWORD inspectError, DWORD heldSequence,
+                          DWORD inspectedSequence) noexcept
+{
+    const DWORD sequenceBefore = GetClipboardSequenceNumber();
+    if (!OpenClipboard(owner))
+    {
+        const DWORD openError = GetLastError();
+        const HWND opener = GetOpenClipboardWindow();
+        DWORD openerProcess = 0;
+        const DWORD openerThread = opener ? GetWindowThreadProcessId(opener, &openerProcess) : 0;
+        std::printf("clipboard-diagnostic openerProcess=%lu openerThread=%lu callerProcess=%lu\n", openerProcess,
+                    openerThread, GetCurrentProcessId());
+        std::printf("clipboardbinding.diag %s inspectError=%lu heldSequence=%lu inspectedSequence=%lu "
+                    "sequenceBefore=%lu open=0 openError=%lu formats=<unavailable>\n",
+                    label, static_cast<unsigned long>(inspectError), static_cast<unsigned long>(heldSequence),
+                    static_cast<unsigned long>(inspectedSequence), static_cast<unsigned long>(sequenceBefore),
+                    static_cast<unsigned long>(openError));
+        return;
+    }
+
+    bool closed = false;
+    DWORD closeError = ERROR_SUCCESS;
+    auto close = wil::scope_exit(
+        [&]() noexcept
+        {
+            SetLastError(ERROR_SUCCESS);
+            closed = CloseClipboard() != FALSE;
+            closeError = closed ? ERROR_SUCCESS : GetLastError();
+        });
+    const DWORD heldNow = GetClipboardSequenceNumber();
+    std::array<UINT, 32> formats{};
+    unsigned count = 0;
+    DWORD enumError = ERROR_SUCCESS;
+    UINT format = 0;
+    for (;;)
+    {
+        SetLastError(ERROR_SUCCESS);
+        format = EnumClipboardFormats(format);
+        enumError = GetLastError();
+        if (!format || count == formats.size())
+            break;
+        formats[count++] = format;
+    }
+    const DWORD sequenceAfterEnum = GetClipboardSequenceNumber();
+    close.reset();
+    const DWORD sequenceAfterClose = GetClipboardSequenceNumber();
+    std::printf("clipboardbinding.diag %s inspectError=%lu heldSequence=%lu inspectedSequence=%lu "
+                "sequenceBefore=%lu heldNow=%lu sequenceAfterEnum=%lu sequenceAfterClose=%lu "
+                "enumError=%lu enumTruncated=%u close=%u closeError=%lu formats=",
+                label, static_cast<unsigned long>(inspectError), static_cast<unsigned long>(heldSequence),
+                static_cast<unsigned long>(inspectedSequence), static_cast<unsigned long>(sequenceBefore),
+                static_cast<unsigned long>(heldNow), static_cast<unsigned long>(sequenceAfterEnum),
+                static_cast<unsigned long>(sequenceAfterClose), static_cast<unsigned long>(enumError),
+                count == formats.size() ? 1u : 0u, closed ? 1u : 0u, static_cast<unsigned long>(closeError));
+    for (unsigned i = 0; i < count; ++i)
+        std::printf("%s%u", i ? "," : "", static_cast<unsigned>(formats[i]));
+    std::printf("\n");
 }
 
 bool SetGlobal(UINT format, std::span<const std::uint8_t> bytes) noexcept
@@ -169,6 +241,7 @@ struct Observation final
     Stage cancelAt = static_cast<Stage>(255);
     CancelSource* cancel = nullptr;
     DWORD lastMutationSequence = 0;
+    DWORD heldSequence = 0;
     std::array<unsigned, static_cast<std::size_t>(Fault::ReceiptRead) + 1> faultCalls{};
     std::array<unsigned, static_cast<std::size_t>(Stage::Copied) + 1> reached{};
 };
@@ -179,6 +252,8 @@ void Reached(void* raw, Stage stage) noexcept
     const auto index = static_cast<std::size_t>(stage);
     if (index < observed.reached.size())
         ++observed.reached[index];
+    if (stage == Stage::Opened)
+        observed.heldSequence = GetClipboardSequenceNumber();
     if (stage == Stage::Emptied || stage == Stage::ReceiptPlaced || stage == Stage::PngPlaced ||
         stage == Stage::DibPlaced)
         observed.lastMutationSequence = GetClipboardSequenceNumber();
@@ -201,16 +276,41 @@ ClipboardTransfer::Observer Observe(Observation& observed) noexcept
 }
 
 Status InspectRetry(std::int64_t budget, Inspection& inspected, CancelToken cancellation = {},
-                    ClipboardTransfer::Observer observer = {})
+                    ClipboardTransfer::Observer observer = {}, InspectDiagnostic* diagnostic = nullptr)
 {
+    InspectDiagnostic localDiagnostic;
+    if (!diagnostic)
+        diagnostic = &localDiagnostic;
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return Status::OutOfMemory;
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
+    for (unsigned attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
+        SetLastError(ERROR_SUCCESS);
         const Status status = ClipboardTransfer::Inspect(budget, inspected, cancellation, observer);
-        if (status != Status::Busy || cancellation.IsCancelled() || attempt == 3 || !WaitOneShot(timer.get()))
+        if (diagnostic)
+        {
+            ++diagnostic->attempts;
+            diagnostic->status = status;
+            diagnostic->nativeError = GetLastError();
+            diagnostic->sequenceAfterCall = GetClipboardSequenceNumber();
+            if (status == Status::Busy)
+            {
+                diagnostic->busyError = diagnostic->nativeError;
+                if (const HWND opener = GetOpenClipboardWindow())
+                    (void)GetWindowThreadProcessId(opener, &diagnostic->busyProcess);
+            }
+        }
+        if (status != Status::Busy || cancellation.IsCancelled() || attempt + 1 == kFixtureAttempts ||
+            !WaitOneShot(timer.get()))
+        {
+            if (diagnostic->busyError)
+                std::printf("clipboardbinding.listener-settle attempts=%u status=%u busyError=%lu busyProcess=%lu "
+                            "callerProcess=%lu sequence=%lu\n",
+                            diagnostic->attempts, static_cast<unsigned>(status), diagnostic->busyError,
+                            diagnostic->busyProcess, GetCurrentProcessId(), diagnostic->sequenceAfterCall);
             return status;
+        }
     }
     return Status::Busy;
 }
@@ -221,10 +321,11 @@ Status CopyRetry(const Inspection& inspected, ImageCopy& copy, CancelToken cance
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return Status::OutOfMemory;
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
+    for (unsigned attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
         const Status status = ClipboardTransfer::Copy(inspected, copy, cancellation, observer);
-        if (status != Status::Busy || cancellation.IsCancelled() || attempt == 3 || !WaitOneShot(timer.get()))
+        if (status != Status::Busy || cancellation.IsCancelled() || attempt + 1 == kFixtureAttempts ||
+            !WaitOneShot(timer.get()))
             return status;
     }
     return Status::Busy;
@@ -236,12 +337,12 @@ Publication PublishRetry(PreparedImage& prepared, CancelToken cancellation = {},
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return {Status::OutOfMemory};
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
+    for (unsigned attempt = 0; attempt < kFixtureAttempts; ++attempt)
     {
         Publication result = ClipboardTransfer::Publish(prepared, cancellation, observer);
         // In particular, an emptied clipboard is terminal even if only some formats were placed.
-        if (result.status != Status::Busy || result.emptied || cancellation.IsCancelled() || attempt == 3 ||
-            !WaitOneShot(timer.get()))
+        if (result.status != Status::Busy || result.emptied || cancellation.IsCancelled() ||
+            attempt + 1 == kFixtureAttempts || !WaitOneShot(timer.get()))
             return result;
     }
     return {Status::Busy};
@@ -256,16 +357,22 @@ bool DecodeEquals(const ImageCopy& copy, std::span<const std::uint8_t> expected)
 }
 
 bool InspectCopy(HWND owner, Inspection& inspected, ImageCopy& copy, Observation* observed = nullptr,
-                 CancelToken cancellation = {})
+                 CancelToken cancellation = {}, InspectDiagnostic* diagnostic = nullptr)
 {
     const auto observer = observed ? Observe(*observed) : ClipboardTransfer::Observer{};
-    const Status inspectStatus = InspectRetry(2, inspected, cancellation, observer);
+    const Status inspectStatus = InspectRetry(2, inspected, cancellation, observer, diagnostic);
     if (inspectStatus != Status::Ok || !inspected)
     {
-        std::printf("clipboardbinding.inspect status=%u valid=%u sequence=%lu currentSequence=%lu\n",
+        std::printf("clipboardbinding.inspect status=%u valid=%u sequence=%lu currentSequence=%lu attempts=%u "
+                    "nativeError=%lu sequenceAfterCall=%lu observerHeldSequence=%lu\n",
                     static_cast<unsigned>(inspectStatus), inspected ? 1u : 0u,
                     static_cast<unsigned long>(inspected.Sequence()),
-                    static_cast<unsigned long>(GetClipboardSequenceNumber()));
+                    static_cast<unsigned long>(GetClipboardSequenceNumber()), diagnostic ? diagnostic->attempts : 0u,
+                    static_cast<unsigned long>(diagnostic ? diagnostic->nativeError : ERROR_SUCCESS),
+                    static_cast<unsigned long>(diagnostic ? diagnostic->sequenceAfterCall : 0u),
+                    static_cast<unsigned long>(observed ? observed->heldSequence : 0u));
+        DumpClipboardFormats(owner, "inspect-failed", diagnostic ? diagnostic->nativeError : ERROR_SUCCESS,
+                             observed ? observed->heldSequence : 0u, inspected.Sequence());
         return false;
     }
     const Status copyStatus = CopyRetry(inspected, copy, cancellation, observer);
@@ -304,9 +411,22 @@ bool ReadPublished(HWND owner, std::vector<std::uint8_t>& receipt, std::vector<s
 }
 
 bool Origin(const ImageCopy& copy, const ClipboardFingerprint::Binding& binding,
-            const ClipboardReceipt::Key& currentKey, bool& matches, CancelToken cancellation = {})
+            const ClipboardReceipt::Key& currentKey, bool& matches, CancelToken cancellation = {},
+            const char* diagnosticLabel = nullptr)
 {
-    return ClipboardTransfer::HasPrivateOrigin(copy, binding, currentKey, matches, cancellation) == Status::Ok;
+    const Status status = ClipboardTransfer::HasPrivateOrigin(copy, binding, currentKey, matches, cancellation);
+    if (diagnosticLabel && (status != Status::Ok || !matches))
+    {
+        const DWORD currentSequence = GetClipboardSequenceNumber();
+        std::printf("clipboardbinding.diag %s originStatus=%u matches=%u copySequence=%lu currentSequence=%lu "
+                    "privateKeyMatches=%u expectedPngBytes=%llu expectedDibBytes=%llu\n",
+                    diagnosticLabel, static_cast<unsigned>(status), matches ? 1u : 0u,
+                    static_cast<unsigned long>(copy.Sequence()), static_cast<unsigned long>(currentSequence),
+                    binding.key == currentKey ? 1u : 0u, static_cast<unsigned long long>(binding.png.bytes),
+                    static_cast<unsigned long long>(binding.dib.bytes));
+        DumpClipboardFormats(nullptr, diagnosticLabel, ERROR_SUCCESS, copy.Sequence(), copy.Sequence());
+    }
+    return status == Status::Ok;
 }
 
 std::optional<ClipboardFingerprint::Binding> PrepareBound(const ClipboardReceipt::Key& key, PreparedImage& prepared,
@@ -481,8 +601,10 @@ void TestReceiptFallbacks(HWND owner, const ClipboardReceipt::Key& key)
     Inspection validInspection;
     ImageCopy validCopy;
     bool validOrigin = false;
-    Expect(InspectCopy(owner, validInspection, validCopy) && Origin(validCopy, expectedBinding, key, validOrigin) &&
-               validOrigin,
+    Observation validObservation;
+    InspectDiagnostic validDiagnostic;
+    Expect(InspectCopy(owner, validInspection, validCopy, &validObservation, {}, &validDiagnostic) &&
+               Origin(validCopy, expectedBinding, key, validOrigin, {}, "valid-receipt-origin") && validOrigin,
            "receipt.same-payload-with-valid-receipt-actually-matches-control");
 
     receipt[7] ^= 0x40;

@@ -126,6 +126,17 @@
     - [ ] T4 — Guard deferred session callers against inline commit/cancel/redraw bypass while preserving direct
       numeric reference APIs. Audit every writer, including Alt-duplicate, BeginTransform/selection transform,
       SetActiveLayerID, selection commands, flips, New/Close/Reset, source sampling and already selected requests.
+      - [x] Private deferred display model — 47 independent checks and all DocumentTests goldens pass against
+        523 frozen inputs. Exact evidence is retained in
+        `.build/p1-distort-draft/transform-deferred-core-qualified-r1/`; production activation remains open.
+      - [x] Private deferred writer/outline guards — The complete DocumentTests run passes 100 guard controls
+        and the 47 deferred-model controls against 527 frozen inputs. Independent analytic projective coordinates
+        verify floating outlines; .build/p1-distort-draft/transform-deferred-guard-core-qualified-r1/ preserves
+        sources and evidence. Production caller activation and native qualification remain open.
+      - [ ] Guard all direct document/history/target writers while the deferred opening owns its source; prepare
+        floating preview outlines on workers and retain the complete outline with the displayed pixel snapshot.
+      - [ ] Activate one active/latest pending preview graph and route discard/capture-loss before enabling the
+        deferred policy in production. Qualify real host coalescing, failure, cancellation and lifetime controls.
     - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,
       refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
       reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation
@@ -139,6 +150,17 @@
       inputs (180 new assertions, unchanged existing host tests); `.build/p1-distort-draft/transform-host-qualified-r7/`
       preserves its exact proof. Additional floating admission/capture/history faults, deferred preview guards and
       complete native caller activation remain open.
+      - [x] Private settlement foundation — The complete WARP run passes 344 new host assertions against 521
+        frozen inputs in r13. It includes floating opening/merge/cancel, exact prepaid rollback on admission,
+        capture/worker/history failure, stale ordinary drafts/source/history/replacement, younger Undo, off-owner
+        retirement, input-time Shift layer nudges and repeated Ctrl+T retaining an existing draft. Sources,
+        image and evidence are retained in `.build/p1-distort-draft/transform-host-qualified-r13/`.
+      - [x] Native settlement foundation — Selected release/header/command, input-time nudges and floating
+        job routes pass all three full x64 suites and all three ARM64 cross-builds against 540 frozen inputs.
+        The r5 matrix is incremental; its 540-source/296-evidence archive and earlier preserved failures are
+        identified in the [settlement record](../../TestRuns/TransformSettlement_2026-10-02.md).
+        Complete deferred preview, inline-bypass, Alt-duplicate/pointer-loss, device/shutdown and measured G1
+        closeout remain open. The full P1 clean exit is separate.
   - [ ] A6.4 — Qualify all configurations and measure capture/apply/first-upload/G1 before closing A6.
 - [ ] A7 — Shape mouse-up/redraw, selection-derived masks and Layer via Copy; semantic mask thumbnails prepared atomically on workers.
   - [x] A7.1 — Seal owned Shape release, rasterize with exact coverage and adopted pixels on workers, prepare
