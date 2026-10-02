@@ -140,3 +140,20 @@ Seven mutants change no control:
   module and contribution when it lies in the same procedure. They stay in the method so that it does not rely on them.
 - The 64 KiB limit bounds work, not proof.
 - An index range that is only alignment holds no vector byte, so accepting it changes nothing.
+
+## Validation
+
+- `format.ps1 -Check` passes (505 files). `validate-skills.ps1` did not run: this machine's Python lacks the `yaml` module. No
+  skill changed.
+- The three ARM64 configurations build. The x64 gate does not run there.
+- `test.ps1` passes in x64 Debug (10,771 passing checks), Release (10,771) and ASan Debug (13,918), with the hidden WARP self-test
+  and the ISA controls. As in the revision 3 record, three checks are skipped on this machine: `path.junction-load`, the absent
+  gradient snapshot and the RAW corpus byte controls.
+- The `test.ps1` runs used two local patches, never committed and reverted afterwards:
+  - the display-size patch of the revision 3 record;
+  - a no-clipboard patch, so that the runs could not replace the user's clipboard. Neither clipboard scope
+    (`SystemClipboard.cpp`, `ClipboardTransfer.cpp`) opens it. The self-test leaves out its five clipboard stages and the
+    system-mirror checks of its pixel-edit block. IoTests leaves out `RunClipboardTransferTests` and
+    `RunClipboardAvailabilityTests`.
+
+  This change touches no product code.
