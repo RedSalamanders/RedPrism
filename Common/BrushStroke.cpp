@@ -2321,6 +2321,7 @@ void DocumentSession::BeginShape(Vec2 point)
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
+    ++_shapeOpening;
     _shapeDraft = ShapeDraft{shapeKind, anchor, SelectionBounds{anchor.x, anchor.y, anchor.x, anchor.y},
                              shapeKind == ShapeKind::Rectangle ? std::max(0.0, shapeCornerRadius) : 0.0};
 }
@@ -2336,6 +2337,8 @@ void DocumentSession::DragShape(Vec2 point, bool square, bool fromCenter)
 
 void DocumentSession::CancelShape() noexcept
 {
+    if (_shapeDraft)
+        ++_shapeOpening;
     _shapeDraft.reset();
 }
 
@@ -2410,6 +2413,7 @@ void DocumentSession::FinishShape()
         return;
     }
     const ShapeDraft draft = _shapeDraft.value();
+    ++_shapeOpening;
     _shapeDraft.reset();
     CommitShape(draft, _foregroundArgb);
 }

@@ -203,7 +203,8 @@ namespace RedPrismBuild
         // MOVZX EAX,DL in DxUi typography's dispatch. The latter and the RDX-base/RCX-target form in WIC
         // orientation dispatch require the anonymous same-owner PDB data start. The observed Menu form uses
         // R9 as image base, one EAX byte-index load, an R8D DWORD load, ADD R8,R9 and JMP R8; it requires that
-        // same PDB proof too. No other R9 sequence or intervening instruction is accepted.
+        // same PDB proof too. No other R9 sequence or intervening instruction is accepted. RunFilter's RDI-indexed
+        // RDX-base/EAX-target form has the same exact PDB/RET/target proof and PE-checked contiguous dispatch.
         // That form also requires an exact PDB data start. The table follows RET plus at most three alignment
         // bytes, belongs to that contribution, and is bounded by the next same-owner anonymous data symbol when
         // present. Every entry must name a decoded instruction boundary; backward entries also need one exact
@@ -1342,6 +1343,7 @@ namespace RedPrismBuild
             bool rdxRemap = false;
             bool rdxByteGuard = false;
             bool r8ClGuard = false;
+            bool rdxRdiIndex = false;
             bool rdxBaseMatchesPe = false;
             bool r9Base = false;
             int indexRegister = 0, targetRegister = 0;
@@ -1405,6 +1407,10 @@ namespace RedPrismBuild
                             contributions, decoded, decodedStarts)))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 1; dispatchStage = 3; }
                     else if (rdxBase && rdxBaseMatchesPe && dispatchStage == 1 && encoded.Length == 7 &&
+                        StartsWith(encoded, 0x8b, 0x84, 0xba) && MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                            contributions, decoded, decodedStarts))
+                    { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 0; rdxRdiIndex = true; dispatchStage = 3; }
+                    else if (rdxBase && rdxBaseMatchesPe && dispatchStage == 1 && encoded.Length == 7 &&
                         (StartsWith(encoded, 0x8b, 0x84, 0x8a) || StartsWith(encoded, 0x8b, 0x84, 0x82)) && MatchesDecodedPe(pe, sections, imageBase, address, encoded,
                             contributions, decoded, decodedStarts))
                     { tableRva = BitConverter.ToUInt32(encoded, 3); targetRegister = 0; rdxByteGuard = true; dispatchStage = 3; }
@@ -1431,7 +1437,7 @@ namespace RedPrismBuild
                          (rdxBase && StartsWith(encoded, 0x48, 0x03, 0xca) &&
                           (!rdxRemap || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
                             contributions, decoded, decodedStarts))) ||
-                         (rdxBase && rdxByteGuard && StartsWith(encoded, 0x48, 0x03, 0xc2) &&
+                         (rdxBase && (rdxByteGuard || rdxRdiIndex) && StartsWith(encoded, 0x48, 0x03, 0xc2) &&
                           MatchesDecodedPe(pe, sections, imageBase, address, encoded, contributions, decoded, decodedStarts)) ||
                          (r9Base && StartsWith(encoded, 0x4d, 0x03, 0xc1)) ||
                          (r8Base && encoded[0] == 0x49 && encoded[1] == 0x03 && encoded[2] == 0xc0 + 8 * targetRegister)))
@@ -1439,7 +1445,7 @@ namespace RedPrismBuild
                     else if (dispatchStage == 4 &&
                         ((r9Base && encoded.Length == 3 && StartsWith(encoded, 0x41, 0xff, 0xe0)) ||
                          (!r9Base && encoded.Length == 2 && encoded[0] == 0xff && encoded[1] == 0xe0 + targetRegister &&
-                          (!rdxRemap || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
+                          (!(rdxRemap || rdxRdiIndex) || MatchesDecodedPe(pe, sections, imageBase, address, encoded,
                             contributions, decoded, decodedStarts)))))
                     {
                         InlineTable provenByteIndexTable = null;
@@ -1512,6 +1518,7 @@ namespace RedPrismBuild
                       hasByteIndexTable = false; byteIndexTableRva = 0;
                       rdxRemap = false; rdxByteGuard = false;
                       r8ClGuard = false;
+                      rdxRdiIndex = false;
                       signedByteIndex = !r8Base && !raxBase && !rdxBase && !r9Base && previousSignedByteIndex && address == precedingEnd;
                       dlByteIndex = false;
                       rcxSignedByteBeforeLea = r8Base && previousRcxSignedByte && address == precedingEnd;

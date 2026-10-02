@@ -1,10 +1,64 @@
 #include "SelectionCommandWork.h"
 
+#include "BrushStroke.h"
 #include "Selection.h"
+#include "WarpStroke.h"
 
 #include <limits>
 #include <type_traits>
 #include <utility>
+
+SelectionCommandAuthority DocumentSession::CaptureSelectionCommandAuthority() const noexcept
+{
+    SelectionCommandAuthority result;
+    result._session = _tokenIdentity.value;
+    result._documentSerial = _documentSerial;
+    result._generation = _generation;
+    result._restoreSerial = _restoreSerial;
+    result._documentID = _document ? std::optional(_document->id) : std::optional<Guid>{};
+    result._active = _activeLayerID;
+    result._crop = _cropRect;
+    result._maskSelected = _maskSelected;
+    result._brush = _brush;
+    result._warp = _warp;
+    result._shape = _shapeDraft.has_value();
+    result._shapeOpening = _shapeOpening;
+    result._valid =
+        CanEditSelection() && !HasColorEdit() && !_gradient && !_pixelMove && !_selectionMoveOrigin && !_lassoDraft;
+    return result;
+}
+
+bool DocumentSession::CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept
+{
+    // owner_before compares control blocks, so cancellation/reopening cannot pass through an address ABA.
+    return authority._valid && authority._session == _tokenIdentity.value &&
+           authority._documentSerial == _documentSerial && authority._generation == _generation &&
+           authority._restoreSerial == _restoreSerial &&
+           authority._documentID == (_document ? std::optional(_document->id) : std::optional<Guid>{}) &&
+           authority._active == _activeLayerID && authority._maskSelected == _maskSelected &&
+           authority._crop == _cropRect && !authority._brush.owner_before(_brush) &&
+           !_brush.owner_before(authority._brush) && !authority._warp.owner_before(_warp) &&
+           !_warp.owner_before(authority._warp) && authority._shape == _shapeDraft.has_value() &&
+           authority._shapeOpening == _shapeOpening && CanEditSelection() && !HasColorEdit() && !_gradient &&
+           !_pixelMove && !_selectionMoveOrigin && !_lassoDraft;
+}
+
+std::optional<SelectionCommandInput> DocumentSession::PreparePreservingSelectionCommandInput(
+    SelectionCommandKind kind) const
+{
+    if (!_document || kind > SelectionCommandKind::Deselect)
+        return std::nullopt;
+    auto authority = CaptureSelectionCommandAuthority();
+    if (!CanApplySelectionCommand(authority))
+        return std::nullopt;
+    auto token = CaptureJobToken();
+    if (!token)
+        return std::nullopt;
+    SelectionCommandInput result(kind, HistoryRestoreAuthority{}, std::move(token.value()), history.CaptureState(),
+                                 _document.value(), _activeLayerID);
+    result._preservedGesture = std::move(authority);
+    return result;
+}
 
 std::optional<SelectionCommandInput> DocumentSession::PrepareSelectionCommandInput(SelectionCommandKind kind) const
 {
@@ -69,7 +123,9 @@ std::optional<PreparedSelectionCommand> DocumentSession::PrepareSelectionCommand
 
 bool DocumentSession::IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept
 {
-    return !prepared._applied && prepared._input._valid && CanApplyHistoryRestore(prepared._input._authority) &&
+    return !prepared._applied && prepared._input._valid &&
+           (prepared._input._preservedGesture ? CanApplySelectionCommand(prepared._input._preservedGesture.value())
+                                              : CanApplyHistoryRestore(prepared._input._authority)) &&
            CanApplyJobResult(prepared._input._token, 0) &&
            (prepared._history ? history.CanPublish(prepared._history.value())
                               : history.IsCurrent(prepared._input._history));
@@ -101,6 +157,9 @@ std::uint64_t DocumentSession::SelectionCommandMemoryBytes(SelectionCommandKind 
     // EditMemoryBytes bounds eight record copies, immutable stack growth and trim workspace. This graph uses
     // owner capture, private after-document and before/after snapshots (four copies). No raster/coverage output
     // or Clipper workspace is created; Select All adds exactly one four-point loop plus shared root/control.
-    constexpr std::uint64_t extra = 4096 + sizeof(SelectionCommandInput) + sizeof(PreparedSelectionCommand);
+    // Weak identities can retain the combined make_shared record after a gesture is cancelled. Its vectors and
+    // rasters have already been destroyed, but the inline object/control storage stays until this input retires.
+    constexpr std::uint64_t extra = 4096 + sizeof(SelectionCommandInput) + sizeof(PreparedSelectionCommand) +
+                                    sizeof(BrushStroke) + sizeof(WarpStroke) + 128;
     return bytes && bytes <= (std::numeric_limits<std::uint64_t>::max)() - extra ? bytes + extra : 0;
 }

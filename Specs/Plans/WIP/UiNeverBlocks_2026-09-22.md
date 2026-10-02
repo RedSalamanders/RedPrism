@@ -80,10 +80,28 @@
   all 71 named controls and unchanged goldens; ARM64 is build-only. Exact 591 frozen inputs and 328 evidence
   files are independently SHA-verified before another build
   ([qualification](../../TestRuns/WandCancellation_2026-10-02.md)). This completes S4a only.
-- [ ] Next selection publication slice — Private S4b prepares settled active-layer New sampling/trace and
+- [x] Active-layer New publication core — S4b prepares settled active-layer New sampling/trace and
   complete history publication with captured point/settings/AA. A transparent-source rectangle shortcut and
-  cheaper-agent literal/authority/history tests are drafted; review, capacity/retirement proof, private runtime
-  and native qualification remain pending. All Layers, booleans, live gestures, host ordering and G1 stay open.
+  cheaper-agent literal/authority/history tests were reviewed and corrected. The final private Debug suite passes
+  117 unique controls plus existing goldens; exact 296 inputs and 136 evidence files are archived before native
+  activation. Capacity planning carries sparse-copy recycling through later phases; actual worker retirement
+  releases the test's observation owners first. Native r1 passes ARM64 and full x64 ASan, then Release stops
+  before runtime at an unrecognized RDI-indexed adjustment switch table in the linked ISA scan. Exact 595 inputs
+  and 297 evidence files retain the failure before repair. The unchanged-image recheck and strict parser controls
+  precede a fresh native matrix. Combined r2 now passes all six profiles with 117 exact wand checks in every
+  full x64 suite. Independent source/control verification and archival retain 598 inputs and 7,223 evidence files
+  ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)). Host ordering, live gestures, All Layers, booleans and G1 stay open.
+- [x] Preserving selection authority — S2a adds separate weak opening identity for live brush/warp/shape without
+  weakening settled history restore. A primary-reviewed private Debug suite passes 136 unique controls, including
+  literal committed pixels and separate Undo steps proving the original stroke clip survives Select All/Deselect.
+  Exact 299 inputs and 137 evidence files are archived; original fixture/compile failures remain retained. S4b and
+  this core share the fresh native qualification matrix. Production pointer buffering and writer barriers stay open.
+  Combined native r2 now qualifies all 136 named controls in each full x64 suite and all ARM64 cross-builds;
+  exact source parity and independent evidence hashes pass ([record](../../TestRuns/SelectionPreservation_2026-10-02.md)).
+- [ ] Settled selection host route — S2b is an isolated implementation candidate: admit before owner capture,
+  prepare history on the worker, retain the selected ordinal/input until apply/drop, and retire the aggregate
+  off owner. Actual Application ordering/fault/pump/authority tests precede native activation. Header inputs,
+  live brush/warp/shape, lasso/move closure, broader writer barriers and G1 remain separate requirements.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

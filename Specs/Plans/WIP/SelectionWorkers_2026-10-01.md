@@ -9,7 +9,19 @@ general geometry admission and measured G1 remain unqualified.
 S4a cancellable wand/trace/sampling also qualifies in six forced-rebuild profiles against 591 unchanged inputs:
 all 71 named cancellation/chunk controls pass in each full x64 suite, with legacy goldens unchanged. Exact
 sources, products and evidence are archived ([record](../../TestRuns/WandCancellation_2026-10-02.md)).
-S4b active-layer New preparation is a private, uncompiled prototype; admission/retirement proof and tests remain pending.
+S4b active-layer New preparation passes 117 unique private Debug controls and existing document goldens. Exact
+296 inputs and 136 evidence files are archived before core activation. Native r1 passes all ARM64 cross-builds
+and full x64 ASan, then Release's linked ISA scan reports an EVEX-looking row in an adjustment switch table;
+Release runtime and x64 Debug do not run. Exact 595 inputs and 297 evidence files, including the failed
+image/PDB and compiler tracking, are archived before diagnosis. That attempt does not qualify native activation.
+The strict RDI-index proof passes 23 controls against the unchanged failed image, with the allowlist unchanged.
+Combined S4b/S2a native r2 passes all six profiles at `2026-10-02T20:13:23.3037530Z`: every full x64 suite contains
+the exact 117 wand, 136 preserving-selection, 71 cancellation/chunk and 23 ISA controls. ARM64 is cross-build only.
+Independent control/source verification and immutable archival retain 598 exact inputs and 7,223 evidence files.
+Only the S4b/S2a core boundaries qualify; settled host routing is the next private slice and G1 remains open.
+Its first attempt failed before compilation because the workspace disk was full. The exact 296 inputs and
+five failure receipts/logs are archived on the local disk before any edit/retry. Generated native intermediates
+were copied, hash-verified and relocated recoverably; no source or qualified image was removed.
 The owning selection behavior is [Document_Tools](../../Document/Document_Tools.md); existing legacy numeric
 expectations remain unchanged. This plan does not add a Smooth command, which the current product does not expose.
 
@@ -26,6 +38,30 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
   - [ ] S1b — Inverse/Expand/Contract only after S0b; reuse complete publication, preserve legacy geometry.
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
+  - [x] S2a — Qualify separate Select All/Deselect authority that preserves an already live brush, warp or shape.
+    Keep settled history-restore authority unchanged. Bind brush/warp control-block identity without owning or
+    reading their mutable state; bind the shape opening separately from its changing drag bounds. Refuse any
+    replaced/closed gesture, document/history/target/crop change, panel, gradient, transform, lifted pixels,
+    lasso or outline move. Prove literal selection/history results, unchanged captured stroke coverage, allowed
+    continued samples, and reached gesture replacement/cancellation refusals privately before host routing.
+    Production pointer buffering, selected ordinals, writer barriers and measured G1 remain S2/S3b/P1.4.
+    Primary reviews the cheaper-agent draft and adds independent committed-pixel clip/Undo controls. Exact
+    compile failures and the seven failing r3 fixture expectations are retained before correction: first-warp
+    Append records only its opening, raster identity is not pixel equality, and an open transaction's UndoName
+    still names its prior committed entry. The r4 full private Debug suite passes 136 unique controls and all
+    existing goldens; 299 exact inputs and 137 evidence files are archived before activation. A combined fresh
+    six-profile S4b/S2a core matrix follows the independently qualified ISA data proof. Neither slice is complete
+    until native control/source verification and archival pass; production host routing stays open.
+    The combined native r2 matrix and independent verification/archive now pass: 136 exact unique controls run
+    in every full x64 suite, and all three ARM64 cross-builds pass. This completes the preserving authority core
+    ([evidence](../../TestRuns/SelectionPreservation_2026-10-02.md)); production input/gesture routing stays open.
+  - [ ] S2b — Route settled Select All/Deselect through the production host ordinal, whole-graph admission,
+    worker history preparation, exact completion acknowledgement and off-owner retirement. Capture only after
+    reservation; preserve no-op/redo, nested title/depth, saved markers and cancellation/fault refusal. Queue
+    younger document commands and keep view/chrome pumping. Qualify actual Application controls privately,
+    then all native configurations. Live brush/warp/shape, selection move/lasso/lifted pixels and header inputs
+    keep their current routes until separate pointer replay/closure/writer barriers qualify; this bounded slice
+    does not complete S2/S3b or G1. Primary owns the host integration and reviews cheaper-agent test sidecars.
 - [ ] S3 — Move committed marquee/lasso booleans and layer/mask traces; own gesture arguments and exact source
   authority, retaining drafts until apply/drop. Preserve outline-move cancellation and undo semantics.
   - [x] S3a — Prepare outline-move End/Cancel history and retirement separately. The qualified native core passes
@@ -58,7 +94,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     The native matrix passes all six profiles at `2026-10-02T17:49:56.7560093Z`. All 71 named controls pass
     in each full x64 suite; ARM64 cross-builds pass without a runtime claim. Independent manifest/byte hashes
     retain 591 exact inputs and 328 evidence files before the next build. Only S4a is complete.
-  - [ ] S4b — Prepare a sealed New selection from a settled active layer, with private sampling/trace and the
+  - [x] S4b — Prepare a sealed New selection from a settled active layer, with private sampling/trace and the
     complete after-document/history publication. Build privately while S4a native inputs are frozen. Preserve
     event-time point/settings/AA, exact active/mask/crop/document/history authority, `Magic Wand` versus no-match
     `Deselect` titles, no-op/redo and whole-graph retirement. Blank/folder sources can produce the exact full-canvas
@@ -72,6 +108,22 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     Host activation then requires S2/S3b ordered inputs and move closure plus P1.3 utility readback for All Layers;
     retain drafts through acknowledgement and gate every overlapping writer. Direct New requests and clicks
     inside the selection must keep their current order and error behavior.
+    Primary reviewed the cheaper agent's test draft, correcting matching tolerance, placed-pixel and disconnected
+    component literals, moved optional ownership and reached active/mask-only authority fixtures. Added local
+    cancellation at all six history stages, recovery, nested transaction/saved-marker cases, phased memory
+    planning and a real gated worker handoff of both applied and stale prepared-result aggregates. Final r4 passes
+    117 unique assertions and the unchanged document suite. Earlier r2/r3 exact inputs/images are retained before
+    strengthening recycle carry and dropping the test's observation owners before worker disposal. The final exact
+    296 inputs, image/PDB and 136 evidence files are archived before native activation. Native r1's full x64 ASan
+    and ARM64 builds pass; Release stops at linked ISA scanning before runtime and Debug does not run. Exact
+    failure inputs/images/objects/ISA evidence are retained before repair. The original image recheck proves only
+    one DWORD-table row changes classification under the proposed RDI-index data proof, with instruction count
+    and runtime allowlist unchanged. Synthetic refusal controls and fresh native qualification remain required.
+    Scheduler/host admission and G1 remain pending. Compiler intermediates use a recoverable local `.build` path
+    through the repository's normal intermediate directory after the workspace-space failure.
+    The fresh combined r2 matrix, exact source/control verification and independent archive now pass against
+    598 inputs and 7,223 evidence files. All 117 wand controls run in each full x64 suite, with unchanged goldens;
+    ARM64 builds pass. This completes S4b core preparation ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)).
 - [ ] S5 — Bound and cache coverage and displayed geometry under exact immutable selection/grid/transform keys.
   Avoid full outline construction during every pointer/frame/chrome sync; preserve exact coverage goldens.
 - [ ] S6 — Native ordering, failure, stale, cancellation, device/source and retirement proof; clean configuration

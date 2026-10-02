@@ -304,6 +304,15 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   Geometrically unchanged commands preserve revision, redo, epoch and generation. Explicit empty remains
   distinct from absent selection. This factory refuses pending gestures and edits; direct command eligibility
   remains unchanged until ordered production callers and exact live-gesture authority qualify.
+- `PreparePreservingSelectionCommandInput` is a separate Select All/Deselect boundary for an existing brush,
+  warp or shape opening. It preserves mutable gesture owners and captured stroke coverage. Opaque authority
+  binds weak brush/warp control-block identities and the shape opening counter, plus the same document/history/
+  target/crop stamps. The worker never locks or reads these gesture owners. Continued brush/warp samples and
+  shape drag bounds do not invalidate this opening; cancellation, closure or replacement does. A shape reopened
+  with identical geometry is a different opening. Panels, gradients, transforms, lifted pixels, lasso and outline
+  moves remain refused. Settled history-restore authority and the original settled factory remain unchanged.
+  This core API does not activate application commands or authorize synchronous gesture closure; host ordinals,
+  retained pointer arguments and writer barriers remain S2/S3b/P1.4.
 - `SelectionMoveWork` prepares active outline-move End/Cancel history before removing the original outline.
   End retains moved geometry and acknowledges one generation. Cancel restores the original and acknowledges
   two generations (restoration plus End), including a no-op. Changed history and named outer transaction depth
@@ -366,6 +375,30 @@ the same sampler `CanvasSize` places a layer with, collapsing High to Smooth sin
 resample; transparent outside the box or for an invalid transform); a folder or blank layer reads as transparent,
 so the whole canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without
 the canvas clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
+
+### Prepared active-layer New wand (P1.6 S4b core)
+
+`WandLayerSelectionInput` retains event-time point/settings/AA, an owned document value and immutable history
+view. Capture requires finite on-canvas input, a supported sample size and a settled document; All Layers and
+live gestures are refused without changing or settling them. Its authority retains session/document/restore
+identity, generation, active/mask target and crop; history publication separately validates the exact epoch.
+Changing header settings later does not change the captured request. Owner capture still copies layer metadata.
+
+`PrepareWandLayerSelectionPublication` reads only this owned graph. The active image is placed using the sampler
+above, ignoring its visibility, opacity and mask, then traced with the cancellable kernels. A source with no
+storage produces the exact clockwise canvas rectangle directly: every sample is transparent for every supported
+radius, tolerance and connectivity. This shortcut creates no canvas-sized pixels, mask or vertex grid.
+
+Preparation owns the complete after-document and history publication. A changed traced selection is `Magic Wand`;
+no match in New mode becomes a named `Deselect`. Geometric/AA equality is a true no-op preserving redo, revision,
+generation and history epoch. Nested history retains its outer depth/title; publication does not replace a saved
+marker changed while work was in flight. Cancellation, memory/refusal and thrown history allocation failure
+install no partial selection or history.
+
+Current apply is nonthrowing validation followed by history publication and document/display-owner swaps.
+Applied and rejected aggregates retain their owners for worker disposal; they must not be destroyed on the owner
+path by a production caller. This core does not route application input. S2/S3b ordering, gesture closure, complete
+scheduler admission and All Layers/Add/Subtract remain separate prerequisites; no UI/G1 bound follows from it.
 
 ## Brush session (C10)
 

@@ -1212,7 +1212,12 @@ struct HueTargetDrag
 
 enum class SelectionCommandKind : std::uint8_t;
 class SelectionCommandInput;
+class SelectionCommandAuthority;
 class PreparedSelectionCommand;
+class WandLayerSelectionInput;
+class PreparedWandLayerSelection;
+struct WandLayerSelectionObserver;
+struct WandLayerSelectionMemoryPlan;
 class SelectionMoveClosureInput;
 class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
@@ -2115,11 +2120,23 @@ class DocumentSession
     void ContractSelection(int amount);
     // Admitted owner capture; these sealed preparation APIs leave the direct selection reference routes intact.
     [[nodiscard]] std::optional<SelectionCommandInput> PrepareSelectionCommandInput(SelectionCommandKind kind) const;
+    [[nodiscard]] std::optional<SelectionCommandInput> PreparePreservingSelectionCommandInput(
+        SelectionCommandKind kind) const;
     [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(
         SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
+                                                                                        WandSettings settings,
+                                                                                        bool antialiased) const;
+    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
+        WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
+    [[nodiscard]] bool IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
+        Vec2 point, WandSettings settings) const noexcept;
     [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(bool cancel) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
         SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
@@ -2638,6 +2655,8 @@ class DocumentSession
     }
 
   private:
+    [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;
+    [[nodiscard]] bool CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept;
     [[nodiscard]] bool HasDeferredTransform() const noexcept
     {
         return _transformEdit && _transformEdit->deferred;
@@ -2743,6 +2762,7 @@ class DocumentSession
     std::optional<GradientEdit> _gradient;
     std::uint64_t _gradientOpening = 0;
     std::optional<ShapeDraft> _shapeDraft;
+    std::uint64_t _shapeOpening = 0;
     std::optional<PixelMove> _pixelMove;
     std::uint64_t _pixelMoveOpening = 0;
     std::optional<PixelClipboard> _clipboard;

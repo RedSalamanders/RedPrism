@@ -46,6 +46,7 @@ namespace SelectionGeometry
 
 namespace MagicWand
 {
+inline constexpr std::size_t kTraceEdgeLimit = 8'000'000;
 // Worker cancellation checkpoints. Observers are borrowed, optional, noexcept and cannot publish document state.
 // Offsets count work in that stage; explicit loops poll at least every 4096 steps. Allocator/OS latency is separate.
 enum class WorkStage : std::uint8_t

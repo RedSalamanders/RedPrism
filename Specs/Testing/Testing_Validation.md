@@ -305,6 +305,16 @@ unsuccessful OpenClipboard acquisition when available. These fixture waits do no
 
 ### Prepared selection publication (P1.6 core)
 
+`selection-preserve.*` adds literal 4-by-4 source, mask and clockwise selection controls for the separate
+preserving-command boundary. Live brush/warp/shape opening identity and continued input survive publication;
+reached cancellation/replacement and identical-geometry shape reopening refuse old output. Weak authority does
+not keep cancelled gesture objects alive. A white hard brush continues outside its original 2-by-2 opening clip
+after Select All/Deselect: committed outside pixels remain the literal source, the center is white, and separate
+Undo steps restore pixels and then the original outline/AA. History depth/title, true no-op redo, exact target/
+crop/session/history staleness and reached cancellation/bad_alloc recovery use independent expectations.
+Existing settled factory and history-restore refusals remain in their original tests. Production pointer buffering,
+writer ordering, close/device cases, all geometry modes and measured G1 are not qualified by this core suite.
+
 `selection-command.*` uses literal 4-by-1 pixels/mask, full-canvas geometry and coverage bytes for Select All,
 absent versus explicit empty Deselect, no-op/redo, named nested transactions and a distinct later saved marker.
 Both operations reach each SelectionSnapshot/BeforeSnapshot/AfterSnapshot/Entry/StackGrowth/TrimIndex cancellation
@@ -339,6 +349,27 @@ final chunk boundary exactly once, discard partial output and recover with a fre
 Paired Release CPU measurements retain the pre-change source as a performance reference only, with validation
 outside timing. Native configuration qualification, host activation, full admission/Clipper/GPU/history lifetimes
 and UI/G1 measurements are distinct gates.
+
+### Prepared active-layer wand publication (P1.6 S4b)
+
+`wand-layer.*` uses literal BGRA pixels and clockwise coordinate lists to check translated nearest sampling,
+hidden/masked/zero-opacity source rules, captured settings/AA, sparse cache isolation, transparent blank/folder/
+no-active inputs, contiguous versus disconnected components and rounded-sample no-match deselection. History
+checks cover exact titles/Undo/Redo, unchanged-outline redo retention, nested outer transactions and saving while
+publication is in flight. Existing legacy goldens remain unchanged.
+
+Reached active-only, mask-only and crop-only fixtures prove invalidation without generation/history changes;
+history-epoch and document-generation changes, moved/copied/foreign sessions and single-use ownership refuse
+stale application without changing the current owner. Cancellation reaches every publication milestone and all
+six history preparation stages; separately thrown `bad_alloc` at those stages preserves current state. Fresh
+tokens recover complete literal geometry. These are named stage injections, not OS allocator fault coverage.
+
+Memory controls inspect literal pixel/vertex capacities, sparse source overlap and recycling carry, actual default
+vector growth/old-new overlap, complete retirement charges, invalid-grid/settings refusal and 64-bit maximum-grid
+planning without allocating its pixels. A 30,000-square transparent document produces only the literal quad.
+Real gated workers prepare both applied and stale aggregates, then dispose of the whole result on the worker after
+the owner closes the document. This proves the core handoff; scheduler/host lifecycle, ordering, failure/refusal
+presentation and measured G1 remain separate gates.
 
 ## Gates
 

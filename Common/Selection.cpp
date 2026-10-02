@@ -22,7 +22,6 @@ namespace
 constexpr double kPi = 3.14159265358979323846;
 constexpr int kClipperPrecision = 2; // hundredths of a document pixel
 // Outlines with more pixel edges than this are refused: the path would be too slow to draw (legacy limit).
-constexpr std::size_t kWandEdgeLimit = 8'000'000;
 
 class WandProgress final
 {
@@ -597,7 +596,7 @@ template <typename Selected>
                 }
             }
         }
-        if (edges > kWandEdgeLimit)
+        if (edges > MagicWand::kTraceEdgeLimit)
         {
             if (failure)
             {

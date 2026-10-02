@@ -61,6 +61,7 @@
 #include "Selection.h"
 #include "SelectionCommandTests.h"
 #include "SelectionMoveClosureTests.h"
+#include "SelectionPreserveTests.h"
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
@@ -74,6 +75,7 @@
 #include "TransformPreviewWorkTests.h"
 #include "WandCancellationTests.h"
 #include "WandChunkBoundaryTests.h"
+#include "WandLayerSelectionTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7387,8 +7389,10 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
+    gFailures += RunSelectionPreserveTests();
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();
+    gFailures += RunWandLayerSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
     gFailures += RunColorDismissalTests();
     gFailures += RunAdjustmentNestedTests();

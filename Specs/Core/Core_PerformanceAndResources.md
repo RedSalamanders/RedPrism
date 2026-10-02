@@ -144,6 +144,27 @@ overhead were retained and replaced. Shared-desktop outliers remain in evidence.
 qualify no UI deadline or host activation. Complete admission, source/history lifetime and GPU sampling migration
 remain P1.3/P1.6 obligations; SIMD/GPU throughput and RAW/Photoshop qualification remain later phases.
 
+`PlanWandLayerSelectionMemory` declares the settled active-layer New graph before owner capture. Let `N = W*H`,
+`V = (W+1)*(H+1)` and `E = min(4N, MagicWand::kTraceEdgeLimit)`. Sampled BGRA and a potential sparse private
+copy use rounded `PixelBuffer::RequiredBytes`; charge the private copy through later phases because its pixels
+can remain recycled. Mask and vertex arrays reserve exactly `N` and `V`. A contiguous flood processes disjoint
+newly selected runs; above/below scans total at most `2N`, with at most one seed push per scan step plus the first
+seed. Charge the 4096-slot initial reserve and old/new growth overlap for at most `2N+1` pushes.
+
+Each traced coordinate push consumes an edge, and each accepted loop has at least three coordinates. The
+qualified MSVC v145 default allocator returns the requested capacity and geometric vector growth is 1.5;
+three times total pushed coordinates and potential loop headers bounds old/new overlap. The plan also charges
+Debug vector proxies, immutable selection/control roots and complete metadata/history construction. Requalify
+this implementation-based capacity proof when changing the toolset; it is not a portable `std::vector` guarantee.
+The eight-million-edge limit bounds accepted tracing, not canvas area or Clipper booleans.
+
+Use the maximum of source, flood/mask and trace phases, with source/recycling carry, plus capture/history storage.
+Charge complete retained current/history/display graphs and new geometry again for aggregate retirement. Sharing
+overcounts intentionally; overflow/unavailable estimates refuse planning. Blank/folder/no-active sampling owns
+only an exact four-point result plus metadata/history. Global allocator/codec/OS headroom and live process pressure
+remain separate from declared storage. The core's owner metadata capture and memory/history traversal still need
+H2/H3 work; this estimate and off-owner publication establish no G1 latency or production scheduler admission.
+
 `Application` owns a bounded `JobScheduler`: at most 128 records across queued, running and undrained states, and
 eight pending UI actions. The seven job classes share three OS priorities. The serial classes (`Stroke`,
 `Selection`, `Commit`, `Io`) preserve FIFO within each class and key through apply or drop. Each record has two
@@ -200,6 +221,12 @@ history capture remain H2/H3 work. Unmigrated synchronous Begin/End callers reta
 allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
+
+Preserving selection-command authority owns only weak brush/warp identities. The memory charge also includes
+the inline BrushStroke/WarpStroke records and combined control storage: after a strong owner drops, weak
+references can retain the combined allocation even though its vectors, rasters and engine ownership have been
+destroyed. These records are distinct from owning mutable gesture buffers. The shape opening counter allocates
+nothing. Capture/history traversal, geometry equality, actual host admission and G1 latency remain separate work.
 
 Each raster storage record caches a construction-time upper bound for its complete held graph: its aligned pixel
 capacity, storage/control allowance and tile-vector capacity, plus cached bounds for its base and tile rasters. A
