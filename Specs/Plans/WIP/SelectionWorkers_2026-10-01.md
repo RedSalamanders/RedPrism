@@ -40,6 +40,10 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
   off owner; immutable authority and nonthrowing apply/retirement. Preserve nullopt versus explicit empty and AA.
   - [x] S1a — Sealed Select All/Deselect input/publication and 127 independent preparation checks qualify in all configurations.
   - [ ] S1b — Inverse/Expand/Contract only after S0b; reuse complete publication, preserve legacy geometry.
+  - [ ] S1c — Selection nudge owns event-time whole-pixel delta/Shift state and prepares translated loops and
+    complete `Move Selection` history off owner. The session's current NudgeSelection starts its own move
+    only when no outline move is already live; keep that live-outline no-op policy. Qualify translation output
+    bounds, no-op/redo, enclosing transaction and command ordering independently of Clipper operations.
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
   - [x] S2a — Qualify separate Select All/Deselect authority that preserves an already live brush, warp or shape.
@@ -177,7 +181,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
         - [ ] S3b1b1 — Own no-move follow-ups, remaining header/size/replacement/close callers and the concrete
           coexisting-edit semantics. Source classification of a command does not qualify its heavy dependent
           geometry/pixel operation; boolean/traces, All Layers and measured G1 remain their separate gates.
-          - [ ] S3b1b1a — Own click-without-drag End and its Deselect or active-layer New wand follow-up in one
+          - [x] S3b1b1a — Own click-without-drag End and its Deselect or active-layer New wand follow-up in one
             noncoalescing bounded input. Capture the exact opening and original point/settings/AA at release;
             refuse a reopened outline before capture. Preserve the enclosing transaction and reuse the selected
             ordinal through both acknowledged jobs. Freeze pointer samples on admission/refusal; a failed End
@@ -192,8 +196,36 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
             existing coexisting and All Layers callers retain their reference route until separately migrated.
             Admission refusal never enters a synchronous fallback. Primary adds a reached deferred-panel
             compatibility control; coexisting publication and All Layers remain separate open work.
+            Private r1 fails compilation because the continuation file sees only the selection-command enum's
+            forward declaration. Its exact 623 inputs and 413 evidence files are archived before adding the
+            owning header and rebuilding r2. Runtime/native qualification remains pending
+            ([record](../../TestRuns/SelectionMoveFollowups_2026-10-03.md)).
+            - [x] Private r2 full WARP qualification: 84 unique checks/16 modes, 52 ordered Application stages
+              and retained caller/close/selection/wand suites. Archive 623 exact inputs/436 evidence files;
+              independent preflight and seven byte-identical activations complete before native rebuilding.
+            - [x] Fresh native six-profile matrix, exact control verification and immutable archival.
+              Matrix starts at `2026-10-03T02:23:16.4027680+00:00`, with 612 frozen inputs. All ARM64 builds pass;
+              x64 ASan's linked ISA scan rejects a vector-looking Application table row, actual exit 1 at
+              `02:33:28.7931999+00:00`. Exact 612 inputs/5,850 evidence files and failed EXE/PDB are archived
+              before diagnosis. The strict QWORD-stack/RAX data proof now passes 73 new controls, retains
+              all 57 RDI controls and rechecks both original failed images with the allowlist unchanged.
+              Its 17-input/19,260-evidence immutable archive verifies before three scanner/test activations.
+              Native r2 returns actual exit 0 at `2026-10-03T03:46:41.3855104+00:00` against 613 frozen inputs.
+              All six profiles, 84 exact follow-up checks/16 modes and retained suites qualify. Independent
+              verification and immutable archival retain 613 inputs/21,605 evidence files, completed at
+              `2026-10-03T03:51:14.2165680+00:00`. The next private compiler may now consume these dependencies.
           - [ ] S3b1b1b — Own selection-header changes and remaining size/replacement/close callers only after
             their concrete reference settlement and coexisting-edit policy controls qualify.
+            - [ ] S3b1b1b0 — Eligible idle outline header kind/Deselect retains exact opening/action/value,
+              freezes samples on admission/refusal and waits acknowledged End before bounded settings apply
+              or prepared Deselect at the same ordinal. Preserve unchanged-kind End, zero/moved outline
+              history, event-time value, nested title/depth, failure/cancellation/refusal/retry and younger order.
+              Keep existing busy/coexisting header policy until its own preserving publication qualifies.
+              Primary seeds 498 source files from the immutable follow-up private r2 and prepares isolated
+              code; a cheaper agent drafts literal controls. No next compiler may consume native dependencies
+              before the current follow-up matrix completes and archives. This is source preparation only.
+            - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
+              cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
   - [x] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
@@ -277,8 +309,10 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
 
 ## Current routes and parity
 
-`OnCommand` routes settled Select All/Deselect through the qualified actor; existing live-gesture paths remain
-direct. Inverse and layer/mask selection remain direct. `OnSelectionAction` supplies Expand
+`OnCommand` routes settled Select All/Deselect through the qualified actor; the qualified outline callers also
+acknowledge their exact End/Cancel prerequisite before the selected command or tool. Other live stroke/warp/shape
+paths remain direct. Inverse and layer/mask selection still use their direct geometry engines after any required
+outline closure. `OnSelectionAction` supplies Expand
 and Contract amounts; lasso/marquee completion calls ApplySelection booleans. Settled active-layer New wand uses
 the qualified actor; All Layers, booleans and live wand still synchronously compose or render the source before
 flood/trace. The direct engine APIs stay as reference routes. Outline move is a live
@@ -298,7 +332,7 @@ moved geometry, Cancel restores its original geometry, and Preserve keeps its op
 
 | Caller | Reference outline policy and dependent action | Owned migration/proof |
 | --- | --- | --- |
-| Moved `SelectionRelease` | End only; freeze further samples | S3b1a typed exact opening; 242 private controls, repaired native matrix pending |
+| Moved `SelectionRelease` | End only; freeze further samples | S3b1a qualified typed exact opening; 242 controls in each full x64 suite and all ARM64 cross-builds |
 | Direct Escape / first Undo / first Redo | Cancel; consume this edit before ordinary history restore | S3b1a; retained redo and exact original outline |
 | `EndPointerDrag`, capture loss | End moved outline; preserve polygonal-lasso leave semantics separately | S3b1b0 qualified; real producer held-worker control |
 | Changed tool / tool-selection command | End before tool state changes; same tool preserves | S3b1b0 qualified; exact event opening, failed closure never switches tool |
@@ -311,13 +345,15 @@ moved geometry, Cancel restores its original geometry, and Preserve keeps its op
 | Selection header kind / Deselect | End even when a kind value is unchanged, then apply captured header action | S3b1b1; own kind/value and exact gesture opening |
 | Header mode/AA/wand settings/amount controls | Preserve; mutate settings for later operations | Retain event-time values without silently closing the outline |
 | Expand / Contract | Preserve outline transaction while applying current nested selection edit | S0b/S1b/S3b1b1; bounded geometry plus independent nested title/depth proof |
+| Selection nudge | Starts and closes its own move when settled; an already live outline move makes Begin fail and remains unchanged | S1c; capture delta/Shift at input, prepare translation/history and preserve existing live-outline no-op |
 | Enter / Save / Export | Preserve outline; other live edits follow their own caller policies | Keep existing behavior; actual writer/earlier-edit integration controls remain required |
 | Copy / Copy Merged / raster edits without an explicit End | Preserve reference nesting; preceding gradient/color work has separate rules | Do not add them to End classification merely because they are document commands |
 | Size / replacement / project/window/session close | Own caller-specific prompt and live-graph outcome | S3b1b1 plus qualified lifecycle boundaries; preserve Cancel answers and retire complete old ownership |
 
 S3b1b0's source and controls qualify in all six native profiles. Its 27 actual End-before-command refusal routes do not
 qualify the dependent Inverse/trace/filter/pixel kernels, general geometry capacity, coexisting earlier-edit
-policies or measured G1. The next private compiler run must follow the repaired S3b1a native archive.
+policies or measured G1. The next header private compiler must follow the current S3b1b1a native r2 qualification
+and archive; its source preparation does not consume dependencies while that matrix runs.
 
 ## Authority and publication
 

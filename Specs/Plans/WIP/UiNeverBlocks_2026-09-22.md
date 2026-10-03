@@ -172,10 +172,18 @@
     retained suites in every x64 gate. ARM64 is cross-build only. Exact verification and immutable archival
     retain 611 inputs/1,546 evidence files; 57 refined ISA controls keep the scanner/allowlist unchanged
     ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)).
-- [ ] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
+- [x] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
   one selected request, retaining event-time point/settings/AA and the ordinal through both worker phases.
-  Primary-owned isolated code and cheaper-agent controls are in preparation while native inputs stay frozen;
-  private/native qualification, All Layers, remaining header/close callers and measured G1 remain open.
+  Primary-owned isolated code and 16 reviewed modes are prepared. Private r1's missing-enum-header compiler
+  failure retains 623 exact inputs/413 evidence files before correction. Private r2's full WARP suite passes
+  84 unique checks/16 modes; 623 inputs/436 evidence files are archived before seven exact activations.
+  Native r1 passes all ARM64 builds, then fails x64 ASan's linked ISA scan; 612 inputs/5,850 evidence files
+  and the failed EXE/PDB are archived before diagnosis ([record](../../TestRuns/SelectionMoveFollowups_2026-10-03.md)).
+  The narrow QWORD-stack/RAX table proof now passes 73 new controls and both unchanged failed images;
+  its immutable archive and all 57 retained RDI controls verify before activation. Native r2 passes all six
+  profiles at `2026-10-03T03:46:41.3855104+00:00`, with exact 84/16 follow-up and retained controls in every
+  full x64 suite. Independent verification and archival retain 613 inputs/21,605 evidence files at
+  `2026-10-03T03:51:14.2165680+00:00`. All Layers, remaining header/close callers and measured G1 remain open.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

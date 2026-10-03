@@ -1296,6 +1296,8 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 70.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         if (_session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
         {
             SelfTestFailure(L"A click inside the selection did not deselect.\n");
@@ -2288,6 +2290,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveCallerSelfTest\n");
     if (const int callers = RunSelectionMoveCallerSelfTest(); callers != 0)
         return callers;
+    std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
+    if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
+        return followup;
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
@@ -6345,19 +6350,23 @@ void Application::SelectionRelease(Vec2 view) noexcept
             SelectionChanged();
             return;
         }
-        _session.EndSelectionMove();
-        if (!moved && _tool == EditorTool::Wand)
+        if (CanQueueSelectionMoveClick() && (_tool != EditorTool::Wand || !_session.wandSettings.sampleAllLayers))
         {
-            // The wand's click inside the selection selects afresh from that pixel.
-            RunMagicWand(ended.start, SelectionMode::New);
+            (void)QueueSelectionMoveClick(_tool == EditorTool::Wand
+                                              ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings,
+                                                                                    _session.selectionAntialiased})
+                                              : std::nullopt);
+            SelectionChanged();
             return;
         }
-        if (!moved)
+        _session.EndSelectionMove(); // Composite/coexisting routes keep their reference behavior until migration.
+        if (_tool == EditorTool::Wand)
+            RunMagicWand(ended.start, SelectionMode::New);
+        else
         {
-            // A click without a drag deselects, as anywhere else with the lasso.
             _session.Deselect();
+            SelectionChanged();
         }
-        SelectionChanged();
         return;
     }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();

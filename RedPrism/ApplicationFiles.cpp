@@ -543,6 +543,13 @@ bool Application::ExecuteHostInput() noexcept
                 if (FAILED(_hostExecutionError))
                     _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
             }
+            else if constexpr (std::is_same_v<Input, HostSelectionMoveClickInput>)
+            {
+                _hostAfterPrerequisite = HostStage::SelectionMoveFollowup;
+                _hostExecutionError = StartSelectionMoveClose(value.opening, false);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
             else if constexpr (std::is_same_v<Input, HostToolInput>)
             {
                 OnTool(value.tool);

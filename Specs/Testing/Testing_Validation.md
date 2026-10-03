@@ -371,15 +371,27 @@ every raster's final reference; window-message/zoom controls establish no timing
 and six-profile native runs, with the retained failed native r1, are recorded in
 [`SelectionMoveHost_2026-10-03.md`](../TestRuns/SelectionMoveHost_2026-10-03.md). Remaining callers and G1 stay open.
 
-`selection-move-caller.*` adds 276 unique assertions across 49 modes in the full 51-stage Application suite.
+`selection-move-caller.*` adds 276 unique assertions across 49 modes, retained in the full Application suite.
 Real changed/same tool and tool-command inputs, all 27 End-before-command refusal routes, capture loss,
 selected Undo/Redo, Select All/Deselect ordering and younger Undo bind the event-time opening. Held workers
 prove stopped late samples, pending receipt/reservation ownership, nested title/depth, actual budget/allocation
 refusal and retry, reached worker failure and equal-geometry reopen refusal before capture. Exact unique
 names and source/runtime stage order must match the independently archived private proof in every x64 suite.
 Six fresh native profiles and immutable source/product/evidence archival are recorded in
-[`SelectionMoveCallers_2026-10-03.md`](../TestRuns/SelectionMoveCallers_2026-10-03.md). No-move/header/close and
+[`SelectionMoveCallers_2026-10-03.md`](../TestRuns/SelectionMoveCallers_2026-10-03.md). Remaining header/close and
 coexisting-edit policies, heavy dependent actions and measured G1 remain separate requirements.
+
+`selection-move-followup.*` adds 84 unique assertions across 16 modes through actual zero-offset pointer
+release, with the complete 52-stage Application order. Exact private and native PASS names/summary and
+source/runtime stage order must match; retain caller 276/49, close 242/31, selection 162 and wand 86/16 checks.
+Literal geometry/Undo, event-time press point/settings/AA, same-ordinal End/selection gates, younger tool/Undo
+order, no-op/redo, nested title/depth, reached capture/worker/admission failure and real cancellation at either
+phase must qualify. Refusal freezes samples and retry preserves the opening; equal-geometry reopening refuses
+before capture. A live deferred-panel fixture retains its original selection clip on the existing caller route.
+The held follow-up processes Zoom and an actual posted window message before release; this is a structural
+control, with no timing threshold. All Layers/coexisting publication, remaining headers/close and measured G1
+stay separate. Actual qualification and retained failed attempts are recorded in
+[`SelectionMoveFollowups_2026-10-03.md`](../TestRuns/SelectionMoveFollowups_2026-10-03.md).
 
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
@@ -575,6 +587,15 @@ targets. Every high displacement byte is tested independently; malformed opcodes
 overlapping/mismatched rows, incorrect metadata/end/targets and an unrelated later symbol refuse the data proof.
 Adjacent real VEX remains a violation while all eleven DWORD data rows are still recognized. Recheck the exact
 archived failing image before rebuilding, with the runtime allowlist and executable/runtime/tier counts preserved.
+
+The ASan `std::variant` visit switch additionally has 73 QWORD-stack/RAX-base controls: four valid tables and
+69 refusals. The seven contiguous CMP/JA/LEA/MOV/load/ADD/JMP rows require exact PE/listing agreement, equal
+full stack displacements, an unsigned bound 1…127, an exact image base, anonymous same-owner aligned data,
+an immediately preceding RET, an exact terminal procedure end, decoded body targets and a guarded fallback
+among those targets. Changed operands, guards, row boundaries, symbols, bounds, targets and incoming direct
+edges into the guard interior or table from elsewhere in the procedure refuse. Adjacent executable VEX stays
+a violation. Reparse the original failing ASan image and retained Release image before rebuilding, keep all
+57 RDI controls and the existing runtime allowlist: [proof](../TestRuns/IsaQwordStackRax_2026-10-03.md).
 
 The Release clipboard status switch additionally has 91 AL-guard controls. Its exact contiguous MOVZX EAX from
 RSI+disp32, CMP AL/unsigned JA, RDX image-base/load/ADD/JMP rows require matching PE bytes and decoded listing.

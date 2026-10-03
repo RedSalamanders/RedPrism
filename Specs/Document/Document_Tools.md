@@ -344,9 +344,17 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   the outline active cancels and consumes the input; younger Undo after an older successful End restores its
   completed history entry. Capture loss closes the moved outline through the owned producer. A replaced
   opening is refused before unrelated settlement/capture, and failure runs no dependent action.
-  The retirement observation covers the prepared aggregate, not each raster's final reference. No-move
-  Deselect/New wand follow-ups, remaining headers, coexisting edits and replacement/close still require
-  separate owned migration; Save/Export/Enter preserve their live outline behavior. End-before-action
+  An eligible zero-offset release retains End and Deselect, or active-layer New wand at the original press
+  point, in one noncoalescing typed request. It binds the opening and event-time wand settings/AA, validates
+  before unrelated settlement/capture, and keeps the selected ordinal through both acknowledged workers.
+  Younger writers cannot pass either phase. Failure before End runs no dependent action; failure/cancellation
+  after acknowledged End preserves the completed closure and publishes no dependent selection/history.
+  Admission refusal stops pointer samples without a synchronous fallback. A coexisting pending edit or
+  All Layers keeps its current caller policy until separately migrated; the typed settled route refuses
+  those states before End. Enclosing history name/depth and true no-op/redo semantics remain unchanged.
+  The retirement observation covers the prepared aggregate, not each raster's final reference. Remaining
+  headers, coexisting edits and replacement/close still require separate owned migration; Save/Export/Enter
+  preserve their live outline behavior. End-before-action
   classification does not migrate its dependent geometry/pixel work. Graph capture/accounting costs,
   broader selection kernels and measured G1 remain separate requirements.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the

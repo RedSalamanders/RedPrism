@@ -248,6 +248,7 @@
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCallerSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionMoveFollowupSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCommandSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
     <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />

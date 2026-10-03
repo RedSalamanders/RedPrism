@@ -5,6 +5,7 @@
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "SelectionCommandWork.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 
@@ -96,6 +97,27 @@ ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
     return receipt;
 }
 
+bool Application::CanQueueSelectionMoveClick() const noexcept
+{
+    // Match the settled selection factory's gesture exclusions while this outline is still open.
+    return !_session.HasColorEdit() && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
+           !_session.PendingBrush() && !_session.PendingWarp() && !_session.PendingPixelMove() &&
+           !_session.PendingShape() && !_session.PendingLasso();
+}
+
+ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept
+{
+    // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
+    DropDrag<OutlineDrag>();
+    const auto opening = _session.SelectionMoveOpening();
+    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
+                         : wand && wand->settings.sampleAllLayers
+                             ? ContinuationReceipt::Failure(E_INVALIDARG)
+                             : QueueHostInput(HostSelectionMoveClickInput{opening.value(), wand});
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
 bool Application::SelectionMoveEndCommand(int command) noexcept
 {
     switch (command)
@@ -170,6 +192,8 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
         tool->selectionMoveOpening = _session.SelectionMoveOpening();
     if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
         DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
+    if (std::holds_alternative<HostSelectionMoveClickInput>(input))
+        DropDrag<OutlineDrag>();
     try
     {
         auto owned = HostRequest::TryCreate(input, _hostInputBudget, _hostAdmissionAllocationFailureForTest);
@@ -410,6 +434,21 @@ void Application::RunHostContinuation() noexcept
                 // Closing this exact gesture must not implicitly settle a coexisting color/shape edit.
                 _hostStage = HostStage::Execute;
                 break;
+            }
+            if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(click->opening) || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (click->wand && click->wand->settings.sampleAllLayers)
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // Preserve the reference's enclosing transaction through End and its dependent action.
             }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->draft.kind == SizeCardKind::NewCanvas)
@@ -869,6 +908,28 @@ void Application::RunHostContinuation() noexcept
             if (_selectionMoveCloseTicket)
                 return;
             _hostStage = _hostAfterPrerequisite;
+            break;
+        }
+        case HostStage::SelectionMoveFollowup:
+        {
+            const auto* click = std::get_if<HostSelectionMoveClickInput>(&input);
+            if (!click || _session.IsMovingSelection())
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            const auto result = click->wand ? StartWandLayerSelection(click->wand.value())
+                                            : StartSelectionCommand(SelectionCommandKind::Deselect);
+            if (FAILED(result))
+            {
+                _prompts->PostNotice(_window.get(), kNoticeMessage,
+                                     click->wand ? IDS_ERROR_WAND_MEMORY : IDS_ERROR_SELECTION_EDIT);
+                FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (_hostCommitStamp || _historyWork.Busy())
+                return;
+            _hostStage = HostStage::Complete;
             break;
         }
         case HostStage::Execute:

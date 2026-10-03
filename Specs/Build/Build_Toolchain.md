@@ -364,6 +364,18 @@ table start; all existing
 decoded-target and table-bound checks apply. Corrupted registers, sequences, symbols, targets, and real vector
 instructions beside the table remain refused. This adds no object/function runtime exemption.
 
+The separately observed ASan QWORD-stack/RAX terminal form requires exactly seven contiguous instructions:
+`CMP qword [RSP+disp32],imm8; JA rel32; LEA RAX,imagebase; MOV RCX,[RSP+disp32];
+MOV ECX,[RAX+4*RCX+tableRva]; ADD RCX,RAX; JMP RCX`. Both full stack displacements must agree and the unsigned
+bound must be 1…127. All seven rows must match the PE bytes and decoded boundaries without overlap. The aligned
+table starts at an anonymous same-owner untyped PDB data record; max+1 DWORDs end exactly at its owning
+procedure's end, with no interior same-owner data record. A decoded single-byte RET immediately precedes it.
+Every target is a decoded body boundary in that procedure before the table and outside the protected guard/
+dispatch; the guarded fallback must be among them. Direct branches/calls elsewhere in that procedure cannot
+enter the protected interior or the table. Missing or changed proof evidence leaves the bytes subject to the
+ordinary ISA gate; real vector code adjacent to the table remains gated. The runtime allowlist is unchanged
+([73-control proof and unchanged-image rechecks](../TestRuns/IsaQwordStackRax_2026-10-03.md)).
+
 The observed Release variant form loads a signed byte into RAX from RBP+disp8 or RBP+disp32 immediately before
 LEA RCX of image base. Only `48 0F BE 45 <disp8>` or `48 0F BE 85 <disp32>` proves that index; a different
 destination, REX prefix, frame base, SIB or load width does not. Its DWORD load can point exactly one entry after

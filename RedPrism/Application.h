@@ -358,6 +358,8 @@ class Application final : public ChromeEvents
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveClose(bool cancel) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept;
+    [[nodiscard]] bool CanQueueSelectionMoveClick() const noexcept;
     enum class SelectionMoveClosePolicy : std::uint8_t
     {
         Preserve,
@@ -470,6 +472,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartSelectionMoveClose(std::uint64_t opening, bool cancel) noexcept;
     int RunSelectionMoveCloseSelfTest() noexcept;
     int RunSelectionMoveCallerSelfTest() noexcept;
+    int RunSelectionMoveFollowupSelfTest() noexcept;
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
@@ -866,6 +869,7 @@ class Application final : public ChromeEvents
         TransformDiscard,
         Write,
         SelectionMoveSettle,
+        SelectionMoveFollowup,
         Execute,
         FileComplete,
         Complete

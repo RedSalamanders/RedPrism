@@ -72,6 +72,11 @@ struct HostSelectionMoveCloseInput final
     std::uint64_t opening;
     bool cancel;
 };
+struct HostSelectionMoveClickInput final
+{
+    std::uint64_t opening;
+    std::optional<HostWandLayerNewInput> wand; // absent means Deselect; retain the click's point/settings/AA
+};
 struct HostToolInput final
 {
     EditorTool tool;
@@ -193,7 +198,8 @@ using HostRequestInput =
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
-                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput>;
+                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
+                 HostSelectionMoveClickInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);
