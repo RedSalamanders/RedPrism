@@ -18,6 +18,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.
 & (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaQwordPaddingTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }

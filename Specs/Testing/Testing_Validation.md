@@ -683,6 +683,14 @@ edges into the guard interior or table from elsewhere in the procedure refuse. A
 a violation. Reparse the original failing ASan image and retained Release image before rebuilding, keep all
 57 RDI controls and the existing runtime allowlist: [proof](../TestRuns/IsaQwordStackRax_2026-10-03.md).
 
+The exact QWORD terminal-padding extension has 113 additional parser controls: four accepted tables and 109
+refusals. RET plus the exact three-byte alignment NOP, the complete contiguous PE-matched body, every table/
+default target, and known direct edges into padding/table/guard are checked independently. Missing, unknown,
+overlapping, duplicate or changed body/terminal rows refuse. Valid tables remain paired with real adjacent
+VEX code that must fail. Keep the eleven preceding parser assertion multisets and runtime allowlist unchanged;
+reparse all four original archived image/PDB pairs before rebuilding
+([proof and preserved fixture failures](../TestRuns/IsaQwordPadding_2026-10-03.md)).
+
 The Release R9 byte-switch form additionally has 108 parser controls (8 accepted, 100 refused). The exact
 CMP R9B/unsigned JA, RDX image-base, R9-indexed DWORD load, ADD/JMP, aligned anonymous same-owner data and
 terminal procedure end must agree. All decoded body rows and the RET/CALL/INT3/NOP tail match PE bytes;

@@ -1,7 +1,11 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
-Execution paused by the user on 2026-10-03. Source, partial validation and the next steps are preserved in the
-[resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md). Do not restart until explicitly resumed.
+Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
+remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,
+independent control/source verification and a 630-input/23,526-evidence immutable archive. The exact QWORD-switch
+padding repair passes 113 new controls, all preceding suites and four unchanged images with the allowlist unchanged.
+Current work is eligible New, window close and noncritical session-end outline closure. Its source and real-producer
+literals are prepared; private build/runtime and native qualification remain required. P1/G1 remains open.
 
 ## Implementation checklist
 
@@ -246,16 +250,17 @@ Execution paused by the user on 2026-10-03. Source, partial validation and the n
   All six profiles pass at `2026-10-03T11:05:34.9785354+00:00`; independent verification and immutable archival
   retain 627 inputs/23,056 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
   `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. This also qualifies the shared size guard.
-- [ ] Eligible Close Project outline closure — S3b1b1b1c prepares the same prompt-aware close/save/lifecycle
-  ordering without a size card. The separate 513-source seed has two literal and 46 fault/order/admission cases;
-  primary corrects the cheaper-agent literals and qualifies 473 unchanged counterparts. Private r1 Debug Rebuild
-  and full 61-stage WARP pass against 641 frozen inputs: 14 literal and 477 fault/order assertions.
-  Its qualified immutable archive retains 641 inputs/218 evidence files at `2026-10-03T11:28:12.1916372+00:00`
-  ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). Nine byte-identical native activations
-  and independent preflight pass; PID 37776 starts the six-profile matrix at
-  `2026-10-03T11:40:21.3075606+00:00`, freezing 629 inputs. P1/G1 remain open.
-  User pause stops this matrix during ARM64 Release; only ARM64 ASan Debug completed. Actual interrupted exit 1
-  is retained at `2026-10-03T11:45:34.9856264+00:00`. Full native qualification remains open.
+- [x] Eligible Close Project outline closure — S3b1b1b1c qualifies prompt-aware Cancel/Discard/Save and current-only
+  close/save/lifecycle ordering, with no size card or coexisting edit. Full private and native suites retain
+  14 literal assertions/two modes and 477 fault/order assertions/46 modes, all predecessor controls and 61
+  ordered application stages. Native r3 passes all six profiles; independent verification and immutable archival
+  retain 630 inputs/23,526 evidence files at `2026-10-03T14:18:25.4242700+00:00`, completion
+  `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`
+  ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). Original pause and ISA failure remain
+  archived; the exact padding repair retains 113 new parser controls with the allowlist unchanged.
+- [ ] Eligible New/window/session outline closure — S3b1b1b1d source prepares current-only opening/generation
+  checks, six independent real-producer literals and 127 fault/order/admission modes. Actual private and native
+  qualification remain required ([candidate](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

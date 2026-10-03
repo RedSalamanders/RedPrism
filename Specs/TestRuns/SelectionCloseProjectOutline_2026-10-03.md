@@ -83,3 +83,53 @@ Source and partial evidence are preserved for a new complete attempt; see the
 [resume checkpoint](UiNeverBlocksPause_2026-10-03.md).
 The immutable interrupted archive completes at `2026-10-03T11:55:11.3382133+00:00`, retaining 629 inputs/26,193
 evidence files, completion `FD5DAE460AA64F51CDCFC4FA9AD61871103FD665463A5483B44E3D5900FF2F11`.
+
+## Native r2 resumed; ISA failure before runtime
+
+The user resumes execution. The resume helper verifies every source/evidence copy of the interrupted archive,
+all 629 unchanged compiler inputs, the nine existing activations and the qualified private/native/ISA prerequisites.
+Independent preflight passes. Durable hidden matrix PID 45164 starts at `2026-10-03T12:20:30.0519681+00:00`.
+Skills and formatting pass; all three ARM64 configurations rebuild successfully. The x64 ASan image links,
+then the ISA gate rejects `0x140855ecc` as `cmpgexadd`. The matrix returns actual exit 1 at
+`2026-10-03T12:30:23.5883091+00:00`; no x64 application runtime or later x64 configuration runs.
+
+PE/listing/PDB inspection identifies an anonymous 65-entry DWORD table in the same `std::_Variant_raw_visit1`
+procedure, dispatched by an unsigned QWORD-stack guard with RAX image base and RCX target. Its RET at
+`0x140855e68` is followed by the exact alignment NOP `0f 1f 00`; the table starts at `0x140855e6c`.
+The existing exact QWORD proof requires RET immediately before the table. A separate source-only candidate
+will prove both decoded terminal rows, the complete padded procedure body, every target and incoming direct
+transfer. The runtime allowlist remains unchanged. Failed image SHA-256:
+`E800D8FF8CA261663A3803D3DDF334FCCABCE02BFC81609C43407A83A53C6D7D`; PDB:
+`BBF98BB35620833AE992DA6E3771D5BD3B172A8C6AB01AB0C6AAC58100273786`.
+
+- [x] Record the actual failure and inspect the unchanged PE/listing/PDB.
+- [x] Finish immutable failed-attempt archival before activation or retry: 629 inputs/26,394 evidence files,
+  completed `2026-10-03T12:42:32.8521514+00:00`, completion
+  `698544D4BCD20C2F6EE727D817D4105C8DCE1C911E66CC4A6836F8746081D8CC`.
+- [x] Qualify the exact padding proof, independent parser controls and unchanged failed images:
+  all 113 new controls, eleven retained parser suites and four unchanged images pass; exact archive and
+  independent verification precede activation ([proof](IsaQwordPadding_2026-10-03.md)).
+- [x] Re-run and independently verify the full native matrix before completing this slice.
+
+## Native r3 started after exact repair proof
+
+Independent padding-proof verification checks all 20 inputs/22,425 evidence copies and the four unchanged
+images before activating exactly the scanner, registration script and new parser suite. All nine Close Project
+source activations remain unchanged. Fresh preflight checks the qualified private/native predecessors and
+471 unchanged compiler counterparts. Hidden matrix PID 93628 starts at `2026-10-03T13:34:35.7344420+00:00`;
+the matrix freezes 630 inputs and requires all six fresh profiles, including the exact 113 new parser controls
+in every full x64 suite. ARM64 ASan Debug, Release and Debug pass. Full x64 ASan passes at
+`2026-10-03T13:55:16.6541411Z`; full Release passes at `2026-10-03T14:00:32.8124910Z`.
+Debug passes, and the actual matrix returns exit 0 at `2026-10-03T14:07:35.1376140+00:00`.
+Independent verification passes at `2026-10-03T14:12:48.5152872+00:00`: all six profiles, all retained core/host
+control multisets, 14 literal checks/two modes, 477 fault checks/46 modes, the 113 new ISA controls and the
+61 source-ordered application stages match. All 24 native image/PDB products are fresh and bound by hash/length.
+
+Immutable qualified archive `p1-selection-closeproject-outline-native-r3-qualified` retains 630 inputs and
+23,526 evidence files at `2026-10-03T14:18:25.4242700+00:00`.
+Completion: `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`.
+Source manifest: `7C7A4E29CF6FCBA4509928FC67C4758F00471E7BA13237126820C1B9D908FD5E`.
+Evidence manifest: `39E5EA04658EECB7D8DA73E1853151913DC578A90BF719C971F0DD8DB92DAC7F`.
+Every archived copy is checked against its source hash and byte length. Original interruptions and failures
+remain preserved. This qualifies S3b1b1b1c's eligible Close Project path; broader coexisting edits, geometry,
+metadata/history, native ARM64 runtime and measured G1 remain open.

@@ -369,12 +369,19 @@ The separately observed ASan QWORD-stack/RAX terminal form requires exactly seve
 MOV ECX,[RAX+4*RCX+tableRva]; ADD RCX,RAX; JMP RCX`. Both full stack displacements must agree and the unsigned
 bound must be 1…127. All seven rows must match the PE bytes and decoded boundaries without overlap. The aligned
 table starts at an anonymous same-owner untyped PDB data record; max+1 DWORDs end exactly at its owning
-procedure's end, with no interior same-owner data record. A decoded single-byte RET immediately precedes it.
+procedure's end, with no interior same-owner data record. A decoded single-byte RET immediately precedes it,
+or is followed by exactly one decoded `0f 1f 00` alignment NOP immediately before the table. In the padded form,
+both terminal rows and every procedure-body row before the table must be known, contiguous, nonoverlapping and
+byte-identical to the PE. Table/default targets cannot enter the padding. Direct transfers, including LOOP-family
+and legacy-prefixed branches/calls, cannot enter the padding/table or protected guard interior from elsewhere.
 Every target is a decoded body boundary in that procedure before the table and outside the protected guard/
 dispatch; the guarded fallback must be among them. Direct branches/calls elsewhere in that procedure cannot
 enter the protected interior or the table. Missing or changed proof evidence leaves the bytes subject to the
 ordinary ISA gate; real vector code adjacent to the table remains gated. The runtime allowlist is unchanged
 ([73-control proof and unchanged-image rechecks](../TestRuns/IsaQwordStackRax_2026-10-03.md)).
+The padded extension retains those controls and all other predecessor parser suites; 113 additional controls
+and four unchanged archived images pass the [terminal-padding proof](../TestRuns/IsaQwordPadding_2026-10-03.md).
+Native qualification remains separately required for its activation.
 
 The observed Release variant form loads a signed byte into RAX from RBP+disp8 or RBP+disp32 immediately before
 LEA RCX of image base. Only `48 0F BE 45 <disp8>` or `48 0F BE 85 <disp32>` proves that index; a different

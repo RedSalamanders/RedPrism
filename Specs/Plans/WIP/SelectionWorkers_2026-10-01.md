@@ -1,9 +1,15 @@
 # Ordered selection workers (P1.6)
 
-Execution paused by the user on 2026-10-03. See the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md).
-No agent or build remains active; the current Close Project native qualification is incomplete.
+Execution resumed by the user on 2026-10-03. The saved [checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
+retains the interruption. Close Project native r3 qualifies all six profiles, with actual exit 0 at
+`2026-10-03T14:07:35.1376140+00:00`. Independent verification and immutable archival pass against 630 inputs and
+23,526 evidence files, completion `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`.
+The exact QWORD padding proof preserves all prior controls and the allowlist; original failures remain archived.
+Current step: S3b1b1b1d — eligible New, window close and noncritical session end with a live outline. Its isolated
+source and reviewed real-producer literals are prepared; actual private compilation/runtime and native
+qualification remain required. Broader P1/G1 remains open.
 
-Current step: S3b1b1b1c Close Project with a live outline. New Canvas and the shared size opacity/Crop correction
+Qualified step: S3b1b1b1c Close Project with a live outline. New Canvas and the shared size opacity/Crop correction
 qualify in all six fresh profiles; independent verification and immutable archival retain 627 inputs/23,056
 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
 `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. The separate Close Project candidate
@@ -64,6 +70,11 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
   - [x] S0a — Select All/Deselect use no Clipper or pixel output: account complete record/history capture,
     four-point result and retirement using the existing conservative history bounds. H2/H3 traversal stays open.
   - [ ] S0b — Boolean/offset/source geometry requires its own proved capacity and cancellation contract below.
+    - [x] Verify the resolved Clipper2 2.0.1 call chain and immutable legacy tuples for Inverse/Expand/Contract.
+      Primary checks the cheaper-agent inventory against the installed package and operation/test sources.
+      Difference, offset's preliminary/cleanup Union and final canvas Intersect require separate peak accounting;
+      stable-sort temporary buffers and the priority-queue backing storage also require coverage. This is source
+      evidence only; no capacity bound, cancellation deadline or worker migration is qualified by the inventory.
 - [ ] S1 — Prepare Select All, Deselect, Inverse, Expand and Contract geometry and complete history publication
   off owner; immutable authority and nonthrowing apply/retirement. Preserve nullopt versus explicit empty and AA.
   - [x] S1a — Sealed Select All/Deselect input/publication and 127 independent preparation checks qualify in all configurations.
@@ -365,7 +376,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
                 at `2026-10-03T10:36:27.9675830+00:00`, freezing 627 inputs.
                 All six profiles and exact immutable archival now qualify at
                 `2026-10-03T11:14:26.1987889+00:00` (627 inputs/23,056 evidence files).
-            - [ ] S3b1b1b1c — Eligible Close Project with a live outline and no coexisting edit preserves the
+            - [x] S3b1b1b1c — Eligible Close Project with a live outline and no coexisting edit preserves the
               Save/Discard/Cancel prompt. Cancel keeps the exact live outline/local drag/history/path; Discard
               acknowledges worker Cancel before close, and Save acknowledges End and original-document write
               before close. One selected ordinal owns all phases, with current-only publication and retirement.
@@ -381,13 +392,23 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
                 exit 0 at `2026-10-03T11:21:36.3289326+00:00`, freezing 641 inputs. The full 61-stage WARP run returns
                 actual exit 0 at `2026-10-03T11:27:01.2532823+00:00`; 14 literal and 477 fault/order assertions pass.
                 Immutable archival retains 641 inputs/218 evidence files at `2026-10-03T11:28:12.1916372+00:00`.
-              - [ ] Activate byte-identical sources, qualify all six fresh profiles, archive, update and commit/push.
+              - [x] Activate byte-identical sources, qualify all six fresh profiles and independently archive.
                 Independent preflight passes; native r1 PID 37776 starts at
                 `2026-10-03T11:40:21.3075606+00:00` against 629 frozen inputs.
                 The user stops r1 during ARM64 Release, after ARM64 ASan Debug passes. Actual matrix exit 1 is
                 retained at `2026-10-03T11:45:34.9856264+00:00`; full native qualification remains required.
                 Interrupted archival retains 629 inputs/26,193 evidence files at
                 `2026-10-03T11:55:11.3382133+00:00`. A new complete native attempt is required on resume.
+                Resumed r2 passes every ARM64 cross-build, then fails the x64 ASan linked ISA gate before runtime
+                at `2026-10-03T12:30:23.5883091+00:00`. Exact 629 inputs/26,394 evidence files are archived before
+                repair. The exact RET/NOP QWORD-table proof passes 113 new controls, all retained suites and
+                four unchanged failed images; immutable proof archival and independent verification pass.
+                Native r3 preflight retains 471 unchanged counterparts and the exact nine host activations.
+                PID 93628 starts the fresh 630-input matrix at `2026-10-03T13:34:35.7344420+00:00`
+                ([record](../../TestRuns/IsaQwordPadding_2026-10-03.md)).
+                All six profiles pass at `2026-10-03T14:07:35.1376140+00:00`; independent verification passes and
+                immutable archival retains 630 inputs/23,526 evidence files at
+                `2026-10-03T14:18:25.4242700+00:00`. This completes the eligible Close Project functional slice.
             - [ ] S3b1b1b1d — Eligible default New, window close and noncritical session-end inputs preserve the
               prompt and acknowledge outline Cancel for Discard or End before Save. Reuse the same selected
               ordinal and editor/opening authority; a cancelled session generation cannot publish closure or
@@ -397,6 +418,10 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
                 six independent literal New/window-close/session-end Discard/Cancel cases.
               - [ ] Review source-only code and tests; compile only after actual Close Project native qualification
                 and immutable archive. Preserve any failure before correction.
+                Primary review completes the six literal and 127 fault/order/admission modes, registers 63
+                application stages and replaces simulated younger cancellation with the actual continuation
+                stop/unregister boundary. Primary corrects static helper lookup in the two external worker
+                classes. No candidate compiler has run ([record](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
               - [ ] Qualify full private and all six fresh native profiles, archive, update contracts and commit/push.
             - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
               cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.

@@ -405,10 +405,22 @@ namespace RedPrismBuild
             foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
                 if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
             int tableRaw = checked((int)Offset(tableRva, sections, pe.Length));
-            if (tableRaw > pe.Length - checked((int)(end - begin)) || begin < imageBase + 1 ||
-                !guardRows.TryGetValue(begin - 1, out byte[] terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
-                !MatchesDecodedPe(pe, sections, imageBase, begin - 1, terminal, contributions, decoded, decodedStarts))
-                return null;
+            if (tableRaw > pe.Length - checked((int)(end - begin)) || begin < imageBase + 1) return null;
+            ulong returnAddress = begin - 1;
+            if (!guardRows.TryGetValue(returnAddress, out byte[] terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
+                !MatchesDecodedPe(pe, sections, imageBase, returnAddress, terminal, contributions, decoded, decodedStarts))
+            {
+                // MSVC also emits RET followed by exactly this three-byte alignment NOP. Both rows must
+                // be decoded, nonoverlapping and byte-identical to the PE; no arbitrary tail is skipped.
+                if (begin < imageBase + 4 ||
+                    !guardRows.TryGetValue(begin - 4, out terminal) || terminal.Length != 1 || terminal[0] != 0xc3 ||
+                    !MatchesDecodedPe(pe, sections, imageBase, begin - 4, terminal, contributions, decoded, decodedStarts) ||
+                    !guardRows.TryGetValue(begin - 3, out byte[] padding) || padding.Length != 3 ||
+                    !StartsWith(padding, 0x0f, 0x1f, 0x00) ||
+                    !MatchesDecodedPe(pe, sections, imageBase, begin - 3, padding, contributions, decoded, decodedStarts))
+                    return null;
+                returnAddress = begin - 4;
+            }
             foreach (Function procedure in procedures)
             {
                 if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
@@ -420,32 +432,60 @@ namespace RedPrismBuild
                 for (uint entry = 0; entry <= maximum && valid; ++entry)
                 {
                     ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * entry))));
-                    valid = target >= procedure.Begin && target < begin && (target < prefix || target >= afterJump) &&
+                    valid = target >= procedure.Begin && target <= returnAddress && (target < prefix || target >= afterJump) &&
                             IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts);
                     table.Targets.Add(target);
                 }
                 if (!valid || !table.Targets.Contains((ulong)fallback)) continue;
                 int first = decodedStarts.BinarySearch(procedure.Begin);
+                ulong nextAddress = procedure.Begin;
+                bool padded = returnAddress != begin - 1;
                 for (int i = first; i >= 0 && i < decodedStarts.Count && decodedStarts[i] < begin; ++i)
                 {
                     ulong address = decodedStarts[i];
                     DecodedInstruction instruction = decoded[address];
+                    if (padded)
+                    {
+                        if (address != nextAddress || instruction.Unknown || instruction.Module != owner.Module ||
+                            instruction.Length <= 0 || instruction.Length > 15 || address + (ulong)instruction.Length > begin ||
+                            !guardRows.TryGetValue(address, out byte[] bodyRow) || bodyRow.Length != instruction.Length ||
+                            !MatchesDecodedPe(pe, sections, imageBase, address, bodyRow, contributions, decoded, decodedStarts))
+                        { valid = false; break; }
+                        nextAddress = address + (ulong)instruction.Length;
+                    }
                     if (instruction.Unknown || instruction.Module != owner.Module) continue;
                     int source = checked((int)Offset(checked((uint)(address - imageBase)), sections, pe.Length));
                     if (source > pe.Length - instruction.Length) { valid = false; break; }
+                    int opcodeOffset = 0;
+                    if (padded)
+                        while (opcodeOffset < instruction.Length && (IsLegacyPrefix(pe[source + opcodeOffset]) ||
+                               (pe[source + opcodeOffset] >= 0x40 && pe[source + opcodeOffset] <= 0x4f))) ++opcodeOffset;
+                    if (opcodeOffset == instruction.Length) continue;
+                    byte opcode = pe[source + opcodeOffset];
                     long target;
-                    if (instruction.Length == 2 && (pe[source] == 0xeb || (pe[source] >= 0x70 && pe[source] <= 0x7f)))
-                        target = (long)address + 2 + unchecked((sbyte)pe[source + 1]);
-                    else if (instruction.Length == 5 && (pe[source] == 0xe9 || pe[source] == 0xe8))
-                        target = (long)address + 5 + BitConverter.ToInt32(pe, source + 1);
-                    else if (instruction.Length == 6 && pe[source] == 0x0f && pe[source + 1] >= 0x80 && pe[source + 1] <= 0x8f)
-                        target = (long)address + 6 + BitConverter.ToInt32(pe, source + 2);
+                    if (opcode == 0xeb || (opcode >= 0x70 && opcode <= 0x7f) ||
+                        (padded && opcode >= 0xe0 && opcode <= 0xe3))
+                    {
+                        if (instruction.Length != opcodeOffset + 2) { valid = false; break; }
+                        target = (long)address + instruction.Length + unchecked((sbyte)pe[source + opcodeOffset + 1]);
+                    }
+                    else if (opcode == 0xe9 || opcode == 0xe8)
+                    {
+                        if (instruction.Length != opcodeOffset + 5) { valid = false; break; }
+                        target = (long)address + instruction.Length + BitConverter.ToInt32(pe, source + opcodeOffset + 1);
+                    }
+                    else if (opcode == 0x0f && opcodeOffset + 1 < instruction.Length &&
+                             pe[source + opcodeOffset + 1] >= 0x80 && pe[source + opcodeOffset + 1] <= 0x8f)
+                    {
+                        if (instruction.Length != opcodeOffset + 6) { valid = false; break; }
+                        target = (long)address + instruction.Length + BitConverter.ToInt32(pe, source + opcodeOffset + 2);
+                    }
                     else continue;
                     if ((target > (long)prefix && target < (long)afterJump &&
                          (address < prefix || address >= afterJump)) ||
-                        (target >= (long)begin && target < (long)end)) { valid = false; break; }
+                        (target > (long)returnAddress && target < (long)end)) { valid = false; break; }
                 }
-                if (valid) return table;
+                if (valid && (!padded || nextAddress == begin)) return table;
             }
             return null;
         }
@@ -1585,6 +1625,7 @@ namespace RedPrismBuild
             var r10BaseCandidates = new List<ulong>();
             var rdiBaseCandidates = new List<ulong>();
             var raxStackCandidates = new List<ulong>();
+            var raxPaddingBodyRanges = new List<InlineTable>();
             var r9ByteCandidates = new List<ulong>();
             var r9BodyRanges = new List<InlineTable>();
             foreach (string line in disassemblyLines)
@@ -1613,6 +1654,16 @@ namespace RedPrismBuild
                             {
                                 ulong table = checked(imageBase + BitConverter.ToUInt32(pe, at + 3));
                                 if (table > imageBase) rdxGuardCandidates.Add(table - 1);
+                                if (table >= imageBase + 4)
+                                {
+                                    rdxGuardCandidates.Add(table - 4);
+                                    rdxGuardCandidates.Add(table - 3);
+                                    int tableRaw = checked((int)Offset(checked((uint)(table - imageBase)), sections, pe.Length));
+                                    if (tableRaw >= 4 && StartsWithAt(pe, tableRaw - 4, 0xc3, 0x0f, 0x1f, 0x00))
+                                        foreach (Function procedure in procedures)
+                                            if (procedure.Begin <= address - 15 && procedure.End > table)
+                                                raxPaddingBodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = table });
+                                }
                             }
                         }
                         catch (InvalidDataException) { /* Unmapped candidate; no terminal row retained. */ }
@@ -1737,6 +1788,8 @@ namespace RedPrismBuild
                     // not millions of unrelated encodings. Each new proof checks actual PE bytes as well.
                     bool r9Body = false;
                     foreach (InlineTable range in r9BodyRanges)
+                        if (rowAddress >= range.Begin && rowAddress < range.End) { r9Body = true; break; }
+                    foreach (InlineTable range in raxPaddingBodyRanges)
                         if (rowAddress >= range.Begin && rowAddress < range.End) { r9Body = true; break; }
                     if (r9Body || (rowBytes.Length == 11 && rowBytes[0] == "81" && rowBytes[1] == "bc" && rowBytes[2] == "24") ||
                         (rowBytes.Length == 6 && rowBytes[0] == "0f" && rowBytes[1] == "87") ||
