@@ -5,9 +5,16 @@ retains the interruption. Close Project native r3 qualifies all six profiles, wi
 `2026-10-03T14:07:35.1376140+00:00`. Independent verification and immutable archival pass against 630 inputs and
 23,526 evidence files, completion `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`.
 The exact QWORD padding proof preserves all prior controls and the allowlist; original failures remain archived.
-Current step: S3b1b1b1d — eligible New, window close and noncritical session end with a live outline. Its isolated
-source and reviewed real-producer literals are prepared; actual private compilation/runtime and native
-qualification remain required. Broader P1/G1 remains open.
+Qualified step: S3b1b1b1d — eligible New, window close and noncritical session end with a live outline. Its isolated
+source and reviewed real-producer literals are prepared. Private r1's C4456 compiler failure is archived before
+repair; private r2 qualifies all 63 stages, 43 literal and 1,529 fault/order assertions. Independent verification
+and 645-input/220-evidence archival complete at `2026-10-03T14:44:56.6931963+00:00`, receipt
+`2A706D648A4051F62B3FB171A12482C35827145EEE07A0EAEE727378690739E9`. Native r1 qualifies all six profiles,
+independent verification and immutable 632-input/23,532-evidence archival at
+`2026-10-03T15:33:16.1738417+00:00`, completion
+`97C09D00D3CF1CD164BD0A3C11E6E0CAF1C12F7D4FA1BF210E66E7083D169E70`.
+Remaining selection work includes general geometry admission/cancellation, coexisting edits and gestures,
+all-layers sources and measured G1. Broader P1/G1 remains open.
 
 Qualified step: S3b1b1b1c Close Project with a live outline. New Canvas and the shared size opacity/Crop correction
 qualify in all six fresh profiles; independent verification and immutable archival retain 627 inputs/23,056
@@ -409,20 +416,29 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
                 All six profiles pass at `2026-10-03T14:07:35.1376140+00:00`; independent verification passes and
                 immutable archival retains 630 inputs/23,526 evidence files at
                 `2026-10-03T14:18:25.4242700+00:00`. This completes the eligible Close Project functional slice.
-            - [ ] S3b1b1b1d — Eligible default New, window close and noncritical session-end inputs preserve the
+            - [x] S3b1b1b1d — Eligible default New, window close and noncritical session-end inputs preserve the
               prompt and acknowledge outline Cancel for Discard or End before Save. Reuse the same selected
               ordinal and editor/opening authority; a cancelled session generation cannot publish closure or
               post a late window close. Observe the callback-safe posted close in the harness before teardown.
               - [x] Seed 515 exact sources from the qualified Close Project private r1 archive, separately from
                 frozen native sources. Primary owns production and fault/order tests; a cheaper agent drafts
                 six independent literal New/window-close/session-end Discard/Cancel cases.
-              - [ ] Review source-only code and tests; compile only after actual Close Project native qualification
+              - [x] Review source-only code and tests; compile only after actual Close Project native qualification
                 and immutable archive. Preserve any failure before correction.
                 Primary review completes the six literal and 127 fault/order/admission modes, registers 63
                 application stages and replaces simulated younger cancellation with the actual continuation
                 stop/unregister boundary. Primary corrects static helper lookup in the two external worker
-                classes. No candidate compiler has run ([record](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
-              - [ ] Qualify full private and all six fresh native profiles, archive, update contracts and commit/push.
+                classes. The first compiler rejects a shadowed Close Window local; all 645 inputs and 197 evidence
+                files are archived and independently verified before the isolated name correction. Fresh private
+                r2 runs against the qualified Close Project predecessor
+                ([record](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
+              - [x] Qualify and independently archive the full private run: 43 literal checks/six modes, 1,529
+                fault/order checks/127 modes and all 63 stages pass. Every archived hash/length and the exact
+                519-owned/126-external input partition are verified before native activation.
+              - [x] Qualify all six fresh native profiles, independent verification and exact archive: 632 inputs,
+                23,532 evidence files, 43 literal and 1,529 fault/order checks per full x64 run, all 63 stages.
+                Update the owning lifecycle contract; ARM64 is cross-build only.
+              - [x] Commit and push the qualified step.
             - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
               cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve

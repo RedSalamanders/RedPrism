@@ -192,6 +192,7 @@ struct HostDuplicateFinishInput final
 };
 struct HostNewInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostCloseProjectInput final
 {
@@ -199,11 +200,13 @@ struct HostCloseProjectInput final
 };
 struct HostCloseWindowInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostEndSessionInput final
 {
     std::uint64_t generation;
     std::int64_t reasons;
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 
 using HostRequestInput =

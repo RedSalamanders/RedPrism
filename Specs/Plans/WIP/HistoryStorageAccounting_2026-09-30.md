@@ -94,6 +94,21 @@
       cross-builds pass against 423 frozen inputs ([evidence](../../TestRuns/SelectionCommandPreparation_2026-10-01.md)).
       Production command/gesture routing and full metadata capture/accounting remain open.
   - [ ] H2 — Shared immutable document/history record handles and cached owned storage indexes; capture/restore must not copy 10,000 layer records on the owner.
+    - [ ] H2.2 — Immutable document record roots. Primary prepares the ownership API in a separate private
+      workspace while the selection lifecycle native matrix stays frozen. Capture/read must copy only a root
+      handle, including non-const reads; no mutable pointer or iterator exposes a published root. A private
+      builder owns all edits and seals a complete replacement before publication. Never mutate using use_count.
+      Independent tests must cover 10,000 records without capture copies, retained strings/storage owners,
+      old-root lifetime, reader concurrency, cancelled/failed cloning and retry. Native document integration,
+      complete reservation/retirement updates, all goldens and six profiles follow the privately qualified
+      foundation; full accounting and measured G1 remain separate gates.
+      - [x] Seed 519 exact owned inputs into `p1-document-record-roots-proof` and prepare the primary-owned
+        immutable root/exclusive builder API. No compiler or native activation has run
+        ([candidate](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
+      - [x] Review independent ownership/cancellation/concurrent-reader tests and register them privately.
+        Primary adds actual allocator faults for constructor/seal/clone and separate new-allocation-owner
+        lifetime controls, retaining standard allocation by default.
+      - [ ] Qualify the private foundation before document integration; no compiler/runtime result yet.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering

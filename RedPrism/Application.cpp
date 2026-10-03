@@ -2314,6 +2314,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCloseProjectFaultSelfTest\n");
     if (const int closeProjectFault = RunSelectionCloseProjectFaultSelfTest(); closeProjectFault != 0)
         return closeProjectFault;
+    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineLiteralSelfTest\n");
+    if (const int lifecycleOutlineLiteral = RunSelectionLifecycleOutlineLiteralSelfTest(); lifecycleOutlineLiteral != 0)
+        return lifecycleOutlineLiteral;
+    std::printf("BEGIN self-test.RunSelectionLifecycleOutlineFaultSelfTest\n");
+    if (const int lifecycleOutlineFault = RunSelectionLifecycleOutlineFaultSelfTest(); lifecycleOutlineFault != 0)
+        return lifecycleOutlineFault;
     std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
     if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
     {

@@ -181,11 +181,9 @@ class Application::SelectionMoveCloseJob final : public Job
         const bool sizeCurrent = !size || !size->selectionMoveOpening ||
                                  (size->invocation == _owner._sizeInvocation && _owner.SizeCardOpen() &&
                                   _owner.CanQueueSelectionSizeOutline());
-        const auto* close = _owner._activeHostRequest
-                                ? std::get_if<HostCloseProjectInput>(&_owner._activeHostRequest->input.Input())
-                                : nullptr;
-        const bool lifecycleCurrent =
-            !close || !close->selectionMoveOpening || _owner.CanQueueSelectionLifecycleOutline();
+        const bool ownsLifecycleOutline = _owner._activeHostRequest && _owner.SelectionLifecycleRequestOpening(
+                                                                           _owner._activeHostRequest->input.Input());
+        const bool lifecycleCurrent = !ownsLifecycleOutline || _owner.SelectionLifecycleOutlineCurrent();
         return !_owner._shutdownStarted && _owner._selectionMoveCloseStamp == _stamp && sizeCurrent &&
                lifecycleCurrent && _owner._historyWork.IsCurrent(_stamp) &&
                _owner._session.DocumentSerial() == _stamp.documentSerial &&

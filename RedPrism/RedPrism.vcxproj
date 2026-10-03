@@ -256,6 +256,8 @@
     <ClCompile Include="ApplicationSelectionNewCanvasFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCloseProjectLiteralSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCloseProjectFaultSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionLifecycleOutlineLiteralSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionLifecycleOutlineFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseSelfTest.cpp" />

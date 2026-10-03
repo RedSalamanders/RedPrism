@@ -115,6 +115,28 @@ bool Application::CanQueueSelectionLifecycleOutline() const noexcept
     return CanQueueSelectionSizeOutline() && !SizeCardOpen();
 }
 
+std::optional<std::uint64_t> Application::SelectionLifecycleRequestOpening(const HostRequestInput& input) noexcept
+{
+    if (const auto* close = std::get_if<HostCloseProjectInput>(&input))
+        return close->selectionMoveOpening;
+    if (const auto* replacement = std::get_if<HostNewInput>(&input))
+        return replacement->selectionMoveOpening;
+    if (const auto* close = std::get_if<HostCloseWindowInput>(&input))
+        return close->selectionMoveOpening;
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&input))
+        return ending->selectionMoveOpening;
+    return std::nullopt;
+}
+
+bool Application::SelectionLifecycleOutlineCurrent() const noexcept
+{
+    if (!_activeHostRequest || !CanQueueSelectionLifecycleOutline())
+        return false;
+    if (const auto* ending = std::get_if<HostEndSessionInput>(&_activeHostRequest->input.Input()))
+        return _endSessionPending && ending->generation == _endSessionGeneration;
+    return true;
+}
+
 ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept
 {
     // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
@@ -217,8 +239,8 @@ std::optional<std::uint64_t> Application::SelectionMoveRequestOpening(const Host
         return command->selectionMoveOpening;
     if (const auto* tool = std::get_if<HostToolInput>(&input))
         return tool->selectionMoveOpening;
-    if (const auto* close = std::get_if<HostCloseProjectInput>(&input))
-        return close->selectionMoveOpening;
+    if (const auto opening = SelectionLifecycleRequestOpening(input))
+        return opening;
     if (const auto* size = std::get_if<HostSizeApplyInput>(&input))
         return size->selectionMoveOpening;
     return std::nullopt;
@@ -259,6 +281,24 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
         close->selectionMoveOpening.reset();
         if (CanQueueSelectionLifecycleOutline())
             close->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* replacement = std::get_if<HostNewInput>(&input))
+    {
+        replacement->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            replacement->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* closingWindow = std::get_if<HostCloseWindowInput>(&input))
+    {
+        closingWindow->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            closingWindow->selectionMoveOpening = _session.SelectionMoveOpening();
+    }
+    else if (auto* ending = std::get_if<HostEndSessionInput>(&input))
+    {
+        ending->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline() && _endSessionPending && ending->generation == _endSessionGeneration)
+            ending->selectionMoveOpening = _session.SelectionMoveOpening();
     }
     if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
         DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
@@ -482,19 +522,19 @@ void Application::RunHostContinuation() noexcept
         const auto& input = active.input.Input();
         const auto* paths = std::get_if<HostPathsInput>(&input);
         const auto* newCanvas = std::get_if<HostSizeApplyInput>(&input);
-        const auto* closeProject = std::get_if<HostCloseProjectInput>(&input);
+        const auto lifecycleOpening = SelectionLifecycleRequestOpening(input);
         const bool ownsLifecycleOutline =
             (newCanvas && newCanvas->draft.kind == SizeCardKind::NewCanvas && newCanvas->selectionMoveOpening) ||
-            (closeProject && closeProject->selectionMoveOpening);
+            lifecycleOpening.has_value();
         if (ownsLifecycleOutline && _hostStage != HostStage::Complete)
         {
             // The prompt precedes closure. After closure, both save and replacement require it to stay closed.
             // A nested output dialog or worker wait can admit a newer edit without changing pixel generation.
             const bool needsOpening =
                 _hostStage != HostStage::Write && _hostStage != HostStage::Execute && _hostStage != HostStage::Complete;
-            const bool editorCurrent = closeProject ? CanQueueSelectionLifecycleOutline()
-                                                    : newCanvas->invocation == _sizeInvocation && SizeCardOpen() &&
-                                                          CanQueueSelectionSizeOutline();
+            const bool editorCurrent = lifecycleOpening ? SelectionLifecycleOutlineCurrent()
+                                                        : newCanvas->invocation == _sizeInvocation && SizeCardOpen() &&
+                                                              CanQueueSelectionSizeOutline();
             if (!editorCurrent || (needsOpening ? SelectionMoveRequestOpening(input) != _session.SelectionMoveOpening()
                                                 : _session.IsMovingSelection()))
             {

@@ -258,9 +258,12 @@ literals are prepared; private build/runtime and native qualification remain req
   `5245F52417F232AB52E4F33BE125474FFE5C54C0802975549C5DD3890AC54E53`
   ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). Original pause and ISA failure remain
   archived; the exact padding repair retains 113 new parser controls with the allowlist unchanged.
-- [ ] Eligible New/window/session outline closure — S3b1b1b1d source prepares current-only opening/generation
-  checks, six independent real-producer literals and 127 fault/order/admission modes. Actual private and native
-  qualification remain required ([candidate](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
+- [x] Eligible New/window/session outline closure — S3b1b1b1d private r2 passes all 63 stages, 43 literal
+  assertions/six real-producer routes and 1,529 fault/order assertions/127 modes. All 645 inputs and 220 evidence
+  files are independently verified and archived. All six native profiles and independent verification pass;
+  immutable archival retains 632 inputs/23,532 evidence files at `2026-10-03T15:33:16.1738417+00:00`, completion
+  `97C09D00D3CF1CD164BD0A3C11E6E0CAF1C12F7D4FA1BF210E66E7083D169E70`
+  ([candidate](../../TestRuns/SelectionLifecycleOutline_2026-10-03.md)).
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

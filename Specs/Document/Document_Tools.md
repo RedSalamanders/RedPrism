@@ -1296,6 +1296,42 @@ reservations retain captured and retired owners until off-owner disposal.
 Already coexisting lifecycle routes retain their existing policy until separately migrated. This functional
 boundary does not qualify constant-time metadata/history, native ARM64 runtime or measured G1 limits.
 
+### Eligible New, window close and session end with a live outline (P1.6 S3b1b1b1d)
+
+Default New, ordinary window close and noncritical session end with the original outline opening, no size card
+and no coexisting canvas, opacity or Crop edit retain their existing Save/Discard/Cancel prompt. Prompt Cancel
+preserves the current moved outline, local drag, document/path and exact post-gesture history/generation.
+Only a confirmed Save or Discard stops further outline samples.
+
+Discard acknowledges prepared outline Cancel before the dependent replacement or close. Save acknowledges
+prepared outline End before writing the captured original document; dependent replacement or window close
+requires successful save acknowledgement. The selected input keeps one ordinal and all request/path ownership
+through closure, save and the final action. Failure preserves already acknowledged phases and refuses the
+dependent action; no successful phase is replayed.
+
+Default New then uses the established saved 1280 by 800 blank-document replacement, New Canvas history and path
+clearing policy. A younger old-document Undo waits through replacement and becomes stale. Window and session
+close request one callback-safe posted WM_CLOSE after all acknowledgements. Actual continuation shutdown
+unregisters the input source, cancels retained younger inputs and refuses fresh input before ownership teardown.
+
+Before closure, the exact original outline opening and session/document authority must remain current.
+After closure, the outline must stay closed. Every owner stage and worker publication also checks the absence
+of a newly opened size card, color, opacity or Crop editor. A request cannot close or mutate a newer edit even
+when that edit has not changed pixel generation.
+
+Noncritical session end uses the ordinary WM_QUERYENDSESSION veto and generation-tagged deferred prompt.
+Admission, prompt return, every stage and publication require the same pending session-end generation.
+WM_ENDSESSION(FALSE) or a replaced generation prevents an unacknowledged closure and late window close;
+already acknowledged closure/save phases remain completed. Critical termination retains its existing policy.
+
+The normal full WARP self-test drives actual NewDocument, ordinary WM_CLOSE and WM_QUERYENDSESSION producers
+for Cancel/Discard. Its typed fault/order controls separately reach Save, capture/preparation/publication,
+allocation/admission refusal, stale editor/opening/authority, session-generation cancellation, output-path
+ownership, replacement history, ordered younger Undo, message pumping and off-owner disposal. Final WM_CLOSE
+is intercepted for harness inspection, including the actual StopHostContinuations boundary; the existing
+separate-owner shutdown suite proves complete owner teardown. Structural controls do not assert a wall-clock
+performance limit or qualify general coexisting edit routes.
+
 `ResizeCanvas`, `ResizeImage` and the placed rasterizers accept a cancellation token; direct callers use its empty
 default. They preserve the existing sampling order, rounding and pixel goldens. Source sparse pixels are assembled
 privately, without publishing `Raster::Data()` on a shared sparse input. Checks occur between layers, rows and
