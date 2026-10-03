@@ -158,3 +158,28 @@ Seven mutants change no control:
 - Then, with the user's agreement to the runs replacing their clipboard, `test.ps1` ran again with only the display-size patch,
   so with every clipboard check. It passes in x64 Debug (10,975 passing checks), Release (10,975) and ASan Debug (14,122). That
   includes the 125 `clipboardtransfer.*` checks and the self-test's five clipboard stages, with the same three skips.
+
+## 3 October: main merged
+
+The branch merges `origin/main` `bd4c969`, 16 commits after `249820d`. Meanwhile main added eight dispatch recognizers (CL
+guard, compact RCX, R10 AL guard, wide stack, QWORD stack/RAX, R9 byte switch, RDI index and RDI image-base remap). The
+scanner keeps them beside this change's marked-range proof, which still runs last. Five of the new suites go through
+`Invoke-Control` and so already evaluate each control twice. The compact RCX, RDI-index and RDI image-base suites call
+`Scan` themselves and now do the same (`4754fdb`). `Testing_Validation.md` names every suite that does.
+
+All eleven parser suites pass: AL-guard 91 (with the 575 shared inline controls), CL-guard 99, RDX 39, compact RCX 56, R10
+183, wide stack 54, QWORD stack 73, R9 byte switch 108, RDI index 23, RDI image-base 57 and marked tables 39.
+
+`format.ps1 -Check` passes (559 files). `validate-skills.ps1` still cannot run on this machine (no `yaml` module); no skill
+changed. With the user's agreement to the runs replacing their clipboard, `test.ps1` passes with every clipboard check and
+only the display-size patch, applied for the runs and reverted afterwards:
+
+| Configuration | `PASS` lines | `RedPrism.exe` VEX/EVEX rows (all runtime) | Undecoded prefixes | Verified table data |
+| --- | --- | --- | --- | --- |
+| Debug | 16,119 | 11,690 | 0 | 26 |
+| Release | 16,119 | 459 | 1 | 25 |
+| ASan Debug | 19,360 | 11,690 | 0 | 25 |
+
+Every run passes the gate on all five linked images and its compiled controls, `clipboardtransfer` passes 139 checks, and
+the same three checks as before are skipped. The first ASan Debug run stopped when the disk filled while it wrote parser
+fixtures, before any test failed; the second passed.
