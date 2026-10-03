@@ -18,6 +18,7 @@
 #include "DocumentLifecycleTests.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
+#include "DuplicateOpeningLimitTests.h"
 #include "DuplicateOpeningWorkTests.h"
 #include "ExportMemoryTests.h"
 #include "FilterCancellationTests.h"
@@ -60,6 +61,9 @@
 #include "Selection.h"
 #include "SelectionCommandTests.h"
 #include "SelectionMoveClosureTests.h"
+#include "SelectionMoveOpeningTests.h"
+#include "SelectionNudgeTests.h"
+#include "SelectionPreserveTests.h"
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
 #include "SettingsStore.h"
@@ -71,6 +75,9 @@
 #include "TransformEdit.h"
 #include "TransformPixelsWorkTests.h"
 #include "TransformPreviewWorkTests.h"
+#include "WandCancellationTests.h"
+#include "WandChunkBoundaryTests.h"
+#include "WandLayerSelectionTests.h"
 #include "WarpStroke.h"
 
 #include <algorithm>
@@ -7384,7 +7391,13 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
+    gFailures += RunSelectionNudgeTests();
+    gFailures += RunSelectionPreserveTests();
+    gFailures += RunWandCancellationTests();
+    gFailures += RunWandChunkBoundaryTests();
+    gFailures += RunWandLayerSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
+    gFailures += RunSelectionMoveOpeningTests();
     gFailures += RunColorDismissalTests();
     gFailures += RunAdjustmentNestedTests();
     gFailures += RunMergeHistoryTests();
@@ -7422,6 +7435,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunTransformDeferredTests();
     gFailures += RunTransformDeferredGuardTests();
     gFailures += RunDuplicateOpeningWorkTests();
+    gFailures += RunDuplicateOpeningLimitTests();
     gFailures += internal::RunDocumentLifecycleTests();
     gFailures += RunFloatingOpeningWorkTests();
     gFailures += RunFloatingMergeWorkTests();

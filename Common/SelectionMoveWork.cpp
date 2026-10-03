@@ -4,21 +4,24 @@
 #include <type_traits>
 #include <utility>
 
-std::optional<SelectionMoveClosureInput> DocumentSession::PrepareSelectionMoveClosureInput(bool cancel) const
+std::optional<SelectionMoveClosureInput> DocumentSession::PrepareSelectionMoveClosureInput(
+    bool cancel, std::optional<std::uint64_t> expectedOpening) const
 {
-    if (!_document || !_selectionMoveOrigin || history.CaptureState().Depth() <= 0)
+    if (!_document || !_selectionMoveOrigin || !_selectionMoveOpening ||
+        (expectedOpening && expectedOpening.value() != _selectionMoveOpening) || history.CaptureState().Depth() <= 0)
         return std::nullopt;
     auto token = CaptureJobToken();
     if (!token)
         return std::nullopt;
     return SelectionMoveClosureInput(std::move(token.value()), history.CaptureState(), _document.value(),
-                                     _selectionMoveOrigin.value(), _activeLayerID, _cropRect, _maskSelected, cancel);
+                                     _selectionMoveOrigin.value(), _activeLayerID, _cropRect, _selectionMoveOpening,
+                                     _maskSelected, cancel);
 }
 
 std::optional<PreparedSelectionMoveClosure> DocumentSession::PrepareSelectionMoveClosurePublication(
     SelectionMoveClosureInput input, CancelToken cancellation, DocumentHistory::PrepareObserver observer)
 {
-    if (cancellation.IsCancelled() || !input._valid || !input._document || input._token.target ||
+    if (cancellation.IsCancelled() || !input._valid || !input._opening || !input._document || input._token.target ||
         input._history.Depth() <= 0 || input._document->width != input._token.canvasWidth ||
         input._document->height != input._token.canvasHeight)
         return std::nullopt;
@@ -38,7 +41,8 @@ bool DocumentSession::IsPreparedSelectionMoveClosureCurrent(const PreparedSelect
 {
     const auto& input = prepared._input;
     return !prepared._applied && input._valid && _document && _selectionMoveOrigin && prepared._history &&
-           _activeLayerID == input._active && _maskSelected == input._maskSelected && _cropRect == input._crop &&
+           input._opening != 0 && _selectionMoveOpening == input._opening && _activeLayerID == input._active &&
+           _maskSelected == input._maskSelected && _cropRect == input._crop &&
            _selectionMoveOrigin->antialiased == input._origin.antialiased &&
            _selectionMoveOrigin->loops.Identity() == input._origin.loops.Identity() &&
            CanApplyJobResult(input._token, 0) && history.CanPublish(prepared._history.value());
@@ -69,4 +73,18 @@ std::uint64_t DocumentSession::SelectionMoveClosureMemoryBytes() const noexcept
     const auto bytes = history.EditMemoryBytes(_document);
     constexpr std::uint64_t extra = 4096 + sizeof(SelectionMoveClosureInput) + sizeof(PreparedSelectionMoveClosure);
     return bytes && bytes <= (std::numeric_limits<std::uint64_t>::max)() - extra ? bytes + extra : 0;
+}
+
+std::uint64_t DocumentSession::SelectionMoveClosureRetirementMemoryBytes() const noexcept
+{
+    if (!_document || !_selectionMoveOrigin)
+        return 0;
+    const auto bytes = HistoryRestoreRetirementMemoryBytes();
+    const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    constexpr std::uint64_t control = sizeof(DocumentSelection) + 128;
+    const auto outline = _selectionMoveOrigin->loops.StorageBytes();
+    if (!bytes || outline > maximum - control || outline + control > maximum - bytes)
+        return 0;
+    // StorageBytes is cached when the immutable loops are created; no owner-side path walk.
+    return bytes + outline + control;
 }

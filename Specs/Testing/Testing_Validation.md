@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-03
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -305,6 +305,37 @@ unsuccessful OpenClipboard acquisition when available. These fixture waits do no
 
 ### Prepared selection publication (P1.6 core)
 
+The application WARP self-test's `wand-layer-host.*` controls exercise the settled active-layer New production
+actor. Independent placed-pixel clockwise literals, settings/AA changed before capture, no-op redo, unmatched
+sample deselection, queued outside/nonfinite/empty acknowledgement, actual younger Deselect/Undo, adjacent/full-
+ring coalescing with distinct latest output and a reached shared-ordinal gap are required. Held stale active/mask
+authority, cancellation acknowledgement, exact worker error, capture/entry allocation faults, real record-table
+refusal/recovery and complete aggregate retirement preserve document/history and release all ownership. Direct
+zoom and an actual window message are observed before held-worker release. These are structural controls; no
+additional physical pointer acceptance, broad gesture routing or G1 timing claim follows.
+
+The application WARP self-test's `selection-host.*` controls exercise the settled Select All/Deselect production
+actor. Literal clockwise full-canvas/nullopt output, complete layer/target preservation, no-op redo/revision,
+nested depth/title, updated saved marker and ordered younger opposite command/Undo are checked. A held worker
+proves reservation before one capture, pending receipt/history ownership, direct zoom and a posted window message
+before acknowledgement, and aggregate retirement off owner. Reached generation/active/mask/crop/epoch/replacement/
+lasso/brush changes refuse stale output. Capture and six history-stage allocation faults preserve live state;
+actual full scheduler records refuse admission and a later command recovers after drain. The mask fixture MUST
+begin on image pixels with an existing mask, so its held target switch is a reached change.
+These 162 unique checks across 28 modes run inside the full application suite; they do not qualify live gesture
+or header routing, every retained raster's last-release thread, allocator/API faults, constant-time capture or G1.
+Harness setup/cleanup waits for queued selection acknowledgement before starting later pointer gestures.
+
+`selection-preserve.*` adds literal 4-by-4 source, mask and clockwise selection controls for the separate
+preserving-command boundary. Live brush/warp/shape opening identity and continued input survive publication;
+reached cancellation/replacement and identical-geometry shape reopening refuse old output. Weak authority does
+not keep cancelled gesture objects alive. A white hard brush continues outside its original 2-by-2 opening clip
+after Select All/Deselect: committed outside pixels remain the literal source, the center is white, and separate
+Undo steps restore pixels and then the original outline/AA. History depth/title, true no-op redo, exact target/
+crop/session/history staleness and reached cancellation/bad_alloc recovery use independent expectations.
+Existing settled factory and history-restore refusals remain in their original tests. Production pointer buffering,
+writer ordering, close/device cases, all geometry modes and measured G1 are not qualified by this core suite.
+
 `selection-command.*` uses literal 4-by-1 pixels/mask, full-canvas geometry and coverage bytes for Select All,
 absent versus explicit empty Deselect, no-op/redo, named nested transactions and a distinct later saved marker.
 Both operations reach each SelectionSnapshot/BeforeSnapshot/AfterSnapshot/Entry/StackGrowth/TrimIndex cancellation
@@ -319,8 +350,126 @@ A fully undone Cancel proves that changed-history construction checkpoints are a
 retains the live move and complete history; a separate clean candidate can still close. Pre-cancelled, foreign,
 copied/moved-session and moved-from/single-use candidates are refused. No timing threshold is asserted.
 
+`selection-move-opening.*` adds 66 unique checks for absent/explicit-empty eligibility, stable opening through
+samples, nonfinite input, duplicate Begin, wrong zero/maximum/real prior-gesture End and Cancel capture, and
+equal-geometry reopen. Stale prepared apply preserves the entire reopened state. Fresh End/Cancel, no-op redo
+and their generation acknowledgements use literal geometry and named history expectations. Replacement and
+clear during an active move never reuse its opening. The cached original-outline retirement contribution and
+complete session bound preserve moved geometry and never materialize a sparse fixture. Counter exhaustion is
+source-reviewed; maximum expected opening is a mismatch control, not a forced private-counter overflow test.
+Retained table-driven suites may repeat labels; qualification compares their exact named multiset, including
+repetitions. New opening labels are unique. Application closure/order/retirement and G1 remain separate gates.
+
+`selection-move-host.*` exercises the moved-release and direct Escape/first Undo/Redo close boundary in the full
+Application suite: 242 unique assertions across 31 modes, retained in the full ordered stage sequence. Held real workers prove
+pending receipt/reservation ownership, stopped late samples, duplicate receipt reuse, younger-writer ordering,
+exact opening and equal-geometry reopen refusal before capture, generation/serial/active/mask/crop/history
+staleness, nested transaction/saved-marker preservation, capture/history-allocation faults, worker cancellation
+and failure, input-budget/allocation refusal, real scheduler-record saturation and retry. Literal rectangles and
+independent history expectations check publication. Retirement probes cover the prepared aggregate rather than
+every raster's final reference; window-message/zoom controls establish no timing threshold. Qualified private
+and six-profile native runs, with the retained failed native r1, are recorded in
+[`SelectionMoveHost_2026-10-03.md`](../TestRuns/SelectionMoveHost_2026-10-03.md). Remaining callers and G1 stay open.
+
+`selection-move-caller.*` adds 276 unique assertions across 49 modes, retained in the full Application suite.
+Real changed/same tool and tool-command inputs, all 27 End-before-command refusal routes, capture loss,
+selected Undo/Redo, Select All/Deselect ordering and younger Undo bind the event-time opening. Held workers
+prove stopped late samples, pending receipt/reservation ownership, nested title/depth, actual budget/allocation
+refusal and retry, reached worker failure and equal-geometry reopen refusal before capture. Exact unique
+names and source/runtime stage order must match the independently archived private proof in every x64 suite.
+Six fresh native profiles and immutable source/product/evidence archival are recorded in
+[`SelectionMoveCallers_2026-10-03.md`](../TestRuns/SelectionMoveCallers_2026-10-03.md). Remaining header/close and
+coexisting-edit policies, heavy dependent actions and measured G1 remain separate requirements.
+
+`selection-move-followup.*` adds 84 unique assertions across 16 modes through actual zero-offset pointer
+release, with the complete 52-stage Application order. Exact private and native PASS names/summary and
+source/runtime stage order must match; retain caller 276/49, close 242/31, selection 162 and wand 86/16 checks.
+Literal geometry/Undo, event-time press point/settings/AA, same-ordinal End/selection gates, younger tool/Undo
+order, no-op/redo, nested title/depth, reached capture/worker/admission failure and real cancellation at either
+phase must qualify. Refusal freezes samples and retry preserves the opening; equal-geometry reopening refuses
+before capture. A live deferred-panel fixture retains its original selection clip on the existing caller route.
+The held follow-up processes Zoom and an actual posted window message before release; this is a structural
+control, with no timing threshold. All Layers/coexisting publication, remaining headers/close and measured G1
+stay separate. Actual qualification and retained failed attempts are recorded in
+[`SelectionMoveFollowups_2026-10-03.md`](../TestRuns/SelectionMoveFollowups_2026-10-03.md).
+
+`selection-move-header.*` adds 126 unique assertions across 21 modes through actual idle outline header
+producers, in the complete 53-stage Application order. The exact unique PASS set/summary and source/runtime
+stage order must match the independently archived full private proof in every x64 suite. Retain follow-up
+84/16, caller 276/49, close 242/31, selection 162 and wand 86/16 controls. Rectangle/ellipse and freehand/polygonal
+kind changes own event-time values; unchanged kind still Ends. Literal zero/moved geometry, separate Deselect
+Undo, retained Redo, nested outer title/depth, held End and Deselect workers, younger writer order, busy header
+refusal, actual capture/admission/worker failures, owner cancellation at either phase, retry and equal-geometry
+reopening must qualify. A reached pending-panel fixture retains its original header policy. These are structural
+controls; coexisting publication, remaining size/lifecycle callers and measured G1 remain separate.
+Actual private/native status is recorded in
+[`SelectionMoveHeaders_2026-10-03.md`](../TestRuns/SelectionMoveHeaders_2026-10-03.md).
+
+The complete DocumentTests runner registers `RunSelectionNudgeTests` once. Its `selection-nudge.*` core controls
+use literal legacy arrow/off-canvas vertices and independent publication/cancellation state expectations.
+Qualification requires 80 unique PASS names matching the executed summary, unchanged retained assertion
+multisets and full suite success; no old golden is rebaselined. Controls cover holes/AA, exact Undo/Redo, absent
+and explicit-empty refusal, active/live gesture exclusion, sealed moves, stale session/document/history/target,
+zero-delta redo/counter/generation behavior, nested title/depth, literal construction caches and pinned-toolset
+capacity, 1,024-step cancellation spacing, reached history fault stages, held worker preparation and off-owner
+aggregate disposal. Aggregate disposal does not prove the final release of every shared raster. Full native
+profiles and exact archive/receipt verification follow private qualification
+([record](../TestRuns/SelectionNudge_2026-10-03.md)); host keyboard routing and measured G1 remain separate.
+
+The full Application runner registers `RunSelectionNudgeSelfTest` and `RunSelectionNudgeFaultSelfTest` once.
+`selection-nudge-host.*` requires 84 unique checks across 11 modes: all eight real arrow/Shift inputs retain
+literal one/ten-pixel vertices after Shift reverses, one named history entry and literal Undo/Redo, plus nested
+outer history, absent selection and the live-outline no-op policy. `selection-nudge-fault-host.*` requires 173
+unique checks across 26 modes. Held production jobs prove reservation-before-capture, queued typed and real
+keyboard inputs/Undo in order, event-time Shift, view/message pumping, local cancellation and stale document/
+generation/target/mask/crop/history/gesture refusal. Capture and all five history preparation faults are reached;
+saved marker, zero-delta redo, actual scheduler quota and input allocation/storage refusal/retry are covered.
+Settlement includes deferred destruction, and the payload aggregate must retire off owner. Exact retained
+host assertion lists and all 55 ordered Application stages remain required; existing goldens are unchanged.
+Private full WARP proof and immutable archival precede native activation and all six native profiles
+([record](../TestRuns/SelectionNudgeHost_2026-10-03.md)); ARM64 runtime and measured G1 remain separate gates.
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
+
+### Cancellable wand and trace kernels (P1.6 S4a)
+
+`wand-cancel.*` covers pre-cancelled local/shutdown tokens, reached Source/MaskInitialize/Sample/MatchScan/
+FloodSeeds/FloodRun/FloodNeighbors/TraceInitialize/TraceEdges/TraceStarts/TraceWalk/Complete checkpoints and
+whole-output refusal. Owner-driven event gates hold a real worker at matching step 4096 before local or shutdown
+stop; acknowledgement precedes join, and a fresh token recovers complete literal bytes. Literal references cover
+channel/alpha tolerance, rounded clipped sampling, disconnected stripes, holes, actual diagonal corner contact,
+sparse reads without source-cache publication, nearest placement and transparent blank-layer sampling.
+
+`wand-chunk.*` records fixed-size checkpoint arrays with overflow rejection. Odd-width 257-by-65 and skinny/
+8193-by-1 inputs prove exact ordered 4096-step boundaries across rows and tails, cumulative flood run/neighbor
+counts, literal full masks and clockwise rectangles. Late matching/vertex-start cancellation must reach its
+final chunk boundary exactly once, discard partial output and recover with a fresh token. Existing `wand.*`,
+`wandsession.*`, `loadrefused.*`, selection and coverage goldens remain unchanged; no elapsed threshold is asserted.
+Paired Release CPU measurements retain the pre-change source as a performance reference only, with validation
+outside timing. Native configuration qualification, host activation, full admission/Clipper/GPU/history lifetimes
+and UI/G1 measurements are distinct gates.
+
+### Prepared active-layer wand publication (P1.6 S4b)
+
+`wand-layer.*` uses literal BGRA pixels and clockwise coordinate lists to check translated nearest sampling,
+hidden/masked/zero-opacity source rules, captured settings/AA, sparse cache isolation, transparent blank/folder/
+no-active inputs, contiguous versus disconnected components and rounded-sample no-match deselection. History
+checks cover exact titles/Undo/Redo, unchanged-outline redo retention, nested outer transactions and saving while
+publication is in flight. Existing legacy goldens remain unchanged.
+
+Reached active-only, mask-only and crop-only fixtures prove invalidation without generation/history changes;
+history-epoch and document-generation changes, moved/copied/foreign sessions and single-use ownership refuse
+stale application without changing the current owner. Cancellation reaches every publication milestone and all
+six history preparation stages; separately thrown `bad_alloc` at those stages preserves current state. Fresh
+tokens recover complete literal geometry. These are named stage injections, not OS allocator fault coverage.
+
+Memory controls inspect literal pixel/vertex capacities, sparse source overlap and recycling carry, actual default
+vector growth/old-new overlap, complete retirement charges, invalid-grid/settings refusal and 64-bit maximum-grid
+planning without allocating its pixels. A 30,000-square transparent document produces only the literal quad.
+Real gated workers prepare both applied and stale aggregates, then dispose of the whole result on the worker after
+the owner closes the document. This proves the core handoff; scheduler/host lifecycle, ordering, failure/refusal
+presentation and measured G1 remain separate gates.
 
 ## Gates
 
@@ -419,6 +568,30 @@ preview off while the worker is held and cancellation of late lookup work.
 
 ### CPU dispatch and instruction boundary (P0.8)
 
+The 56 `isa-compact-rcx-byte-remap.*` controls prove the compact ASan stack guard, same-displacement EAX reload
+and eight contiguous PE/listing rows; both anonymous tables, exact procedure end, literal index range and decoded
+body/default targets are required. Missing/unknown/duplicate/overlapping or PE-mismatched rows fail independently.
+Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
+and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
+
+`IsaRdiBaseByteRemapTests.ps1` adds 57 synthetic controls for Release OnCommand's RDI image-base remap:
+seven accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
+table row proved from PE bytes) and 50 refusals. The exact nine-row unsigned guard/CDQE/base/byte-and-DWORD
+dispatch requires PE/listing agreement, same-owner anonymous PDB starts, procedure/contribution bounds, valid
+byte indices and decoded body/default targets. Direct bypass into the protected sequence or table data fails.
+Malformed bytes/rows, symbols/owners/bounds, counts/indices/targets and adjacent real VEX/EVEX are independent
+controls. No synthetic code is executed and no runtime allowance is added. The unchanged failed Release image
+and all nine parser suites are retained with source hashes in the selection-move host test-run record;
+this standalone proof does not replace the native configuration gates. A valid decoded body target and the
+same row marked unknown form a paired control; this isolates target decode validity from table bounds.
+
+The 183 `isa-inline-table.R10AlGuard*` controls prove the exact non-clobbering R10 prelude and AL-bound dispatch:
+every protected row independently rejects missing, duplicate, unknown, overlap and PE/listing mismatch; valid
+extreme bounds, separate default, backward table target and direct entry at the base definition pass. Bypassing
+that definition fails. Same-owner table/procedure ends, decoded body targets and terminal return/security-failure
+rows are required. Real VEX/EVEX in the body and immediately after the table remain violations with the proved
+table data count intact. The original archived Release image is rechecked independently of a rebuild.
+
 The synthetic ISA parser controls cover DxUi typography's exact `LEA RCX,imagebase; MOVZX EAX,DL; DWORD load;
 ADD; JMP` form. They require the anonymous same-owner untyped PDB start and retain negative controls for wrong
 register/opcode, extra or missing instructions, invalid symbols, contribution/decoded-target bounds and real
@@ -441,6 +614,35 @@ same-owner data start, guard-derived entry count equal to the exact PDB procedur
 same-procedure decoded boundary. An unrelated later data symbol does not extend the table. Missing/changed
 bytes, mismatched stack slots, ranges, symbols, procedure ends and targets refuse; real vector code after the
 proved table remains gated. No DxUi object, procedure or new runtime allowlist exemption is added.
+
+`IsaWideStackGuardTests.ps1` reruns the original inline-table controls and adds 54 independent
+`isa-inline-table.TerminalDwordWideStack*` controls for the observed ASan EndCanvasEdit switch. The seven
+contiguous CMP/JA/MOVSXD/RCX-dispatch rows require exact PE/listing agreement, full disp32 stack-slot equality,
+unsigned bound 1…127, same-owner anonymous table start, exact terminal PDB procedure end and decoded body/default
+targets. Every high displacement byte is tested independently; malformed opcodes/SIB/registers, missing/unknown/
+overlapping/mismatched rows, incorrect metadata/end/targets and an unrelated later symbol refuse the data proof.
+Adjacent real VEX remains a violation while all eleven DWORD data rows are still recognized. Recheck the exact
+archived failing image before rebuilding, with the runtime allowlist and executable/runtime/tier counts preserved.
+
+The ASan `std::variant` visit switch additionally has 73 QWORD-stack/RAX-base controls: four valid tables and
+69 refusals. The seven contiguous CMP/JA/LEA/MOV/load/ADD/JMP rows require exact PE/listing agreement, equal
+full stack displacements, an unsigned bound 1…127, an exact image base, anonymous same-owner aligned data,
+an immediately preceding RET, an exact terminal procedure end, decoded body targets and a guarded fallback
+among those targets. Changed operands, guards, row boundaries, symbols, bounds, targets and incoming direct
+edges into the guard interior or table from elsewhere in the procedure refuse. Adjacent executable VEX stays
+a violation. Reparse the original failing ASan image and retained Release image before rebuilding, keep all
+57 RDI controls and the existing runtime allowlist: [proof](../TestRuns/IsaQwordStackRax_2026-10-03.md).
+
+The Release R9 byte-switch form additionally has 108 parser controls (8 accepted, 100 refused). The exact
+CMP R9B/unsigned JA, RDX image-base, R9-indexed DWORD load, ADD/JMP, aligned anonymous same-owner data and
+terminal procedure end must agree. All decoded body rows and the RET/CALL/INT3/NOP tail match PE bytes;
+missing/unknown/overlapping rows refuse, and the full table fits the section's stored bytes. Every table/default
+target is a decoded body boundary outside the guard/tail/table. Known direct transfers, including LOOP-family
+and prefixed transfers, cannot enter the guard interior or data; the observed same-CMP/JNE entry to JA needs
+identical flags and exact encodings. Real executable VEX remains rejected. This classifies inline data, without
+asserting complete CFG or R9 upper-bit provenance. Reparse all three preserved EXE/PDB pairs and keep all ten
+retained parser assertion multisets, 73 QWORD controls, 57 RDI controls and runtime allowlist unchanged before
+native rebuilding: [proof](../TestRuns/IsaR9ByteSwitch_2026-10-03.md).
 
 The Release clipboard status switch additionally has 91 AL-guard controls. Its exact contiguous MOVZX EAX from
 RSI+disp32, CMP AL/unsigned JA, RDX image-base/load/ADD/JMP rows require matching PE bytes and decoded listing.
@@ -673,6 +875,84 @@ The WARP self-test also simulates an early mode failure with a worker waiting on
 destroy its payload after Run returns, and leave the caller's STA alive. `Main.cpp` calls that same shutdown
 before clearing the resource satellite or leaving its COM scope on every mode return, including failures.
 
+Standalone `JobShutdownRetirementTests` owns its own TLS sink. Its 28 independent controls use real 16 MiB CPU
+owners and running, queued, memory-waiting, undrained jobs plus an owned UI action. Producer join precedes wrapper
+destruction on owner; CPU destruction is exactly once on an MTA worker while reservations/events remain alive.
+Useful callbacks stay suppressed. Stopped idle pools still run the ordered final hooks; repeated Close does not
+repeat them, and invalid initialization/restart refuses safely. This primitive proof does not qualify the full
+application's remaining live session/graphics graph or shutdown timing.
+
+`JobCloseHookTests` adds 26 assertion records (excluding its summary): stopped idle pool, gated producer and
+uninitialized Close. The joined owner hook follows wrapper destruction; final worker retirement is ordered,
+exactly once, off owner and on MTA while borrowed context, reservations and wake events remain alive. Repeated
+and uninitialized Close cannot run hooks.
+
+Before constructing the ordinary application, `RunStandaloneProcessingSelfTest` drives 26 independent Application
+owners: eight faults after successful owned-stage acquisition, sixteen faults at the existing retry observer
+seams (EventCreation/RegisterWait in all eight slots), successful initialization and never-started shutdown.
+Its 390 controls require the exact original HRESULT, each acquired checkpoint once with no later stage, exact
+retry observer prefix/reached fault, matching live pool/routing/source/sink state, first/second Shutdown, detached
+retry/GPU routes, empty ownership and unchanged caller apartment. Acquired pools acknowledge exactly one final
+off-owner MTA hook; a prefix with no scheduler runs no hook. Each case owns its own trace/pool/sink and supplies
+no window/device/chrome. The following complete graphics-host tests retain their separate scope.
+Full x64 logs must report `application-processing summary: 390 checks, 0 failures` and 390 named PASS controls.
+After-stage checkpoints test prefix cleanup, not failure inside those successful APIs. Retry seams return before
+the selected native call; they prove the reached unwind boundary after earlier slots succeed. Native allocation,
+scheduler/pool/GPU and other unintercepted initialization failures remain separate A3 work. No legacy golden changes.
+
+`RunStandaloneLeaseShutdownSelfTest` constructs four independent hidden WARP/chrome Application owners with
+their own pool/sink. Two actual DocumentReadbackJob workers hold real 2048-squared mapped rows through shutdown
+cancellation, one after explicit queue device retirement. Literal BGRA rows must remain readable until worker
+return; joined wrappers acknowledge the exact lease on owner before queue cleanup, where a stale release fails.
+The other cases hold an actual RetryWaitQueue callback before readiness publication, or leave its readiness
+undrained. A separately entered worker releases the callback after the actual shutdown stop token is signalled;
+Shutdown and close hooks never pump or wait on a test gate. Callback join precedes receiver destruction, useful
+callbacks stay suppressed, and the real 16 MiB CPU graph is destroyed once on MTA. Original ticket/reservation,
+queue/event retirement, repeated Shutdown, caller apartment and consumed quit are independent observations.
+The complete application must report `application-lease-shutdown summary: 56 checks, 0 failures` and 56 named
+PASS controls. The complete private Debug WARP candidate passes these and unchanged application suites;
+the fresh six-profile native matrix passes all three complete x64 suites and all ARM64 cross-builds
+([qualification](../TestRuns/P1LeaseShutdown_2026-10-02.md)). Explicit queue retirement does not inject a driver/device-loss
+failure. Clipboard leases, other live owners, initialization API faults and timing remain separate.
+
+`RunStandaloneLiveShutdownSelfTest` constructs 24 independent hidden WARP/chrome Application owners: ordinary
+and mask Paint/Erase, three healing modes, Clone, ordinary/mask Blur, Liquify and Smudge, each with lifecycle work
+held before/after preparation. Its 432 controls require real 16 MiB source pixels, actual brush tiles or Warp
+points, exact original target/transform/mask/history authority at joined owner detachment, then weak-only draft
+expiration observed on the final off-owner MTA callback. Borrowed brush engines are live before shutdown and
+detached on owner before CPU destruction. A separately retained literal BGRA source remains unchanged afterward.
+Useful lifecycle publication stays suppressed; reservations/events/apartment survive the acknowledgement;
+second Shutdown repeats no hooks and each destroyed owner consumes its quit before the next fixture.
+The complete x64 application must report `application-live-shutdown summary: 432 checks, 0 failures` and 432
+named PASS controls. The fresh six-profile forced rebuild qualifies these 432 controls in every complete x64
+suite, with all ARM64 cross-builds and exact archived inputs/receipts
+([record](../TestRuns/P1LiveShutdown_2026-10-02.md)). Mapped GPU/event/clipboard leases, other live owners,
+initialization API faults and shutdown timing remain separate.
+
+Before ordinary Application processing initialization, `RunStandaloneShutdownSelfTest` constructs two actual
+hidden WARP/chrome owners with their own sink and pool. Its 52 controls cover lifecycle work held before/after
+preparation, a real 16 MiB document/history, private clipboard and a live graphics-backed gradient draft. Producer
+join precedes owner graphics detachment and final MTA CPU-root retirement; callbacks remain suppressed and tickets,
+barriers, events, reservations and sink retire before acknowledgement. The caller's STA survives and second Shutdown
+cannot repeat hooks. Each destroyed fixture's full message queue must consume its quit before constructing the next
+owner. Fourteen added controls retain real 16 MiB sampling pixels, explicit four-point overlay geometry and
+independent benchmark image roots before Shutdown, then require their retirement on the acknowledged final MTA
+worker. Benchmark object identity, timing address, completion/result metadata and known-path cleanup survive;
+second Shutdown cannot repeat the callback. The original 38 controls remain unchanged and separate.
+Full x64 application logs must report `application-shutdown summary: 52 checks, 0 failures`.
+Preview and delayed-clipboard shutdown controls retain their exact original source/history authority checks at
+joined owner detachment, before CPU retirement, then assert empty session and independently retained literal pixels
+after acknowledgement. These suites require 112 preview and 45 delayed-clipboard controls; existing legacy goldens
+remain unchanged. Unintercepted initialization API failures, other live owners and GPU/event leases, residual hash capacity and
+shutdown timing remain in P1.7 F5d A3.
+
+The application lifecycle controls cover 115 New/Close/order/state assertions, 58 accepted-dimension/refusal
+assertions and 85 Close cancellation/fault assertions. They test actual selected host inputs, pending-to-ACK
+receipts, literal saved New Undo/Redo and empty Close state, palette/private clipboard retention, reached admission,
+capture and history allocation faults, stale authority and younger input retirement. Invalid New Canvas dimensions
+refuse before destroying a live draft; changing the card after admission cannot change the copied request. Existing
+typed-opacity replacement goldens MUST still pass. Event-gated failure bounds detect hangs and assert no timing.
+
 `HostTests.exe --bench-jobs` measures scheduler overhead with eight warmups and 200 single Commit jobs. It reports
 submission and full submit-to-drain median/p95/max in microseconds, with an independently checked worker result.
 Payload construction is outside the timed intervals; admission, cancellation-state allocation, worker dispatch,
@@ -719,7 +999,15 @@ and each timer resource failure require the exact old tree and initiating native
 retry observation leaves the original destination intact. Healthy and injected final rename failures require
 zero destination timer create/arm/wait visits. Every case checks publication count, no rollback before rotation
 and complete owned-staging cleanup. These controls bound attempts and preserve ownership; they do not identify
-an external reader/filter or assert wall-clock timer latency.
+  an external reader/filter or assert wall-clock timer latency.
+
+Native `publication-retry.*` controls hold the owned staging manifest or directory without delete sharing,
+after all writers close. First-save and replacement cases separately verify release/retry, exhaustion,
+pre-rotation cancellation, late cancellation with successful publication or rollback, Published count,
+literal pixels, byte-identical original trees, earlier backup preservation, and owned staging cleanup.
+Timer create/arm/wait faults retain the immediate native error; injected rename errors remain final with no
+timer hook visits. A healthy native rename creates no timer. These are independently controlled filesystem
+and cancellation transitions; no observer sleeps or asserts nominal timer latency.
 
 P1.7 F5a adds literal `clipboarddib.*` and `imagecodecwork.clipboard-png-probe.*` byte/metadata controls.
 They exercise independent padded/directed RGB, alpha/masks/palette offsets, premultiplication and literal V5
@@ -1082,5 +1370,23 @@ producer-order DIB selection, refusal to request synthesized variants of malform
 malformed PNG fallback, cleared Busy/cancel/native-close output and a deliberate
 post-close clipboard replacement. Its availability and inspection retain the held sequence, and Copy rejects
 the replacement. Fixture helpers use bounded event waits for external listeners; injected Busy remains one
-attempt. Full frozen native qualification is required before closing these foundations. Production host,
+  attempt. Pixel-preservation observations use the independent C9b `SystemClipboard::ReadImage` reference,
+  holding one clipboard acquisition through decode; direct Inspect/Copy/Stale authority assertions stay separate.
+  Literal dimensions and every expected channel byte remain unchanged. This prevents a verification-only
+  gap between metadata Inspect and Copy from invalidating an otherwise coherent preservation observation.
+  Direct Copy Busy diagnostics retain the immediate native error, attempt, clipboard-holder process and sealed
+  inspection sequence. The foreign-replacement refusal check additionally reports its exact returned status,
+  held sequence at the Opened observation, acquisition count and retained output bytes on failure. Diagnostics
+  do not renew inspection authority, accept Busy as Stale or weaken the assertion.
+  Fixture source-sequence acquisition also reports immediate failed Open/Close errors, holder/caller process,
+  attempt and owner-window validity. Test fixture acquisition now uses the existing C9b harness allowance:
+  at most 30 attempts with lazy 100 ms one-shot event waits between contention results (about 3 s scheduled
+  waits; 200 ms per timer wait is a deadlock failure bound). Source capture, Inspect, Copy and Publish use this
+  test-only policy; Copy retains its sealed Inspection and Publish retains the same PreparedImage. Stale,
+  cancellation, partial publication and failed timer waits stop retries. Fourteen deterministic supplied-trace
+  controls verify immediate success without a wait, success after five Busy results, exact 30/29 exhaustion,
+  failed wait, Stale refusal, cancellation and partial publication. Existing 125 transfer controls, literal
+  dimensions/channel bytes and direct one-attempt Busy fault checks remain unchanged. Production's admitted
+  transfer retry budget is unchanged. Exhausted fixture acquisition still fails the original assertion.
+  Full frozen native qualification is required before closing these foundations. Production host,
 retry/lifetime, G1 and native ARM64 runtime claims remain separate.

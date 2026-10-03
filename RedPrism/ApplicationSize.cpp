@@ -79,6 +79,11 @@ void Application::OpenSizeCard(SizeCardKind kind) noexcept
 void Application::CancelSizeCard() noexcept
 {
     CancelClipboardPrefill();
+    if (_documentLifecycleTicket)
+    {
+        (void)_historyWork.RequestCancel();
+        (void)_jobs.Cancel(_documentLifecycleTicket.value());
+    }
     if (_sizingTicket)
     {
         (void)_historyWork.RequestCancel();
@@ -108,21 +113,18 @@ void Application::ApplySizeCard() noexcept
     const SizeCardKind kind = _sizeDialog.kind;
     if (kind == SizeCardKind::NewCanvas)
     {
-        const int width = static_cast<int>(std::round(_sizeDialog.newWidth));
-        const int height = static_cast<int>(std::round(_sizeDialog.newHeight));
-        if (!std::isfinite(_sizeDialog.newWidth) || !std::isfinite(_sizeDialog.newHeight) || width < 1 ||
-            width > kMaxCanvasSide || height < 1 || height > kMaxCanvasSide)
+        const auto dimensions = NewCanvasDimensions(_sizeDialog);
+        if (!dimensions)
         {
             return;
         }
-        _sizeDialog.kind = SizeCardKind::None;
-        SettleInteractions(false);
-        _session.ClearDocument();
-        _session.CreateDocument(width, height, true);
-        _session.history.MarkSaved();
-        _documentPath.clear();
-        _viewport.followsFit = true;
-        DocumentChanged();
+        _hostExecutionError = StartDocumentLifecycle(dimensions, _sizeInvocation);
+        if (FAILED(_hostExecutionError))
+        {
+            ++_errorsShown;
+            _lastErrorId = IDS_ERROR_DOCUMENT_LIFECYCLE;
+            _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+        }
         return;
     }
     if (!_session.Document().has_value())

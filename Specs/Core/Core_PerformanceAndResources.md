@@ -17,6 +17,14 @@ the affected configuration and justified in the owning contract or an active WIP
 "Zero CPU while idle" means RedPrism owns no polling loop or periodic wake-up when no frame, input, I/O completion, or
 state change is pending. Operating-system scheduling noise is outside this contract.
 
+Outline-move closure event authority is a bounded session-local scalar opening. An expected opening is checked
+before document/history capture; reopening equal geometry cannot authorize a delayed closure. Prepared apply
+retains all generation/history/target checks and also binds that opening. Admission's complete retirement bound
+includes construction-cached original loops, their control allowance, and the existing document/history/display
+graph bound; future host jobs additionally charge wrappers and construction peak. Reading the original-loop
+cache never walks paths or materializes rasters. Existing history/metadata traversals remain H2/H3 work, and the
+core APIs alone establish no host closure, frame latency or G1 qualification.
+
 ## Mandatory runtime rules (C1 host)
 
 - Idle, hidden, minimized, suspended, display-off, and occluded execution MUST block on events. Busy polling is
@@ -133,6 +141,46 @@ under repository `.build/`. C1 does not yet create that tree.
 
 ## Worker execution cost and lifetime
 
+Wand/mask-trace preparation uses 4096-unit cancellation spans and a separate checkpoint call so optional
+observer/token call state does not remain in each scalar pixel loop. Matching, flood neighbor scans and vertex
+starts retain their numeric/visit order. Empty boundary vertices can be skipped with scalar 64-bit unaligned-safe
+loads within the already checked span. Sparse sources use a private cancellable copy without cache publication.
+The accepted private Release cost comparison records two runs at 45 MP and a fragmented-stripe trace: matching
+median overhead is 2.9–4.2%, flood ranges from 5.4% faster to 4.7% slower, and solid trace adds 0.6–1.6%. This
+bounded checkpoint/cancellation cost is accepted for the S4a foundation; first per-pixel candidates with 19–39%
+overhead were retained and replaced. Shared-desktop outliers remain in evidence. These scalar CPU measurements
+qualify no UI deadline or host activation. Complete admission, source/history lifetime and GPU sampling migration
+remain P1.3/P1.6 obligations; SIMD/GPU throughput and RAW/Photoshop qualification remain later phases.
+
+`PlanWandLayerSelectionMemory` declares the settled active-layer New graph before owner capture. Let `N = W*H`,
+`V = (W+1)*(H+1)` and `E = min(4N, MagicWand::kTraceEdgeLimit)`. Sampled BGRA and a potential sparse private
+copy use rounded `PixelBuffer::RequiredBytes`; charge the private copy through later phases because its pixels
+can remain recycled. Mask and vertex arrays reserve exactly `N` and `V`. A contiguous flood processes disjoint
+newly selected runs; above/below scans total at most `2N`, with at most one seed push per scan step plus the first
+seed. Charge the 4096-slot initial reserve and old/new growth overlap for at most `2N+1` pushes.
+
+Each traced coordinate push consumes an edge, and each accepted loop has at least three coordinates. The
+qualified MSVC v145 default allocator returns the requested capacity and geometric vector growth is 1.5;
+three times total pushed coordinates and potential loop headers bounds old/new overlap. The plan also charges
+Debug vector proxies, immutable selection/control roots and complete metadata/history construction. Requalify
+this implementation-based capacity proof when changing the toolset; it is not a portable `std::vector` guarantee.
+The eight-million-edge limit bounds accepted tracing, not canvas area or Clipper booleans.
+
+The settled selection-nudge producer translates vertices and constructs immutable cached geometry in one pass.
+Cancellation checkpoints count both loops and points, at most 1,024 explicit work steps apart, including empty
+loops. Allocation/OS stop latency is separate. A zero delta reuses geometry and prepares no after-document copy.
+Admission adds a second geometry-sized peak and allocator/control allowances to the existing complete edit
+bound, using cached point/loop counts; copied output never retains the source's unused vector capacity.
+Its reserve-capacity assumption is also qualified against the pinned v145 STL and must be requalified on a
+toolset change. History capture/accounting, full graph retirement charging and measured G1 remain separate gates.
+
+Use the maximum of source, flood/mask and trace phases, with source/recycling carry, plus capture/history storage.
+Charge complete retained current/history/display graphs and new geometry again for aggregate retirement. Sharing
+overcounts intentionally; overflow/unavailable estimates refuse planning. Blank/folder/no-active sampling owns
+only an exact four-point result plus metadata/history. Global allocator/codec/OS headroom and live process pressure
+remain separate from declared storage. The core's owner metadata capture and memory/history traversal still need
+H2/H3 work; this estimate and off-owner publication establish no G1 latency or production scheduler admission.
+
 `Application` owns a bounded `JobScheduler`: at most 128 records across queued, running and undrained states, and
 eight pending UI actions. The seven job classes share three OS priorities. The serial classes (`Stroke`,
 `Selection`, `Commit`, `Io`) preserve FIFO within each class and key through apply or drop. Each record has two
@@ -189,6 +237,26 @@ history capture remain H2/H3 work. Unmigrated synchronous Begin/End callers reta
 allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
+
+Settled active-layer New wand host jobs reserve the qualified phased source/flood/trace/history peak, including
+retirement and job metadata, before owner capture. Event-time settings and point are bounded owned input; source
+sampling, geometry and history construction run on workers. Rejected and applied graphs retire off owner. Queued
+coalescing preserves document/ordinal gaps and receipts. Metadata capture/planning traversal and chrome/display
+costs remain H2/H3/S5/G1 work; this migration does not itself qualify latency or broader live pointer routes.
+
+Settled Select All/Deselect host jobs reserve the complete selection-command/history peak before copying document
+records. The resumable admission boundary captures once on the owner, then constructs all geometry, after-document
+and history on the worker. Replaced and captured CPU owners remain in one deferred-release aggregate through
+apply/drop. Already resident immutable pixels are shared, while complete aggregate retirement receives its own
+conservative release charge. Queue/cancel refusal retains the selected request until exact acknowledgement.
+The value-record capture and memory/history planners still traverse document/history metadata; H2/H3 and measured
+owner apply, chrome and G1 remain open. Message pumping is a structural test, not a frame or latency measurement.
+
+Preserving selection-command authority owns only weak brush/warp identities. The memory charge also includes
+the inline BrushStroke/WarpStroke records and combined control storage: after a strong owner drops, weak
+references can retain the combined allocation even though its vectors, rasters and engine ownership have been
+destroyed. These records are distinct from owning mutable gesture buffers. The shape opening counter allocates
+nothing. Capture/history traversal, geometry equality, actual host admission and G1 latency remain separate work.
 
 Each raster storage record caches a construction-time upper bound for its complete held graph: its aligned pixel
 capacity, storage/control allowance and tile-vector capacity, plus cached bounds for its base and tile rasters. A
@@ -390,8 +458,18 @@ owner validation/history costs remain measured separately and are subject to the
 The owner installs a thread-local deferred-release sink. Last-reference storage or directly owned pixel buffers
 of at least 16 MiB transfer an intrusive node to a non-cancellable NORMAL worker lane. This path allocates nothing,
 needs no job slot/reservation, and cannot be refused by a full job queue. Smaller or non-owner-thread frees run
-inline. Queued and executing releases count toward outstanding work. Close clears the sink, joins event sources
-and workers, then drains leftovers while hidden, before destroying events or the receiving owner.
+inline. Queued and executing releases count toward outstanding work. Close joins event sources and producers,
+then destroys owner-affine job/action wrappers while their sink remains installed. Their CPU owners transfer to
+the release lane. Close clears the sink and acknowledges a preallocated final MTA callback that drains releases
+and recycled pixels before releasing reservations, pool/apartment ownership and events. Cancellation cannot skip
+this final callback. After producer join and wrapper destruction, Application's borrowed owner hook detaches
+coverage engines and joined graphics/retry resources; its final worker hook clears the large document, history,
+display, draft and private-clipboard owners before release/recycle drain. It also clears the application sampling
+raster, cached selection and benchmark document/image roots. Benchmark timing/results and known-path cleanup remain
+owned by the same benchmark object until its callers finish. Nonthrowing document construction/assignment guards
+the reset; these hooks allocate no application storage. Empty selected/collapsed hash bucket arrays survive until
+host destruction. Broader failed-initialization,
+live-draft/lease coverage and hidden owner cleanup costs require separate proof and measurement.
 
 Measured fresh-page overhead justifies a process recycle pool for buffers of at least 16 MiB. It has at most 32
 slots, uses 16 MiB size classes and initially retains at most one eighth of the sampled admission ceiling, capped

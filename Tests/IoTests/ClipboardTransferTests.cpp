@@ -73,27 +73,150 @@ UINT PngFormat() noexcept
     return RegisterClipboardFormatW(L"PNG");
 }
 
-bool WaitOneShotRetry(HANDLE timer) noexcept
+// Match the availability/receipt fixtures: at most 30 attempts, 100 ms event waits between Busy results.
+// Production admission/retry limits are independent. An admitted source sequence is never renewed here.
+constexpr unsigned kFixtureAttempts = SystemClipboard::kHarnessAttempts / 10;
+template <typename Attempt, typename Retryable, typename Wait>
+auto RetryFixtureAcquisition(Attempt attempt, Retryable retryable, Wait wait)
 {
-    LARGE_INTEGER due{};
-    due.QuadPart = -1'000'000; // 100 ms, relative one-shot timer.
-    return SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE) != FALSE &&
-           WaitForSingleObject(timer, 200) == WAIT_OBJECT_0;
+    static_assert(kFixtureAttempts == 30);
+    for (unsigned index = 0;; ++index)
+    {
+        auto result = attempt(index);
+        if (!retryable(result) || index + 1 == kFixtureAttempts || !wait())
+            return result;
+    }
+}
+
+struct FixtureRetryWait final
+{
+    wil::unique_handle timer;
+
+    bool operator()() noexcept
+    {
+        if (!timer)
+        {
+            timer.reset(CreateWaitableTimerW(nullptr, TRUE, nullptr));
+            if (!timer)
+            {
+                std::printf("DIAG clipboardtransfer.fixture-timer-create error=%lu\n", GetLastError());
+                return false;
+            }
+        }
+        LARGE_INTEGER due{};
+        due.QuadPart = -1'000'000; // 100 ms, relative one-shot timer; 200 ms is a failure bound.
+        if (!SetWaitableTimer(timer.get(), &due, 0, nullptr, nullptr, FALSE))
+        {
+            std::printf("DIAG clipboardtransfer.fixture-timer-arm error=%lu\n", GetLastError());
+            return false;
+        }
+        const DWORD result = WaitForSingleObject(timer.get(), 200);
+        if (result != WAIT_OBJECT_0)
+        {
+            const DWORD error = result == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+            std::printf("DIAG clipboardtransfer.fixture-timer-wait result=%lu error=%lu\n", result, error);
+        }
+        return result == WAIT_OBJECT_0;
+    }
+};
+
+void TestFixtureRetryPolicy()
+{
+    using Status = ClipboardTransfer::Status;
+    struct Trace final
+    {
+        std::span<const Status> results;
+        unsigned attempts = 0, waits = 0;
+        bool waitSucceeds = true;
+    };
+    const auto run = [](Trace& trace, CancelToken cancellation = {}) noexcept
+    {
+        return RetryFixtureAcquisition(
+            [&](unsigned index) noexcept
+            {
+                ++trace.attempts;
+                return trace.results[(std::min)(static_cast<std::size_t>(index), trace.results.size() - 1)];
+            },
+            [&](Status status) noexcept { return status == Status::Busy && !cancellation.IsCancelled(); },
+            [&]() noexcept
+            {
+                ++trace.waits;
+                return trace.waitSucceeds;
+            });
+    };
+    constexpr std::array ready{Status::Ok};
+    Trace immediate{ready};
+    Expect(run(immediate) == Status::Ok, "fixture-retry.immediate-success");
+    Expect(immediate.attempts == 1 && immediate.waits == 0, "fixture-retry.ready-does-not-wait");
+
+    constexpr std::array delayed{Status::Busy, Status::Busy, Status::Busy, Status::Busy, Status::Busy, Status::Ok};
+    Trace later{delayed};
+    Expect(run(later) == Status::Ok, "fixture-retry.success-after-five-contention-results");
+    Expect(later.attempts == 6 && later.waits == 5, "fixture-retry.supplied-six-step-trace-consumed-once");
+
+    constexpr std::array busy{Status::Busy};
+    Trace exhausted{busy};
+    Expect(run(exhausted) == Status::Busy, "fixture-retry.exhaustion-retains-busy");
+    Expect(exhausted.attempts == 30 && exhausted.waits == 29, "fixture-retry.finite-30-attempts-no-final-wait");
+
+    Trace waitFailure{busy};
+    waitFailure.waitSucceeds = false;
+    Expect(run(waitFailure) == Status::Busy, "fixture-retry.failed-wait-retains-original-result");
+    Expect(waitFailure.attempts == 1 && waitFailure.waits == 1, "fixture-retry.failed-wait-does-not-reacquire");
+
+    constexpr std::array replaced{Status::Busy, Status::Stale, Status::Ok};
+    Trace stale{replaced};
+    Expect(run(stale) == Status::Stale, "fixture-retry.stale-authority-is-final");
+    Expect(stale.attempts == 2 && stale.waits == 1, "fixture-retry.stale-never-renewed-to-success");
+
+    CancelSource stop;
+    (void)stop.Cancel();
+    Trace cancelled{busy};
+    Expect(run(cancelled, stop.Token()) == Status::Busy, "fixture-retry.cancellation-retains-attempt-result");
+    Expect(cancelled.attempts == 1 && cancelled.waits == 0, "fixture-retry.cancellation-prevents-retry");
+
+    unsigned partialAttempts = 0, partialWaits = 0;
+    const auto partial = RetryFixtureAcquisition(
+        [&](unsigned) noexcept
+        {
+            ++partialAttempts;
+            ClipboardTransfer::Publication publication;
+            publication.status = Status::Busy;
+            publication.emptied = true;
+            publication.nativeError = ERROR_ACCESS_DENIED;
+            return publication;
+        },
+        [](const ClipboardTransfer::Publication& publication) noexcept
+        { return publication.status == Status::Busy && !publication.emptied; },
+        [&]() noexcept
+        {
+            ++partialWaits;
+            return true;
+        });
+    Expect(partial.status == Status::Busy && partial.emptied && partial.nativeError == ERROR_ACCESS_DENIED,
+           "fixture-retry.partial-publication-retains-exact-result");
+    Expect(partialAttempts == 1 && partialWaits == 0, "fixture-retry.partial-publication-never-replayed");
 }
 
 bool OpenClipboardRetry(HWND owner) noexcept
 {
-    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
-    if (!timer)
-        return false;
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
-    {
-        if (OpenClipboard(owner))
-            return true;
-        if (attempt == 3 || !WaitOneShotRetry(timer.get()))
+    FixtureRetryWait wait;
+    return RetryFixtureAcquisition(
+        [&](unsigned attempt) noexcept
+        {
+            if (OpenClipboard(owner))
+                return true;
+            const DWORD error = GetLastError();
+            DWORD holderProcess = 0;
+            const HWND holder = GetOpenClipboardWindow();
+            if (holder)
+                (void)GetWindowThreadProcessId(holder, &holderProcess);
+            std::printf("DIAG clipboardtransfer.fixture-open attempt=%u error=%lu holderProcess=%lu callerProcess=%lu "
+                        "ownerValid=%d\n",
+                        attempt + 1, error, holderProcess, GetCurrentProcessId(), IsWindow(owner) != FALSE);
             return false;
-    }
-    return false;
+        },
+        [](bool opened) noexcept { return !opened; }, [&]() noexcept { return wait(); });
 }
 
 [[noreturn]] void FailFastJoin(const char* name) noexcept
@@ -178,6 +301,8 @@ struct DelayedProducer final
     std::atomic<DWORD> threadId{0};
     std::atomic<bool> installed{false};
     std::atomic<unsigned> renderCalls{0};
+    std::atomic<unsigned> pngRenders{0}, dibRenders{0};
+    std::atomic<DWORD> renderError{0}, renderWait{WAIT_TIMEOUT};
 };
 
 constexpr wchar_t kDelayedProducerClass[] = L"RedPrismClipboardTransferDelayedProducer";
@@ -196,12 +321,23 @@ LRESULT CALLBACK DelayedWndProc(HWND window, UINT message, WPARAM wParam, LPARAM
         (void)producer->renderCalls.fetch_add(1, std::memory_order_relaxed);
         (void)SetEvent(producer->entered);
         const DWORD released = WaitForSingleObject(producer->release, 5000);
+        producer->renderWait.store(released);
         if (released == WAIT_OBJECT_0)
         {
+            bool placed = false;
+            SetLastError(ERROR_SUCCESS);
             if (wParam == PngFormat())
-                (void)SetGlobal(static_cast<UINT>(wParam), kLiteralPng);
+            {
+                producer->pngRenders.fetch_add(1);
+                placed = SetGlobal(static_cast<UINT>(wParam), kLiteralPng);
+            }
             else if (wParam == CF_DIBV5)
-                (void)SetGlobal(CF_DIBV5, kLiteralDibV5);
+            {
+                producer->dibRenders.fetch_add(1);
+                placed = SetGlobal(CF_DIBV5, kLiteralDibV5);
+            }
+            if (!placed)
+                producer->renderError.store(GetLastError());
         }
         return 0;
     }
@@ -263,16 +399,19 @@ DWORD WINAPI DelayedProducerMain(void* raw) noexcept
 
 bool ReadClipboardPixels(std::span<const std::uint8_t> expected, int width, int height)
 {
-    ClipboardTransfer::Inspection inspected;
-    if (InspectWithBusyRetry(kMaxLayerPixels, inspected, {}, {}) != ClipboardTransfer::Status::Ok || !inspected)
-        return false;
-    ClipboardTransfer::ImageCopy copied;
-    if (CopyWithBusyRetry(inspected, copied, {}, {}) != ClipboardTransfer::Status::Ok)
-        return false;
+    // Verification uses the independent C9b reader, which holds one clipboard acquisition through decode.
+    // Inspect/Copy authority and Stale remain exercised directly below. Listener-generated formats must not
+    // invalidate this separate pixel-preservation observation between two verification acquisitions.
     Raster image;
-    return ClipboardTransfer::Decode(copied, image) == ClipboardTransfer::Status::Ok && image.HasStorage() &&
-           image.Width() == width && image.Height() == height && image.Format() == RasterFormat::Bgra8888 &&
-           std::equal(expected.begin(), expected.end(), image.Data());
+    const bool read = SystemClipboard::ReadImage(gOwner, kMaxLayerPixels, image, SystemClipboard::kHarnessAttempts);
+    const DWORD error = GetLastError();
+    const bool matches = read && image.HasStorage() && image.Width() == width && image.Height() == height &&
+                         image.Format() == RasterFormat::Bgra8888 &&
+                         std::equal(expected.begin(), expected.end(), image.Data());
+    if (!matches)
+        std::printf("DIAG clipboardtransfer.fixture-read read=%d error=%lu size=%dx%d expected=%dx%d\n", read, error,
+                    image.Width(), image.Height(), width, height);
+    return matches;
 }
 
 bool SequenceWhileOpen(DWORD& sequence) noexcept
@@ -280,7 +419,11 @@ bool SequenceWhileOpen(DWORD& sequence) noexcept
     if (!OpenClipboardRetry(gOwner))
         return false;
     sequence = GetClipboardSequenceNumber();
-    return CloseClipboard() != FALSE;
+    const bool closed = CloseClipboard() != FALSE;
+    const DWORD error = closed ? ERROR_SUCCESS : GetLastError();
+    if (!closed)
+        std::printf("DIAG clipboardtransfer.fixture-sequence-close error=%lu sequence=%lu\n", error, sequence);
+    return closed;
 }
 
 bool VerifyPublishedGlobals(std::span<const std::uint8_t> expectedPixels) noexcept
@@ -367,64 +510,51 @@ ClipboardTransfer::Publication PublishWithBusyRetry(ClipboardTransfer::PreparedI
                                                     CancelToken cancellation = {},
                                                     ClipboardTransfer::Observer observer = {}) noexcept
 {
-    ClipboardTransfer::Publication last;
-    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
-    if (!timer)
-    {
-        last.status = ClipboardTransfer::Status::NativeFailure;
-        last.nativeError = GetLastError();
-        return last;
-    }
-    for (unsigned attempt = 0; attempt < 3; ++attempt)
-    {
-        last = ClipboardTransfer::Publish(prepared, cancellation, observer);
-        if (last.status != ClipboardTransfer::Status::Busy || last.emptied || cancellation.IsCancelled())
-            return last;
-        if (attempt == 2 || !WaitOneShotRetry(timer.get()))
-            return last;
-    }
-    return last;
+    FixtureRetryWait wait;
+    return RetryFixtureAcquisition(
+        [&](unsigned) noexcept { return ClipboardTransfer::Publish(prepared, cancellation, observer); },
+        [&](const ClipboardTransfer::Publication& result) noexcept
+        { return result.status == ClipboardTransfer::Status::Busy && !result.emptied && !cancellation.IsCancelled(); },
+        [&]() noexcept { return wait(); });
 }
 
 ClipboardTransfer::Status InspectWithBusyRetry(std::int64_t pixelBudget, ClipboardTransfer::Inspection& output,
                                                CancelToken cancellation = {}, ClipboardTransfer::Observer observer = {})
 {
-    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
-    if (!timer)
-    {
-        output = {};
-        return ClipboardTransfer::Status::NativeFailure;
-    }
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
-    {
-        const auto status = ClipboardTransfer::Inspect(pixelBudget, output, cancellation, observer);
-        if (status != ClipboardTransfer::Status::Busy || cancellation.IsCancelled())
-            return status;
-        if (attempt == 3 || !WaitOneShotRetry(timer.get()))
-            return status;
-    }
-    return ClipboardTransfer::Status::Busy;
+    FixtureRetryWait wait;
+    return RetryFixtureAcquisition([&](unsigned)
+                                   { return ClipboardTransfer::Inspect(pixelBudget, output, cancellation, observer); },
+                                   [&](ClipboardTransfer::Status status) noexcept
+                                   { return status == ClipboardTransfer::Status::Busy && !cancellation.IsCancelled(); },
+                                   [&]() noexcept { return wait(); });
 }
 
 ClipboardTransfer::Status CopyWithBusyRetry(const ClipboardTransfer::Inspection& inspection,
                                             ClipboardTransfer::ImageCopy& output, CancelToken cancellation = {},
                                             ClipboardTransfer::Observer observer = {})
 {
-    wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
-    if (!timer)
-    {
-        output = {};
-        return ClipboardTransfer::Status::NativeFailure;
-    }
-    for (unsigned attempt = 0; attempt < 4; ++attempt)
-    {
-        const auto status = ClipboardTransfer::Copy(inspection, output, cancellation, observer);
-        if (status != ClipboardTransfer::Status::Busy || cancellation.IsCancelled())
+    FixtureRetryWait wait;
+    return RetryFixtureAcquisition(
+        [&](unsigned attempt)
+        {
+            const auto status = ClipboardTransfer::Copy(inspection, output, cancellation, observer);
+            const DWORD error = GetLastError();
+            if (status == ClipboardTransfer::Status::Busy)
+            {
+                DWORD holderProcess = 0;
+                const HWND holder = GetOpenClipboardWindow();
+                if (holder)
+                    (void)GetWindowThreadProcessId(holder, &holderProcess);
+                std::printf("DIAG clipboardtransfer.copy-busy attempt=%u error=%lu holderProcess=%lu callerProcess=%lu "
+                            "inspectedSequence=%lu\n",
+                            attempt + 1, error, holderProcess, GetCurrentProcessId(),
+                            static_cast<unsigned long>(inspection.Sequence()));
+            }
             return status;
-        if (attempt == 3 || !WaitOneShotRetry(timer.get()))
-            return status;
-    }
-    return ClipboardTransfer::Status::Busy;
+        },
+        [&](ClipboardTransfer::Status status) noexcept
+        { return status == ClipboardTransfer::Status::Busy && !cancellation.IsCancelled(); },
+        [&]() noexcept { return wait(); });
 }
 
 Raster Source()
@@ -790,8 +920,30 @@ void TestInspectCopyDecode()
     Expect(InspectWithBusyRetry(6, stale) == ClipboardTransfer::Status::Ok, "copy.stale-inspection-created");
     Expect(PutClipboard({}, kLiteralDibV5), "copy.stale-foreign-replacement-installed");
     ClipboardTransfer::ImageCopy staleOutput;
-    Expect(CopyWithBusyRetry(stale, staleOutput) == ClipboardTransfer::Status::Stale &&
-               staleOutput.RetainedBytes() == 0,
+    struct StaleObservation final
+    {
+        DWORD openedSequence = 0;
+        unsigned opens = 0;
+    } staleObservation;
+    const ClipboardTransfer::Observer staleObserver{&staleObservation,
+                                                    [](void* raw, ClipboardTransfer::Stage stage) noexcept
+                                                    {
+                                                        if (stage == ClipboardTransfer::Stage::Opened)
+                                                        {
+                                                            auto& observation = *static_cast<StaleObservation*>(raw);
+                                                            observation.openedSequence = GetClipboardSequenceNumber();
+                                                            ++observation.opens;
+                                                        }
+                                                    },
+                                                    nullptr};
+    const auto staleStatus = CopyWithBusyRetry(stale, staleOutput, {}, staleObserver);
+    if (staleStatus != ClipboardTransfer::Status::Stale || staleOutput.RetainedBytes() != 0)
+        std::printf("DIAG clipboardtransfer.copy-stale status=%u inspectedSequence=%lu openedSequence=%lu "
+                    "opens=%u retained=%llu\n",
+                    static_cast<unsigned>(staleStatus), static_cast<unsigned long>(stale.Sequence()),
+                    staleObservation.openedSequence, staleObservation.opens,
+                    static_cast<unsigned long long>(staleOutput.RetainedBytes()));
+    Expect(staleStatus == ClipboardTransfer::Status::Stale && staleOutput.RetainedBytes() == 0,
            "copy.foreign-replacement-refused-empty-output");
 
     Expect(PutClipboard({}, kLiteralDibV5), "copy.immutable-fixture-installed");
@@ -990,6 +1142,15 @@ void TestDelayedRenderer()
         (void)PostMessageW(producerWindow, WM_CLOSE, 0, 0);
     JoinNativeThread(ownerThread.get(), "delayed-render-producer");
     Expect(true, "delayed.producer-thread-closed");
+    if (request.status != ClipboardTransfer::Status::Ok || !request.inspection || request.inspection.Sequence() == 0 ||
+        request.inspection.Png().width != 2 || request.inspection.Dib().width != 2 || producer.renderCalls.load() < 2)
+        std::printf("DIAG clipboardtransfer.delayed.inspect status=%u valid=%d sequence=%lu current=%lu "
+                    "png=%dx%d dib=%dx%d renders=%u png-renders=%u dib-renders=%u wait=%lu render-error=%lu\n",
+                    static_cast<unsigned int>(request.status), static_cast<bool>(request.inspection),
+                    request.inspection.Sequence(), GetClipboardSequenceNumber(), request.inspection.Png().width,
+                    request.inspection.Png().height, request.inspection.Dib().width, request.inspection.Dib().height,
+                    producer.renderCalls.load(), producer.pngRenders.load(), producer.dibRenders.load(),
+                    producer.renderWait.load(), producer.renderError.load());
     Expect(request.status == ClipboardTransfer::Status::Ok && request.inspection &&
                request.inspection.Sequence() != 0 && request.inspection.Png().width == 2 &&
                request.inspection.Dib().width == 2 && producer.renderCalls.load(std::memory_order_relaxed) >= 2,
@@ -1000,6 +1161,10 @@ void TestDelayedRenderer()
                                 : ClipboardTransfer::Status::Invalid;
     Expect(copyStatus == ClipboardTransfer::Status::Ok && copied.RetainedBytes() > 0,
            "delayed.copy-uses-post-render-inspection-sequence");
+    if (copyStatus != ClipboardTransfer::Status::Ok || copied.RetainedBytes() == 0)
+        std::printf("DIAG clipboardtransfer.delayed.copy status=%u inspected-sequence=%lu current=%lu bytes=%llu\n",
+                    static_cast<unsigned int>(copyStatus), request.inspection.Sequence(), GetClipboardSequenceNumber(),
+                    static_cast<unsigned long long>(copied.RetainedBytes()));
     Raster delayedPixels;
     Expect(copyStatus == ClipboardTransfer::Status::Ok &&
                ClipboardTransfer::Decode(copied, delayedPixels) == ClipboardTransfer::Status::Ok &&
@@ -1044,6 +1209,7 @@ int RunWorker()
                 Expect(false, "clipboard.restore-user-contents");
         });
 
+    TestFixtureRetryPolicy();
     TestPreparation();
     TestPublishOutcomes();
     TestSequenceAndRetry();

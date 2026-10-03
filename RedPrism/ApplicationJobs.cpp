@@ -54,6 +54,9 @@ struct ActivityEvidence final
 {
     wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    std::atomic<DWORD> waitResult{MAXDWORD};
+    std::atomic<DWORD> waitError{0};
+    std::atomic<bool> returned{false};
     bool applied = false;
 };
 
@@ -66,7 +69,11 @@ class ActivityGateJob final : public Job
         context.ReportProgress(37);
         (void)SetEvent(_evidence.entered.get());
         const HANDLE handles[]{_evidence.release.get(), context.shutdownEvent};
-        if (WaitForMultipleObjects(2, handles, FALSE, 10000) == WAIT_OBJECT_0)
+        const DWORD waited = WaitForMultipleObjects(2, handles, FALSE, 10000);
+        _evidence.waitError.store(waited == WAIT_FAILED ? GetLastError() : 0);
+        _evidence.waitResult.store(waited);
+        _evidence.returned.store(true);
+        if (waited == WAIT_OBJECT_0)
         {
             return {};
         }
@@ -236,11 +243,21 @@ int Application::RunJobActivitySelfTest() noexcept
             return 5;
         }
     }
-    (void)SetEvent(evidence.release.get());
-    if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled || !evidence.applied ||
-        _jobActivity.Selected() || _jobIndicatorTimer || _chrome->JobProgressVisible())
+    const bool released = SetEvent(evidence.release.get()) != FALSE;
+    const auto settled = SettleJobs(_jobs, 10000, DispatchMessageThunk, this);
+    if (settled != SettleResult::Settled || !evidence.applied || _jobActivity.Selected() || _jobIndicatorTimer ||
+        _chrome->JobProgressVisible())
     {
-        SelfTestFailure(L"Completing the busy job did not retire the indicator.\n");
+        SelfTestFailure(std::format(L"Completing the busy job did not retire the indicator: settle={}, applied={}, "
+                                    L"selected={}, timer={}, visible={}, idle={}, shutdown={}, window={}, "
+                                    L"frameFailure={:#x}, released={}, workerReturned={}, wait={:#x}, "
+                                    L"waitError={:#x}, sameTicket={}.\n",
+                                    static_cast<unsigned int>(settled), evidence.applied,
+                                    _jobActivity.Selected().has_value(), _jobIndicatorTimer.has_value(),
+                                    _chrome->JobProgressVisible(), _jobs.IsIdle(), _shutdownStarted,
+                                    static_cast<bool>(_window), static_cast<unsigned int>(_frameLoopFailure), released,
+                                    evidence.returned.load(), evidence.waitResult.load(), evidence.waitError.load(),
+                                    _jobActivity.Selected() && _jobActivity.Selected()->ticket == ticket));
         return 5;
     }
     OnJobIndicatorTimer(); // a timer message already queued before KillTimer must remain harmless

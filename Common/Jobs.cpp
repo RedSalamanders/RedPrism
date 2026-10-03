@@ -937,7 +937,7 @@ void JobScheduler::RequestStop() noexcept
     self.resumesPending = false;
 }
 
-void JobScheduler::Close() noexcept
+void JobScheduler::Close(CloseHooks hooks) noexcept
 {
     if (!_impl)
     {
@@ -951,45 +951,63 @@ void JobScheduler::Close() noexcept
         return;
     }
     RequestStop();
-    if (self.releaseSinkInstalled)
-    {
-        (void)ClearDeferredReleaseSink(_impl.get());
-        self.releaseSinkInstalled = false;
-    }
     self.memoryWaits.Close();
     self.lowMemory.reset();
     self.highMemory.reset();
-    self.workers.Close();
-    self.DrainReleases();
-    self.TrimRecycle();
-    if (self.ownsRecycle)
+    struct CloseState final
     {
-        ClosePixelBufferRecycle();
-        self.ownsRecycle = false;
-    }
-    (void)InterlockedFlushSList(&self.completions);
-    std::array<std::unique_ptr<Job>, kCapacity> retired;
-    {
-        WorkerResources::ExclusiveLock guard{self.lock};
-        for (std::size_t index = 0; index < self.records.size(); ++index)
-        {
-            auto& record = self.records[index];
-            retired[index] = std::move(record.job);
-            record.cancel.reset();
-            record.state = Impl::State::Empty;
-        }
-    }
-    // No producer remains. Payload destruction deliberately occurs without the scheduler lock/UI callback.
-    // Destroy before closing handles: a payload may own a subordinate cancellation-registration lifetime.
-    for (auto& job : retired)
-    {
-        job.reset();
-    }
+        Impl& scheduler;
+        CloseHooks hooks;
+    } closeState{self, hooks};
+    self.workers.Close({[](void* opaque) noexcept
+                        {
+                            auto& state = *static_cast<CloseState*>(opaque);
+                            auto& stopped = state.scheduler;
+                            stopped.CheckOwner();
+                            (void)InterlockedFlushSList(&stopped.completions);
+                            std::array<std::unique_ptr<Job>, kCapacity> retired;
+                            {
+                                WorkerResources::ExclusiveLock guard{stopped.lock};
+                                for (std::size_t index = 0; index < stopped.records.size(); ++index)
+                                {
+                                    auto& record = stopped.records[index];
+                                    retired[index] = std::move(record.job);
+                                    record.cancel.reset();
+                                    record.state = Impl::State::Empty;
+                                }
+                            }
+                            // Producer callbacks have joined. Owner-affine wrappers detach their CPU payloads through
+                            // the still-installed sink, outside the scheduler lock and without applying completions.
+                            for (auto& job : retired)
+                                job.reset();
+                            for (auto& action : stopped.actions)
+                                action.reset();
+                            if (state.hooks.owner)
+                                state.hooks.owner(state.hooks.context);
+                            if (stopped.releaseSinkInstalled)
+                            {
+                                (void)ClearDeferredReleaseSink(&stopped);
+                                stopped.releaseSinkInstalled = false;
+                            }
+                        },
+                        [](void* opaque) noexcept
+                        {
+                            auto& state = *static_cast<CloseState*>(opaque);
+                            auto& stopped = state.scheduler;
+                            if (state.hooks.worker)
+                                state.hooks.worker(state.hooks.context);
+                            stopped.DrainReleases();
+                            stopped.TrimRecycle();
+                            if (stopped.ownsRecycle)
+                            {
+                                ClosePixelBufferRecycle();
+                                stopped.ownsRecycle = false;
+                            }
+                        },
+                        &closeState});
+    // Final CPU retirement is acknowledged while events, reservations and the pool apartment are alive.
+    assert(self.releasingCount.load(std::memory_order_acquire) == 0);
     (void)self.memory.Release(self.memory.Reserved());
-    for (auto& action : self.actions)
-    {
-        action.reset();
-    }
     self.actionCount = 0;
     self.actionSource = nullptr;
     self.sourceReady = false;

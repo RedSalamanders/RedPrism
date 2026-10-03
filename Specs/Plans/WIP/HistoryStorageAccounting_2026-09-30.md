@@ -11,11 +11,14 @@
 - [x] Full configuration matrix and measured real-loop history/apply costs; record outstanding P1.9 gates.
 - [ ] Incremental accounting, lazy image thumbnails and first uploads; complete the remaining P1.9 work before closure.
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.
-    - [ ] New/default canvas, New Canvas card and Close Project: optional-document preparation, saved New
+    - [x] New/default canvas, New Canvas card and Close Project: optional-document preparation, saved New
       entry and complete draft/history retirement are tracked in
       [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md). The private primitive passes
       65 independent controls and the complete DocumentTests suite. The primitive passes all six native profiles
-      ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)); actual host activation remains open.
+      ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). The reviewed host is activated after private
+      258-control qualification; its combined six-profile matrix passes
+      ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader shutdown, admission/capture
+      traversal and measured G1 remain open.
     - [x] Immutable views, detached publication and complete aggregate release for basic raster, gradient and pixel-move commits; all profiles pass ([evidence](../../TestRuns/PreparedHistoryPublication_2026-10-01.md)). Other callers remain open.
     - [x] Destructive color/filter and size-card publication and complete retirement qualify in all configurations
       ([color](../../TestRuns/ColorHistoryPublication_2026-10-01.md), [size](../../TestRuns/SizeHistoryPublication_2026-10-01.md)).

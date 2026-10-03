@@ -85,9 +85,12 @@
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
+    <ClInclude Include="DuplicateOpeningLimitTests.h" />
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\..\Common\SelectionNudgeWork.h" />
+    <ClInclude Include="..\..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
@@ -138,7 +141,11 @@
     <ClInclude Include="AdjustmentClosureTests.h" />
     <ClInclude Include="AdjustmentOpeningTests.h" />
     <ClInclude Include="SelectionCommandTests.h" />
+    <ClInclude Include="SelectionNudgeTests.h" />
+    <ClInclude Include="SelectionPreserveTests.h" />
+    <ClInclude Include="WandLayerSelectionTests.h" />
     <ClInclude Include="SelectionMoveClosureTests.h" />
+    <ClInclude Include="SelectionMoveOpeningTests.h" />
     <ClInclude Include="ColorDismissalTests.h" />
     <ClInclude Include="AdjustmentNestedTests.h" />
     <ClInclude Include="PreparedColorHistoryTests.h" />
@@ -157,6 +164,7 @@
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
     <ClCompile Include="DocumentLifecycleTests.cpp" />
+    <ClCompile Include="DuplicateOpeningLimitTests.cpp" />
     <ClCompile Include="MaskEditWorkTests.cpp" />
     <ClCompile Include="LayerCopyWorkTests.cpp" />
     <ClCompile Include="DistortWorkTests.cpp" />
@@ -209,7 +217,13 @@
     <ClCompile Include="AdjustmentClosureTests.cpp" />
     <ClCompile Include="AdjustmentOpeningTests.cpp" />
     <ClCompile Include="SelectionCommandTests.cpp" />
+    <ClCompile Include="SelectionNudgeTests.cpp" />
+    <ClCompile Include="SelectionPreserveTests.cpp" />
+    <ClCompile Include="WandCancellationTests.cpp" />
+    <ClCompile Include="WandChunkBoundaryTests.cpp" />
+    <ClCompile Include="WandLayerSelectionTests.cpp" />
     <ClCompile Include="SelectionMoveClosureTests.cpp" />
+    <ClCompile Include="SelectionMoveOpeningTests.cpp" />
     <ClCompile Include="ColorDismissalTests.cpp" />
     <ClCompile Include="AdjustmentNestedTests.cpp" />
     <ClCompile Include="PreparedColorHistoryTests.cpp" />
@@ -235,6 +249,8 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\SelectionNudgeWork.cpp" />
+    <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />

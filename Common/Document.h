@@ -742,6 +742,7 @@ class SelectionLoops
     }
 
   private:
+    friend class SelectionNudgeBuilder;
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
     std::optional<SelectionBounds> _bounds;
@@ -824,6 +825,7 @@ enum class WandFailure : std::uint8_t
     None,
     TooDetailed,
     Memory,
+    Cancelled,
 };
 
 struct ImageLayer
@@ -1211,7 +1213,15 @@ struct HueTargetDrag
 
 enum class SelectionCommandKind : std::uint8_t;
 class SelectionCommandInput;
+class SelectionCommandAuthority;
 class PreparedSelectionCommand;
+class SelectionNudgeInput;
+class PreparedSelectionNudge;
+struct SelectionNudgeObserver;
+class WandLayerSelectionInput;
+class PreparedWandLayerSelection;
+struct WandLayerSelectionObserver;
+struct WandLayerSelectionMemoryPlan;
 class SelectionMoveClosureInput;
 class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
@@ -1766,6 +1776,12 @@ class DocumentSession
         ImageImportAuthority authority, std::optional<CanvasDocument> source, DocumentHistory::StateView history,
         std::optional<CanvasDocument> replacement, std::optional<Guid> active, std::wstring name,
         CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
+    // Lifecycle preparation depends only on sealed lifetime authority, history roots and the new state.
+    // Publication itself transfers the actual old document into retirement without an owner-side record copy.
+    [[nodiscard]] static std::optional<PreparedImageImport> PrepareDocumentLifecyclePublication(
+        ImageImportAuthority authority, DocumentHistory::StateView history, std::optional<CanvasDocument> replacement,
+        std::optional<Guid> active, std::wstring name, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] ImageImportAuthority CaptureImageImportAuthority() const noexcept;
     [[nodiscard]] bool CanApplyImageImport(const ImageImportAuthority& authority) const noexcept;
     // Crop tool (C16, legacy Crop.swift): the frame lives in the session until Apply Crop resizes the canvas to
@@ -2100,26 +2116,52 @@ class DocumentSession
     {
         return _selectionMoveOrigin.has_value();
     }
+    // Session-local event authority. Closing and reopening an equal outline is a distinct move.
+    [[nodiscard]] std::optional<std::uint64_t> SelectionMoveOpening() const noexcept
+    {
+        return _selectionMoveOrigin ? std::optional(_selectionMoveOpening) : std::nullopt;
+    }
     // Arrow keys: 1 px, or 10 with Shift; each press is one entry.
     void NudgeSelection(double dx, double dy);
+    [[nodiscard]] std::optional<SelectionNudgeInput> PrepareSelectionNudgeInput(int dx, int dy) const;
+    [[nodiscard]] static std::optional<PreparedSelectionNudge> PrepareSelectionNudgePublication(
+        SelectionNudgeInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        const SelectionNudgeObserver* geometryObserver = nullptr);
+    [[nodiscard]] bool IsPreparedSelectionNudgeCurrent(const PreparedSelectionNudge& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedSelectionNudgeIfCurrent(PreparedSelectionNudge& prepared) noexcept;
+    [[nodiscard]] std::uint64_t SelectionNudgeMemoryBytes() const noexcept;
     // Expand / Contract need a non-empty selection and no outline in progress.
     [[nodiscard]] bool CanModifySelection() const noexcept;
     void ExpandSelection(int amount);
     void ContractSelection(int amount);
     // Admitted owner capture; these sealed preparation APIs leave the direct selection reference routes intact.
     [[nodiscard]] std::optional<SelectionCommandInput> PrepareSelectionCommandInput(SelectionCommandKind kind) const;
+    [[nodiscard]] std::optional<SelectionCommandInput> PreparePreservingSelectionCommandInput(
+        SelectionCommandKind kind) const;
     [[nodiscard]] static std::optional<PreparedSelectionCommand> PrepareSelectionCommandPublication(
         SelectionCommandInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
-    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(bool cancel) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
+                                                                                        WandSettings settings,
+                                                                                        bool antialiased) const;
+    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
+        WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
+    [[nodiscard]] bool IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
+        Vec2 point, WandSettings settings) const noexcept;
+    [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
+        bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
     [[nodiscard]] static std::optional<PreparedSelectionMoveClosure> PrepareSelectionMoveClosurePublication(
         SelectionMoveClosureInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {});
     [[nodiscard]] bool IsPreparedSelectionMoveClosureCurrent(
         const PreparedSelectionMoveClosure& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionMoveClosureIfCurrent(PreparedSelectionMoveClosure& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionMoveClosureMemoryBytes() const noexcept;
+    [[nodiscard]] std::uint64_t SelectionMoveClosureRetirementMemoryBytes() const noexcept;
     void SelectAll();
     void Deselect();
     void InvertSelection();
@@ -2152,6 +2194,12 @@ class DocumentSession
     {
         _brushEngine = engine;
     }
+    // Owner-only after all producers join. Detach borrowed graphics engines without dropping the CPU graph;
+    // the final retirement callback then releases the session's large CPU owners away from the owner thread.
+    void DetachCoverageForShutdown() noexcept;
+    // Final worker only after owner detachment and producer join. Drop all pixel/history/draft/settings owners
+    // without allocating or reconstructing a session; empty hash bucket capacity survives until host destruction.
+    void RetireCpuForShutdown() noexcept;
     // Starts a stroke at `point` (document pixels): the foreground color, or `erase`; on a mask, black or white
     // per `maskPaintWhite`. False when painting cannot start (or the stroke exceeded the pixel budget).
     bool BeginBrush(Vec2 point, bool erase = false);
@@ -2184,6 +2232,11 @@ class DocumentSession
     [[nodiscard]] const WarpStroke* PendingWarp() const noexcept
     {
         return _warp.get();
+    }
+    // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
+    [[nodiscard]] std::weak_ptr<WarpStroke> WeakPendingWarpForTest() const noexcept
+    {
+        return _warp;
     }
     [[nodiscard]] WarpStroke* MutableWarp() noexcept
     {
@@ -2507,6 +2560,11 @@ class DocumentSession
     {
         return _brush.get();
     }
+    // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
+    [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept
+    {
+        return _brush;
+    }
     [[nodiscard]] BrushStroke* MutableBrush() noexcept
     {
         return _brush.get();
@@ -2615,6 +2673,8 @@ class DocumentSession
     }
 
   private:
+    [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;
+    [[nodiscard]] bool CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept;
     [[nodiscard]] bool HasDeferredTransform() const noexcept
     {
         return _transformEdit && _transformEdit->deferred;
@@ -2695,6 +2755,7 @@ class DocumentSession
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::optional<DocumentSelection> _selectionMoveOrigin;
+    std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;
     BrushCoverageEngine* _brushEngine = nullptr;
     struct LastBrushPoint
@@ -2720,6 +2781,7 @@ class DocumentSession
     std::optional<GradientEdit> _gradient;
     std::uint64_t _gradientOpening = 0;
     std::optional<ShapeDraft> _shapeDraft;
+    std::uint64_t _shapeOpening = 0;
     std::optional<PixelMove> _pixelMove;
     std::uint64_t _pixelMoveOpening = 0;
     std::optional<PixelClipboard> _clipboard;

@@ -79,7 +79,18 @@ int Application::RunClipboardWorkSelfTest() noexcept
     };
     SystemClipboard::SavedContents saved;
     if (!SystemClipboard::SaveContents(_window.get(), saved))
+    {
+        const DWORD error = GetLastError();
+        DWORD clipboardProcess = 0;
+        const HWND clipboardOwner = GetOpenClipboardWindow();
+        if (clipboardOwner)
+            (void)GetWindowThreadProcessId(clipboardOwner, &clipboardProcess);
+        std::printf("FAIL clipboard-host.save-user-clipboard error=%lu window-valid=%d open-owner=%p "
+                    "open-process=%lu sequence=%lu\n",
+                    error, IsWindow(_window.get()) != FALSE, static_cast<void*>(clipboardOwner), clipboardProcess,
+                    GetClipboardSequenceNumber());
         return 5;
+    }
     auto restore = wil::scope_exit(
         [&]() noexcept
         {
@@ -282,7 +293,10 @@ int Application::RunClipboardWorkSelfTest() noexcept
         _session.SetSelection(
             DocumentSelection{false, SelectionLoops{{Vec2{1, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{1, 1}}}}, L"Fixture");
         if (scenario.mode != Mode::Empty && !_session.CopySelection())
+        {
+            std::printf("FAIL clipboard-host.%s.fixture-private-copy\n", scenario.name);
             return 5;
+        }
         _session.history.Reset();
         _session.history.MarkSaved();
         _clipboardBinding.reset();

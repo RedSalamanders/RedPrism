@@ -91,6 +91,7 @@
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
@@ -102,6 +103,8 @@
     <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="JobCloseHookTests.h" />
+    <ClInclude Include="JobSuspendedRetirementTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
@@ -133,6 +136,7 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
@@ -161,6 +165,9 @@
     <ClCompile Include="DeferredReleaseTests.cpp" />
     <ClCompile Include="PipelineTraceTests.cpp" />
     <ClCompile Include="JobMemoryTests.cpp" />
+    <ClCompile Include="JobShutdownRetirementTests.cpp" />
+    <ClCompile Include="JobCloseHookTests.cpp" />
+    <ClCompile Include="JobSuspendedRetirementTests.cpp" />
     <ClCompile Include="PixelRecycleTests.cpp" />
     <ClCompile Include="PerfRootTests.cpp" />
     <ClCompile Include="..\..\Common\PerfRoot.cpp" />

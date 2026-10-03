@@ -138,6 +138,18 @@ HRESULT WorkerPool::Initialize(unsigned int threads, Dispatch dispatch, void* co
             }
         }
     }
+    if (SUCCEEDED(result))
+    {
+        // Outside the dispatch cleanup group: its single final callback runs after that group has joined.
+        TP_CALLBACK_ENVIRON environment;
+        InitializeThreadpoolEnvironment(&environment);
+        SetThreadpoolCallbackPool(&environment, _pool.get());
+        _closeCallback.reset(CreateThreadpoolWork(CloseCallback, this, &environment));
+        const DWORD error = _closeCallback ? ERROR_SUCCESS : GetLastError();
+        DestroyThreadpoolEnvironment(&environment);
+        if (!_closeCallback)
+            result = HRESULT_FROM_WIN32(error);
+    }
     if (FAILED(result))
     {
         Close();
@@ -183,14 +195,24 @@ void WorkerPool::RequestStop() noexcept
     (void)_stop.request_stop();
 }
 
-void WorkerPool::Close() noexcept
+void CALLBACK WorkerPool::CloseCallback(PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept
+{
+    auto& pool = *static_cast<WorkerPool*>(context);
+    CallbackScope scope{&pool, WorkPriority::Normal, L"RedPrism.Workers"};
+    // Cancellation stops useful work, but cannot suppress ownership retirement.
+    pool._closeWork.worker(pool._closeWork.context);
+}
+
+void WorkerPool::Close(CloseWork work) noexcept
 {
     assert(g_currentPool != this);
-    RequestStop();
     {
         WorkerResources::ExclusiveLock lock{_lock};
+        if (_closing)
+            return;
         _closing = true;
     }
+    RequestStop();
     if (_cleanup)
     {
         // Dispatch work is owned by the cleanup group. Parallel helper work is owned by its calling frame,
@@ -203,6 +225,19 @@ void WorkerPool::Close() noexcept
         {
             (void)SleepConditionVariableSRW(&_parallelDone, &_lock, INFINITE, 0);
         }
+    }
+    if (work.owner)
+        work.owner(work.context);
+    if (work.worker && _closeCallback)
+    {
+        _closeWork = work;
+        SubmitThreadpoolWork(_closeCallback.get());
+        WaitForThreadpoolWorkCallbacks(_closeCallback.get(), FALSE);
+        _closeWork = {};
+    }
+    _closeCallback.reset();
+    {
+        WorkerResources::ExclusiveLock lock{_lock};
         _pending.fill(0);
         for (auto& lane : _lanes)
         {

@@ -183,19 +183,26 @@
         performance/device/shutdown closeout remain open.
       - [ ] Activate one active/latest pending preview graph and route discard/capture-loss before enabling the
         deferred policy in production. Qualify real host coalescing, failure, cancellation and lifetime controls.
-        - [ ] Ordinary policy candidate — Privately route Ctrl+T, typed headers, body drag and layer nudge through
+        - [x] Ordinary policy candidate — Privately route Ctrl+T, typed headers, body drag and layer nudge through
           BeginDeferredTransform; mark worker-opened floating drafts deferred. Reviewed interaction tests cover
           exact typed/nudge/body geometry, ephemeral/persistent pointer loss, real Ctrl-corner distortion/Undo
           and floating opening/cancel. Event-gated preview tests replace the device and shut down independent
           hosts before/after preparation. The initial build refusal for discarded nodiscard results is preserved;
           the r3/r4 full runs expose obsolete direct-Undo fixture loops. Sources, binaries and diagnostic
-          evidence are preserved; the running disposable processes await explicit termination authorization.
+          evidence are preserved; those disposable processes have since exited externally.
           The r5 bounded harness exposes a floating-outline assertion reading before preview acknowledgement;
           its failure is preserved before adding the acknowledgement wait. The r6 full private run is pending.
           The r6 run finds an owner preview ticket retained after scheduler shutdown suppresses callbacks;
           its exact failure is preserved before clearing that ticket after the join. The r7 complete private
           WARP self-test passes 29 policy and 108 preview controls, with all existing application suites,
-          against 542 private inputs. Production policy activation and all native gates remain open.
+          against 542 private inputs. Reviewed production policy is now activated. The first native matrix passed
+          all three ARM64 clean cross-builds and full x64 ASan; Release stopped at an inline CL/R8 table proof
+          before runtime, and Debug did not run. Its 564 inputs and 294 evidence entries remain archived in
+          `.build/p1-transform-policy-native-r1-Release-isa-failure/`. The precise parser extension passes 99
+          controls and rechecks that original Release image without an allowlist exception. A fresh combined
+          lifecycle/policy/shutdown r9 matrix now passes all six profiles, with 29 policy and 112 preview controls
+          per x64 configuration ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader lifetime and
+          all timing gates remain open.
     - [ ] T5 — Exercise real host success, stale, before/after-ready cancellation, reached allocation/history faults,
       refusal, reordered/newer input, hidden/device recovery, replacement and shutdown. All tickets, history barriers,
       reservations and retired graphs must acknowledge exactly once. Qualify all native profiles before activation

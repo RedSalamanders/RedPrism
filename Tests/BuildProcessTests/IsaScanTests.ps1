@@ -8,9 +8,23 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
 & (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdxByteRemapTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Guarded RDX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaCompactRcxByteRemapTests.ps1')
+& (Join-Path $PSScriptRoot 'IsaR10AlGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaWideStackGuardTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'RDI-image-base byte-remap parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaMarkedTableTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'PDB-marked table parser controls failed.' }
 $root = Join-Path $repo ".build\IsaScan\Controls\$($Configuration -replace '\s', '')"

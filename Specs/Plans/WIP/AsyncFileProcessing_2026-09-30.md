@@ -74,6 +74,14 @@
       and all six frozen native profiles qualify. Native waits retain the source even during cancelled external render.
   - [ ] F5d — Full contention/delayed-render/cancel/shutdown gates and real-loop measurements; retire production UI codec/transfer callers.
 - [ ] F6 — Faults, late cancellation, shutdown save coordination, complete validation and measured UI/apply/IO bounds; update master checklist.
+  - [x] F6a.4 — Bounded native staging-publication recovery with truthful cancellation/publication and rollback:
+    at most three attempts after native error 5/32, 25/100 ms event waits, separate timer resource faults and final
+    injected rename errors. Independent real staging-child/directory readers cover first saves and replacements.
+    Combined r6 failed the initial destination-retry fixture before fault installation; its exact 577 inputs and
+    294 evidence entries are archived. Focused Release r4 passes 269 publication controls and the complete I/O suite;
+    fresh r9 full-matrix qualification passes all six profiles
+    ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Unexpected destination races retain exact foreign bytes and the old
+    backup after rollback refusal. External cause, IO-call interruption and measured cancellation limits remain open.
   - [x] F6a.2 — Timer creation/arming/wait resource faults preserve native rollback errors, backup and publication
     truth; healthy/final-injected rollback paths skip timer hooks. All configurations and 40 rotation checks pass
     after correcting the directory fixture to lock the directory itself ([evidence](../../TestRuns/LiftedPixelsPreparation_2026-10-01.md)).

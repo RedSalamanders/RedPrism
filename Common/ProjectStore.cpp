@@ -1573,18 +1573,45 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     return true;
 }
 
-[[nodiscard]] bool RenameDirectory(const std::wstring& from, const std::wstring& to, ProjectSaveFaultStage faultStage,
-                                   std::uint32_t& failure, ProjectSaveFaultPolicy faultPolicy) noexcept
+[[nodiscard]] ProjectIoStatus PublishDirectory(const std::wstring& staging, const std::wstring& dest,
+                                               std::uint32_t& failure, bool rotated, CancelToken cancellation,
+                                               ProjectSaveFaultPolicy faultPolicy, ProjectIoObserver observer) noexcept
 {
-    failure = RequestedFailure(faultPolicy, faultStage);
+    failure = RequestedFailure(faultPolicy, ProjectSaveFaultStage::StagingToDestinationRename);
     if (failure != 0)
-        return false;
-    if (!MoveFileW(from.c_str(), to.c_str()))
+        return ProjectIoStatus::Encode; // Injected operation failures remain final.
+    constexpr std::array<LONGLONG, 2> retryDelays100ns{-25 * 10000ll, -100 * 10000ll};
+    wil::unique_handle retryTimer;
+    for (std::size_t attempt = 0;; ++attempt)
     {
+        // Before rotation no external destination was changed. After rotation, a late stop must not abandon
+        // the new publication or the complete recovery backup. Never replace an unexpected destination.
+        if (!rotated && cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled;
+        if (MoveFileW(staging.c_str(), dest.c_str()))
+            return ProjectIoStatus::Ok;
         failure = GetLastError(); // Capture before reporting, rollback or cleanup.
-        return false;
+        if ((failure != ERROR_ACCESS_DENIED && failure != ERROR_SHARING_VIOLATION) ||
+            attempt == retryDelays100ns.size())
+            return ProjectIoStatus::Encode;
+        if (!retryTimer)
+        {
+            if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::PublicationTimerCreate) != 0)
+                return ProjectIoStatus::Encode;
+            retryTimer.reset(CreateWaitableTimerW(nullptr, FALSE, nullptr));
+        }
+        LARGE_INTEGER due{};
+        due.QuadPart = retryDelays100ns[attempt];
+        if (!retryTimer || RequestedFailure(faultPolicy, ProjectSaveFaultStage::PublicationTimerArm) != 0 ||
+            !SetWaitableTimer(retryTimer.get(), &due, 0, nullptr, nullptr, FALSE))
+            return ProjectIoStatus::Encode;
+        Report(observer, ProjectIoStage::PublicationRetryScheduled, failure);
+        if (!rotated && cancellation.IsCancelled())
+            return ProjectIoStatus::Cancelled;
+        if (RequestedFailure(faultPolicy, ProjectSaveFaultStage::PublicationTimerWait) != 0 ||
+            WaitForSingleObject(retryTimer.get(), 1000) != WAIT_OBJECT_0)
+            return ProjectIoStatus::Encode;
     }
-    return true;
 }
 
 [[nodiscard]] bool RestoreDirectory(const std::wstring& backup, const std::wstring& dest, std::uint32_t& failure,
@@ -1670,6 +1697,7 @@ constexpr unsigned int kMaxCleanupDepth = 128;
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
     const std::wstring backup = dest + L".old";
+    bool rotated = false;
     Report(observer, ProjectIoStage::Staged);
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
@@ -1690,10 +1718,15 @@ constexpr unsigned int kMaxCleanupDepth = 128;
                 Report(observer, ProjectIoStage::DestinationToBackupFailed, failure);
             return rotation;
         }
+        rotated = true;
     }
     std::uint32_t publishFailure = 0;
-    if (!RenameDirectory(staging, dest, ProjectSaveFaultStage::StagingToDestinationRename, publishFailure, faultPolicy))
+    const auto publication =
+        PublishDirectory(staging, dest, publishFailure, rotated, cancellation, faultPolicy, observer);
+    if (publication != ProjectIoStatus::Ok)
     {
+        if (publication == ProjectIoStatus::Cancelled)
+            return publication; // Only reachable before rotation; leave any earlier recovery backup intact.
         Report(observer, ProjectIoStage::StagingToDestinationFailed, publishFailure);
         if (IsDirectory(backup.c_str()))
         {

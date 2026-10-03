@@ -59,10 +59,34 @@ enum class HostPathAction : std::uint8_t
 struct HostCommandInput final
 {
     int command;
+    std::optional<std::uint64_t> selectionMoveOpening; // bound by the owner at admission, never geometry
+};
+struct HostWandLayerNewInput final
+{
+    Vec2 point;
+    WandSettings settings;
+    bool antialiased;
+};
+struct HostSelectionMoveCloseInput final
+{
+    std::uint64_t opening;
+    bool cancel;
+};
+struct HostSelectionMoveClickInput final
+{
+    std::uint64_t opening;
+    std::optional<HostWandLayerNewInput> wand; // absent means Deselect; retain the click's point/settings/AA
+};
+struct HostSelectionMoveHeaderInput final
+{
+    std::uint64_t opening;
+    SelectionAction action;
+    double value;
 };
 struct HostToolInput final
 {
     EditorTool tool;
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostShapeFinishInput final
 {
@@ -138,6 +162,11 @@ struct HostPixelNudgeInput final
 {
     Vec2 offset; // event-time Shift step; a queued press must not read newer keyboard state
 };
+struct HostSelectionNudgeInput final
+{
+    int dx;
+    int dy;
+};
 struct HostLayerNudgeInput final
 {
     Vec2 offset; // Own the layer nudge's event-time Shift step through preceding commits.
@@ -180,7 +209,8 @@ using HostRequestInput =
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
-                 HostDuplicateBeginInput, HostDuplicateFinishInput>;
+                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
+                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

@@ -293,6 +293,24 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   rounded offset from the drag start without re-clipping (the outline can leave the canvas and come back intact);
   `EndSelectionMove` closes the entry; `CancelSelectionMove` (Escape) puts the outline back where the move began and
   closes the entry unrecorded; `NudgeSelection` is one entry per press.
+- `SelectionNudgeWork` supplies a separate settled-session core for whole-pixel nudges. Its sealed move-only input
+  captures the document/history, session/generation/target/crop authority and exact outline-opening counter.
+  Absent/empty selection, live outline, pending edits/gestures and exhausted counters refuse capture.
+  Worker translation preserves every vertex, AA, holes and off-canvas geometry without clipping or coverage
+  construction; the producer caches point count, bounds and retained capacity in that same cancellable pass.
+  Complete `Move Selection` history is prepared before nonthrowing current-only publication and owner swaps.
+  Publication advances the opening counter once and generation twice, matching MoveSelection/EndEdit.
+  Zero offsets share geometry and preserve revision/redo, while acknowledging the prepared history epoch;
+  nested transactions retain their original outer name/depth. Caller eligibility remains a host policy.
+- Eligible settled keyboard arrow commands own a signed whole-pixel `HostSelectionNudgeInput` at event time:
+  one pixel, or ten with Shift. They are noncoalescing ordered requests; later Shift changes cannot alter them.
+  Selected execution refuses a newly opened outline or coexisting edit before capture or unrelated settlement.
+  Complete scheduler admission precedes document/history capture; worker preparation resumes that same job.
+  Current-only completion acknowledges the exact history ordinal, publishes geometry/history together and
+  retires the prepared/old-owner aggregate through the worker release sink. Refusal, failure, stale authority
+  and cancellation publish no partial result and never run a synchronous fallback for this eligible route.
+  An already live outline keeps the existing no-op policy. Other coexisting routes remain separately tracked
+  in the selection worker plan; this route alone does not complete selection migration or measured G1.
 - `CanModifySelection`: a non-empty selection and no draft. `ExpandSelection(amount)` offsets outward and clips to
   the canvas (`Expand Selection`); `ContractSelection(amount)` offsets inward, away from the canvas edges too, and
   can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.
@@ -302,15 +320,69 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   Capture owns the whole document/history after admission; worker preparation builds complete changed
   geometry/history, and exact session/generation/active/mask/crop/epoch validation precedes nonthrowing apply.
   Geometrically unchanged commands preserve revision, redo, epoch and generation. Explicit empty remains
-  distinct from absent selection. This factory refuses pending gestures and edits; direct command eligibility
-  remains unchanged until ordered production callers and exact live-gesture authority qualify.
+    distinct from absent selection. This factory refuses pending gestures and edits.
+  - Application routes settled Select All/Deselect through its owned host request and history ordinal. The full
+    command/history reservation precedes snapshot capture; the same suspended job resumes for worker preparation.
+    Completion validates the exact stamp, settled session authority and sealed publication before apply. Cancel,
+    stale authority, capture/history allocation faults and scheduler refusal acknowledge without partial geometry
+    or history publication. The request survives until that acknowledgement; younger document commands wait,
+    while view commands and messages continue. Replaced CPU owners retire in the worker release aggregate.
+    Empty-document requests acknowledge without a worker. True no-ops retain redo/revision/generation; nested
+    history joins its original outer entry and saved-marker changes during preparation survive publication.
+    Existing live brush/warp/shape, lasso, outline-move and selection-header routes remain separate migrations.
+    This settled route does not authorize synchronous gesture closure or establish the measured G1 exit.
+- `PreparePreservingSelectionCommandInput` is a separate Select All/Deselect boundary for an existing brush,
+  warp or shape opening. It preserves mutable gesture owners and captured stroke coverage. Opaque authority
+  binds weak brush/warp control-block identities and the shape opening counter, plus the same document/history/
+  target/crop stamps. The worker never locks or reads these gesture owners. Continued brush/warp samples and
+  shape drag bounds do not invalidate this opening; cancellation, closure or replacement does. A shape reopened
+  with identical geometry is a different opening. Panels, gradients, transforms, lifted pixels, lasso and outline
+  moves remain refused. Settled history-restore authority and the original settled factory remain unchanged.
+  This core API does not activate application commands or authorize synchronous gesture closure; host ordinals,
+  retained pointer arguments and writer barriers remain S2/S3b/P1.4.
 - `SelectionMoveWork` prepares active outline-move End/Cancel history before removing the original outline.
+  A successful Begin owns a session-local monotonic opening; `SelectionMoveOpening` is absent after closure or
+  document removal. Replacement and clear/recreate preserve the counter. Exhaustion refuses Begin before
+  history opens. An expected event-time opening refuses a closed/reopened move before capture, including equal
+  geometry. Prepared apply additionally binds that same opening; existing whole-document/history checks remain.
   End retains moved geometry and acknowledges one generation. Cancel restores the original and acknowledges
   two generations (restoration plus End), including a no-op. Changed history and named outer transaction depth
   follow the direct reference methods. Whole-document authority, original outline identity, active/mask/crop and
   exact history epoch are checked before publication. Replaced origin/display/document/history ownership
-  remains in the prepared aggregate for worker retirement. Existing host pointer/command routes remain direct
-  until their owned input and prepared closure are separately qualified.
+  remains in the prepared aggregate for worker retirement.
+  The Application routes moved-pointer release through prepared End and direct Escape/first Undo/Redo through
+  prepared Cancel. Its bounded typed input binds the exact opening and shared host ordinal; a replaced opening
+  is refused before capture or unrelated edit settlement. Closing preserves an enclosing transaction's name
+  and depth and reuses Begin's original outline snapshot. Admission immediately stops further outline samples,
+  even on refusal. Repeated producers for the same opening/intent reuse the pending receipt. The receipt and
+  history barrier stay owned through acknowledgement. A failed/cancelled worker retains the moved draft,
+  original outline and pending history for retry; admission failure has no synchronous closure fallback.
+  Known End-before-command and changed-tool events also retain their event-time opening and wait for End
+  acknowledgement before Execute. Same-tool inputs preserve the move. Selected first Undo/Redo with only
+  the outline active cancels and consumes the input; younger Undo after an older successful End restores its
+  completed history entry. Capture loss closes the moved outline through the owned producer. A replaced
+  opening is refused before unrelated settlement/capture, and failure runs no dependent action.
+  An eligible zero-offset release retains End and Deselect, or active-layer New wand at the original press
+  point, in one noncoalescing typed request. It binds the opening and event-time wand settings/AA, validates
+  before unrelated settlement/capture, and keeps the selected ordinal through both acknowledged workers.
+  Younger writers cannot pass either phase. Failure before End runs no dependent action; failure/cancellation
+  after acknowledged End preserves the completed closure and publishes no dependent selection/history.
+  Admission refusal stops pointer samples without a synchronous fallback. A coexisting pending edit or
+  All Layers keeps its current caller policy until separately migrated; the typed settled route refuses
+  those states before End. Enclosing history name/depth and true no-op/redo semantics remain unchanged.
+  Eligible idle outline headers for SetMarqueeKind, SetLassoKind and Deselect own the exact opening/action/value
+  in a noncoalescing request. Admission/refusal stops samples; opening validation precedes capture or unrelated
+  settlement. Acknowledged End precedes the event-time kind change or prepared Deselect at the same ordinal.
+  An unchanged kind still Ends the move. A failed End changes no setting and runs no Deselect; failure/cancellation
+  after End retains its completed moved outline/history without publishing dependent selection/history.
+  Zero-offset End preserves redo; moved End keeps its separate Undo before Deselect. Enclosing transaction
+  name/depth survives. Existing busy and coexisting header policy remains separate; admission never falls back
+  synchronously. The native header qualification is tracked in SelectionWorkers S3b1b1b0.
+  The retirement observation covers the prepared aggregate, not each raster's final reference. Remaining
+  coexisting headers/edits and replacement/close still require separate owned migration; Save/Export/Enter
+  preserve their live outline behavior. End-before-action
+  classification does not migrate its dependent geometry/pixel work. Graph capture/accounting costs,
+  broader selection kernels and measured G1 remain separate requirements.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,
@@ -334,6 +406,29 @@ where loops meet so touching corners stay apart; more than 8 000 000 edges is `W
 allocation failure `WandFailure::Memory`. `MagicWand::Select(image, point, settings)` floors the point to a pixel,
 masks and traces; nullopt when nothing matches or the point is outside the image.
 
+### Cancellable wand and trace preparation (P1.6 S4a)
+
+`Mask`, `Trace`, `Select`, `MaskTracing::DarkPixels` and `OpaquePixels` accept an optional cancellation token;
+direct callers use an empty token. Cancellation discards the entire private output. `Mask` reports count `-2`
+(`MagicWand::kCancelledMaskCount`); selection/tracing report `WandFailure::Cancelled`. The existing `None`,
+`Memory` and `TooDetailed` results and numeric/topological rules remain unchanged. A noncancelled empty result
+retains the existing nullopt/zero-count behavior. Observers are optional borrowed `noexcept` checkpoint callbacks;
+their lifetime ends with the call and they cannot publish document state.
+
+Already materialized input pixels are shared read-only. Otherwise the kernel uses a private cancellable contiguous
+copy; it never publishes the source's lazy cache. Mask and vertex storage are initialized in spans of at most
+4096 bytes. Explicit matching/edge construction visits, flood seeds/run/neighbor steps, vertex starts and directed
+edge walks check cancellation at no more than 4096 steps **in each stage**. Sampling retains the clipped sample
+square and rounded four-channel reference. Flood visitation/seed order, right-turn corner separation, outline
+order/winding and the eight-million-edge refusal are unchanged. Vertex-start scans can skip all-zero scalar
+64-bit words within the checked span using unaligned-safe `memcpy`; they still find nonzero vertices in order.
+
+`RenderLayerPixels` forwards cancellation to its placed rasterizer, including transparent blank/invalid-transform
+results. Its sampling and placement rules below remain unchanged. Kernel checkpoints do not bound allocator,
+OS call, vector growth, loop-vector compaction or Clipper latency. These APIs prepare worker migration; the host's
+wand/clone/sampler and selection command/pointer routes remain synchronous until ordered source acquisition,
+complete admission, history publication and lifetime qualification land. S4a establishes no UI/G1 time bound.
+
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
 the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
 flattened composition readback; a missing or wrongly sized composite makes the click do nothing), otherwise the
@@ -343,6 +438,39 @@ the same sampler `CanvasSize` places a layer with, collapsing High to Smooth sin
 resample; transparent outside the box or for an invalid transform); a folder or blank layer reads as transparent,
 so the whole canvas matches. Nothing matched deselects in New mode. A New selection takes the traced loops without
 the canvas clip (they already lie on it); Add and Subtract go through `ApplySelection`. One `Magic Wand` entry.
+
+### Prepared active-layer New wand (P1.6 S4b core)
+
+`WandLayerSelectionInput` retains event-time point/settings/AA, an owned document value and immutable history
+view. Capture requires finite on-canvas input, a supported sample size and a settled document; All Layers and
+live gestures are refused without changing or settling them. Its authority retains session/document/restore
+identity, generation, active/mask target and crop; history publication separately validates the exact epoch.
+Changing header settings later does not change the captured request. Owner capture still copies layer metadata.
+
+`PrepareWandLayerSelectionPublication` reads only this owned graph. The active image is placed using the sampler
+above, ignoring its visibility, opacity and mask, then traced with the cancellable kernels. A source with no
+storage produces the exact clockwise canvas rectangle directly: every sample is transparent for every supported
+radius, tolerance and connectivity. This shortcut creates no canvas-sized pixels, mask or vertex grid.
+
+Preparation owns the complete after-document and history publication. A changed traced selection is `Magic Wand`;
+no match in New mode becomes a named `Deselect`. Geometric/AA equality is a true no-op preserving redo, revision,
+generation and history epoch. Nested history retains its outer depth/title; publication does not replace a saved
+marker changed while work was in flight. Cancellation, memory/refusal and thrown history allocation failure
+install no partial selection or history.
+
+Current apply is nonthrowing validation followed by history publication and document/display-owner swaps.
+Applied and rejected aggregates retain their owners for worker disposal; they must not be destroyed on the owner
+path by a production caller. This core does not route application input. S2/S3b ordering, gesture closure, complete
+scheduler admission and All Layers/Add/Subtract remain separate prerequisites; no UI/G1 bound follows from it.
+
+Application routes settled active-layer New wand input through the owned host request and shared ordinal. Point,
+settings and AA are event-time values; complete phased memory admission precedes capture/resume. Worker source
+sampling/flood/trace and history preparation use only the captured graph. Current-only completion acknowledges
+success/refusal before younger work and retires its complete aggregate off owner. Outside/nonfinite clicks and
+empty documents acknowledge without a job or selection change; an in-canvas no-match publishes `Deselect`.
+Consecutive queued New requests obey the existing document/adjacent-ordinal coalescing rules and retire the
+superseded receipt. This route does not change the pointer busy guard, All Layers/Add/Subtract/Intersect or
+live-gesture routes. Broader pointer replay/closure, metadata/accounting and G1 qualification remain separate.
 
 ## Brush session (C10)
 

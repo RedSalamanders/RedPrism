@@ -2,6 +2,212 @@
 
 ## Implementation checklist
 
+- [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions
+  pass in x64 Debug/Release/ASan. Fixture helpers follow the existing 30-attempt/100 ms event-wait policy;
+  production retry limits, sealed authority and literal assertions remain unchanged.
+- [x] Current P1 functional integration, 2026-10-02 — Ordinary deferred transforms, admitted worker
+  New/New Canvas/Close, acknowledged session CPU retirement, suspended/prequeued shutdown and bounded folder
+  staging publication pass the clean x64 matrix and all ARM64 cross-builds. Strict CL/R8, compact RCX and R10/AL
+  ISA proofs preserve the runtime allowlist. Exact 582 inputs and 327 evidence files are byte/SHA verified
+  ([qualification](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)); original failures remain preserved.
+- [x] P1 shutdown CPU roots — Sampling/overlay/benchmark CPU roots: eight original failures among 52 controls
+  are preserved before repair; the complete private WARP candidate passes all 52 and existing application suites.
+  The fresh native matrix passes all six profiles against 582 unchanged inputs: 52 shutdown controls and full
+  suites in each x64 configuration, plus all ARM64 cross-builds. The benchmark state/timing/metadata remain valid
+  ([qualification](../../TestRuns/P1ShutdownCpuRoots_2026-10-02.md)).
+  Broader shutdown, selection/stroke/readback/history paths and measured G1 remain open.
+- [x] P1 shutdown acquired-prefix initialization: primary-owned controls cover eight
+  successful-stage checkpoints, sixteen retry event/registration seams, successful and never-started processing.
+  Its complete private Debug WARP application passes all 390 controls and unchanged suites; exact private proof
+  is archived before native activation. Review confirms the 26-case prefix/count/lifetime expectations.
+  The native candidate passes all six forced-rebuild profiles against 584 unchanged inputs, with 390 processing
+  and unchanged 52 shutdown controls in each full x64 suite. Exact sources/products/receipts are archived
+  ([qualification](../../TestRuns/P1ProcessingInitialization_2026-10-02.md)). These controls
+  do not qualify native allocation/pool/GPU API failures or broader A3.
+  Native r1 passes all ARM64 cross-builds and full x64 ASan, then Release's actual self-test crashes before
+  buffered output reaches its log; x64 Debug does not run. Exact 584 inputs, 230 evidence files and PID 108148's
+  dump are archived before repair. Symbol/disassembly and retained build timestamps show Release reused the
+  pre-probe `Application.obj` with the older member layout: private file copying preserved source timestamps
+  older than that object. A supplementary 162-entry tracking archive is retained. Move stdout configuration
+  before all standalone tests and force a six-profile rebuild; the buffering issue is not the crash cause.
+- [x] P1 live shutdown slice — Live Paint/Erase/Heal/Clone/Blur/Liquify/Smudge owners, including masks:
+  the reviewed isolated Debug WARP candidate passes all 432 controls, unchanged 390 processing/52 shutdown checks
+  and the full existing application suite at `2026-10-02T14:26:05.1417394Z`. Exact 562 private inputs and 25 evidence
+  entries are archived before native activation. Eight reviewed files are activated with current write timestamps;
+  six forced-rebuild profiles are required before completion/commit. GPU/event/clipboard leases, API faults and
+  timing remain open.
+  The fresh six-profile forced rebuild passes at `2026-10-02T15:06:20.9478751Z`; each full x64 suite passes
+  all 432 live-owner controls and unchanged startup/shutdown checks. Exact 585 inputs and 327 evidence files
+  are byte/SHA verified before the next private build
+  ([qualification](../../TestRuns/P1LiveShutdown_2026-10-02.md)). This closes A3c only.
+- [x] P1 shutdown GPU/retry lease slice — A3d actual mapped GPU rows and retry wait producers/receivers: prepare four
+  standalone Application cases, with 56 event-gated assertions, in a private tree. Observe mapped-row
+  acknowledgement before queue fallback cleanup, retain literal bytes through cancellation and device
+  retirement, and join held/ready-undrained retry producers before receiver destruction. Preserve the first
+  private link failure before serializing shared DxUi builds. Clipboard leases, actual API faults and timings
+  remain separate; private runtime and native qualification are pending.
+  The complete private Debug WARP application now passes all 56 actual map/retry controls and unchanged suites;
+  exact 563 inputs and 40 evidence entries are archived before activating seven reviewed native files.
+  Native r1 passes all ARM64 cross-builds, then stops at x64 ASan's linked ISA check before runtime;
+  x64 Release/Debug do not build or run. Exact 586 inputs and 243 evidence files are preserved before repair.
+  The reported instruction bytes belong to an eleven-entry terminal DWORD switch table; the observed matching
+  RSP+disp32 guard needs a narrow data proof. Private controls pass without changing the runtime allowlist.
+  Original-image recheck and fresh six-profile qualification remain required; A3d/P1/G1 stay open.
+  The private proof now passes the exact original image and all parser controls: only three rows inside two
+  bounded terminal tables change classification; runtime/tier/EVEX policy is unchanged. Exact proof sources and
+  evidence are archived before activation. Fresh native r2 is running all six forced-rebuild profiles.
+  Native r2 now passes all six profiles against 587 unchanged inputs; each full x64 suite passes all 56 lease
+  and 54 new strict ISA controls, with existing goldens unchanged. Independent source/evidence verification
+  retains 587 inputs and 325 evidence files
+  ([qualification](../../TestRuns/P1LeaseShutdown_2026-10-02.md)). Broader A3/P1/G1 remain open.
+- [x] P1 wand/trace cancellation foundation — S4a cancellable wand/flood/mask tracing and layer sampling: a private candidate
+  prepares sparse reads without source-cache publication and bounded explicit-loop cancellation checkpoints.
+  Primary reviews the cheaper agent's literal/checkpoint tests, fixes the actual corner-touch case and adds
+  owner-driven local/shutdown cancellation. Private full DocumentTests and paired Release kernel measurements
+  precede activation and a fresh native matrix. Ordered host/GPU caller migration and G1 remain separate.
+  Private Release r1 passes all 54 cancellation checks and existing document goldens, but paired 45 MP medians
+  regress by 34% matching, 39% flood and 19% trace. Exact inputs, image/PDB, compiler tracking, logs and machine
+  metadata are preserved before tuning. Chunked r2 passes again; matching/trace regress by about 3%, flood by
+  18%, so it also stays private and is archived. Further tuning and reviewed odd-width/tail checkpoint tests
+  precede qualification; no production selection route has changed.
+  Private r6 now passes all 54 cancellation and 17 boundary checks, unchanged document goldens and two paired
+  measurements. Final matching medians add 2.9–4.2%; flood varies from 5.4% faster to 4.7% slower, solid trace
+  adds 0.6–1.6%, and fragmented stripe trace varies from 3.1% faster to 1.3% slower. Retain shared-desktop outliers;
+  these are kernel costs, not G1 qualification. Exact 289 inputs and 199 evidence entries are archived before
+  activating nine reviewed native files with current write timestamps. The fresh six-profile forced rebuild is
+  running; S4a remains unchecked until its native matrix and archive pass.
+  The native matrix now passes all six profiles at `2026-10-02T17:49:56.7560093Z`: each full x64 suite passes
+  all 71 named controls and unchanged goldens; ARM64 is build-only. Exact 591 frozen inputs and 328 evidence
+  files are independently SHA-verified before another build
+  ([qualification](../../TestRuns/WandCancellation_2026-10-02.md)). This completes S4a only.
+- [x] Active-layer New publication core — S4b prepares settled active-layer New sampling/trace and
+  complete history publication with captured point/settings/AA. A transparent-source rectangle shortcut and
+  cheaper-agent literal/authority/history tests were reviewed and corrected. The final private Debug suite passes
+  117 unique controls plus existing goldens; exact 296 inputs and 136 evidence files are archived before native
+  activation. Capacity planning carries sparse-copy recycling through later phases; actual worker retirement
+  releases the test's observation owners first. Native r1 passes ARM64 and full x64 ASan, then Release stops
+  before runtime at an unrecognized RDI-indexed adjustment switch table in the linked ISA scan. Exact 595 inputs
+  and 297 evidence files retain the failure before repair. The unchanged-image recheck and strict parser controls
+  precede a fresh native matrix. Combined r2 now passes all six profiles with 117 exact wand checks in every
+  full x64 suite. Independent source/control verification and archival retain 598 inputs and 7,223 evidence files
+  ([record](../../TestRuns/WandLayerSelection_2026-10-02.md)). Host ordering, live gestures, All Layers, booleans and G1 stay open.
+- [x] Preserving selection authority — S2a adds separate weak opening identity for live brush/warp/shape without
+  weakening settled history restore. A primary-reviewed private Debug suite passes 136 unique controls, including
+  literal committed pixels and separate Undo steps proving the original stroke clip survives Select All/Deselect.
+  Exact 299 inputs and 137 evidence files are archived; original fixture/compile failures remain retained. S4b and
+  this core share the fresh native qualification matrix. Production pointer buffering and writer barriers stay open.
+  Combined native r2 now qualifies all 136 named controls in each full x64 suite and all ARM64 cross-builds;
+  exact source parity and independent evidence hashes pass ([record](../../TestRuns/SelectionPreservation_2026-10-02.md)).
+- [x] Settled selection host route — S2b is qualified: admit before owner capture,
+  prepare history on the worker, retain the selected ordinal/input until apply/drop, and retire the aggregate
+  off owner. Actual Application ordering/fault/pump/authority tests precede native activation. Header inputs,
+  live brush/warp/shape, lasso/move closure, broader writer barriers and G1 remain separate requirements.
+  Private r1 compiler failure, r2's unreached mask-target fixture and r3's clipboard setup ordering failure are
+  archived before each correction. The r3 selection stage passes 162 exact named checks, but the full application
+  suite fails: its pending-gradient fixture began pointer input before queued Deselect acknowledged. The fixture
+  now waits through the existing asynchronous command helper; production clipboard/gradient logic is unchanged.
+  The revised full private Debug suite must pass and be archived before native activation.
+  Private r4 now passes the full WARP application suite and all 162 named selection checks across 28 modes.
+  Exact 471 inputs and 188 evidence files are independently SHA-verified and archived before eleven native
+  activations. A fresh serialized six-profile forced rebuild is running; S2b remains unchecked until exact native
+  controls, source parity and archival pass ([record](../../TestRuns/SelectionHost_2026-10-02.md)).
+  Native r1 stops in ARM64 ASan HostTests: its string catalogue's declared size omits the newly added ID. No
+  complete profile qualifies. Exact 601 inputs and 3,850 evidence files are retained before a single-byte test
+  count correction; private application inputs/qualification are unchanged. Native r2 runs the full fresh matrix.
+  All ARM64 cross-builds and the complete x64 ASan suite now pass, including actual sanitizer detection,
+  full WARP application controls and corpus/screenshot gates. x64 Release/Debug, independent verification and
+  archival remain required before checking S2b.
+  Native r2 now passes all six profiles at `2026-10-02T21:48:10.2541344Z`. Each full x64 suite passes the exact
+  162 unique actor checks; ARM64 is cross-build only. Independent source/control verification and immutable
+  archival retain 601 inputs and 2,858 evidence files, including a separately verified 45-file private runtime
+  supplement for omitted archive log entries. Only the settled Select All/Deselect host boundary is complete;
+  S2/S3b, broader P1 and measured G1 remain open.
+- [x] Active-layer New wand host route — Prepare the next isolated source candidate while S2b native inputs
+  are frozen. Own point/settings/AA at event time; use the qualified capacity planner before capture, worker
+  sampling/flood/trace/history, current-only apply and aggregate retirement. Preserve queue coalescing/receipts,
+  literal output, no-op/error/cancel semantics and the actual application caller. All Layers, Add/Subtract,
+  outline/lasso closure, broader pointer acceptance/writer barriers and G1 remain separate migrations. Private
+  code review, full application proof, archival and native qualification precede activation.
+  Primary review strengthens the cheaper-agent test draft with distinct latest-click literals, a real shared-
+  ordinal gap, a window message observed before worker release, event-time settings changed before capture,
+  queued outside/nonfinite/empty acknowledgements and actual record-table refusal/recovery. The isolated source
+  has sixteen test modes, independently qualified below.
+  The complete private Debug/WARP application now passes all 86 new controls, unchanged selection/compatibility
+  suites and all 49 registered stages. Exact 475 inputs and 197 evidence files are archived before nine reviewed
+  native activations. All six forced native rebuild profiles, full x64 suites and ARM64 cross-builds pass. Exact
+  control/source verification and independent archival retain 604 inputs and 877 evidence files; each x64 run
+  passes 86/16 wand-host controls and 162 retained selection-host controls. Only this settled host boundary is
+  complete ([record](../../TestRuns/WandLayerHost_2026-10-03.md)); all broader P1/G1 requirements stay open.
+- [x] Outline-move opening core authority — S3b0 qualifies the private core prerequisite: a bounded scalar opening
+  identifies the exact gesture before capture and survives equal-geometry reopen/refusal cases. Preserve all
+  prepared End/Cancel generation/history semantics and account complete original-outline retirement. Private
+  source, reviewed literal/state-machine controls and full core/native qualification precede host closure;
+  S4c native inputs stayed frozen throughout preparation. The primary-reviewed private core passes 66 unique
+  new checks and the complete DocumentTests suite, retaining all 185 closure controls and original goldens.
+  Failed attempts are archived before corrections; final proof retains 554 inputs and 145 evidence files before
+  eight reviewed native activations. The fresh forced six-profile matrix passes at `2026-10-02T23:17:48.9451202Z`;
+  exact native controls/source verification and archival retain 606 inputs and 913 evidence files
+  ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). Production outline closure remains open.
+- [x] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
+  under the shared ordinal, stops later pointer samples and retains draft/history until acknowledgement.
+  The primary-reviewed private full WARP Application proof passes 242 unique controls across 31 modes and all
+  50 stages; its 618 exact inputs/199 evidence files are archived before nine host activations. The native
+  r1 matrix freezes 609 inputs; ARM64 cross-builds and x64 ASan pass, then Release's ISA gate rejects a
+  vector-looking OnCommand table row. Exact failed inputs/products and 4,286 evidence files are archived before
+  scanner diagnosis. The unchanged failed image and all nine parser suites now pass the narrow RDI-base
+  proof, including 56 new controls without changing the allowlist. Its immutable archive retains 13 inputs
+  and 238 evidence files. Native r2 is running against 610 frozen inputs; verification/archive remain required
+  Native r2 now passes all six profiles at `2026-10-03T01:07:26.4741875Z`, with 242 exact host controls, 56
+  ISA controls and all 50 Application stages in each full x64 suite. Independent source/control verification
+  and immutable archival retain 610 inputs and 1,298 evidence files
+  ([record](../../TestRuns/SelectionMoveHost_2026-10-03.md)). S3b1b still requires no-move follow-ups and the
+  remaining concrete End/Cancel callers while preserving Save/Enter and nested history. Broader P1 and measured
+  G1 remain open; the private structural proof does not close them.
+- [x] Ordered outline callers — S3b1b0 binds known End-before-command/tool events to their exact outline
+  opening and preserves selected first Undo/Redo cancellation, same-tool behavior and capture loss.
+  - [x] Full private Debug/WARP proof: 276 unique checks across 49 modes, all 51 Application stages and retained
+    host checks. Exact 621 inputs/435 evidence files are archived before seven byte-identical activations;
+    the two new Select All fixture failures are preserved before correcting their AA expectation.
+  - [x] Full native matrix: all six forced-rebuild profiles pass with 276 unique caller checks/49 modes and
+    retained suites in every x64 gate. ARM64 is cross-build only. Exact verification and immutable archival
+    retain 611 inputs/1,546 evidence files; 57 refined ISA controls keep the scanner/allowlist unchanged
+    ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)).
+- [x] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
+  one selected request, retaining event-time point/settings/AA and the ordinal through both worker phases.
+  Primary-owned isolated code and 16 reviewed modes are prepared. Private r1's missing-enum-header compiler
+  failure retains 623 exact inputs/413 evidence files before correction. Private r2's full WARP suite passes
+  84 unique checks/16 modes; 623 inputs/436 evidence files are archived before seven exact activations.
+  Native r1 passes all ARM64 builds, then fails x64 ASan's linked ISA scan; 612 inputs/5,850 evidence files
+  and the failed EXE/PDB are archived before diagnosis ([record](../../TestRuns/SelectionMoveFollowups_2026-10-03.md)).
+  The narrow QWORD-stack/RAX table proof now passes 73 new controls and both unchanged failed images;
+  its immutable archive and all 57 retained RDI controls verify before activation. Native r2 passes all six
+  profiles at `2026-10-03T03:46:41.3855104+00:00`, with exact 84/16 follow-up and retained controls in every
+  full x64 suite. Independent verification and archival retain 613 inputs/21,605 evidence files at
+  `2026-10-03T03:51:14.2165680+00:00`. All Layers, remaining header/close callers and measured G1 remain open.
+- [x] Idle outline header follow-ups — S3b1b1b0 owns kind/Deselect event-time values through acknowledged End
+  at one ordinal. Primary-reviewed isolated code passes the full private Debug/WARP suite: 126 unique checks
+  across 21 modes and 53 ordered Application stages, with retained suites/goldens unchanged. Exact 625 inputs/
+  216 evidence files are archived at `2026-10-03T03:57:49.3365819+00:00` before seven byte-identical activations
+  ([record](../../TestRuns/SelectionMoveHeaders_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T04:29:21.8934408+00:00`; independent verification and immutable archival retain 614 inputs/
+  20,351 evidence files at `2026-10-03T04:39:26.9716006+00:00`. Coexisting header/size/lifecycle policies and
+  measured G1 stay open.
+
+- [x] Selection nudge core — S1c1 privately qualifies 80 unique geometry/history/cancellation/worker controls;
+  exact 629 inputs/158 evidence files are archived before eight native activations
+  ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T06:34:34.8129025+00:00`; independent verification/archive retain 619 inputs/23,770 evidence files
+  at `2026-10-03T06:41:31.8464318+00:00`. Typed keyboard host routing, other selection geometry and G1 stay open.
+  Native r1 passes ARM64 cross-builds and full x64 ASan, then Release's ISA scan refuses terminal switch data;
+  actual exit 1 and the exact failed image/618 sources/24,357 evidence files are archived before private repair.
+
+- [x] Selection nudge host — S1c2 full private WARP proof passes 84 literal checks/11 modes and 173 fault/order
+  checks/26 modes. Exact 635 inputs/216 evidence files are archived before ten byte-identical activations
+  ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)). Native r1 starts at
+  `2026-10-03T07:01:39.6988523+00:00` against 623 frozen inputs. All six profiles pass; actual exit 0 at
+  `2026-10-03T07:30:25.0520148+00:00`. Independent verification/archive retain 623 inputs/1,064 evidence files
+  at `2026-10-03T07:36:56.8764451+00:00`. Other selection producers and measured G1 remain open.
+
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.
@@ -192,6 +398,8 @@
       - [x] F6a.3 — Native destination-to-backup retry/cancellation and timer resource failures qualify in all
         six configurations with 52 real reader/fault assertions per x64 profile. Old bytes and injected final
         failures are preserved ([record](../../TestRuns/PanelCancellationHistoryPublication_2026-10-01.md)).
+      - [x] F6a.4 — Bounded native staging-publication retry and complete backup/foreign-destination preservation;
+        269 controls pass in every x64 profile and all ARM64 clean builds qualify ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)).
       - [x] Qualify D17 unique exclusive project staging, checked write/flush/close, STORE PNG members, DEFLATE compatibility and distinguishable failed-overwrite preservation. All x64 suites and ARM64 cross-builds pass; [bounded save record](../Done/ProjectSaveDurability_2026-09-30.md). Worker migration and fault injection remain open.
       - [x] Qualify bounded positional-path parsing, marker-aware mode preflight and owning startup handoff; all x64 gates and ARM64 cross-builds pass. File processing jobs remain pending.
     - [ ] P1.8 — Immutable Image Size/Canvas Size jobs under the shared history barrier; copied-draft and cancellation tests.
@@ -223,6 +431,9 @@
         561 frozen inputs ([record](../../TestRuns/DocumentLifecycleCore_2026-10-02.md)). Production default
         New, New Canvas card and Close Project activation remains in
         [DocumentLifecycleWorkers](DocumentLifecycleWorkers_2026-10-02.md); H2/H3/H4 and G1 remain open.
+      - [x] P1.9 H1 lifecycle host — Production New/New Canvas/Close, sealed admitted capture, saved optional
+        history and worker retirement qualify in all six profiles: 115/58/85 actual application controls
+        ([record](../../TestRuns/P1LifecycleShutdown_2026-10-02.md)). Broader live contexts, H2/H3/H4 and G1 remain open.
       - [x] P1.9 H2.1 / H4.1 — Immutable history-container roots and optional image thumbnails qualify in the
         frozen six-configuration matrix: 28 root/30 producer assertions and 331 parser controls per x64 suite
         ([record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
@@ -1001,17 +1212,20 @@ enum class JobClass { InteractivePreview, Refinement, Stroke, Selection, Commit,
 **Deferred release**:
 
 - Large frees move off the UI thread through a thread-local release sink in `Common/`. `Application` registers
-  the function/context pair on its UI thread after the lanes start and clears it on that thread before stopping
-  them. Other threads have no sink and free inline. This implementation decision (2026-09-27) removes the race
+  the function/context pair on its UI thread after the lanes start. Shutdown retains it through producer join and
+  owner wrapper/resource detachment, then clears it before the final worker callback and pool teardown.
+  Other threads have no sink and free inline. This implementation decision (2026-09-27) removes the race
   between loading a process-global function and its separately retired context, with no per-release lock or
   reference count.
 - `Storage`'s deleter and a directly owned `PixelBuffer` transfer allocations of 16 MiB or more to that sink.
   The buffer's allocation carries its own aligned intrusive header, so cancelled/unadopted results also avoid a
-  large UI-thread free. Normal worker destruction and final shutdown destruction remain inline.
+  large UI-thread free. Normal worker destruction and the final MTA shutdown callback free inline on their worker.
 - The node is intrusive inside `Storage`, so queuing never allocates.
 - A NORMAL-priority Background callback drains the list. Frees are never dropped or cancelled.
-- With no sink registered (tests, shutdown, non-UI threads), the deleter frees inline.
-- Shutdown drains the list after the pool stops. Admission counts queued-free bytes as releasing.
+- With no sink registered, the deleter frees inline on its calling thread. Standalone ownership tests install
+  their own sink; shutdown clears the owner's sink only after joined owner cleanup.
+- Shutdown drains the list through a preallocated, non-cancellable final MTA callback after producer join and
+  before reservation/event/pool/apartment teardown. Admission counts queued-free bytes as releasing.
 
 ### 4.5 Data-parallel execution
 

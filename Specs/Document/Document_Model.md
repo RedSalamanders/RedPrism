@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-02
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -90,8 +90,9 @@ mutable pointers before publication. `Raster::Make` retains its copying/zero-fil
 
 Large last-reference storage releases can be transferred through the owning thread's deferred-release sink.
 The intrusive node remains alive until its worker destroys it; workers with no sink release inline. Directly
-owned `PixelBuffer` results follow the same rule, including unpublished/cancelled results. Clearing the sink
-before joining/draining prevents callbacks into a destroyed scheduler. Sparse bases and tiles retain independent
+owned `PixelBuffer` results follow the same rule, including unpublished/cancelled results. Shutdown retains the
+sink through producer join and owner wrapper/resource detachment, then clears it before final worker retirement
+and scheduler teardown. Sparse bases and tiles retain independent
 shared ownership; dropping a wrapper never frees a still-referenced base or tile.
 
 Production pixel moves may retain one opaque immutable opening with source, selection, coverage and lifted pixels.
@@ -115,8 +116,8 @@ on the UI thread merely because each tile is below the per-storage threshold. Wo
 reachable raster identities and includes allocation-rounded contiguous pixel bounds, tile-vector capacities, conservative storage overhead,
 names and retained selection capacity. This retirement bound includes held immutable sources and may overcount
 sources still referenced by the live document; it never copies their pixels. Unaccounted allocation-failure
-paths remain eligible for aggregate deferral. Clearing the sink before shutdown join preserves the existing
-join/drain ownership rule.
+paths remain eligible for aggregate deferral. Clearing the sink only after joined owner cleanup preserves the
+final worker drain and prevents any retired node from outliving its consumer.
 
 `PixelBuffer` uses a separately allocated 64-byte ownership record and aligned CRT pixels. Requested size is
 distinct from rounded capacity; buffers of at least 16 MiB use 16 MiB classes for bounded recycling. Consumers
@@ -169,6 +170,13 @@ mutates through session operations, including `ApplyImportedDocument` for a vali
 and pixel budgets before replacing any state. Loaded replacements and size results also validate before install.
 `EditForTest(fn)` is a scoped fixture hook for tests and the application harness; the callback receives a document
 reference that MUST NOT escape. It invalidates the generation before the callback, including if construction fails.
+
+Final application shutdown has one exclusive retirement boundary after all producers have joined. The owner
+calls `DetachCoverageForShutdown`, severing borrowed graphics engines without destroying the CPU drafts.
+The scheduler's final MTA callback then calls `RetireCpuForShutdown` to release document, display, history, drafts,
+private clipboard and other large CPU roots without constructing a replacement session. No UI read or mutation
+may overlap that callback. This is destruction only; it publishes no edit or completion. Empty selected/collapsed
+hash bucket capacity remains until host destruction; no general concurrent session access is supported.
 
 `Generation()` is a session-local monotonic `uint64_t` mutation stamp, distinct from the history revision and the
 display-preview revision. Every `EndEdit` advances it, even inside an outer history transaction. Restore, document

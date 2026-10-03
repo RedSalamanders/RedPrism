@@ -451,6 +451,12 @@ bool Application::ExecuteHostInput() noexcept
             {
                 return !_session.PendingTransformEdit();
             }
+            else if constexpr (std::is_same_v<Input, HostSelectionNudgeInput>)
+            {
+                _hostExecutionError = StartSelectionNudge(value.dx, value.dy);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
             else if constexpr (std::is_same_v<Input, HostPixelNudgeInput>)
             {
                 ExecutePixelNudge(value.offset);
@@ -529,6 +535,33 @@ bool Application::ExecuteHostInput() noexcept
             else if constexpr (std::is_same_v<Input, HostCommandInput>)
             {
                 OnCommand(value.command);
+            }
+            else if constexpr (std::is_same_v<Input, HostWandLayerNewInput>)
+            {
+                _hostExecutionError = StartWandLayerSelection(value);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_WAND_MEMORY);
+            }
+            else if constexpr (std::is_same_v<Input, HostSelectionMoveCloseInput>)
+            {
+                _hostAfterPrerequisite = HostStage::Complete;
+                _hostExecutionError = StartSelectionMoveClose(value.opening, value.cancel);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
+            else if constexpr (std::is_same_v<Input, HostSelectionMoveClickInput>)
+            {
+                _hostAfterPrerequisite = HostStage::SelectionMoveFollowup;
+                _hostExecutionError = StartSelectionMoveClose(value.opening, false);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+            }
+            else if constexpr (std::is_same_v<Input, HostSelectionMoveHeaderInput>)
+            {
+                _hostAfterPrerequisite = HostStage::SelectionHeaderFollowup;
+                _hostExecutionError = StartSelectionMoveClose(value.opening, false);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
             }
             else if constexpr (std::is_same_v<Input, HostToolInput>)
             {
@@ -635,8 +668,10 @@ void Application::FinishPreparedDocumentReplacement() noexcept
     _duplicateGesture.reset();
     // Model/history publication has already moved every discarded draft into its CPU retirement aggregate.
     // Drop only host UI state here: committing an old drag or opacity edit against reused layer ids is invalid.
+    if (_opacityEdit)
+        _opacityRecorded = _opacityEdit->shown;
     _opacityEdit.reset();
-    _opacityRecorded.reset();
+    // A field's late Enter/focus-loss commit must still acknowledge the value closed on the old document.
     _sizeDialog.kind = SizeCardKind::None;
     CloseRenameCard();
     _drag = PointerDrag{};
@@ -692,11 +727,13 @@ void Application::CloseProject() noexcept
     {
         return;
     }
-    SettleInteractions(false);
-    _session.ClearDocument();
-    _documentPath.clear();
-    _viewport.followsFit = true;
-    DocumentChanged();
+    _hostExecutionError = StartDocumentLifecycle(std::nullopt);
+    if (FAILED(_hostExecutionError))
+    {
+        ++_errorsShown;
+        _lastErrorId = IDS_ERROR_DOCUMENT_LIFECYCLE;
+        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+    }
 }
 
 // ── Close, session end, capture and focus loss (Specs/UI/UI_Windowing.md) ─────────────────────────────────────────
@@ -1612,7 +1649,7 @@ int Application::RunClipboardSelfTest() noexcept
     // Copy and Copy Merged take the pixels the canvas shows (RF-1104, Decision D3): a pending gradient commits first
     // as its own entry and its preview ends with it; the merged copy holds the gradient, not the layers beneath it.
     {
-        OnCommand(ChromeHost::kCommandDeselect);
+        clipboardCommand(ChromeHost::kCommandDeselect);
         OnCommand(ChromeHost::kCommandNewLayer);
         OnTool(EditorTool::Gradient);
         _session.SetForegroundColor(0xFF000000u);
@@ -1663,7 +1700,7 @@ int Application::RunClipboardSelfTest() noexcept
             return 5;
         }
     }
-    OnCommand(ChromeHost::kCommandDeselect);
+    clipboardCommand(ChromeHost::kCommandDeselect);
     return 0;
 }
 

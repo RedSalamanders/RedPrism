@@ -5,6 +5,7 @@
 #include "FileDialogs.h"
 #include "ImageCodecs.h"
 #include "ProjectStore.h"
+#include "SelectionCommandWork.h"
 #include "UiBenchmark.h"
 #include "resource.h"
 
@@ -70,12 +71,148 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
     return receipt;
 }
 
+ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
+{
+    const auto opening = _session.SelectionMoveOpening();
+    if (!opening)
+        return ContinuationReceipt::Failure(E_ABORT);
+    if (_pendingSelectionMoveCloseOpening == opening &&
+        _pendingSelectionMoveCloseDocumentSerial == _session.DocumentSerial() &&
+        _pendingSelectionMoveCloseCancel == cancel &&
+        _pendingSelectionMoveCloseReceipt.Read().outcome == HostOutcome::Pending)
+        return _pendingSelectionMoveCloseReceipt;
+    if (cancel)
+        CancelHostContinuations();
+    // Stop pointer sampling even when admission refuses. The original outline/history survive for retry.
+    DropDrag<OutlineDrag>();
+    const auto receipt = QueueHostInput(HostSelectionMoveCloseInput{opening.value(), cancel});
+    if (receipt.Read().outcome == HostOutcome::Pending)
+    {
+        _pendingSelectionMoveCloseOpening = opening;
+        _pendingSelectionMoveCloseDocumentSerial = _session.DocumentSerial();
+        _pendingSelectionMoveCloseCancel = cancel;
+        _pendingSelectionMoveCloseReceipt = receipt;
+    }
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
+bool Application::CanQueueSelectionMoveClick() const noexcept
+{
+    // Match the settled selection factory's gesture exclusions while this outline is still open.
+    return !_session.HasColorEdit() && !_session.PendingGradient() && !_session.PendingTransformEdit() &&
+           !_session.PendingBrush() && !_session.PendingWarp() && !_session.PendingPixelMove() &&
+           !_session.PendingShape() && !_session.PendingLasso();
+}
+
+ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept
+{
+    // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
+    DropDrag<OutlineDrag>();
+    const auto opening = _session.SelectionMoveOpening();
+    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
+                         : wand && wand->settings.sampleAllLayers
+                             ? ContinuationReceipt::Failure(E_INVALIDARG)
+                             : QueueHostInput(HostSelectionMoveClickInput{opening.value(), wand});
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
+bool Application::SelectionMoveHeaderAction(SelectionAction action) noexcept
+{
+    return action == SelectionAction::SetMarqueeKind || action == SelectionAction::SetLassoKind ||
+           action == SelectionAction::Deselect;
+}
+
+ContinuationReceipt Application::QueueSelectionMoveHeader(SelectionAction action, double value) noexcept
+{
+    DropDrag<OutlineDrag>();
+    const auto opening = _session.SelectionMoveOpening();
+    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
+                         : !SelectionMoveHeaderAction(action)
+                             ? ContinuationReceipt::Failure(E_INVALIDARG)
+                             : QueueHostInput(HostSelectionMoveHeaderInput{opening.value(), action, value});
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
+bool Application::SelectionMoveEndCommand(int command) noexcept
+{
+    switch (command)
+    {
+    case ChromeHost::kCommandCut:
+    case ChromeHost::kCommandPaste:
+    case ChromeHost::kCommandLayerViaCopy:
+    case ChromeHost::kCommandCurves:
+    case ChromeHost::kCommandLevels:
+    case ChromeHost::kCommandHueSaturation:
+    case ChromeHost::kCommandExposure:
+    case ChromeHost::kCommandGradientMap:
+    case ChromeHost::kCommandGrain:
+    case ChromeHost::kCommandGaussianBlur:
+    case ChromeHost::kCommandMotionBlur:
+    case ChromeHost::kCommandAddNoise:
+    case ChromeHost::kCommandLensCorrection:
+    case ChromeHost::kCommandContentAwareFill:
+    case ChromeHost::kCommandNewLevelsAdjustment:
+    case ChromeHost::kCommandNewCurvesAdjustment:
+    case ChromeHost::kCommandNewHueSaturationAdjustment:
+    case ChromeHost::kCommandNewExposureAdjustment:
+    case ChromeHost::kCommandNewGradientMapAdjustment:
+    case ChromeHost::kCommandNewGrainAdjustment:
+    case ChromeHost::kCommandAddMask:
+    case ChromeHost::kCommandAddBlackMask:
+    case ChromeHost::kCommandSelectAll:
+    case ChromeHost::kCommandDeselect:
+    case ChromeHost::kCommandInverse:
+    case ChromeHost::kCommandLoadLayerSelection:
+    case ChromeHost::kCommandLoadMaskSelection:
+        return true;
+    default:
+        return false;
+    }
+}
+
+Application::SelectionMoveClosePolicy Application::SelectionMovePolicy(const HostRequestInput& input) const noexcept
+{
+    if (const auto* tool = std::get_if<HostToolInput>(&input))
+        return tool->tool == _tool ? SelectionMoveClosePolicy::Preserve : SelectionMoveClosePolicy::End;
+    if (const auto* command = std::get_if<HostCommandInput>(&input))
+    {
+        if (command->command == ChromeHost::kCommandUndo || command->command == ChromeHost::kCommandRedo)
+        {
+            // Size cards let history pass. Each earlier canvas edit consumes the first history command.
+            for (int edit = static_cast<int>(CanvasEdit::Panel); edit < static_cast<int>(CanvasEdit::OutlineMove);
+                 ++edit)
+                if (EditUnderWay(static_cast<CanvasEdit>(edit)))
+                    return SelectionMoveClosePolicy::Preserve;
+            return SelectionMoveClosePolicy::Cancel;
+        }
+        const auto selected = ChromeHost::ToolForSelectCommand(command->command);
+        if (selected != EditorTool::Count)
+            return selected == _tool ? SelectionMoveClosePolicy::Preserve : SelectionMoveClosePolicy::End;
+        if (SelectionMoveEndCommand(command->command))
+            return SelectionMoveClosePolicy::End;
+    }
+    return SelectionMoveClosePolicy::Preserve;
+}
+
 ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 {
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return ContinuationReceipt::Failure(E_ABORT);
     }
+    // These bounded scalar inputs bind the event's gesture before admission; later Execute cannot close a reopen.
+    if (auto* command = std::get_if<HostCommandInput>(&input))
+        command->selectionMoveOpening = _session.SelectionMoveOpening();
+    else if (auto* tool = std::get_if<HostToolInput>(&input))
+        tool->selectionMoveOpening = _session.SelectionMoveOpening();
+    if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+        DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
+    if (std::holds_alternative<HostSelectionMoveClickInput>(input) ||
+        std::holds_alternative<HostSelectionMoveHeaderInput>(input))
+        DropDrag<OutlineDrag>();
     try
     {
         auto owned = HostRequest::TryCreate(input, _hostInputBudget, _hostAdmissionAllocationFailureForTest);
@@ -101,9 +238,11 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
         (void)request.Finish(HostOutcome::Failed, !ordinal ? HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW) : E_ABORT);
         return receipt;
     }
-    const auto admission = _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), ContinuationKind::Command,
-                                                 request, RetireHostContinuation);
-    if (admission != ContinuationAdmission::Queued)
+    const auto kind = std::holds_alternative<HostWandLayerNewInput>(request.Input()) ? ContinuationKind::WandNew
+                                                                                     : ContinuationKind::Command;
+    const auto admission =
+        _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+    if (admission != ContinuationAdmission::Queued && admission != ContinuationAdmission::Coalesced)
     {
         (void)request.Finish(HostOutcome::Failed,
                              admission == ContinuationAdmission::Full ? HRESULT_FROM_WIN32(ERROR_BUSY) : E_UNEXPECTED);
@@ -167,6 +306,14 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     CompleteDuplicateGestureInput(result.outcome);
+    if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
+        close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
+        _pendingSelectionMoveCloseCancel == close->cancel &&
+        _pendingSelectionMoveCloseDocumentSerial == _activeHostRequest->documentSerial)
+    {
+        _pendingSelectionMoveCloseOpening.reset();
+        _pendingSelectionMoveCloseReceipt = {};
+    }
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
     if (std::holds_alternative<HostShapeFinishInput>(_activeHostRequest->input.Input()))
     {
@@ -266,10 +413,11 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle             ? HostStage::GradientSettle
-                         : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
-                         : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
-                         : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
+            _hostStage = _hostStage == HostStage::Settle                ? HostStage::GradientSettle
+                         : _hostStage == HostStage::GradientSettle      ? HostStage::PixelMoveSettle
+                         : _hostStage == HostStage::PixelMoveSettle     ? HostStage::TransformSettle
+                         : _hostStage == HostStage::TransformDiscard    ? HostStage::Execute
+                         : _hostStage == HostStage::SelectionMoveSettle ? _hostAfterPrerequisite
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -284,6 +432,82 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (std::holds_alternative<HostSelectionNudgeInput>(input))
+            {
+                if (_session.IsMovingSelection() || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // This settled input must not implicitly commit a newly opened unrelated edit.
+            }
+            if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+            {
+                const auto expected = std::get_if<HostCommandInput>(&input)
+                                          ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                          : std::get<HostToolInput>(input).selectionMoveOpening;
+                if (expected != _session.SelectionMoveOpening())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return; // Refuse the event's replaced opening before settling another edit or capturing owners.
+                }
+            }
+            if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(close->opening))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                // Closing this exact gesture must not implicitly settle a coexisting color/shape edit.
+                _hostStage = HostStage::Execute;
+                break;
+            }
+            if (const auto* header = std::get_if<HostSelectionMoveHeaderInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(header->opening) || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (!SelectionMoveHeaderAction(header->action))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // Header End uses the original enclosing transaction, like pointer End.
+            }
+            if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(click->opening) || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (click->wand && click->wand->settings.sampleAllLayers)
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // Preserve the reference's enclosing transaction through End and its dependent action.
+            }
+            if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
+                size && size->draft.kind == SizeCardKind::NewCanvas)
+            {
+                if (size->invocation != _sizeInvocation || !SizeCardOpen())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (!NewCanvasDimensions(size->draft))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+            }
             if (const auto* duplicate = std::get_if<HostDuplicateBeginInput>(&input);
                 duplicate &&
                 (!_duplicateGesture || _duplicateGesture->serial != duplicate->gesture ||
@@ -702,7 +926,108 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
             break;
         }
+        case HostStage::SelectionMoveSettle:
+        {
+            const auto policy = SelectionMovePolicy(input);
+            const auto opening = _session.SelectionMoveOpening();
+            const auto expected = std::get_if<HostCommandInput>(&input)
+                                      ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                      : std::get<HostToolInput>(input).selectionMoveOpening;
+            if (!opening || opening != expected || policy == SelectionMoveClosePolicy::Preserve)
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            _hostAfterPrerequisite =
+                policy == SelectionMoveClosePolicy::Cancel ? HostStage::Complete : HostStage::Execute;
+            const auto result =
+                opening ? StartSelectionMoveClose(opening.value(), policy == SelectionMoveClosePolicy::Cancel)
+                        : E_ABORT;
+            if (FAILED(result))
+            {
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+                FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (_selectionMoveCloseTicket)
+                return;
+            _hostStage = _hostAfterPrerequisite;
+            break;
+        }
+        case HostStage::SelectionMoveFollowup:
+        {
+            const auto* click = std::get_if<HostSelectionMoveClickInput>(&input);
+            if (!click || _session.IsMovingSelection())
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            const auto result = click->wand ? StartWandLayerSelection(click->wand.value())
+                                            : StartSelectionCommand(SelectionCommandKind::Deselect);
+            if (FAILED(result))
+            {
+                _prompts->PostNotice(_window.get(), kNoticeMessage,
+                                     click->wand ? IDS_ERROR_WAND_MEMORY : IDS_ERROR_SELECTION_EDIT);
+                FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (_hostCommitStamp || _historyWork.Busy())
+                return;
+            _hostStage = HostStage::Complete;
+            break;
+        }
+        case HostStage::SelectionHeaderFollowup:
+        {
+            const auto* header = std::get_if<HostSelectionMoveHeaderInput>(&input);
+            if (!header || _session.IsMovingSelection())
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            if (header->action == SelectionAction::Deselect)
+            {
+                const auto result = StartSelectionCommand(SelectionCommandKind::Deselect);
+                if (FAILED(result))
+                {
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_hostCommitStamp || _historyWork.Busy())
+                    return;
+            }
+            else if (header->action == SelectionAction::SetMarqueeKind)
+            {
+                _session.marqueeKind = header->value >= 0.5 ? LassoKind::Ellipse : LassoKind::Rectangle;
+                SelectionChanged();
+            }
+            else if (header->action == SelectionAction::SetLassoKind)
+            {
+                _session.lassoKind = header->value >= 0.5 ? LassoKind::Polygonal : LassoKind::Freehand;
+                SelectionChanged();
+            }
+            else
+            {
+                FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                return;
+            }
+            _hostStage = HostStage::Complete;
+            break;
+        }
         case HostStage::Execute:
+            if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+            {
+                const auto expected = std::get_if<HostCommandInput>(&input)
+                                          ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                          : std::get<HostToolInput>(input).selectionMoveOpening;
+                if (expected != _session.SelectionMoveOpening())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::SelectionMoveSettle;
+                break;
+            }
             _hostExecutionError = S_OK;
             if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {
@@ -810,6 +1135,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_utilityTicket.value());
         }
+        else if (_documentLifecycleTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_documentLifecycleTicket.value());
+        }
         else if (_sizingTicket)
         {
             (void)_historyWork.RequestCancel();
@@ -819,6 +1149,26 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_historyRestoreTicket.value());
+        }
+        else if (_selectionNudgeTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionNudgeTicket.value());
+        }
+        else if (_selectionCommandTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionCommandTicket.value());
+        }
+        else if (_selectionMoveCloseTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionMoveCloseTicket.value());
+        }
+        else if (_wandLayerHostTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_wandLayerHostTicket.value());
         }
         else if (_rasterEditTicket)
         {

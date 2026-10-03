@@ -39,6 +39,12 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     // Call only after worker acknowledgement/join. Destination owners must already exist and be empty; the
     // derived release aggregate keeps every CPU owner off the UI destructor path while GPU cleanup stays here.
     void TransferReadbackOwners(CanvasDocument& document, PixelBuffer& pixels, Raster& image) noexcept;
+    // Harness-only observation of the actual borrowed lease during ProcessReadback. Never retain/read it
+    // after the producer returns and owner acknowledgement; it transfers no context or texture ownership.
+    [[nodiscard]] GpuReadbackRows MappedRowsForTest() const noexcept
+    {
+        return _rows;
+    }
     // Optional worker-only final processing under this graph's reservation (for example merge crop/thumbnail).
     [[nodiscard]] virtual JobResult ProcessReadback(Raster&, JobContext&)
     {

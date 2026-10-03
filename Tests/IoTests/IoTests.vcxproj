@@ -113,6 +113,7 @@
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
     <ClInclude Include="..\..\Common\CopyPixelsWork.h" />
     <ClInclude Include="..\..\Common\ClipboardCommandWork.h" />
@@ -120,6 +121,7 @@
     <ClInclude Include="..\..\Common\ClipboardReceipt.h" />
     <ClInclude Include="..\..\RedPrism\ClipboardFingerprint.h" />
     <ClInclude Include="ClipboardTransferTests.h" />
+    <ClInclude Include="ProjectPublicationRetryTests.h" />
     <ClInclude Include="ClipboardAvailabilityTests.h" />
     <ClInclude Include="ClipboardReceiptTests.h" />
     <ClInclude Include="ClipboardFingerprintTests.h" />
@@ -156,6 +158,7 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
     <ClCompile Include="..\..\Common\CopyPixelsWork.cpp" />
     <ClCompile Include="..\..\Common\ClipboardCommandWork.cpp" />
@@ -187,6 +190,7 @@
     <ClCompile Include="CappedImageCodecTests.cpp" />
     <ClCompile Include="CodecMemoryStreamTests.cpp" />
     <ClCompile Include="ProjectCancellationTests.cpp" />
+    <ClCompile Include="ProjectPublicationRetryTests.cpp" />
     <ClCompile Include="FileIoBench.cpp" />
     <ClCompile Include="..\..\Common\SettingsStore.cpp" />
   </ItemGroup>

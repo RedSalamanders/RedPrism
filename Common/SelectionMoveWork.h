@@ -15,7 +15,7 @@ class SelectionMoveClosureInput final
     SelectionMoveClosureInput(SelectionMoveClosureInput&& source) noexcept
         : _token(std::move(source._token)), _history(std::move(source._history)),
           _document(std::move(source._document)), _origin(std::move(source._origin)), _active(source._active),
-          _crop(source._crop), _maskSelected(source._maskSelected), _cancel(source._cancel),
+          _crop(source._crop), _opening(source._opening), _maskSelected(source._maskSelected), _cancel(source._cancel),
           _valid(std::exchange(source._valid, false))
     {
     }
@@ -29,6 +29,7 @@ class SelectionMoveClosureInput final
             _origin = std::move(source._origin);
             _active = source._active;
             _crop = source._crop;
+            _opening = source._opening;
             _maskSelected = source._maskSelected;
             _cancel = source._cancel;
             _valid = std::exchange(source._valid, false);
@@ -41,9 +42,10 @@ class SelectionMoveClosureInput final
     friend class PreparedSelectionMoveClosure;
     SelectionMoveClosureInput(JobToken token, DocumentHistory::StateView history, CanvasDocument document,
                               DocumentSelection origin, std::optional<Guid> active, std::optional<CropRect> crop,
-                              bool maskSelected, bool cancel) noexcept
+                              std::uint64_t opening, bool maskSelected, bool cancel) noexcept
         : _token(std::move(token)), _history(std::move(history)), _document(std::move(document)),
-          _origin(std::move(origin)), _active(active), _crop(crop), _maskSelected(maskSelected), _cancel(cancel)
+          _origin(std::move(origin)), _active(active), _crop(crop), _opening(opening), _maskSelected(maskSelected),
+          _cancel(cancel)
     {
     }
     JobToken _token;
@@ -52,6 +54,7 @@ class SelectionMoveClosureInput final
     DocumentSelection _origin;
     std::optional<Guid> _active;
     std::optional<CropRect> _crop;
+    std::uint64_t _opening = 0;
     bool _maskSelected = false, _cancel = false, _valid = true;
 };
 

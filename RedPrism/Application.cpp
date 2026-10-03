@@ -1,4 +1,7 @@
 #include "Application.h"
+#include "ApplicationProcessingTestProbe.h"
+#include "ApplicationShutdownTestProbe.h"
+#include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
 
@@ -33,6 +36,7 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 #include <windowsx.h>
@@ -172,21 +176,40 @@ HRESULT Application::InitializeProcessing() noexcept
         return E_FAIL;
     }
     _jobQpcFrequency = static_cast<std::uint64_t>(frequency.QuadPart);
+    const auto checkpoint = [this](ApplicationProcessingStage stage) noexcept -> HRESULT
+    {
+        return _processingTestProbe && _processingTestProbe->afterStage
+                   ? static_cast<HRESULT>(_processingTestProbe->afterStage(_processingTestProbe->context, stage))
+                   : S_OK;
+    };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
     RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::OwnerWork));
     RETURN_IF_FAILED(_gpuWork.Initialize(_jobs, &_ownerWork));
     _gpuWorkInitialized = true;
-    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(_jobs, _ownerWork)));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::GpuWork));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_retryWait.Initialize(
+        _jobs, _ownerWork, _processingTestProbe ? _processingTestProbe->retryWait : RetryWaitObserver{})));
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::RetryWait));
     if (!InitializeHostContinuations())
     {
         return E_UNEXPECTED;
     }
-    if (!_jobs.EnableDeferredRelease() || !_jobs.EnableMemoryRecycling())
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Continuations));
+    if (!_jobs.EnableDeferredRelease())
     {
         return E_OUTOFMEMORY;
     }
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::DeferredRelease));
+    if (!_jobs.EnableMemoryRecycling())
+    {
+        return E_OUTOFMEMORY;
+    }
+    RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Recycling));
     return S_OK;
 }
 
@@ -554,6 +577,7 @@ void SelfTestFailure(const wchar_t* message) noexcept
 
 int Application::RunSelfTest() noexcept
 {
+    (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
     if (_session.history.RetainedByteLimit() != HostHistoryLimit())
     {
         SelfTestFailure(L"The application session did not receive its physical-memory history limit.\n");
@@ -580,6 +604,28 @@ int Application::RunSelfTest() noexcept
         }
     };
 
+    const auto undoTo = [&](int count) noexcept
+    {
+        const int allowance = (std::max)(0, _session.history.UndoCount() - count) + 2;
+        int attempts = 0;
+        while (_session.history.CanUndo() && _session.history.UndoCount() > count)
+        {
+            if (attempts++ >= allowance)
+            {
+                SelfTestFailure(L"The host Undo fixture made no bounded progress toward its original history.\n");
+                return false;
+            }
+            hostCommand(ChromeHost::kCommandUndo);
+        }
+        if (_session.history.UndoCount() != count)
+        {
+            SelfTestFailure(L"The host Undo fixture did not restore its original entry count.\n");
+            return false;
+        }
+        return true;
+    };
+
+    std::printf("BEGIN self-test.RunJobShutdownSelfTest\n");
     if (const int failed = RunJobShutdownSelfTest(); failed != 0)
     {
         return failed;
@@ -662,6 +708,7 @@ int Application::RunSelfTest() noexcept
         return 5;
     }
     const int visibleTools = _chrome->VisibleToolButtonCount();
+    std::printf("BEGIN self-test.RunJobActivitySelfTest\n");
     if (const int failed = RunJobActivitySelfTest(); failed != 0)
     {
         return failed;
@@ -954,6 +1001,7 @@ int Application::RunSelfTest() noexcept
         // Keys through the window procedure (ApplicationKeyboard.cpp): replacements, text fields, AltGr, the Command
         // List, the menu bar, the Move tool's digits and the chords the chrome shows. It leaves the palette at
         // black over white, the document and the settings as they were.
+        std::printf("BEGIN self-test.RunKeyboardSelfTest\n");
         if (const int keyboard = RunKeyboardSelfTest(); keyboard != 0)
         {
             return keyboard;
@@ -1011,10 +1059,8 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         CancelColorEditForTest();
-        while (_session.history.CanUndo() && _session.history.UndoCount() > editsBeforeFilter)
-        {
-            _session.Undo();
-        }
+        if (!undoTo(editsBeforeFilter))
+            return 5;
 
         const int editsBeforeDrag = _session.history.UndoCount();
         _session.AddBlankLayer();
@@ -1062,10 +1108,8 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Dragging a layer did not reorder it.\n");
             return 5;
         }
-        while (_session.history.CanUndo() && _session.history.UndoCount() > editsBeforeDrag)
-        {
-            _session.Undo();
-        }
+        if (!undoTo(editsBeforeDrag))
+            return 5;
         SyncChrome();
 
         if (!_chrome->RequestLayerOpacity(50.0))
@@ -1213,6 +1257,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 60.0, 60.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 90.0, 70.0);
         pointer(WM_LBUTTONUP, 0, 90.0, 70.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (!box.has_value() || !closeTo(box->minX, before + 30.0) ||
             _session.history.UndoName() != L"Move Selection" || _session.IsMovingSelection())
@@ -1250,6 +1296,8 @@ int Application::RunSelfTest() noexcept
         }
         pointer(WM_LBUTTONDOWN, 0, 100.0, 70.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 70.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         if (_session.Selection().has_value() || _session.history.UndoName() != L"Deselect")
         {
             SelfTestFailure(L"A click inside the selection did not deselect.\n");
@@ -1260,6 +1308,8 @@ int Application::RunSelfTest() noexcept
         OnTool(EditorTool::Wand);
         pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
         pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
             _session.history.UndoName() != L"Magic Wand")
@@ -1980,6 +2030,11 @@ int Application::RunSelfTest() noexcept
         draft.origin.x += 50.0;
         _session.PreviewTransform(draft);
         DocumentChanged();
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The floating outline fixture could not settle its admitted preview.\n");
+            return 5;
+        }
         displayed = shown();
         if (!displayed.has_value() || !closeTo(displayed->minX, 150.0) || !closeTo(bounds()->minX, 100.0))
         {
@@ -2195,121 +2250,195 @@ int Application::RunSelfTest() noexcept
     }
 
     // Product hardening (C14): accessible names and the UIA root, the settings file's live reload and the theme.
+    std::printf("BEGIN self-test.RunProductHardeningSelfTest\n");
     if (const int hardening = RunProductHardeningSelfTest(); hardening != 0)
     {
         return hardening;
     }
     // Files and the unimplemented-function notice (C16).
+    std::printf("BEGIN self-test.RunFilesSelfTest\n");
     if (const int files = RunFilesSelfTest(); files != 0)
     {
         return files;
     }
+    std::printf("BEGIN self-test.RunSizeSelfTest\n");
     if (const int sizes = RunSizeSelfTest(); sizes != 0)
     {
         return sizes;
     }
+    std::printf("BEGIN self-test.RunSizingWorkSelfTest\n");
     if (const int sizing = RunSizingWorkSelfTest(); sizing != 0)
         return sizing;
+    std::printf("BEGIN self-test.RunDocumentLifecycleSelfTest\n");
+    if (const int lifecycle = RunDocumentLifecycleSelfTest(); lifecycle != 0)
+        return lifecycle;
+    std::printf("BEGIN self-test.RunDocumentLifecycleRefusalSelfTest\n");
+    if (const int lifecycle = RunDocumentLifecycleRefusalSelfTest(); lifecycle != 0)
+        return lifecycle;
+    std::printf("BEGIN self-test.RunDocumentLifecycleCloseSelfTest\n");
+    if (const int lifecycle = RunDocumentLifecycleCloseSelfTest(); lifecycle != 0)
+        return lifecycle;
+    std::printf("BEGIN self-test.RunHistoryRestoreSelfTest\n");
     if (const int restore = RunHistoryRestoreSelfTest(); restore != 0)
         return restore;
+    std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
+    if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
+        return selection;
+    std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
+    if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
+        return close;
+    std::printf("BEGIN self-test.RunSelectionMoveCallerSelfTest\n");
+    if (const int callers = RunSelectionMoveCallerSelfTest(); callers != 0)
+        return callers;
+    std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
+    if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
+        return followup;
+    std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
+    if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
+        return header;
+    std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
+    if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
+    {
+        return nudge;
+    }
+    std::printf("BEGIN self-test.RunSelectionNudgeFaultSelfTest\n");
+    if (const int nudgeFaults = RunSelectionNudgeFaultSelfTest(); nudgeFaults != 0)
+        return nudgeFaults;
+    std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
+    if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
+        return wand;
+    std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
+    std::printf("BEGIN self-test.RunMaskWorkSelfTest\n");
     if (const int maskWork = RunMaskWorkSelfTest(); maskWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: mask-work.\n");
         return maskWork;
     }
+
+    std::printf("BEGIN self-test.RunLayerCopyWorkSelfTest\n");
     if (const int layerCopy = RunLayerCopyWorkSelfTest(); layerCopy != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: layer-copy.\n");
         return layerCopy;
     }
+    std::printf("BEGIN self-test.RunTransformWorkSelfTest\n");
     if (const int transformWork = RunTransformWorkSelfTest(); transformWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-work.\n");
         return transformWork;
     }
+    std::printf("BEGIN self-test.RunTransformPreviewSelfTest\n");
     if (const int transformPreview = RunTransformPreviewSelfTest(); transformPreview != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: transform-preview.\n");
         return transformPreview;
     }
+    std::printf("BEGIN self-test.RunDuplicateGestureSelfTest\n");
     if (const int duplicateGesture = RunDuplicateGestureSelfTest(); duplicateGesture != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: duplicate-gesture.\n");
         return duplicateGesture;
     }
+    std::printf("BEGIN self-test.RunTransformPolicySelfTest\n");
+    if (const int transformPolicy = RunTransformPolicySelfTest(); transformPolicy != 0)
+    {
+        SelfTestFailure(L"SELF-TEST STAGE failed: transform-policy.\n");
+        return transformPolicy;
+    }
+    std::printf("BEGIN self-test.RunShapeWorkSelfTest\n");
     if (const int shapeWork = RunShapeWorkSelfTest(); shapeWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: shape-work.\n");
         return shapeWork;
     }
+    std::printf("BEGIN self-test.RunGradientWorkSelfTest\n");
     if (const int gradientWork = RunGradientWorkSelfTest(); gradientWork != 0)
         return gradientWork;
+    std::printf("BEGIN self-test.RunPixelMoveWorkSelfTest\n");
     if (const int pixelMoveWork = RunPixelMoveWorkSelfTest(); pixelMoveWork != 0)
         return pixelMoveWork;
+    std::printf("BEGIN self-test.RunCropSelfTest\n");
     if (const int crop = RunCropSelfTest(); crop != 0)
     {
         return crop;
     }
+    std::printf("BEGIN self-test.RunLayerEditsSelfTest\n");
     if (const int edits = RunLayerEditsSelfTest(); edits != 0)
     {
         return edits;
     }
     // The adjustment panel's live controls (review fixes wave 1b: RF-1107).
+    std::printf("BEGIN self-test.RunUtilityReadbackSelfTest\n");
     if (const int utility = RunUtilityReadbackSelfTest(); utility != 0)
     {
         return utility;
     }
+    std::printf("BEGIN self-test.RunAdjustSelfTest\n");
     if (const int adjust = RunAdjustSelfTest(); adjust != 0)
     {
         return adjust;
     }
+    std::printf("BEGIN self-test.RunColorJobsSelfTest\n");
     if (const int colorJobs = RunColorJobsSelfTest(); colorJobs != 0)
     {
         return colorJobs;
     }
+    std::printf("BEGIN self-test.RunAdjustBusySelfTest\n");
     if (const int adjustBusy = RunAdjustBusySelfTest(); adjustBusy != 0)
     {
         return adjustBusy;
     }
+    std::printf("BEGIN self-test.RunColorCommitSelfTest\n");
     if (const int colorCommit = RunColorCommitSelfTest(); colorCommit != 0)
     {
         return colorCommit;
     }
+    std::printf("BEGIN self-test.RunAdjustmentClosureSelfTest\n");
     if (const int adjustmentClosure = RunAdjustmentClosureSelfTest(); adjustmentClosure != 0)
     {
         return adjustmentClosure;
     }
+    std::printf("BEGIN self-test.RunColorCancellationSelfTest\n");
     if (const int cancellation = RunColorCancellationSelfTest(); cancellation != 0)
     {
         return cancellation;
     }
+    std::printf("BEGIN self-test.RunAdjustmentOpeningSelfTest\n");
     if (const int adjustmentOpening = RunAdjustmentOpeningSelfTest(); adjustmentOpening != 0)
     {
         return adjustmentOpening;
     }
+    std::printf("BEGIN self-test.RunHostContinuationSelfTest\n");
     if (const int continuations = RunHostContinuationSelfTest(); continuations != 0)
     {
         return continuations;
     }
+    std::printf("BEGIN self-test.RunHostFlowSelfTest\n");
     if (const int flows = RunHostFlowSelfTest(); flows != 0)
     {
         return flows;
     }
+    std::printf("BEGIN self-test.RunPathClassificationSelfTest\n");
     if (const int classification = RunPathClassificationSelfTest(); classification != 0)
     {
         return classification;
     }
+    std::printf("BEGIN self-test.RunProjectOpenSelfTest\n");
     if (const int opened = RunProjectOpenSelfTest(); opened != 0)
         return opened;
+    std::printf("BEGIN self-test.RunImageImportSelfTest\n");
     if (const int imported = RunImageImportSelfTest(); imported != 0)
         return imported;
+    std::printf("BEGIN self-test.RunProjectSaveSelfTest\n");
     if (const int projectSave = RunProjectSaveSelfTest(); projectSave != 0)
         return projectSave;
+    std::printf("BEGIN self-test.RunExportReadbackSelfTest\n");
     if (const int exported = RunExportReadbackSelfTest(); exported != 0)
         return exported;
     // What a pointer move costs the chrome and its UI Automation snapshot (review fixes RF-1001).
+    std::printf("BEGIN self-test.RunChromeSyncSelfTest\n");
     if (const int chromeSync = RunChromeSyncSelfTest(); chromeSync != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: chrome-sync.\n");
@@ -2317,42 +2446,50 @@ int Application::RunSelfTest() noexcept
     }
     // Session and interaction state (review fixes RF-603, RF-607…RF-609, RF-612): the clipboard, capture and focus
     // loss, a close inside a chrome dispatch and the session end.
+    std::printf("BEGIN self-test.RunClipboardSelfTest\n");
     if (const int clipboard = RunClipboardSelfTest(); clipboard != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-compatibility.\n");
         return clipboard;
     }
+    std::printf("BEGIN self-test.RunClipboardWorkSelfTest\n");
     if (const int clipboardWork = RunClipboardWorkSelfTest(); clipboardWork != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-work.\n");
         return clipboardWork;
     }
+    std::printf("BEGIN self-test.RunClipboardPrefillSelfTest\n");
     if (const int clipboardPrefill = RunClipboardPrefillSelfTest(); clipboardPrefill != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-prefill.\n");
         return clipboardPrefill;
     }
+    std::printf("BEGIN self-test.RunClipboardDelayedSelfTest\n");
     if (const int clipboardDelayed = RunClipboardDelayedSelfTest(); clipboardDelayed != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-delayed.\n");
         return clipboardDelayed;
     }
+    std::printf("BEGIN self-test.RunClipboardFaultSelfTest\n");
     if (const int clipboardFault = RunClipboardFaultSelfTest(); clipboardFault != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: clipboard-fault.\n");
         return clipboardFault;
     }
+    std::printf("BEGIN self-test.RunSessionSelfTest\n");
     if (const int session = RunSessionSelfTest(); session != 0)
     {
         SelfTestFailure(L"SELF-TEST STAGE failed: session.\n");
         return session;
     }
     // Refusals the host reports (review fixes wave 1b: RF-1102, RF-1103).
+    std::printf("BEGIN self-test.RunRefusalSelfTest\n");
     if (const int refusals = RunRefusalSelfTest(); refusals != 0)
     {
         return refusals;
     }
     // Rendering, viewport and frame loop (review fixes WP4).
+    std::printf("BEGIN self-test.RunRenderingSelfTest\n");
     if (const int rendering = RunRenderingSelfTest(); rendering != 0)
     {
         return rendering;
@@ -3152,7 +3289,74 @@ void Application::Shutdown() noexcept
     _gpuWork.StopNotifications();
     // The only normal host join: the window is hidden and its close has already been confirmed. All borrowed
     // session/device/chrome owners and the localization satellite remain alive until every callback returns.
-    _jobs.Close();
+    _jobs.Close(
+        {[](void* opaque) noexcept
+         {
+             auto& owner = *static_cast<Application*>(opaque);
+             // Producer callbacks and their wrappers have joined; graphics ownership remains here.
+             if (auto* probe = owner._shutdownTestProbe; probe && probe->checkJoined)
+                 probe->checkJoined(probe->checkContext);
+             // Detach engines without CancelBrush's synchronous CPU-graph destruction.
+             owner._session.DetachCoverageForShutdown();
+             owner._brushEngine.Release();
+             owner._retryWait.CloseAfterWorkers();
+             owner._gpuWork.CloseAfterWorkers();
+             owner._gpuWorkInitialized = false;
+             owner._shapeCommitPreview.reset();
+             owner._composition.EndStroke();
+             owner._composition.SetAdjustmentPreview(std::nullopt);
+             owner._composition.ReleaseDeviceResources();
+             if (auto* probe = owner._shutdownTestProbe)
+             {
+                 ++probe->ownerCalls;
+                 probe->draftAliveAtDetach = !probe->draft.expired();
+                 probe->liveDraftAliveAtDetach = !probe->liveDraft.expired();
+                 probe->graphicsDetachedOnOwner =
+                     GetCurrentThreadId() == probe->owner && !owner._brushEngine.Ready() && owner._renderer.Device();
+                 probe->reservationAndWakeAlive = owner._jobs.WakeHandle() && owner._jobs.ReservedMemoryBytes() != 0;
+                 if (probe->checkOwner)
+                     probe->checkOwner(probe->checkContext);
+             }
+         },
+         [](void* opaque) noexcept
+         {
+             auto& owner = *static_cast<Application*>(opaque);
+             // MSVC hash-container move construction can allocate. Release every large owning root
+             // directly on the final worker instead; shutdown must remain safe under allocation refusal.
+             owner._session.RetireCpuForShutdown();
+             // Producer callbacks and owner-affine graphics detachment have finished. These host caches own
+             // only CPU pixels/selection geometry and can otherwise keep the final large reference on owner.
+             owner._drag.emplace<std::monostate>();
+             owner._overlaySelection.reset();
+             if (owner._uiBenchmark)
+             {
+                 // RunUiBenchmark and UiTimingCapture still borrow the state after Run returns. Keep result/
+                 // timing/path metadata alive; release only its immutable document and raster ownership here.
+                 static_assert(std::is_nothrow_default_constructible_v<CanvasDocument> &&
+                               std::is_nothrow_move_assignable_v<CanvasDocument>);
+                 owner._uiBenchmark->fixture = {};
+                 owner._uiBenchmark->imageImportBaseline = {};
+                 owner._uiBenchmark->previousImage = {};
+                 owner._uiBenchmark->previousPreview = {};
+             }
+             if (auto* probe = owner._shutdownTestProbe)
+             {
+                 APTTYPE apartment{};
+                 APTTYPEQUALIFIER qualifier{};
+                 probe->mta.store(SUCCEEDED(CoGetApartmentType(&apartment, &qualifier)) && apartment == APTTYPE_MTA);
+                 probe->offOwner.store(GetCurrentThreadId() != probe->owner);
+                 probe->draftRetired.store(probe->draft.expired());
+                 probe->liveDraftRetired.store(probe->liveDraft.expired());
+                 probe->hostCpuRootsRetired.store(
+                     std::holds_alternative<std::monostate>(owner._drag) && !owner._overlaySelection &&
+                     (!owner._uiBenchmark || (owner._uiBenchmark->fixture.layers.empty() &&
+                                              owner._uiBenchmark->imageImportBaseline.layers.empty() &&
+                                              !owner._uiBenchmark->previousImage.HasStorage() &&
+                                              !owner._uiBenchmark->previousPreview.HasStorage())));
+                 probe->workerCalls.fetch_add(1);
+             }
+         },
+         this});
     if (_clipboardStamp)
         (void)_historyWork.Finish(_clipboardStamp.value());
     _clipboardStamp.reset();
@@ -3164,6 +3368,13 @@ void Application::Shutdown() noexcept
     _layerCopyStamp.reset();
     _transformWorkTicket.reset();
     _transformWorkStamp.reset();
+    // Close joins and retires every job while deliberately suppressing completion callbacks. Clear the
+    // preview's owner ticket only after that acknowledgement; CancelTransformPreviewJobs closed its mailbox.
+    _transformPreviewTicket.reset();
+    if (_documentLifecycleStamp)
+        (void)_historyWork.Finish(_documentLifecycleStamp.value());
+    _documentLifecycleStamp.reset();
+    _documentLifecycleTicket.reset();
     _shapeStamp.reset();
     _shapeCommitPreview.reset();
     _clipboardPrefillTicket.reset();
@@ -3780,6 +3991,11 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     {
         EndTransformDrag();
     }
+    else if (std::holds_alternative<OutlineDrag>(_drag) && _session.IsMovingSelection() && !_hostExecuting)
+    {
+        (void)QueueSelectionMoveClose(false);
+        SelectionChanged();
+    }
     else if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
              std::holds_alternative<PixelDrag>(_drag) || _session.PendingLasso().has_value())
     {
@@ -3881,8 +4097,15 @@ void Application::OnCommand(int command) noexcept
                            command == ChromeHost::kCommandCopyMerged || command == ChromeHost::kCommandPaste;
     const bool maskEdit = command == ChromeHost::kCommandAddMask || command == ChromeHost::kCommandAddBlackMask;
     const bool layerCopy = command == ChromeHost::kCommandLayerViaCopy;
-    if (!_hostExecuting &&
-        (rasterEdit || clipboard || maskEdit || layerCopy || command == ChromeHost::kCommandFreeTransform))
+    const bool settledSelection =
+        (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect) &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
+    const auto selectedTool = ChromeHost::ToolForSelectCommand(command);
+    const bool closesOutline =
+        _session.IsMovingSelection() &&
+        (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || closesOutline ||
+                            command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
         return;
@@ -3925,6 +4148,20 @@ void Application::OnCommand(int command) noexcept
         _session.HasColorEdit() && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
     {
         return; // an open, uncommitted panel owns history until OK/Cancel
+    }
+    if (!_hostExecuting && command >= ChromeHost::kCommandNudgeSelectionLeft &&
+        command <= ChromeHost::kCommandNudgeSelectionDown && !_session.IsMovingSelection() &&
+        CanQueueSelectionMoveClick())
+    {
+        const int step = _acceleratorShift ? 10 : 1;
+        const int dx = command == ChromeHost::kCommandNudgeSelectionLeft    ? -step
+                       : command == ChromeHost::kCommandNudgeSelectionRight ? step
+                                                                            : 0;
+        const int dy = command == ChromeHost::kCommandNudgeSelectionUp     ? -step
+                       : command == ChromeHost::kCommandNudgeSelectionDown ? step
+                                                                           : 0;
+        ReportHostAdmission(QueueHostInput(HostSelectionNudgeInput{dx, dy}));
+        return;
     }
     if (!_hostExecuting && command >= ChromeHost::kCommandNudgePixelsLeft &&
         command <= ChromeHost::kCommandNudgePixelsDown)
@@ -4252,7 +4489,7 @@ void Application::OnCommand(int command) noexcept
         }
         else
         {
-            _session.BeginTransform(true);
+            (void)_session.BeginDeferredTransform(true);
             DocumentChanged();
         }
         break;
@@ -4392,14 +4629,25 @@ void Application::OnCommand(int command) noexcept
         }
         break;
     case ChromeHost::kCommandSelectAll:
-        EndSelectionInteraction(false);
-        _session.SelectAll();
-        SelectionChanged();
-        break;
     case ChromeHost::kCommandDeselect:
-        EndSelectionInteraction(false);
-        _session.Deselect();
-        SelectionChanged();
+        if (_hostExecuting && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+        {
+            _hostExecutionError =
+                StartSelectionCommand(command == ChromeHost::kCommandSelectAll ? SelectionCommandKind::SelectAll
+                                                                               : SelectionCommandKind::Deselect);
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+        }
+        else
+        {
+            // Live selection/stroke closure keeps its qualified legacy route until ordered replay lands.
+            EndSelectionInteraction(false);
+            if (command == ChromeHost::kCommandSelectAll)
+                _session.SelectAll();
+            else
+                _session.Deselect();
+            SelectionChanged();
+        }
         break;
     case ChromeHost::kCommandInverse:
         EndSelectionInteraction(false);
@@ -4562,7 +4810,10 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         if (drops)
         {
             DropDrag<OutlineDrag>();
-            _session.CancelSelectionMove();
+            if (!_hostExecuting)
+                (void)QueueSelectionMoveClose(true);
+            else
+                _session.CancelSelectionMove();
             SelectionChanged();
         }
         else
@@ -4677,7 +4928,7 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+        (_historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() || _session.PendingGradient() ||
          _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
@@ -4712,13 +4963,13 @@ void Application::NewDocument() noexcept
         ReportHostAdmission(QueueHostInput(HostNewInput{}));
         return;
     }
-    SettleInteractions(false);
-    _session.ClearDocument();
-    _session.CreateDocument(kDefaultClientWidth, kDefaultClientHeight, true);
-    _session.history.MarkSaved();
-    _documentPath.clear();
-    _viewport.followsFit = true;
-    DocumentChanged();
+    _hostExecutionError = StartDocumentLifecycle(std::array<int, 2>{kDefaultClientWidth, kDefaultClientHeight});
+    if (FAILED(_hostExecutionError))
+    {
+        ++_errorsShown;
+        _lastErrorId = IDS_ERROR_DOCUMENT_LIFECYCLE;
+        _prompts->PostNotice(_window.get(), kNoticeMessage, _lastErrorId);
+    }
 }
 
 void Application::OpenDocument() noexcept
@@ -5435,7 +5686,7 @@ void Application::ChangeTransform(const std::function<void(LayerTransform&)>& up
 {
     if (!_session.PendingTransformEdit().has_value())
     {
-        _session.BeginTransform(true);
+        (void)_session.BeginDeferredTransform(true);
     }
     const std::optional<TransformEdit>& edit = _session.PendingTransformEdit();
     // Numbers describe an ordinary transform; while distorted, the handles are the controls.
@@ -5611,7 +5862,7 @@ void Application::BeginTransformDrag(Vec2 view, UINT modifiers) noexcept
     }
     if (!_session.PendingTransformEdit().has_value())
     {
-        _session.BeginTransform(false);
+        (void)_session.BeginDeferredTransform(false);
     }
     // Ctrl-dragging a handle distorts, as in Photoshop; once distorted, handles keep distorting.
     if (mode == TransformDrag::Mode::Resize && _session.PendingTransformEdit().has_value() &&
@@ -5908,6 +6159,12 @@ void Application::OnSelectionAction(SelectionAction action, double value) noexce
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
         return;
     }
+    if (!_hostExecuting && _session.IsMovingSelection() && CanQueueSelectionMoveClick() &&
+        SelectionMoveHeaderAction(action))
+    {
+        (void)QueueSelectionMoveHeader(action, value);
+        return;
+    }
     const auto whole = [value](int minimum, int maximum)
     { return std::clamp(static_cast<int>(std::lround(value)), minimum, maximum); };
     switch (action)
@@ -6119,19 +6376,29 @@ void Application::SelectionRelease(Vec2 view) noexcept
         const OutlineDrag ended = *outline;
         const bool moved = ended.offset.x != 0.0 || ended.offset.y != 0.0;
         _drag = PointerDrag{};
-        _session.EndSelectionMove();
-        if (!moved && _tool == EditorTool::Wand)
+        if (moved)
         {
-            // The wand's click inside the selection selects afresh from that pixel.
-            RunMagicWand(ended.start, SelectionMode::New);
+            (void)QueueSelectionMoveClose(false);
+            SelectionChanged();
             return;
         }
-        if (!moved)
+        if (CanQueueSelectionMoveClick() && (_tool != EditorTool::Wand || !_session.wandSettings.sampleAllLayers))
         {
-            // A click without a drag deselects, as anywhere else with the lasso.
-            _session.Deselect();
+            (void)QueueSelectionMoveClick(_tool == EditorTool::Wand
+                                              ? std::optional(HostWandLayerNewInput{ended.start, _session.wandSettings,
+                                                                                    _session.selectionAntialiased})
+                                              : std::nullopt);
+            SelectionChanged();
+            return;
         }
-        SelectionChanged();
+        _session.EndSelectionMove(); // Composite/coexisting routes keep their reference behavior until migration.
+        if (_tool == EditorTool::Wand)
+            RunMagicWand(ended.start, SelectionMode::New);
+        else
+        {
+            _session.Deselect();
+            SelectionChanged();
+        }
         return;
     }
     const std::optional<LassoDraft>& draft = _session.PendingLasso();
@@ -6200,6 +6467,13 @@ void Application::SelectionChanged() noexcept
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 {
+    if (mode == SelectionMode::New && !_session.wandSettings.sampleAllLayers &&
+        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    {
+        ReportHostAdmission(
+            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased}));
+        return;
+    }
     std::optional<Raster> composite;
     if (_session.wandSettings.sampleAllLayers)
     {
@@ -7722,6 +7996,8 @@ int Application::RunRefusalSelfTest() noexcept
         // A Gaussian Blur whose grown grid would not fit names the budget, not the layer.
         _session.filterSettings.radius = 10;
         OnCommand(ChromeHost::kCommandGaussianBlur);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         const bool blurRefused = !_session.HasColorEdit() && _budgetNotices == notices + 3;
         // Merge Down of B onto A spans 200 × 200: the budget refuses it, and IDS_ERROR_FLATTEN is not raised.
         _session.SelectLayer(b);
