@@ -13,8 +13,10 @@ The repaired matrix passes all six profiles, with 637 unchanged inputs and 217 i
 files. Release root capture is about 0.052 microseconds for 10,000 records; changed-root construction still costs
 about 6 ms. Borrowed read APIs and exclusive buffer transfer also qualify in all six profiles: 18 adoption,
 12 view and 34 root controls plus all 5,704 preceding document assertions, with 641 unchanged inputs and 220
-independently verified evidence files. Full document mutation integration is being prepared separately and
-remains required. P1/G1 stays open.
+independently verified evidence files. The private full document candidate passes the complete Debug, Release and
+ASan suites: 5,768 unchanged predecessor assertions plus eight draft/six fixture controls, with identical owned
+sources and independently verified source/evidence archives. Original failures stay archived. Production metadata and
+preview worker placement, complete accounting/retirement and native activation remain required. P1/G1 stays open.
 
 ## Implementation checklist
 

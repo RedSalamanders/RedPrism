@@ -128,10 +128,14 @@
         preceding document controls. The original Release clipboard/text interference and complete failure are
         preserved; four already passed profiles are retained and Release/Debug rerun without source changes.
         All 220 final evidence copies are independently verified ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
-      - [ ] Full layer-root integration: a separate 528-input seed has the primary document draft and initial
-        unchanged-root/history/reference-setter migration. Eight source-only draft controls receive primary
-        lifetime/capacity/moved-state correction. Structural, remaining worker, preview/metadata UI placement,
-        fixture, complete reservation/retirement and full behavior qualification remain open.
+      - [ ] Full layer-root integration: a separate 528-input seed now has private drafts for structural,
+        brush/transform/resize/mask and prepared raster/color publication. Primary reviews four cheaper-agent
+        fixture groups and preserves the original retired-layer accessor contract. The complete private Debug
+        suites pass all 5,768 preceding assertions plus eight draft/six fixture controls in Debug, Release and
+        ASan Debug. Their identical owned sources and all frozen source/evidence copies are independently verified.
+        Original compile/runtime failures are preserved. Production metadata/typed-opacity/adjustment/display worker placement, complete
+        reservation/retirement, native activation and measured G1 remain open
+        ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering

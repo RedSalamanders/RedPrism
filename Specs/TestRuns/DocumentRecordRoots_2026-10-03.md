@@ -14,10 +14,109 @@
 - [x] Privately qualify the read-only helpers and preserve all root and preceding document controls.
 - [x] Commit and push the qualified primitive foundation (`3111e44`).
 - [x] Qualify native read helpers and exclusive buffer transfer, including preserved clipboard interference.
-- [ ] Commit and push the qualified read/transfer preparation.
+- [x] Commit and push the qualified read/transfer preparation (`68ab66c`).
+- [x] Privately qualify the explicit document draft and read access before complete caller integration.
+  - [x] Prepare bounded draft construction/sealing and eight independent literal controls.
+  - [x] Prepare root reuse for selection-only outputs and unchanged adjustment closure.
+  - [x] Prepare private structural ordering, grouping, deletion and merge construction.
+  - [x] Review delegated record-producing workers and bind complete sealed documents to prepared applies.
+  - [x] Compile/run the eight isolated draft controls in Debug, Release and ASan Debug; preserve exact source and evidence.
+  - [x] Compile the migrated Common record producers as a private Debug static library; independently verify its archive.
+  - [x] Prepare brush/transform/display and mask record producers, preserving deferred-transform guards.
+  - [x] Migrate explicit fixture construction and independently review the cheaper-agent edits.
+  - [x] Pass the full private Debug document suite with all preceding assertions unchanged.
+  - [x] Pass the full private Release and ASan document suites against the same candidate.
+  - [ ] Place metadata, typed opacity, adjustment and display construction/retirement on production workers.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
+
+## Current private integration work
+
+The record producers now compile in Common with read-only published layer records. Brush commits, transform
+and floating-pixel construction, resize, masks and color/raster history prepare exclusive drafts and seal
+complete output documents. Reference display and opacity construction also compile, but their production
+worker placement, admission and retirement are still open. No candidate integration source is activated.
+
+Private Common r1 completes at `2026-10-03T19:41:07.4499911+00:00` with 282 frozen inputs / 64 evidence files.
+Its archive is `p1-document-layer-core-r1-compiled`, completion
+`215D882E1E3BC7171FFAF7D9187AAFD61073EB9412EA4CBBF67BE8EEC2DA0804`, source manifest
+`5BF231D96685457697D4B1BB47B9E37DFA6DB5769BBA285FFC3B44DADBF4A3EE`, evidence manifest
+`C7095398B38A1FE957AEA9E340B87A0912B71877F1783E9AC497568083F93100`.
+Every archived length and hash is independently verified. This is compilation evidence only; it does not
+qualify caller integration, linkage, unchanged goldens, native application behavior or G1.
+
+Common r2 adds the project-store/WIC translation units and restored deferred-transform guards to the compilation
+proof. It completes at `2026-10-03T20:01:07.1035759+00:00`, 282 inputs / 66 evidence files, completion
+`A4677C94525EA57B15A0557B90BD1BDFB643D0B15BB7B5E9F40184652FA216FA`. Its source manifest is
+`6AEEC5031A4F504A945CE843092DB2906AAFF0EAA3A5A11F0A7A7162CA39A2E5`, evidence manifest
+`DEF3E03DDF081E7B1076DAC4402B23AE4DC14FC4F1176683200F04B87D46C69C`. Every copy is independently verified.
+
+Test fixtures are being migrated through an explicit test-only owned buffer with explicit immutable sealing.
+The helper allows intentionally invalid literal documents for existing validation tests and cannot borrow
+mutable published records. Cheaper agents have disjoint private test-file scopes; primary owns the helper,
+main suite, production guards and review. Assertion names, expected values and legacy goldens stay unchanged.
+
+## Private complete document suite
+
+Four cheaper agents migrate disjoint fixture groups. Primary reviews the edits, removes unnecessary scalar-only
+construction and checks literal token preservation across all 75 existing document test translation units.
+Actual compilation then catches remaining explicit boundaries; the original test expectations remain intact.
+No native implementation file is changed by this migration.
+
+Each attempt freezes 662 compiler/helper/dependency inputs, forces a full `DocumentTests` rebuild and runs the
+normal complete suite without a subset. It binds the qualified native predecessor's exact 5,768 PASS names.
+Each completed failure is archived and every copy independently checked before correction:
+
+| Attempt | Actual outcome | Evidence files | Completion SHA256 |
+| --- | --- | --- | --- |
+| r1 Debug | Compiler refuses remaining fixture/published-record boundaries; runtime does not start | 132 | `92D0E40118F814B117A0259DC832CB8A69D4FF0A8F93991A1E6B86E1FD2FCE94` |
+| r2 Debug | Build passes; one retired-layer accessor assertion fails in the complete runtime | 150 | `B3B83BA48F3E41027CB5562B5441AFF88FCFD08C5946367E1BD75BDDDA8E61C2` |
+| r3 Debug | Compiler rejects direct access to a private history publication field; runtime does not start | 122 | `F2FAD07FE712836FB857930D7E9CF6167F87BA3A99B597155D52893C1A63BA3A` |
+
+The r2 retirement expectation is preserved. A prepared raster publication retains the whole retired document
+after its owner swap. Its `Layer()` accessor then borrows the old record at the index bound on the worker;
+pixel-move `Selection()` similarly exposes the retained old selection. A private applied flag changes only after
+successful publication. This avoids allocating or copying a string-bearing record during owner application.
+Current generation, target and history checks still refuse stale candidates before either swap.
+
+Private r4 Debug rebuilds at `2026-10-03T20:12:48.9585022+00:00`–`20:13:00.3547450+00:00`, actual exit 0.
+The normal complete runtime at `20:13:00.8577417+00:00`–`20:13:36.8354210+00:00` exits 0, preserving every
+preceding assertion and passing eight draft plus six fixture controls. The archive
+`p1-document-layer-integration-r4-Debug-qualified-private-document-suite` completes at
+`2026-10-03T20:13:44.5197579+00:00` with 662 inputs / 151 evidence files, completion
+`B46EC0B5F07C03EF736A4F8947F5ECD6FA3031B5AB9DE7FE18019F358CC2DEB0`. Its source manifest is
+`F1C21B0917966CC62B12F452A0A0B9368FD2B167190ACC52512D7A1566A0470A`, evidence manifest
+`5F091805CCD74ADE4DE907E394090FDB217875544437B59C44661B41C5332DDC`, EXE
+`620A1DF5C5696574A8503AB326B9754289FECE7EAEBF699E91AB2E760B60C9A3`, PDB
+`535EC01FC467EBECACB6B955D14470D2191B64610FDA1A078D5FFB975B246497`.
+Every archived length/hash is independently verified.
+
+Release r5 and ASan Debug r6 also run the normal complete suite with the same 5,768 preceding assertions plus
+14 new controls. Their archived owned compiler sources are compared byte/hash for identical candidate identity.
+The profile-specific external library/runtime inputs are frozen separately. These are document-suite gates,
+not full application/WARP/ISA/ARM64 or measured UI qualification.
+
+| Profile | Actual runtime (UTC, 2026-10-03; exit 0) | Inputs / evidence | Completion SHA256 |
+| --- | --- | --- | --- |
+| Release r5 | `20:17:32.8812609`–`20:17:42.7992034` | 662 / 149 | `CFD98CE0032374158F06E4133C301EF597C8B2A5C89DB35E40D2F6CED807621B` |
+| ASan Debug r6 | `20:19:30.0425399`–`20:20:49.1973173` | 663 / 153 | `B65E132AE3131A531692821C20223BBC1706FC1A303C1209739DC865009C0B06` |
+
+Release archive `p1-document-layer-integration-r5-Release-qualified-private-document-suite` completes at
+`2026-10-03T20:17:50.7133582+00:00`. Source manifest
+`28D5864944D47C3702F2800E974A8E933866A85950A1D8FB2DEEB3307562CEAE`, evidence manifest
+`345624D8D4255BD8D94988C55D9FC90F6B2E9EE84A2EFE9B03D7D8FD1965A5B9`, EXE
+`B4DFD2B396396E3A42BB7A490749FA0C68DD43C3118AB0F87401817F6A3F3DBD`, PDB
+`FC27BCE5CDD246F83B6863F27366DD772F126D78754237A32EBF7FD60D23CF07`.
+
+ASan archive `p1-document-layer-integration-r6-ASanDebug-qualified-private-document-suite` completes at
+`2026-10-03T20:20:58.5167659+00:00`. Source manifest
+`42242FF2CEF55B7EFE0B652B3EBF22D084C4B9E7F24C750FA6F6305AE7690EA5`, evidence manifest
+`EFCF74FFBCBFEFE1B62BE74D455CC25C94D35552AA9C53FD999C5ED3A5053221`, EXE
+`F4AD344EC20C4C97E5BAFFBF6F959606D988682428CE6AD3A9914729A28D94AC`, PDB
+`7E550FC81933DD33170B9863211942EF478F44B9CE27F40D74BA33E954EE46E4`.
+Every archived copy is independently verified. Actual application caller placement, complete admission/retirement,
+native activation and G1 stay open.
 
 ## Source preparation
 
@@ -276,6 +375,35 @@ this integration can qualify. Opacity preview, structural edits, other worker bu
 remain unported. Eight independent draft controls are source-only: primary corrects an expired cancellation-token
 fixture, a capacity mismatch and reads of moved state, and bounds the mutable borrow before insertion/sealing.
 No compiler/runtime or complete integration claim is made for this private workspace.
+
+After pushed read/transfer commit `68ab66c`, private preparation continues with explicit insertion, ordering,
+grouping, clipping repair, deletion and merge drafts. Prepared color/raster producers must retain the complete
+sealed after-document so owner publication swaps root ownership rather than mutating a published record.
+Three insertion workers and six record-producing workers are delegated in disjoint private file scopes and
+reviewed by primary. Initial delegated capacity limits incorrectly reserve 10,000 records for small edits;
+those limits are returned for correction to the actual source/output sizes before any compiler qualification.
+An isolated draft-only proof project is being prepared with the actual headers and unchanged source excerpts
+needed by its literal controls. It cannot qualify the full caller migration or UI placement. Preview opacity,
+remaining brush/transform/display writers, complete admission and fixture migration remain open.
+
+The isolated proof subsequently rebuilds and runs all eight assertions in each x64 profile, actual exit 0.
+Debug builds at `2026-10-03T19:26:21.9914127+00:00` to `19:26:25.0883515` and runs through `19:26:25.2397561`;
+Release builds through `19:26:27.5159434` and runs through `19:26:27.6317455`;
+ASan Debug builds through `19:26:29.7079835` and runs through `19:26:29.8961625`.
+The proof links verbatim qualified `Guid::Generate`, `ImageLayer::operator==` and `LoopsBounds` definitions,
+checks the literal assertion names, and freezes the actual private headers. It does not compile all document
+callers, run WARP or the complete sanitizer-probe gate, or establish native activation/G1 qualification.
+The 101-input / 26-evidence archive completes at `2026-10-03T19:26:30.9029482+00:00`;
+every copied source/evidence file and both manifests are independently checked by length and SHA-256.
+Completion: `38505BAED4E307C8D17AD84B94E431F4BFA62B12CB4132A13298E202A0DEFE72`.
+Source manifest: `7CF63EDAD915152872292AA0F8B1430FEA46FC47D55121D304E2E6EA55D6FFD3`.
+Evidence manifest: `1DB83FCEFCA943F6E2D5B46DE0DD4E81C2485C574FC572E3EA469DD35B97D4AC`.
+
+The bounded mask-worker delegation edits the native file instead of its assigned private copy. Primary detects
+the scope error before compilation, retains the exact patch under `.build`, transfers it to the private
+candidate, and restores the native file byte-for-byte from the qualified read/transfer archive. No native
+candidate is activated or tested from that misplaced edit. The isolated proof above remains limited to its
+declared headers and eight literal controls.
 
 ## Integration requirements
 
