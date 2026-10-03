@@ -359,6 +359,8 @@ class Application final : public ChromeEvents
     [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveClose(bool cancel) noexcept;
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueSelectionMoveHeader(SelectionAction action, double value) noexcept;
+    [[nodiscard]] static bool SelectionMoveHeaderAction(SelectionAction action) noexcept;
     [[nodiscard]] bool CanQueueSelectionMoveClick() const noexcept;
     enum class SelectionMoveClosePolicy : std::uint8_t
     {
@@ -473,6 +475,7 @@ class Application final : public ChromeEvents
     int RunSelectionMoveCloseSelfTest() noexcept;
     int RunSelectionMoveCallerSelfTest() noexcept;
     int RunSelectionMoveFollowupSelfTest() noexcept;
+    int RunSelectionMoveHeaderSelfTest() noexcept;
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
@@ -870,6 +873,7 @@ class Application final : public ChromeEvents
         Write,
         SelectionMoveSettle,
         SelectionMoveFollowup,
+        SelectionHeaderFollowup,
         Execute,
         FileComplete,
         Complete

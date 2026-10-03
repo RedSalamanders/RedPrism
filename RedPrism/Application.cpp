@@ -2293,6 +2293,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveFollowupSelfTest\n");
     if (const int followup = RunSelectionMoveFollowupSelfTest(); followup != 0)
         return followup;
+    std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
+    if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
+        return header;
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
@@ -6131,6 +6134,12 @@ void Application::OnSelectionAction(SelectionAction action, double value) noexce
     if (!_hostExecuting && (_historyWork.Busy() || _activeHostRequest || _hostRequests.Size()))
     {
         _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        return;
+    }
+    if (!_hostExecuting && _session.IsMovingSelection() && CanQueueSelectionMoveClick() &&
+        SelectionMoveHeaderAction(action))
+    {
+        (void)QueueSelectionMoveHeader(action, value);
         return;
     }
     const auto whole = [value](int minimum, int maximum)

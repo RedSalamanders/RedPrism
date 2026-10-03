@@ -44,6 +44,13 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
     complete `Move Selection` history off owner. The session's current NudgeSelection starts its own move
     only when no outline move is already live; keep that live-outline no-op policy. Qualify translation output
     bounds, no-op/redo, enclosing transaction and command ordering independently of Clipper operations.
+    - [x] Seed 500 isolated sources from the qualified header private r1 archive; primary prepares sealed
+      whole-pixel authority, one-pass cancellable translation/cached geometry, worker history and two-generation
+      current-only acknowledgement. A cheaper agent drafts independent legacy and cancellation controls.
+    - [x] Primary reviews and extends worker/capacity/retirement tests; the header native archive now qualifies.
+    - [ ] Compile and qualify the complete private DocumentTests suite against that verified predecessor.
+      Full private proof, exact archival and fresh native qualification precede activation
+      ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). No nudge host route has changed.
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
   - [x] S2a — Qualify separate Select All/Deselect authority that preserves an already live brush, warp or shape.
@@ -216,14 +223,22 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
               `2026-10-03T03:51:14.2165680+00:00`. The next private compiler may now consume these dependencies.
           - [ ] S3b1b1b — Own selection-header changes and remaining size/replacement/close callers only after
             their concrete reference settlement and coexisting-edit policy controls qualify.
-            - [ ] S3b1b1b0 — Eligible idle outline header kind/Deselect retains exact opening/action/value,
+            - [x] S3b1b1b0 — Eligible idle outline header kind/Deselect retains exact opening/action/value,
               freezes samples on admission/refusal and waits acknowledged End before bounded settings apply
               or prepared Deselect at the same ordinal. Preserve unchanged-kind End, zero/moved outline
               history, event-time value, nested title/depth, failure/cancellation/refusal/retry and younger order.
               Keep existing busy/coexisting header policy until its own preserving publication qualifies.
               Primary seeds 498 source files from the immutable follow-up private r2 and prepares isolated
               code; a cheaper agent drafts literal controls. No next compiler may consume native dependencies
-              before the current follow-up matrix completes and archives. This is source preparation only.
+              before the current follow-up matrix completes and archives. Private r1 now passes fresh Debug
+              compilation and the full WARP Application suite: 126 unique checks/21 modes, 53 ordered stages
+              and all retained suites. Immutable archival retains 625 inputs/216 evidence files, completed
+              `2026-10-03T03:57:49.3365819+00:00` before seven byte-identical activations
+              ([record](../../TestRuns/SelectionMoveHeaders_2026-10-03.md)). Independent preflight verifies
+              460 unchanged common inputs; native r1 PID 50116 returns actual exit 0 at
+              `2026-10-03T04:29:21.8934408+00:00` against 614 frozen inputs. All six profiles pass; independent
+              verification and immutable archival retain 614 inputs/20,351 evidence files at
+              `2026-10-03T04:39:26.9716006+00:00`. Remaining routes and measured G1 stay open.
             - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
               cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve

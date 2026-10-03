@@ -184,6 +184,14 @@
   profiles at `2026-10-03T03:46:41.3855104+00:00`, with exact 84/16 follow-up and retained controls in every
   full x64 suite. Independent verification and archival retain 613 inputs/21,605 evidence files at
   `2026-10-03T03:51:14.2165680+00:00`. All Layers, remaining header/close callers and measured G1 remain open.
+- [x] Idle outline header follow-ups — S3b1b1b0 owns kind/Deselect event-time values through acknowledged End
+  at one ordinal. Primary-reviewed isolated code passes the full private Debug/WARP suite: 126 unique checks
+  across 21 modes and 53 ordered Application stages, with retained suites/goldens unchanged. Exact 625 inputs/
+  216 evidence files are archived at `2026-10-03T03:57:49.3365819+00:00` before seven byte-identical activations
+  ([record](../../TestRuns/SelectionMoveHeaders_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T04:29:21.8934408+00:00`; independent verification and immutable archival retain 614 inputs/
+  20,351 evidence files at `2026-10-03T04:39:26.9716006+00:00`. Coexisting header/size/lifecycle policies and
+  measured G1 stay open.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

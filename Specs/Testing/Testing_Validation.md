@@ -393,6 +393,18 @@ control, with no timing threshold. All Layers/coexisting publication, remaining 
 stay separate. Actual qualification and retained failed attempts are recorded in
 [`SelectionMoveFollowups_2026-10-03.md`](../TestRuns/SelectionMoveFollowups_2026-10-03.md).
 
+`selection-move-header.*` adds 126 unique assertions across 21 modes through actual idle outline header
+producers, in the complete 53-stage Application order. The exact unique PASS set/summary and source/runtime
+stage order must match the independently archived full private proof in every x64 suite. Retain follow-up
+84/16, caller 276/49, close 242/31, selection 162 and wand 86/16 controls. Rectangle/ellipse and freehand/polygonal
+kind changes own event-time values; unchanged kind still Ends. Literal zero/moved geometry, separate Deselect
+Undo, retained Redo, nested outer title/depth, held End and Deselect workers, younger writer order, busy header
+refusal, actual capture/admission/worker failures, owner cancellation at either phase, retry and equal-geometry
+reopening must qualify. A reached pending-panel fixture retains its original header policy. These are structural
+controls; coexisting publication, remaining size/lifecycle callers and measured G1 remain separate.
+Actual private/native status is recorded in
+[`SelectionMoveHeaders_2026-10-03.md`](../TestRuns/SelectionMoveHeaders_2026-10-03.md).
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 

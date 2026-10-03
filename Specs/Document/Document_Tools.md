@@ -352,8 +352,16 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   Admission refusal stops pointer samples without a synchronous fallback. A coexisting pending edit or
   All Layers keeps its current caller policy until separately migrated; the typed settled route refuses
   those states before End. Enclosing history name/depth and true no-op/redo semantics remain unchanged.
+  Eligible idle outline headers for SetMarqueeKind, SetLassoKind and Deselect own the exact opening/action/value
+  in a noncoalescing request. Admission/refusal stops samples; opening validation precedes capture or unrelated
+  settlement. Acknowledged End precedes the event-time kind change or prepared Deselect at the same ordinal.
+  An unchanged kind still Ends the move. A failed End changes no setting and runs no Deselect; failure/cancellation
+  after End retains its completed moved outline/history without publishing dependent selection/history.
+  Zero-offset End preserves redo; moved End keeps its separate Undo before Deselect. Enclosing transaction
+  name/depth survives. Existing busy and coexisting header policy remains separate; admission never falls back
+  synchronously. The native header qualification is tracked in SelectionWorkers S3b1b1b0.
   The retirement observation covers the prepared aggregate, not each raster's final reference. Remaining
-  headers, coexisting edits and replacement/close still require separate owned migration; Save/Export/Enter
+  coexisting headers/edits and replacement/close still require separate owned migration; Save/Export/Enter
   preserve their live outline behavior. End-before-action
   classification does not migrate its dependent geometry/pixel work. Graph capture/accounting costs,
   broader selection kernels and measured G1 remain separate requirements.

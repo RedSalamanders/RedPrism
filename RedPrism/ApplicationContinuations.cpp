@@ -118,6 +118,24 @@ ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandL
     return receipt;
 }
 
+bool Application::SelectionMoveHeaderAction(SelectionAction action) noexcept
+{
+    return action == SelectionAction::SetMarqueeKind || action == SelectionAction::SetLassoKind ||
+           action == SelectionAction::Deselect;
+}
+
+ContinuationReceipt Application::QueueSelectionMoveHeader(SelectionAction action, double value) noexcept
+{
+    DropDrag<OutlineDrag>();
+    const auto opening = _session.SelectionMoveOpening();
+    const auto receipt = !opening || !CanQueueSelectionMoveClick() ? ContinuationReceipt::Failure(E_ABORT)
+                         : !SelectionMoveHeaderAction(action)
+                             ? ContinuationReceipt::Failure(E_INVALIDARG)
+                             : QueueHostInput(HostSelectionMoveHeaderInput{opening.value(), action, value});
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
 bool Application::SelectionMoveEndCommand(int command) noexcept
 {
     switch (command)
@@ -192,7 +210,8 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
         tool->selectionMoveOpening = _session.SelectionMoveOpening();
     if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
         DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
-    if (std::holds_alternative<HostSelectionMoveClickInput>(input))
+    if (std::holds_alternative<HostSelectionMoveClickInput>(input) ||
+        std::holds_alternative<HostSelectionMoveHeaderInput>(input))
         DropDrag<OutlineDrag>();
     try
     {
@@ -434,6 +453,21 @@ void Application::RunHostContinuation() noexcept
                 // Closing this exact gesture must not implicitly settle a coexisting color/shape edit.
                 _hostStage = HostStage::Execute;
                 break;
+            }
+            if (const auto* header = std::get_if<HostSelectionMoveHeaderInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(header->opening) || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                if (!SelectionMoveHeaderAction(header->action))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // Header End uses the original enclosing transaction, like pointer End.
             }
             if (const auto* click = std::get_if<HostSelectionMoveClickInput>(&input))
             {
@@ -929,6 +963,44 @@ void Application::RunHostContinuation() noexcept
             }
             if (_hostCommitStamp || _historyWork.Busy())
                 return;
+            _hostStage = HostStage::Complete;
+            break;
+        }
+        case HostStage::SelectionHeaderFollowup:
+        {
+            const auto* header = std::get_if<HostSelectionMoveHeaderInput>(&input);
+            if (!header || _session.IsMovingSelection())
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            if (header->action == SelectionAction::Deselect)
+            {
+                const auto result = StartSelectionCommand(SelectionCommandKind::Deselect);
+                if (FAILED(result))
+                {
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_hostCommitStamp || _historyWork.Busy())
+                    return;
+            }
+            else if (header->action == SelectionAction::SetMarqueeKind)
+            {
+                _session.marqueeKind = header->value >= 0.5 ? LassoKind::Ellipse : LassoKind::Rectangle;
+                SelectionChanged();
+            }
+            else if (header->action == SelectionAction::SetLassoKind)
+            {
+                _session.lassoKind = header->value >= 0.5 ? LassoKind::Polygonal : LassoKind::Freehand;
+                SelectionChanged();
+            }
+            else
+            {
+                FinishHostContinuation({HostOutcome::Failed, E_INVALIDARG});
+                return;
+            }
             _hostStage = HostStage::Complete;
             break;
         }
