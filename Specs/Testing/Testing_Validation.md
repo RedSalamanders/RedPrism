@@ -687,7 +687,8 @@ Each refusal changes one thing:
 A genuine VEX instruction in the marked range, in the procedure's code or after it stays a violation (3). So does a row that
 reaches from a proved DWORD table into unproved indices (1).
 
-The inline, AL-guard and RDX suites evaluate every control twice. Through the full gate, an accepted control stays accepted and a
+Every dispatch-recognizer suite (inline, AL-guard, RDX, CL-guard, compact RCX, R10, wide-stack, QWORD stack, R9 byte switch,
+RDI-index and RDI image-base) evaluates every control twice. Through the full gate, an accepted control stays accepted and a
 control that plants vector code stays refused. With the marked-range proof disabled, their dispatch-form assertions apply
 unchanged. [Record](../TestRuns/IsaMarkedDataTables_2026-10-02.md).
 
