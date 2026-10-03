@@ -163,6 +163,19 @@
   ([record](../../TestRuns/SelectionMoveHost_2026-10-03.md)). S3b1b still requires no-move follow-ups and the
   remaining concrete End/Cancel callers while preserving Save/Enter and nested history. Broader P1 and measured
   G1 remain open; the private structural proof does not close them.
+- [x] Ordered outline callers — S3b1b0 binds known End-before-command/tool events to their exact outline
+  opening and preserves selected first Undo/Redo cancellation, same-tool behavior and capture loss.
+  - [x] Full private Debug/WARP proof: 276 unique checks across 49 modes, all 51 Application stages and retained
+    host checks. Exact 621 inputs/435 evidence files are archived before seven byte-identical activations;
+    the two new Select All fixture failures are preserved before correcting their AA expectation.
+  - [x] Full native matrix: all six forced-rebuild profiles pass with 276 unique caller checks/49 modes and
+    retained suites in every x64 gate. ARM64 is cross-build only. Exact verification and immutable archival
+    retain 611 inputs/1,546 evidence files; 57 refined ISA controls keep the scanner/allowlist unchanged
+    ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)).
+- [ ] Outline click follow-ups — S3b1b1a owns no-move End and its Deselect/active-layer New wand action in
+  one selected request, retaining event-time point/settings/AA and the ordinal through both worker phases.
+  Primary-owned isolated code and cheaper-agent controls are in preparation while native inputs stay frozen;
+  private/native qualification, All Layers, remaining header/close callers and measured G1 remain open.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.

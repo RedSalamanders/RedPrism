@@ -361,7 +361,7 @@ Retained table-driven suites may repeat labels; qualification compares their exa
 repetitions. New opening labels are unique. Application closure/order/retirement and G1 remain separate gates.
 
 `selection-move-host.*` exercises the moved-release and direct Escape/first Undo/Redo close boundary in the full
-Application suite: 242 unique assertions across 31 modes, registered with all 50 stages. Held real workers prove
+Application suite: 242 unique assertions across 31 modes, retained in the full ordered stage sequence. Held real workers prove
 pending receipt/reservation ownership, stopped late samples, duplicate receipt reuse, younger-writer ordering,
 exact opening and equal-geometry reopen refusal before capture, generation/serial/active/mask/crop/history
 staleness, nested transaction/saved-marker preservation, capture/history-allocation faults, worker cancellation
@@ -370,6 +370,16 @@ independent history expectations check publication. Retirement probes cover the 
 every raster's final reference; window-message/zoom controls establish no timing threshold. Qualified private
 and six-profile native runs, with the retained failed native r1, are recorded in
 [`SelectionMoveHost_2026-10-03.md`](../TestRuns/SelectionMoveHost_2026-10-03.md). Remaining callers and G1 stay open.
+
+`selection-move-caller.*` adds 276 unique assertions across 49 modes in the full 51-stage Application suite.
+Real changed/same tool and tool-command inputs, all 27 End-before-command refusal routes, capture loss,
+selected Undo/Redo, Select All/Deselect ordering and younger Undo bind the event-time opening. Held workers
+prove stopped late samples, pending receipt/reservation ownership, nested title/depth, actual budget/allocation
+refusal and retry, reached worker failure and equal-geometry reopen refusal before capture. Exact unique
+names and source/runtime stage order must match the independently archived private proof in every x64 suite.
+Six fresh native profiles and immutable source/product/evidence archival are recorded in
+[`SelectionMoveCallers_2026-10-03.md`](../TestRuns/SelectionMoveCallers_2026-10-03.md). No-move/header/close and
+coexisting-edit policies, heavy dependent actions and measured G1 remain separate requirements.
 
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
@@ -516,15 +526,16 @@ body/default targets are required. Missing/unknown/duplicate/overlapping or PE-m
 Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
 and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
 
-`IsaRdiBaseByteRemapTests.ps1` adds 56 synthetic controls for Release OnCommand's RDI image-base remap:
-six accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
+`IsaRdiBaseByteRemapTests.ps1` adds 57 synthetic controls for Release OnCommand's RDI image-base remap:
+seven accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
 table row proved from PE bytes) and 50 refusals. The exact nine-row unsigned guard/CDQE/base/byte-and-DWORD
 dispatch requires PE/listing agreement, same-owner anonymous PDB starts, procedure/contribution bounds, valid
 byte indices and decoded body/default targets. Direct bypass into the protected sequence or table data fails.
 Malformed bytes/rows, symbols/owners/bounds, counts/indices/targets and adjacent real VEX/EVEX are independent
 controls. No synthetic code is executed and no runtime allowance is added. The unchanged failed Release image
 and all nine parser suites are retained with source hashes in the selection-move host test-run record;
-this standalone proof does not replace the native configuration gates.
+this standalone proof does not replace the native configuration gates. A valid decoded body target and the
+same row marked unknown form a paired control; this isolates target decode validity from table bounds.
 
 The 183 `isa-inline-table.R10AlGuard*` controls prove the exact non-clobbering R10 prelude and AL-bound dispatch:
 every protected row independently rejects missing, duplicate, unknown, overlap and PE/listing mismatch; valid

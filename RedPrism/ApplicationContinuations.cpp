@@ -96,12 +96,80 @@ ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
     return receipt;
 }
 
+bool Application::SelectionMoveEndCommand(int command) noexcept
+{
+    switch (command)
+    {
+    case ChromeHost::kCommandCut:
+    case ChromeHost::kCommandPaste:
+    case ChromeHost::kCommandLayerViaCopy:
+    case ChromeHost::kCommandCurves:
+    case ChromeHost::kCommandLevels:
+    case ChromeHost::kCommandHueSaturation:
+    case ChromeHost::kCommandExposure:
+    case ChromeHost::kCommandGradientMap:
+    case ChromeHost::kCommandGrain:
+    case ChromeHost::kCommandGaussianBlur:
+    case ChromeHost::kCommandMotionBlur:
+    case ChromeHost::kCommandAddNoise:
+    case ChromeHost::kCommandLensCorrection:
+    case ChromeHost::kCommandContentAwareFill:
+    case ChromeHost::kCommandNewLevelsAdjustment:
+    case ChromeHost::kCommandNewCurvesAdjustment:
+    case ChromeHost::kCommandNewHueSaturationAdjustment:
+    case ChromeHost::kCommandNewExposureAdjustment:
+    case ChromeHost::kCommandNewGradientMapAdjustment:
+    case ChromeHost::kCommandNewGrainAdjustment:
+    case ChromeHost::kCommandAddMask:
+    case ChromeHost::kCommandAddBlackMask:
+    case ChromeHost::kCommandSelectAll:
+    case ChromeHost::kCommandDeselect:
+    case ChromeHost::kCommandInverse:
+    case ChromeHost::kCommandLoadLayerSelection:
+    case ChromeHost::kCommandLoadMaskSelection:
+        return true;
+    default:
+        return false;
+    }
+}
+
+Application::SelectionMoveClosePolicy Application::SelectionMovePolicy(const HostRequestInput& input) const noexcept
+{
+    if (const auto* tool = std::get_if<HostToolInput>(&input))
+        return tool->tool == _tool ? SelectionMoveClosePolicy::Preserve : SelectionMoveClosePolicy::End;
+    if (const auto* command = std::get_if<HostCommandInput>(&input))
+    {
+        if (command->command == ChromeHost::kCommandUndo || command->command == ChromeHost::kCommandRedo)
+        {
+            // Size cards let history pass. Each earlier canvas edit consumes the first history command.
+            for (int edit = static_cast<int>(CanvasEdit::Panel); edit < static_cast<int>(CanvasEdit::OutlineMove);
+                 ++edit)
+                if (EditUnderWay(static_cast<CanvasEdit>(edit)))
+                    return SelectionMoveClosePolicy::Preserve;
+            return SelectionMoveClosePolicy::Cancel;
+        }
+        const auto selected = ChromeHost::ToolForSelectCommand(command->command);
+        if (selected != EditorTool::Count)
+            return selected == _tool ? SelectionMoveClosePolicy::Preserve : SelectionMoveClosePolicy::End;
+        if (SelectionMoveEndCommand(command->command))
+            return SelectionMoveClosePolicy::End;
+    }
+    return SelectionMoveClosePolicy::Preserve;
+}
+
 ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 {
     if (_shutdownStarted || !_hostSourceRegistered)
     {
         return ContinuationReceipt::Failure(E_ABORT);
     }
+    // These bounded scalar inputs bind the event's gesture before admission; later Execute cannot close a reopen.
+    if (auto* command = std::get_if<HostCommandInput>(&input))
+        command->selectionMoveOpening = _session.SelectionMoveOpening();
+    else if (auto* tool = std::get_if<HostToolInput>(&input))
+        tool->selectionMoveOpening = _session.SelectionMoveOpening();
+    if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+        DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
     try
     {
         auto owned = HostRequest::TryCreate(input, _hostInputBudget, _hostAdmissionAllocationFailureForTest);
@@ -302,10 +370,11 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle             ? HostStage::GradientSettle
-                         : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
-                         : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
-                         : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
+            _hostStage = _hostStage == HostStage::Settle                ? HostStage::GradientSettle
+                         : _hostStage == HostStage::GradientSettle      ? HostStage::PixelMoveSettle
+                         : _hostStage == HostStage::PixelMoveSettle     ? HostStage::TransformSettle
+                         : _hostStage == HostStage::TransformDiscard    ? HostStage::Execute
+                         : _hostStage == HostStage::SelectionMoveSettle ? _hostAfterPrerequisite
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -320,6 +389,17 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+            {
+                const auto expected = std::get_if<HostCommandInput>(&input)
+                                          ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                          : std::get<HostToolInput>(input).selectionMoveOpening;
+                if (expected != _session.SelectionMoveOpening())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return; // Refuse the event's replaced opening before settling another edit or capturing owners.
+                }
+            }
             if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&input))
             {
                 if (_session.SelectionMoveOpening() != std::optional(close->opening))
@@ -763,7 +843,48 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
             break;
         }
+        case HostStage::SelectionMoveSettle:
+        {
+            const auto policy = SelectionMovePolicy(input);
+            const auto opening = _session.SelectionMoveOpening();
+            const auto expected = std::get_if<HostCommandInput>(&input)
+                                      ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                      : std::get<HostToolInput>(input).selectionMoveOpening;
+            if (!opening || opening != expected || policy == SelectionMoveClosePolicy::Preserve)
+            {
+                FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            _hostAfterPrerequisite =
+                policy == SelectionMoveClosePolicy::Cancel ? HostStage::Complete : HostStage::Execute;
+            const auto result =
+                opening ? StartSelectionMoveClose(opening.value(), policy == SelectionMoveClosePolicy::Cancel)
+                        : E_ABORT;
+            if (FAILED(result))
+            {
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
+                FinishHostContinuation({HostOutcome::Failed, result});
+                return;
+            }
+            if (_selectionMoveCloseTicket)
+                return;
+            _hostStage = _hostAfterPrerequisite;
+            break;
+        }
         case HostStage::Execute:
+            if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
+            {
+                const auto expected = std::get_if<HostCommandInput>(&input)
+                                          ? std::get<HostCommandInput>(input).selectionMoveOpening
+                                          : std::get<HostToolInput>(input).selectionMoveOpening;
+                if (expected != _session.SelectionMoveOpening())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::SelectionMoveSettle;
+                break;
+            }
             _hostExecutionError = S_OK;
             if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {

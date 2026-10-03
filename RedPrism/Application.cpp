@@ -2285,6 +2285,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
+    std::printf("BEGIN self-test.RunSelectionMoveCallerSelfTest\n");
+    if (const int callers = RunSelectionMoveCallerSelfTest(); callers != 0)
+        return callers;
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
@@ -3971,6 +3974,11 @@ void Application::EndPointerDrag(PointerEnd end) noexcept
     {
         EndTransformDrag();
     }
+    else if (std::holds_alternative<OutlineDrag>(_drag) && _session.IsMovingSelection() && !_hostExecuting)
+    {
+        (void)QueueSelectionMoveClose(false);
+        SelectionChanged();
+    }
     else if (std::holds_alternative<OutlineDrag>(_drag) || std::holds_alternative<DraftDrag>(_drag) ||
              std::holds_alternative<PixelDrag>(_drag) || _session.PendingLasso().has_value())
     {
@@ -4075,7 +4083,11 @@ void Application::OnCommand(int command) noexcept
     const bool settledSelection =
         (command == ChromeHost::kCommandSelectAll || command == ChromeHost::kCommandDeselect) &&
         _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority());
-    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection ||
+    const auto selectedTool = ChromeHost::ToolForSelectCommand(command);
+    const bool closesOutline =
+        _session.IsMovingSelection() &&
+        (SelectionMoveEndCommand(command) || (selectedTool != EditorTool::Count && selectedTool != _tool));
+    if (!_hostExecuting && (rasterEdit || clipboard || maskEdit || layerCopy || settledSelection || closesOutline ||
                             command == ChromeHost::kCommandFreeTransform))
     {
         ReportHostAdmission(QueueHostInput(HostCommandInput{command}));
@@ -4885,7 +4897,7 @@ void Application::EndCanvasEdits(EditEnd end) noexcept
 void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
-        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+        (_historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() || _session.PendingGradient() ||
          _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));

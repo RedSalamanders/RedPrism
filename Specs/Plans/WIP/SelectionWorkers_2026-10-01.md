@@ -150,7 +150,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
         Tool/header/capture loss, selected Undo/Redo, replacement/close and shutdown need concrete caller/result
         controls before migration. A queued closure alone does not authorize its dependent command to run before
         acknowledgement, and settlement must not silently change the previous nested transaction semantics.
-        - [ ] S3b1b0 — Qualify the known End-before-command/tool callers and capture-loss outline route. Bind
+        - [x] S3b1b0 — Qualify the known End-before-command/tool callers and capture-loss outline route. Bind
           command/tool events to their observed opening, refuse a replacement before other settlement, freeze
           pointer sampling and wait for exact closure acknowledgement before Execute. Selected first Undo/Redo
           cancels the outline and consumes the command; younger Undo after a completed End restores its entry.
@@ -161,11 +161,39 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
           enclosing-history/younger Undo controls. Private parser refinement also pairs a valid decoded body
           target with the same row marked unknown: 57 source-only controls pass, with its first wrong target
           fixture preserved. This strengthens the original UnknownTarget label, which additionally violated
-          table-target bounds. Native inputs and the current r2 run remain unchanged.
-          No compiler or runtime qualification is claimed yet.
+          table-target bounds. The refinement keeps the scanner and runtime allowlist unchanged.
+          Private r1 actually exits 5 with 274 passed caller assertions across 49 modes and two new Select All
+          fixture failures: the literal expected AA=false instead of the owning contract's AA=true. Both Undo
+          checks and the retained 242 closure checks pass. Exact 621 inputs/435 evidence files are archived
+          before correcting only the new fixture and launching r2
+          ([record](../../TestRuns/SelectionMoveCallers_2026-10-03.md)); production and existing goldens stay unchanged.
+          Private r2 now passes its fresh compiler and normal full WARP Application runtime: 276 unique caller
+          checks across 49 modes, all 51 stages and retained host controls. Independent verification and archival
+          retain 621 inputs and 435 evidence files before seven native source activations. Native r1 now passes
+          all six forced-rebuild profiles at `2026-10-03T01:59:42.3724882Z`: all 276 unique caller checks/49 modes,
+          242 retained close checks/31 modes, all 51 stages, 57 ISA controls and unchanged retained suites run
+          in every full x64 suite; ARM64 cross-builds pass. Independent verification and immutable archival
+          retain 611 inputs and 1,546 evidence files before another build. This completes S3b1b0 only.
         - [ ] S3b1b1 — Own no-move follow-ups, remaining header/size/replacement/close callers and the concrete
           coexisting-edit semantics. Source classification of a command does not qualify its heavy dependent
           geometry/pixel operation; boolean/traces, All Layers and measured G1 remain their separate gates.
+          - [ ] S3b1b1a — Own click-without-drag End and its Deselect or active-layer New wand follow-up in one
+            noncoalescing bounded input. Capture the exact opening and original point/settings/AA at release;
+            refuse a reopened outline before capture. Preserve the enclosing transaction and reuse the selected
+            ordinal through both acknowledged jobs. Freeze pointer samples on admission/refusal; a failed End
+            runs no follow-up. A failed/cancelled follow-up after acknowledged End preserves its completed
+            closure and publishes no dependent selection/history. Prove literal geometry and Undo, no-op/redo,
+            original outer title/depth, two held worker phases, younger-writer order, settings changed after
+            admission, actual budget/allocation/capture/worker/cancellation failures and retry. Primary prepares
+            an isolated candidate from the immutable 497-file private caller source while 611 native inputs
+            remain frozen; a cheaper agent drafts controls. Full private proof, immutable archive and native
+            gates precede activation. The eligible route excludes other pending edits/gestures exactly as the
+            settled selection factory does. Its typed request refuses before End when those are present;
+            existing coexisting and All Layers callers retain their reference route until separately migrated.
+            Admission refusal never enters a synchronous fallback. Primary adds a reached deferred-panel
+            compatibility control; coexisting publication and All Layers remain separate open work.
+          - [ ] S3b1b1b — Own selection-header changes and remaining size/replacement/close callers only after
+            their concrete reference settlement and coexisting-edit policy controls qualify.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve
   all existing tolerance/channel/sample/contiguous/mode semantics and source-failure reporting.
   - [x] S4a — Qualify cancellable wand/mask-trace kernels and layer sampling before ordered host activation.
@@ -272,13 +300,13 @@ moved geometry, Cancel restores its original geometry, and Preserve keeps its op
 | --- | --- | --- |
 | Moved `SelectionRelease` | End only; freeze further samples | S3b1a typed exact opening; 242 private controls, repaired native matrix pending |
 | Direct Escape / first Undo / first Redo | Cancel; consume this edit before ordinary history restore | S3b1a; retained redo and exact original outline |
-| `EndPointerDrag`, capture loss | End moved outline; preserve polygonal-lasso leave semantics separately | S3b1b0 candidate; real producer held-worker control |
-| Changed tool / tool-selection command | End before tool state changes; same tool preserves | S3b1b0 candidate; exact event opening, failed closure never switches tool |
-| Cut / Paste / Layer via Copy | End before their admitted pixel/clipboard action | S3b1b0 candidate; each real command reaches refused dependency control |
-| Eleven destructive panel-opening commands | End before opening the selected panel | S3b1b0 candidate; each actual command refuses its panel if closure fails |
-| Six new adjustment commands / Add Mask / Add Black Mask | End before adding the layer/mask | S3b1b0 candidate; per-command refusal controls |
-| Select All / Deselect / Inverse / Load Layer Selection / Load Mask Selection | End before geometry publication | S3b1b0 candidate closes first; only Select All/Deselect already have the qualified prepared geometry engine |
-| Queued Undo/Redo with only the outline active | Cancel and consume; Undo behind an older successful End restores its completed entry | S3b1b0 candidate; literal ordering and preserved redo |
+| `EndPointerDrag`, capture loss | End moved outline; preserve polygonal-lasso leave semantics separately | S3b1b0 qualified; real producer held-worker control |
+| Changed tool / tool-selection command | End before tool state changes; same tool preserves | S3b1b0 qualified; exact event opening, failed closure never switches tool |
+| Cut / Paste / Layer via Copy | End before their admitted pixel/clipboard action | S3b1b0 qualified; each real command reaches refused dependency control |
+| Eleven destructive panel-opening commands | End before opening the selected panel | S3b1b0 qualified; each actual command refuses its panel if closure fails |
+| Six new adjustment commands / Add Mask / Add Black Mask | End before adding the layer/mask | S3b1b0 qualified; per-command refusal controls |
+| Select All / Deselect / Inverse / Load Layer Selection / Load Mask Selection | End before geometry publication | S3b1b0 qualified closes first; only Select All/Deselect already have the qualified prepared geometry engine |
+| Queued Undo/Redo with only the outline active | Cancel and consume; Undo behind an older successful End restores its completed entry | S3b1b0 qualified; literal ordering and preserved redo |
 | Zero-offset release inside outline | End, then Deselect; Wand instead performs New sampling at original press point | S3b1b1; retain point/settings/AA/tool and keep both actions ahead of younger writers |
 | Selection header kind / Deselect | End even when a kind value is unchanged, then apply captured header action | S3b1b1; own kind/value and exact gesture opening |
 | Header mode/AA/wand settings/amount controls | Preserve; mutate settings for later operations | Retain event-time values without silently closing the outline |
@@ -287,7 +315,7 @@ moved geometry, Cancel restores its original geometry, and Preserve keeps its op
 | Copy / Copy Merged / raster edits without an explicit End | Preserve reference nesting; preceding gradient/color work has separate rules | Do not add them to End classification merely because they are document commands |
 | Size / replacement / project/window/session close | Own caller-specific prompt and live-graph outcome | S3b1b1 plus qualified lifecycle boundaries; preserve Cancel answers and retire complete old ownership |
 
-S3b1b0 currently contains source and test drafts only. Its 27 actual End-before-command refusal routes do not
+S3b1b0's source and controls qualify in all six native profiles. Its 27 actual End-before-command refusal routes do not
 qualify the dependent Inverse/trace/filter/pixel kernels, general geometry capacity, coexisting earlier-edit
 policies or measured G1. The next private compiler run must follow the repaired S3b1a native archive.
 

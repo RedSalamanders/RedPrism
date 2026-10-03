@@ -358,6 +358,14 @@ class Application final : public ChromeEvents
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveClose(bool cancel) noexcept;
+    enum class SelectionMoveClosePolicy : std::uint8_t
+    {
+        Preserve,
+        End,
+        Cancel
+    };
+    [[nodiscard]] SelectionMoveClosePolicy SelectionMovePolicy(const HostRequestInput& input) const noexcept;
+    [[nodiscard]] static bool SelectionMoveEndCommand(int command) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
@@ -461,6 +469,7 @@ class Application final : public ChromeEvents
     class SelectionMoveCloseJob;
     [[nodiscard]] HRESULT StartSelectionMoveClose(std::uint64_t opening, bool cancel) noexcept;
     int RunSelectionMoveCloseSelfTest() noexcept;
+    int RunSelectionMoveCallerSelfTest() noexcept;
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
@@ -856,6 +865,7 @@ class Application final : public ChromeEvents
         TransformSettle,
         TransformDiscard,
         Write,
+        SelectionMoveSettle,
         Execute,
         FileComplete,
         Complete

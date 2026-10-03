@@ -184,7 +184,7 @@ function New-IrbCase {
     if ($Fault -eq 'TargetProtectedRow') { $targetValue = [UInt32]$ins[5].Rva }
     if ($Fault -eq 'OutsideProcedure') { $targetValue = [UInt32]($tableEndRva + 0x20) }
     if ($Fault -eq 'InteriorTarget') { $targetValue = [UInt32]($targetRva + 2) }
-    if ($Fault -eq 'UnknownTarget') { $targetValue = [UInt32]($targetRva + 0x10) }
+    if ($Fault -in @('KnownBodyTarget','UnknownTarget')) { $targetValue = [UInt32]($targetRva - 0x10) }
     for ($i = 0; $i -lt $dwordCount; ++$i) {
         # Keep the other entries vector-looking so malformed target controls
         # still exercise an ISA violation rather than removing its marker.
@@ -197,7 +197,7 @@ function New-IrbCase {
     Put-IrbBytes $pe (0x400 + $byteRva - $sectionRva) $remap
     if ($Fault -eq 'UnknownTarget') {
         # The target is mapped, but its decoded row is deliberately marked unknown below.
-        $targetValue = [UInt32]($targetRva + 0x10)
+        $targetValue = [UInt32]($targetRva - 0x10)
         Set-IrbU32 $pe (0x400 + $dwordRva - $sectionRva + 4*($dwordCount-1)) $targetValue
     }
     if ($Fault -eq 'PeMismatch') { $pe[0x400 + $ins[4].Rva - $sectionRva] = 0x4c }
@@ -303,13 +303,16 @@ function New-IrbCase {
         $rows.Add(('{0:x}: {1} vaddps zmm0, zmm0, zmm0' -f ($imageBase+$tableEndRva),(Get-IrbHex $outsideVector)))
     }
     if ($Fault -eq 'UnknownTarget') {
-        $unknownRva = [UInt32]($targetRva + 0x10)
+        $unknownRva = [UInt32]($targetRva - 0x10)
+        $targetRowFound = $false
         for ($i = 0; $i -lt $rows.Count; ++$i) {
             if ($rows[$i].StartsWith(('{0:x}:' -f ($imageBase+$unknownRva)))) {
                 $rows[$i] = ('{0:x}: <unknown>' -f ($imageBase+$unknownRva))
+                $targetRowFound = $true
                 break
             }
         }
+        if (-not $targetRowFound) { throw 'Unknown-target fixture did not reach its decoded body row.' }
     }
     Set-Content -LiteralPath $disassembly -Value (@($rows | Sort-Object {
         [UInt64]::Parse(($_ -split ':',2)[0], [Globalization.NumberStyles]::HexNumber)
@@ -346,6 +349,7 @@ Assert-IrbCase (New-IrbCase 'maximum-guard-boundary' '' 4095) $true
 Assert-IrbCase (New-IrbCase 'adjacent-66-90-padding' 'AdjacentNopPadding' 5) $true
 Assert-IrbCase (New-IrbCase 'exact-no-padding' 'NoPadding' 3) $true
 Assert-IrbCase (New-IrbCase 'unknown-table-decode-is-still-data' 'UnknownTableRow') $true
+Assert-IrbCase (New-IrbCase 'known-body-target' 'KnownBodyTarget') $true
 foreach ($fault in @(
     'PeMismatch','ListingMismatch','UnknownInstruction','MissingInstruction','Overlap',
     'GuardMismatch','WrongBiasRegister','WrongGuardOpcode','WrongGuardCondition','WrongGuardLimit','GuardEscape','WrongCdqe',

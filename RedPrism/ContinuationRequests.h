@@ -59,6 +59,7 @@ enum class HostPathAction : std::uint8_t
 struct HostCommandInput final
 {
     int command;
+    std::optional<std::uint64_t> selectionMoveOpening; // bound by the owner at admission, never geometry
 };
 struct HostWandLayerNewInput final
 {
@@ -74,6 +75,7 @@ struct HostSelectionMoveCloseInput final
 struct HostToolInput final
 {
     EditorTool tool;
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostShapeFinishInput final
 {
