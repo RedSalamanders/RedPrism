@@ -1257,6 +1257,8 @@ int Application::RunSelfTest() noexcept
         pointer(WM_LBUTTONDOWN, 0, 60.0, 60.0);
         pointer(WM_MOUSEMOVE, MK_LBUTTON, 90.0, 70.0);
         pointer(WM_LBUTTONUP, 0, 90.0, 70.0);
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+            return 5;
         box = bounds();
         if (!box.has_value() || !closeTo(box->minX, before + 30.0) ||
             _session.history.UndoName() != L"Move Selection" || _session.IsMovingSelection())
@@ -2280,6 +2282,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
+    std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
+    if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
+        return close;
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
@@ -4762,7 +4767,10 @@ bool Application::EndCanvasEdit(CanvasEdit edit, EditEnd end) noexcept
         if (drops)
         {
             DropDrag<OutlineDrag>();
-            _session.CancelSelectionMove();
+            if (!_hostExecuting)
+                (void)QueueSelectionMoveClose(true);
+            else
+                _session.CancelSelectionMove();
             SelectionChanged();
         }
         else
@@ -6319,6 +6327,12 @@ void Application::SelectionRelease(Vec2 view) noexcept
         const OutlineDrag ended = *outline;
         const bool moved = ended.offset.x != 0.0 || ended.offset.y != 0.0;
         _drag = PointerDrag{};
+        if (moved)
+        {
+            (void)QueueSelectionMoveClose(false);
+            SelectionChanged();
+            return;
+        }
         _session.EndSelectionMove();
         if (!moved && _tool == EditorTool::Wand)
         {

@@ -66,6 +66,11 @@ struct HostWandLayerNewInput final
     WandSettings settings;
     bool antialiased;
 };
+struct HostSelectionMoveCloseInput final
+{
+    std::uint64_t opening;
+    bool cancel;
+};
 struct HostToolInput final
 {
     EditorTool tool;
@@ -186,7 +191,7 @@ using HostRequestInput =
                  HostSizeApplyInput, HostPanelOkInput, HostNewInput, HostCloseProjectInput, HostCloseWindowInput,
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
-                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput>;
+                 HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

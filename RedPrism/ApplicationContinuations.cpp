@@ -70,6 +70,32 @@ ContinuationReceipt Application::QueuePanelCancel(std::uint64_t opening) noexcep
     return receipt;
 }
 
+ContinuationReceipt Application::QueueSelectionMoveClose(bool cancel) noexcept
+{
+    const auto opening = _session.SelectionMoveOpening();
+    if (!opening)
+        return ContinuationReceipt::Failure(E_ABORT);
+    if (_pendingSelectionMoveCloseOpening == opening &&
+        _pendingSelectionMoveCloseDocumentSerial == _session.DocumentSerial() &&
+        _pendingSelectionMoveCloseCancel == cancel &&
+        _pendingSelectionMoveCloseReceipt.Read().outcome == HostOutcome::Pending)
+        return _pendingSelectionMoveCloseReceipt;
+    if (cancel)
+        CancelHostContinuations();
+    // Stop pointer sampling even when admission refuses. The original outline/history survive for retry.
+    DropDrag<OutlineDrag>();
+    const auto receipt = QueueHostInput(HostSelectionMoveCloseInput{opening.value(), cancel});
+    if (receipt.Read().outcome == HostOutcome::Pending)
+    {
+        _pendingSelectionMoveCloseOpening = opening;
+        _pendingSelectionMoveCloseDocumentSerial = _session.DocumentSerial();
+        _pendingSelectionMoveCloseCancel = cancel;
+        _pendingSelectionMoveCloseReceipt = receipt;
+    }
+    ReportHostAdmission(receipt);
+    return receipt;
+}
+
 ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 {
     if (_shutdownStarted || !_hostSourceRegistered)
@@ -169,6 +195,14 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     CompleteDuplicateGestureInput(result.outcome);
+    if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
+        close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
+        _pendingSelectionMoveCloseCancel == close->cancel &&
+        _pendingSelectionMoveCloseDocumentSerial == _activeHostRequest->documentSerial)
+    {
+        _pendingSelectionMoveCloseOpening.reset();
+        _pendingSelectionMoveCloseReceipt = {};
+    }
     (void)_activeHostRequest->input.Finish(result.outcome, result.error);
     if (std::holds_alternative<HostShapeFinishInput>(_activeHostRequest->input.Input()))
     {
@@ -286,6 +320,17 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&input))
+            {
+                if (_session.SelectionMoveOpening() != std::optional(close->opening))
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                // Closing this exact gesture must not implicitly settle a coexisting color/shape edit.
+                _hostStage = HostStage::Execute;
+                break;
+            }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->draft.kind == SizeCardKind::NewCanvas)
             {
@@ -845,6 +890,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionCommandTicket.value());
+        }
+        else if (_selectionMoveCloseTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionMoveCloseTicket.value());
         }
         else if (_wandLayerHostTicket)
         {

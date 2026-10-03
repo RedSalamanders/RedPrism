@@ -58,6 +58,7 @@ struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
 struct SelectionCommandTestGate;
+struct SelectionMoveCloseTestGate;
 struct WandLayerHostTestGate;
 struct FileWorkTestGate;
 struct ProjectSaveTestGate;
@@ -356,6 +357,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool InitializeHostContinuations() noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCommit(std::uint64_t opening) noexcept;
     [[nodiscard]] ContinuationReceipt QueuePanelCancel(std::uint64_t opening) noexcept;
+    [[nodiscard]] ContinuationReceipt QueueSelectionMoveClose(bool cancel) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostPaths(std::span<const std::wstring_view> paths, HostPathAction action,
@@ -456,6 +458,9 @@ class Application final : public ChromeEvents
     class SelectionCommandJob;
     [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
     int RunSelectionCommandSelfTest() noexcept;
+    class SelectionMoveCloseJob;
+    [[nodiscard]] HRESULT StartSelectionMoveClose(std::uint64_t opening, bool cancel) noexcept;
+    int RunSelectionMoveCloseSelfTest() noexcept;
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
@@ -769,6 +774,13 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _selectionCommandStamp;
     std::optional<JobTicket> _selectionCommandTicket;
     std::shared_ptr<SelectionCommandTestGate> _selectionCommandTestGate;
+    std::optional<HistoryWorkStamp> _selectionMoveCloseStamp;
+    std::optional<JobTicket> _selectionMoveCloseTicket;
+    std::shared_ptr<SelectionMoveCloseTestGate> _selectionMoveCloseTestGate;
+    std::optional<std::uint64_t> _pendingSelectionMoveCloseOpening;
+    std::uint64_t _pendingSelectionMoveCloseDocumentSerial = 0;
+    bool _pendingSelectionMoveCloseCancel = false;
+    ContinuationReceipt _pendingSelectionMoveCloseReceipt;
     std::optional<HistoryWorkStamp> _wandLayerHostStamp;
     std::optional<JobTicket> _wandLayerHostTicket;
     std::shared_ptr<WandLayerHostTestGate> _wandLayerHostTestGate;

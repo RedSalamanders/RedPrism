@@ -280,6 +280,19 @@ directly touching DWORD and byte-index spans keep the same 15-byte, byte-for-byt
 No object, library or function runtime allowlist entry is added by either proof.
 Unrecognized table/dispatch forms receive no exemption.
 
+The observed Release OnCommand remap has exactly nine contiguous rows (43 bytes):
+`LEA EAX,[RBX-0x64]; CMP EAX,imm32; JA rel32; CDQE; LEA RDI,imagebase; MOVZX EAX,[RDI+RAX+byteTable];
+MOV ECX,[RDI+4*RAX+dwordTable]; ADD RCX,RDI; JMP RCX`. Every row must match PE bytes and known,
+nonoverlapping decoded boundaries. The unsigned maximum is 1…4095. Same-owner anonymous PDB starts bound
+adjacent DWORD/byte spans; the DWORD table has 2…4096 entries and the byte span is exactly max+1 bytes.
+Its exclusive boundary is the next same-owner data symbol or owning procedure end, with at most three bytes
+of canonical alignment (`90`/`CC`, `66 90` or `0F 1F 00`). That alignment receives no table exemption.
+The guard/dispatch, both spans and all decoded targets fit the exact same procedure and contribution.
+Every byte is below the DWORD entry count. Every DWORD target is a decoded body boundary before the tables,
+outside the protected guard/dispatch; the JA default must be one of those targets. Direct body entry into the
+protected sequence or either data span rejects the proof. Missing/corrupt bounds, owner, PE/listing rows or
+targets receive no fallback. Other vector code remains gated; the runtime allowlist is unchanged.
+
 The observed terminal CL/R8 dispatch controls live in `IsaClGuardTests.ps1`. That exact form is contiguous
 `MOVZX ECX,byte [RBX+disp8]; CMP CL,max; JA rel32; MOVZX ECX,CL; LEA R8,imagebase;
 MOV ECX,[R8+4*RCX+table]; ADD RCX,R8; JMP RCX`. Every row's exact bytes/length agree with the PE, with no unknown

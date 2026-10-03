@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-03
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -360,6 +360,17 @@ source-reviewed; maximum expected opening is a mismatch control, not a forced pr
 Retained table-driven suites may repeat labels; qualification compares their exact named multiset, including
 repetitions. New opening labels are unique. Application closure/order/retirement and G1 remain separate gates.
 
+`selection-move-host.*` exercises the moved-release and direct Escape/first Undo/Redo close boundary in the full
+Application suite: 242 unique assertions across 31 modes, registered with all 50 stages. Held real workers prove
+pending receipt/reservation ownership, stopped late samples, duplicate receipt reuse, younger-writer ordering,
+exact opening and equal-geometry reopen refusal before capture, generation/serial/active/mask/crop/history
+staleness, nested transaction/saved-marker preservation, capture/history-allocation faults, worker cancellation
+and failure, input-budget/allocation refusal, real scheduler-record saturation and retry. Literal rectangles and
+independent history expectations check publication. Retirement probes cover the prepared aggregate rather than
+every raster's final reference; window-message/zoom controls establish no timing threshold. Qualified private
+and six-profile native runs, with the retained failed native r1, are recorded in
+[`SelectionMoveHost_2026-10-03.md`](../TestRuns/SelectionMoveHost_2026-10-03.md). Remaining callers and G1 stay open.
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 
@@ -504,6 +515,16 @@ and eight contiguous PE/listing rows; both anonymous tables, exact procedure end
 body/default targets are required. Missing/unknown/duplicate/overlapping or PE-mismatched rows fail independently.
 Extreme valid bounds/displacements pass; a later data symbol cannot rescue a missing guard. Adjacent real VEX
 and EVEX remain violations while the seven synthetic DWORD rows remain proved data. The runtime allowlist is unchanged.
+
+`IsaRdiBaseByteRemapTests.ps1` adds 56 synthetic controls for Release OnCommand's RDI image-base remap:
+six accepted forms/boundaries (guard maxima 1 and 4095, canonical alignment/no padding and an unknown-decoded
+table row proved from PE bytes) and 50 refusals. The exact nine-row unsigned guard/CDQE/base/byte-and-DWORD
+dispatch requires PE/listing agreement, same-owner anonymous PDB starts, procedure/contribution bounds, valid
+byte indices and decoded body/default targets. Direct bypass into the protected sequence or table data fails.
+Malformed bytes/rows, symbols/owners/bounds, counts/indices/targets and adjacent real VEX/EVEX are independent
+controls. No synthetic code is executed and no runtime allowance is added. The unchanged failed Release image
+and all nine parser suites are retained with source hashes in the selection-move host test-run record;
+this standalone proof does not replace the native configuration gates.
 
 The 183 `isa-inline-table.R10AlGuard*` controls prove the exact non-clobbering R10 prelude and AL-bound dispatch:
 every protected row independently rejects missing, duplicate, unknown, overlap and PE/listing mismatch; valid

@@ -331,8 +331,18 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   two generations (restoration plus End), including a no-op. Changed history and named outer transaction depth
   follow the direct reference methods. Whole-document authority, original outline identity, active/mask/crop and
   exact history epoch are checked before publication. Replaced origin/display/document/history ownership
-  remains in the prepared aggregate for worker retirement. Existing host pointer/command routes remain direct
-  until their owned input and prepared closure are separately qualified.
+  remains in the prepared aggregate for worker retirement.
+  The Application routes moved-pointer release through prepared End and direct Escape/first Undo/Redo through
+  prepared Cancel. Its bounded typed input binds the exact opening and shared host ordinal; a replaced opening
+  is refused before capture or unrelated edit settlement. Closing preserves an enclosing transaction's name
+  and depth and reuses Begin's original outline snapshot. Admission immediately stops further outline samples,
+  even on refusal. Repeated producers for the same opening/intent reuse the pending receipt. The receipt and
+  history barrier stay owned through acknowledgement. A failed/cancelled worker retains the moved draft,
+  original outline and pending history for retry; admission failure has no synchronous closure fallback.
+  The retirement observation covers the prepared aggregate, not each raster's final reference. Capture loss,
+  no-move Deselect/New wand follow-ups and remaining tool/header/writer/replacement/close routes still require
+  separate owned caller migration; Save/Export/Enter preserve their live outline behavior. Graph capture and
+  accounting costs, broader selection kernels and measured G1 remain separate requirements.
 - `LoadMaskSelection(id, mode)`: the mask's pixels darker than 50 % (`MaskTracing::DarkPixels`), mapped through the
   mask's placement (`PixelToDocument(MaskTransform)`), combined by `mode` (`Load Mask Selection`); false when the
   layer has no mask or no dark pixel. `LoadLayerSelection(id, mode)`: the layer's pixels at least 50 % opaque,

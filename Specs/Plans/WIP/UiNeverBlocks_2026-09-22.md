@@ -148,11 +148,21 @@
   eight reviewed native activations. The fresh forced six-profile matrix passes at `2026-10-02T23:17:48.9451202Z`;
   exact native controls/source verification and archival retain 606 inputs and 913 evidence files
   ([record](../../TestRuns/SelectionMoveOpening_2026-10-03.md)). Production outline closure remains open.
-- [ ] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
+- [x] Outline-move host closure — S3b1a owns moved-pointer release and direct Escape/first Undo cancellation
   under the shared ordinal, stops later pointer samples and retains draft/history until acknowledgement.
-  Primary prepares isolated host code; a cheaper agent drafts Application controls for review. S3b1b still
-  requires no-move follow-ups and the concrete remaining End/Cancel callers while preserving Save/Enter and
-  nested history semantics. No host/runtime, broader P1 or G1 completion claim is made by the core prerequisite.
+  The primary-reviewed private full WARP Application proof passes 242 unique controls across 31 modes and all
+  50 stages; its 618 exact inputs/199 evidence files are archived before nine host activations. The native
+  r1 matrix freezes 609 inputs; ARM64 cross-builds and x64 ASan pass, then Release's ISA gate rejects a
+  vector-looking OnCommand table row. Exact failed inputs/products and 4,286 evidence files are archived before
+  scanner diagnosis. The unchanged failed image and all nine parser suites now pass the narrow RDI-base
+  proof, including 56 new controls without changing the allowlist. Its immutable archive retains 13 inputs
+  and 238 evidence files. Native r2 is running against 610 frozen inputs; verification/archive remain required
+  Native r2 now passes all six profiles at `2026-10-03T01:07:26.4741875Z`, with 242 exact host controls, 56
+  ISA controls and all 50 Application stages in each full x64 suite. Independent source/control verification
+  and immutable archival retain 610 inputs and 1,298 evidence files
+  ([record](../../TestRuns/SelectionMoveHost_2026-10-03.md)). S3b1b still requires no-move follow-ups and the
+  remaining concrete End/Cancel callers while preserving Save/Enter and nested history. Broader P1 and measured
+  G1 remain open; the private structural proof does not close them.
 
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
