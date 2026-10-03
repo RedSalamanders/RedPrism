@@ -122,6 +122,8 @@
     <ClInclude Include="ImportHistoryTests.h" />
     <ClInclude Include="ImportPublicationTests.h" />
     <ClInclude Include="HistoryEntriesTests.h" />
+    <ClInclude Include="RecordRootTests.h" />
+    <ClInclude Include="RecordRootBench.h" />
     <ClInclude Include="OptionalImageThumbnailTests.h" />
     <ClInclude Include="ProjectSaveMemoryTests.h" />
     <ClInclude Include="ExportMemoryTests.h" />
@@ -206,6 +208,8 @@
     <ClCompile Include="ImportHistoryTests.cpp" />
     <ClCompile Include="ImportPublicationTests.cpp" />
     <ClCompile Include="HistoryEntriesTests.cpp" />
+    <ClCompile Include="RecordRootTests.cpp" />
+    <ClCompile Include="RecordRootBench.cpp" />
     <ClCompile Include="OptionalImageThumbnailTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />
     <ClCompile Include="HistoryRevisionTests.cpp" />

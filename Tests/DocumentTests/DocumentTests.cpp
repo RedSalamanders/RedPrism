@@ -58,6 +58,8 @@
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
 #include "RasterWorkTests.h"
+#include "RecordRootBench.h"
+#include "RecordRootTests.h"
 #include "Selection.h"
 #include "SelectionCommandTests.h"
 #include "SelectionMoveClosureTests.h"
@@ -7331,11 +7333,13 @@ int wmain(int argc, wchar_t** argv)
     {
         return RedPrismTestFailureReports::RunSelfTest();
     }
+    if (argc == 2 && std::wstring_view(argv[1]) == L"--bench-record-roots")
+        return RunRecordRootBench();
     if (argc > 1)
     {
         if (argc != 2 || std::wstring_view(argv[1]) != L"--stress")
         {
-            std::fprintf(stderr, "Usage: DocumentTests.exe [--stress]\n");
+            std::fprintf(stderr, "Usage: DocumentTests.exe [--stress | --bench-record-roots]\n");
             return 2;
         }
         const int failures = RunRasterConcurrencyTests(256);
@@ -7382,6 +7386,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryRevisionTests();
     gFailures += RunHistoryStateViewTests();
     gFailures += RunHistoryEntriesTests();
+    gFailures += RunRecordRootTests();
     gFailures += RunOptionalImageThumbnailTests();
     gFailures += RunPreparedHistoryTests();
     gFailures += RunHistoryPreparationFaultTests();

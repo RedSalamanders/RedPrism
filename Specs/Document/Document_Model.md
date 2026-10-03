@@ -1,7 +1,7 @@
 # Document model
 
 Status: current normative product contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-03
 Owner: `Common/Document.h`, `Common/Document.cpp`
 
 ## Scope
@@ -50,6 +50,33 @@ image state: it may be empty and can be produced explicitly with `Raster::MakeTh
 side). It does not change image-layer equality. A shape layer also keeps `shapeImage`, the raster its shape drew,
 outside equality: while the asset still holds it the layer is a live shape (`LiveShape`) that redraws at a new size
 (C11).
+
+### Immutable record construction foundation (P1.9 H2.2)
+
+`Common/RecordRoot.h` provides a shared immutable sequence primitive. This foundation does not yet replace
+`CanvasDocument::layers`; full document writer/capture integration remains tracked in
+[`HistoryStorageAccounting`](../Plans/WIP/HistoryStorageAccounting_2026-09-30.md).
+
+A captured root retains its immutable record vector. Copying a root never copies its records, and all reads,
+including on non-const handles, remain const. Root identity is only an equality fast path: independently built
+roots compare record values and sequence order, including equal empty sequences. Records and their shared children
+must obey immutable ownership after publication. Record moves, assignments and destruction must be nonthrowing.
+
+An exclusive, noncopyable builder reserves its admitted record capacity, refuses growth past that limit before
+moving an incoming record, and exposes only const reads. Insert/replace/erase affect its private buffer. A capacity
+larger than the vector can represent produces an invalid builder without reserving a record buffer; Clone refuses
+that capacity even for an empty source. Sealing allocates the immutable root owner before moving the buffer;
+allocation failure leaves the builder retryable. Successful Seal consumes it. Consumed/moved builders refuse
+further mutation or publication. `use_count` never authorizes mutation of a published root.
+
+Clone checks cancellation before allocation, before each record copy and after the final copy. Cancellation,
+record-copy failure or new-buffer allocation failure preserves the source root. The allocator supplied for a
+new clone owns that clone's allocations; it does not silently inherit the source root's allocation owner.
+Final root destruction belongs to the admitted retirement path. Container capacity alone does not account
+record children, captured history, control blocks or complete construction/retirement peaks. Those remain
+integration and H3 accounting obligations; this primitive establishes no UI timing bound.
+
+### Raster storage and masks
 
 `Raster` is immutable shared storage (`std::shared_ptr`). Equality of image pixels is identity of that storage,
 matching Swift `CGImage ===`. Formats: BGRA8888 (premultiplied, B,G,R,A byte order, the WIC `32bppPBGRA` layout

@@ -1,8 +1,28 @@
 # Application and image benchmarks
 
 Status: current normative diagnostic contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-03
 Owner: `RedPrism/ApplicationBenchmark.cpp`, `Common/BenchmarkMachine.*`, and `Build/bench/`
+
+## Immutable record primitive comparison
+
+`DocumentTests.exe --bench-record-roots` compares the immutable record primitive with `vector<ImageLayer>` for
+1, 100 and 10,000 records. Each record has a unique deterministic id, a 512-character name, a deterministic
+transform and a held shared one-pixel BGRA raster. Fixture documents pass the ordinary document validator.
+Full source/result content, layer order, names, placement and raster identity are checked outside timed blocks.
+The same middle-record opacity change (0.375) is used for private Clone/Replace/Seal and vector copy/replace.
+
+Five rounds alternate root/vector order. Each timed iteration includes construction, a fixed first/middle/last
+record sample and final destruction; it never scans all names or all 10,000 records to consume a timed result.
+Root captures use 65,536 iterations at each size. Vector captures use 1,024/256/16; both mutation paths use
+256/64/8. Raw rows retain operation, path, record count, round, iterations, elapsed nanoseconds and checksum.
+Different iteration counts MUST be normalized per operation before comparison. Checksum sums use defined
+unsigned arithmetic and must match the independent expected sample multiplied by the iteration count.
+
+Use a qualified Release image for cost evidence, retain its exact EXE/PDB/source binding and all raw rows, and
+record machine/configuration context. Timing thresholds are not functional test gates. These measurements
+include the consumer and destruction costs and do not isolate a bare shared-pointer increment. They qualify
+neither migrated `CanvasDocument` capture/mutation nor G1, RAW or Photoshop performance.
 
 ## Filter cancellation diagnostic
 

@@ -4,8 +4,15 @@ Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,
 independent control/source verification and a 630-input/23,526-evidence immutable archive. The exact QWORD-switch
 padding repair passes 113 new controls, all preceding suites and four unchanged images with the allowlist unchanged.
-Current work is eligible New, window close and noncritical session-end outline closure. Its source and real-producer
-literals are prepared; private build/runtime and native qualification remain required. P1/G1 remains open.
+Eligible New, window close and noncritical session-end outline closure now qualify in all six profiles and are
+committed/pushed as `39c2f92`: 43 literal and 1,529 fault assertions, 63 ordered application stages, and an immutable
+632-input/23,532-evidence archive. Current work is P1.9 H2.2 immutable document record roots: the reviewed private
+foundation passes 34 ownership/equality controls and all 5,704 predecessor document assertions. Its first native
+matrix stops at a benchmark fixture ISA violation; the preserved failure precedes an equivalent constant-data repair.
+The repaired matrix passes all six profiles, with 637 unchanged inputs and 217 independently verified evidence
+files. Release root capture is about 0.052 microseconds for 10,000 records; changed-root construction still costs
+about 6 ms. Separate pure-read preparation passes 12 additional view controls privately. Full document mutation
+integration remains required. P1/G1 stays open.
 
 ## Implementation checklist
 

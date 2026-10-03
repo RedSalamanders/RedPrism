@@ -11,6 +11,22 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Immutable record primitive foundation
+
+Normal `DocumentTests` runs `document-record-root.*`: 10,000-record zero-copy capture/non-const read, retained
+strings/child owners, event-ordered concurrent readers, private edit ordering/capacity refusal, consumed/moved
+builders, before/mid/final-copy cancellation, reached record-buffer/root-seal/record-copy allocation faults,
+retry and distinct new allocation owners, complete tracked retirement and worker-thread final child release.
+Value equality preserves independently built equal roots, differing lengths/values/order and empty sequences;
+unrepresentable constructor/clone capacity refuses without a record buffer or input move.
+
+Debug proxy allocations are counted through retirement, but fault injection into its nonthrowing vector
+constructor is not a recoverable buffer-failure control. Inject buffer reserve and shared-root allocation at
+their actual failure boundaries. Generic thread controls alone do not qualify scheduler/COM retirement,
+whole-job memory bounds, document integration or G1. Preserve all preceding numeric goldens and complete the
+x64 Debug/Release/ASan suites plus all ARM64 cross-builds before closing this foundation.
+The optional comparison is specified in [`Testing_Benchmarks.md`](Testing_Benchmarks.md).
+
 ### Detached basic raster edits
 
 `DocumentTests` runs `rastereditwork.*` for literal legacy Fill/Clear/Invert bytes, Gray8 masks, transformed

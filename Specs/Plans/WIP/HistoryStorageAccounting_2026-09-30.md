@@ -108,7 +108,21 @@
       - [x] Review independent ownership/cancellation/concurrent-reader tests and register them privately.
         Primary adds actual allocator faults for constructor/seal/clone and separate new-allocation-owner
         lifetime controls, retaining standard allocation by default.
-      - [ ] Qualify the private foundation before document integration; no compiler/runtime result yet.
+      - [x] Initial private foundation: r2 passes 29 root controls and preserves all 5,704 predecessor document
+        assertions. The r1 injected Debug-container proxy allocation abort remains archived before repair.
+      - [x] Review the writer/pointer/equality inventory; snapshots must retain record-value and ordering semantics.
+      - [x] Private r3 qualifies 34 root/equality/capacity controls and all 5,704 preceding document assertions;
+        a separate Debug benchmark run checks all 60 paired raw rows and complete result/source content.
+      - [x] Native foundation: r1 passes all ARM64 cross-builds and full x64 ASan, then Release's linked ISA
+        check rejects the benchmark fixture's compiler-vectorized Guid byte pattern. Exact 637-input/3,587-evidence
+        failure is archived before its literal-equivalent repair. Repaired r2 passes all six profiles with 637
+        unchanged inputs; its 217 evidence copies and complete Release comparison are independently verified.
+        Root capture stays about 0.052 microseconds at 10,000 records; a full changed root still costs about 6 ms.
+        This closes the primitive foundation only, not document integration or G1.
+      - [x] Prepare and privately qualify pure read spans with array/immutable-root borrowing controls in a second
+        isolated workspace. Its Debug build and full document suite pass 12 new view, 34 root and 5,704 preceding
+        assertions; all 650 inputs / 153 evidence copies are independently verified. Native activation requires
+        the completed repaired foundation. Full writer/record capture migration, H3 accounting and measured G1 stay open.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering
