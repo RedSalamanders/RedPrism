@@ -27,6 +27,19 @@ whole-job memory bounds, document integration or G1. Preserve all preceding nume
 x64 Debug/Release/ASan suites plus all ARM64 cross-builds before closing this foundation.
 The optional comparison is specified in [`Testing_Benchmarks.md`](Testing_Benchmarks.md).
 
+`layer-read-view.*` checks direct array/sliced/empty ranges, range-relative indices, complete and incomplete
+hierarchy/clipping graphs, literal descendant/hierarchy/reverse/collapse/visibility results, the document
+forwarder, direct immutable-root borrowing and retained old views through new-root publication. Retain all
+root and preceding document controls. Private proof precedes native activation; complete all six native
+profiles before closing the read API preparation. These tests do not qualify document writers or G1.
+
+`document-record-adopt.*` checks sufficient-capacity buffer/address/allocator transfer without record copies or
+moves, complete ordered values and child/name handles, refusal before consuming rvalues, size/capacity/maximum
+limit refusal, empty zero-limit roots, reached reserve/seal allocation failures, successful reserve/seal retries,
+and balanced final allocation release. Debug iterator-proxy allocations remain tracked; buffer failures are
+injected at actual record-buffer allocation. Preserve the 34 root, 12 view and all preceding controls, and qualify
+all six profiles before closing this construction preparation. Full document drafts/writers remain separate.
+
 ### Detached basic raster edits
 
 `DocumentTests` runs `rastereditwork.*` for literal legacy Fill/Clear/Invert bytes, Gray8 masks, transformed

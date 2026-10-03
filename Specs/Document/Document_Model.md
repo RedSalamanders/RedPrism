@@ -69,12 +69,27 @@ that capacity even for an empty source. Sealing allocates the immutable root own
 allocation failure leaves the builder retryable. Successful Seal consumes it. Consumed/moved builders refuse
 further mutation or publication. `use_count` never authorizes mutation of a published root.
 
+`Builder::Adopt` transfers an exclusively owned worker vector and its allocator. All mutable borrows MUST end
+before adoption. It refuses size or actual capacity above the admitted limit, or a limit above `max_size`, before
+moving or reserving. A required reserve has the ordinary strong failure guarantee; account old/new buffer overlap
+first. Sufficient-capacity adoption copies/moves no records and retains the buffer address. Subsequent sealing
+keeps the allocation-before-move retry rule. The caller retains the source document/root through acknowledgement;
+adoption never uses reference counts as permission to edit shared records.
+
 Clone checks cancellation before allocation, before each record copy and after the final copy. Cancellation,
 record-copy failure or new-buffer allocation failure preserves the source root. The allocator supplied for a
 new clone owns that clone's allocations; it does not silently inherit the source root's allocation owner.
 Final root destruction belongs to the admitted retirement path. Container capacity alone does not account
 record children, captured history, control blocks or complete construction/retirement peaks. Those remain
 integration and H3 accounting obligations; this primitive establishes no UI timing bound.
+
+Pure layer reads (`IndexOf`, hierarchy/clipping validation, hierarchy entries, descendants and effective
+visibility) borrow `std::span<const ImageLayer>`. Array, sliced, vector and immutable-root ranges retain their
+own order; lookup indices are relative to the supplied range. Validation refuses a required parent/clipping
+source outside that range. The helper stores no span and constructs no owning adapter. A caller MUST hold the
+underlying records for the entire call; longer-lived views additionally retain their document/root owner.
+The const-document visibility overload forwards a borrowed span for existing callers. Mutable structural
+helpers still edit their explicitly owned vector until full document record integration is complete.
 
 ### Raster storage and masks
 

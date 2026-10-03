@@ -123,6 +123,15 @@
         isolated workspace. Its Debug build and full document suite pass 12 new view, 34 root and 5,704 preceding
         assertions; all 650 inputs / 153 evidence copies are independently verified. Native activation requires
         the completed repaired foundation. Full writer/record capture migration, H3 accounting and measured G1 stay open.
+      - [x] Native read/transfer preparation: pure read spans and exclusive worker-buffer adoption qualify with
+        all six profiles against the same 641 inputs. Each x64 suite passes 18 adoption, 12 view, 34 root and all
+        preceding document controls. The original Release clipboard/text interference and complete failure are
+        preserved; four already passed profiles are retained and Release/Debug rerun without source changes.
+        All 220 final evidence copies are independently verified ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
+      - [ ] Full layer-root integration: a separate 528-input seed has the primary document draft and initial
+        unchanged-root/history/reference-setter migration. Eight source-only draft controls receive primary
+        lifetime/capacity/moved-state correction. Structural, remaining worker, preview/metadata UI placement,
+        fixture, complete reservation/retirement and full behavior qualification remain open.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering

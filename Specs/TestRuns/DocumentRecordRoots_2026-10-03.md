@@ -12,6 +12,9 @@
 - [x] Independently verify the complete native archive and record the measured primitive costs.
 - [x] Prepare read-only span helpers and direct-array/immutable-root borrowing controls in a second isolated workspace.
 - [x] Privately qualify the read-only helpers and preserve all root and preceding document controls.
+- [x] Commit and push the qualified primitive foundation (`3111e44`).
+- [x] Qualify native read helpers and exclusive buffer transfer, including preserved clipboard interference.
+- [ ] Commit and push the qualified read/transfer preparation.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
@@ -178,6 +181,14 @@ RAW decode, GPU throughput, native ARM64 runtime or Photoshop performance.
 - [ ] Replace `CanvasDocument.layers` with its immutable root and expose explicit private builders for every writer.
   Root capture/read/equality must preserve scalar fields, selection, order and raster identity; const helper
   compatibility must never construct an owning vector. Published records cannot yield mutable pointers.
+- [x] M1a — Prepare exclusive worker-buffer adoption. Refuse inadmissible size/capacity/maximum limits before
+  moving; preserve the input on a reserve fault. Transfer the actual record buffer and its allocation owner
+  without another record copy. Sealing retains its allocation-before-move retry rule. End all mutable borrows
+  before adoption. Do not expose a mutable published vector or infer exclusivity from `use_count`.
+- [ ] M1b — Build an explicit document draft around owned records. Copy only scalar/selection handles when
+  records are unchanged; changed/structural drafts reserve complete old/new capacity and child peaks before
+  construction. Draft record borrows end before sealing/publication. A failed or cancelled draft cannot alter
+  the opening root, selected ids, transaction or history. Cache accounting only after complete construction.
 - [ ] Migrate worker after-document/history construction: reuse roots when records are unchanged; build complete
   replacement roots when they change. Keep all construction, cancellation and failure before checked publication.
 - [ ] Migrate structural/group/clipping/import/merge/size/floating writers with exact repair/order/rollback behavior.
@@ -206,6 +217,65 @@ Private compilation runs alongside the repaired native foundation matrix with is
 dependency inputs. The completed core foundation and frozen repaired fixture bind the candidate; it is not
 native activation qualification. The review-only document forwarder borrows its layer range and preserves the
 AdjustEdit caller missed by the initial inventory. Full writer migration and owner capture remain open.
+
+## Exclusive buffer transfer and current native qualification
+
+The primary adds `Builder::Adopt` in a separate 526-file seed. The agent's test additions are reviewed: primary
+replaces an invalid Debug allocation-count assumption with actual record-buffer counts and adds successful reserve
+retry. The complete private Debug suite passes 18 adoption controls, all 12 view / 34 root controls and 5,704
+preceding document assertions. Build: `2026-10-03T17:40:48.1541369+00:00` to `17:41:09.8221623`;
+runtime: `17:41:10.9380430` to `17:41:56.1206554`; both actual exit 0.
+The 652-input / 154-evidence archive completes at `2026-10-03T17:42:09.1434461+00:00` and every copy is independently
+verified. Completion: `E8015F22A52CD96B5E15341D96B3151BF014210A606F4698353EE8A2ED88E3CE`.
+Source manifest: `5911548B39596D19BAA15E308FACB648B39B969A5F5AF60965A9B5E668C26E1D`.
+Evidence manifest: `640E8A1F36A1D76B56BB8C69745309522CA1F020FAF88149CC182B2F6C5E51B1`.
+EXE: `46D803E23DC71DE34B3F037AAB2084F5FA54CBECB73B38573C216B8CFC9A0780`.
+PDB: `4CF276B97392590475D2DC86FEC05EA84B1271A9CE2D6428456BEB6C2AEA18AC`.
+
+Ten reviewed files form the native read/transfer preparation. R1, PID 98460, runs from
+`2026-10-03T17:46:24.1583795+00:00` through `18:11:58.4668193`, actual exit 1. All ARM64 builds and x64 ASan pass;
+Release builds and passes the document controls, then IoTests fails after the published image is externally
+replaced by text. The diagnostics enumerate clipboard formats 13, 16, 1 and 7; process 114384 is holding it and
+is subsequently identified as VS Code, started at `18:11:47.6898020Z`. This observation does not establish which
+process replaced the payload. No candidate or test input is changed for retry.
+
+The preserved failure completes at `2026-10-03T18:19:09.2285930+00:00`: 641 inputs / 3,597 evidence files.
+Completion: `E18BE78867B7B37F8E8D3B05203F050CA231DB032D50AA275C14F1D5CB4A8E98`.
+Source manifest: `5FBDBB6CD92633D87A0E0564FAB30E8F69C87D05DA5710C0F77DAA7464B90664`.
+Evidence manifest: `0426DE5FDEDEE65DAAFCA7AF01B0E07559D5CF00708D20C662448AFACA7D31BA`.
+All copies and compiler sources are checked before continuing. R2 retains the four actual passed profiles and
+their original timings/products from the immutable failure archive, then rebuilds and reruns Release and Debug.
+All 641 compiler inputs remain identical. R2, PID 107780, runs at `2026-10-03T18:34:25.9198221+00:00` through
+`18:47:17.7436975`, actual exit 0. Release passes at `18:39:59.0397610`; Debug at `18:47:17.5685313`.
+The independent verifier confirms all six actual profiles, unchanged compiler sources, retained exact control
+names and original passed-profile products/timings. Every x64 suite passes the 18 adoption, 12 view and 34 root
+controls, all 5,704 preceding document assertions and all other original suites; WARP, screenshots and the
+actual sanitizer probe pass. Skills and formatting checks also pass.
+
+The qualification archive completes at `2026-10-03T18:51:44.3350078+00:00`, with 641 inputs / 220 evidence files.
+Completion: `ADA434B25238AA70C41704BF094DA6E4791B2C94CCFA726F471F4E27CCF1AA8B`.
+Source manifest: `BDB807BA55B3608C2A988BDD3F0C0963926F9C60C1F3108C8BA79B658F0955A4`.
+Evidence manifest: `B734EBBB39B4B5088221659F836839B33764982C5EAC863D0D8666518D72DDD8`.
+All archive copies are independently checked by length and SHA-256 before commit. An initial archive attempt
+references an absent continuation activation filename after copying sources; its exact helper is preserved,
+the path is corrected to the actual original activation, and the partial archive resumes only with matching
+existing copies. No qualified receipt is overwritten and no compiler input changes for this repair.
+
+## Full layer integration preparation
+
+The separate `p1-document-layer-integration-proof` seed holds 528 reviewed adoption inputs. It changes the private
+document's layer type to the immutable root and adds the primary-owned explicit `CanvasDocumentDraft`. Drafts
+hold the source root, copy changed records into a bounded private buffer and transfer that buffer at Seal.
+All mutable borrows end before structural edits or publication; a seal allocation failure retains a retryable
+private builder. Construction, validation and final-owner destruction remain worker responsibilities.
+
+Three selection after-document builders now reuse unchanged roots. Primary also prepares shared history document
+capture with a same-root equality fast path and explicit draft-based reference rename/visibility/opacity/blend
+mutations. Reference setters still allocate on their caller; production UI placement must be deferred before
+this integration can qualify. Opacity preview, structural edits, other worker builders and fixture construction
+remain unported. Eight independent draft controls are source-only: primary corrects an expired cancellation-token
+fixture, a capacity mismatch and reads of moved state, and bounds the mutable borrow before insertion/sealing.
+No compiler/runtime or complete integration claim is made for this private workspace.
 
 ## Integration requirements
 

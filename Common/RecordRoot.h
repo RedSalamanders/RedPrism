@@ -164,6 +164,15 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
             _records.erase(_records.begin() + static_cast<std::ptrdiff_t>(index));
             return true;
         }
+        // Transfer an exclusively owned worker buffer. All mutable borrows must end before this call.
+        // Refusal preserves the input, including its allocation owner. Admit old/new reserve overlap first.
+        [[nodiscard]] static std::optional<Builder> Adopt(Container&& records, std::size_t limit)
+        {
+            if (records.size() > limit || records.capacity() > limit || limit > records.max_size())
+                return std::nullopt;
+            records.reserve(limit);
+            return Builder(std::move(records), limit, AdoptTag{});
+        }
         [[nodiscard]] std::optional<RecordRoot> Seal()
         {
             if (!_sealable)
@@ -195,6 +204,13 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
         }
 
       private:
+        struct AdoptTag
+        {
+        };
+        Builder(Container&& records, std::size_t limit, AdoptTag) noexcept
+            : _records(std::move(records)), _limit(limit), _sealable(true)
+        {
+        }
         Container _records;
         std::size_t _limit = 0;
         bool _sealable = false;

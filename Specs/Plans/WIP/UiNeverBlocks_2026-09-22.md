@@ -11,8 +11,10 @@ foundation passes 34 ownership/equality controls and all 5,704 predecessor docum
 matrix stops at a benchmark fixture ISA violation; the preserved failure precedes an equivalent constant-data repair.
 The repaired matrix passes all six profiles, with 637 unchanged inputs and 217 independently verified evidence
 files. Release root capture is about 0.052 microseconds for 10,000 records; changed-root construction still costs
-about 6 ms. Separate pure-read preparation passes 12 additional view controls privately. Full document mutation
-integration remains required. P1/G1 stays open.
+about 6 ms. Borrowed read APIs and exclusive buffer transfer also qualify in all six profiles: 18 adoption,
+12 view and 34 root controls plus all 5,704 preceding document assertions, with 641 unchanged inputs and 220
+independently verified evidence files. Full document mutation integration is being prepared separately and
+remains required. P1/G1 stays open.
 
 ## Implementation checklist
 

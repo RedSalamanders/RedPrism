@@ -40,6 +40,7 @@
 #include "ImportHistoryTests.h"
 #include "ImportPublicationTests.h"
 #include "LayerCopyWorkTests.h"
+#include "LayerReadViewTests.h"
 #include "LiftReferenceTests.h"
 #include "MaskEditWorkExtraTests.h"
 #include "MaskEditWorkTests.h"
@@ -58,6 +59,7 @@
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
 #include "RasterWorkTests.h"
+#include "RecordRootAdoptTests.h"
 #include "RecordRootBench.h"
 #include "RecordRootTests.h"
 #include "Selection.h"
@@ -7387,6 +7389,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryStateViewTests();
     gFailures += RunHistoryEntriesTests();
     gFailures += RunRecordRootTests();
+    gFailures += RunRecordRootAdoptTests();
+    gFailures += RunLayerReadViewTests();
     gFailures += RunOptionalImageThumbnailTests();
     gFailures += RunPreparedHistoryTests();
     gFailures += RunHistoryPreparationFaultTests();

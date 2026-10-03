@@ -1012,7 +1012,7 @@ bool NameUtf8LengthOk(std::wstring_view name) noexcept
 
 namespace
 {
-[[nodiscard]] const ImageLayer* LayerById(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
+[[nodiscard]] const ImageLayer* LayerById(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     for (const ImageLayer& layer : layers)
     {
@@ -1038,7 +1038,7 @@ namespace
 
 } // namespace
 
-std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const Guid& id) noexcept
+std::optional<std::size_t> IndexOf(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     for (std::size_t i = 0; i < layers.size(); ++i)
     {
@@ -1050,7 +1050,7 @@ std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const 
     return std::nullopt;
 }
 
-DocumentStatus ValidateHierarchy(const std::vector<ImageLayer>& layers)
+DocumentStatus ValidateHierarchy(std::span<const ImageLayer> layers)
 {
     std::unordered_map<Guid, const ImageLayer*> byId;
     byId.reserve(layers.size());
@@ -1094,7 +1094,7 @@ DocumentStatus ValidateHierarchy(const std::vector<ImageLayer>& layers)
     return DocumentStatus::Ok;
 }
 
-DocumentStatus ValidateLiveMaskGraph(const std::vector<ImageLayer>& layers)
+DocumentStatus ValidateLiveMaskGraph(std::span<const ImageLayer> layers)
 {
     std::unordered_map<Guid, const ImageLayer*> records;
     records.reserve(layers.size());
@@ -1229,7 +1229,7 @@ DocumentStatus ValidateDocument(const CanvasDocument& document, int formatVersio
     return ValidateLiveMaskGraph(document.layers);
 }
 
-std::vector<HierarchyEntry> HierarchyEntries(const std::vector<ImageLayer>& layers, bool topFirst,
+std::vector<HierarchyEntry> HierarchyEntries(std::span<const ImageLayer> layers, bool topFirst,
                                              const std::unordered_set<Guid>& collapsed)
 {
     std::unordered_map<Guid, std::vector<std::size_t>> children;
@@ -1287,7 +1287,7 @@ std::vector<Guid> RenderLayerIds(const CanvasDocument& document)
     return ids;
 }
 
-std::unordered_set<Guid> DescendantIds(const std::vector<ImageLayer>& layers, const Guid& id)
+std::unordered_set<Guid> DescendantIds(std::span<const ImageLayer> layers, const Guid& id)
 {
     std::unordered_map<Guid, std::vector<Guid>> children;
     for (const ImageLayer& layer : layers)
@@ -1890,7 +1890,7 @@ void DocumentSession::MoveActiveLayerOutOfGroup()
 namespace
 {
 // The layers sharing `parent`, in document order (bottom to top).
-[[nodiscard]] std::vector<Guid> SiblingIds(const std::vector<ImageLayer>& layers, const std::optional<Guid>& parent)
+[[nodiscard]] std::vector<Guid> SiblingIds(std::span<const ImageLayer> layers, const std::optional<Guid>& parent)
 {
     std::vector<Guid> ids;
     for (const ImageLayer& layer : layers)
@@ -1904,7 +1904,7 @@ namespace
 }
 
 // `id`'s parents from the nearest up, then nullopt for the document root (legacy `ancestors`).
-[[nodiscard]] std::vector<std::optional<Guid>> AncestorChain(const std::vector<ImageLayer>& layers, const Guid& id)
+[[nodiscard]] std::vector<std::optional<Guid>> AncestorChain(std::span<const ImageLayer> layers, const Guid& id)
 {
     std::vector<std::optional<Guid>> result;
     const ImageLayer* layer = LayerById(layers, id);

@@ -123,6 +123,8 @@
     <ClInclude Include="ImportPublicationTests.h" />
     <ClInclude Include="HistoryEntriesTests.h" />
     <ClInclude Include="RecordRootTests.h" />
+    <ClInclude Include="RecordRootAdoptTests.h" />
+    <ClInclude Include="LayerReadViewTests.h" />
     <ClInclude Include="RecordRootBench.h" />
     <ClInclude Include="OptionalImageThumbnailTests.h" />
     <ClInclude Include="ProjectSaveMemoryTests.h" />
@@ -209,6 +211,8 @@
     <ClCompile Include="ImportPublicationTests.cpp" />
     <ClCompile Include="HistoryEntriesTests.cpp" />
     <ClCompile Include="RecordRootTests.cpp" />
+    <ClCompile Include="RecordRootAdoptTests.cpp" />
+    <ClCompile Include="LayerReadViewTests.cpp" />
     <ClCompile Include="RecordRootBench.cpp" />
     <ClCompile Include="OptionalImageThumbnailTests.cpp" />
     <ClCompile Include="RasterConcurrencyTests.cpp" />

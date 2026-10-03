@@ -1108,14 +1108,14 @@ std::optional<BrushStroke::Commit> BrushStroke::PaintSnapshot() const
 
 // ── DocumentSession ──────────────────────────────────────────────────────
 
-bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
+bool EffectivelyVisible(std::span<const ImageLayer> layers, const Guid& id) noexcept
 {
     std::optional<Guid> current = id;
     int depth = 0;
     while (current.has_value() && depth < kMaxLayerCount)
     {
         const ImageLayer* found = nullptr;
-        for (const ImageLayer& layer : document.layers)
+        for (const ImageLayer& layer : layers)
         {
             if (layer.id == current.value())
             {
@@ -1155,7 +1155,7 @@ bool DocumentSession::CanPaint() const noexcept
     {
         return false;
     }
-    if (!EffectivelyVisible(_document.value(), layer->id))
+    if (!EffectivelyVisible(_document->layers, layer->id))
     {
         return false;
     }
@@ -3197,7 +3197,7 @@ bool DocumentSession::CanInvert() const noexcept
         return false;
     }
     const ImageLayer* layer = ActiveLayer();
-    if (layer == nullptr || (layer->isGroup && !_maskSelected) || !EffectivelyVisible(_document.value(), layer->id))
+    if (layer == nullptr || (layer->isGroup && !_maskSelected) || !EffectivelyVisible(_document->layers, layer->id))
     {
         return false;
     }

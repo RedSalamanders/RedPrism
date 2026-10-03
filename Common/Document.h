@@ -1395,18 +1395,22 @@ struct HierarchyEntry
 
 [[nodiscard]] std::wstring TrimWide(std::wstring_view text);
 [[nodiscard]] bool NameUtf8LengthOk(std::wstring_view name) noexcept;
-[[nodiscard]] DocumentStatus ValidateHierarchy(const std::vector<ImageLayer>& layers);
-[[nodiscard]] DocumentStatus ValidateLiveMaskGraph(const std::vector<ImageLayer>& layers);
+[[nodiscard]] DocumentStatus ValidateHierarchy(std::span<const ImageLayer> layers);
+[[nodiscard]] DocumentStatus ValidateLiveMaskGraph(std::span<const ImageLayer> layers);
 [[nodiscard]] DocumentStatus ValidateDocument(const CanvasDocument& document,
                                               int formatVersion = kCurrentFormatVersion);
-[[nodiscard]] std::vector<HierarchyEntry> HierarchyEntries(const std::vector<ImageLayer>& layers, bool topFirst = false,
+[[nodiscard]] std::vector<HierarchyEntry> HierarchyEntries(std::span<const ImageLayer> layers, bool topFirst = false,
                                                            const std::unordered_set<Guid>& collapsed = {});
 [[nodiscard]] std::vector<Guid> RenderLayerIds(const CanvasDocument& document);
 // A layer shown: it and every folder above it are visible.
-[[nodiscard]] bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept;
-[[nodiscard]] std::unordered_set<Guid> DescendantIds(const std::vector<ImageLayer>& layers, const Guid& id);
+[[nodiscard]] bool EffectivelyVisible(std::span<const ImageLayer> layers, const Guid& id) noexcept;
+[[nodiscard]] inline bool EffectivelyVisible(const CanvasDocument& document, const Guid& id) noexcept
+{
+    return EffectivelyVisible(std::span<const ImageLayer>(document.layers), id);
+}
+[[nodiscard]] std::unordered_set<Guid> DescendantIds(std::span<const ImageLayer> layers, const Guid& id);
 // `id`'s position in `layers`; nullopt when it is not there.
-[[nodiscard]] std::optional<std::size_t> IndexOf(const std::vector<ImageLayer>& layers, const Guid& id) noexcept;
+[[nodiscard]] std::optional<std::size_t> IndexOf(std::span<const ImageLayer> layers, const Guid& id) noexcept;
 
 class DocumentHistory
 {
