@@ -19,6 +19,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Compact RCX byte-remap parser controls failed.
 if ($LASTEXITCODE -ne 0) { throw 'Wide-stack terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaQwordStackRaxTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')

@@ -166,6 +166,14 @@ Debug vector proxies, immutable selection/control roots and complete metadata/hi
 this implementation-based capacity proof when changing the toolset; it is not a portable `std::vector` guarantee.
 The eight-million-edge limit bounds accepted tracing, not canvas area or Clipper booleans.
 
+The settled selection-nudge producer translates vertices and constructs immutable cached geometry in one pass.
+Cancellation checkpoints count both loops and points, at most 1,024 explicit work steps apart, including empty
+loops. Allocation/OS stop latency is separate. A zero delta reuses geometry and prepares no after-document copy.
+Admission adds a second geometry-sized peak and allocator/control allowances to the existing complete edit
+bound, using cached point/loop counts; copied output never retains the source's unused vector capacity.
+Its reserve-capacity assumption is also qualified against the pinned v145 STL and must be requalified on a
+toolset change. History capture/accounting, full graph retirement charging and measured G1 remain separate gates.
+
 Use the maximum of source, flood/mask and trace phases, with source/recycling carry, plus capture/history storage.
 Charge complete retained current/history/display graphs and new geometry again for aggregate retirement. Sharing
 overcounts intentionally; overflow/unavailable estimates refuse planning. Blank/folder/no-active sampling owns

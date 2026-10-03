@@ -405,6 +405,17 @@ controls; coexisting publication, remaining size/lifecycle callers and measured 
 Actual private/native status is recorded in
 [`SelectionMoveHeaders_2026-10-03.md`](../TestRuns/SelectionMoveHeaders_2026-10-03.md).
 
+The complete DocumentTests runner registers `RunSelectionNudgeTests` once. Its `selection-nudge.*` core controls
+use literal legacy arrow/off-canvas vertices and independent publication/cancellation state expectations.
+Qualification requires 80 unique PASS names matching the executed summary, unchanged retained assertion
+multisets and full suite success; no old golden is rebaselined. Controls cover holes/AA, exact Undo/Redo, absent
+and explicit-empty refusal, active/live gesture exclusion, sealed moves, stale session/document/history/target,
+zero-delta redo/counter/generation behavior, nested title/depth, literal construction caches and pinned-toolset
+capacity, 1,024-step cancellation spacing, reached history fault stages, held worker preparation and off-owner
+aggregate disposal. Aggregate disposal does not prove the final release of every shared raster. Full native
+profiles and exact archive/receipt verification follow private qualification
+([record](../TestRuns/SelectionNudge_2026-10-03.md)); host keyboard routing and measured G1 remain separate.
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 
@@ -608,6 +619,17 @@ among those targets. Changed operands, guards, row boundaries, symbols, bounds, 
 edges into the guard interior or table from elsewhere in the procedure refuse. Adjacent executable VEX stays
 a violation. Reparse the original failing ASan image and retained Release image before rebuilding, keep all
 57 RDI controls and the existing runtime allowlist: [proof](../TestRuns/IsaQwordStackRax_2026-10-03.md).
+
+The Release R9 byte-switch form additionally has 108 parser controls (8 accepted, 100 refused). The exact
+CMP R9B/unsigned JA, RDX image-base, R9-indexed DWORD load, ADD/JMP, aligned anonymous same-owner data and
+terminal procedure end must agree. All decoded body rows and the RET/CALL/INT3/NOP tail match PE bytes;
+missing/unknown/overlapping rows refuse, and the full table fits the section's stored bytes. Every table/default
+target is a decoded body boundary outside the guard/tail/table. Known direct transfers, including LOOP-family
+and prefixed transfers, cannot enter the guard interior or data; the observed same-CMP/JNE entry to JA needs
+identical flags and exact encodings. Real executable VEX remains rejected. This classifies inline data, without
+asserting complete CFG or R9 upper-bit provenance. Reparse all three preserved EXE/PDB pairs and keep all ten
+retained parser assertion multisets, 73 QWORD controls, 57 RDI controls and runtime allowlist unchanged before
+native rebuilding: [proof](../TestRuns/IsaR9ByteSwitch_2026-10-03.md).
 
 The Release clipboard status switch additionally has 91 AL-guard controls. Its exact contiguous MOVZX EAX from
 RSI+disp32, CMP AL/unsigned JA, RDX image-base/load/ADD/JMP rows require matching PE bytes and decoded listing.

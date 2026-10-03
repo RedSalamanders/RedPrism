@@ -193,6 +193,14 @@
   20,351 evidence files at `2026-10-03T04:39:26.9716006+00:00`. Coexisting header/size/lifecycle policies and
   measured G1 stay open.
 
+- [x] Selection nudge core — S1c1 privately qualifies 80 unique geometry/history/cancellation/worker controls;
+  exact 629 inputs/158 evidence files are archived before eight native activations
+  ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). All six native profiles pass at
+  `2026-10-03T06:34:34.8129025+00:00`; independent verification/archive retain 619 inputs/23,770 evidence files
+  at `2026-10-03T06:41:31.8464318+00:00`. Typed keyboard host routing, other selection geometry and G1 stay open.
+  Native r1 passes ARM64 cross-builds and full x64 ASan, then Release's ISA scan refuses terminal switch data;
+  actual exit 1 and the exact failed image/618 sources/24,357 evidence files are archived before private repair.
+
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

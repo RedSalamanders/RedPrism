@@ -62,6 +62,7 @@
 #include "SelectionCommandTests.h"
 #include "SelectionMoveClosureTests.h"
 #include "SelectionMoveOpeningTests.h"
+#include "SelectionNudgeTests.h"
 #include "SelectionPreserveTests.h"
 #include "SelectionStorageTests.h"
 #include "SessionGenerationTests.h"
@@ -7390,6 +7391,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
+    gFailures += RunSelectionNudgeTests();
     gFailures += RunSelectionPreserveTests();
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();

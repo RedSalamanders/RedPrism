@@ -293,6 +293,15 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   rounded offset from the drag start without re-clipping (the outline can leave the canvas and come back intact);
   `EndSelectionMove` closes the entry; `CancelSelectionMove` (Escape) puts the outline back where the move began and
   closes the entry unrecorded; `NudgeSelection` is one entry per press.
+- `SelectionNudgeWork` supplies a separate settled-session core for whole-pixel nudges. Its sealed move-only input
+  captures the document/history, session/generation/target/crop authority and exact outline-opening counter.
+  Absent/empty selection, live outline, pending edits/gestures and exhausted counters refuse capture.
+  Worker translation preserves every vertex, AA, holes and off-canvas geometry without clipping or coverage
+  construction; the producer caches point count, bounds and retained capacity in that same cancellable pass.
+  Complete `Move Selection` history is prepared before nonthrowing current-only publication and owner swaps.
+  Publication advances the opening counter once and generation twice, matching MoveSelection/EndEdit.
+  Zero offsets share geometry and preserve revision/redo, while acknowledging the prepared history epoch;
+  nested transactions retain their original outer name/depth. This core does not activate keyboard routing.
 - `CanModifySelection`: a non-empty selection and no draft. `ExpandSelection(amount)` offsets outward and clips to
   the canvas (`Expand Selection`); `ContractSelection(amount)` offsets inward, away from the canvas edges too, and
   can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.

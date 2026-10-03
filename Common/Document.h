@@ -742,6 +742,7 @@ class SelectionLoops
     }
 
   private:
+    friend class SelectionNudgeBuilder;
     std::shared_ptr<const std::vector<SelectionLoop>> _loops;
     std::uint64_t _pointCount = 0;
     std::optional<SelectionBounds> _bounds;
@@ -1214,6 +1215,9 @@ enum class SelectionCommandKind : std::uint8_t;
 class SelectionCommandInput;
 class SelectionCommandAuthority;
 class PreparedSelectionCommand;
+class SelectionNudgeInput;
+class PreparedSelectionNudge;
+struct SelectionNudgeObserver;
 class WandLayerSelectionInput;
 class PreparedWandLayerSelection;
 struct WandLayerSelectionObserver;
@@ -2119,6 +2123,13 @@ class DocumentSession
     }
     // Arrow keys: 1 px, or 10 with Shift; each press is one entry.
     void NudgeSelection(double dx, double dy);
+    [[nodiscard]] std::optional<SelectionNudgeInput> PrepareSelectionNudgeInput(int dx, int dy) const;
+    [[nodiscard]] static std::optional<PreparedSelectionNudge> PrepareSelectionNudgePublication(
+        SelectionNudgeInput input, CancelToken cancellation = {}, DocumentHistory::PrepareObserver observer = {},
+        const SelectionNudgeObserver* geometryObserver = nullptr);
+    [[nodiscard]] bool IsPreparedSelectionNudgeCurrent(const PreparedSelectionNudge& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedSelectionNudgeIfCurrent(PreparedSelectionNudge& prepared) noexcept;
+    [[nodiscard]] std::uint64_t SelectionNudgeMemoryBytes() const noexcept;
     // Expand / Contract need a non-empty selection and no outline in progress.
     [[nodiscard]] bool CanModifySelection() const noexcept;
     void ExpandSelection(int amount);

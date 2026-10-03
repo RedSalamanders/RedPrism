@@ -48,9 +48,24 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
       whole-pixel authority, one-pass cancellable translation/cached geometry, worker history and two-generation
       current-only acknowledgement. A cheaper agent drafts independent legacy and cancellation controls.
     - [x] Primary reviews and extends worker/capacity/retirement tests; the header native archive now qualifies.
-    - [ ] Compile and qualify the complete private DocumentTests suite against that verified predecessor.
+    - [x] Compile and qualify the complete private DocumentTests suite against that verified predecessor:
+      80 unique controls pass; exact 629 inputs/158 evidence files are archived before eight byte-identical
+      native activations. The first archiver's retained-name uniqueness mistake is preserved before recovery.
+    - [x] S1c1 — Qualify the settled prepared core in all six native profiles and independently archive.
       Full private proof, exact archival and fresh native qualification precede activation
       ([record](../../TestRuns/SelectionNudge_2026-10-03.md)). No nudge host route has changed.
+      Native r1 returns actual exit 1: all ARM64 cross-builds and full x64 ASan pass, then Release's linked
+      ISA scan rejects a vector-looking terminal DWORD in OnSelectionAction. Its 618 inputs and 24,357
+      evidence files are archived before isolated scanner repair; Release runtime and x64 Debug remain open.
+      Native r2 now passes all six profiles at `2026-10-03T06:34:34.8129025+00:00`; independent verification
+      and immutable archival retain 619 inputs/23,770 evidence files at `2026-10-03T06:41:31.8464318+00:00`.
+      All 80 new checks and exact retained suites pass; ARM64 is cross-build only. This completes S1c1.
+    - [ ] S1c2 — Activate typed event-time arrow/Shift inputs through ordered host publication, preserving
+      live-outline no-op and existing settlement policy; qualify actual host faults, ordering, pump and disposal.
+      A separate 504-source seed owns the source-only host candidate. Primary prepares the production path
+      and fault/pump/stale/admission controls; reviewed cheaper-agent arrow goldens cover all eight input
+      combinations, with independently literal nested history. Private compilation waits for S1c1's exact
+      native completion/archive ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)).
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
   - [x] S2a — Qualify separate Select All/Deselect authority that preserves an already live brush, warp or shape.
