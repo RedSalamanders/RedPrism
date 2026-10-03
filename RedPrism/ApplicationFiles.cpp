@@ -530,7 +530,7 @@ bool Application::ExecuteHostInput() noexcept
                 if (value.invocation != _sizeInvocation || !SizeCardOpen())
                     return false;
                 _sizeDialog = value.draft;
-                ApplySizeCard();
+                ApplySizeCard(value.extensionArgb);
             }
             else if constexpr (std::is_same_v<Input, HostCommandInput>)
             {

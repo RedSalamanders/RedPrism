@@ -1,10 +1,25 @@
 # Ordered selection workers (P1.6)
 
-Current step: S3b1b1b1a eligible Canvas/Image Size outline closure. A separate 509-source candidate owns the
-next cancel-before-resize continuation; compilation waits for the qualified nudge host archive, now complete.
-S1c1/S1c2 qualify and are committed/pushed stepwise. Native nudge host r1 passes all six fresh profiles with
-84 literal and 173 fault/order checks per x64 suite; independent archival retains 623 inputs/1,064 evidence
-files at `2026-10-03T07:36:56.8764451+00:00`. Other geometry, gesture, lifecycle and measured G1 remain open.
+Current step: S3b1b1b1c Close Project with a live outline. New Canvas and the shared size opacity/Crop correction
+qualify in all six fresh profiles; independent verification and immutable archival retain 627 inputs/23,056
+evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
+`675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. The separate Close Project candidate
+has two literal cases and 46 fault/order/admission cases; primary reviews the cheaper-agent literals and
+prepares current-only close/save/lifecycle stages. Its compiler gate can now verify the qualified prerequisite.
+Other geometry, gestures, lifecycle, constant-time metadata/history and measured G1 remain open.
+
+Qualified preceding step: S3b1b1b1b New Canvas and the shared size opacity/Crop authority correction. Size native r4
+passes all six profiles; independent archival retains 625 inputs/1,739 evidence files at
+`2026-10-03T10:02:54.6386235+00:00`, completion `21DEC551A422A6EDAE95F5E0ADEF1CA1794DDF383CE6C87D76A0EF31BC6A1239`.
+The earlier clipboard failure, unknown-exit interruption and precompiler PATH failure remain preserved.
+The isolated New Canvas candidate has two literal scenarios and 52 fault/order scenarios. Private r1's missing
+enum include and r2's ten history-checkpoint fixture failures are archived before correction. Private r3 passes
+all 59 application stages, 20 literal assertions and 536 fault/order assertions. Its immutable archive retains
+639 inputs/216 evidence files, completion `FDE0FC933778E8BDD03A7926C62BBCC07E2A2186977C14F3D6BF346519448BBF`.
+Eight exact native activations and preflight pass; native r1 PID 23260 starts at
+`2026-10-03T10:36:27.9675830+00:00` against 627 frozen inputs. All six configurations and exact immutable archival
+now qualify size-card completion. S1c1/S1c2 are pushed through `bd4c969`. Other geometry, gestures, lifecycle and
+measured G1 remain open.
 Status: active execution child of [UiNeverBlocks](UiNeverBlocks_2026-09-22.md). S0a/S1a/S3a core preparation
 qualifies in all six clean configurations against 423 frozen inputs: 127 command and 185 move-closure checks
 per x64 suite. The 39 strict RDX controls and unchanged failed Release image pass with the runtime allowlist
@@ -269,6 +284,92 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
               `2026-10-03T04:29:21.8934408+00:00` against 614 frozen inputs. All six profiles pass; independent
               verification and immutable archival retain 614 inputs/20,351 evidence files at
               `2026-10-03T04:39:26.9716006+00:00`. Remaining routes and measured G1 stay open.
+            - [x] S3b1b1b1a — Eligible Canvas/Image Size Apply owns the captured existing outline and card
+              invocation, cancels the outline on a worker, then starts the existing size worker on the same
+              request ordinal. Foreground/background extension captures the input-time ARGB value. Refuse a
+              replaced/closed outline, reopened card or newly coexisting edit before capture/apply. NewCanvas
+              and prompt-driven lifecycle remain outside this slice; preserve their exact prompt order.
+              - [x] Seed 509 verified sources in a separate candidate; primary owns the continuation and
+                completion checks. A cheaper agent drafts four ordinary/nested literal Canvas/Image cases;
+                primary fixes locked-ratio setup and worker cleanup, then adds dual-worker faults/order/pump,
+                input-time palette, stale/capture/admission/refusal/retry and disposal controls. Source only.
+              - [x] Wait for native nudge host qualification and immutable archive; `bd4c969` is pushed.
+                Its completion is `AB96CD24B0A857C1987A9A43F9ED7CE4C80DA72A93FCAB226F2CA55FBFCE6877`.
+              - [x] Full private r3 WARP proof: 46 literal checks/4 modes, 242 fault/order checks/29 modes and all
+                57 registered stages pass. Exact archival retains 637 inputs/214 evidence files at
+                `2026-10-03T07:52:00.4863863+00:00`. Both earlier failures are preserved before repair.
+              - [x] Qualify all six fresh native profiles, independently verify/archive, update contracts and
+                commit/push. Actual timing and ARM64 runtime qualification remain separate.
+                Native r1 passes ARM64 builds and the new size assertions, then x64 ASan's existing clipboard
+                fault fixture fails to open the clipboard (error 5), actual matrix exit 1 at
+                `2026-10-03T08:21:30.8022590+00:00`. Immutable archival preserves 625 inputs/4,374 evidence files
+                before the two remaining short clipboard setup helpers adopt thirty readiness attempts. The
+                size slice remains unqualified; Release/Debug did not run. A fresh full matrix is required.
+                Native r2 PID 66964 starts at `2026-10-03T08:32:45.4833456+00:00`, freezing the same 625 inputs
+                with two explicitly bound fixture readiness repairs. Preflight verifies 466 unchanged common
+                counterparts, ten original activations, exact private controls and the retained failed attempt.
+                Its process/tool session disappears without an actual completion receipt. The observed exit
+                remains unknown; immutable interrupted archival retains 625 inputs/4,377 evidence files at
+                `2026-10-03T08:57:25.0198348+00:00`, completion SHA-256
+                `CB8C2596990D4D0B2657C9D0AC6C11045ABD3947BC10FEE52D2B71AB53C3D468`.
+                A hidden same-user launcher independently proves repository access outside the tool session.
+                Fresh r3 PID 82736 starts at `2026-10-03T09:11:22.7778174+00:00` after exact preflight; six
+                profiles, actual process receipt and independent verification/archive remain pending.
+                Detached r3 returns actual exit 1 at `2026-10-03T09:12:07.8717412+00:00`, before source inventory
+                or compilation, because its PATH cannot resolve rg. Precompiler failure archival retains 625
+                independently unchanged inputs/33 evidence files at `2026-10-03T09:17:42.7051168+00:00`, completion
+                SHA-256 `BE2C22A9B22A93698475ECC51713FE1239E609FCA531419CA7CDF3DEC05152D6`.
+                Fresh r4 pins explicit rg/git/pwsh paths before launching the same full matrix. Source inputs
+                remain unchanged; actual six-profile qualification is still pending.
+                Independent r4 preflight passes, and PID 91044 starts at
+                `2026-10-03T09:21:55.6955366+00:00`. Its launcher pins the detached executables by SHA-256;
+                successful process creation remains separate from actual profile qualification.
+                All six profiles pass; actual exit 0 at `2026-10-03T09:56:45.0024453+00:00`. Independent exact
+                verification and archival retain 625 inputs/1,739 evidence files at
+                `2026-10-03T10:02:54.6386235+00:00`, completion
+                `21DEC551A422A6EDAE95F5E0ADEF1CA1794DDF383CE6C87D76A0EF31BC6A1239`.
+                The New Canvas follow-up qualifies the reviewed shared opacity/Crop guard before completion.
+            - [x] S3b1b1b1b — Eligible New Canvas Apply with a live outline preserves Save/Discard/Cancel prompt
+              order. Cancel leaves the card, outline capture and exact live history unchanged; Discard prepares
+              outline Cancel before replacement; Save prepares End before the captured project write and starts
+              replacement only after its acknowledged success. One ordinal owns each acknowledged phase.
+              - [x] Seed 511 exact sources from the qualified size private r3 in a separate source-only tree.
+                Primary prepares prompt-aware stages and current-only closure/lifecycle checks. A cheaper agent
+                drafts two independent literal Discard/Cancel cases; primary corrects the history reference and
+                post-move capture, and owns Save, held-stage authority, fault/order/pump and retirement controls.
+                Two literal scenarios and 52 fault/order scenarios are drafted; new color, same-value opacity
+                and crop openings are refused at the selected and held-worker boundaries. Already coexisting
+                opacity/crop paths keep their separate migration. Full compilation/runtime proof is pending.
+                Primary review adds a shared size-specific opacity/Crop predicate and eight Canvas/Image
+                selected/held cases that require no resize admission or capture. These guards complete the
+                size-card authority correction alongside the New Canvas follow-up; the native r4 inputs stay frozen.
+                Its native size prerequisite now qualifies (625 inputs/1,739 evidence files). Private r1's enum
+                include failure is preserved (639/193); r2 returns actual exit 5 with 20 passing literal checks
+                and ten failures among 535 fault assertions (639/216 preserved). Trace shows four End checkpoints
+                and no BeforeSnapshot checkpoint; preparation failure precedes the held publication gate.
+                Only new fixture expectations change afterwards. Private r3 passes all 59 stages, 20 literal
+                assertions and 536 fault/order assertions; 639 inputs/216 evidence files are archived.
+              - [x] Compile the private candidate only after the current size native matrix and immutable archive
+                qualify; retain every failure before repair. Full WARP proof/archive precede native activation.
+              - [x] Qualify all six fresh native profiles, independently verify/archive, update contracts and
+                commit/push. Coexisting/invalid lifecycle callers and measured G1 remain open.
+                Eight exact native activations and 472-counterpart preflight pass. Native r1 PID 23260 starts
+                at `2026-10-03T10:36:27.9675830+00:00`, freezing 627 inputs.
+                All six profiles and exact immutable archival now qualify at
+                `2026-10-03T11:14:26.1987889+00:00` (627 inputs/23,056 evidence files).
+            - [ ] S3b1b1b1c — Eligible Close Project with a live outline and no coexisting edit preserves the
+              Save/Discard/Cancel prompt. Cancel keeps the exact live outline/local drag/history/path; Discard
+              acknowledges worker Cancel before close, and Save acknowledges End and original-document write
+              before close. One selected ordinal owns all phases, with current-only publication and retirement.
+              - [x] Seed 513 exact source-only inputs from New Canvas private r3. Native inputs remain frozen;
+                compilation waits for the actual qualified New Canvas native archive. Primary owns production
+                and fault/order controls; a cheaper agent drafts two independent literal Close/Cancel cases.
+              - [x] Review and finish source-only production and independent tests: two literal cases and 46
+                fault/order/admission cases; the primary fixes agent string literals and post-gesture capture.
+                The candidate registers 61 stages, with 473 unchanged compiler counterparts
+                ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). No compiler has run.
+              - [ ] Qualify full private WARP and archive after the exact native New Canvas prerequisite.
+              - [ ] Activate byte-identical sources, qualify all six fresh profiles, archive, update and commit/push.
             - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
               cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve

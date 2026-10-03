@@ -175,7 +175,13 @@ class Application::SelectionMoveCloseJob final : public Job
   private:
     [[nodiscard]] bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._selectionMoveCloseStamp == _stamp &&
+        const auto* size = _owner._activeHostRequest
+                               ? std::get_if<HostSizeApplyInput>(&_owner._activeHostRequest->input.Input())
+                               : nullptr;
+        const bool sizeCurrent = !size || !size->selectionMoveOpening ||
+                                 (size->invocation == _owner._sizeInvocation && _owner.SizeCardOpen() &&
+                                  _owner.CanQueueSelectionSizeOutline());
+        return !_owner._shutdownStarted && _owner._selectionMoveCloseStamp == _stamp && sizeCurrent &&
                _owner._historyWork.IsCurrent(_stamp) && _owner._session.DocumentSerial() == _stamp.documentSerial &&
                _owner._session.SelectionMoveOpening() == std::optional(_opening) &&
                _owner._session.Generation() == _generation && _owner._session.ActiveLayerID() == _active &&

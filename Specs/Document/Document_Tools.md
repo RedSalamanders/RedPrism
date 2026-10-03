@@ -1224,9 +1224,56 @@ edit open for Cancel, and the layer is untouched; a fill is never trimmed. OK re
 
 The application's Image Size and Canvas Size Apply actions submit immutable Commit jobs after all preceding
 history work has applied. Options include the selected draft's dimensions, sampling, resolution, anchor and
-captured extension color. Workers never read the card, palette, session, window or GPU. New Canvas and Crop retain
-their existing paths. A size action that first commits a panel continues the same input ordinal with a new exact
+captured extension color. Workers never read the card, palette, session, window or GPU. Eligible New Canvas Apply
+with a live outline follows the prompt-aware preparation below; Crop retains its existing path. A size action that first commits a panel continues the same input ordinal with a new exact
 acquisition stamp. A younger Undo or mutation starts only after the size result has applied or been dropped.
+
+### Eligible size-card Apply with a live outline (P1.6 S3b1b1b1a)
+
+An eligible valid Canvas Size or Image Size Apply, with an existing outline move and no coexisting canvas,
+opacity or Crop edit, owns the input-time card invocation and exact outline opening. Stop outline pointer sampling when
+admission is attempted. The noncoalescing request first cancels that opening on its admitted worker, then
+starts the existing size worker after acknowledged publication, retaining one input ordinal through both
+workers. The original outline is restored before size acquisition; resizing drops selection. A younger Undo
+cannot pass either worker. Ordinary changes produce one Canvas Size/Image Size entry; an enclosing history
+transaction retains its depth and original outer title.
+
+Foreground/background extension owns the input-time ARGB value alongside the copied draft. A later palette
+change cannot change that requested fill. Completion refuses a reopened card, replaced/closed outline,
+changed document/history authority or new coexisting edit before closing or resizing. Refused admission and
+failed/cancelled close preserve the live opening and moved outline for retry. After successful outline Cancel,
+a failed/cancelled resize preserves the restored original outline and adds no size history entry; it does not
+reopen the cancelled gesture. Captured/retired owners stay reserved through acknowledgement and retire on
+workers. Invalid drafts, other prompt-driven lifecycle and already coexisting edits retain their existing
+routes until separately migrated. Constant-time metadata capture, incremental history and measured G1 remain
+separate requirements.
+
+### Eligible New Canvas Apply with a live outline (P1.6 S3b1b1b1b)
+
+A valid New Canvas Apply on the current card, with the original outline opening and no coexisting canvas,
+opacity or Crop edit, owns its copied draft and card invocation through one noncoalescing input ordinal.
+The existing Save/Discard/Cancel prompt precedes outline closure. Prompt Cancel preserves the current document,
+card, moved outline, local outline drag and exact history/generation. Only confirmed Save or Discard stops
+further outline sampling.
+
+Discard prepares outline Cancel on its admitted worker and starts document replacement only after successful
+publication. Save prepares outline End, writes the captured original document to the selected output path,
+and starts replacement only after acknowledged successful save. The close, write and replacement phases retain
+the same selected ordinal; younger Undo or mutations cannot pass them. The copied draft retains input-time
+dimensions and the write retains its selected path even if later card/path values change. Successful replacement
+uses the established New Canvas history entry and saved marker, closes the card and clears the old document path.
+
+Every selected stage and worker publication checks the current card invocation and original document/history
+authority. Closure also requires the exact original outline opening; after closure, save and replacement require
+the outline to remain closed. A newly opened color, opacity or Crop editor refuses the request even when pixel
+generation is unchanged. Refusal cannot close the newer edit/card/opening or publish dependent size work.
+Cancellation remains pending through worker acknowledgement. Failure before closure preserves the original
+document and live outline; failure after acknowledged closure or save preserves those completed phases and
+adds no replacement history. Reservations cover captured/retired owners until acknowledgement and worker disposal.
+
+Invalid drafts and already coexisting edits retain their existing route until separately migrated. This
+qualified functional boundary does not establish constant-time metadata capture, incremental history, native
+ARM64 runtime or the measured G1 limits.
 
 `ResizeCanvas`, `ResizeImage` and the placed rasterizers accept a cancellation token; direct callers use its empty
 default. They preserve the existing sampling order, rounding and pixel goldens. Source sparse pixels are assembled

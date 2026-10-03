@@ -208,6 +208,41 @@
   `2026-10-03T07:30:25.0520148+00:00`. Independent verification/archive retain 623 inputs/1,064 evidence files
   at `2026-10-03T07:36:56.8764451+00:00`. Other selection producers and measured G1 remain open.
 
+- [x] Eligible Canvas/Image Size outline closure — S3b1b1b1a private r3 passes 46 literal and 242 fault/order
+  checks, all 57 registered stages and exact retained suites. Immutable archival retains 637 inputs/214 evidence
+  files before ten byte-identical activations; independent preflight verifies 468 unchanged counterparts.
+  Native r1 PID 110580 starts at `2026-10-03T08:01:51.9057802+00:00` against 625 frozen inputs
+  ([record](../../TestRuns/SelectionSizeOutline_2026-10-03.md)). Six profiles and independent archive remain required.
+  Native r1 stops after ARM64 cross-builds and the passing new size controls: x64 ASan's existing clipboard fault
+  fixture cannot acquire the clipboard. Its exact 625 inputs/4,374 evidence files are archived before two setup
+  helpers adopt thirty readiness attempts. Native r2 PID 66964 starts at `2026-10-03T08:32:45.4833456+00:00`;
+  r2 is interrupted without an actual exit receipt. Its 625 inputs/4,377 evidence files are archived
+  unqualified, preserving the unknown exit. Fresh r3 PID 82736 starts at
+  `2026-10-03T09:11:22.7778174+00:00` through a hidden durable launcher after exact preflight (466 unchanged
+  counterparts). All six profiles and independent verification/archive are still required.
+  Detached r3 returns actual exit 1 before compilation because rg is absent from its PATH. Its 625 unchanged
+  inputs/33 evidence files are archived; r4 supplies explicit tool paths for the fresh complete matrix.
+  R4 preflight passes; PID 91044 starts at `2026-10-03T09:21:55.6955366+00:00`. Qualification remains pending.
+  ARM64 builds and the complete x64 Asan suite pass; Release/Debug and independent archive remain required.
+  Primary review adds opacity/Crop authority guards in the private follow-up before size-card completion.
+  R4 now passes all six profiles, actual exit 0 at `2026-10-03T09:56:45.0024453+00:00`; independent archival
+  retains 625 inputs/1,739 evidence files at `2026-10-03T10:02:54.6386235+00:00`. The guard correction is next.
+- [x] Eligible New Canvas outline closure — S3b1b1b1b has a separate source-only 511-input seed. Primary prepares
+  Save/Discard/Cancel phases, exact opening/card/coexisting authority and one-ordinal close/write/replacement.
+  Two reviewed literal scenarios and 52 primary fault/order scenarios include the shared size authority correction
+  ([record](../../TestRuns/SelectionNewCanvasOutline_2026-10-03.md)). P1/G1 remain open.
+  The qualified size r4 archive is pinned. Private r1's missing enum include is preserved before correction;
+  fresh r2 is building. Runtime qualification and exact archive remain required.
+  R2's ten history-observer fixture failures are archived before correction. Private r3 Rebuild and full WARP
+  runtime pass: all 59 stages, 20 literal assertions and 536 fault/order assertions. Immutable archival retains
+  639 inputs/216 evidence files at `2026-10-03T10:25:34.5400849+00:00`. Fresh native qualification remains required.
+  Production and numeric legacy goldens remain unchanged by this fixture repair.
+  Eight exact native activations and independent 472-counterpart preflight pass. Native r1 PID 23260 starts
+  at `2026-10-03T10:36:27.9675830+00:00`, freezing 627 inputs for all six profiles. Eligible Close Project
+  preparation has a separate 513-source seed; its compiler waits for this native proof/archive.
+  All six profiles pass at `2026-10-03T11:05:34.9785354+00:00`; independent verification and immutable archival
+  retain 627 inputs/23,056 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
+  `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. This also qualifies the shared size guard.
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

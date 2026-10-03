@@ -363,6 +363,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] ContinuationReceipt QueueSelectionMoveHeader(SelectionAction action, double value) noexcept;
     [[nodiscard]] static bool SelectionMoveHeaderAction(SelectionAction action) noexcept;
     [[nodiscard]] bool CanQueueSelectionMoveClick() const noexcept;
+    [[nodiscard]] bool CanQueueSelectionSizeOutline() const noexcept;
     enum class SelectionMoveClosePolicy : std::uint8_t
     {
         Preserve,
@@ -370,6 +371,8 @@ class Application final : public ChromeEvents
         Cancel
     };
     [[nodiscard]] SelectionMoveClosePolicy SelectionMovePolicy(const HostRequestInput& input) const noexcept;
+    [[nodiscard]] static std::optional<std::uint64_t> SelectionMoveRequestOpening(
+        const HostRequestInput& input) noexcept;
     [[nodiscard]] static bool SelectionMoveEndCommand(int command) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostInput(HostRequestInput input) noexcept;
     [[nodiscard]] ContinuationReceipt QueueHostRequest(HostRequest request) noexcept;
@@ -454,7 +457,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] bool SizeCardOpen() const noexcept;
     void OpenSizeCard(SizeCardKind kind) noexcept;
     void CancelSizeCard() noexcept;
-    void ApplySizeCard() noexcept;
+    void ApplySizeCard(std::optional<std::uint32_t> extensionArgb = std::nullopt) noexcept;
     void OnSizeAction(SizeAction action, double value) noexcept override;
     void OnSizeColor(ChromeEditPhase phase, uint32_t argb) noexcept;
     void SyncSizeCard() noexcept;
@@ -473,6 +476,10 @@ class Application final : public ChromeEvents
     [[nodiscard]] HRESULT StartSelectionNudge(int dx, int dy) noexcept;
     int RunSelectionNudgeSelfTest() noexcept;
     int RunSelectionNudgeFaultSelfTest() noexcept;
+    int RunSelectionSizeOutlineLiteralSelfTest() noexcept;
+    int RunSelectionSizeOutlineFaultSelfTest() noexcept;
+    int RunSelectionNewCanvasLiteralSelfTest() noexcept;
+    int RunSelectionNewCanvasFaultSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
     int RunSelectionCommandSelfTest() noexcept;
     class SelectionMoveCloseJob;
@@ -880,6 +887,7 @@ class Application final : public ChromeEvents
         TransformDiscard,
         Write,
         SelectionMoveSettle,
+        NewCanvasOutline,
         SelectionMoveFollowup,
         SelectionHeaderFollowup,
         Execute,

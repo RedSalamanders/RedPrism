@@ -2296,6 +2296,18 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;
+    std::printf("BEGIN self-test.RunSelectionSizeOutlineLiteralSelfTest\n");
+    if (const int sizeOutline = RunSelectionSizeOutlineLiteralSelfTest(); sizeOutline != 0)
+        return sizeOutline;
+    std::printf("BEGIN self-test.RunSelectionSizeOutlineFaultSelfTest\n");
+    if (const int sizeOutlineFault = RunSelectionSizeOutlineFaultSelfTest(); sizeOutlineFault != 0)
+        return sizeOutlineFault;
+    std::printf("BEGIN self-test.RunSelectionNewCanvasLiteralSelfTest\n");
+    if (const int newCanvasOutline = RunSelectionNewCanvasLiteralSelfTest(); newCanvasOutline != 0)
+        return newCanvasOutline;
+    std::printf("BEGIN self-test.RunSelectionNewCanvasFaultSelfTest\n");
+    if (const int newCanvasFault = RunSelectionNewCanvasFaultSelfTest(); newCanvasFault != 0)
+        return newCanvasFault;
     std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
     if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
     {

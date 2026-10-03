@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "ChromeHost.h"
 #include "DocumentLifecycleTestGate.h"
 #include "ImageImportHistory.h"
 #include "resource.h"
@@ -202,7 +203,13 @@ class Application::DocumentLifecycleJob final : public Job
   private:
     [[nodiscard]] bool Current() const noexcept
     {
-        return !_owner._shutdownStarted && _owner._documentLifecycleStamp == _stamp &&
+        const auto* size = _owner._activeHostRequest
+                               ? std::get_if<HostSizeApplyInput>(&_owner._activeHostRequest->input.Input())
+                               : nullptr;
+        const bool outlineCurrent =
+            !size || size->draft.kind != SizeCardKind::NewCanvas || !size->selectionMoveOpening ||
+            (_owner.CanQueueSelectionSizeOutline() && !_owner._session.IsMovingSelection() && _owner.SizeCardOpen());
+        return !_owner._shutdownStarted && _owner._documentLifecycleStamp == _stamp && outlineCurrent &&
                _owner._hostCommitStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
                _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
                _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&

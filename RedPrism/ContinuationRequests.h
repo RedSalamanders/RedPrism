@@ -140,7 +140,9 @@ struct HostPathsInput final
 struct HostSizeApplyInput final
 {
     HostSizeDraft draft;
-    std::uint64_t invocation; // card lifetime, distinct from the session document serial
+    std::uint64_t invocation;                          // card lifetime, distinct from the session document serial
+    std::optional<std::uint64_t> selectionMoveOpening; // eligible existing outline at event-time admission
+    std::optional<std::uint32_t> extensionArgb;        // foreground/background owned through that outline close
 };
 struct HostPanelOkInput final
 {

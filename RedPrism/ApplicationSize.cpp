@@ -98,7 +98,7 @@ void Application::CancelSizeCard() noexcept
     _frameInvalidated = true;
 }
 
-void Application::ApplySizeCard() noexcept
+void Application::ApplySizeCard(std::optional<std::uint32_t> extensionArgb) noexcept
 {
     if (!SizeCardOpen())
     {
@@ -155,10 +155,10 @@ void Application::ApplySizeCard() noexcept
         switch (_sizeDialog.extension)
         {
         case 1:
-            options.fill = ColorOf(_session.ForegroundColor());
+            options.fill = ColorOf(extensionArgb.value_or(_session.ForegroundColor()));
             break;
         case 2:
-            options.fill = ColorOf(_session.BackgroundColor());
+            options.fill = ColorOf(extensionArgb.value_or(_session.BackgroundColor()));
             break;
         case 3:
             options.fill = CanvasExtensionColor{0, 0, 0};

@@ -302,6 +302,8 @@ acquisitions with 100 ms event waits, retrying only Busy. Fault-injected Busy st
 assertions are never retried. Failure diagnostics enumerate offered format IDs without calling GetClipboardData;
 they record inspection status, attempts, clipboard sequence, immediate native error and the process holding an
 unsuccessful OpenClipboard acquisition when available. These fixture waits do not change production retry limits.
+The Application ordinary/fault clipboard setup helpers use the same thirty-acquisition/100 ms event-wait
+budget. Only fixture acquisition is retried; failed assertions and injected production transfers are never retried.
 
 ### Prepared selection publication (P1.6 core)
 
@@ -425,12 +427,48 @@ keyboard inputs/Undo in order, event-time Shift, view/message pumping, local can
 generation/target/mask/crop/history/gesture refusal. Capture and all five history preparation faults are reached;
 saved marker, zero-delta redo, actual scheduler quota and input allocation/storage refusal/retry are covered.
 Settlement includes deferred destruction, and the payload aggregate must retire off owner. Exact retained
-host assertion lists and all 55 ordered Application stages remain required; existing goldens are unchanged.
+host assertion lists and all source-registered ordered Application stages remain required; existing goldens are unchanged.
 Private full WARP proof and immutable archival precede native activation and all six native profiles
 ([record](../TestRuns/SelectionNudgeHost_2026-10-03.md)); ARM64 runtime and measured G1 remain separate gates.
 
+The full Application runner registers `RunSelectionSizeOutlineLiteralSelfTest` and
+`RunSelectionSizeOutlineFaultSelfTest` once. `selection-size-outline-literal.*` requires 46 unique assertions
+across four ordinary/nested Canvas/Image cases: 40x40 to 50x40 at 72 dpi, or to 80x80 at 144 dpi with Nearest,
+one named size entry or retained outer title/depth, original 10..30 outline restored by Undo, and literal Redo.
+`selection-size-outline-fault.*` requires 242 unique assertions across 29 modes. Held production close and
+size workers retain one input ordinal; acquisition for size observes the cancelled original outline and no
+move entry. Both stages preserve local cancellation/failure, capture refusal, allocation codes and off-owner
+retirement. All five size-history faults are reached. Stale opening/card/generation/coexisting state refuses
+before capture or publication; literal foreground/background pixels retain input-time ARGB after palette
+changes. Younger Undo waits for both workers, posted-message/view pumping remains live, and full-record-table
+or input budget/allocation refusal has no owner fallback and recovers with a fresh Apply. The complete 57-stage
+runner and eight retained host control lists must match the qualified predecessor and private proof before
+native closeout ([record](../TestRuns/SelectionSizeOutline_2026-10-03.md)). Existing numeric size/selection
+goldens stay unchanged; ARM64 runtime and G1 timing require separate evidence.
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
+
+The full Application runner registers `RunSelectionNewCanvasLiteralSelfTest` and
+`RunSelectionNewCanvasFaultSelfTest` once. The private r3 full normal
+`RedPrism.exe --self-test --warp` run passes 59 ordered Application stages, 20 literal assertions across two
+modes, and 536 fault/order assertions across 52 modes. Its retained host evidence includes the ten previous
+control lists, including the size-outline lists (46 assertions/four modes and 242 assertions/29 modes); those
+controls and existing numeric goldens remain unchanged.
+
+`selection-newcanvas-literal.*` independently checks prompt Cancel preserving the local outline drag, card and
+history, plus confirmed Discard's Cancel-close then replacement. `selection-newcanvas-fault.*` checks Save's
+End-close, write of the captured original 40 x 40 document, then replacement, and one selected ordinal through
+close, write and replacement; all four reached End-history faults; and a positive control that BeforeSnapshot
+remains unvisited. It exercises stale opening/card state, held card changes, opening changes, newly opened color,
+opacity and Crop editors, and preserves draft dimensions and selected path from input time. Eight Canvas/Image
+authority-guard controls deny opacity/Crop changes before sizing capture. Ordering and owner pumping, actual
+record-table refusal, cancellation acknowledgement, whole reservation and off-owner retirement are covered.
+The qualified scenarios do not extend to already-coexisting lifecycle callers.
+
+Private and all six fresh native profiles now qualify this eligible functional boundary; exact independent
+control/source/product verification and immutable archival retain 627 inputs/23,056 evidence files
+([record](../TestRuns/SelectionNewCanvasOutline_2026-10-03.md)). ARM64 evidence is cross-build only. It does not qualify native
+ARM64 runtime, G1/performance, or global completion. Legacy numeric goldens are not rebaselined.
 
 ### Cancellable wand and trace kernels (P1.6 S4a)
 

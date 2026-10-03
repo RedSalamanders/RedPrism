@@ -250,6 +250,10 @@
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionSizeOutlineLiteralSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionSizeOutlineFaultSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionNewCanvasLiteralSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionNewCanvasFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseSelfTest.cpp" />

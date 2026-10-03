@@ -17,11 +17,11 @@ bool OpenClipboardFixture(HWND owner) noexcept
     wil::unique_handle timer(CreateWaitableTimerW(nullptr, TRUE, nullptr));
     if (!timer)
         return false;
-    for (unsigned int attempt = 0; attempt < 4; ++attempt)
+    for (unsigned int attempt = 0; attempt < 30; ++attempt)
     {
         if (OpenClipboard(owner))
             return true;
-        if (attempt == 3)
+        if (attempt == 29)
             return false;
         LARGE_INTEGER due{};
         due.QuadPart = -1'000'000; // one-shot 100 ms readiness wait; never a latency assertion
