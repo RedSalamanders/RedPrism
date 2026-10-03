@@ -7,7 +7,7 @@
 - [x] Review the cheaper-agent Discard/Cancel literals; correct output strings and capture state after the gesture.
 - [x] Prepare 43 fault/order cases and three real admission/refusal cases; register both suites (61 stages).
 - [x] Qualify and archive the preceding New Canvas native matrix before any private compiler starts.
-- [ ] Fresh private Rebuild, complete normal WARP application run, independent controls and immutable archive.
+- [x] Fresh private Rebuild, complete normal WARP application run, independent controls and immutable archive.
 - [ ] Byte-identical native activation and all six fresh configurations, independent verification/archive.
 - [ ] Update owning contracts/checklists, commit and push the qualified slice.
 
@@ -46,5 +46,40 @@ ownership, younger Undo, posted messages/zoom, reservation retirement and off-ow
 preserves acknowledged earlier close/save state. Real full scheduler capacity and input budget/allocation refusal
 must preserve the live opening and recover on fresh Close Project.
 
-All candidate code and expectations are uncompiled and unexecuted. This record does not qualify already
+The private candidate qualifies; native verification remains in progress. This record does not qualify already
 coexisting lifecycle callers, native ARM64 runtime, G1 timing, RAW speed or the Photoshop comparison.
+
+## Private r1 qualified
+
+After the exact native prerequisite and 473 unchanged counterparts are verified, Debug Rebuild freezes 641
+inputs and returns actual exit 0 from `2026-10-03T11:21:05.0211318+00:00` to
+`2026-10-03T11:21:36.3289326+00:00`. Application image SHA-256 is
+`7363443E7F63A79E900558E7A9AC653FC5FF3F07A94FCBF7E3E4B73855830BE2`.
+The full normal `--self-test --warp` process returns actual exit 0 from
+`2026-10-03T11:23:03.8709661+00:00` to `2026-10-03T11:27:01.2532823+00:00`.
+All 61 ordered stages pass, including 14 literal assertions/two modes and 477 fault/order assertions/46 modes.
+Independent checks retain all 12 preceding host assertion lists unchanged. No legacy numeric golden changes.
+
+Immutable archive `p1-selection-closeproject-outline-private-r1-Debug-qualified` retains 641 inputs and 218
+evidence files at `2026-10-03T11:28:12.1916372+00:00`:
+
+- Completion: `C21D21F0679864E6BFE551F55E74B49C4E906813502B7BF844290EC911C0DE33`.
+- Source manifest: `CEA9FF2FDFC83E0EAF57B024DA512AB6B06CCA0BB834AD17AA8344255652F53F`.
+- Evidence manifest: `425150EECA79FE77611360E1075E5A3CEE5CC90A80666A17CC2DBDD48B4B87DB`.
+- PDB: `EB63769D6CCE74F3A2D388293EE3584CFFD2F71B894CD4B36D18BF654AD5BA3C`.
+
+Nine byte-identical native source activations follow this qualified proof. Independent preflight and the six
+fresh native configurations remain required before completion, commit and push.
+
+## Native r1 interrupted by the user
+
+Independent preflight passes against 473 unchanged counterparts. Native r1 PID 37776 starts at
+`2026-10-03T11:40:21.3075606+00:00`, freezing 629 inputs. Skills validation passes all 15 skills and formatting
+checks 565 files. ARM64 ASan Debug completes with actual exit 0 at `2026-10-03T11:42:33.9422000Z`.
+The user requests that all work stop while ARM64 Release is building. The owned matrix/compiler process tree
+is stopped; its launcher records actual matrix exit 1 at `2026-10-03T11:45:34.9856264+00:00`.
+ARM64 Debug and all x64 gates are unexecuted in this attempt. This interruption does not qualify S3b1b1b1c.
+Source and partial evidence are preserved for a new complete attempt; see the
+[resume checkpoint](UiNeverBlocksPause_2026-10-03.md).
+The immutable interrupted archive completes at `2026-10-03T11:55:11.3382133+00:00`, retaining 629 inputs/26,193
+evidence files, completion `FD5DAE460AA64F51CDCFC4FA9AD61871103FD665463A5483B44E3D5900FF2F11`.

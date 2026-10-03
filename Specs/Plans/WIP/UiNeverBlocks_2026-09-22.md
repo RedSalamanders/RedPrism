@@ -1,5 +1,8 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
+Execution paused by the user on 2026-10-03. Source, partial validation and the next steps are preserved in the
+[resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md). Do not restart until explicitly resumed.
+
 ## Implementation checklist
 
 - [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions
@@ -243,6 +246,16 @@
   All six profiles pass at `2026-10-03T11:05:34.9785354+00:00`; independent verification and immutable archival
   retain 627 inputs/23,056 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
   `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. This also qualifies the shared size guard.
+- [ ] Eligible Close Project outline closure — S3b1b1b1c prepares the same prompt-aware close/save/lifecycle
+  ordering without a size card. The separate 513-source seed has two literal and 46 fault/order/admission cases;
+  primary corrects the cheaper-agent literals and qualifies 473 unchanged counterparts. Private r1 Debug Rebuild
+  and full 61-stage WARP pass against 641 frozen inputs: 14 literal and 477 fault/order assertions.
+  Its qualified immutable archive retains 641 inputs/218 evidence files at `2026-10-03T11:28:12.1916372+00:00`
+  ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). Nine byte-identical native activations
+  and independent preflight pass; PID 37776 starts the six-profile matrix at
+  `2026-10-03T11:40:21.3075606+00:00`, freezing 629 inputs. P1/G1 remain open.
+  User pause stops this matrix during ARM64 Release; only ARM64 ASan Debug completed. Actual interrupted exit 1
+  is retained at `2026-10-03T11:45:34.9856264+00:00`. Full native qualification remains open.
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

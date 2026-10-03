@@ -1,11 +1,19 @@
 # Ordered selection workers (P1.6)
 
+Execution paused by the user on 2026-10-03. See the [resume checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md).
+No agent or build remains active; the current Close Project native qualification is incomplete.
+
 Current step: S3b1b1b1c Close Project with a live outline. New Canvas and the shared size opacity/Crop correction
 qualify in all six fresh profiles; independent verification and immutable archival retain 627 inputs/23,056
 evidence files at `2026-10-03T11:14:26.1987889+00:00`, completion
 `675F17599A2288391C7E24993101D326B46AEEBFB4FC77D75F55990876E366DD`. The separate Close Project candidate
 has two literal cases and 46 fault/order/admission cases; primary reviews the cheaper-agent literals and
-prepares current-only close/save/lifecycle stages. Its compiler gate can now verify the qualified prerequisite.
+prepares current-only close/save/lifecycle stages. Its compiler gate verifies the qualified prerequisite and 473
+unchanged counterparts; private r1 Debug Rebuild and all 61 WARP stages pass against 641 frozen inputs.
+All 14 literal and 477 fault/order assertions pass. Its immutable 641-input/218-evidence archive completes at
+`2026-10-03T11:28:12.1916372+00:00`; nine exact native activations and independent preflight pass.
+Native r1 PID 37776 starts at `2026-10-03T11:40:21.3075606+00:00`, freezing 629 inputs. A separate 515-source
+candidate prepares eligible New, window close and noncritical session-end outline closure while that matrix runs.
 Other geometry, gestures, lifecycle, constant-time metadata/history and measured G1 remain open.
 
 Qualified preceding step: S3b1b1b1b New Canvas and the shared size opacity/Crop authority correction. Size native r4
@@ -367,9 +375,29 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
               - [x] Review and finish source-only production and independent tests: two literal cases and 46
                 fault/order/admission cases; the primary fixes agent string literals and post-gesture capture.
                 The candidate registers 61 stages, with 473 unchanged compiler counterparts
-                ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)). No compiler has run.
-              - [ ] Qualify full private WARP and archive after the exact native New Canvas prerequisite.
+                ([record](../../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)).
+              - [x] Qualify full private WARP and archive after the exact native New Canvas prerequisite.
+                The prerequisite qualifies and is pushed as `0ce2070`. Private r1 Debug Rebuild returns actual
+                exit 0 at `2026-10-03T11:21:36.3289326+00:00`, freezing 641 inputs. The full 61-stage WARP run returns
+                actual exit 0 at `2026-10-03T11:27:01.2532823+00:00`; 14 literal and 477 fault/order assertions pass.
+                Immutable archival retains 641 inputs/218 evidence files at `2026-10-03T11:28:12.1916372+00:00`.
               - [ ] Activate byte-identical sources, qualify all six fresh profiles, archive, update and commit/push.
+                Independent preflight passes; native r1 PID 37776 starts at
+                `2026-10-03T11:40:21.3075606+00:00` against 629 frozen inputs.
+                The user stops r1 during ARM64 Release, after ARM64 ASan Debug passes. Actual matrix exit 1 is
+                retained at `2026-10-03T11:45:34.9856264+00:00`; full native qualification remains required.
+                Interrupted archival retains 629 inputs/26,193 evidence files at
+                `2026-10-03T11:55:11.3382133+00:00`. A new complete native attempt is required on resume.
+            - [ ] S3b1b1b1d — Eligible default New, window close and noncritical session-end inputs preserve the
+              prompt and acknowledge outline Cancel for Discard or End before Save. Reuse the same selected
+              ordinal and editor/opening authority; a cancelled session generation cannot publish closure or
+              post a late window close. Observe the callback-safe posted close in the harness before teardown.
+              - [x] Seed 515 exact sources from the qualified Close Project private r1 archive, separately from
+                frozen native sources. Primary owns production and fault/order tests; a cheaper agent drafts
+                six independent literal New/window-close/session-end Discard/Cancel cases.
+              - [ ] Review source-only code and tests; compile only after actual Close Project native qualification
+                and immutable archive. Preserve any failure before correction.
+              - [ ] Qualify full private and all six fresh native profiles, archive, update contracts and commit/push.
             - [ ] S3b1b1b1 — Remaining coexisting header, size and lifecycle routes need their exact prompt,
               cancel, snapshot/history nesting and acknowledged old-owner retirement policy before activation.
 - [ ] S4 — Migrate wand with asynchronous all-layer composition and worker layer sampling/flood/trace; preserve

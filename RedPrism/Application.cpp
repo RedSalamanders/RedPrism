@@ -2308,6 +2308,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionNewCanvasFaultSelfTest\n");
     if (const int newCanvasFault = RunSelectionNewCanvasFaultSelfTest(); newCanvasFault != 0)
         return newCanvasFault;
+    std::printf("BEGIN self-test.RunSelectionCloseProjectLiteralSelfTest\n");
+    if (const int closeProjectOutline = RunSelectionCloseProjectLiteralSelfTest(); closeProjectOutline != 0)
+        return closeProjectOutline;
+    std::printf("BEGIN self-test.RunSelectionCloseProjectFaultSelfTest\n");
+    if (const int closeProjectFault = RunSelectionCloseProjectFaultSelfTest(); closeProjectFault != 0)
+        return closeProjectFault;
     std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
     if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
     {

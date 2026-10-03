@@ -209,7 +209,12 @@ class Application::DocumentLifecycleJob final : public Job
         const bool outlineCurrent =
             !size || size->draft.kind != SizeCardKind::NewCanvas || !size->selectionMoveOpening ||
             (_owner.CanQueueSelectionSizeOutline() && !_owner._session.IsMovingSelection() && _owner.SizeCardOpen());
-        return !_owner._shutdownStarted && _owner._documentLifecycleStamp == _stamp && outlineCurrent &&
+        const auto* close = _owner._activeHostRequest
+                                ? std::get_if<HostCloseProjectInput>(&_owner._activeHostRequest->input.Input())
+                                : nullptr;
+        const bool closeCurrent = !close || !close->selectionMoveOpening ||
+                                  (_owner.CanQueueSelectionLifecycleOutline() && !_owner._session.IsMovingSelection());
+        return !_owner._shutdownStarted && _owner._documentLifecycleStamp == _stamp && outlineCurrent && closeCurrent &&
                _owner._hostCommitStamp == _stamp && _owner._historyWork.IsCurrent(_stamp) &&
                _owner._activeHostRequest && _owner._activeHostRequest->ordinal == _stamp.ordinal &&
                _owner._activeHostRequest->documentSerial == _stamp.documentSerial &&

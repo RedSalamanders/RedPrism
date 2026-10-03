@@ -195,6 +195,7 @@ struct HostNewInput final
 };
 struct HostCloseProjectInput final
 {
+    std::optional<std::uint64_t> selectionMoveOpening;
 };
 struct HostCloseWindowInput final
 {

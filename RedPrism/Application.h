@@ -364,6 +364,7 @@ class Application final : public ChromeEvents
     [[nodiscard]] static bool SelectionMoveHeaderAction(SelectionAction action) noexcept;
     [[nodiscard]] bool CanQueueSelectionMoveClick() const noexcept;
     [[nodiscard]] bool CanQueueSelectionSizeOutline() const noexcept;
+    [[nodiscard]] bool CanQueueSelectionLifecycleOutline() const noexcept;
     enum class SelectionMoveClosePolicy : std::uint8_t
     {
         Preserve,
@@ -480,6 +481,8 @@ class Application final : public ChromeEvents
     int RunSelectionSizeOutlineFaultSelfTest() noexcept;
     int RunSelectionNewCanvasLiteralSelfTest() noexcept;
     int RunSelectionNewCanvasFaultSelfTest() noexcept;
+    int RunSelectionCloseProjectLiteralSelfTest() noexcept;
+    int RunSelectionCloseProjectFaultSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
     int RunSelectionCommandSelfTest() noexcept;
     class SelectionMoveCloseJob;
@@ -887,7 +890,7 @@ class Application final : public ChromeEvents
         TransformDiscard,
         Write,
         SelectionMoveSettle,
-        NewCanvasOutline,
+        LifecycleOutline,
         SelectionMoveFollowup,
         SelectionHeaderFollowup,
         Execute,

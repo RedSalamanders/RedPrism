@@ -470,6 +470,18 @@ control/source/product verification and immutable archival retain 627 inputs/23,
 ([record](../TestRuns/SelectionNewCanvasOutline_2026-10-03.md)). ARM64 evidence is cross-build only. It does not qualify native
 ARM64 runtime, G1/performance, or global completion. Legacy numeric goldens are not rebaselined.
 
+Close Project with a live outline is qualified by the private r1 Debug proof: 641 frozen inputs/218 evidence files,
+a full normal WARP run with 61 ordered Application stages, 14 literal assertions across two modes and 477
+fault/order assertions across 46 modes. `RunSelectionCloseProjectLiteralSelfTest` checks real Discard's empty
+closed-project state and Cancel's preserved post-gesture history/generation/path and literal moved square; Save
+ordering is covered by the fault/order suite. `RunSelectionCloseProjectFaultSelfTest` reaches all four End-history
+faults (with BeforeSnapshot positively unvisited), both replacement faults, same-ordinal close/save/lifecycle
+ordering, cancellation and published-save behavior, stale editor/path cases, owner pumping, full-record/input
+budget refusal and retry, and complete off-owner retirement. All 12 prior host assertion lists, including New
+Canvas and Size, remain unchanged. Native six-profile activation and independent archival are pending; ARM64
+runtime, G1/performance and global completion remain unqualified. Existing legacy numeric goldens are unchanged
+([record](../TestRuns/SelectionCloseProjectOutline_2026-10-03.md)).
+
 ### Cancellable wand and trace kernels (P1.6 S4a)
 
 `wand-cancel.*` covers pre-cancelled local/shutdown tokens, reached Source/MaskInitialize/Sample/MatchScan/

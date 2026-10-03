@@ -1275,6 +1275,27 @@ Invalid drafts and already coexisting edits retain their existing route until se
 qualified functional boundary does not establish constant-time metadata capture, incremental history, native
 ARM64 runtime or the measured G1 limits.
 
+### Eligible Close Project with a live outline (P1.6 S3b1b1b1c)
+
+Close Project with the original outline opening, no size card and no coexisting canvas, opacity or Crop edit
+retains the existing Save/Discard/Cancel prompt. Prompt Cancel preserves the current moved outline, local drag,
+document/path and post-gesture history/generation. Only confirmed Save or Discard stops outline sampling.
+
+Discard acknowledges prepared outline Cancel before closing the project. Save acknowledges prepared outline
+End and the captured original-document write to the selected path before closing. One noncoalescing selected
+ordinal owns close, save and lifecycle publication; younger old-document Undo waits and becomes stale after close.
+Successful close installs an absent document and active layer, clears the path and selection, and installs empty
+saved history with no Undo/Redo, matching the existing lifecycle reference.
+
+Every selected stage and worker publication validates the original document/history authority and current
+editors. Before closure the exact opening must remain current; afterwards it must stay closed. A newly opened
+size card, color, opacity or Crop editor refuses the request even when pixel generation is unchanged. A later
+failure preserves already acknowledged close/save phases. Cancellation retains ownership through acknowledgement;
+reservations retain captured and retired owners until off-owner disposal.
+
+Already coexisting lifecycle routes retain their existing policy until separately migrated. This functional
+boundary does not qualify constant-time metadata/history, native ARM64 runtime or measured G1 limits.
+
 `ResizeCanvas`, `ResizeImage` and the placed rasterizers accept a cancellation token; direct callers use its empty
 default. They preserve the existing sampling order, rounding and pixel goldens. Source sparse pixels are assembled
 privately, without publishing `Raster::Data()` on a shared sparse input. Checks occur between layers, rows and

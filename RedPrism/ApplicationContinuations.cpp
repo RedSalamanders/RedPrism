@@ -110,6 +110,11 @@ bool Application::CanQueueSelectionSizeOutline() const noexcept
     return CanQueueSelectionMoveClick() && !_opacityEdit && !EditUnderWay(CanvasEdit::Crop);
 }
 
+bool Application::CanQueueSelectionLifecycleOutline() const noexcept
+{
+    return CanQueueSelectionSizeOutline() && !SizeCardOpen();
+}
+
 ContinuationReceipt Application::QueueSelectionMoveClick(std::optional<HostWandLayerNewInput> wand) noexcept
 {
     // One noncoalescing input owns End and its dependent action. A younger writer cannot pass either phase.
@@ -212,6 +217,8 @@ std::optional<std::uint64_t> Application::SelectionMoveRequestOpening(const Host
         return command->selectionMoveOpening;
     if (const auto* tool = std::get_if<HostToolInput>(&input))
         return tool->selectionMoveOpening;
+    if (const auto* close = std::get_if<HostCloseProjectInput>(&input))
+        return close->selectionMoveOpening;
     if (const auto* size = std::get_if<HostSizeApplyInput>(&input))
         return size->selectionMoveOpening;
     return std::nullopt;
@@ -246,6 +253,12 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
             else if (size->draft.extension == 2)
                 size->extensionArgb = _session.BackgroundColor();
         }
+    }
+    else if (auto* close = std::get_if<HostCloseProjectInput>(&input))
+    {
+        close->selectionMoveOpening.reset();
+        if (CanQueueSelectionLifecycleOutline())
+            close->selectionMoveOpening = _session.SelectionMoveOpening();
     }
     if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
         DropDrag<OutlineDrag>(); // Refusal retains the origin/history, but never accepts later pointer samples.
@@ -456,7 +469,7 @@ void Application::RunHostContinuation() noexcept
                          : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
                          : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
                          : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
-                         : _hostStage == HostStage::SelectionMoveSettle || _hostStage == HostStage::NewCanvasOutline
+                         : _hostStage == HostStage::SelectionMoveSettle || _hostStage == HostStage::LifecycleOutline
                              ? _hostAfterPrerequisite
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(active.input.Input())
                              ? HostStage::Write
@@ -469,17 +482,21 @@ void Application::RunHostContinuation() noexcept
         const auto& input = active.input.Input();
         const auto* paths = std::get_if<HostPathsInput>(&input);
         const auto* newCanvas = std::get_if<HostSizeApplyInput>(&input);
-        const bool ownsNewCanvasOutline = newCanvas && newCanvas->draft.kind == SizeCardKind::NewCanvas &&
-                                          newCanvas->selectionMoveOpening.has_value();
-        if (ownsNewCanvasOutline && _hostStage != HostStage::Complete)
+        const auto* closeProject = std::get_if<HostCloseProjectInput>(&input);
+        const bool ownsLifecycleOutline =
+            (newCanvas && newCanvas->draft.kind == SizeCardKind::NewCanvas && newCanvas->selectionMoveOpening) ||
+            (closeProject && closeProject->selectionMoveOpening);
+        if (ownsLifecycleOutline && _hostStage != HostStage::Complete)
         {
             // The prompt precedes closure. After closure, both save and replacement require it to stay closed.
             // A nested output dialog or worker wait can admit a newer edit without changing pixel generation.
             const bool needsOpening =
                 _hostStage != HostStage::Write && _hostStage != HostStage::Execute && _hostStage != HostStage::Complete;
-            if (newCanvas->invocation != _sizeInvocation || !SizeCardOpen() || !CanQueueSelectionSizeOutline() ||
-                (needsOpening ? newCanvas->selectionMoveOpening != _session.SelectionMoveOpening()
-                              : _session.IsMovingSelection()))
+            const bool editorCurrent = closeProject ? CanQueueSelectionLifecycleOutline()
+                                                    : newCanvas->invocation == _sizeInvocation && SizeCardOpen() &&
+                                                          CanQueueSelectionSizeOutline();
+            if (!editorCurrent || (needsOpening ? SelectionMoveRequestOpening(input) != _session.SelectionMoveOpening()
+                                                : _session.IsMovingSelection()))
             {
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
@@ -936,7 +953,7 @@ void Application::RunHostContinuation() noexcept
                 if (_transformWorkTicket)
                     return;
             }
-            _hostStage = _hostSaveBeforeAction && ownsNewCanvasOutline ? HostStage::NewCanvasOutline
+            _hostStage = _hostSaveBeforeAction && ownsLifecycleOutline ? HostStage::LifecycleOutline
                          : _hostSaveBeforeAction || std::holds_alternative<HostWriteInput>(input)
                              ? HostStage::Write
                              : _hostAfterPrerequisite;
@@ -962,12 +979,12 @@ void Application::RunHostContinuation() noexcept
                 if (_transformWorkTicket)
                     return;
             }
-            _hostStage = ownsNewCanvasOutline ? HostStage::NewCanvasOutline : HostStage::Execute;
+            _hostStage = ownsLifecycleOutline ? HostStage::LifecycleOutline : HostStage::Execute;
             break;
         }
         case HostStage::Write:
         {
-            if (ownsNewCanvasOutline)
+            if (ownsLifecycleOutline)
                 _hostAfterPrerequisite = HostStage::Execute; // The close's Write resume target must not replay save.
             const auto result = WriteHostOutput(_hostWriteFormat);
             if (FAILED(result))
@@ -993,9 +1010,9 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPrerequisite;
             break;
         }
-        case HostStage::NewCanvasOutline:
+        case HostStage::LifecycleOutline:
         {
-            if (!ownsNewCanvasOutline)
+            if (!ownsLifecycleOutline)
             {
                 FinishHostContinuation({HostOutcome::Stale, E_ABORT});
                 return;
@@ -1004,7 +1021,7 @@ void Application::RunHostContinuation() noexcept
             DropDrag<OutlineDrag>();
             _hostAfterPrerequisite = _hostSaveBeforeAction ? HostStage::Write : HostStage::Execute;
             const auto result =
-                StartSelectionMoveClose(newCanvas->selectionMoveOpening.value(), !_hostSaveBeforeAction);
+                StartSelectionMoveClose(SelectionMoveRequestOpening(input).value(), !_hostSaveBeforeAction);
             if (FAILED(result))
             {
                 _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_SELECTION_EDIT);
