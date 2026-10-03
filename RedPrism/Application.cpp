@@ -2296,6 +2296,14 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionMoveHeaderSelfTest\n");
     if (const int header = RunSelectionMoveHeaderSelfTest(); header != 0)
         return header;
+    std::printf("BEGIN self-test.RunSelectionNudgeSelfTest\n");
+    if (const int nudge = RunSelectionNudgeSelfTest(); nudge != 0)
+    {
+        return nudge;
+    }
+    std::printf("BEGIN self-test.RunSelectionNudgeFaultSelfTest\n");
+    if (const int nudgeFaults = RunSelectionNudgeFaultSelfTest(); nudgeFaults != 0)
+        return nudgeFaults;
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
@@ -2308,6 +2316,7 @@ int Application::RunSelfTest() noexcept
         SelfTestFailure(L"SELF-TEST STAGE failed: mask-work.\n");
         return maskWork;
     }
+
     std::printf("BEGIN self-test.RunLayerCopyWorkSelfTest\n");
     if (const int layerCopy = RunLayerCopyWorkSelfTest(); layerCopy != 0)
     {
@@ -4139,6 +4148,20 @@ void Application::OnCommand(int command) noexcept
         _session.HasColorEdit() && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
     {
         return; // an open, uncommitted panel owns history until OK/Cancel
+    }
+    if (!_hostExecuting && command >= ChromeHost::kCommandNudgeSelectionLeft &&
+        command <= ChromeHost::kCommandNudgeSelectionDown && !_session.IsMovingSelection() &&
+        CanQueueSelectionMoveClick())
+    {
+        const int step = _acceleratorShift ? 10 : 1;
+        const int dx = command == ChromeHost::kCommandNudgeSelectionLeft    ? -step
+                       : command == ChromeHost::kCommandNudgeSelectionRight ? step
+                                                                            : 0;
+        const int dy = command == ChromeHost::kCommandNudgeSelectionUp     ? -step
+                       : command == ChromeHost::kCommandNudgeSelectionDown ? step
+                                                                           : 0;
+        ReportHostAdmission(QueueHostInput(HostSelectionNudgeInput{dx, dy}));
+        return;
     }
     if (!_hostExecuting && command >= ChromeHost::kCommandNudgePixelsLeft &&
         command <= ChromeHost::kCommandNudgePixelsDown)

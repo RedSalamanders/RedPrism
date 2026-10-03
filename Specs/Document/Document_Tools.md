@@ -301,7 +301,16 @@ header state. `CanEditSelection` needs a document and no pending transform (comm
   Complete `Move Selection` history is prepared before nonthrowing current-only publication and owner swaps.
   Publication advances the opening counter once and generation twice, matching MoveSelection/EndEdit.
   Zero offsets share geometry and preserve revision/redo, while acknowledging the prepared history epoch;
-  nested transactions retain their original outer name/depth. This core does not activate keyboard routing.
+  nested transactions retain their original outer name/depth. Caller eligibility remains a host policy.
+- Eligible settled keyboard arrow commands own a signed whole-pixel `HostSelectionNudgeInput` at event time:
+  one pixel, or ten with Shift. They are noncoalescing ordered requests; later Shift changes cannot alter them.
+  Selected execution refuses a newly opened outline or coexisting edit before capture or unrelated settlement.
+  Complete scheduler admission precedes document/history capture; worker preparation resumes that same job.
+  Current-only completion acknowledges the exact history ordinal, publishes geometry/history together and
+  retires the prepared/old-owner aggregate through the worker release sink. Refusal, failure, stale authority
+  and cancellation publish no partial result and never run a synchronous fallback for this eligible route.
+  An already live outline keeps the existing no-op policy. Other coexisting routes remain separately tracked
+  in the selection worker plan; this route alone does not complete selection migration or measured G1.
 - `CanModifySelection`: a non-empty selection and no draft. `ExpandSelection(amount)` offsets outward and clips to
   the canvas (`Expand Selection`); `ContractSelection(amount)` offsets inward, away from the canvas edges too, and
   can leave an empty selection (`Contract Selection`). Amounts outside 1–500 are ignored.

@@ -160,6 +160,7 @@
     <ClInclude Include="Application.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
+    <ClInclude Include="SelectionNudgeTestGate.h" />
     <ClInclude Include="SelectionMoveCloseTestGate.h" />
     <ClInclude Include="WandLayerHostTestGate.h" />
     <ClInclude Include="DocumentLifecycleTestGate.h" />
@@ -247,6 +248,9 @@
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
+    <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
+    <ClCompile Include="ApplicationSelectionNudgeSelfTest.cpp" />
+    <ClCompile Include="ApplicationSelectionNudgeFaultSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseJobs.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCloseSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionMoveCallerSelfTest.cpp" />

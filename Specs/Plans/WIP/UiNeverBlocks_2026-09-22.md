@@ -201,6 +201,13 @@
   Native r1 passes ARM64 cross-builds and full x64 ASan, then Release's ISA scan refuses terminal switch data;
   actual exit 1 and the exact failed image/618 sources/24,357 evidence files are archived before private repair.
 
+- [x] Selection nudge host — S1c2 full private WARP proof passes 84 literal checks/11 modes and 173 fault/order
+  checks/26 modes. Exact 635 inputs/216 evidence files are archived before ten byte-identical activations
+  ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)). Native r1 starts at
+  `2026-10-03T07:01:39.6988523+00:00` against 623 frozen inputs. All six profiles pass; actual exit 0 at
+  `2026-10-03T07:30:25.0520148+00:00`. Independent verification/archive retain 623 inputs/1,064 evidence files
+  at `2026-10-03T07:36:56.8764451+00:00`. Other selection producers and measured G1 remain open.
+
 - [ ] P0.1 — Measure the baseline and establish performance instruments. CPU benchmarks and paired ownership measurements recorded; UI/ETW/IO coverage remains open.
   - [x] Add the scalar and whole-output CPU benchmark with checksums and a bounded smoke gate.
   - [x] Capture the 4K and 45 MP before measurements on R1.

@@ -416,6 +416,19 @@ aggregate disposal. Aggregate disposal does not prove the final release of every
 profiles and exact archive/receipt verification follow private qualification
 ([record](../TestRuns/SelectionNudge_2026-10-03.md)); host keyboard routing and measured G1 remain separate.
 
+The full Application runner registers `RunSelectionNudgeSelfTest` and `RunSelectionNudgeFaultSelfTest` once.
+`selection-nudge-host.*` requires 84 unique checks across 11 modes: all eight real arrow/Shift inputs retain
+literal one/ten-pixel vertices after Shift reverses, one named history entry and literal Undo/Redo, plus nested
+outer history, absent selection and the live-outline no-op policy. `selection-nudge-fault-host.*` requires 173
+unique checks across 26 modes. Held production jobs prove reservation-before-capture, queued typed and real
+keyboard inputs/Undo in order, event-time Shift, view/message pumping, local cancellation and stale document/
+generation/target/mask/crop/history/gesture refusal. Capture and all five history preparation faults are reached;
+saved marker, zero-delta redo, actual scheduler quota and input allocation/storage refusal/retry are covered.
+Settlement includes deferred destruction, and the payload aggregate must retire off owner. Exact retained
+host assertion lists and all 55 ordered Application stages remain required; existing goldens are unchanged.
+Private full WARP proof and immutable archival precede native activation and all six native profiles
+([record](../TestRuns/SelectionNudgeHost_2026-10-03.md)); ARM64 runtime and measured G1 remain separate gates.
+
 The native configuration matrix qualifies these preparation methods; production command/pointer ordering,
 live gesture/sample ownership, deferred job retirement, general Clipper bounds and G1 remain separate gates.
 

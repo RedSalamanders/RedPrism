@@ -432,6 +432,16 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (std::holds_alternative<HostSelectionNudgeInput>(input))
+            {
+                if (_session.IsMovingSelection() || !CanQueueSelectionMoveClick())
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+                _hostStage = HostStage::Execute;
+                break; // This settled input must not implicitly commit a newly opened unrelated edit.
+            }
             if (_session.IsMovingSelection() && SelectionMovePolicy(input) != SelectionMoveClosePolicy::Preserve)
             {
                 const auto expected = std::get_if<HostCommandInput>(&input)
@@ -1139,6 +1149,11 @@ void Application::CancelHostContinuations() noexcept
         {
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_historyRestoreTicket.value());
+        }
+        else if (_selectionNudgeTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_selectionNudgeTicket.value());
         }
         else if (_selectionCommandTicket)
         {

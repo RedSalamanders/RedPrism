@@ -58,6 +58,7 @@ struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
 struct SelectionCommandTestGate;
+struct SelectionNudgeTestGate;
 struct SelectionMoveCloseTestGate;
 struct WandLayerHostTestGate;
 struct FileWorkTestGate;
@@ -468,6 +469,10 @@ class Application final : public ChromeEvents
     int RunDocumentLifecycleRefusalSelfTest() noexcept;
     int RunDocumentLifecycleCloseSelfTest() noexcept;
     class SelectionCommandJob;
+    class SelectionNudgeJob;
+    [[nodiscard]] HRESULT StartSelectionNudge(int dx, int dy) noexcept;
+    int RunSelectionNudgeSelfTest() noexcept;
+    int RunSelectionNudgeFaultSelfTest() noexcept;
     [[nodiscard]] HRESULT StartSelectionCommand(SelectionCommandKind kind) noexcept;
     int RunSelectionCommandSelfTest() noexcept;
     class SelectionMoveCloseJob;
@@ -789,6 +794,9 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _selectionCommandStamp;
     std::optional<JobTicket> _selectionCommandTicket;
     std::shared_ptr<SelectionCommandTestGate> _selectionCommandTestGate;
+    std::optional<HistoryWorkStamp> _selectionNudgeStamp;
+    std::optional<JobTicket> _selectionNudgeTicket;
+    std::shared_ptr<SelectionNudgeTestGate> _selectionNudgeTestGate;
     std::optional<HistoryWorkStamp> _selectionMoveCloseStamp;
     std::optional<JobTicket> _selectionMoveCloseTicket;
     std::shared_ptr<SelectionMoveCloseTestGate> _selectionMoveCloseTestGate;

@@ -1,5 +1,10 @@
 # Ordered selection workers (P1.6)
 
+Current step: S3b1b1b1a eligible Canvas/Image Size outline closure. A separate 509-source candidate owns the
+next cancel-before-resize continuation; compilation waits for the qualified nudge host archive, now complete.
+S1c1/S1c2 qualify and are committed/pushed stepwise. Native nudge host r1 passes all six fresh profiles with
+84 literal and 173 fault/order checks per x64 suite; independent archival retains 623 inputs/1,064 evidence
+files at `2026-10-03T07:36:56.8764451+00:00`. Other geometry, gesture, lifecycle and measured G1 remain open.
 Status: active execution child of [UiNeverBlocks](UiNeverBlocks_2026-09-22.md). S0a/S1a/S3a core preparation
 qualifies in all six clean configurations against 423 frozen inputs: 127 command and 185 move-closure checks
 per x64 suite. The 39 strict RDX controls and unchanged failed Release image pass with the runtime allowlist
@@ -40,7 +45,7 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
   off owner; immutable authority and nonthrowing apply/retirement. Preserve nullopt versus explicit empty and AA.
   - [x] S1a — Sealed Select All/Deselect input/publication and 127 independent preparation checks qualify in all configurations.
   - [ ] S1b — Inverse/Expand/Contract only after S0b; reuse complete publication, preserve legacy geometry.
-  - [ ] S1c — Selection nudge owns event-time whole-pixel delta/Shift state and prepares translated loops and
+  - [x] S1c — Selection nudge owns event-time whole-pixel delta/Shift state and prepares translated loops and
     complete `Move Selection` history off owner. The session's current NudgeSelection starts its own move
     only when no outline move is already live; keep that live-outline no-op policy. Qualify translation output
     bounds, no-op/redo, enclosing transaction and command ordering independently of Clipper operations.
@@ -60,12 +65,22 @@ expectations remain unchanged. This plan does not add a Smooth command, which th
       Native r2 now passes all six profiles at `2026-10-03T06:34:34.8129025+00:00`; independent verification
       and immutable archival retain 619 inputs/23,770 evidence files at `2026-10-03T06:41:31.8464318+00:00`.
       All 80 new checks and exact retained suites pass; ARM64 is cross-build only. This completes S1c1.
-    - [ ] S1c2 — Activate typed event-time arrow/Shift inputs through ordered host publication, preserving
+    - [x] S1c2 — Activate typed event-time arrow/Shift inputs through ordered host publication, preserving
       live-outline no-op and existing settlement policy; qualify actual host faults, ordering, pump and disposal.
       A separate 504-source seed owns the source-only host candidate. Primary prepares the production path
       and fault/pump/stale/admission controls; reviewed cheaper-agent arrow goldens cover all eight input
       combinations, with independently literal nested history. Private compilation waits for S1c1's exact
       native completion/archive ([record](../../TestRuns/SelectionNudgeHost_2026-10-03.md)).
+      That predecessor now qualifies and is pushed as `cc04ddf`; private Debug Rebuild starts after exact
+      verification of 466 unchanged counterparts, freezing 635 inputs. Full WARP/native qualification remains open.
+      Private r1's primary saved-state fixture API error is archived before correction. Full private r2 WARP
+      passes 84 literal checks/11 modes and 173 fault/order checks/26 modes, with all 55 stages and exact retained
+      suites. Immutable archival retains 635 inputs/216 evidence files at `2026-10-03T06:55:20.1712298+00:00`
+      before ten byte-identical activations. Fresh native qualification and archival remain required.
+      Native preflight verifies all ten activations and 466 unchanged counterparts; PID 77024 starts the
+      six-profile forced matrix at `2026-10-03T07:01:39.6988523+00:00` against 623 frozen inputs.
+      Actual exit 0 at `2026-10-03T07:30:25.0520148+00:00`; independent verification and immutable archival
+      retain 623 inputs/1,064 evidence files at `2026-10-03T07:36:56.8764451+00:00`. S1c2 completes.
 - [ ] S2 — Activate ordered command/header requests, capturing amounts/modes at input time and acquiring settled
   geometry only after earlier history work acknowledges. Gate every overlapping selection mutation and gesture.
   - [x] S2a — Qualify separate Select All/Deselect authority that preserves an already live brush, warp or shape.

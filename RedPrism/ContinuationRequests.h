@@ -162,6 +162,11 @@ struct HostPixelNudgeInput final
 {
     Vec2 offset; // event-time Shift step; a queued press must not read newer keyboard state
 };
+struct HostSelectionNudgeInput final
+{
+    int dx;
+    int dy;
+};
 struct HostLayerNudgeInput final
 {
     Vec2 offset; // Own the layer nudge's event-time Shift step through preceding commits.
@@ -205,7 +210,7 @@ using HostRequestInput =
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
-                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput>;
+                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);
