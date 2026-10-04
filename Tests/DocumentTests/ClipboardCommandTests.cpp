@@ -1,5 +1,7 @@
 #include "ClipboardCommandTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "ClipboardCommandWork.h"
 
 #include <algorithm>
@@ -30,7 +32,7 @@ constexpr std::array<std::uint8_t, 4> kMask{0, 64, 128, 255};
 DocumentSession Session(bool withMask = true)
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 1;
@@ -42,7 +44,7 @@ DocumentSession Session(bool withMask = true)
     if (withMask)
         layer.mask = LayerMask{RasterAsset{mask, mask, L"Literal clipboard mask"}, true, std::nullopt, true};
     document.layers.push_back(std::move(layer));
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 
@@ -255,7 +257,8 @@ void RemainingAuthorityAndRefusals()
         if (refusal == 1)
             session.ToggleVisibility(session.ActiveLayerID().value());
         if (refusal == 2)
-            session.EditForTest([](CanvasDocument& document) { document.layers.front().transform.origin.x = 10; });
+            EditLayerRecordsForTest(session,
+                                    [](DocumentFixture& document) { document.layers.front().transform.origin.x = 10; });
         const OwnerState before(session);
         auto input = session.PrepareClipboardCommandInput(ClipboardCommandKind::Cut);
         auto cut = input ? DocumentSession::PrepareClipboardCommandPublication(std::move(input.value())) : std::nullopt;
@@ -302,8 +305,8 @@ void RemainingAuthorityAndRefusals()
                    session.ClipboardCommandRetirementMemoryBytes(ClipboardCommandKind::Copy) >= source + oldCopy,
                "copy-declares-private-output-and-both-held-source-roots");
         const auto normal = session.ClipboardCommandMemoryBytes(ClipboardCommandKind::Copy);
-        session.EditForTest([](CanvasDocument& document)
-                            { document.layers.front().mask->asset.name.assign(8000, L'm'); });
+        EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                { document.layers.front().mask->asset.name.assign(8000, L'm'); });
         Expect(session.ClipboardCommandMemoryBytes(ClipboardCommandKind::Copy) >= normal + 8000 * sizeof(wchar_t),
                "copy-admission-includes-owned-target-mask-name");
         session.SelectLayerTarget(session.ActiveLayerID().value(), true);
@@ -472,9 +475,12 @@ void StaleInputsAndOwnership()
                });
     StaleAfter("mask-target-stales-prepared-copy",
                [](DocumentSession& session) { session.SelectLayerTarget(session.ActiveLayerID().value(), true); });
-    StaleAfter(
-        "placement-stales-prepared-copy", [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.layers.front().transform.origin.x = 1; }); });
+    StaleAfter("placement-stales-prepared-copy",
+               [](DocumentSession& session)
+               {
+                   EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                           { document.layers.front().transform.origin.x = 1; });
+               });
     StaleAfter("document-replacement-stales-prepared-copy",
                [](DocumentSession& session)
                {

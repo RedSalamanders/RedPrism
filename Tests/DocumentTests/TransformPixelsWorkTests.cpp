@@ -1,5 +1,6 @@
 #include "TransformPixelsWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "ShapeEditWork.h"
@@ -53,14 +54,14 @@ ImageLayer Layer(std::wstring name, const Raster& image, LayerTransform transfor
 
 CanvasDocument Document(std::vector<ImageLayer> layers, int width = 32, int height = 24)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = width;
     document.height = height;
     document.layers = std::move(layers);
     document.selection =
         DocumentSelection{true, SelectionLoops{SelectionLoop{Vec2{1, 1}, Vec2{6, 1}, Vec2{6, 5}, Vec2{1, 5}}}};
-    return document;
+    return std::move(document).Seal();
 }
 
 bool PixelsEqual(const Raster& actual, std::span<const std::uint8_t> expected, int width, int height)
@@ -510,7 +511,8 @@ void RefusalsCancellationAndBudget()
     Expect(TransformPixelsMemoryBytes(source, invalidSize) == 0, "budget.invalid-size-does-not-reserve");
 
     CanvasDocument metadataOnly = source;
-    metadataOnly.layers.front().name.assign(2048, L'x');
+    EditDocumentFixture(metadataOnly,
+                        [](DocumentFixture& document) { document.layers.front().name.assign(2048, L'x'); });
     Expect(TransformPixelsMemoryBytes(metadataOnly, edit) == TransformPixelsMemoryBytes(source, edit),
            "budget-document-metadata-remains-caller-reservation");
 }

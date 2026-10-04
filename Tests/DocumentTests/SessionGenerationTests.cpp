@@ -1,5 +1,7 @@
 #include "SessionGenerationTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Selection.h"
 
@@ -34,7 +36,7 @@ Raster Pixels(std::uint8_t value = 64)
 
 DocumentSession Session()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 16;
     document.height = 16;
@@ -47,7 +49,7 @@ DocumentSession Session()
     }
     const Guid active = document.layers.back().id;
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 
@@ -116,11 +118,11 @@ void Mutations()
     FreshChange("import",
                 [](auto& s)
                 {
-                    CanvasDocument d = s.Document().value();
+                    DocumentFixture d = DocumentFixture::Copy(s.Document().value());
                     ImageLayer layer = ImageLayer::Blank(L"Import", Vec2{2, 2});
                     const Guid id = layer.id;
                     d.layers.push_back(std::move(layer));
-                    Expect(s.ApplyImportedDocument(std::move(d), id, L"Import"), "import-accepted");
+                    Expect(s.ApplyImportedDocument(std::move(d).Seal(), id, L"Import"), "import-accepted");
                 });
     FreshChange("fixture", [](auto& s) { s.EditForTest([](CanvasDocument& d) { d.resolution = 144; }); });
     FreshChange("brush-commit",
@@ -280,21 +282,21 @@ void Tokens()
     s.ToggleMaskLink(id);
     Expect(!s.CanApplyJobResult(token, 0), "mask-link-refused");
     token = s.CaptureJobToken(id).value();
-    s.EditForTest(
-        [](CanvasDocument& d)
-        {
-            LayerTransform p = d.layers.back().transform;
-            p.origin.x += 2;
-            d.layers.back().mask->placement = p;
-        });
+    EditLayerRecordsForTest(s,
+                            [](DocumentFixture& d)
+                            {
+                                LayerTransform p = d.layers.back().transform;
+                                p.origin.x += 2;
+                                d.layers.back().mask->placement = p;
+                            });
     Expect(!s.CanApplyJobResult(token, 0), "mask-placement-refused");
     token = s.CaptureJobToken(id).value();
-    s.EditForTest(
-        [](CanvasDocument& d)
-        {
-            const std::uint8_t zero = 0;
-            d.layers.back().mask->asset.image = Raster::Make(1, 1, RasterFormat::Gray8, &zero, 1);
-        });
+    EditLayerRecordsForTest(s,
+                            [](DocumentFixture& d)
+                            {
+                                const std::uint8_t zero = 0;
+                                d.layers.back().mask->asset.image = Raster::Make(1, 1, RasterFormat::Gray8, &zero, 1);
+                            });
     Expect(!s.CanApplyJobResult(token, 0), "mask-image-refused");
     s.SelectLayerTarget(id, false);
     token = s.CaptureJobToken(id).value();
@@ -324,7 +326,7 @@ void Tokens()
         DocumentSession typed = Session();
         typed.AddBlankLayer();
         const auto emptyToken = typed.CaptureJobToken(typed.ActiveLayerID()).value();
-        typed.EditForTest([](CanvasDocument& d) { d.layers.back().isGroup = true; });
+        EditLayerRecordsForTest(typed, [](DocumentFixture& d) { d.layers.back().isGroup = true; });
         Expect(!typed.CanApplyJobResult(emptyToken, 0), "layer-kind-refused");
         typed.AddAdjustment(AdjustmentKind::Exposure);
         const auto adjustmentToken = typed.CaptureJobToken(typed.ActiveLayerID()).value();
@@ -368,8 +370,9 @@ void Refusals()
     const auto before = s.Document();
     const auto token = s.CaptureJobToken().value();
     const auto serial = s.DocumentSerial();
-    CanvasDocument invalid = before.value();
-    invalid.layers.push_back(invalid.layers.front());
+    DocumentFixture invalidFixture = DocumentFixture::Copy(before.value());
+    invalidFixture.layers.push_back(invalidFixture.layers.front());
+    CanvasDocument invalid = std::move(invalidFixture).Seal();
     Expect(!s.ApplyImportedDocument(invalid, s.ActiveLayerID(), L"Invalid"), "invalid-import-refused");
     s.ReplaceDocument(invalid, s.ActiveLayerID());
     s.ApplyDocumentSize(invalid, L"Invalid");

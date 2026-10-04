@@ -1,5 +1,6 @@
 #include "TransformDeferredTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "TransformCancellationWork.h"
@@ -42,7 +43,7 @@ struct Fixture final
         constexpr std::array<std::uint8_t, 4> maskPixels{255, 128, 64, 0};
         const Raster image = Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
         const Raster mask = Raster::Make(2, 2, RasterFormat::Gray8, maskPixels.data(), maskPixels.size());
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -60,7 +61,7 @@ struct Fixture final
         sibling.transform.sampling = LayerSampling::Nearest;
         siblingID = sibling.id;
         document.layers = {source, sibling};
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         static_cast<void>(session.CopySelection());
         session.SelectLayerTarget(sourceID, true);
     }
@@ -284,7 +285,8 @@ void OpeningCacheAndSourceRejection()
     Expect(current.publication && fixture.session.ApplyPreparedTransformPreviewIfCurrent(current.publication.value()) &&
                fixture.session.DisplayDocument() != committed,
            "source-rejection-fixture-first-displays-current-complete-preview");
-    fixture.session.EditForTest([](CanvasDocument& document) { document.layers.back().name = L"Changed source"; });
+    EditLayerRecordsForTest(fixture.session,
+                            [](DocumentFixture& document) { document.layers.back().name = L"Changed source"; });
     Expect(fixture.session.DisplayDocument() == &fixture.session.Document().value(),
            "source-generation-change-falls-back-to-current-committed-document");
     if (stale.publication)

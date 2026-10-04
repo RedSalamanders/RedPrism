@@ -1,5 +1,6 @@
 #include "PixelMoveStateTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "BrushStroke.h"
 #include "Document.h"
 #include "RasterEditWork.h"
@@ -57,14 +58,14 @@ bool Initialize(DocumentSession& session, bool withSelection = true)
     const Raster thumbnail = Raster::MakeThumbnail(pixels);
     if (!thumbnail.HasStorage())
         return false;
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{pixels, thumbnail, layer.name};
-            if (withSelection)
-                document.selection = Rect(1, 0, 1, 1);
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{pixels, thumbnail, layer.name};
+                                if (withSelection)
+                                    document.selection = Rect(1, 0, 1, 1);
+                            });
     return session.ActiveLayer() && session.ActiveLayer()->asset &&
            session.Document()->selection.has_value() == withSelection;
 }
@@ -376,13 +377,14 @@ void DeferredFinishDuplicateRedoAndLegacy(int& failures)
     {
         DocumentSession transparent;
         Expect(Initialize(transparent), "transparent.fixture", failures);
-        transparent.EditForTest(
-            [](CanvasDocument& document)
-            {
-                auto& layer = document.layers.front();
-                const Raster zero = Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
-                layer.asset = RasterAsset{zero, Raster::MakeThumbnail(zero), layer.name};
-            });
+        EditLayerRecordsForTest(transparent,
+                                [](DocumentFixture& document)
+                                {
+                                    auto& layer = document.layers.front();
+                                    const Raster zero =
+                                        Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
+                                    layer.asset = RasterAsset{zero, Raster::MakeThumbnail(zero), layer.name};
+                                });
         Expect(transparent.BeginDeferredPixelMove(), "transparent.deferred-open", failures);
         transparent.MovePixels(1, 0);
         const auto token = Token(transparent);

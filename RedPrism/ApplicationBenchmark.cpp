@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "DocumentDraft.h"
+
 #include "BenchmarkMachine.h"
 #include "BrushStroke.h"
 #include "ChromeHost.h"
@@ -250,9 +252,14 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         next->imageImportBaseline.id = Guid::Generate();
         next->imageImportBaseline.width = width;
         next->imageImportBaseline.height = height;
+        auto importDraft = CanvasDocumentDraft::Rebuild(next->imageImportBaseline, 1);
+        auto fixtureDraft = CanvasDocumentDraft::Rebuild(next->fixture, ceiling ? 1 : 3);
+        if (!importDraft || !fixtureDraft)
+            return E_INVALIDARG;
         auto importBaseLayer = top;
         importBaseLayer.mask.reset();
-        next->imageImportBaseline.layers.push_back(std::move(importBaseLayer));
+        if (!importDraft.value().Append(std::move(importBaseLayer)))
+            return E_INVALIDARG;
         if (!ceiling)
         {
             Raster mask = Pattern(width, height, 0, true, next->fixtureChecksum);
@@ -264,9 +271,11 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
             top.mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Benchmark mask"}};
             auto bottom = ImageLayer::Blank(L"Benchmark bottom", size);
             bottom.asset = RasterAsset{bottomPixels, Raster::MakeThumbnail(bottomPixels), L"Benchmark bottom"};
-            next->fixture.layers.push_back(std::move(bottom));
+            if (!fixtureDraft.value().Append(std::move(bottom)))
+                return E_INVALIDARG;
         }
-        next->fixture.layers.push_back(std::move(top));
+        if (!fixtureDraft.value().Append(std::move(top)))
+            return E_INVALIDARG;
         if (!ceiling)
         {
             ImageLayer adjustment;
@@ -276,8 +285,15 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
             adjustment.adjustment = LayerAdjustment{};
             adjustment.adjustment->kind = AdjustmentKind::Exposure;
             adjustment.adjustment->exposureSettings = ExposureSettings{0.25, 0, 1};
-            next->fixture.layers.push_back(std::move(adjustment));
+            if (!fixtureDraft.value().Append(std::move(adjustment)))
+                return E_INVALIDARG;
         }
+        auto importDocument = importDraft.value().Seal();
+        auto fixtureDocument = fixtureDraft.value().Seal();
+        if (!importDocument || !fixtureDocument)
+            return E_INVALIDARG;
+        next->imageImportBaseline = std::move(importDocument.value());
+        next->fixture = std::move(fixtureDocument.value());
         if (ValidateDocument(next->fixture) != DocumentStatus::Ok)
         {
             return E_INVALIDARG;

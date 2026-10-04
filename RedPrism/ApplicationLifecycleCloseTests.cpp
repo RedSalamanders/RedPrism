@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentLifecycleTestGate.h"
 #include "Selection.h"
@@ -135,7 +136,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         if (!settle())
             return false;
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 1;
         document.height = 1;
@@ -158,7 +159,7 @@ int Application::RunDocumentLifecycleCloseSelfTest() noexcept
         document.layers.push_back(std::move(group));
         document.layers.push_back(std::move(layer));
         document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 1)};
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.history.Reset();
         _session.history.MarkSaved();
         _session.CollapsedGroupIDs().insert(groupID);

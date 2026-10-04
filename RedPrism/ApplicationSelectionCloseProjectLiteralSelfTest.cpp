@@ -3,6 +3,7 @@
 #include "ChromeHost.h"
 #include "Prompts.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -127,7 +128,8 @@ int Application::RunSelectionCloseProjectLiteralSelfTest() noexcept
         if (!liveOutline)
             break;
 
-        const std::vector<ImageLayer> sourceLayers = _session.Document().value().layers;
+        const auto& sourceLayerRecords = _session.Document().value().layers;
+        const std::vector<ImageLayer> sourceLayers(sourceLayerRecords.begin(), sourceLayerRecords.end());
         const Guid sourceActiveLayer = _session.ActiveLayerID().value();
         const Guid sourceRevision = _session.history.CurrentRevision();
         const std::uint64_t sourceGeneration = _session.Generation();
@@ -167,8 +169,9 @@ int Application::RunSelectionCloseProjectLiteralSelfTest() noexcept
         {
             const CanvasDocument* result = _session.Document() ? &_session.Document().value() : nullptr;
             expect(mode.name, "cancel-preserves-document-and-exact-layers",
-                   result != nullptr && result->width == 40 && result->height == 40 && result->layers == sourceLayers &&
-                       _session.ActiveLayerID().has_value() && _session.ActiveLayerID().value() == sourceActiveLayer);
+                   result != nullptr && result->width == 40 && result->height == 40 &&
+                       std::ranges::equal(result->layers, sourceLayers) && _session.ActiveLayerID().has_value() &&
+                       _session.ActiveLayerID().value() == sourceActiveLayer);
             expect(mode.name, "cancel-preserves-live-moved-outline-and-opening",
                    _session.IsMovingSelection() && _session.SelectionMoveOpening() == sourceOpening &&
                        selectionMatches(15, 17, 35, 37) && std::holds_alternative<OutlineDrag>(_drag) &&

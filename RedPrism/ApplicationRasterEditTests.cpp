@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 #include "RasterEditTestGate.h"
@@ -89,13 +91,14 @@ int Application::RunRasterEditSelfTest() noexcept
             state.cancelRetained = state.receipt.Read().outcome == HostOutcome::Pending && owner._rasterEditTicket;
         }
         else if (state.mode == Mode::StaleImage)
-            owner._session.EditForTest([](CanvasDocument& document)
-                                       { document.layers.back().asset->image = SolidRaster(4, 2, 0xFF0000FF); });
+            EditLayerRecordsForTest(owner._session, [](DocumentFixture& document)
+                                    { document.layers.back().asset->image = SolidRaster(4, 2, 0xFF0000FF); });
         else if (state.mode == Mode::StaleTransform)
-            owner._session.EditForTest([](CanvasDocument& document)
-                                       { document.layers.back().transform.origin.x += 1; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().transform.origin.x += 1; });
         else if (state.mode == Mode::StaleMask)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().mask->linked = false; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().mask->linked = false; });
         else if (state.mode == Mode::StaleSelection)
             owner._session.Deselect();
         else if (state.mode == Mode::StaleGeneration)
@@ -152,17 +155,18 @@ int Application::RunRasterEditSelfTest() noexcept
                     _session.CreateDocument(width, height);
                     const auto target =
                         InsertPaintedLayer(_session, L"Raster source", width, height, {0, 0}, 0, 0xFFFF0000);
-                    _session.EditForTest(
-                        [&](CanvasDocument& document)
-                        {
-                            const std::uint8_t reveal = 255;
-                            const auto image = Raster::Make(1, 1, RasterFormat::Gray8, &reveal, 1);
-                            document.layers.back().mask = LayerMask{RasterAsset{image, image, L"Raster mask"}};
-                            document.selection =
-                                DocumentSelection{false, SelectionLoops{{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}};
-                            if (large)
-                                document.selection.reset();
-                        });
+                    EditLayerRecordsForTest(_session,
+                                            [&](DocumentFixture& document)
+                                            {
+                                                const std::uint8_t reveal = 255;
+                                                const auto image = Raster::Make(1, 1, RasterFormat::Gray8, &reveal, 1);
+                                                document.layers.back().mask =
+                                                    LayerMask{RasterAsset{image, image, L"Raster mask"}};
+                                                document.selection = DocumentSelection{
+                                                    false, SelectionLoops{{{0, 0}, {1, 0}, {1, 1}, {0, 1}}}};
+                                                if (large)
+                                                    document.selection.reset();
+                                            });
                     _session.SelectLayer(target);
                     if (mask)
                         _session.SelectLayerTarget(target, true);

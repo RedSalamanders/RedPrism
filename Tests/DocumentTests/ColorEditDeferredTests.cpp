@@ -1,5 +1,6 @@
 #include "ColorEditDeferredTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Adjust.h"
 #include "ColorEditWork.h"
 #include "Document.h"
@@ -30,7 +31,7 @@ Raster FourGrayPixels()
 
 DocumentSession Session(const Raster& image = FourGrayPixels())
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = image.Width();
     document.height = image.Height();
@@ -40,7 +41,7 @@ DocumentSession Session(const Raster& image = FourGrayPixels())
     layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), L"Deferred fixture"};
     document.layers.push_back(std::move(layer));
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 
@@ -455,18 +456,19 @@ void OpeningTargetChecksAndAdjustmentHistogram()
         }
         const auto histogram = Histogram(*input);
         const auto preview = Preview(*input);
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                if (selectionChanged)
-                {
-                    document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)};
-                }
-                else
-                {
-                    document.layers[0].transform.origin.x += 1;
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    if (selectionChanged)
+                                    {
+                                        document.selection =
+                                            DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)};
+                                    }
+                                    else
+                                    {
+                                        document.layers[0].transform.origin.x += 1;
+                                    }
+                                });
         Expect(
             !session.ApplyColorEditHistogram(histogram) && !session.ApplyColorEditPreview(preview) &&
                 !session.PendingColorEdit()->histogramReady && !session.PendingColorEdit()->previewRaster.HasStorage(),

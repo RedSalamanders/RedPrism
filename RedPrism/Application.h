@@ -479,10 +479,38 @@ class Application final : public ChromeEvents
     int RunDocumentLifecycleCloseSelfTest() noexcept;
     class SelectionCommandJob;
     class LayerMetadataJob;
+    enum class OpacityAcknowledgement : std::uint8_t
+    {
+        Preview,
+        Commit,
+        Cancel,
+        Close
+    };
+    struct OpacityMetadataContext final
+    {
+        std::uint64_t opening;
+        OpacityInputOrder::Stamp order;
+        OpacityAcknowledgement action;
+    };
+    void ExecuteLayerOpacityInput(const HostLayerOpacityInput& request) noexcept;
+    [[nodiscard]] bool NewerOpacityInputPending(Guid target, OpacityInputOrder::Stamp order) const noexcept;
+    [[nodiscard]] HRESULT StartOpacityClosure() noexcept;
+    void AcknowledgeOpacityMetadata(Guid target, double value, OpacityMetadataContext context) noexcept;
+    enum class OpacityMetadataIntent : std::uint8_t
+    {
+        Recorded,
+        Preview,
+        TypedCommit,
+    };
     int RunLayerMetadataSelfTest() noexcept;
+    int RunLayerOpacityHostSelfTest() noexcept;
+    int RunLayerOpacityContextsSelfTest() noexcept;
+    bool OpenOpacityEditForTest(double value) noexcept;
     [[nodiscard]] HRESULT StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name = {},
-                                             double opacity = 1.0,
-                                             LayerBlendMode blendMode = LayerBlendMode::Normal) noexcept;
+                                             double opacity = 1.0, LayerBlendMode blendMode = LayerBlendMode::Normal,
+                                             OpacityMetadataIntent intent = OpacityMetadataIntent::Recorded,
+                                             std::optional<double> opening = {},
+                                             std::optional<OpacityMetadataContext> context = {}) noexcept;
     class SelectionNudgeJob;
     [[nodiscard]] HRESULT StartSelectionNudge(int dx, int dy) noexcept;
     int RunSelectionNudgeSelfTest() noexcept;
@@ -898,6 +926,7 @@ class Application final : public ChromeEvents
         Confirm,
         Output,
         Settle,
+        OpacitySettle,
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,
@@ -915,6 +944,7 @@ class Application final : public ChromeEvents
     HostStage _hostStage = HostStage::Begin;
     HostStage _hostAfterPrerequisite = HostStage::Execute;
     HostStage _hostAfterPanelCancel = HostStage::Execute;
+    HostStage _hostAfterOpacity = HostStage::Execute;
     HostWriteFormat _hostWriteFormat = HostWriteFormat::Project;
     std::size_t _hostPathIndex = 0;
     bool _hostSawProject = false;
@@ -999,8 +1029,19 @@ class Application final : public ChromeEvents
         Guid layer;
         double start = 1.0;
         double shown = 1.0;
+        std::uint64_t opening = 0;
+        std::uint64_t documentSerial = 0;
     };
     std::optional<OpacityEdit> _opacityEdit;
+    std::uint64_t _opacityOpening = 0;
+    OpacityInputOrder _opacityInputOrder;
+    struct OpacityProducerKey final
+    {
+        std::uint64_t documentSerial;
+        Guid layer;
+        [[nodiscard]] bool operator==(const OpacityProducerKey&) const noexcept = default;
+    };
+    std::optional<OpacityProducerKey> _opacityProducerKey;
     // The value an edit closed from outside recorded while the field kept its text: the field's late commit of that
     // same value is already in history and changes nothing (not even another document's layer).
     std::optional<double> _opacityRecorded;

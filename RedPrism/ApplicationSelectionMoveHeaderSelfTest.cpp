@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "SelectionCommandTestGate.h"
 #include "SelectionMoveCloseTestGate.h"
@@ -104,7 +105,7 @@ int Application::RunSelectionMoveHeaderSelfTest() noexcept
     {
         _drag = PointerDrag{};
         _session.ClearDocument();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
@@ -118,7 +119,7 @@ int Application::RunSelectionMoveHeaderSelfTest() noexcept
         layer.transform.size = Vec2{2, 2};
         layer.transform.sampling = LayerSampling::Nearest;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), activeId);
+        _session.ReplaceDocument(std::move(document).Seal(), activeId);
         _session.SetSelection(rectangle(1, 1, 2, 2), L"Selection header opening");
         _session.history.Reset();
         _session.history.MarkSaved();

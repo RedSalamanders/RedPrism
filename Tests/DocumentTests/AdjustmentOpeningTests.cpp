@@ -1,5 +1,6 @@
 #include "AdjustmentOpeningTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 #include "AdjustmentOpeningWork.h"
 #include "Executor.h"
@@ -132,7 +133,7 @@ struct Fixture final
         : kind(kind), original(LiteralAdjustment(kind)), templateSettings(LiteralGlobalTemplate()),
           source(SourceRaster())
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 2;
         document.height = 2;
@@ -145,11 +146,12 @@ struct Fixture final
         pixels.asset = RasterAsset{source, Raster::MakeThumbnail(source), pixels.name};
         document.layers.push_back(std::move(adjustment));
         document.layers.push_back(std::move(pixels));
-        session.ReplaceDocument(std::move(document), adjustmentID);
+        session.ReplaceDocument(std::move(document).Seal(), adjustmentID);
         session.filterSettings = templateSettings;
 
         session.BeginEdit(L"Seed redo");
-        session.EditForTest([&](CanvasDocument& current) { current.layers[1].name = L"Changed source fixture"; });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& current) { current.layers[1].name = L"Changed source fixture"; });
         session.EndEdit();
         session.Undo();
         baseline = session.Document();

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include <algorithm>
+
 #include "ChromeHost.h"
 #include "Prompts.h"
 #include "Selection.h"
@@ -172,7 +174,8 @@ int Application::RunSelectionLifecycleOutlineLiteralSelfTest() noexcept
         if (!live)
             break;
 
-        const std::vector<ImageLayer> sourceLayers = _session.Document()->layers;
+        const auto& sourceLayerRecords = _session.Document()->layers;
+        const std::vector<ImageLayer> sourceLayers(sourceLayerRecords.begin(), sourceLayerRecords.end());
         const Guid sourceActive = _session.ActiveLayerID().value();
         const auto sourceHistory = _session.history.CaptureState();
         const Guid sourceRevision = _session.history.CurrentRevision();
@@ -200,9 +203,10 @@ int Application::RunSelectionLifecycleOutlineLiteralSelfTest() noexcept
             {
                 expect(mode.route, "cancel-preserves-document-layers-outline-drag-and-opening",
                        _session.Document() && _session.Document()->width == 40 && _session.Document()->height == 40 &&
-                           _session.Document()->layers == sourceLayers && _session.ActiveLayerID() == sourceActive &&
-                           _session.IsMovingSelection() && _session.SelectionMoveOpening() == sourceOpening &&
-                           selectionMatches(15, 17, 35, 37) && std::holds_alternative<OutlineDrag>(_drag) &&
+                           std::ranges::equal(_session.Document()->layers, sourceLayers) &&
+                           _session.ActiveLayerID() == sourceActive && _session.IsMovingSelection() &&
+                           _session.SelectionMoveOpening() == sourceOpening && selectionMatches(15, 17, 35, 37) &&
+                           std::holds_alternative<OutlineDrag>(_drag) &&
                            std::get<OutlineDrag>(_drag).start == Vec2{20, 20} &&
                            std::get<OutlineDrag>(_drag).offset == Vec2{5, 7});
                 expect(mode.route, "cancel-preserves-history-generation-and-path",
@@ -282,9 +286,10 @@ int Application::RunSelectionLifecycleOutlineLiteralSelfTest() noexcept
             {
                 expect(mode.route, "cancel-preserves-document-layers-live-outline-and-local-drag",
                        _session.Document() && _session.Document()->width == 40 && _session.Document()->height == 40 &&
-                           _session.Document()->layers == sourceLayers && _session.ActiveLayerID() == sourceActive &&
-                           _session.IsMovingSelection() && _session.SelectionMoveOpening() == sourceOpening &&
-                           selectionMatches(15, 17, 35, 37) && std::holds_alternative<OutlineDrag>(_drag) &&
+                           std::ranges::equal(_session.Document()->layers, sourceLayers) &&
+                           _session.ActiveLayerID() == sourceActive && _session.IsMovingSelection() &&
+                           _session.SelectionMoveOpening() == sourceOpening && selectionMatches(15, 17, 35, 37) &&
+                           std::holds_alternative<OutlineDrag>(_drag) &&
                            std::get<OutlineDrag>(_drag).start == Vec2{20, 20} &&
                            std::get<OutlineDrag>(_drag).offset == Vec2{5, 7});
                 expect(mode.route, "cancel-preserves-history-generation-and-path",
@@ -299,9 +304,10 @@ int Application::RunSelectionLifecycleOutlineLiteralSelfTest() noexcept
             {
                 expect(mode.route, "outline-cancel-acknowledged-before-window-close",
                        _session.Document() && _session.Document()->width == 40 && _session.Document()->height == 40 &&
-                           _session.Document()->layers == sourceLayers && _session.ActiveLayerID() == sourceActive &&
-                           !_session.IsMovingSelection() && !_session.SelectionMoveOpening().has_value() &&
-                           selectionMatches(10, 10, 30, 30) && std::holds_alternative<std::monostate>(_drag));
+                           std::ranges::equal(_session.Document()->layers, sourceLayers) &&
+                           _session.ActiveLayerID() == sourceActive && !_session.IsMovingSelection() &&
+                           !_session.SelectionMoveOpening().has_value() && selectionMatches(10, 10, 30, 30) &&
+                           std::holds_alternative<std::monostate>(_drag));
                 expect(mode.route, "one-callback-safe-close-post-confirmed", pump.closePosts == 1 && _closeConfirmed);
             }
             if (std::string_view(mode.route).starts_with("end-session."))

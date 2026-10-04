@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "Adjust.h"
 #include "ChromeHost.h"
 #include "FileDialogs.h"
@@ -600,13 +602,13 @@ bool Application::ExecuteHostInput() noexcept
                 if (value.name)
                     _hostExecutionError = StartLayerMetadata(LayerMetadataKind::Rename, value.id, value.name.value());
                 if (FAILED(_hostExecutionError))
-                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
             }
             else if constexpr (std::is_same_v<Input, HostLayerOpacityInput>)
             {
                 if (_session.ActiveLayerID() != value.id)
                     return false;
-                OnLayerOpacity(value.opacity, value.phase);
+                ExecuteLayerOpacityInput(value);
             }
             else
             {
@@ -1060,7 +1062,7 @@ int Application::RunFilesSelfTest() noexcept
     const Guid top = _session.ActiveLayerID().value();
     const auto indexOf = [&](const Guid& id) noexcept
     {
-        const std::vector<ImageLayer>& layers = _session.Document().value().layers;
+        const auto& layers = _session.Document().value().layers;
         for (std::size_t index = 0; index < layers.size(); ++index)
         {
             if (layers[index].id == id)
@@ -1587,7 +1589,7 @@ int Application::RunClipboardSelfTest() noexcept
         ImageLayer layer = ImageLayer::Blank(L"Sheet", Vec2{100, 100});
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();
@@ -1763,7 +1765,7 @@ int Application::RunSessionSelfTest() noexcept
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{300, 200};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
     }

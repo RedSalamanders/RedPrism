@@ -1,4 +1,5 @@
 #include "FloatingPixelsWork.h"
+#include "DocumentDraft.h"
 
 #include "CopyPixelsWork.h"
 #include "RasterEditWork.h"
@@ -214,9 +215,11 @@ FloatingOpeningPixels PrepareFloatingOpeningPixels(const CanvasDocument& source,
                 : cleared.status == RasterEditStatus::Invalid   ? FloatingPixelsStatus::Invalid
                                                                 : FloatingPixelsStatus::Memory};
     auto before = std::make_shared<CanvasDocument>(source);
-    auto after = source;
-    const auto index = IndexOf(after.layers, active);
-    after.layers[index.value()] = std::move(cleared.layer.value());
+    auto draft = CanvasDocumentDraft::Clone(source, source.layers.size() + 1, cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? FloatingPixelsStatus::Cancelled : FloatingPixelsStatus::Invalid};
+    const auto index = IndexOf(source.layers, active);
+    draft.value().EditLayers()[index.value()] = std::move(cleared.layer.value());
     ImageLayer floating =
         ImageLayer::Blank(L"Floating Selection", {static_cast<double>(copied.clipboard->image.Width()),
                                                   static_cast<double>(copied.clipboard->image.Height())});
@@ -235,12 +238,16 @@ FloatingOpeningPixels PrepareFloatingOpeningPixels(const CanvasDocument& source,
                                       floating.transform,
                                       copied.clipboard->image.Width(),
                                       copied.clipboard->image.Height()};
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, std::move(floating));
-    if (ValidateDocument(after) != DocumentStatus::Ok)
+    if (!draft.value().Insert(index.value() + 1, std::move(floating)))
+        return {FloatingPixelsStatus::TooLarge};
+    auto after = draft.value().Seal(cancellation);
+    if (cancellation.IsCancelled())
+        return {FloatingPixelsStatus::Cancelled};
+    if (!after || ValidateDocument(after.value()) != DocumentStatus::Ok)
         return {FloatingPixelsStatus::TooLarge};
     if (cancellation.IsCancelled())
         return {FloatingPixelsStatus::Cancelled};
-    return {FloatingPixelsStatus::Ready, std::move(after), std::move(edit)};
+    return {FloatingPixelsStatus::Ready, std::move(after.value()), std::move(edit)};
 }
 
 std::uint64_t FloatingMergePixelsMemoryBytes(const CanvasDocument& source, const TransformEdit& edit) noexcept
@@ -370,23 +377,32 @@ FloatingMergePixels PrepareFloatingMergePixels(const CanvasDocument& source, con
     auto selection = source.selection;
     if (selection && !PrepareFloatingSelectionOutline(selection.value(), edit, cancellation))
         return {FloatingPixelsStatus::Cancelled};
-    auto after = source;
-    const auto floatingIndex = IndexOf(after.layers, edit.layerID);
-    after.layers.erase(after.layers.begin() + static_cast<std::ptrdiff_t>(floatingIndex.value()));
-    auto& installed = after.layers[IndexOf(after.layers, edit.floating->sourceID).value()];
+    auto draft = CanvasDocumentDraft::Clone(source, source.layers.size(), cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? FloatingPixelsStatus::Cancelled : FloatingPixelsStatus::Invalid};
+    const auto floatingIndex = IndexOf(source.layers, edit.layerID);
+    if (!draft.value().Erase(floatingIndex.value()))
+        return {};
     auto merged = layer->transform;
     merged.size = {extent->width * merged.size.x / oldWidth, extent->height * merged.size.y / oldHeight};
     const auto center = toDocument.Apply({extent->x + extent->width / 2.0, extent->y + extent->height / 2.0});
     merged.origin = {center.x - merged.size.x / 2, center.y - merged.size.y / 2};
     if (!merged.IsValid())
         return {};
-    installed.asset = RasterAsset{std::move(image), {}, layer->name};
-    installed.transform = merged;
-    installed.mask = std::move(mask);
-    after.selection = std::move(selection);
-    if (ValidateDocument(after) != DocumentStatus::Ok)
+    {
+        auto& installed =
+            draft.value().EditLayers()[IndexOf(draft.value().ReadLayers(), edit.floating->sourceID).value()];
+        installed.asset = RasterAsset{std::move(image), {}, layer->name};
+        installed.transform = merged;
+        installed.mask = std::move(mask);
+    }
+    draft.value().DocumentState().selection = std::move(selection);
+    auto after = draft.value().Seal(cancellation);
+    if (cancellation.IsCancelled())
+        return {FloatingPixelsStatus::Cancelled};
+    if (!after || ValidateDocument(after.value()) != DocumentStatus::Ok)
         return {};
     if (cancellation.IsCancelled())
         return {FloatingPixelsStatus::Cancelled};
-    return {FloatingPixelsStatus::Ready, std::move(after), edit.floating->sourceID};
+    return {FloatingPixelsStatus::Ready, std::move(after.value()), edit.floating->sourceID};
 }

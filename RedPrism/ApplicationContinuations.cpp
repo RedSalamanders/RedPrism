@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 #include "FileDialogs.h"
@@ -9,7 +11,9 @@
 #include "UiBenchmark.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -252,6 +256,21 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
     {
         return ContinuationReceipt::Failure(E_ABORT);
     }
+    std::optional<OpacityInputOrder::Proposal> opacityProposal;
+    if (auto* opacity = std::get_if<HostLayerOpacityInput>(&input))
+    {
+        if (!std::isfinite(opacity->opacity) || opacity->phase > ChromeEditPhase::Cancel)
+            return ContinuationReceipt::Failure(E_INVALIDARG);
+        const OpacityProducerKey key{_session.DocumentSerial(), opacity->id};
+        const auto phase = opacity->phase == ChromeEditPhase::Preview  ? OpacityInputOrder::Phase::Preview
+                           : opacity->phase == ChromeEditPhase::Commit ? OpacityInputOrder::Phase::Commit
+                                                                       : OpacityInputOrder::Phase::Cancel;
+        auto proposed = _opacityInputOrder.Propose(phase, _opacityProducerKey == std::optional(key));
+        if (!proposed)
+            return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW));
+        opacityProposal.emplace(std::move(proposed.value()));
+        opacity->order = opacityProposal.value().Identity();
+    }
     // These bounded scalar inputs bind the event's gesture before admission; later Execute cannot close a reopen.
     if (auto* command = std::get_if<HostCommandInput>(&input))
         command->selectionMoveOpening = _session.SelectionMoveOpening();
@@ -312,7 +331,16 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
         {
             return ContinuationReceipt::Failure(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
         }
-        return QueueHostRequest(std::move(owned.value()));
+        const auto receipt = QueueHostRequest(std::move(owned.value()));
+        if (opacityProposal && receipt.Read().outcome == HostOutcome::Pending)
+        {
+            // Queue admission and this acknowledgement cannot dispatch or reenter the owner.
+            if (!_opacityInputOrder.Accept(opacityProposal.value()))
+                std::terminate();
+            const auto& opacity = std::get<HostLayerOpacityInput>(input);
+            _opacityProducerKey = OpacityProducerKey{_session.DocumentSerial(), opacity.id};
+        }
+        return receipt;
     }
     catch (const std::bad_alloc&)
     {
@@ -332,8 +360,28 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
     }
     const auto kind = std::holds_alternative<HostWandLayerNewInput>(request.Input()) ? ContinuationKind::WandNew
                                                                                      : ContinuationKind::Command;
+    const auto* opacity = std::get_if<HostLayerOpacityInput>(&request.Input());
+    const bool preview = opacity && opacity->phase == ChromeEditPhase::Preview;
+    const bool fieldInput = opacity != nullptr;
     const auto admission =
-        _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+        preview
+            ? _hostRequests.EnqueueAdjacent(
+                  _session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation,
+                  [](const HostRequest& previous, const HostRequest& next) noexcept
+                  {
+                      const auto* older = std::get_if<HostLayerOpacityInput>(&previous.Input());
+                      const auto* newer = std::get_if<HostLayerOpacityInput>(&next.Input());
+                      return older && newer && older->phase == ChromeEditPhase::Preview &&
+                             newer->phase == ChromeEditPhase::Preview && older->id == newer->id &&
+                             older->order.stream != 0 && older->order.stream == newer->order.stream;
+                  })
+            : _hostRequests.Enqueue(_session.DocumentSerial(), ordinal.value(), kind, request, RetireHostContinuation);
+    if ((admission == ContinuationAdmission::Queued || admission == ContinuationAdmission::Coalesced) && !fieldInput)
+    {
+        // Generic accepted inputs are barriers. Rejected inputs consume neither field sequence nor opening.
+        (void)_opacityInputOrder.Barrier();
+        _opacityProducerKey.reset();
+    }
     if (admission != ContinuationAdmission::Queued && admission != ContinuationAdmission::Coalesced)
     {
         (void)request.Finish(HostOutcome::Failed,
@@ -505,7 +553,8 @@ void Application::RunHostContinuation() noexcept
             _hostStage = _hostAfterPanelCancel;
         }
         else
-            _hostStage = _hostStage == HostStage::Settle             ? HostStage::GradientSettle
+            _hostStage = _hostStage == HostStage::OpacitySettle      ? _hostAfterOpacity
+                         : _hostStage == HostStage::Settle           ? HostStage::GradientSettle
                          : _hostStage == HostStage::GradientSettle   ? HostStage::PixelMoveSettle
                          : _hostStage == HostStage::PixelMoveSettle  ? HostStage::TransformSettle
                          : _hostStage == HostStage::TransformDiscard ? HostStage::Execute
@@ -853,6 +902,9 @@ void Application::RunHostContinuation() noexcept
             _hostStage = HostStage::GradientSettle;
             break;
         }
+        case HostStage::OpacitySettle:
+            FinishHostContinuation({HostOutcome::Failed, E_UNEXPECTED});
+            return; // Only acknowledgement may leave the held opacity prerequisite.
         case HostStage::GradientSettle:
         {
             const auto* command = std::get_if<HostCommandInput>(&input);
@@ -1024,6 +1076,21 @@ void Application::RunHostContinuation() noexcept
         }
         case HostStage::Write:
         {
+            if (OpacityEditLayer())
+            {
+                const auto result = StartOpacityClosure();
+                if (FAILED(result))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_layerMetadataTicket)
+                {
+                    _hostAfterOpacity = HostStage::Write;
+                    _hostStage = HostStage::OpacitySettle;
+                    return;
+                }
+            }
             if (ownsLifecycleOutline)
                 _hostAfterPrerequisite = HostStage::Execute; // The close's Write resume target must not replay save.
             const auto result = WriteHostOutput(_hostWriteFormat);
@@ -1162,6 +1229,48 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
+            if (const auto* opacity = std::get_if<HostLayerOpacityInput>(&input);
+                opacity && _session.ActiveLayerID() != opacity->id)
+            {
+                // A selected row closes the previous field. Its equal late terminal acknowledges that closure;
+                // other old-target events are stale and must never edit the newly active layer.
+                if (opacity->phase == ChromeEditPhase::Commit && _opacityRecorded &&
+                    _opacityRecorded.value() == std::clamp(opacity->opacity, 0.0, 1.0))
+                {
+                    _opacityRecorded.reset();
+                    FinishHostContinuation({HostOutcome::Succeeded, S_OK});
+                }
+                else
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            if (!paths &&
+                !(std::get_if<HostCommandInput>(&input) &&
+                  (std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomFit ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomActual ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomIn ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandZoomOut ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandAbout ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandSampleRing ||
+                   std::get<HostCommandInput>(input).command == ChromeHost::kCommandKeyboardShortcuts)) &&
+                !std::holds_alternative<HostLayerOpacityInput>(input) && !std::holds_alternative<HostNewInput>(input) &&
+                !std::holds_alternative<HostCloseProjectInput>(input) &&
+                !std::holds_alternative<HostCloseWindowInput>(input) &&
+                !std::holds_alternative<HostEndSessionInput>(input) && OpacityEditLayer())
+            {
+                const auto result = StartOpacityClosure();
+                if (FAILED(result))
+                {
+                    FinishHostContinuation({HostOutcome::Failed, result});
+                    return;
+                }
+                if (_layerMetadataTicket)
+                {
+                    _hostAfterOpacity = HostStage::Execute;
+                    _hostStage = HostStage::OpacitySettle;
+                    return;
+                }
+            }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->selectionMoveOpening &&
                 (size->invocation != _sizeInvocation || !SizeCardOpen() || !CanQueueSelectionSizeOutline()))
@@ -1446,7 +1555,7 @@ int Application::RunHostContinuationSelfTest() noexcept
             return false;
         }
         _colorWorkTestGate.reset();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -1454,7 +1563,7 @@ int Application::RunHostContinuationSelfTest() noexcept
         const Guid active = layer.id;
         layer.asset = RasterAsset{source, source, layer.name};
         document.layers.push_back(std::move(layer));
-        ReplaceDocument(std::move(document), active, {});
+        ReplaceDocument(std::move(document).Seal(), active, {});
         if (!BeginColorEdit(ChromeHost::kCommandLevels))
         {
             return false;
@@ -1916,19 +2025,20 @@ int Application::RunHostFlowSelfTest() noexcept
             (void)DeleteFileW(output.c_str());
         });
     const auto source = SolidRaster(4, 1, 0xFF404040u);
-    CanvasDocument fixture;
-    fixture.id = Guid::Generate();
-    fixture.width = 4;
-    fixture.height = 1;
+    DocumentFixture fixtureDraft;
+    fixtureDraft.id = Guid::Generate();
+    fixtureDraft.width = 4;
+    fixtureDraft.height = 1;
     ImageLayer layer = ImageLayer::Blank(L"Host flow", Vec2{4, 1});
     const auto id = layer.id;
     layer.asset = RasterAsset{source, source, layer.name};
-    fixture.layers.push_back(std::move(layer));
+    fixtureDraft.layers.push_back(std::move(layer));
     ImageLayer other = ImageLayer::Blank(L"Other host target", Vec2{4, 1});
     const auto otherId = other.id;
     other.asset = RasterAsset{source, source, other.name};
     other.visible = false;
-    fixture.layers.push_back(std::move(other));
+    fixtureDraft.layers.push_back(std::move(other));
+    const CanvasDocument fixture = std::move(fixtureDraft).Seal();
     if (SaveProject(project.c_str(), fixture, id, true) != ProjectIoStatus::Ok ||
         ExportDocumentPng(source, 72, imagePath.c_str()) != ProjectIoStatus::Ok)
         return fail(L"Host flow fixtures failed to encode.\n");

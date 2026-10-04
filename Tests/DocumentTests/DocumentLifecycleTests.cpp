@@ -1,4 +1,5 @@
 #include "DocumentLifecycleTests.h"
+#include "../Support/DocumentFixture.h"
 
 #include "Document.h"
 #include "ImageImportHistory.h"
@@ -31,7 +32,7 @@ void Expect(bool condition, const char* name) noexcept
 CanvasDocument SourceDocument()
 {
     constexpr std::array<std::uint8_t, 4> kPixel{23, 47, 89, 255};
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 1;
     document.height = 1;
@@ -40,17 +41,17 @@ CanvasDocument SourceDocument()
     imageLayer.asset = RasterAsset{image, image, imageLayer.name};
     document.layers.push_back(std::move(imageLayer));
     document.layers.push_back(ImageLayer::Blank(L"Second layer", Vec2{1, 1}));
-    return document;
+    return std::move(document).Seal();
 }
 
 CanvasDocument NewCanvas()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 5;
     document.height = 7;
     document.layers.push_back(ImageLayer::Blank(L"Layer 1", Vec2{5, 7}));
-    return document;
+    return std::move(document).Seal();
 }
 
 bool ClipboardHasSourcePixel(const DocumentSession& session) noexcept
@@ -77,9 +78,9 @@ void SeedSession(DocumentSession& session)
     session.SetForegroundColor(0xFF315779u);
     session.SetBackgroundColor(0xFF9B7531u);
     session.SelectAll();
-    CanvasDocument changed = session.Document().value();
+    auto changed = DocumentFixture::Copy(session.Document().value());
     changed.layers.front().name = L"Changed source";
-    static_cast<void>(session.ApplyImportedDocument(std::move(changed), imageLayer, L"Prior edit"));
+    static_cast<void>(session.ApplyImportedDocument(std::move(changed).Seal(), imageLayer, L"Prior edit"));
     session.Undo();
 }
 
@@ -468,7 +469,7 @@ void CheckStalePublications()
         DocumentSession session;
         SeedSession(session);
         auto prepared = PrepareNewCanvas(session);
-        session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.25; });
+        EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().opacity = 0.25; });
         const auto changed = session.Document();
         const auto generation = session.Generation();
         Expect(prepared && !session.ApplyPreparedImageImportIfCurrent(*prepared) && session.Document() == changed &&

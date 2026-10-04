@@ -1,5 +1,7 @@
 #include "LayerReadViewTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "RecordRoot.h"
 
@@ -77,9 +79,11 @@ int RunLayerReadViewTests()
            "array-view-reversed-and-collapsed-orders-remain-literal");
     Expect(EffectivelyVisible(view, records[0].id) && !EffectivelyVisible(view, records[2].id),
            "array-view-visibility-follows-hidden-parent");
-    CanvasDocument compatibility;
+    DocumentFixture compatibility;
     compatibility.layers.assign(records.begin(), records.end());
-    Expect(EffectivelyVisible(compatibility, records[0].id) && !EffectivelyVisible(compatibility, records[2].id),
+    const CanvasDocument sealedCompatibility = std::move(compatibility).Seal();
+    Expect(EffectivelyVisible(sealedCompatibility, records[0].id) &&
+               !EffectivelyVisible(sealedCompatibility, records[2].id),
            "const-document-forwarder-preserves-existing-caller-results");
 
     Root::Builder sourceBuilder(records.size());

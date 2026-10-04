@@ -1,4 +1,5 @@
 #include "CanvasSize.h"
+#include "DocumentDraft.h"
 
 #include "RasterWork.h"
 #include "Selection.h"
@@ -566,11 +567,16 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
     }
     try
     {
-        CanvasDocument next = source;
-        next.width = options.width;
-        next.height = options.height;
-        next.selection.reset();
-        for (ImageLayer& layer : next.layers)
+        const bool extending =
+            options.fill.has_value() && (options.width > source.width || options.height > source.height);
+        const auto limit = source.layers.size() + (extending ? 1u : 0u);
+        auto draft = CanvasDocumentDraft::Clone(source, limit, cancellation);
+        if (!draft)
+            return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::TooLarge;
+        draft.value().DocumentState().width = options.width;
+        draft.value().DocumentState().height = options.height;
+        draft.value().DocumentState().selection.reset();
+        for (ImageLayer& layer : draft.value().EditLayers())
         {
             if (cancellation.IsCancelled())
             {
@@ -591,11 +597,11 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
         }
         // A colored extension is separate bottom-layer content; the old canvas intersection stays transparent,
         // including holes in the existing artwork.
-        if (options.fill.has_value() && (options.width > source.width || options.height > source.height))
+        if (extending)
         {
             const std::int64_t pixels = static_cast<std::int64_t>(options.width) * options.height;
             if (pixels > static_cast<std::int64_t>(kMaxLayerPixels) - UsedLayerPixels(source) ||
-                static_cast<int>(next.layers.size()) >= kMaxLayerCount)
+                static_cast<int>(source.layers.size()) >= kMaxLayerCount)
             {
                 return ResizeStatus::TooLarge;
             }
@@ -647,14 +653,21 @@ ResizeStatus ResizeCanvas(const CanvasDocument& source, const CanvasSizeOptions&
             ImageLayer extension = ImageLayer::Blank(
                 L"Canvas Extension", Vec2{static_cast<double>(options.width), static_cast<double>(options.height)});
             extension.asset = RasterAsset{image, {}, extension.name};
-            next.layers.insert(next.layers.begin(), std::move(extension));
+            if (!draft.value().Insert(0, std::move(extension)))
+                return ResizeStatus::TooLarge;
         }
         if (cancellation.IsCancelled())
         {
             result = {};
             return ResizeStatus::Cancelled;
         }
-        result = std::move(next);
+        auto next = draft.value().Seal(cancellation);
+        if (!next)
+        {
+            result = {};
+            return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Invalid;
+        }
+        result = std::move(next.value());
         return ResizeStatus::Ok;
     }
     catch (const std::bad_alloc&)
@@ -699,15 +712,19 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
         {
             return ResizeStatus::TooLarge;
         }
-        next.width = options.width;
-        next.height = options.height;
-        next.selection.reset();
+        auto draft = CanvasDocumentDraft::Clone(source, source.layers.size(), cancellation);
+        if (!draft)
+            return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::TooLarge;
+        draft.value().DocumentState().resolution = options.resolution;
+        draft.value().DocumentState().width = options.width;
+        draft.value().DocumentState().height = options.height;
+        draft.value().DocumentState().selection.reset();
         const double sx = static_cast<double>(options.width) / static_cast<double>(source.width);
         const double sy = static_cast<double>(options.height) / static_cast<double>(source.height);
         const Affine2 scale = Affine2::Scale(sx, sy);
         std::int64_t usedPixels = 0;
         std::int64_t usedMaskPixels = 0;
-        for (ImageLayer& layer : next.layers)
+        for (ImageLayer& layer : draft.value().EditLayers())
         {
             if (cancellation.IsCancelled())
             {
@@ -788,7 +805,13 @@ ResizeStatus ResizeImage(const CanvasDocument& source, const ImageSizeOptions& o
             result = {};
             return ResizeStatus::Cancelled;
         }
-        result = std::move(next);
+        auto resized = draft.value().Seal(cancellation);
+        if (!resized)
+        {
+            result = {};
+            return cancellation.IsCancelled() ? ResizeStatus::Cancelled : ResizeStatus::Invalid;
+        }
+        result = std::move(resized.value());
         return ResizeStatus::Ok;
     }
     catch (const std::bad_alloc&)

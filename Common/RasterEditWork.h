@@ -83,11 +83,13 @@ class PreparedRasterEdit final
     PreparedRasterEdit& operator=(PreparedRasterEdit&&) noexcept = default;
     [[nodiscard]] const ImageLayer& Layer() const noexcept
     {
-        return _raster.layer.value();
+        // Publication swaps the complete document. Borrow the retained old record after apply, preserving
+        // the retired-layer accessor without copying a string-bearing record on the owner thread.
+        return _applied ? _document.value().layers[_targetIndex] : _raster.layer.value();
     }
     [[nodiscard]] const std::optional<DocumentSelection>& Selection() const noexcept
     {
-        return _raster.selection;
+        return _applied && _kind == RasterEditKind::PixelMove ? _document.value().selection : _raster.selection;
     }
     [[nodiscard]] const std::optional<BrushCommitInfo>& PreviewCommit() const noexcept
     {
@@ -100,14 +102,19 @@ class PreparedRasterEdit final
         RasterEditKind, bool, const std::optional<CanvasDocument>&, const std::optional<Guid>&, JobToken,
         DocumentHistory::StateView, RasterEditResult&&, std::wstring, CancelToken, DocumentHistory::PrepareObserver);
     PreparedRasterEdit(RasterEditKind kind, bool mask, JobToken token, RasterEditResult&& raster,
+                       std::optional<CanvasDocument> document, std::size_t targetIndex,
                        DocumentHistory::Publication&& history) noexcept
-        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)), _history(std::move(history))
+        : _kind(kind), _mask(mask), _token(std::move(token)), _raster(std::move(raster)),
+          _document(std::move(document)), _targetIndex(targetIndex), _history(std::move(history))
     {
     }
     RasterEditKind _kind;
     bool _mask;
     JobToken _token;
     RasterEditResult _raster;
+    std::optional<CanvasDocument> _document;
+    std::size_t _targetIndex;
+    bool _applied = false;
     DocumentHistory::Publication _history;
     std::optional<BrushCommitInfo> _retiredBrushCommit;
     std::optional<GradientEdit> _retiredGradient;

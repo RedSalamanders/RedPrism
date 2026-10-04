@@ -2,6 +2,7 @@
 
 #include "ApplicationShutdownTestProbe.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
@@ -304,7 +305,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         owner->_clipboardWorkTestGate = std::make_shared<ClipboardWorkTestGate>();
         auto gate = owner->_clipboardWorkTestGate;
         auto clearGate = wil::scope_exit([&]() noexcept { owner->_clipboardWorkTestGate.reset(); });
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 9;
         document.height = 7;
@@ -314,7 +315,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             RasterAsset{Raster::Make(1, 1, RasterFormat::Bgra8888, basePixel.data(), basePixel.size()), {}, base.name};
         const auto active = base.id;
         document.layers.push_back(std::move(base));
-        owner->_session.ReplaceDocument(std::move(document), active);
+        owner->_session.ReplaceDocument(std::move(document).Seal(), active);
         owner->_session.history.MarkSaved();
         owner->_clipboardSequence = 0;
         owner->_clipboardBinding.reset();

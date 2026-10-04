@@ -1,5 +1,6 @@
 #include "HistoryRestoreTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "HistoryRestoreWork.h"
 #include "RasterWork.h"
 
@@ -47,24 +48,24 @@ bool InstallFixture(DocumentSession& session, bool withMask = false, bool second
     if (!image.HasStorage() || (withMask && !mask.HasStorage()))
         return false;
     const Guid layerID = *session.ActiveLayerID();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == layerID)
-                {
-                    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-                    if (withMask)
-                    {
-                        LayerMask layerMask;
-                        layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
-                        layer.mask = std::move(layerMask);
-                    }
-                    break;
-                }
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == layerID)
+                                    {
+                                        layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                        if (withMask)
+                                        {
+                                            LayerMask layerMask;
+                                            layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
+                                            layer.mask = std::move(layerMask);
+                                        }
+                                        break;
+                                    }
+                                }
+                            });
     session.history.Reset();
     return session.Document()->layers.size() == (secondLayer ? 2u : 1u);
 }

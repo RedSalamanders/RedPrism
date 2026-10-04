@@ -26,7 +26,6 @@
       <Platform>ARM64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -34,9 +33,7 @@
     <RootNamespace>DocumentTests</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries Condition="('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">true</UseDebugLibraries>
@@ -44,17 +41,13 @@
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
-            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
-            Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-
   <ItemDefinitionGroup Condition="('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">
     <ClCompile>
       <Optimization>Disabled</Optimization>
@@ -81,7 +74,6 @@
       <AdditionalDependencies>rpcrt4.lib;ole32.lib;Clipper2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-
   <ItemGroup>
     <ClInclude Include="..\Support\FailureReports.h" />
     <ClInclude Include="DocumentLifecycleTests.h" />
@@ -89,8 +81,6 @@
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
-    <ClInclude Include="..\..\Common\LayerMetadataWork.h" />
-    <ClInclude Include="LayerMetadataWorkTests.h" />
     <ClInclude Include="..\..\Common\SelectionNudgeWork.h" />
     <ClInclude Include="..\..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
@@ -166,6 +156,14 @@
     <ClInclude Include="..\..\Common\TransformEdit.h" />
     <ClInclude Include="..\..\Common\Selection.h" />
     <ClInclude Include="..\..\Common\BrushStroke.h" />
+    <ClInclude Include="..\Support\DocumentFixture.h" />
+    <ClInclude Include="DocumentDraftTests.h" />
+    <ClInclude Include="DocumentFixtureTests.h" />
+    <ClInclude Include="LayerMetadataWorkTests.h" />
+    <ClInclude Include="PreservedLayerMetadataTests.h" />
+    <ClInclude Include="PreservedLayerOpacityTests.h" />
+    <ClInclude Include="LayerOpacityWorkTests.h" />
+    <ClInclude Include="..\..\Common\LayerMetadataWork.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DocumentTests.cpp" />
@@ -259,8 +257,6 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
-    <ClCompile Include="..\..\Common\LayerMetadataWork.cpp" />
-    <ClCompile Include="LayerMetadataWorkTests.cpp" />
     <ClCompile Include="..\..\Common\SelectionNudgeWork.cpp" />
     <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />
@@ -292,8 +288,14 @@
     <ClCompile Include="..\..\Common\DocumentHistory.cpp" />
     <ClCompile Include="..\..\Common\HistoryRestoreWork.cpp" />
     <ClCompile Include="..\..\Common\ImageImportHistory.cpp" />
+    <ClCompile Include="DocumentDraftTests.cpp" />
+    <ClCompile Include="DocumentFixtureTests.cpp" />
+    <ClCompile Include="LayerMetadataWorkTests.cpp" />
+    <ClCompile Include="PreservedLayerMetadataTests.cpp" />
+    <ClCompile Include="PreservedLayerOpacityTests.cpp" />
+    <ClCompile Include="LayerOpacityWorkTests.cpp" />
+    <ClCompile Include="..\..\Common\LayerMetadataWork.cpp" />
   </ItemGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

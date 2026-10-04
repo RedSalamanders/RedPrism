@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Selection.h"
 #include "TransformWorkTestGate.h"
@@ -172,7 +174,8 @@ int Application::RunTransformWorkSelfTest() noexcept
             }
         }
         else if (state.test == Case::StaleSource)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
         else if (state.test == Case::StaleHistory)
             owner._session.history.Reset();
         else if (state.test == Case::SameIdReplacement)
@@ -295,7 +298,7 @@ int Application::RunTransformWorkSelfTest() noexcept
         mask.asset = RasterAsset{maskImage, Raster::MakeThumbnail(maskImage), L"Transform test mask"};
         mask.linked = linked;
         mask.placement = LayerTransform{Vec2{1, 1}, Vec2{8, 6}, 0, false, false, LayerSampling::Nearest};
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.back().mask = mask; });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.back().mask = mask; });
         _session.SelectLayer(target);
         _session.history.Reset();
         const auto before = _session.ActiveLayer()->transform;

@@ -253,6 +253,8 @@
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
     <ClCompile Include="ApplicationLayerMetadataJobs.cpp" />
     <ClCompile Include="ApplicationLayerMetadataSelfTest.cpp" />
+    <ClCompile Include="ApplicationLayerOpacitySelfTest.cpp" />
+    <ClCompile Include="ApplicationLayerOpacityContextsSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionSizeOutlineLiteralSelfTest.cpp" />

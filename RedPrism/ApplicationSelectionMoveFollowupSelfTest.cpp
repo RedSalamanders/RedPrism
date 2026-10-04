@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "SelectionCommandTestGate.h"
 #include "SelectionMoveCloseTestGate.h"
@@ -127,7 +128,7 @@ int Application::RunSelectionMoveFollowupSelfTest() noexcept
     {
         _drag = PointerDrag{};
         _session.ClearDocument();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
@@ -139,7 +140,7 @@ int Application::RunSelectionMoveFollowupSelfTest() noexcept
         layer.transform.size = Vec2{2, 2};
         layer.transform.sampling = LayerSampling::Nearest;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), activeId);
+        _session.ReplaceDocument(std::move(document).Seal(), activeId);
         _session.wandSettings = FollowupSettings();
         _session.selectionAntialiased = false;
         _session.SetSelection(widerOpening ? FollowupRectangle(0, 0, 3, 3) : FollowupRectangle(1, 1, 2, 2),

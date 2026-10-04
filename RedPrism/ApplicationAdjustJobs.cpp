@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "Adjust.h"
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
@@ -412,7 +414,7 @@ int Application::RunColorJobsSelfTest() noexcept
     constexpr std::array<std::uint8_t, 16> pixels{0,   0,   0,   255, 64,  64,  64,  255,
                                                   128, 128, 128, 255, 255, 255, 255, 255};
     const Raster source = Raster::Make(4, 1, RasterFormat::Bgra8888, pixels.data(), pixels.size());
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 1;
@@ -420,7 +422,7 @@ int Application::RunColorJobsSelfTest() noexcept
     const Guid active = layer.id;
     layer.asset = RasterAsset{source, source, layer.name};
     document.layers.push_back(std::move(layer));
-    ReplaceDocument(std::move(document), active, {});
+    ReplaceDocument(std::move(document).Seal(), active, {});
 
     const auto cleanup = wil::scope_exit(
         [&]() noexcept

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "AdjustmentClosureWork.h"
 #include "ColorWorkTestGate.h"
 
@@ -307,7 +309,7 @@ int Application::RunAdjustmentClosureSelfTest() noexcept
             for (std::size_t attempt = 0; attempt < attempts; ++attempt)
             {
                 _session.CancelColorEdit(); // no worker is live at this fixture construction boundary
-                CanvasDocument document;
+                DocumentFixture document;
                 document.id = Guid::Generate();
                 document.width = 4;
                 document.height = 1;
@@ -315,7 +317,7 @@ int Application::RunAdjustmentClosureSelfTest() noexcept
                 base.asset = RasterAsset{image, {}, base.name};
                 const Guid baseID = base.id;
                 document.layers.push_back(std::move(base));
-                ReplaceDocument(std::move(document), baseID, {});
+                ReplaceDocument(std::move(document).Seal(), baseID, {});
                 _session.AddAdjustment(kind);
                 const Guid id = _session.ActiveLayerID().value();
                 LayerAdjustment original = _session.ActiveLayer()->adjustment.value();

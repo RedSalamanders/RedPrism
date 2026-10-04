@@ -1,5 +1,6 @@
 #include "ProjectSaveMemoryTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "ProjectSaveWork.h"
 
 #include <array>
@@ -7,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -48,7 +50,8 @@ void InvalidInputsAreRefused()
            "invalid-canvas-dimensions-refused");
 
     CanvasDocument tooManyLayers = EmptyDocument();
-    tooManyLayers.layers.resize(static_cast<std::size_t>(kMaxLayerCount) + 1);
+    EditDocumentFixture(tooManyLayers, [](DocumentFixture& document)
+                        { document.layers.resize(static_cast<std::size_t>(kMaxLayerCount) + 1); });
     Expect(ProjectSaveMemoryBytes(tooManyLayers, 1) == 0, "layer-count-over-limit-refused");
 }
 
@@ -70,20 +73,24 @@ void PixelFramesContributeTheirLargestStorage()
     CanvasDocument smallBgraDocument = EmptyDocument();
     ImageLayer smallBgraLayer = BlankLayer(L"BGRA");
     smallBgraLayer.asset = RasterAsset{onePixelBgra, {}, smallBgraLayer.name};
-    smallBgraDocument.layers.push_back(smallBgraLayer);
+    EditDocumentFixture(smallBgraDocument,
+                        [&](DocumentFixture& document) { document.layers.push_back(smallBgraLayer); });
     CanvasDocument largeBgraDocument = EmptyDocument();
     ImageLayer largeBgraLayer = BlankLayer(L"BGRA");
     largeBgraLayer.asset = RasterAsset{largeBgra, {}, largeBgraLayer.name};
-    largeBgraDocument.layers.push_back(largeBgraLayer);
+    EditDocumentFixture(largeBgraDocument,
+                        [&](DocumentFixture& document) { document.layers.push_back(largeBgraLayer); });
 
     CanvasDocument smallGrayDocument = EmptyDocument();
     ImageLayer smallGrayLayer = BlankLayer(L"Gray");
     smallGrayLayer.asset = RasterAsset{onePixelGray, {}, smallGrayLayer.name};
-    smallGrayDocument.layers.push_back(smallGrayLayer);
+    EditDocumentFixture(smallGrayDocument,
+                        [&](DocumentFixture& document) { document.layers.push_back(smallGrayLayer); });
     CanvasDocument largeGrayDocument = EmptyDocument();
     ImageLayer largeGrayLayer = BlankLayer(L"Gray");
     largeGrayLayer.asset = RasterAsset{largeGray, {}, largeGrayLayer.name};
-    largeGrayDocument.layers.push_back(largeGrayLayer);
+    EditDocumentFixture(largeGrayDocument,
+                        [&](DocumentFixture& document) { document.layers.push_back(largeGrayLayer); });
 
     const std::uint64_t smallBgraBytes = ProjectSaveMemoryBytes(smallBgraDocument, 260);
     const std::uint64_t largeBgraBytes = ProjectSaveMemoryBytes(largeBgraDocument, 260);
@@ -110,15 +117,17 @@ void SharedRastersAddBoundedSourceMetadata()
     CanvasDocument oneAsset = EmptyDocument();
     ImageLayer first = BlankLayer(L"Shared one");
     first.asset = RasterAsset{shared, {}, first.name};
-    oneAsset.layers.push_back(first);
-    CanvasDocument twoAssets = oneAsset;
+    EditDocumentFixture(oneAsset, [&](DocumentFixture& document) { document.layers.push_back(first); });
+    auto twoAssetsFixture = DocumentFixture::Copy(oneAsset);
     ImageLayer second = BlankLayer(L"Shared two");
     second.asset = RasterAsset{shared, {}, second.name};
-    twoAssets.layers.push_back(second);
-    CanvasDocument threeAssets = twoAssets;
+    twoAssetsFixture.layers.push_back(second);
+    CanvasDocument twoAssets = std::move(twoAssetsFixture).Seal();
+    auto threeAssetsFixture = DocumentFixture::Copy(twoAssets);
     ImageLayer third = BlankLayer(L"Shared three");
     third.asset = RasterAsset{shared, {}, third.name};
-    threeAssets.layers.push_back(third);
+    threeAssetsFixture.layers.push_back(third);
+    CanvasDocument threeAssets = std::move(threeAssetsFixture).Seal();
 
     const std::uint64_t oneBytes = ProjectSaveMemoryBytes(oneAsset, 260);
     const std::uint64_t twoBytes = ProjectSaveMemoryBytes(twoAssets, 260);
@@ -139,16 +148,17 @@ void NamesAndPathsAffectReservation()
     CanvasDocument document = EmptyDocument();
     ImageLayer layer = BlankLayer(L"A");
     layer.asset = RasterAsset{image, {}, L"A"};
-    document.layers.push_back(layer);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
 
     const std::uint64_t shortPath = ProjectSaveMemoryBytes(document, 1);
     const std::uint64_t longPath = ProjectSaveMemoryBytes(document, 32637);
     Expect(longPath > shortPath, "bounded-longer-path-increases-reservation");
 
-    document.layers[0].name = std::wstring(256, L'L');
+    EditDocumentFixture(document, [](DocumentFixture& fixture) { fixture.layers[0].name = std::wstring(256, L'L'); });
     const std::uint64_t longerLayerName = ProjectSaveMemoryBytes(document, 1);
     Expect(longerLayerName > shortPath, "longer-layer-name-increases-reservation");
-    document.layers[0].asset.value().name = std::wstring(256, L'A');
+    EditDocumentFixture(document, [](DocumentFixture& fixture)
+                        { fixture.layers[0].asset.value().name = std::wstring(256, L'A'); });
     const std::uint64_t longerAssetName = ProjectSaveMemoryBytes(document, 1);
     Expect(longerAssetName > longerLayerName, "longer-asset-name-increases-reservation");
 }
@@ -159,7 +169,7 @@ void CurvesAndCurrentLimits()
     ImageLayer curveLayer = BlankLayer(L"Curves");
     curveLayer.adjustment.emplace();
     curveLayer.adjustment.value().curves.channels[0].resize(33);
-    tooManyCurvePoints.layers.push_back(curveLayer);
+    EditDocumentFixture(tooManyCurvePoints, [&](DocumentFixture& document) { document.layers.push_back(curveLayer); });
     Expect(ProjectSaveMemoryBytes(tooManyCurvePoints, 1) == 0, "curve-channel-over-32-points-refused");
 
     constexpr std::array<std::uint8_t, 4> tinyPixel{90, 80, 70, 255};
@@ -167,11 +177,12 @@ void CurvesAndCurrentLimits()
     CanvasDocument maximumCanvas = EmptyDocument(kMaxCanvasSide, kMaxCanvasSide);
     ImageLayer tinyLayer = BlankLayer(L"Tiny raster at maximum canvas bounds");
     tinyLayer.asset = RasterAsset{tinyRaster, {}, tinyLayer.name};
-    maximumCanvas.layers.push_back(tinyLayer);
+    EditDocumentFixture(maximumCanvas, [&](DocumentFixture& document) { document.layers.push_back(tinyLayer); });
     Expect(ProjectSaveMemoryBytes(maximumCanvas, 1) != 0, "maximum-canvas-sides-accepted-with-tiny-raster");
 
     CanvasDocument maximumLayers = EmptyDocument();
-    maximumLayers.layers.resize(static_cast<std::size_t>(kMaxLayerCount));
+    EditDocumentFixture(maximumLayers, [](DocumentFixture& document)
+                        { document.layers.resize(static_cast<std::size_t>(kMaxLayerCount)); });
     Expect(ProjectSaveMemoryBytes(maximumLayers, 1) != 0, "maximum-layer-count-accepted");
 }
 
@@ -184,7 +195,7 @@ void SparseSourcesStaySharedAndUnmaterialized()
     CanvasDocument document = EmptyDocument(2, 2);
     ImageLayer layer = BlankLayer(L"Sparse");
     layer.asset = RasterAsset{sparse, {}, layer.name};
-    document.layers.push_back(layer);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
 
     const std::uint64_t reservation = ProjectSaveMemoryBytes(document, 260);
     Expect(reservation != 0 && sparse.IsSparse(), "sparse-source-reservation-succeeds");

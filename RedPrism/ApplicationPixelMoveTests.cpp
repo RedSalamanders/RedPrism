@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "PixelMoveWorkTestGate.h"
 
@@ -94,13 +96,13 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
             break;
         case Mode::Replace:
         {
-            CanvasDocument replacement;
+            DocumentFixture replacement;
             replacement.id = Guid::Generate();
             replacement.width = 3;
             replacement.height = 1;
             replacement.layers.push_back(ImageLayer::Blank(L"Replacement", Vec2{3, 1}));
             const Guid active = replacement.layers.front().id;
-            owner.ReplaceDocument(std::move(replacement), active, {});
+            owner.ReplaceDocument(std::move(replacement).Seal(), active, {});
             break;
         }
         case Mode::YoungerUndo:
@@ -193,14 +195,14 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
         const Raster image = Raster::Make(4, 1, RasterFormat::Bgra8888, bytes.data(), bytes.size());
         if (!image.HasStorage())
             return false;
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                auto& layer = document.layers.front();
-                layer.transform.size = Vec2{4, 1};
-                layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-                document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    auto& layer = document.layers.front();
+                                    layer.transform.size = Vec2{4, 1};
+                                    layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                    document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
+                                });
         _session.history.Reset();
         DocumentChanged();
         BeginPixelDrag(Vec2{1.5, 0.5}, false);
@@ -414,13 +416,13 @@ int Application::RunPixelMoveWorkSelfTest() noexcept
     _pixelMoveWorkTestGate.reset();
     _session.CreateDocument(2048, 2048, true);
     const Raster largeImage = Raster::Make(2048, 2048, RasterFormat::Bgra8888);
-    _session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            auto& layer = document.layers.front();
-            layer.asset = RasterAsset{largeImage, Raster::MakeThumbnail(largeImage), layer.name};
-            document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
-        });
+    EditLayerRecordsForTest(_session,
+                            [&](DocumentFixture& document)
+                            {
+                                auto& layer = document.layers.front();
+                                layer.asset = RasterAsset{largeImage, Raster::MakeThumbnail(largeImage), layer.name};
+                                document.selection = DocumentSelection{false, {{{1, 0}, {2, 0}, {2, 1}, {1, 1}}}};
+                            });
     _session.history.Reset();
     if (!largeImage.HasStorage() || !gate(PixelMoveWorkTestKind::Commit, Mode::LateCancel, true) ||
         !_session.BeginDeferredPixelMove())

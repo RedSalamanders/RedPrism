@@ -1,5 +1,7 @@
 #include "SelectionCommandTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Selection.h"
 #include "SelectionCommandWork.h"
@@ -26,7 +28,7 @@ void Expect(bool condition, const char* name) noexcept
 DocumentSession Session()
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 1;
@@ -41,7 +43,7 @@ DocumentSession Session()
     first.mask = LayerMask{RasterAsset{mask, mask, L"Literal selection mask"}, true, std::nullopt, true};
     document.layers.push_back(std::move(first));
     document.layers.push_back(ImageLayer::Blank(L"Other selection target", Vec2{4, 1}));
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     return session;
 }
 

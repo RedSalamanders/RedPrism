@@ -23,14 +23,15 @@ class PreparedColorEdit final
                                                                         const ColorEditJobResult&, CancelToken,
                                                                         DocumentHistory::PrepareObserver);
 
-    PreparedColorEdit(std::uint64_t generation, ColorEditJobResult result, ImageLayer layer,
+    PreparedColorEdit(std::uint64_t generation, ColorEditJobResult result, std::optional<CanvasDocument> document,
                       DocumentHistory::Publication history)
-        : _generation(generation), _result(std::move(result)), _layer(std::move(layer)), _history(std::move(history))
+        : _generation(generation), _result(std::move(result)), _document(std::move(document)),
+          _history(std::move(history))
     {
     }
     std::uint64_t _generation = 0;
     ColorEditJobResult _result;
-    ImageLayer _layer;
+    std::optional<CanvasDocument> _document;
     DocumentHistory::Publication _history;
     std::optional<ColorEdit> _retiredPanel;
 };

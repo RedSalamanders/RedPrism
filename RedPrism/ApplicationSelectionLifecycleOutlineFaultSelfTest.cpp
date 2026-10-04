@@ -327,10 +327,7 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
         }
         else if (mode == Mode::HeldOpacity || mode == Mode::LifecycleOpacity || mode == Mode::SelectedOpacity)
         {
-            owner._hostExecuting = true; // Test-only bypass of the production younger-input queue.
-            owner.OnLayerOpacity(0.5, ChromeEditPhase::Preview); // Same value: opening changes, generation does not.
-            owner._hostExecuting = false;
-            state.mutationReached = owner._opacityEdit.has_value();
+            state.mutationReached = owner.OpenOpacityEditForTest(0.5);
         }
         else
         {
@@ -429,10 +426,7 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
                 }
                 else if (state.mode == Mode::HeldOpacity)
                 {
-                    owner._hostExecuting = true;
-                    owner.OnLayerOpacity(0.5, ChromeEditPhase::Preview);
-                    owner._hostExecuting = false;
-                    state.mutationReached = owner._opacityEdit.has_value();
+                    state.mutationReached = owner.OpenOpacityEditForTest(0.5);
                 }
                 else
                 {
@@ -506,10 +500,7 @@ int Application::RunSelectionLifecycleOutlineFaultSelfTest() noexcept
                 }
                 else if (state.mode == Mode::LifecycleOpacity)
                 {
-                    owner._hostExecuting = true;
-                    owner.OnLayerOpacity(0.5, ChromeEditPhase::Preview);
-                    owner._hostExecuting = false;
-                    state.mutationReached = owner._opacityEdit.has_value();
+                    state.mutationReached = owner.OpenOpacityEditForTest(0.5);
                 }
                 else
                 {

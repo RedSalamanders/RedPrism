@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "ShapeWorkTestGate.h"
 
@@ -96,7 +98,8 @@ int Application::RunShapeWorkSelfTest() noexcept
             state.cancelledRetained = state.receipt.Read().outcome == HostOutcome::Pending && owner._shapeTicket;
         }
         else if (state.mode == Mode::StaleSource)
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
         else if (state.mode == Mode::StaleSelection)
             owner._session.Deselect();
         else if (state.mode == Mode::StaleHistory)

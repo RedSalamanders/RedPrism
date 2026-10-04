@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "DocumentDraft.h"
+
 #include "DocumentReadbackJob.h"
 #include "RasterWork.h"
 #include "UtilityWorkTestGate.h"
@@ -74,7 +76,10 @@ class Application::MergePlanProbeJob final : public Job
             flat.width = _payload->source->width;
             flat.height = _payload->source->height;
             flat.resolution = _payload->source->resolution;
-            flat.layers.reserve(_payload->plan->ids.size());
+            auto draft = CanvasDocumentDraft::Rebuild(flat, _payload->source->layers.size(), context.cancellation);
+            if (!draft)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
             for (const auto& layer : _payload->source->layers)
             {
                 if (context.cancellation.IsCancelled())
@@ -86,8 +91,14 @@ class Application::MergePlanProbeJob final : public Job
                     copy.parentID.reset();
                 if (copy.maskSourceID && !_payload->plan->removed.contains(copy.maskSourceID.value()))
                     copy.maskSourceID.reset();
-                flat.layers.push_back(std::move(copy));
+                if (!draft.value().Append(std::move(copy)))
+                    return {JobStatus::Failed, E_INVALIDARG};
             }
+            auto sealed = draft.value().Seal(context.cancellation);
+            if (!sealed)
+                return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                          : JobResult{JobStatus::Failed, E_INVALIDARG};
+            flat = std::move(sealed.value());
         }
         if (_gate)
             _gate->probePreparations.fetch_add(1);

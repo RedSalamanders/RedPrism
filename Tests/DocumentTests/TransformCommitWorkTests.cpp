@@ -1,5 +1,6 @@
 #include "TransformCommitWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "TransformCommitWork.h"
 
 #include <array>
@@ -27,7 +28,7 @@ void Initialize(DocumentSession& session)
     const auto image = Raster::Make(2, 2, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     layer.asset = RasterAsset{image, image, L"Source"};
     layer.transform.sampling = LayerSampling::Nearest;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
 }
 
@@ -139,7 +140,7 @@ void StaleAndConsumedInput()
                session.PendingTransformEdit()->draft == newer,
            "stale-keeps-newer-draft-document-history");
     auto changedPrepared = Prepare(session, executor);
-    session.EditForTest([](CanvasDocument& document) { document.layers.back().name = L"Changed"; });
+    EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.back().name = L"Changed"; });
     Expect(changedPrepared.publication &&
                !session.ApplyPreparedTransformCommitIfCurrent(changedPrepared.publication.value()),
            "source-mutation-refuses");
@@ -209,7 +210,7 @@ void GroupBudgetKeepsLaterOriginals()
 {
     // A virtual untouched 99,990,000-pixel layer costs only a sparse storage header. Two one-pixel targets
     // cannot each grow to 10,000 pixels: whichever is processed first must keep the other's original reserved.
-    CanvasDocument source;
+    DocumentFixture source;
     source.id = Guid::Generate();
     source.width = 128;
     source.height = 128;
@@ -225,14 +226,15 @@ void GroupBudgetKeepsLaterOriginals()
     second.id = Guid::Generate();
     second.name = L"Second";
     source.layers = {untouched, first, second};
+    const CanvasDocument sourceDocument = std::move(source).Seal();
     TransformEdit edit;
     edit.layerID = first.id;
     edit.draft.size = {1, 1};
     edit.group = TransformGroup{edit.draft, {{second.id, second.transform}, {first.id, first.transform}}};
     edit.corners = std::array<Vec2, 4>{Vec2{0, 0}, Vec2{100, 0}, Vec2{100, 100}, Vec2{0, 100}};
     InlineExecutor executor;
-    auto result = PrepareTransformPixels(source, edit, executor);
-    Expect(ValidateDocument(source) == DocumentStatus::Ok, "budget-virtual-opening-valid");
+    auto result = PrepareTransformPixels(sourceDocument, edit, executor);
+    Expect(ValidateDocument(sourceDocument) == DocumentStatus::Ok, "budget-virtual-opening-valid");
     Expect(result.status == TransformPixelsStatus::Ready && result.document && result.budgetRefused,
            "budget-group-refusal-publishes-complete-valid-plan");
     if (result.document)

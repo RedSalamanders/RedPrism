@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 
 #include <array>
@@ -34,7 +35,7 @@ int Application::RunDocumentLifecycleRefusalSelfTest() noexcept
                                                        {(std::numeric_limits<double>::max)(), 7}};
     for (const auto dimensions : invalid)
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 2;
         document.height = 2;
@@ -44,7 +45,7 @@ int Application::RunDocumentLifecycleRefusalSelfTest() noexcept
             RasterAsset{Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size()), {}, layer.name};
         const auto active = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.AddBlankLayer();
         _session.Undo();
         _session.history.MarkSaved();

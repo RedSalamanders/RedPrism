@@ -1,4 +1,5 @@
 #include "LiftReferenceTests.h"
+#include "../Support/DocumentFixture.h"
 
 #include "BrushStroke.h"
 #include "Document.h"
@@ -49,7 +50,7 @@ Guid AddLayer(DocumentSession& session, int width, int height, Vec2 origin, Vec2
     layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), L"Lift reference"};
     layer.transform.origin = origin;
     const Guid id = layer.id;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(id);
     return id;
 }
@@ -254,19 +255,20 @@ void TestPlacedMaskCopyUsesEdgeTone(int& failures)
     placement.origin = Vec2{1, 1};
     placement.size = Vec2{2, 2};
     bool maskInstalled = false;
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == id && mask.HasStorage())
-                {
-                    layer.mask = LayerMask{RasterAsset{mask, mask, L"Mask"}, true, placement, false};
-                    maskInstalled = true;
-                    break;
-                }
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == id && mask.HasStorage())
+                                    {
+                                        layer.mask =
+                                            LayerMask{RasterAsset{mask, mask, L"Mask"}, true, placement, false};
+                                        maskInstalled = true;
+                                        break;
+                                    }
+                                }
+                            });
     session.SelectLayerTarget(id, true);
     Select(session, 4, 1, 2, 2);
     const bool copied = session.CopySelection();

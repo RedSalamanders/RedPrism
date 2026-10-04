@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "TransformWorkTestGate.h"
 
@@ -112,7 +113,7 @@ int Application::RunDuplicateGestureSelfTest() noexcept
         const Raster image = Raster::Make(2, 2, RasterFormat::Bgra8888, pixels.data(), pixels.size());
         if (!image.HasStorage())
             return std::nullopt;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 16;
         document.height = 16;
@@ -123,7 +124,7 @@ int Application::RunDuplicateGestureSelfTest() noexcept
         layer.transform.sampling = LayerSampling::Nearest;
         const Guid id = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), id);
+        _session.ReplaceDocument(std::move(document).Seal(), id);
         _session.history.Reset();
         _session.history.MarkSaved();
         _viewport.SetZoom(1, _viewport.Center(), DocumentSize());

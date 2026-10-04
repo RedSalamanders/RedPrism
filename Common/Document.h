@@ -5,6 +5,7 @@
 #include "HistoryEntries.h"
 
 #include "PixelBuffer.h"
+#include "RecordRoot.h"
 
 #include <algorithm>
 #include <array>
@@ -857,7 +858,7 @@ struct CanvasDocument
     int width = 1;
     int height = 1;
     double resolution = 72;
-    std::vector<ImageLayer> layers;
+    RecordRoot<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
     [[nodiscard]] bool operator==(const CanvasDocument&) const noexcept = default;
 };
@@ -1216,6 +1217,7 @@ class SelectionCommandInput;
 class SelectionCommandAuthority;
 class PreparedSelectionCommand;
 enum class LayerMetadataKind : std::uint8_t;
+class LayerMetadataAuthority;
 class LayerMetadataInput;
 class PreparedLayerMetadata;
 struct LayerMetadataPrepareObserver;
@@ -1913,7 +1915,9 @@ class DocumentSession
     void DeleteLayer(const Guid& id);
     void SetOpacity(double opacity);
     // The host's typed opacity preview/restore, outside history; callers bracket the final value in an entry.
-    [[nodiscard]] bool PreviewLayerOpacity(const Guid& id, double opacity) noexcept;
+    // Reference construction may allocate. The production host must prepare the replacement on its admitted
+    // worker before this root integration can be activated; owner preview must not call this constructor.
+    [[nodiscard]] bool PreviewLayerOpacity(const Guid& id, double opacity);
     void SetBlendMode(LayerBlendMode mode);
     [[nodiscard]] bool LinkMask(const Guid& source, const Guid& target);
     [[nodiscard]] bool CanLinkMask(const Guid& source, const Guid& target) const;
@@ -2151,12 +2155,22 @@ class DocumentSession
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
-    // Settled metadata capture follows full graph admission. Worker preparation owns the record construction,
+    // Settled metadata capture follows full graph admission. Worker preparation owns the record draft,
     // validation and complete undo publication; owner application only checks authority and swaps owners.
-    // Capture still copies legacy vector records until the immutable document root integration (P1.9 H2.2).
     [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInput(
         LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0,
         LayerBlendMode blendMode = LayerBlendMode::Normal) const;
+    // Preserves these gesture openings and any outer history transaction; never permits Undo over a live edit.
+    [[nodiscard]] LayerMetadataAuthority CaptureLayerMetadataAuthority(bool preserve = false) const noexcept;
+    [[nodiscard]] bool CanApplyLayerMetadataAuthority(const LayerMetadataAuthority& authority) const noexcept;
+    [[nodiscard]] std::optional<LayerMetadataInput> PreparePreservedLayerMetadataInput(
+        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0,
+        LayerBlendMode blendMode = LayerBlendMode::Normal) const;
+    // Owner-only after full admission. Preview/restore edits no history; typed closure records opening -> final.
+    // The caller retains and validates the typed opening/sequence before capture and owner publication.
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerOpacityPreviewInput(Guid target, double value) const;
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareTypedLayerOpacityInput(Guid target, double opening,
+                                                                                  double value) const;
     [[nodiscard]] static std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(
         LayerMetadataInput input, CancelToken cancellation, DocumentHistory::PrepareObserver historyObserver,
         LayerMetadataPrepareObserver observer);
@@ -2164,6 +2178,8 @@ class DocumentSession
     [[nodiscard]] bool ApplyPreparedLayerMetadataIfCurrent(PreparedLayerMetadata& prepared) noexcept;
     [[nodiscard]] std::uint64_t LayerMetadataMemoryBytes(LayerMetadataKind kind,
                                                          std::size_t nameUnits = 0) const noexcept;
+    [[nodiscard]] std::uint64_t PreservedLayerMetadataMemoryBytes(LayerMetadataKind kind,
+                                                                  std::size_t nameUnits = 0) const noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
                                                                                         WandSettings settings,
                                                                                         bool antialiased) const;
@@ -2737,10 +2753,8 @@ class DocumentSession
     // drops the mask target, and the selection becomes that layer alone. A mask stays targeted only while the
     // active layer has one.
     void SetActiveLayerID(const std::optional<Guid>& id);
-    static void AdoptClipping(const Guid& id, std::vector<ImageLayer>& layers);
-    static void ReleaseDetachedClipping(std::vector<ImageLayer>& layers);
-    [[nodiscard]] ImageLayer* MutableLayer(const Guid& id) noexcept;
-    [[nodiscard]] ImageLayer* MutableActiveLayer() noexcept;
+    static void AdoptClipping(const Guid& id, std::span<ImageLayer> layers);
+    static void ReleaseDetachedClipping(std::span<ImageLayer> layers);
     [[nodiscard]] const ImageLayer* FindLayer(const Guid& id) const noexcept;
     void NoteDocumentMutation() noexcept
     {
@@ -2748,6 +2762,13 @@ class DocumentSession
         ++_editRevision;
     }
     [[nodiscard]] bool BeginGradientImpl(Vec2 point, bool deferred);
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInputImpl(LayerMetadataKind kind, Guid target,
+                                                                                  std::wstring_view name,
+                                                                                  double opacity,
+                                                                                  LayerBlendMode blendMode,
+                                                                                  bool preserve) const;
+    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytesImpl(LayerMetadataKind kind, std::size_t nameUnits,
+                                                             bool preserve) const noexcept;
     [[nodiscard]] bool BeginPixelMoveImpl(bool duplicate, bool deferred);
     [[nodiscard]] bool ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std::wstring name, const JobToken& token,
                                            bool gradientCommit, bool pixelMoveCommit = false,
@@ -2775,9 +2796,11 @@ class DocumentSession
     mutable std::uint64_t _displayTransformOpening = 0, _displaySourceGeneration = 0;
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
+    std::uint64_t _lassoOpening = 0;
     std::optional<DocumentSelection> _selectionMoveOrigin;
     std::uint64_t _selectionMoveOpening = 0;
     std::shared_ptr<BrushStroke> _brush;
+    std::uint64_t _brushOpening = 0;
     BrushCoverageEngine* _brushEngine = nullptr;
     struct LastBrushPoint
     {
@@ -2790,6 +2813,7 @@ class DocumentSession
     std::optional<BrushCommitInfo> _lastBrushCommit;
     std::optional<Vec2> _cloneOffset;
     std::shared_ptr<WarpStroke> _warp;
+    std::uint64_t _warpOpening = 0;
     struct WarpSource
     {
         Guid layerID;
@@ -2852,7 +2876,7 @@ class DocumentSession
     void InsertLayerAboveActive(ImageLayer layer, const std::wstring& editName, bool dropsSelection);
     // A shape layer scaled to a new size draws its shape again at that size, so a rounded corner keeps its radius
     // instead of stretching. Part of the edit that changed the size.
-    void RedrawShape(std::size_t index);
+    void RedrawShape(ImageLayer& layer, std::span<const ImageLayer> records);
     // Installs a raster edit as one entry; `selectionAfterCommit` replaces the selection inside the same entry (a
     // moved selection). False when nothing was installed (no pixels, or the layer changed under the edit).
     bool CommitStroke(const std::shared_ptr<BrushStroke>& stroke,

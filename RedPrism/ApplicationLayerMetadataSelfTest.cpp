@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "LayerMetadataTestGate.h"
 
@@ -7,6 +9,7 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace
@@ -254,7 +257,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
         }
         else
         {
-            auto expectedDocument = before.value();
+            auto expectedDocument = DocumentFixture::Copy(before.value());
             for (auto& layer : expectedDocument.layers)
             {
                 if (layer.id != target)
@@ -273,8 +276,9 @@ int Application::RunLayerMetadataSelfTest() noexcept
                                             : test.mode == Mode::Blend    ? L"Layer Blend Mode"
                                                                           : L"Rename Layer";
             if (!expect(test.name, "literal-output-and-history",
-                        _session.Document().value() == expectedDocument && _session.history.UndoCount() == 1 &&
-                            _session.history.UndoName() == title && _session.ActiveLayerID() == active))
+                        _session.Document().value() == std::move(expectedDocument).Seal() &&
+                            _session.history.UndoCount() == 1 && _session.history.UndoName() == title &&
+                            _session.ActiveLayerID() == active))
                 return 5;
         }
         if (test.mode == Mode::Ordered &&
@@ -318,15 +322,21 @@ int Application::RunLayerMetadataSelfTest() noexcept
                     _jobs.ReservedMemoryBytes() == 0 && !_historyWork.Busy()))
         return 5;
     // The worker slice must preserve commands that were legal during an existing gesture or transaction.
-    // These literal checks intentionally expose the remaining reference route, rather than claim it is a job.
+    // Each context must capture under admission and retire its complete worker publication.
     constexpr std::array contexts{"brush", "warp", "shape", "lasso", "nested"};
     constexpr std::array kinds{LayerMetadataKind::Rename, LayerMetadataKind::ToggleVisibility,
                                LayerMetadataKind::SetOpacity, LayerMetadataKind::SetBlendMode};
+    constexpr std::array kindNames{"rename", "visibility", "opacity", "blend"};
     for (std::size_t context = 0; context < contexts.size(); ++context)
     {
         for (const auto kind : kinds)
         {
             prepare();
+            const std::string contextName =
+                std::string(contexts[context]) + "-" + kindNames[static_cast<std::size_t>(kind)];
+            const auto gate = std::make_shared<LayerMetadataTestGate>();
+            gate->hold = false;
+            _layerMetadataTestGate = gate;
             if (context == 0 && !_session.BeginBrush({0.5, 0.5}))
                 return 5;
             if (context == 1 && !_session.BeginWarp({0.5, 0.5}))
@@ -343,7 +353,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
             const auto lasso = _session.PendingLasso();
             const auto active = _session.ActiveLayerID();
             const auto depth = _session.history.CaptureState().Depth();
-            CanvasDocument expectedDocument = _session.Document().value();
+            auto expectedDocument = DocumentFixture::Copy(_session.Document().value());
             auto& expectedLayer = expectedDocument.layers.back();
             ContinuationReceipt receipt;
             std::wstring_view title;
@@ -380,19 +390,20 @@ int Application::RunLayerMetadataSelfTest() noexcept
                                                     currentLasso.value().anchor == lasso.value().anchor));
             const bool unchangedGesture = _session.PendingBrush() == brush && _session.PendingWarp() == warp &&
                                           _session.PendingShape() == shape && unchangedLasso;
-            if (!expect(contexts[context], "reference-route-preserves-gesture-and-literal-edit",
+            if (!expect(contextName.c_str(), "worker-preserves-gesture-and-literal-edit",
                         finished && receipt.Read().outcome == HostOutcome::Succeeded &&
-                            _session.Document() == std::optional<CanvasDocument>{expectedDocument} &&
+                            _session.Document() == std::optional<CanvasDocument>{std::move(expectedDocument).Seal()} &&
                             _session.ActiveLayerID() == active && unchangedGesture &&
                             _session.history.CaptureState().Depth() == depth && !_layerMetadataTicket &&
-                            !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 &&
+                            !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0 && gate->captures.load() == 1 &&
+                            gate->reservationHeld.load() && gate->retired.load() && gate->retiredOffOwner.load() &&
                             _session.history.UndoCount() == (context == 4 ? 0 : 1) &&
                             (context == 4 || _session.history.UndoName() == title)))
                 return 5;
             if (context == 4)
             {
                 _session.EndEdit();
-                if (!expect(contexts[context], "outer-name-and-single-entry-preserved",
+                if (!expect(contextName.c_str(), "outer-name-and-single-entry-preserved",
                             _session.history.UndoCount() == 1 &&
                                 _session.history.UndoName() == L"Literal outer transaction"))
                     return 5;

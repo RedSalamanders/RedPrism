@@ -2,6 +2,7 @@
 
 #include "BrushStroke.h"
 #include "CopyPixelsWork.h"
+#include "DocumentDraft.h"
 
 #include <algorithm>
 #include <cmath>
@@ -166,15 +167,21 @@ LayerCopyResult DocumentSession::PrepareLayerCopyPublication(LayerCopyInput inpu
     }
     const auto newActive = layer.id;
     const auto expandParent = selected ? layer.parentID : std::optional<Guid>{};
-    auto after = input._source;
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(index.value() + 1), std::move(layer));
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size() + 1, cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? LayerCopyStatus::Cancelled : LayerCopyStatus::Invalid};
+    if (!draft.value().Insert(index.value() + 1, std::move(layer)))
+        return {cancellation.IsCancelled() ? LayerCopyStatus::Cancelled : LayerCopyStatus::Invalid};
     if (selected)
-        after.selection.reset();
+        draft.value().DocumentState().selection.reset();
     if (!LayerCopyCheckpoint(observer, LayerCopyStage::Document, cancellation))
         return {LayerCopyStatus::Cancelled};
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return {cancellation.IsCancelled() ? LayerCopyStatus::Cancelled : LayerCopyStatus::Invalid};
     ImageImportBatchResult imported;
     imported.status = ProjectIoStatus::Ok;
-    imported.importedDocument = std::move(after);
+    imported.importedDocument = std::move(after.value());
     imported.importedActiveLayerID = newActive;
     imported.historyName = selected ? L"Layer via Copy" : L"Duplicate Layer";
     auto publication =

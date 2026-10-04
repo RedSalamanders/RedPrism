@@ -1,5 +1,7 @@
 #include "DuplicateOpeningWork.h"
 
+#include "DocumentDraft.h"
+
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -82,9 +84,16 @@ DuplicateOpeningResult DocumentSession::PrepareDuplicateOpeningPublication(
     TransformEdit edit{duplicateID, duplicate.transform, false, std::nullopt, false, std::nullopt};
     if (!Checkpoint(observer, DuplicateOpeningStage::Document, cancellation))
         return {DuplicateOpeningStatus::Cancelled};
-    auto after = input._source;
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(index.value() + 1), std::move(duplicate));
-    const auto validation = ValidateDocument(after);
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size() + 1, cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    if (!draft.value().Insert(index.value() + 1, std::move(duplicate)))
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return {cancellation.IsCancelled() ? DuplicateOpeningStatus::Cancelled : DuplicateOpeningStatus::Invalid};
+    auto afterDocument = std::move(after.value());
+    const auto validation = ValidateDocument(afterDocument);
     if (validation != DocumentStatus::Ok)
         return {validation == DocumentStatus::TooLarge ? DuplicateOpeningStatus::TooLarge
                                                        : DuplicateOpeningStatus::Invalid};
@@ -118,7 +127,7 @@ DuplicateOpeningResult DocumentSession::PrepareDuplicateOpeningPublication(
     if (!Checkpoint(observer, DuplicateOpeningStage::Publication, cancellation))
         return {DuplicateOpeningStatus::Cancelled};
     opening._source = std::move(input._source);
-    opening._document = std::move(after);
+    opening._document = std::move(afterDocument);
     opening._active = duplicateID;
     opening._selected.insert(duplicateID);
     opening._maskSelected = false;

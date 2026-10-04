@@ -1,5 +1,7 @@
 #include "ClipboardCommandWork.h"
 
+#include "DocumentDraft.h"
+
 #include <cmath>
 #include <limits>
 #include <type_traits>
@@ -135,29 +137,29 @@ std::optional<PreparedClipboardCommand> DocumentSession::PrepareClipboardCommand
     if (cleared.status != RasterEditStatus::Ready || !cleared.layer || cancellation.IsCancelled())
         return std::nullopt;
     const auto& before = result._input._document.value();
-    CanvasDocument after;
-    after.id = before.id;
-    after.width = before.width;
-    after.height = before.height;
-    after.resolution = before.resolution;
-    after.selection = before.selection;
-    after.layers.reserve(before.layers.size());
-    bool replaced = false;
-    for (const auto& layer : before.layers)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        if (layer.id == result._input._active.value())
-        {
-            after.layers.push_back(std::move(cleared.layer.value()));
-            replaced = true;
-        }
-        else
-            after.layers.push_back(layer);
-    }
-    if (!replaced || cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
+    auto draft = CanvasDocumentDraft::Clone(before, before.layers.size(), cancellation);
+    if (!draft)
         return std::nullopt;
-    result._document = std::move(after);
+    bool replaced = false;
+    {
+        auto layers = draft.value().EditLayers();
+        for (auto& layer : layers)
+        {
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            if (layer.id == result._input._active.value())
+            {
+                layer = std::move(cleared.layer.value());
+                replaced = true;
+            }
+        }
+    }
+    if (!replaced || cancellation.IsCancelled())
+        return std::nullopt;
+    auto sealed = draft.value().Seal(cancellation);
+    if (!sealed || cancellation.IsCancelled() || ValidateDocument(sealed.value()) != DocumentStatus::Ok)
+        return std::nullopt;
+    result._document = std::move(sealed.value());
     result._history = DocumentHistory::PrepareEdit(
         result._input._history, result._input._document, result._input._active, result._document, result._input._active,
         result._input._mask ? L"Fill Mask" : L"Clear", cancellation, historyObserver);

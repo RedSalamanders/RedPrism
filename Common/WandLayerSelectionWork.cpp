@@ -135,13 +135,9 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelec
     after.height = original.height;
     after.resolution = original.resolution;
     after.selection = std::move(selection);
-    after.layers.reserve(original.layers.size());
-    for (const auto& layer : original.layers)
-    {
-        if (cancellation.IsCancelled())
-            return refused(WandFailure::Cancelled);
-        after.layers.push_back(layer);
-    }
+    if (cancellation.IsCancelled())
+        return refused(WandFailure::Cancelled);
+    after.layers = original.layers;
     if (!Checkpoint(observer, WandLayerSelectionStage::DocumentReady, cancellation))
         return refused(WandFailure::Cancelled);
     if (ValidateDocument(after) != DocumentStatus::Ok)

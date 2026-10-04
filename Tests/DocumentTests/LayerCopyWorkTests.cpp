@@ -1,5 +1,7 @@
 #include "LayerCopyWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "LayerCopyWork.h"
@@ -105,9 +107,9 @@ ImageLayer SourceLayer(std::wstring name = L"Paint")
     return layer;
 }
 
-CanvasDocument CanvasDoc4x3()
+DocumentFixture CanvasDoc4x3()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Id("61000000-0000-4000-8000-000000000001");
     document.width = 4;
     document.height = 3;
@@ -118,9 +120,9 @@ CanvasDocument CanvasDoc4x3()
 DocumentSession SelectedSession()
 {
     DocumentSession session;
-    CanvasDocument document = CanvasDoc4x3();
+    DocumentFixture document = CanvasDoc4x3();
     const Guid active = document.layers.front().id;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     session.SetSelection(Rect(1, 1, 2, 2), L"Fixture selection");
     return session;
 }
@@ -193,7 +195,7 @@ bool Apply(DocumentSession& session, LayerCopyResult& result)
 void SelectedCropPixelsOriginNameAndHistory()
 {
     DocumentSession session = SelectedSession();
-    CanvasDocument document = session.Document().value();
+    DocumentFixture document = DocumentFixture::Copy(session.Document().value());
     ImageLayer other = ImageLayer::Blank(L"Layer 1", Vec2{1, 1});
     other.id = Id("61000000-0000-4000-8000-000000000003");
     ImageLayer otherName = ImageLayer::Blank(L"Layer 3", Vec2{1, 1});
@@ -201,7 +203,7 @@ void SelectedCropPixelsOriginNameAndHistory()
     document.layers.push_back(std::move(other));
     document.layers.push_back(std::move(otherName));
     const Guid active = document.layers.front().id;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     session.SetSelection(Rect(1, 1, 2, 2), L"Fixture selection");
     Expect(session.CopySelection(), "seed-private-clipboard-before-selected-copy");
     const OwnerState before(session);
@@ -245,7 +247,7 @@ void GroupInsertionAndMaskTargetCopy()
 {
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         ImageLayer group = ImageLayer::Blank(L"Group", Vec2{1, 1});
         group.id = Id("61000000-0000-4000-8000-000000000011");
         group.isGroup = true;
@@ -253,7 +255,7 @@ void GroupInsertionAndMaskTargetCopy()
         document.layers.front().parentID = groupID;
         document.layers.insert(document.layers.begin(), std::move(group));
         const Guid sourceID = document.layers[1].id;
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         session.CollapsedGroupIDs().insert(groupID);
         session.SetSelection(Rect(1, 1, 2, 2), L"Grouped selection");
         ExecutorSerial executor;
@@ -267,11 +269,11 @@ void GroupInsertionAndMaskTargetCopy()
     }
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         const Guid sourceID = document.layers.front().id;
         const Raster mask = Gray(2, 3, kMaskGray);
         document.layers.front().mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"}};
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         session.SelectLayerTarget(sourceID, true);
         session.SetSelection(Rect(1, 2, 2, 1), L"Mask selection");
         ExecutorSerial executor;
@@ -290,7 +292,7 @@ void DuplicatePreservesLayerSemantics()
 {
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         document.layers.reserve(4);
         ImageLayer& source = document.layers.front();
         source.name = L"Portrait";
@@ -316,7 +318,7 @@ void DuplicatePreservesLayerSemantics()
         const Guid sourceID = source.id;
         const ImageLayer sourceSnapshot = source;
         document.layers.insert(document.layers.begin(), std::move(group));
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         Expect(session.CopySelection(), "seed-private-clipboard-before-duplicate");
         const OwnerState before(session);
         ExecutorSerial executor;
@@ -361,16 +363,16 @@ void DuplicatePreservesLayerSemantics()
     }
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         LayerAdjustment adjustment;
         adjustment.kind = AdjustmentKind::Exposure;
         adjustment.exposureSettings = ExposureSettings{1.25, 0.125, 1.5};
         document.layers.front().adjustment = adjustment;
         document.layers.front().asset.reset(); // Adjustment layers cannot own a raster asset.
-        Expect(ValidateDocument(document) == DocumentStatus::Ok, "adjustment-duplicate-fixture-is-valid");
+        Expect(ValidateDocument(document.Seal()) == DocumentStatus::Ok, "adjustment-duplicate-fixture-is-valid");
         const Guid sourceID = document.layers.front().id;
         const ImageLayer source = document.layers.front();
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         ExecutorSerial executor;
         LayerCopyResult prepared = Prepare(session, executor);
         const bool applied = Apply(session, prepared);
@@ -387,10 +389,10 @@ void RefusalsAndSparseBudgets()
 {
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         document.layers.front().asset.reset();
         const Guid active = document.layers.front().id;
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         ExecutorSerial executor;
         LayerCopyResult prepared = Prepare(session, executor);
         Expect(Apply(session, prepared) && session.Document()->layers.size() == 2 && session.ActiveLayer() &&
@@ -401,7 +403,7 @@ void RefusalsAndSparseBudgets()
     for (const int refusal : {0, 1, 2})
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         const Guid active = document.layers.front().id;
         if (refusal == 0)
         {
@@ -417,7 +419,7 @@ void RefusalsAndSparseBudgets()
             document.layers.front().asset.reset();
             document.selection = Rect(1, 1, 2, 2);
         }
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         const OwnerState before(session);
         ExecutorSerial executor;
         const LayerCopyResult prepared = Prepare(session, executor);
@@ -428,7 +430,7 @@ void RefusalsAndSparseBudgets()
     }
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         const Raster sparse = Raster::MakeSparse(10'000, 10'000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
         ImageLayer budget = ImageLayer::Blank(L"Image budget", Vec2{1, 1});
         budget.id = Id("61000000-0000-4000-8000-000000000031");
@@ -436,7 +438,7 @@ void RefusalsAndSparseBudgets()
         document.layers.clear();
         document.layers.push_back(std::move(budget));
         const Guid active = document.layers.back().id;
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         const OwnerState before(session);
         Expect(sparse.IsSparse() && !sparse.IsMaterialized() && session.LayerCopyPreparationMemoryBytes() == 0 &&
                    !session.PrepareLayerCopyInput() && !sparse.IsMaterialized() && SameOwnerState(session, before),
@@ -444,12 +446,12 @@ void RefusalsAndSparseBudgets()
     }
     {
         DocumentSession session;
-        CanvasDocument document = CanvasDoc4x3();
+        DocumentFixture document = CanvasDoc4x3();
         const Raster sparse = Raster::MakeSparse(10'000, 10'000, RasterFormat::Gray8, Raster{}, 0, 0, {}, 0);
         const Raster tiny = Gray(1, 1, std::array<std::uint8_t, 1>{255});
         document.layers.front().mask = LayerMask{RasterAsset{sparse, tiny, L"Sparse mask"}};
         const Guid active = document.layers.front().id;
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         const OwnerState before(session);
         Expect(sparse.IsSparse() && !sparse.IsMaterialized() && session.LayerCopyPreparationMemoryBytes() == 0 &&
                    !session.PrepareLayerCopyInput() && !sparse.IsMaterialized() && SameOwnerState(session, before),
@@ -532,8 +534,8 @@ void StalePublicationRefusals()
         DocumentSession session = SelectedSession();
         if (changes[i] == Change::MaskTarget)
         {
-            session.EditForTest(
-                [](CanvasDocument& document)
+            EditLayerRecordsForTest(
+                session, [](DocumentFixture& document)
                 { document.layers.front().mask = LayerMask{RasterAsset{Gray(2, 3, kMaskGray), {}, L"Mask"}}; });
         }
         ExecutorSerial executor;
@@ -554,17 +556,17 @@ void StalePublicationRefusals()
                 session.SelectLayerTarget(session.ActiveLayerID().value(), true);
                 break;
             case Change::Source:
-                session.EditForTest([](CanvasDocument& document)
-                                    { document.layers.front().visible = !document.layers.front().visible; });
+                EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                        { document.layers.front().visible = !document.layers.front().visible; });
                 break;
             case Change::Selection:
                 session.SetSelection(Rect(0, 0, 1, 1), L"Changed selection");
                 break;
             case Change::ReplacedSameID:
             {
-                CanvasDocument replacement = CanvasDoc4x3();
+                DocumentFixture replacement = CanvasDoc4x3();
                 replacement.layers.front().asset->name = L"Replacement source";
-                session.ReplaceDocument(std::move(replacement), Id("61000000-0000-4000-8000-000000000002"));
+                session.ReplaceDocument(std::move(replacement).Seal(), Id("61000000-0000-4000-8000-000000000002"));
                 session.SetSelection(Rect(1, 1, 2, 2), L"Replacement selection");
                 break;
             }

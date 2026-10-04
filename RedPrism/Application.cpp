@@ -1,6 +1,9 @@
 #include "Application.h"
+
+#include "../Tests/Support/DocumentFixture.h"
 #include "ApplicationProcessingTestProbe.h"
 #include "ApplicationShutdownTestProbe.h"
+#include "DocumentDraft.h"
 #include "SelectionCommandWork.h"
 
 #include "PipelineTrace.h"
@@ -132,9 +135,12 @@ Guid InsertPaintedLayer(DocumentSession& session, const wchar_t* name, int width
     layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), name};
     layer.transform.origin = origin;
     layer.transform.rotation = rotation;
-    CanvasDocument document = session.Document().value();
-    document.layers.push_back(layer);
-    return session.ApplyImportedDocument(std::move(document), layer.id, L"Import Image") ? layer.id : Guid{};
+    auto draft = CanvasDocumentDraft::Clone(session.Document().value(), session.Document()->layers.size() + 1);
+    if (!draft || !draft.value().Append(layer))
+        return Guid{};
+    auto document = draft.value().Seal();
+    return document && session.ApplyImportedDocument(std::move(document.value()), layer.id, L"Import Image") ? layer.id
+                                                                                                             : Guid{};
 }
 
 Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* screenshotPath, uint32_t screenshotDpi,
@@ -2292,6 +2298,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunLayerMetadataSelfTest\n");
     if (const int metadata = RunLayerMetadataSelfTest(); metadata != 0)
         return metadata;
+    std::printf("BEGIN self-test.RunLayerOpacityHostSelfTest\n");
+    if (const int opacity = RunLayerOpacityHostSelfTest(); opacity != 0)
+        return opacity;
+    std::printf("BEGIN self-test.RunLayerOpacityContextsSelfTest\n");
+    if (const int opacityContexts = RunLayerOpacityContextsSelfTest(); opacityContexts != 0)
+        return opacityContexts;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -2693,8 +2705,9 @@ HRESULT Application::InitializeChrome() noexcept
 
 void Application::OnLayerSelected(Guid id) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerSelectInput{id}));
         return;
@@ -2708,8 +2721,9 @@ void Application::OnLayerSelected(Guid id) noexcept
 
 void Application::TargetLayer(Guid id, bool mask, bool toggleMask) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerTargetInput{id, mask, toggleMask}));
         return;
@@ -2748,8 +2762,9 @@ void Application::OnLayerExpanded(Guid id, bool expanded) noexcept
 void Application::OnLayerReordered(Guid source, Guid target, std::optional<Guid> parent,
                                    DxUi::TreeDropPlace place) noexcept
 {
-    if (!_hostExecuting && (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-                            _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+    if (!_hostExecuting &&
+        (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
+         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostLayerReorderInput{source, target, parent, place}));
         return;
@@ -4223,7 +4238,7 @@ void Application::OnCommand(int command) noexcept
     }
     if (!_hostExecuting && !view && !file &&
         (_historyWork.Busy() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         if (_duplicateGesture && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo))
             _duplicateGesture->pointerDown = false;
@@ -4352,7 +4367,7 @@ void Application::OnCommand(int command) noexcept
             _hostExecutionError =
                 StartLayerMetadata(LayerMetadataKind::ToggleVisibility, _session.ActiveLayerID().value());
             if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
         }
         break;
     case ChromeHost::kCommandMoveOutOfGroup:
@@ -4486,7 +4501,7 @@ void Application::OnCommand(int command) noexcept
                 static_cast<LayerBlendMode>((static_cast<int>(layer->blendMode) + direction + count) % count);
             _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetBlendMode, layer->id, {}, 1.0, mode);
             if (FAILED(_hostExecutionError))
-                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_PIXEL_EDIT);
         }
         break;
     case ChromeHost::kCommandDeleteKey:
@@ -4971,7 +4986,7 @@ void Application::OnTool(EditorTool tool) noexcept
 {
     if (!_hostExecuting && tool != _tool &&
         (_historyWork.Busy() || _session.IsMovingSelection() || _session.HasColorEdit() || _session.PendingGradient() ||
-         _session.PendingTransformEdit() || _activeHostRequest || _hostRequests.Size()))
+         _session.PendingTransformEdit() || _opacityEdit || _activeHostRequest || _hostRequests.Size()))
     {
         ReportHostAdmission(QueueHostInput(HostToolInput{tool}));
         return;
@@ -7736,14 +7751,14 @@ int Application::RunRenderingSelfTest() noexcept
         // lower one): what the adopted texture draws equals the committed raster.
         const auto offBy = [&](const Guid& shown) -> int
         {
-            _session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    for (ImageLayer& layer : document.layers)
-                    {
-                        layer.visible = layer.id == shown;
-                    }
-                });
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (ImageLayer& layer : document.layers)
+                                        {
+                                            layer.visible = layer.id == shown;
+                                        }
+                                    });
             DocumentChanged();
             frame();
             std::vector<std::uint8_t> bgra;
@@ -7949,12 +7964,12 @@ int Application::RunRefusalSelfTest() noexcept
     const auto addLayer = [&](ImageLayer layer, bool bottom)
     {
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                std::vector<ImageLayer>& layers = document.layers;
-                layers.insert(bottom ? layers.begin() : layers.end(), layer);
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    std::vector<ImageLayer>& layers = document.layers;
+                                    layers.insert(bottom ? layers.begin() : layers.end(), layer);
+                                });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();

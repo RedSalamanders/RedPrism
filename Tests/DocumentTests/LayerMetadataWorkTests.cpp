@@ -1,5 +1,7 @@
 #include "LayerMetadataWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "LayerMetadataWork.h"
@@ -61,7 +63,7 @@ CanvasDocument FixtureDocument()
     group.id = kGroupId;
     group.isGroup = true;
 
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = kDocumentId;
     document.width = 2;
     document.height = 2;
@@ -69,7 +71,7 @@ CanvasDocument FixtureDocument()
     document.layers[1].parentID = kGroupId;
     document.layers[2].parentID = kGroupId;
     document.selection = DocumentSelection{false, SelectionLoops{{Vec2{0, 0}, Vec2{2, 0}, Vec2{2, 2}, Vec2{0, 2}}}};
-    return document;
+    return std::move(document).Seal();
 }
 
 DocumentSession MakeSession()
@@ -364,7 +366,8 @@ void StalePublicationGuards()
     {
         DocumentSession session = MakeSession();
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old sibling");
-        session.EditForTest([](CanvasDocument& document) { document.layers[2].name = L"Changed sibling"; });
+        EditLayerRecordsForTest(session,
+                                [](DocumentFixture& document) { document.layers[2].name = L"Changed sibling"; });
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
                    !session.ApplyPreparedLayerMetadataIfCurrent(prepared.value()),
                "other-layer-record-change-invalidates-publication");

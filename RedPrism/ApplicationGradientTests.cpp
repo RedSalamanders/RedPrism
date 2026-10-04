@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "GradientWorkTestGate.h"
 
@@ -103,13 +105,13 @@ int Application::RunGradientWorkSelfTest() noexcept
             owner._session.Deselect();
             break;
         case Mode::StaleTarget:
-            owner._session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    for (auto& layer : document.layers)
-                        if (layer.id == owner._session.ActiveLayerID())
-                            layer.transform.origin.x += 1;
-                });
+            EditLayerRecordsForTest(owner._session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        for (auto& layer : document.layers)
+                                            if (layer.id == owner._session.ActiveLayerID())
+                                                layer.transform.origin.x += 1;
+                                    });
             break;
         case Mode::Restore:
             owner._session.Undo();
@@ -117,13 +119,13 @@ int Application::RunGradientWorkSelfTest() noexcept
             break;
         case Mode::Replace:
         {
-            CanvasDocument replacement;
+            DocumentFixture replacement;
             replacement.id = Guid::Generate();
             replacement.width = 3;
             replacement.height = 1;
             replacement.layers.push_back(ImageLayer::Blank(L"Replacement", Vec2{3, 1}));
             const Guid active = replacement.layers.front().id;
-            owner.ReplaceDocument(std::move(replacement), active, {});
+            owner.ReplaceDocument(std::move(replacement).Seal(), active, {});
             break;
         }
         case Mode::StaleMetadata:
@@ -217,20 +219,20 @@ int Application::RunGradientWorkSelfTest() noexcept
         _session.SelectLayer(layer);
         if (mask)
         {
-            _session.EditForTest(
-                [&](CanvasDocument& document)
-                {
-                    const std::array<std::uint8_t, 4> zero{};
-                    const Raster image = Raster::Make(4, 1, RasterFormat::Gray8, zero.data(), 4);
-                    for (ImageLayer& candidate : document.layers)
-                    {
-                        if (candidate.id == layer)
-                        {
-                            candidate.mask = LayerMask{RasterAsset{image, image, L"Gradient mask"}};
-                            break;
-                        }
-                    }
-                });
+            EditLayerRecordsForTest(_session,
+                                    [&](DocumentFixture& document)
+                                    {
+                                        const std::array<std::uint8_t, 4> zero{};
+                                        const Raster image = Raster::Make(4, 1, RasterFormat::Gray8, zero.data(), 4);
+                                        for (ImageLayer& candidate : document.layers)
+                                        {
+                                            if (candidate.id == layer)
+                                            {
+                                                candidate.mask = LayerMask{RasterAsset{image, image, L"Gradient mask"}};
+                                                break;
+                                            }
+                                        }
+                                    });
             _session.SelectLayerTarget(layer, true);
             _session.maskPaintWhite = false;
         }

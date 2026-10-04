@@ -1,4 +1,5 @@
 #include "ProjectStore.h"
+#include "DocumentDraft.h"
 
 #include "JsonRead.h"
 #include "Utf8.h"
@@ -909,12 +910,20 @@ template <typename T, typename Parser>
         }
         manifest.records.push_back(std::move(record));
     }
+    auto draft = CanvasDocumentDraft::Rebuild(manifest.document, count, cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     for (LayerRecord& record : manifest.records)
     {
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
-        manifest.document.layers.push_back(record.layer);
+        if (!draft.value().Append(record.layer))
+            return ProjectIoStatus::TooLarge;
     }
+    auto parsed = draft.value().Seal(cancellation);
+    if (!parsed)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    manifest.document = std::move(parsed.value());
     const DocumentStatus graph = ValidateDocument(manifest.document, manifest.version);
     if (graph == DocumentStatus::UnsupportedVersion)
     {
@@ -1282,6 +1291,9 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
                                            ProjectLoadPixelLimits pixelLimits, auto&& loader)
 {
     Report(observer, ProjectIoStage::ManifestReady);
+    auto draft = CanvasDocumentDraft::Clone(manifest.document, manifest.document.layers.size(), cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     int imagePixels = pixelLimits.imagePixels;
     int maskPixels = pixelLimits.maskPixels;
     for (std::size_t index = 0; index < manifest.records.size(); ++index)
@@ -1289,7 +1301,7 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
         LayerRecord& record = manifest.records[index];
-        ImageLayer& layer = manifest.document.layers[index];
+        ImageLayer& layer = draft.value().EditLayers()[index];
         if (!record.imageFile.empty())
         {
             DecodedImage decoded{};
@@ -1336,6 +1348,10 @@ void AddStr(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const 
             layer.mask = mask;
         }
     }
+    auto decoded = draft.value().Seal(cancellation);
+    if (!decoded)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    manifest.document = std::move(decoded.value());
     return ProjectIoStatus::Ok;
 }
 
@@ -2247,8 +2263,6 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
         decoded.name.empty() ? L"Layer" : decoded.name,
         Vec2{static_cast<double>(decoded.image.Width()), static_cast<double>(decoded.image.Height())});
     layer.asset = RasterAsset{decoded.image, decoded.thumbnail, layer.name};
-    const int previousWidth = document.width;
-    const int previousHeight = document.height;
     const bool establishesCanvas = document.layers.empty();
     if (!establishesCanvas)
     {
@@ -2278,27 +2292,30 @@ ProjectIoStatus ImportImageOnto(CanvasDocument& document, const wchar_t* path, s
             layer.parentID = active->isGroup ? std::optional<Guid>(active->id) : active->parentID;
         }
     }
-    const std::optional<Guid> previousActive = activeLayerID;
     if (cancellation.IsCancelled())
         return ProjectIoStatus::Cancelled;
+    auto draft = CanvasDocumentDraft::Clone(document, document.layers.size() + 1, cancellation);
+    if (!draft)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::TooLarge;
     if (establishesCanvas)
     {
-        document.width = decoded.image.Width();
-        document.height = decoded.image.Height();
+        draft.value().DocumentState().width = decoded.image.Width();
+        draft.value().DocumentState().height = decoded.image.Height();
     }
-    document.layers.push_back(std::move(layer));
-    const Guid importedID = document.layers.back().id;
-    const DocumentStatus validated = ValidateDocument(document);
+    const Guid importedID = layer.id;
+    if (!draft.value().Append(std::move(layer)))
+        return ProjectIoStatus::TooLarge;
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return cancellation.IsCancelled() ? ProjectIoStatus::Cancelled : ProjectIoStatus::Invalid;
+    const DocumentStatus validated = ValidateDocument(after.value());
     if (validated != DocumentStatus::Ok || cancellation.IsCancelled())
     {
-        document.layers.pop_back();
-        document.width = previousWidth;
-        document.height = previousHeight;
-        activeLayerID = previousActive;
         if (cancellation.IsCancelled())
             return ProjectIoStatus::Cancelled;
         return validated == DocumentStatus::TooLarge ? ProjectIoStatus::TooLarge : ProjectIoStatus::Invalid;
     }
+    std::swap(document, after.value());
     activeLayerID = importedID;
     return ProjectIoStatus::Ok;
 }

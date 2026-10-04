@@ -3,6 +3,7 @@
 #include "Executor.h"
 
 #include <cstddef>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -33,20 +34,22 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
 
     [[nodiscard]] const Container& Read() const noexcept
     {
+        if (_root)
+            return *_root;
         static const Container empty;
-        return _root ? *_root : empty;
+        return empty;
     }
     [[nodiscard]] std::size_t size() const noexcept
     {
-        return Read().size();
+        return _root ? _root->size() : 0;
     }
     [[nodiscard]] std::size_t capacity() const noexcept
     {
-        return Read().capacity();
+        return _root ? _root->capacity() : 0;
     }
     [[nodiscard]] bool empty() const noexcept
     {
-        return Read().empty();
+        return size() == 0;
     }
     [[nodiscard]] const Record& operator[](std::size_t index) const noexcept
     {
@@ -54,11 +57,31 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     }
     [[nodiscard]] const_iterator begin() const noexcept
     {
-        return Read().begin();
+        return _root ? _root->begin() : const_iterator{};
     }
     [[nodiscard]] const_iterator end() const noexcept
     {
-        return Read().end();
+        return _root ? _root->end() : const_iterator{};
+    }
+    [[nodiscard]] const Record* data() const noexcept
+    {
+        return _root ? _root->data() : nullptr;
+    }
+    [[nodiscard]] const Record& front() const noexcept
+    {
+        return Read().front();
+    }
+    [[nodiscard]] const Record& back() const noexcept
+    {
+        return Read().back();
+    }
+    [[nodiscard]] auto rbegin() const noexcept
+    {
+        return std::make_reverse_iterator(end());
+    }
+    [[nodiscard]] auto rend() const noexcept
+    {
+        return std::make_reverse_iterator(begin());
     }
     [[nodiscard]] const void* Identity() const noexcept
     {

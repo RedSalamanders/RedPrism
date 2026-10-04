@@ -1,5 +1,6 @@
 #include "OptionalImageThumbnailTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "CanvasSize.h"
 #include "ColorEditHistory.h"
 #include "ColorEditWork.h"
@@ -13,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace
@@ -49,14 +51,14 @@ bool EqualsPixels(const Raster& raster, RasterFormat format, std::span<const std
 
 CanvasDocument ImageDocument(const Raster& image)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.width = image.Width();
     document.height = image.Height();
     ImageLayer layer =
         ImageLayer::Blank(L"Image", Vec2{static_cast<double>(image.Width()), static_cast<double>(image.Height())});
     layer.asset = RasterAsset{image, Raster{}, layer.name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 void EmptyImageThumbnailAndHistoryEquality()
@@ -72,7 +74,7 @@ void EmptyImageThumbnailAndHistoryEquality()
     DocumentSession session;
     session.ReplaceDocument(withEmptyThumbnail, withEmptyThumbnail.layers.front().id);
     session.BeginEdit(L"Visibility");
-    session.EditForTest([](CanvasDocument& document) { document.layers.front().visible = false; });
+    EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers.front().visible = false; });
     session.EndEdit();
     session.Undo();
     const CanvasDocument beforeThumbnail = session.Document().value();
@@ -82,8 +84,8 @@ void EmptyImageThumbnailAndHistoryEquality()
 
     const Raster explicitThumbnail = Raster::MakeThumbnail(image);
     session.BeginEdit(L"Derive image thumbnail");
-    session.EditForTest([&](CanvasDocument& document)
-                        { document.layers.front().asset->thumbnail = explicitThumbnail; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                            { document.layers.front().asset->thumbnail = explicitThumbnail; });
     session.EndEdit();
     Expect(explicitThumbnail.HasStorage() && session.Document().value() == beforeThumbnail,
            "image-explicit-thumbnail-derivation-preserves-document-equality");
@@ -230,7 +232,7 @@ void PreparedMergeOutputHasNoImageThumbnail()
     ImageLayer upper = ImageLayer::Blank(L"Upper", Vec2{1, 1});
     const Guid active = upper.id;
     upper.asset = RasterAsset{upperImage, Raster{}, upper.name};
-    source.layers.push_back(std::move(upper));
+    EditDocumentFixture(source, [&](DocumentFixture& document) { document.layers.push_back(std::move(upper)); });
     DocumentSession session;
     session.ReplaceDocument(source, active);
     const auto plan = session.PlanMerge();

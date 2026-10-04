@@ -1,5 +1,6 @@
 #include "AdjustmentClosureTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "AdjustmentClosureWork.h"
 
 #include <array>
@@ -182,7 +183,7 @@ struct Fixture final
           changed(ChangedSettings(kind, opening)), expected(ExpectedAdjustment(kind, original, changed)),
           templateSettings(TemplateSettings()), source(SourceRaster())
     {
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 2;
         document.height = 2;
@@ -196,11 +197,12 @@ struct Fixture final
         adjustment.mask = LayerMask{RasterAsset{maskPixels, maskPixels, L"Mask fixture"}, true, std::nullopt, true};
         document.layers.push_back(std::move(adjustment));
         document.layers.push_back(std::move(pixels));
-        session.ReplaceDocument(std::move(document), adjustmentID);
+        session.ReplaceDocument(std::move(document).Seal(), adjustmentID);
         session.filterSettings = templateSettings;
 
         session.BeginEdit(L"Seed redo");
-        session.EditForTest([&](CanvasDocument& current) { current.layers[1].name = L"Changed source fixture"; });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& current) { current.layers[1].name = L"Changed source fixture"; });
         session.EndEdit();
         session.Undo();
         openingDocument = session.Document();
@@ -564,8 +566,8 @@ void StaleCandidates()
         Expect(candidate.has_value(), "stale-generation.candidate");
         if (candidate)
         {
-            fixture.session.EditForTest([&](CanvasDocument& document)
-                                        { document.layers[1].name = L"Changed after prepare"; });
+            EditLayerRecordsForTest(fixture.session, [&](DocumentFixture& document)
+                                    { document.layers[1].name = L"Changed after prepare"; });
             ExpectStaleRefusal(fixture, candidate.value(), "stale-generation");
         }
     }

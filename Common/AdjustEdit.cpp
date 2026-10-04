@@ -2,6 +2,7 @@
 #include "BrushStroke.h"
 #include "ColorEditWork.h"
 #include "Document.h"
+#include "DocumentDraft.h"
 #include "RasterWork.h"
 #include "Selection.h"
 
@@ -560,12 +561,24 @@ void DocumentSession::AddAdjustment(AdjustmentKind kind)
 
 bool DocumentSession::UpdateAdjustment(const Guid& id, const LayerAdjustment& value)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return false;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->adjustment.has_value() || !value.IsValid())
     {
         return false;
     }
-    layer->adjustment = value;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    draft.value().EditLayers()[index.value()].adjustment = value;
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
+    std::swap(_document.value(), after.value());
     NoteDocumentMutation();
     return true;
 }
@@ -579,7 +592,7 @@ bool DocumentSession::BeginAdjustmentEditing(const Guid& id, const Raster& below
     {
         return false;
     }
-    const ImageLayer* layer = MutableLayer(id);
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->adjustment.has_value() || !below.HasStorage() ||
         below.Format() != RasterFormat::Bgra8888)
     {

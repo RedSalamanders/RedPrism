@@ -1,5 +1,6 @@
 #include "ColorEditWork.h"
 #include "ColorEditHistory.h"
+#include "DocumentDraft.h"
 
 #include "Adjust.h"
 #include "RasterWork.h"
@@ -828,12 +829,14 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
         ++_editRevision;
         return false;
     }
-    ImageLayer* layer = MutableLayer(id); // CanApplyJobResult proved that this image layer still exists.
+    const ImageLayer* layer = FindLayer(id); // CanApplyJobResult proved that this image layer still exists.
+    if (!layer)
+        return false;
     if (prepared)
     {
-        if (!history.Publish(prepared->_history))
+        if (!prepared->_document || !history.Publish(prepared->_history))
             return false;
-        std::swap(*layer, prepared->_layer);
+        std::swap(_document, prepared->_document);
         std::swap(filterSettings, prepared->_result.settings);
         std::swap(_colorEdit, prepared->_retiredPanel);
         ++_colorEditSequence;
@@ -843,10 +846,23 @@ bool DocumentSession::ApplyColorEditResultImpl(const ColorEditJobResult& result,
     RasterAsset asset{result.image, result.thumbnail, layer->name};
     auto mask = result.mask;
     FilterSettings appliedSettings = result.settings;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
+    {
+        auto& edited = draft.value().EditLayers()[index.value()];
+        edited.asset = std::move(asset);
+        edited.transform = result.transform;
+        edited.mask = std::move(mask);
+    }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
     BeginEdit(FilterKindName(result.kind));
-    layer->asset = std::move(asset);
-    layer->transform = result.transform;
-    layer->mask = std::move(mask);
+    std::swap(_document.value(), after.value());
     EndEdit();
     filterSettings = std::move(appliedSettings);
     _colorEdit.reset();

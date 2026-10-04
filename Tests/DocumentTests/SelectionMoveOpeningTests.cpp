@@ -1,5 +1,7 @@
 #include "SelectionMoveOpeningTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "SelectionMoveWork.h"
 
 #include <array>
@@ -40,7 +42,7 @@ bool IsRect(const std::optional<CanvasDocument>& document, double x)
 
 CanvasDocument MakeDocument(bool withSelection, Guid& activeLayer)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 1;
@@ -50,7 +52,7 @@ CanvasDocument MakeDocument(bool withSelection, Guid& activeLayer)
     activeLayer = layer.id;
     layer.asset = RasterAsset{Raster::MakeSparse(4, 1, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0), {}, layer.name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 struct Fixture final

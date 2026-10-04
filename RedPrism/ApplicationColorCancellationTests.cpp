@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ColorWorkTestGate.h"
 #include "ProjectStore.h"
@@ -63,7 +64,7 @@ int Application::RunColorCancellationSelfTest() noexcept
         _colorWorkTestGate.reset();
         _session.CancelColorEdit(); // no worker exists at this independent fixture construction boundary
         CancelSizeCard();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 1;
@@ -72,7 +73,7 @@ int Application::RunColorCancellationSelfTest() noexcept
         const Guid id = layer.id;
         layer.asset = RasterAsset{source, {}, layer.name};
         document.layers.push_back(std::move(layer));
-        ReplaceDocument(std::move(document), id, {});
+        ReplaceDocument(std::move(document).Seal(), id, {});
         if (kind < adjustmentKinds.size())
             _session.AddAdjustment(adjustmentKinds[kind]);
         _session.SetOpacity(0.75);

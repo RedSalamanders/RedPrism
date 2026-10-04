@@ -1,5 +1,8 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+#include "DocumentDraft.h"
+
 #include "AdjustmentOpeningWork.h"
 #include "ChromeHost.h"
 #include "DocumentReadbackJob.h"
@@ -136,22 +139,14 @@ class Application::AdjustmentOpeningJob final : public DocumentReadbackJob
         if (_gate && _gate->throwProbeAllocationFailure)
             throw std::bad_alloc{};
         const auto& source = _payload->source.value();
-        document.id = source.id;
-        document.width = source.width;
-        document.height = source.height;
-        document.resolution = source.resolution;
-        document.selection = source.selection;
-        document.layers.reserve(source.layers.size());
-        for (const auto& layer : source.layers)
-        {
-            if (context.cancellation.IsCancelled())
-                return {JobStatus::Cancelled};
-            document.layers.push_back(layer);
-        }
+        auto draft = CanvasDocumentDraft::Clone(source, source.layers.size(), context.cancellation);
+        if (!draft)
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                      : JobResult{JobStatus::Failed, E_INVALIDARG};
         // Preserve every record for live mask sources/folder ancestry. Only visibility differs for sampling.
         std::unordered_set<Guid> hidden;
         bool above = false;
-        for (const Guid& id : RenderLayerIds(document))
+        for (const Guid& id : RenderLayerIds(source))
         {
             if (context.cancellation.IsCancelled())
                 return {JobStatus::Cancelled};
@@ -159,13 +154,18 @@ class Application::AdjustmentOpeningJob final : public DocumentReadbackJob
             if (above)
                 hidden.insert(id);
         }
-        for (auto& layer : document.layers)
+        for (auto& layer : draft.value().EditLayers())
         {
             if (context.cancellation.IsCancelled())
                 return {JobStatus::Cancelled};
             if (!layer.isGroup && (layer.id == _id || hidden.contains(layer.id)))
                 layer.visible = false;
         }
+        auto sealed = draft.value().Seal(context.cancellation);
+        if (!sealed)
+            return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled}
+                                                      : JobResult{JobStatus::Failed, E_INVALIDARG};
+        document = std::move(sealed.value());
         return {};
     }
     HRESULT PrepareReadbackDevice(HRESULT reason) noexcept override
@@ -404,7 +404,7 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
               Mode::Sampling, Mode::AdjustmentSnapshot, Mode::PendingSnapshot, Mode::PendingRecord, Mode::Epoch})
         {
             _session.CancelColorEdit();
-            CanvasDocument document;
+            DocumentFixture document;
             document.id = Guid::Generate();
             document.width = 4;
             document.height = 1;
@@ -424,7 +424,7 @@ int Application::RunAdjustmentOpeningSelfTest() noexcept
             document.layers.push_back(std::move(base));
             document.layers.push_back(std::move(adjustment));
             document.layers.push_back(std::move(above));
-            ReplaceDocument(std::move(document), id, {});
+            ReplaceDocument(std::move(document).Seal(), id, {});
             _session.SetOpacity(0.75);
             _session.Undo();
             const auto revision = _session.history.CurrentRevision();

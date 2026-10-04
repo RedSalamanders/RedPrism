@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "KeyboardState.h"
 #include "Resources.h"
@@ -389,18 +391,18 @@ int Application::RunChromeSyncSelfTest() noexcept
         // 1000 small layers, then "Target" on top: 100 x 100 at (500, 300), active.
         const Raster tile = SolidRaster(8, 8, 0xFF3366AAu);
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (int index = 0; index < 1000; ++index)
-                {
-                    ImageLayer layer = ImageLayer::Blank(L"Many", Vec2{8, 8});
-                    layer.asset = RasterAsset{tile, Raster::MakeThumbnail(tile), layer.name};
-                    layer.transform.origin =
-                        Vec2{static_cast<double>((index * 37) % 1200), static_cast<double>((index * 53) % 760)};
-                    document.layers.push_back(layer);
-                }
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (int index = 0; index < 1000; ++index)
+                                    {
+                                        ImageLayer layer = ImageLayer::Blank(L"Many", Vec2{8, 8});
+                                        layer.asset = RasterAsset{tile, Raster::MakeThumbnail(tile), layer.name};
+                                        layer.transform.origin = Vec2{static_cast<double>((index * 37) % 1200),
+                                                                      static_cast<double>((index * 53) % 760)};
+                                        document.layers.push_back(layer);
+                                    }
+                                });
         _session.EndEdit();
         const Guid target = InsertPaintedLayer(_session, L"Target", 100, 100, Vec2{500, 300}, 0.0, 0xFFCC3322u);
         OnTool(EditorTool::Move);
@@ -508,17 +510,17 @@ int Application::RunChromeSyncSelfTest() noexcept
         holdControl(true);
         const bool controlOnNothing = cursorAt(onNothing) == IDC_ARROW;
         const bool controlPicks = cursorAt(onSmall) == IDC_SIZEALL;
-        _session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == smallId.value())
-                    {
-                        layer.visible = false;
-                    }
-                }
-            });
+        EditLayerRecordsForTest(_session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == smallId.value())
+                                        {
+                                            layer.visible = false;
+                                        }
+                                    }
+                                });
         DocumentChanged();
         const bool followsSession = cursorAt(onSmall) == IDC_ARROW;
         holdControl(false);

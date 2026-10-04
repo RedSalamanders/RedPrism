@@ -12,7 +12,8 @@
 - [ ] Incremental accounting, lazy image thumbnails and first uploads; complete the remaining P1.9 work before closure.
   - [ ] Current H2.2 caller integration: complete private immutable-root and preserving-metadata applications pass
     Debug/Release/ASan. Producer opacity ordering, adjacent previews and bounded pending views pass 96 native
-    controls and all six profiles. Another 47 private preserved-opacity core controls pass all x64 profiles. Finish typed host acknowledgement/closure
+    controls and all six profiles. Another 47 private preserved-opacity core controls and 67 complete typed host
+    checks pass all x64 profiles. Finish pointer/lifetime closure
     and adjustment/display worker construction before native root activation. Admission/accounting and measured
     G1 remain open ([current evidence](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
   - [ ] H1 — Construct complete history publication before mutating live state; injected allocation refusal preserves pixels, revision, redo and pending transaction. Include whole metadata/trim peak in every migrated operation's reservation.

@@ -1,4 +1,5 @@
 #include "RecordRootBench.h"
+#include "../Support/DocumentFixture.h"
 
 #include "Document.h"
 #include "RecordRoot.h"
@@ -296,11 +297,11 @@ void PrintLine(const char* operation, const char* path, std::size_t count, std::
         sourceVector.push_back(MakeExpectedLayer(index, raster));
     }
     {
-        CanvasDocument validation;
+        DocumentFixture validation;
         validation.width = kMaxCanvasSide;
         validation.height = kMaxCanvasSide;
         validation.layers = sourceVector;
-        if (ValidateDocument(validation) != DocumentStatus::Ok)
+        if (ValidateDocument(validation.Seal()) != DocumentStatus::Ok)
         {
             std::printf("BENCH document-record-root status=FAIL phase=document-fixture-validation records=%zu\n",
                         count);

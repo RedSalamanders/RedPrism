@@ -1,5 +1,6 @@
 #include "PreparedRasterHistoryTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Executor.h"
 #include "RasterEditWork.h"
 
@@ -50,7 +51,7 @@ bool BytesEqual(const Raster& raster, std::span<const std::uint8_t> expected)
 
 CanvasDocument MakeDocument(const Raster& image, bool selected = false)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = StableGuid("10000000-0000-4000-8000-000000000001");
     document.width = image.Width();
     document.height = image.Height();
@@ -66,7 +67,7 @@ CanvasDocument MakeDocument(const Raster& image, bool selected = false)
         selection.loops = SelectionLoops{{Vec2{0, 0}, Vec2{1, 0}, Vec2{1, 1}, Vec2{0, 1}}};
         document.selection = std::move(selection);
     }
-    return document;
+    return std::move(document).Seal();
 }
 
 bool Install(DocumentSession& session, CanvasDocument document)

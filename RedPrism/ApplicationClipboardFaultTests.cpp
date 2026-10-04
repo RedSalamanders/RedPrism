@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
@@ -66,7 +67,7 @@ constexpr std::array<std::uint8_t, 4> kSelectedPixel{20, 40, 80, 255};
 
 CanvasDocument ClipboardFaultFixture(Guid& activeLayer)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 9;
     document.height = 7;
@@ -75,7 +76,7 @@ CanvasDocument ClipboardFaultFixture(Guid& activeLayer)
         Raster::Make(3, 1, RasterFormat::Bgra8888, kSourcePixels.data(), kSourcePixels.size()), {}, layer.name};
     activeLayer = layer.id;
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 bool PrivateCopyIsLiteral(const DocumentSession& session) noexcept
 {
@@ -227,7 +228,8 @@ int Application::RunClipboardFaultSelfTest() noexcept
 
         if (noPaintCut)
         {
-            _session.EditForTest([](CanvasDocument& document) { document.layers.front().visible = false; });
+            EditLayerRecordsForTest(_session,
+                                    [](DocumentFixture& document) { document.layers.front().visible = false; });
             if (_session.CanPaint() || !_session.CanCopyPixels() || !PrivateCopyIsLiteral(_session))
                 return 5;
             DocumentChanged();

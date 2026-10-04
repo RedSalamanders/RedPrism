@@ -1388,6 +1388,7 @@ void DocumentSession::BeginMarquee(Vec2 point, SelectionMode mode)
         return;
     }
     const Vec2 anchor{std::round(point.x), std::round(point.y)};
+    ++_lassoOpening;
     _lassoDraft = LassoDraft{{anchor}, std::nullopt, mode, marqueeKind, anchor};
 }
 
@@ -1397,6 +1398,7 @@ void DocumentSession::BeginLasso(Vec2 point, SelectionMode mode)
     {
         return;
     }
+    ++_lassoOpening;
     _lassoDraft = LassoDraft{{point}, std::nullopt, mode, lassoKind, std::nullopt};
 }
 

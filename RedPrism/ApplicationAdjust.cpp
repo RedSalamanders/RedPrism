@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "Adjust.h"
 #include "AdjustControls.h"
 #include "ChromeHost.h"
@@ -661,7 +663,7 @@ int Application::RunAdjustSelfTest() noexcept
         layer.asset = RasterAsset{raster, Raster::MakeThumbnail(raster), layer.name};
         layer.transform.origin = Vec2{20, 20};
         _session.BeginEdit(L"Import Image");
-        _session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+        EditLayerRecordsForTest(_session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
         _session.EndEdit();
         _session.SelectLayer(layer.id);
         DocumentChanged();

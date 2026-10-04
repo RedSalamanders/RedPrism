@@ -2,6 +2,8 @@
 
 #include "ApplicationShutdownTestProbe.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "TransformCancellationWork.h"
 #include "TransformPreviewTestGate.h"
@@ -99,7 +101,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const Raster mask = Raster::Make(2, 2, RasterFormat::Gray8, maskPixels.data(), maskPixels.size());
         if (!image.HasStorage() || !mask.HasStorage())
             return false;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -110,7 +112,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         layer.transform.sampling = LayerSampling::Nearest;
         const Guid target = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), target);
+        _session.ReplaceDocument(std::move(document).Seal(), target);
         _session.history.Reset();
         _session.history.MarkSaved();
         _viewport.SetZoom(1, _viewport.Center(), DocumentSize());
@@ -215,7 +217,8 @@ int Application::RunTransformPreviewSelfTest() noexcept
                 break;
             case Action::ReplaceSource:
             {
-                owner._session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+                EditLayerRecordsForTest(owner._session,
+                                        [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
                 owner.DocumentChanged();
                 owner
                     .CancelTransformPreviewJobs(); // Refuse the captured source; next-epoch refresh is a separate case.
@@ -562,7 +565,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
             FAILED(closing._retryWait.Initialize(closing._jobs, closing._ownerWork)) ||
             !closing.InitializeHostContinuations())
             return 5;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 8;
@@ -573,7 +576,7 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const auto active = layer.id;
         const auto source = layer.asset->image;
         document.layers.push_back(std::move(layer));
-        closing._session.ReplaceDocument(std::move(document), active);
+        closing._session.ReplaceDocument(std::move(document).Seal(), active);
         if (!closing._session.BeginDeferredTransform(true))
             return 5;
         auto draft = closing._session.PendingTransformEdit()->draft;

@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "Selection.h"
 
@@ -46,7 +48,7 @@ int Application::RunTransformPolicySelfTest() noexcept
         if (!settle() || !escapeAndSettle())
             return {};
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 16;
         document.height = 16;
@@ -58,7 +60,7 @@ int Application::RunTransformPolicySelfTest() noexcept
         layer.transform.sampling = LayerSampling::Nearest;
         const Guid target = layer.id;
         document.layers.push_back(std::move(layer));
-        _session.ReplaceDocument(std::move(document), target);
+        _session.ReplaceDocument(std::move(document).Seal(), target);
         _session.history.Reset();
         _session.history.MarkSaved();
         _viewport.SetZoom(1.0, _viewport.Center(), DocumentSize());

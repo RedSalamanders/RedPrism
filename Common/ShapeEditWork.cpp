@@ -1,5 +1,6 @@
 #include "ShapeEditWork.h"
 
+#include "DocumentDraft.h"
 #include "Selection.h"
 
 #include <algorithm>
@@ -249,14 +250,19 @@ ShapeEditResult DocumentSession::PrepareShapeEditPublication(ShapeEditInput inpu
     }
     const auto active = added.id;
     const auto parent = added.parentID;
-    auto after = input._source;
-    // Metadata construction and vector growth stay on this worker. Selection geometry shares its immutable root.
-    after.layers.insert(after.layers.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(added));
+    auto draft = CanvasDocumentDraft::Clone(input._source, input._source.layers.size() + 1, cancellation);
+    if (!draft)
+        return {cancellation.IsCancelled() ? ShapeEditStatus::Cancelled : ShapeEditStatus::Invalid};
+    if (!draft.value().Insert(insertion, std::move(added)))
+        return {cancellation.IsCancelled() ? ShapeEditStatus::Cancelled : ShapeEditStatus::Invalid};
     if (!Checkpoint(observer, ShapeWorkStage::Document, cancellation))
         return {ShapeEditStatus::Cancelled};
+    auto after = draft.value().Seal(cancellation);
+    if (!after)
+        return {cancellation.IsCancelled() ? ShapeEditStatus::Cancelled : ShapeEditStatus::Invalid};
     ImageImportBatchResult imported;
     imported.status = ProjectIoStatus::Ok;
-    imported.importedDocument = std::move(after);
+    imported.importedDocument = std::move(after.value());
     imported.importedActiveLayerID = active;
     imported.historyName = input._draft.kind == ShapeKind::Rectangle ? L"Rectangle" : L"Ellipse";
     auto publication =

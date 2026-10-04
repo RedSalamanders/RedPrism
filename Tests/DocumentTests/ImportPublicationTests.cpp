@@ -1,5 +1,6 @@
 #include "ImportPublicationTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "BrushStroke.h"
 #include "ImageImportHistory.h"
 #include "WarpStroke.h"
@@ -31,7 +32,7 @@ void Expect(bool condition, const char* name) noexcept
 
 CanvasDocument PixelDocument(const wchar_t* name, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 1;
     document.height = 1;
@@ -39,26 +40,26 @@ CanvasDocument PixelDocument(const wchar_t* name, std::array<std::uint8_t, 4> bg
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     layer.asset = RasterAsset{image, image, name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 CanvasDocument WithPixel(const CanvasDocument& source, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument result = source;
+    DocumentFixture result = DocumentFixture::Copy(source);
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     result.layers.front().asset.value().image = image;
     result.layers.front().asset.value().thumbnail = image;
-    return result;
+    return std::move(result).Seal();
 }
 
 CanvasDocument WithSecondImage(const CanvasDocument& baseline, std::array<std::uint8_t, 4> bgra)
 {
-    CanvasDocument result = baseline;
+    DocumentFixture result = DocumentFixture::Copy(baseline);
     ImageLayer layer = ImageLayer::Blank(L"Imported image", Vec2{1, 1});
     const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, bgra.data(), bgra.size());
     layer.asset = RasterAsset{image, image, layer.name};
     result.layers.push_back(std::move(layer));
-    return result;
+    return std::move(result).Seal();
 }
 
 bool HasPixel(const CanvasDocument& document, const Guid& layerID, std::array<std::uint8_t, 4> expected) noexcept
@@ -555,7 +556,8 @@ int RunImportPublicationTests()
     {
         SessionFixture fixture;
         CanvasDocument invalid = PixelDocument(L"Invalid mask graph", {10, 11, 12, 255});
-        invalid.layers.front().maskSourceID = Guid::Generate();
+        EditDocumentFixture(invalid,
+                            [](DocumentFixture& fixture) { fixture.layers.front().maskSourceID = Guid::Generate(); });
         auto invalidPrepared = PrepareCurrent(fixture.session, NewImageBatch(invalid));
         Expect(!invalidPrepared.has_value(), "invalid-mask-source-graph-refused");
 

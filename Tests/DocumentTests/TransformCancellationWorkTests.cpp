@@ -1,5 +1,6 @@
 #include "TransformCancellationWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "FloatingOpeningWork.h"
@@ -42,7 +43,7 @@ void MakeFixture(Fixture& fixture)
 {
     fixture.sourceImage = Raster::Make(2, 2, RasterFormat::Bgra8888, kSourcePixels.data(), kSourcePixels.size());
     const Raster maskImage = Raster::Make(2, 2, RasterFormat::Gray8, kMaskPixels.data(), kMaskPixels.size());
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 8;
     document.height = 8;
@@ -60,7 +61,7 @@ void MakeFixture(Fixture& fixture)
     sibling.transform.sampling = LayerSampling::Nearest;
     fixture.siblingID = sibling.id;
     document.layers = {source, sibling};
-    fixture.session.ReplaceDocument(std::move(document), fixture.sourceID);
+    fixture.session.ReplaceDocument(std::move(document).Seal(), fixture.sourceID);
 
     // Seed redo without depending on CreateDocument's initial history shape.
     fixture.session.RenameLayer(fixture.siblingID, L"Sibling edit");
@@ -232,7 +233,8 @@ void NestedDuplicateLeavesOuterEditAndRedo()
     Expect(namedCancellation && named.session.ApplyPreparedTransformCancellationIfCurrent(namedCancellation.value()) &&
                named.session.history.CaptureState().Depth() == 1,
            "named-outer-cancel-returns-to-outer-depth");
-    named.session.EditForTest([](CanvasDocument& document) { document.layers.back().name = L"Outer result"; });
+    EditLayerRecordsForTest(named.session,
+                            [](DocumentFixture& document) { document.layers.back().name = L"Outer result"; });
     named.session.EndEdit();
     Expect(named.session.history.UndoName() == L"Outer edit" && named.session.history.UndoCount() == namedUndoCount + 1,
            "nested-duplicate-cancel-preserves-outer-entry-name");
@@ -262,7 +264,8 @@ void OpenChangedDuplicate(DocumentSession& session)
     session.BeginDuplicateTransform();
     // Change an independent source record so PrepareEnd must build a history entry. Without this change,
     // cancellation restores the opening exactly and AfterSnapshot, Entry and StackGrowth are not visited.
-    session.EditForTest([](CanvasDocument& document) { document.layers.back().name = L"Independent source change"; });
+    EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                            { document.layers.back().name = L"Independent source change"; });
 }
 
 void DuplicateWorkerCancellationAndHistoryFaults()
@@ -318,7 +321,8 @@ void Refusals()
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
-        fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().name = L"Changed source"; });
+        EditLayerRecordsForTest(fixture.session,
+                                [](DocumentFixture& document) { document.layers.front().name = L"Changed source"; });
         const OwnerState changed(fixture.session);
         Expect(prepared && !fixture.session.ApplyPreparedTransformCancellationIfCurrent(prepared.value()) &&
                    SameOwnerState(fixture.session, changed),

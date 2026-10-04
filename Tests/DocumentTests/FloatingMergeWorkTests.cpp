@@ -1,5 +1,6 @@
 #include "FloatingMergeWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "FloatingMergeWork.h"
 #include "Selection.h"
 
@@ -33,7 +34,7 @@ struct Fixture final
 
 bool Open(Fixture& fixture, InlineExecutor& executor, bool mask = false, bool nested = false)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 8;
     document.height = 4;
@@ -52,7 +53,7 @@ bool Open(Fixture& fixture, InlineExecutor& executor, bool mask = false, bool ne
     fixture.sourceID = source.id;
     document.layers.push_back(source);
     document.selection = DocumentSelection{false, SelectionGeometry::Rect(0, 0, 1, 1)};
-    fixture.session.ReplaceDocument(std::move(document), source.id);
+    fixture.session.ReplaceDocument(std::move(document).Seal(), source.id);
     if (!fixture.session.CopySelection())
         return false;
 
@@ -383,7 +384,8 @@ void StaleCapsulesProtectNewerState()
             }
             else if (mutation == 1)
             {
-                fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().opacity = 0.5; });
+                EditLayerRecordsForTest(fixture.session,
+                                        [](DocumentFixture& document) { document.layers.front().opacity = 0.5; });
             }
             else if (mutation == 2)
             {

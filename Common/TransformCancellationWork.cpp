@@ -1,5 +1,7 @@
 #include "TransformCancellationWork.h"
 
+#include "DocumentDraft.h"
+
 #include <algorithm>
 #include <limits>
 #include <type_traits>
@@ -58,29 +60,23 @@ std::optional<PreparedTransformCancellation> DocumentSession::PrepareTransformCa
     const auto originalIndex = IndexOf(input._source->layers, input._duplicate->second);
     if (!copyIndex || !originalIndex)
         return std::nullopt;
-    CanvasDocument after;
-    after.id = input._source->id;
-    after.width = input._source->width;
-    after.height = input._source->height;
-    after.resolution = input._source->resolution;
-    after.selection = input._source->selection;
-    after.layers.reserve(input._source->layers.size() - 1);
-    for (const auto& layer : input._source->layers)
+    auto draft = CanvasDocumentDraft::Clone(input._source.value(), input._source->layers.size(), cancellation);
+    if (!draft)
+        return std::nullopt;
     {
-        if (cancellation.IsCancelled())
+        if (cancellation.IsCancelled() || !draft.value().Erase(copyIndex.value()))
             return std::nullopt;
-        if (layer.id != input._duplicate->first)
-            after.layers.push_back(layer);
     }
-    if (ValidateDocument(after) != DocumentStatus::Ok)
+    auto sealed = draft.value().Seal(cancellation);
+    if (!sealed || cancellation.IsCancelled() || ValidateDocument(sealed.value()) != DocumentStatus::Ok)
         return std::nullopt;
     PreparedImageImport publication(prepared._authority, input._history);
     publication._history =
-        DocumentHistory::PrepareEnd(input._history, after, input._duplicate->second, cancellation, observer);
+        DocumentHistory::PrepareEnd(input._history, sealed.value(), input._duplicate->second, cancellation, observer);
     if (!publication._history || cancellation.IsCancelled())
         return std::nullopt;
     publication._source = std::move(input._source);
-    publication._document = std::move(after);
+    publication._document = std::move(sealed.value());
     publication._active = input._duplicate->second;
     publication._selected.insert(input._duplicate->second);
     publication._maskSelected = false;

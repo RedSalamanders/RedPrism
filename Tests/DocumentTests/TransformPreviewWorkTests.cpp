@@ -1,5 +1,6 @@
 #include "TransformPreviewWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "DistortWork.h"
 #include "Document.h"
 #include "Executor.h"
@@ -63,14 +64,14 @@ LayerTransform Transform(Vec2 origin, Vec2 size)
 
 CanvasDocument Document(std::vector<ImageLayer> layers, int width = 64, int height = 48)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = width;
     document.height = height;
     document.layers = std::move(layers);
     document.selection =
         DocumentSelection{true, SelectionLoops{SelectionLoop{Vec2{2, 3}, Vec2{9, 3}, Vec2{9, 11}, Vec2{2, 11}}}};
-    return document;
+    return std::move(document).Seal();
 }
 
 const ImageLayer* Find(const CanvasDocument* document, const Guid& id) noexcept
@@ -633,7 +634,8 @@ void RefuseStaleForeignAndInvalidInputs()
     {
         SessionFixture fixture;
         auto prepared = Prepare(fixture, executor);
-        fixture.session.EditForTest([](CanvasDocument& document) { document.layers.front().name = L"changed"; });
+        EditLayerRecordsForTest(fixture.session,
+                                [](DocumentFixture& document) { document.layers.front().name = L"changed"; });
         const auto current = fixture.session.Document().value();
         Expect(prepared.publication &&
                    !fixture.session.ApplyPreparedTransformPreviewIfCurrent(prepared.publication.value()) &&

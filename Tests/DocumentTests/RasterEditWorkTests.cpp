@@ -1,4 +1,5 @@
 #include "RasterEditWorkTests.h"
+#include "../Support/DocumentFixture.h"
 
 #include "Document.h"
 #include "RasterEditWork.h"
@@ -147,20 +148,20 @@ bool InitializeOwnerSession(DocumentSession& session, bool withMask, bool withSe
             return false;
         }
     }
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{source, thumbnail, layer.name};
-            if (withMask)
-            {
-                layer.mask = LayerMask{RasterAsset{mask, maskThumbnail, L"Owner mask"}};
-            }
-            if (withSelection)
-            {
-                document.selection = Rect(0, 0, 1, 1);
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{source, thumbnail, layer.name};
+                                if (withMask)
+                                {
+                                    layer.mask = LayerMask{RasterAsset{mask, maskThumbnail, L"Owner mask"}};
+                                }
+                                if (withSelection)
+                                {
+                                    document.selection = Rect(0, 0, 1, 1);
+                                }
+                            });
     session.SelectLayerTarget(active.value(), withMask);
     if (session.ActiveLayerID() != active || session.IsMaskSelected() != withMask || session.ActiveLayer() == nullptr)
     {
@@ -664,29 +665,38 @@ void OwnerStaleResultRefusals()
                                                                                  3, 3, 3, 255, 4, 4, 4, 255};
                               const Raster image = Bgra(2, 2, replacement);
                               const Raster thumbnail = Raster::MakeThumbnail(image);
-                              session.EditForTest(
-                                  [&](CanvasDocument& document)
-                                  {
-                                      document.layers.front().asset->image = image;
-                                      document.layers.front().asset->thumbnail = thumbnail;
-                                  });
+                              EditLayerRecordsForTest(session,
+                                                      [&](DocumentFixture& document)
+                                                      {
+                                                          document.layers.front().asset->image = image;
+                                                          document.layers.front().asset->thumbnail = thumbnail;
+                                                      });
                           });
-    CheckOwnerStaleTarget(
-        "owner.stale-layer-transform-refused", false, false, false, [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.layers.front().transform.origin.x += 1.0; }); });
-    CheckOwnerStaleTarget(
-        "owner.stale-mask-enabled-refused", true, false, false, [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.layers.front().mask->enabled = false; }); });
-    CheckOwnerStaleTarget(
-        "owner.stale-mask-link-refused", true, false, false, [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.layers.front().mask->linked = false; }); });
+    CheckOwnerStaleTarget("owner.stale-layer-transform-refused", false, false, false,
+                          [](DocumentSession& session)
+                          {
+                              EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                                      { document.layers.front().transform.origin.x += 1.0; });
+                          });
+    CheckOwnerStaleTarget("owner.stale-mask-enabled-refused", true, false, false,
+                          [](DocumentSession& session)
+                          {
+                              EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                                      { document.layers.front().mask->enabled = false; });
+                          });
+    CheckOwnerStaleTarget("owner.stale-mask-link-refused", true, false, false,
+                          [](DocumentSession& session)
+                          {
+                              EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                                      { document.layers.front().mask->linked = false; });
+                          });
     CheckOwnerStaleTarget("owner.stale-mask-placement-refused", true, false, false,
                           [](DocumentSession& session)
                           {
                               LayerTransform placement;
                               placement.origin = Vec2{0.5, 0};
-                              session.EditForTest([&](CanvasDocument& document)
-                                                  { document.layers.front().mask->placement = placement; });
+                              EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                                      { document.layers.front().mask->placement = placement; });
                           });
     CheckOwnerStaleTarget("owner.stale-mask-image-refused", true, false, false,
                           [](DocumentSession& session)
@@ -694,16 +704,19 @@ void OwnerStaleResultRefusals()
                               constexpr std::array<std::uint8_t, 4> replacement{240, 180, 120, 60};
                               const Raster image = Gray(2, 2, replacement);
                               const Raster thumbnail = Raster::MakeThumbnail(image);
-                              session.EditForTest(
-                                  [&](CanvasDocument& document)
-                                  {
-                                      document.layers.front().mask->asset.image = image;
-                                      document.layers.front().mask->asset.thumbnail = thumbnail;
-                                  });
+                              EditLayerRecordsForTest(session,
+                                                      [&](DocumentFixture& document)
+                                                      {
+                                                          document.layers.front().mask->asset.image = image;
+                                                          document.layers.front().mask->asset.thumbnail = thumbnail;
+                                                      });
                           });
-    CheckOwnerStaleTarget(
-        "owner.stale-selection-refused", false, true, false, [](DocumentSession& session)
-        { session.EditForTest([](CanvasDocument& document) { document.selection = Rect(1, 1, 1, 1); }); });
+    CheckOwnerStaleTarget("owner.stale-selection-refused", false, true, false,
+                          [](DocumentSession& session)
+                          {
+                              EditLayerRecordsForTest(session, [](DocumentFixture& document)
+                                                      { document.selection = Rect(1, 1, 1, 1); });
+                          });
     {
         DocumentSession session;
         if (!InitializeOwnerSession(session, false, false))
@@ -715,7 +728,7 @@ void OwnerStaleResultRefusals()
             Expect(false, "owner.whole-generation-prepare");
             return;
         }
-        session.EditForTest([](CanvasDocument& document) { document.resolution = 144; });
+        EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.resolution = 144; });
         Expect(session.CanApplyJobResult(token, token.sequence),
                "owner.target-token-still-matches-after-unrelated-document-metadata-change");
         ExpectOwnerRefusal(session, prepared, false, token,
@@ -818,7 +831,8 @@ void OwnerActiveTargetRefusals()
             return;
         ImageLayer other = ImageLayer::Blank(L"Other", Vec2{2, 2});
         const Guid otherId = other.id;
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(std::move(other)); });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document) { document.layers.push_back(std::move(other)); });
         JobToken token;
         ImageLayer prepared;
         if (!PrepareOwnerRasterEdit(session, false, token, prepared))
@@ -985,17 +999,17 @@ void OwnerCandidateValidationRefusals()
             Expect(false, "owner.budget-peer-thumbnail");
             return;
         }
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                document.layers.reserve(static_cast<std::size_t>(peerCount + 1));
-                for (int index = 0; index < peerCount; ++index)
-                {
-                    ImageLayer peer = ImageLayer::Blank(L"Budget peer", Vec2{peerSide, peerSide});
-                    peer.asset = RasterAsset{peerImage, peerThumbnail, peer.name};
-                    document.layers.push_back(std::move(peer));
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    document.layers.reserve(static_cast<std::size_t>(peerCount + 1));
+                                    for (int index = 0; index < peerCount; ++index)
+                                    {
+                                        ImageLayer peer = ImageLayer::Blank(L"Budget peer", Vec2{peerSide, peerSide});
+                                        peer.asset = RasterAsset{peerImage, peerThumbnail, peer.name};
+                                        document.layers.push_back(std::move(peer));
+                                    }
+                                });
         JobToken token;
         ImageLayer prepared;
         if (!PrepareOwnerRasterEdit(session, false, token, prepared))
@@ -1040,17 +1054,18 @@ void OwnerCandidateValidationRefusals()
             Expect(false, "owner.mask-budget-peer-thumbnail");
             return;
         }
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                document.layers.reserve(static_cast<std::size_t>(peerCount + 1));
-                for (int index = 0; index < peerCount; ++index)
-                {
-                    ImageLayer peer = ImageLayer::Blank(L"Mask budget peer", Vec2{peerSide, peerSide});
-                    peer.mask = LayerMask{RasterAsset{peerMask, peerThumbnail, L"Peer mask"}};
-                    document.layers.push_back(std::move(peer));
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    document.layers.reserve(static_cast<std::size_t>(peerCount + 1));
+                                    for (int index = 0; index < peerCount; ++index)
+                                    {
+                                        ImageLayer peer =
+                                            ImageLayer::Blank(L"Mask budget peer", Vec2{peerSide, peerSide});
+                                        peer.mask = LayerMask{RasterAsset{peerMask, peerThumbnail, L"Peer mask"}};
+                                        document.layers.push_back(std::move(peer));
+                                    }
+                                });
         JobToken token;
         ImageLayer prepared;
         if (!PrepareOwnerRasterEdit(session, true, token, prepared))

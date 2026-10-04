@@ -1,4 +1,5 @@
 #include "BrushStroke.h"
+#include "DocumentDraft.h"
 
 #include "Heal.h"
 #include "ImageFilters.h"
@@ -1256,6 +1257,7 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         return false;
     }
+    ++_brushOpening;
     _brush = std::move(stroke);
     return true;
 }
@@ -1317,7 +1319,9 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
     {
         return false;
     }
-    ImageLayer* current = MutableLayer(stroke->LayerID());
+    if (HasDeferredTransform())
+        return false;
+    const ImageLayer* current = FindLayer(stroke->LayerID());
     if (current == nullptr)
     {
         return false;
@@ -1342,37 +1346,50 @@ bool DocumentSession::CommitStroke(const std::shared_ptr<BrushStroke>& stroke,
                               : stroke->IsMask()          ? L"Paint Mask"
                               : stroke->Erasing()         ? L"Erase"
                                                           : L"Brush Stroke";
-    BeginEdit(name);
-    if (stroke->IsMask())
+    const auto index = IndexOf(_document.value().layers, stroke->LayerID());
+    if (!index)
+        return false;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return false;
     {
-        current->mask->asset.image = result->image;
-        current->mask->asset.thumbnail = result->thumbnail;
-    }
-    else
-    {
-        // A mask on the layer's own grid grows with the layer; only the new area is revealed (the old one keeps the
-        // mask's pixels and fill). A uniform mask stays as is.
-        if (current->mask.has_value() && !current->mask->placement.has_value() &&
-            result->bounds != stroke->SourceRect() && current->mask->asset.image.PixelCount() > 1)
+        ImageLayer& edited = draft.value().EditLayers()[index.value()];
+        if (stroke->IsMask())
         {
-            const GridRect& source = stroke->SourceRect();
-            const Raster grown =
-                CarriedMask(current->mask->asset.image, source.width, source.height, source.x - result->bounds.x,
-                            source.y - result->bounds.y, result->bounds.width, result->bounds.height, 255);
-            if (grown.HasStorage())
-            {
-                current->mask->asset.image = grown;
-                current->mask->asset.thumbnail = Raster::MakeThumbnail(grown);
-            }
+            edited.mask->asset.image = result->image;
+            edited.mask->asset.thumbnail = result->thumbnail;
         }
-        const std::wstring layerName = current->name;
-        current->asset = RasterAsset{result->image, result->thumbnail, layerName};
-        current->transform = result->transform;
+        else
+        {
+            // A mask on the layer's own grid grows with the layer; only the new area is revealed (the old one keeps the
+            // mask's pixels and fill). A uniform mask stays as is.
+            if (edited.mask.has_value() && !edited.mask->placement.has_value() &&
+                result->bounds != stroke->SourceRect() && edited.mask->asset.image.PixelCount() > 1)
+            {
+                const GridRect& source = stroke->SourceRect();
+                const Raster grown =
+                    CarriedMask(edited.mask->asset.image, source.width, source.height, source.x - result->bounds.x,
+                                source.y - result->bounds.y, result->bounds.width, result->bounds.height, 255);
+                if (grown.HasStorage())
+                {
+                    edited.mask->asset.image = grown;
+                    edited.mask->asset.thumbnail = Raster::MakeThumbnail(grown);
+                }
+            }
+            const std::wstring layerName = edited.name;
+            edited.asset = RasterAsset{result->image, result->thumbnail, layerName};
+            edited.transform = result->transform;
+        }
     }
     if (selectionAfterCommit.has_value())
     {
-        _document->selection = selectionAfterCommit;
+        draft.value().DocumentState().selection = selectionAfterCommit;
     }
+    auto after = draft.value().Seal();
+    if (!after)
+        return false;
+    BeginEdit(name);
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
     _lastBrushCommit = BrushCommitInfo{result->image,        result->bounds.x,      result->bounds.y,
@@ -1454,12 +1471,16 @@ void DocumentSession::AddLayerMask(bool revealing)
     // Targeting the new mask is a target switch: a pending gradient applies first.
     if (!ResolveGradient())
         return;
-    ImageLayer* layer = MutableActiveLayer();
+    const ImageLayer* layer = ActiveLayer();
     if (!_document.has_value() || layer == nullptr || layer->mask.has_value())
     {
         return;
     }
     CommitTransform();
+    // Settlement can replace the root; the mask targets the same active layer in the settled document.
+    layer = ActiveLayer();
+    if (!layer || layer->mask)
+        return;
     if (PixelBudgetLeft(true) < 1)
     {
         _budgetRefused = true;
@@ -1467,8 +1488,19 @@ void DocumentSession::AddLayerMask(bool revealing)
     }
     const std::uint8_t value = revealing ? 255 : 0;
     const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &value, 1);
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask =
+        LayerMask{RasterAsset{mask, mask, layer->name}, true, std::nullopt, true};
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(revealing ? L"Add Reveal-All Mask" : L"Add Hide-All Mask");
-    layer->mask = LayerMask{RasterAsset{mask, mask, layer->name}, true, std::nullopt, true};
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
     _maskSelected = true;
@@ -1476,13 +1508,26 @@ void DocumentSession::AddLayerMask(bool revealing)
 
 void DocumentSession::ToggleLayerMask(const Guid& id)
 {
-    ImageLayer* layer = MutableLayer(id);
+    if (HasDeferredTransform())
+        return;
+    const ImageLayer* layer = FindLayer(id);
     if (layer == nullptr || !layer->mask.has_value())
     {
         return;
     }
-    BeginEdit(layer->mask->enabled ? L"Disable Layer Mask" : L"Enable Layer Mask");
-    layer->mask->enabled = !layer->mask->enabled;
+    const bool enabled = layer->mask->enabled;
+    const auto index = IndexOf(_document.value().layers, id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask.value().enabled = !enabled;
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
+    BeginEdit(enabled ? L"Disable Layer Mask" : L"Enable Layer Mask");
+    std::swap(_document.value(), after.value());
     ++_editRevision;
     EndEdit();
 }
@@ -1995,6 +2040,7 @@ bool DocumentSession::BeginWarp(Vec2 point)
     }
     _warpSource = WarpSource{layer->id, layer->asset.has_value() ? layer->asset->image : Raster{}, layer->transform};
     warp->Append(point);
+    ++_warpOpening;
     _warp = std::move(warp);
     _lastBrushPoint = LastBrushPoint{point, layer->id, false};
     return true;
@@ -2026,11 +2072,11 @@ void DocumentSession::FinishWarp()
     }
     const std::shared_ptr<WarpStroke> warp = std::move(_warp);
     _warp.reset();
-    if (warp->Points().empty() || !_document.has_value())
+    if (warp->Points().empty() || !_document.has_value() || HasDeferredTransform())
     {
         return;
     }
-    const ImageLayer* current = MutableLayer(_warpSource.layerID);
+    const ImageLayer* current = FindLayer(_warpSource.layerID);
     const Raster currentImage = current != nullptr && current->asset.has_value() ? current->asset->image : Raster{};
     if (current == nullptr || !(currentImage == _warpSource.image) || current->transform != _warpSource.transform)
     {
@@ -2472,16 +2518,15 @@ void DocumentSession::AddPixelLayer(const Raster& image, Vec2 origin, std::wstri
     InsertLayerAboveActive(std::move(layer), editName, dropsSelection);
 }
 
-void DocumentSession::RedrawShape(std::size_t index)
+void DocumentSession::RedrawShape(ImageLayer& layer, std::span<const ImageLayer> records)
 {
     if (HasDeferredTransform())
         return;
 
-    if (!_document.has_value() || index >= _document->layers.size())
+    if (!_document.has_value())
     {
         return;
     }
-    ImageLayer& layer = _document->layers[index];
     const std::optional<LayerShapeStyle> shape = LiveShape(layer);
     if (!shape.has_value() || !layer.asset.has_value())
     {
@@ -2489,10 +2534,14 @@ void DocumentSession::RedrawShape(std::size_t index)
     }
     const int width = std::max(1, static_cast<int>(std::lround(layer.transform.size.x)));
     const int height = std::max(1, static_cast<int>(std::lround(layer.transform.size.y)));
+    std::int64_t imageLeft = kMaxLayerPixels;
+    for (const auto& record : records)
+        if (record.id != layer.id && record.asset)
+            imageLeft -= record.asset->image.PixelCount();
     // Past the document's budget (Decision D7) the shape keeps its pixels, stretched, instead of redrawing.
     if ((width == layer.asset->image.Width() && height == layer.asset->image.Height()) ||
         static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > kMaxShapePixels ||
-        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > PixelBudgetLeft(false, {layer.id}))
+        static_cast<std::int64_t>(width) * static_cast<std::int64_t>(height) > std::max<std::int64_t>(0, imageLeft))
     {
         return;
     }
@@ -3070,7 +3119,7 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
         return false;
     if (pixelMoveCommit && (!_pixelMove || !_pixelMove->deferred || mask || !movedSelection || !_document->selection))
         return false;
-    ImageLayer* const current = MutableLayer(token.target->layerId);
+    const ImageLayer* const current = FindLayer(token.target->layerId);
     if (!current || prepared.id != current->id || prepared.name != current->name ||
         prepared.visible != current->visible || prepared.parentID != current->parentID ||
         prepared.isGroup != current->isGroup || prepared.opacity != current->opacity ||
@@ -3109,13 +3158,13 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
         return false;
     if (publication)
     {
-        if (!history.CanPublish(publication->_history) || !history.Publish(publication->_history))
+        if (!publication->_document || !history.CanPublish(publication->_history) ||
+            !history.Publish(publication->_history))
             return false;
         // Every operation after validation is nonthrowing. The caller's aggregate now retains the old layer,
         // selection and history containers until its worker release; no destructor walks a large graph here.
-        std::swap(*current, prepared);
-        if (pixelMoveCommit)
-            std::swap(_document->selection.value(), *movedSelection);
+        std::swap(_document, publication->_document);
+        publication->_applied = true;
         std::swap(_lastBrushCommit, publication->_retiredBrushCommit);
         if (gradientCommit)
             std::swap(_gradient, publication->_retiredGradient);
@@ -3125,10 +3174,20 @@ bool DocumentSession::ApplyRasterEditImpl(ImageLayer&& prepared, bool mask, std:
     }
     else
     {
-        BeginEdit(std::move(name));
-        *current = std::move(prepared);
+        const auto index = IndexOf(_document.value().layers, prepared.id);
+        if (!index)
+            return false;
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+        if (!draft)
+            return false;
+        draft.value().EditLayers()[index.value()] = std::move(prepared);
         if (pixelMoveCommit)
-            _document->selection = std::move(*movedSelection);
+            draft.value().DocumentState().selection = std::move(*movedSelection);
+        auto after = draft.value().Seal();
+        if (!after)
+            return false;
+        BeginEdit(std::move(name));
+        std::swap(_document.value(), after.value());
         _lastBrushCommit.reset(); // an older gradient/stroke preview cannot be adopted for this prepared edit
         EndEdit();
     }
@@ -3149,13 +3208,23 @@ void DocumentSession::DeleteLayerMask()
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    const ImageLayer* layer = FindLayer(_activeLayerID.value());
     if (layer == nullptr || !layer->mask.has_value())
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask.reset();
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Delete Layer Mask");
-    layer->mask.reset();
+    std::swap(_document.value(), after.value());
     _maskSelected = false;
     ++_editRevision;
     EndEdit();
@@ -3433,7 +3502,7 @@ void DocumentSession::AddMask(bool revealing)
     {
         return;
     }
-    ImageLayer* layer = MutableLayer(_activeLayerID.value());
+    const ImageLayer* layer = FindLayer(_activeLayerID.value());
     if (layer == nullptr || layer->mask.has_value())
     {
         return;
@@ -3486,9 +3555,20 @@ void DocumentSession::AddMask(bool revealing)
     {
         return;
     }
+    const auto index = IndexOf(_document.value().layers, layer->id);
+    if (!index)
+        return;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size());
+    if (!draft)
+        return;
+    draft.value().EditLayers()[index.value()].mask =
+        LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer->name}, true, std::nullopt, true};
+    draft.value().DocumentState().selection.reset();
+    auto after = draft.value().Seal();
+    if (!after)
+        return;
     BeginEdit(L"Add Mask from Selection");
-    layer->mask = LayerMask{RasterAsset{mask, Raster::MakeThumbnail(mask), layer->name}, true, std::nullopt, true};
-    _document->selection.reset();
+    std::swap(_document.value(), after.value());
     _maskSelected = true;
     ++_editRevision;
     EndEdit();
@@ -3568,15 +3648,32 @@ void DocumentSession::BeginSelectionTransform()
     floating.parentID = source.parentID;
     floating.opacity = source.opacity;
     floating.blendMode = source.blendMode;
-    _document->layers.insert(_document->layers.begin() + static_cast<std::ptrdiff_t>(index.value()) + 1, floating);
-    SetActiveLayerID(floating.id);
-    _maskSelected = false;
     TransformEdit edit;
     edit.layerID = floating.id;
     edit.draft = floating.transform;
     edit.persistent = true;
     edit.floating = FloatingTransform{
         source.id, before, beforeActive, floating.transform, lifted->image.Width(), lifted->image.Height()};
+    const Guid floatingId = floating.id;
+    auto draft = CanvasDocumentDraft::Clone(_document.value(), _document.value().layers.size() + 1);
+    if (!draft || !draft.value().Insert(index.value() + 1, std::move(floating)))
+    {
+        _document = *before;
+        SetActiveLayerID(beforeActive);
+        EndEdit();
+        return;
+    }
+    auto after = draft.value().Seal();
+    if (!after)
+    {
+        _document = *before;
+        SetActiveLayerID(beforeActive);
+        EndEdit();
+        return;
+    }
+    std::swap(_document.value(), after.value());
+    SetActiveLayerID(floatingId);
+    _maskSelected = false;
     _transformEdit = std::move(edit);
     NoteDocumentMutation();
 }
@@ -3602,7 +3699,7 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
         {
             break;
         }
-        std::vector<ImageLayer>& layers = _document->layers;
+        const auto& layers = _document->layers;
         const std::optional<std::size_t> floatingIndex = IndexOf(layers, edit.layerID);
         const std::optional<std::size_t> sourceIndex = IndexOf(layers, floating.sourceID);
         if (!floatingIndex.has_value() || !sourceIndex.has_value() ||
@@ -3728,17 +3825,25 @@ void DocumentSession::MergeFloating(const TransformEdit& edit, const FloatingTra
             moved = std::move(selection);
         }
         const std::wstring name = source.name;
-        layers.erase(layers.begin() + static_cast<std::ptrdiff_t>(floatingIndex.value()));
-        const std::optional<std::size_t> target = IndexOf(layers, floating.sourceID);
+        auto draft = CanvasDocumentDraft::Clone(_document.value(), layers.size());
+        if (!draft || !draft.value().Erase(floatingIndex.value()))
+            break;
+        const std::optional<std::size_t> target = IndexOf(draft.value().ReadLayers(), floating.sourceID);
         if (!target.has_value())
         {
             break;
         }
-        ImageLayer& installed = layers[target.value()];
-        installed.asset = RasterAsset{image, {}, name};
-        installed.transform = mergedTransform;
-        installed.mask = mask;
-        _document->selection = moved;
+        {
+            ImageLayer& installed = draft.value().EditLayers()[target.value()];
+            installed.asset = RasterAsset{image, {}, name};
+            installed.transform = mergedTransform;
+            installed.mask = mask;
+        }
+        draft.value().DocumentState().selection = moved;
+        auto after = draft.value().Seal();
+        if (!after)
+            break;
+        std::swap(_document.value(), after.value());
         SetActiveLayerID(floating.sourceID);
         _maskSelected = false;
         merged = true;

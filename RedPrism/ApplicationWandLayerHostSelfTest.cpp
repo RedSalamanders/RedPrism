@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "WandLayerHostTestGate.h"
 
@@ -125,7 +126,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
     const auto prepare = [this]()
     {
         _session.ClearDocument();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
@@ -153,7 +154,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
         other.transform.sampling = LayerSampling::Nearest;
         document.layers.push_back(std::move(other));
 
-        _session.ReplaceDocument(std::move(document), activeId);
+        _session.ReplaceDocument(std::move(document).Seal(), activeId);
         _session.wandSettings = CapturedWandSettings();
         _session.selectionAntialiased = false;
         _session.history.Reset();

@@ -1,5 +1,6 @@
 #include "DuplicateOpeningLimitTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "DuplicateOpeningWork.h"
 #include "Executor.h"
@@ -59,7 +60,7 @@ struct Fixture final
         image = Raster::Make(1, 1, RasterFormat::Bgra8888, kImageBytes.data(), kImageBytes.size());
         mask = Raster::Make(1, 1, RasterFormat::Gray8, kMaskBytes.data(), kMaskBytes.size());
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 1;
         document.height = 1;
@@ -80,7 +81,7 @@ struct Fixture final
             document.layers.push_back(std::move(filler));
         }
 
-        session.ReplaceDocument(std::move(document), sourceID);
+        session.ReplaceDocument(std::move(document).Seal(), sourceID);
         session.history.Reset();
         session.SelectLayerTarget(sourceID, false);
     }
@@ -232,13 +233,13 @@ void LimitAndGroupRefusals()
     }
     {
         Fixture fixture(1);
-        CanvasDocument document = fixture.session.Document().value();
+        auto document = DocumentFixture::Copy(fixture.session.Document().value());
         ImageLayer group = ImageLayer::Blank(L"Sidecar active group", Vec2{1, 1});
         group.isGroup = true;
         const Guid groupID = group.id;
         document.layers.front().parentID = groupID;
         document.layers.insert(document.layers.begin(), std::move(group));
-        fixture.session.ReplaceDocument(std::move(document), groupID);
+        fixture.session.ReplaceDocument(std::move(document).Seal(), groupID);
         fixture.session.history.Reset();
         const OwnerSnapshot before(fixture.session);
         SingleThreadExecutor executor;

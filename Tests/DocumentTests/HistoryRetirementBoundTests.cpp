@@ -1,5 +1,6 @@
 #include "HistoryRetirementBoundTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 
 #include <array>
@@ -40,11 +41,11 @@ Raster HeldBgra(std::uint8_t seed)
 
 CanvasDocument DocumentWithRaster(const Raster& raster, const wchar_t* name)
 {
-    CanvasDocument document{};
+    DocumentFixture document{};
     ImageLayer layer = ImageLayer::Blank(name, Vec2{1, 1});
     layer.asset = RasterAsset{raster, raster, name};
     document.layers.push_back(std::move(layer));
-    return document;
+    return std::move(document).Seal();
 }
 
 SelectionLoops SelectionWithSpareCapacity()
@@ -77,11 +78,16 @@ void EmptyAndCurrentGraphHaveAllocationFloors()
     const std::uint64_t current = history.RetirementMemoryBytes(document);
     Expect(current >= empty + held.ByteSize(), "current-raster-allocation-floor");
 
-    std::wstring& layerName = document->layers.front().name;
-    const auto originalCapacity = layerName.capacity();
-    layerName.reserve(257);
+    const auto originalCapacity = document->layers.front().name.capacity();
+    std::size_t reservedCapacity = 0;
+    EditDocumentFixture(document.value(),
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.front().name.reserve(257);
+                            reservedCapacity = fixture.layers.front().name.capacity();
+                        });
     const std::uint64_t spareName = history.RetirementMemoryBytes(document);
-    Expect(spareName >= current + (layerName.capacity() - originalCapacity) * sizeof(wchar_t),
+    Expect(spareName >= current + (reservedCapacity - originalCapacity) * sizeof(wchar_t),
            "current-name-spare-capacity-floor");
 
     const SelectionLoops loops = SelectionWithSpareCapacity();
@@ -111,14 +117,22 @@ void CapturedPastFuturePendingAndAdditionalRasterAreIncluded()
     operationName.reserve(193);
     const std::size_t operationNameCapacity = operationName.capacity();
     history.Begin(std::move(operationName), document, std::nullopt);
-    document->layers.front().asset->image = afterRaster;
-    document->layers.front().asset->thumbnail = afterRaster;
+    EditDocumentFixture(document.value(),
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.front().asset.value().image = afterRaster;
+                            fixture.layers.front().asset.value().thumbnail = afterRaster;
+                        });
     document->width = 2;
     history.End(document, std::nullopt);
 
     history.Begin(L"middle", document, std::nullopt);
-    document->layers.front().asset->image = secondEditRaster;
-    document->layers.front().asset->thumbnail = secondEditRaster;
+    EditDocumentFixture(document.value(),
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.front().asset.value().image = secondEditRaster;
+                            fixture.layers.front().asset.value().thumbnail = secondEditRaster;
+                        });
     document->width = 3;
     history.End(document, std::nullopt);
 
@@ -130,9 +144,13 @@ void CapturedPastFuturePendingAndAdditionalRasterAreIncluded()
         return;
     }
     document = undo->document;
-    document->layers.front().asset->image = currentRaster;
-    document->layers.front().asset->thumbnail = currentRaster;
-    document->layers.front().name.reserve(257);
+    EditDocumentFixture(document.value(),
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.front().asset.value().image = currentRaster;
+                            fixture.layers.front().asset.value().thumbnail = currentRaster;
+                            fixture.layers.front().name.reserve(257);
+                        });
 
     std::wstring pendingName{L"pending"};
     pendingName.reserve(257);

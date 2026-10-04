@@ -70,12 +70,15 @@ namespace
         left->resolution != right->resolution || left->layers.size() != right->layers.size() ||
         left->selection.has_value() != right->selection.has_value())
         return false;
-    for (std::size_t index = 0; index < left->layers.size(); ++index)
+    if (left->layers.Identity() != right->layers.Identity())
     {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        if (left->layers[index] != right->layers[index])
-            return false;
+        for (std::size_t index = 0; index < left->layers.size(); ++index)
+        {
+            if (cancellation.IsCancelled())
+                return std::nullopt;
+            if (left->layers[index] != right->layers[index])
+                return false;
+        }
     }
     if (left->selection)
     {
@@ -106,8 +109,8 @@ namespace
     return cancellation.IsCancelled() ? std::nullopt : std::optional<bool>{true};
 }
 
-// Value snapshots remain until H2. Their record/string allocations happen on a worker, with a cancellation
-// checkpoint before each bounded layer record. Selection geometry and all pixel storage stay immutable/shared.
+// A document snapshot shares immutable records and selection. Entry construction/accounting remains worker
+// work; this capture does not copy layer records or strings, including when its destination already exists.
 [[nodiscard]] bool CopyHistoryDocument(const std::optional<CanvasDocument>& source,
                                        std::optional<CanvasDocument>& destination, CancelToken cancellation)
 {
@@ -115,20 +118,7 @@ namespace
         return false;
     if (!source)
         return true;
-    CanvasDocument copy;
-    copy.id = source->id;
-    copy.width = source->width;
-    copy.height = source->height;
-    copy.resolution = source->resolution;
-    copy.selection = source->selection;
-    copy.layers.reserve(source->layers.size());
-    for (const auto& layer : source->layers)
-    {
-        if (cancellation.IsCancelled())
-            return false;
-        copy.layers.push_back(layer);
-    }
-    destination = std::move(copy);
+    destination = source;
     return !cancellation.IsCancelled();
 }
 } // namespace

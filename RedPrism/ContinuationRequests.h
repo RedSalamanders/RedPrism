@@ -5,6 +5,7 @@
 #include "ContinuationQueue.h"
 #include "ContinuationReceipt.h"
 #include "EditorTool.h"
+#include "OpacityInputOrder.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -124,6 +125,7 @@ struct HostLayerOpacityInput final
     Guid id;
     double opacity;
     ChromeEditPhase phase;
+    OpacityInputOrder::Stamp order{}; // producer field stream; separate from the acknowledged model opening
 };
 struct HostWriteInput final
 {

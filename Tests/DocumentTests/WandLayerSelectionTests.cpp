@@ -1,5 +1,7 @@
 #include "WandLayerSelectionTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Selection.h"
 #include "WandLayerSelectionWork.h"
@@ -51,7 +53,7 @@ constexpr std::array<std::uint8_t, 16> kTwoByTwo{10, 20, 30, 255, 40, 50, 60, 25
 DocumentSession SourceSession(bool visible = true, double opacity = 1.0, bool withMask = false, bool translated = true)
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 4;
     document.height = 4;
@@ -76,7 +78,7 @@ DocumentSession SourceSession(bool visible = true, double opacity = 1.0, bool wi
     distractor.asset = RasterAsset{
         Raster::Make(1, 1, RasterFormat::Bgra8888, otherPixel.data(), otherPixel.size()), {}, distractor.name};
     document.layers.push_back(std::move(distractor));
-    session.ReplaceDocument(std::move(document), activeID);
+    session.ReplaceDocument(std::move(document).Seal(), activeID);
     return session;
 }
 
@@ -175,7 +177,8 @@ void ActiveLayerLiteralAndCapturedSettings()
                                                       70, 80, 90, 255, 100, 110, 120, 255};
     const Raster tile = Raster::Make(2, 2, RasterFormat::Bgra8888, tilePixels.data(), tilePixels.size());
     const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, Raster{}, 0, 0, {RasterTile{0, 0, tile}}, 0);
-    sparseSession.EditForTest([&](CanvasDocument& document) { document.layers[0].asset->image = sparse; });
+    EditLayerRecordsForTest(sparseSession,
+                            [&](DocumentFixture& document) { document.layers[0].asset->image = sparse; });
     auto sparseInput = sparseSession.PrepareWandLayerSelectionInput(Vec2{1.5, 1.5}, Settings(), false);
     auto sparsePrepared = sparseInput
                               ? DocumentSession::PrepareWandLayerSelectionPublication(std::move(sparseInput.value()))
@@ -191,7 +194,7 @@ void TransparentAndContiguousGoldens()
          {WandSampleSize::Point, WandSampleSize::ThreeByThree, WandSampleSize::FiveByFive})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
@@ -199,7 +202,7 @@ void TransparentAndContiguousGoldens()
         layer.isGroup = true;
         const Guid active = layer.id;
         document.layers.push_back(std::move(layer));
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         auto prepared = Prepare(session, Vec2{2.5, 1.5}, Settings(sample, false));
         Expect(prepared && session.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value()) &&
                    FullCanvas(session.Selection()),
@@ -210,13 +213,13 @@ void TransparentAndContiguousGoldens()
     for (const bool noActive : {false, true})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 4;
         document.height = 4;
         document.layers.push_back(ImageLayer::Blank(L"Blank transparent", Vec2{4, 4}));
         const std::optional<Guid> active = noActive ? std::nullopt : std::optional<Guid>{document.layers.front().id};
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         if (noActive)
             session.SelectLayer(std::nullopt);
         auto prepared = Prepare(session, Vec2{0.5, 0.5}, Settings(WandSampleSize::Point, true));
@@ -233,7 +236,7 @@ void TransparentAndContiguousGoldens()
     for (const bool contiguous : {true, false})
     {
         DocumentSession session;
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 5;
         document.height = 2;
@@ -243,7 +246,7 @@ void TransparentAndContiguousGoldens()
         layer.transform.size = Vec2{5, 2};
         layer.transform.sampling = LayerSampling::Nearest;
         document.layers.push_back(std::move(layer));
-        session.ReplaceDocument(std::move(document), active);
+        session.ReplaceDocument(std::move(document).Seal(), active);
         auto prepared = Prepare(session, Vec2{0.5, 0.5}, Settings(WandSampleSize::Point, contiguous));
         const bool applied = prepared && session.ApplyPreparedWandLayerSelectionIfCurrent(prepared.value());
         const std::vector<SelectionLoop> disconnected{SelectionLoop{{0, 0}, {2, 0}, {2, 2}, {0, 2}},
@@ -259,7 +262,7 @@ void TransparentAndContiguousGoldens()
 void DeselectNoMatchNoopUndoAndSavedMarker()
 {
     DocumentSession session;
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 3;
     document.height = 3;
@@ -272,7 +275,7 @@ void DeselectNoMatchNoopUndoAndSavedMarker()
         Raster::Make(3, 3, RasterFormat::Bgra8888, sampledPixels.data(), sampledPixels.size()), {}, layer.name};
     layer.transform.size = Vec2{3, 3};
     document.layers.push_back(std::move(layer));
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     const auto original = Rect(0, 0, 1, 1);
     session.SetSelection(original, L"Seed selection");
     session.history.MarkSaved();
@@ -665,7 +668,8 @@ void MemoryPlansAndProducerCapacities()
     DocumentSession sparseSession = SourceSession();
     const Raster tile = sparseSession.Document()->layers.front().asset->image;
     const Raster sparse = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, tile}}, 0);
-    sparseSession.EditForTest([&](CanvasDocument& document) { document.layers.front().asset->image = sparse; });
+    EditLayerRecordsForTest(sparseSession,
+                            [&](DocumentFixture& document) { document.layers.front().asset->image = sparse; });
     const auto sparsePlan = sparseSession.PlanWandLayerSelectionMemory({1, 1}, Settings());
     Expect(sparsePlan && sparsePlan->privateSourceBytes == PixelBuffer::RequiredBytes(16) &&
                sparsePlan->sourcePhaseBytes >= sparsePlan->sampledPixelsBytes + sparsePlan->privateSourceBytes &&

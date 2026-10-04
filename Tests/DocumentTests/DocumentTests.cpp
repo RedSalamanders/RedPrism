@@ -1,3 +1,4 @@
+#include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "Adjust.h"
 #include "AdjustmentClosureTests.h"
@@ -15,6 +16,8 @@
 #include "Crop.h"
 #include "DistortWorkTests.h"
 #include "Document.h"
+#include "DocumentDraftTests.h"
+#include "DocumentFixtureTests.h"
 #include "DocumentLifecycleTests.h"
 #include "DocumentSizeHistoryTests.h"
 #include "DocumentSizingWorkTests.h"
@@ -41,6 +44,7 @@
 #include "ImportPublicationTests.h"
 #include "LayerCopyWorkTests.h"
 #include "LayerMetadataWorkTests.h"
+#include "LayerOpacityWorkTests.h"
 #include "LayerReadViewTests.h"
 #include "LiftReferenceTests.h"
 #include "MaskEditWorkExtraTests.h"
@@ -56,6 +60,8 @@
 #include "PreparedHistoryFollowingTests.h"
 #include "PreparedHistoryTests.h"
 #include "PreparedRasterHistoryTests.h"
+#include "PreservedLayerMetadataTests.h"
+#include "PreservedLayerOpacityTests.h"
 #include "ProjectSaveMemoryTests.h"
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
@@ -224,21 +230,21 @@ void TestLiveMask()
 
 void TestValidate()
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.width = 20;
     document.height = 10;
     ImageLayer folder = ImageLayer::Blank(L"Folder", Vec2{20, 10});
     folder.isGroup = true;
     folder.opacity = 0.5;
     document.layers.push_back(folder);
-    Expect(ValidateDocument(document) == DocumentStatus::Invalid, "validate.group-opacity");
+    Expect(ValidateDocument(document.Seal()) == DocumentStatus::Invalid, "validate.group-opacity");
 
     folder.opacity = 1;
     document.layers[0] = folder;
-    Expect(ValidateDocument(document, 1) == DocumentStatus::Invalid, "validate.v1-group");
-    Expect(ValidateDocument(document, 7) == DocumentStatus::Ok, "validate.v7-group");
+    Expect(ValidateDocument(document.Seal(), 1) == DocumentStatus::Invalid, "validate.v1-group");
+    Expect(ValidateDocument(document.Seal(), 7) == DocumentStatus::Ok, "validate.v7-group");
 
-    CanvasDocument masked;
+    DocumentFixture masked;
     masked.width = 8;
     masked.height = 8;
     ImageLayer layer = RasterLayer(8, 8, L"Paint");
@@ -247,10 +253,10 @@ void TestValidate()
     mask.asset.name = L"Layer Mask";
     layer.mask = mask;
     masked.layers.push_back(layer);
-    Expect(ValidateDocument(masked, 3) == DocumentStatus::Invalid, "validate.v4-mask-too-old");
-    Expect(ValidateDocument(masked, 4) == DocumentStatus::Ok, "validate.v4-mask");
+    Expect(ValidateDocument(masked.Seal(), 3) == DocumentStatus::Invalid, "validate.v4-mask-too-old");
+    Expect(ValidateDocument(masked.Seal(), 4) == DocumentStatus::Ok, "validate.v4-mask");
 
-    CanvasDocument folderMask;
+    DocumentFixture folderMask;
     folderMask.width = 8;
     folderMask.height = 8;
     ImageLayer group = ImageLayer::Blank(L"Folder", Vec2{8, 8});
@@ -259,15 +265,15 @@ void TestValidate()
     groupMask.asset.image = Raster::Make(8, 8, RasterFormat::Gray8);
     group.mask = groupMask;
     folderMask.layers.push_back(group);
-    Expect(ValidateDocument(folderMask, 5) == DocumentStatus::Invalid, "validate.v6-folder-mask-too-old");
-    Expect(ValidateDocument(folderMask, 6) == DocumentStatus::Ok, "validate.v6-folder-mask");
+    Expect(ValidateDocument(folderMask.Seal(), 5) == DocumentStatus::Invalid, "validate.v6-folder-mask-too-old");
+    Expect(ValidateDocument(folderMask.Seal(), 6) == DocumentStatus::Ok, "validate.v6-folder-mask");
 
     CanvasDocument huge;
     huge.width = 30'001;
     huge.height = 1;
     Expect(ValidateDocument(huge) == DocumentStatus::TooLarge, "validate.dimension");
 
-    CanvasDocument adjustmentDoc;
+    DocumentFixture adjustmentDoc;
     adjustmentDoc.width = 4;
     adjustmentDoc.height = 4;
     ImageLayer adjustment = ImageLayer::Blank(L"Levels", Vec2{4, 4});
@@ -276,16 +282,16 @@ void TestValidate()
     levels.kind = AdjustmentKind::Levels;
     adjustment.adjustment = levels;
     adjustmentDoc.layers.push_back(adjustment);
-    Expect(ValidateDocument(adjustmentDoc, 7) == DocumentStatus::Invalid, "validate.adjustment-on-group");
+    Expect(ValidateDocument(adjustmentDoc.Seal(), 7) == DocumentStatus::Invalid, "validate.adjustment-on-group");
 
-    CanvasDocument color;
+    DocumentFixture color;
     color.width = 4;
     color.height = 4;
     ImageLayer paint = RasterLayer(4, 4, L"Paint");
     paint.blendMode = LayerBlendMode::Multiply;
     color.layers.push_back(paint);
-    Expect(ValidateDocument(color, 2) == DocumentStatus::Invalid, "validate.v2-blend");
-    Expect(ValidateDocument(color, 3) == DocumentStatus::Ok, "validate.v3-blend");
+    Expect(ValidateDocument(color.Seal(), 2) == DocumentStatus::Invalid, "validate.v2-blend");
+    Expect(ValidateDocument(color.Seal(), 3) == DocumentStatus::Ok, "validate.v3-blend");
 
     LayerMask colorMask;
     colorMask.asset.image = Raster::Make(4, 4, RasterFormat::Bgra8888);
@@ -443,7 +449,7 @@ void TestHistoryBounds()
            "history.uint64-limit-preserved-entry-clamped");
 
     DocumentHistory limited(2, 0);
-    CanvasDocument doc;
+    DocumentFixture doc;
     doc.width = 64;
     doc.height = 32;
     ImageLayer layer = RasterLayer(8, 8, L"Shared");
@@ -451,17 +457,17 @@ void TestHistoryBounds()
     const Guid id = layer.id;
     for (const wchar_t* name : {L"A", L"B", L"C"})
     {
-        limited.Begin(L"Rename", doc, id);
+        limited.Begin(L"Rename", doc.Seal(), id);
         doc.layers[0].name = name;
-        limited.End(doc, id);
+        limited.End(doc.Seal(), id);
     }
     Expect(limited.UndoCount() == 2, "history.entry-limit");
-    Expect(limited.RetainedBytes(doc) == 0, "history.shared-raster-zero-retained");
-    limited.Begin(L"Delete", doc, id);
+    Expect(limited.RetainedBytes(doc.Seal()) == 0, "history.shared-raster-zero-retained");
+    limited.Begin(L"Delete", doc.Seal(), id);
     doc.layers.clear();
-    limited.End(doc, std::nullopt);
+    limited.End(doc.Seal(), std::nullopt);
     Expect(limited.UndoCount() == 0, "history.zero-budget-drops-unique");
-    Expect(limited.RetainedBytes(doc) == 0, "history.zero-budget-bytes");
+    Expect(limited.RetainedBytes(doc.Seal()) == 0, "history.zero-budget-bytes");
 }
 
 void TestHistoryTrim256MiB()
@@ -478,7 +484,7 @@ void TestHistoryTrim256MiB()
         history.Begin(L"Replace", document, selection);
         ImageLayer layer = RasterLayer(kWidth, kHeight, L"Unique");
         selection = layer.id;
-        document.value().layers = {std::move(layer)};
+        EditDocumentFixture(document.value(), [&](DocumentFixture& fixture) { fixture.layers = {std::move(layer)}; });
         history.End(document, selection);
     }
     Expect(history.RetainedBytes(document) <= static_cast<std::size_t>(kHistoryRetainedByteLimit),
@@ -640,7 +646,7 @@ void TestNamingAndInsertion()
     const Guid first = session.Document().value().layers.front().id;
     session.SelectLayer(first);
     session.AddBlankLayer();
-    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    const auto& layers = session.Document().value().layers;
     Expect(layers.size() == 4 && layers[0].name == L"Layer 1" && layers[1].name == L"Layer 4" &&
                layers[2].name == L"Layer 2" && layers[3].name == L"Layer 3",
            "insert.above-selection");
@@ -656,7 +662,7 @@ void TestNamingAndInsertion()
     session.SelectLayer(folder);
     session.AddBlankLayer();
     const Guid inner2 = session.ActiveLayerID().value();
-    const std::vector<ImageLayer>& after = session.Document().value().layers;
+    const auto& after = session.Document().value().layers;
     std::size_t index1 = 0;
     std::size_t index2 = 0;
     for (std::size_t i = 0; i < after.size(); ++i)
@@ -678,7 +684,7 @@ void TestNamingAndInsertion()
     {
         three.AddBlankLayer();
     }
-    const std::vector<ImageLayer> before = three.Document().value().layers;
+    const auto before = three.Document().value().layers;
     three.SelectLayer(before[1].id);
     three.DeleteLayer(before[0].id);
     Expect(three.ActiveLayerID() == before[1].id, "delete.keeps-active-when-other-deleted");
@@ -766,7 +772,7 @@ Guid InsertPainted(DocumentSession& session, int width, int height, Vec2 origin,
     layer.asset->image = SolidRaster(width, height, 0, 0, 255, 255);
     layer.asset->thumbnail = layer.asset->image;
     layer.transform.origin = origin;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     return layer.id;
 }
@@ -1074,9 +1080,9 @@ void TestTransformGroup()
     session.AddGroup();
     const Guid folder = session.ActiveLayerID().value();
     const Guid a = InsertPainted(session, 100, 50, Vec2{10, 20}, L"A");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().parentID = folder; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().parentID = folder; });
     const Guid b = InsertPainted(session, 40, 40, Vec2{200, 100}, L"B");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().parentID = folder; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().parentID = folder; });
     session.SelectLayer(folder);
     Expect(session.TransformsAsGroup() && session.CanTransform(), "group.folder-transforms-members");
     Expect(session.GroupTransformMemberIDs().size() == 2, "group.members");
@@ -1125,7 +1131,7 @@ void TestMaskTransform()
     mask.asset.image = GrayRaster(400, 200, 255);
     mask.asset.thumbnail = mask.asset.image;
     mask.asset.name = L"mask";
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().mask = mask; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().mask = mask; });
     const LayerTransform original = session.ActiveLayer()->transform;
 
     session.SelectLayerTarget(id, true);
@@ -1205,7 +1211,7 @@ void TestFlipCommands()
     InsertPainted(session, 100, 50, Vec2{20, 30});
     LayerTransform before = session.ActiveLayer()->transform;
     before.rotation = 10;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.back().transform = before; });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.back().transform = before; });
     session.FlipCanvas(true);
     const LayerTransform flipped = session.ActiveLayer()->transform;
     Expect(flipped.flipX && flipped.rotation == -10 && Near(flipped.Center().x, 400 - before.Center().x) &&
@@ -1224,8 +1230,8 @@ void TestFlipCommands()
                NearPoint(session.ActiveLayer()->transform.Center(), before.Center()) &&
                session.history.UndoName() == L"Flip Vertical",
            "flip.layer-about-center");
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.selection = DocumentSelection{true, {SelectionLoop{Vec2{10, 10}, Vec2{50, 10}, Vec2{50, 40}}}}; });
     session.FlipCanvas(true);
     Expect(session.Document().value().selection->loops[0][0] == Vec2{390, 10}, "flip.canvas-selection");
@@ -1297,7 +1303,7 @@ void TestDistortWarp()
     stroke.asset->image = Raster::Make(40, 20, RasterFormat::Bgra8888, bytes.data(), bytes.size());
     stroke.asset->thumbnail = stroke.asset->image;
     stroke.transform.origin = Vec2{10, 10};
-    trim.EditForTest([&](CanvasDocument& document) { document.layers.push_back(stroke); });
+    EditLayerRecordsForTest(trim, [&](DocumentFixture& document) { document.layers.push_back(stroke); });
     trim.SelectLayer(stroke.id);
     trim.BeginTransform(false);
     trim.BeginDistort();
@@ -1754,17 +1760,18 @@ Guid MaskedLayer(DocumentSession& session)
         }
     }
     const Raster mask = Raster::Make(100, 100, RasterFormat::Gray8, bytes.data(), bytes.size());
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == id)
-                {
-                    layer.mask = LayerMask{RasterAsset{mask, mask, L"mask"}, true, std::nullopt, true};
-                }
-            }
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == id)
+                                    {
+                                        layer.mask =
+                                            LayerMask{RasterAsset{mask, mask, L"mask"}, true, std::nullopt, true};
+                                    }
+                                }
+                            });
     return id;
 }
 
@@ -1793,35 +1800,36 @@ void TestSelectionLoad()
     // Legacy maskSelectionFollowsTheLayerTransformAndIgnoresAllWhiteMasks.
     DocumentSession scaled = SelectionSession(200, 200);
     const Guid scaledId = MaskedLayer(scaled);
-    scaled.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == scaledId)
-                {
-                    layer.transform.origin = Vec2{0, 0};
-                    layer.transform.size = Vec2{200, 200};
-                }
-            }
-        });
+    EditLayerRecordsForTest(scaled,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == scaledId)
+                                    {
+                                        layer.transform.origin = Vec2{0, 0};
+                                        layer.transform.size = Vec2{200, 200};
+                                    }
+                                }
+                            });
     Expect(scaled.LoadMaskSelection(scaledId) && NearBounds(scaled.Selection(), 40, 60, 80, 80),
            "load.mask-follows-transform");
     scaled.Deselect();
     scaled.AddBlankLayer();
     const Guid blank = scaled.ActiveLayerID().value();
     const Raster white = GrayRaster(1, 1, 255);
-    scaled.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == blank)
-                {
-                    layer.mask = LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
-                }
-            }
-        });
+    EditLayerRecordsForTest(scaled,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == blank)
+                                    {
+                                        layer.mask =
+                                            LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true};
+                                    }
+                                }
+                            });
     Expect(!scaled.LoadMaskSelection(blank) && !scaled.Selection().has_value(), "load.mask-all-white-ignored");
     Expect(!scaled.LoadMaskSelection(Guid::Generate()), "load.mask-unknown-layer");
     // Legacy cmdClickingALayerSelectsItsOpaquePixels: a 50 × 50 image, opaque ring around a transparent center,
@@ -1849,7 +1857,7 @@ void TestSelectionLoad()
     ringLayer.asset->thumbnail = ringRaster;
     ringLayer.transform.origin = Vec2{50, 50};
     ringLayer.transform.size = Vec2{100, 100};
-    layers.EditForTest([&](CanvasDocument& document) { document.layers.push_back(ringLayer); });
+    EditLayerRecordsForTest(layers, [&](DocumentFixture& document) { document.layers.push_back(ringLayer); });
     layers.SelectLayer(ringLayer.id);
     Expect(layers.LoadLayerSelection(ringLayer.id) && layers.history.UndoName() == L"Load Layer Selection" &&
                NearBounds(layers.Selection(), 70, 70, 60, 60),
@@ -1877,7 +1885,7 @@ void TestSelectionLoad()
     flippedLayer.transform.origin = Vec2{0, 0};
     flippedLayer.transform.size = Vec2{50, 50};
     flippedLayer.transform.flipX = true;
-    flipped.EditForTest([&](CanvasDocument& document) { document.layers.push_back(flippedLayer); });
+    EditLayerRecordsForTest(flipped, [&](DocumentFixture& document) { document.layers.push_back(flippedLayer); });
     flipped.SelectLayer(flippedLayer.id);
     Expect(flipped.LoadLayerSelection(flippedLayer.id) && CoverageAt(flipped.Selection(), 200, 200, 49, 0) == 0 &&
                CoverageAt(flipped.Selection(), 200, 200, 15, 15) == 255,
@@ -2165,7 +2173,7 @@ void TestWandSession()
     ImageLayer layer = RasterLayer(20, 10, L"Halves");
     layer.asset->image = halves;
     layer.asset->thumbnail = halves;
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     session.AddBlankLayer();
     const std::set<int> left = Block(0, 10, 0, 10, 20);
@@ -2826,8 +2834,8 @@ void TestBrushSnapshots()
     const Raster first = session.ActiveLayer()->asset->image;
     // Supply the optional derived cache explicitly so this legacy retained-thumbnail accounting golden still
     // covers a distinct thumbnail owner after production image commits stop computing unused thumbnails.
-    session.EditForTest(
-        [](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [](DocumentFixture& document)
         { document.layers.back().asset->thumbnail = Raster::MakeThumbnail(document.layers.back().asset->image); });
     const std::size_t firstThumbnail = session.ActiveLayer()->asset->thumbnail.ByteSize();
     Expect(firstThumbnail > 0, "snapshot.optional-thumbnail-accounting-fixture-has-retained-bytes");
@@ -3066,7 +3074,7 @@ void TestBrushExpansion()
         imported.transform.sampling = LayerSampling::Nearest;
         const Raster gray = GrayRaster(1, 1, 128);
         imported.mask = LayerMask{RasterAsset{gray, gray, L"mask"}, true, std::nullopt, true};
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(imported); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(imported); });
         session.SelectLayer(imported.id);
         const std::optional<CanvasDocument> original = session.Document();
         session.brushSettings = BrushSettings{16, 1, 0, 1, 0, 1};
@@ -3100,7 +3108,7 @@ void TestBrushExpansion()
     masked.transform.size = Vec2{40, 20};
     const Raster half = GrayRaster(40, 20, 128);
     masked.mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true};
-    grown.EditForTest([&](CanvasDocument& document) { document.layers.push_back(masked); });
+    EditLayerRecordsForTest(grown, [&](DocumentFixture& document) { document.layers.push_back(masked); });
     grown.SelectLayer(masked.id);
     grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
     Expect(grown.BeginBrush(Vec2{20, 50}), "expand.mask-begin");
@@ -3127,7 +3135,7 @@ void TestBrushSelectionClip()
     blue.asset->thumbnail = blue.asset->image;
     blue.transform.origin = Vec2{0, 0};
     blue.transform.size = Vec2{100, 40};
-    scaled.EditForTest([&](CanvasDocument& document) { document.layers.push_back(blue); });
+    EditLayerRecordsForTest(scaled, [&](DocumentFixture& document) { document.layers.push_back(blue); });
     scaled.SelectLayer(blue.id);
     scaled.selectionAntialiased = true;
     scaled.ApplySelection({SelectionLoop{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 40}}}, SelectionMode::New, L"Select");
@@ -3173,7 +3181,7 @@ Guid InsertPixels(DocumentSession& session, const Raster& image, const wchar_t* 
     ImageLayer layer = RasterLayer(image.Width(), image.Height(), name);
     layer.asset->image = image;
     layer.asset->thumbnail = Raster::MakeThumbnail(image);
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     return layer.id;
 }
@@ -3394,18 +3402,18 @@ void TestBlurTool()
         }
     }
     const Raster halfMask = Raster::Make(40, 40, RasterFormat::Gray8, half.data(), half.size());
-    masked.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            for (ImageLayer& layer : document.layers)
-            {
-                if (layer.id == id)
-                {
-                    layer.mask->asset.image = halfMask;
-                    layer.mask->asset.thumbnail = halfMask;
-                }
-            }
-        });
+    EditLayerRecordsForTest(masked,
+                            [&](DocumentFixture& document)
+                            {
+                                for (ImageLayer& layer : document.layers)
+                                {
+                                    if (layer.id == id)
+                                    {
+                                        layer.mask->asset.image = halfMask;
+                                        layer.mask->asset.thumbnail = halfMask;
+                                    }
+                                }
+                            });
     masked.SelectLayerTarget(id, true);
     masked.brushSettings = BrushSettings{20, 1, 0, 0, 0, 1};
     Expect(masked.IsMaskSelected() && Dab(masked, Vec2{20, 20}, BrushKind::Blur) &&
@@ -3718,7 +3726,7 @@ void TestShapeTool()
         session.SelectAll();
         const int count = session.history.UndoCount();
         DragShape(session, Vec2{10, 10}, Vec2{40, 30});
-        const std::vector<ImageLayer>& layers = session.Document().value().layers;
+        const auto& layers = session.Document().value().layers;
         Expect(layers.size() == 2 && layers[0].name == L"Layer 1" && layers[1].name == L"Rectangle 1" &&
                    session.ActiveLayer()->name == L"Rectangle 1" && session.history.UndoCount() == count + 1 &&
                    session.history.UndoName() == L"Rectangle",
@@ -4044,18 +4052,18 @@ void TestPixelEditMasksAndInvert()
     {
         DocumentSession session = PixelEditSession(100, 100);
         const Guid id = InsertPixels(session, SolidRaster(50, 50, 255, 0, 0, 255), L"Blue");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == id)
-                    {
-                        layer.transform.origin = Vec2{0, 0};
-                        layer.transform.size = Vec2{100, 100};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == id)
+                                        {
+                                            layer.transform.origin = Vec2{0, 0};
+                                            layer.transform.size = Vec2{100, 100};
+                                        }
+                                    }
+                                });
         SelectRect(session, 0, 0, 50, 50);
         session.AddMask();
         const ImageLayer* layer = session.ActiveLayer();
@@ -4297,17 +4305,17 @@ void TestClipboard()
         DocumentSession session = PixelEditSession();
         TwoColorLayer(session);
         const Guid greenLayer = InsertPixels(session, SolidRaster(20, 20, 0, 255, 0, 255), L"Green");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == greenLayer)
-                    {
-                        layer.transform.origin = Vec2{60, 10};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == greenLayer)
+                                        {
+                                            layer.transform.origin = Vec2{60, 10};
+                                        }
+                                    }
+                                });
         SelectRect(session, 55, 5, 30, 30);
         Expect(session.CopySelection(), "clipboard.active-layer-copy");
         session.Paste();
@@ -5884,7 +5892,7 @@ void TestSizeDrafts()
 void TestCanvasResize()
 {
     // Legacy CanvasSizeTests.everyAnchorPreservesSourceAndTransformForExpansionAndShrink.
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 64;
     document.height = 32;
@@ -5904,7 +5912,7 @@ void TestCanvasResize()
             options.height = 32 + delta;
             options.anchor = anchor;
             CanvasDocument result;
-            if (ResizeCanvas(document, options, result) != ResizeStatus::Ok || result.layers.size() != 1)
+            if (ResizeCanvas(document.Seal(), options, result) != ResizeStatus::Ok || result.layers.size() != 1)
             {
                 anchorsHold = false;
                 continue;
@@ -5985,7 +5993,7 @@ void TestImageResize()
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
     session.BeginEdit(L"Import Image");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.EndEdit();
     session.SelectLayer(layer.id);
     const std::optional<CanvasDocument> original = session.Document();
@@ -6033,12 +6041,12 @@ void TestImageResize()
     Expect(plain.Document().value().resolution == 72, "imagesize.resolution-undo");
     // Legacy rotatedHiddenLayerScalesInDocumentAxesAndInvalidSizeIsRejected: a 90-degree 64 × 32 layer becomes
     // 32 × 64, then scales 2× horizontally and 3× vertically.
-    CanvasDocument rotated = original.value();
+    DocumentFixture rotated = DocumentFixture::Copy(original.value());
     rotated.layers[0].visible = false;
     rotated.layers[0].transform.origin = Vec2{-16, 4};
     rotated.layers[0].transform.rotation = 90;
     CanvasDocument turned;
-    Expect(ResizeImage(rotated, options, turned) == ResizeStatus::Ok && !turned.layers[0].visible &&
+    Expect(ResizeImage(rotated.Seal(), options, turned) == ResizeStatus::Ok && !turned.layers[0].visible &&
                turned.layers[0].transform.rotation == 0 && std::abs(turned.layers[0].transform.size.x - 64) <= 1 &&
                std::abs(turned.layers[0].transform.size.y - 192) <= 1 && turned.layers[0].transform.origin.y < 0,
            "imagesize.rotated-hidden-box");
@@ -6046,23 +6054,23 @@ void TestImageResize()
     huge.width = 30000;
     huge.height = 30000;
     huge.resolution = 72;
-    Expect(ResizeImage(rotated, huge, turned) == ResizeStatus::TooLarge, "imagesize.rejects-megapixels");
+    Expect(ResizeImage(rotated.Seal(), huge, turned) == ResizeStatus::TooLarge, "imagesize.rejects-megapixels");
     Expect(session.Document().value().width == 128, "imagesize.rejection-leaves-document");
     // A scaled layer with a mask on its own placement keeps the mask pixels; a mask on the layer rasterizes.
-    CanvasDocument masked = original.value();
+    DocumentFixture masked = DocumentFixture::Copy(original.value());
     LayerMask mask;
     std::vector<std::uint8_t> gray(64u * 32u, 255);
     mask.asset.image = Raster::Make(64, 32, RasterFormat::Gray8, gray.data(), gray.size());
     mask.asset.thumbnail = Raster::MakeThumbnail(mask.asset.image);
     masked.layers[0].mask = mask;
     CanvasDocument maskedResult;
-    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok && maskedResult.layers[0].mask.has_value() &&
-               maskedResult.layers[0].mask->asset.image.Width() == 128 &&
+    Expect(ResizeImage(masked.Seal(), options, maskedResult) == ResizeStatus::Ok &&
+               maskedResult.layers[0].mask.has_value() && maskedResult.layers[0].mask->asset.image.Width() == 128 &&
                maskedResult.layers[0].mask->asset.image.Height() == 96 &&
                maskedResult.layers[0].mask->asset.image.Data()[0] == 255,
            "imagesize.mask-rasterizes");
     masked.layers[0].mask->placement = LayerTransform{Vec2{8, 8}, Vec2{16, 8}};
-    Expect(ResizeImage(masked, options, maskedResult) == ResizeStatus::Ok &&
+    Expect(ResizeImage(masked.Seal(), options, maskedResult) == ResizeStatus::Ok &&
                maskedResult.layers[0].mask->asset.image == mask.asset.image &&
                maskedResult.layers[0].mask->placement.has_value() &&
                maskedResult.layers[0].mask->placement->origin == Vec2{16, 24} &&
@@ -6095,7 +6103,7 @@ void TestCrop()
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
     session.BeginEdit(L"Import Image");
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.EndEdit();
     session.SelectLayer(layer.id);
     const std::optional<CanvasDocument> before = session.Document();
@@ -6186,7 +6194,7 @@ void TestCrop()
     red.asset = RasterAsset{redRaster, Raster::MakeThumbnail(redRaster), red.name};
     red.transform.origin = Vec2{150, 120};
     targets.BeginEdit(L"Import Image");
-    targets.EditForTest([&](CanvasDocument& document) { document.layers.push_back(red); });
+    EditLayerRecordsForTest(targets, [&](DocumentFixture& document) { document.layers.push_back(red); });
     targets.EndEdit();
     const SnapTargets found = targets.CropSnapTargets();
     const std::set<double> xs(found.xs.begin(), found.xs.end());
@@ -6211,12 +6219,12 @@ void TestMerge()
     ImageLayer blue = RasterLayer(2, 2, L"Blue");
     blue.transform.origin = Vec2{2, 2};
     session.BeginEdit(L"Setup");
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            document.layers.push_back(red);
-            document.layers.push_back(blue);
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                document.layers.push_back(red);
+                                document.layers.push_back(blue);
+                            });
     session.EndEdit();
     session.AddBlankLayer();
     const Guid clipped = session.ActiveLayerID().value();
@@ -6283,7 +6291,7 @@ void TestMerge()
            "merge.prepared-missing-layer-refused");
     Expect(preparedSession.ApplyPreparedMerge(preparedPlan.value(), prepared.value()), "merge.prepared-applies");
     Expect(session.MergeLayers(plan.value(), composite), "merge.down-applies");
-    const std::vector<ImageLayer>& layers = session.Document().value().layers;
+    const auto& layers = session.Document().value().layers;
     const ImageLayer* merged = session.ActiveLayer();
     const ImageLayer* preparedMerged = preparedSession.ActiveLayer();
     // The blank clipped layer sits above the bottom one, so the merged layer lands at the top, in Blue's slot.
@@ -6321,7 +6329,7 @@ void TestMerge()
     ImageLayer inner = RasterLayer(4, 4, L"Inner");
     inner.parentID = folder;
     group.BeginEdit(L"Setup");
-    group.EditForTest([&](CanvasDocument& document) { document.layers.push_back(inner); });
+    EditLayerRecordsForTest(group, [&](DocumentFixture& document) { document.layers.push_back(inner); });
     group.EndEdit();
     group.SelectLayer(folder);
     const std::optional<DocumentSession::MergePlan> groupPlan = group.PlanMerge();
@@ -6512,8 +6520,8 @@ void TestStretchedMaskPainting()
     const Raster half = Raster::Make(300, 150, RasterFormat::Gray8, halves.data(), halves.size());
     DocumentSession session = PixelEditSession(600, 300);
     const Guid id = InsertPixels(session, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true}; });
     session.SelectLayerTarget(id, true);
     Expect(session.IsMaskSelected() && MaskValue(session, 280.5, 280.5) == 0 && MaskValue(session, 450.5, 200.5) == 255,
@@ -6530,8 +6538,8 @@ void TestStretchedMaskPainting()
     // Growing the image carries the stretched mask onto the new grid in place, revealing only the new area.
     DocumentSession grown = PixelEditSession(1000, 300);
     const Guid grownId = InsertPixels(grown, SolidRaster(600, 300, 0, 0, 255, 255), L"Red");
-    grown.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        grown, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, true}; });
     grown.SelectLayer(grownId);
     grown.brushSettings = BrushSettings{10, 1, 0, 1, 0, 1};
@@ -6601,7 +6609,7 @@ void TestActiveLayerTargets()
     // Selecting the same layer again after its mask is gone drops the target too.
     DocumentSession lost = PixelEditSession(40, 40);
     lost.AddLayerMask(true);
-    lost.EditForTest([](CanvasDocument& document) { document.layers.back().mask.reset(); });
+    EditLayerRecordsForTest(lost, [](DocumentFixture& document) { document.layers.back().mask.reset(); });
     lost.SelectLayer(lost.ActiveLayerID());
     Expect(!lost.IsMaskSelected() && lost.CanPaint(), "active.reselect-without-a-mask");
 }
@@ -6696,7 +6704,7 @@ void TestOneColorEditSession()
         session.UpdateColorEdit(changes, true);
         const bool previewed = session.PendingColorEdit()->previewRaster.HasStorage();
         // The layer moves under the open panel (a resize the host did not settle first).
-        CanvasDocument moved = session.Document().value();
+        auto moved = DocumentFixture::Copy(session.Document().value());
         for (ImageLayer& layer : moved.layers)
         {
             if (layer.id == id)
@@ -6704,7 +6712,7 @@ void TestOneColorEditSession()
                 layer.transform.origin.x += 10;
             }
         }
-        session.ApplyDocumentSize(moved, L"Canvas Size");
+        session.ApplyDocumentSize(std::move(moved).Seal(), L"Canvas Size");
         const Raster original = session.ActiveLayer()->asset->image;
         const int count = session.history.UndoCount();
         session.CommitColorEdit();
@@ -6870,12 +6878,13 @@ void TestSelectionLoadRefusals()
            "loadrefused.dark-pixels-too-detailed");
     DocumentSession session = SelectionSession(kSide, kSide);
     const Guid id = session.ActiveLayerID().value();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            document.layers.back().mask =
-                LayerMask{RasterAsset{detailed, Raster::MakeThumbnail(detailed), L"mask"}, true, std::nullopt, true};
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                document.layers.back().mask =
+                                    LayerMask{RasterAsset{detailed, Raster::MakeThumbnail(detailed), L"mask"}, true,
+                                              std::nullopt, true};
+                            });
     const int count = session.history.UndoCount();
     failure = WandFailure::None;
     Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::TooDetailed &&
@@ -6883,8 +6892,8 @@ void TestSelectionLoadRefusals()
            "loadrefused.mask-too-detailed");
     // Nothing to trace is not a refusal.
     const Raster white = GrayRaster(1, 1, 255);
-    session.EditForTest(
-        [&](CanvasDocument& document)
+    EditLayerRecordsForTest(
+        session, [&](DocumentFixture& document)
         { document.layers.back().mask = LayerMask{RasterAsset{white, white, L"mask"}, true, std::nullopt, true}; });
     failure = WandFailure::TooDetailed;
     Expect(!session.LoadMaskSelection(id, SelectionMode::New, &failure) && failure == WandFailure::None,
@@ -6931,7 +6940,7 @@ void TestCropWholePixels()
     ImageLayer layer = ImageLayer::Blank(L"Fixture", Vec2{64, 32});
     const Raster fixture = RedLeftRaster(64, 32);
     layer.asset = RasterAsset{fixture, Raster::MakeThumbnail(fixture), layer.name};
-    session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(layer); });
+    EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(layer); });
     session.SelectLayer(layer.id);
     session.SetCropFrame(CropRect{8.4, 4.6, 32.2, 15.7});
     Expect(session.CommitCrop() && session.Document().value().width == 33 && session.Document().value().height == 15,
@@ -6957,8 +6966,8 @@ void TestDistortMasks()
         DocumentSession session;
         session.CreateDocument(100, 60, false);
         const Guid id = InsertPainted(session, 20, 20, Vec2{10, 10});
-        session.EditForTest(
-            [&](CanvasDocument& document)
+        EditLayerRecordsForTest(
+            session, [&](DocumentFixture& document)
             { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, std::nullopt, false}; });
         const LayerTransform original = session.ActiveLayer()->transform;
         session.BeginTransform(false);
@@ -6981,8 +6990,8 @@ void TestDistortMasks()
         LayerTransform apart;
         apart.origin = Vec2{15, 12};
         apart.size = Vec2{20, 20};
-        session.EditForTest(
-            [&](CanvasDocument& document)
+        EditLayerRecordsForTest(
+            session, [&](DocumentFixture& document)
             { document.layers.back().mask = LayerMask{RasterAsset{half, half, L"mask"}, true, apart, true}; });
         const LayerTransform original = session.ActiveLayer()->transform;
         const std::array<Vec2, 4> carried = DistortWarp::Carried(apart, original, shape);
@@ -7038,7 +7047,8 @@ void TestDocumentPixelBudget()
     const Raster red = SolidRaster(100, 100, 0, 0, 255, 255);
     {
         DocumentSession session = PixelEditSession(200, 200);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 10000)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 10000)); });
         const std::size_t count = session.Document().value().layers.size();
         Expect(session.PixelBudgetLeft(false) == 0 && !session.TakeBudgetRefusal(), "docbudget.full");
         session.PasteImage(SolidRaster(20, 20, 0, 0, 255, 255));
@@ -7049,7 +7059,8 @@ void TestDocumentPixelBudget()
     {
         // 100 000 pixels left for a 300 × 300 layer (90 000): room for its own edits, not for a copy or growth.
         DocumentSession session = PixelEditSession(300, 300);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9990)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9990)); });
         InsertPixels(session, SolidRaster(300, 300, 0, 0, 255, 255), L"Red");
         const std::size_t count = session.Document().value().layers.size();
         session.DuplicateActiveLayer();
@@ -7087,7 +7098,7 @@ void TestDocumentPixelBudget()
             LayerMask{RasterAsset{Raster::MakeSparse(10000, 10000, RasterFormat::Gray8, Raster{}, 0, 0, {}, 255),
                                   Raster::Make(1, 1, RasterFormat::Gray8), L"mask"},
                       true, std::nullopt, true};
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(masked); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document) { document.layers.push_back(masked); });
         InsertPixels(session, red, L"Red");
         SelectRect(session, 10, 10, 20, 20);
         session.AddMask(true);
@@ -7101,20 +7112,21 @@ void TestDocumentPixelBudget()
     }
     {
         DocumentSession session = PixelEditSession(200, 200);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9999)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9999)); });
         const Guid a = InsertPixels(session, SolidRaster(20, 20, 0, 0, 255, 255), L"A");
         const Guid b = InsertPixels(session, SolidRaster(20, 20, 255, 0, 0, 255), L"B");
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                for (ImageLayer& layer : document.layers)
-                {
-                    if (layer.id == b)
-                    {
-                        layer.transform.origin = Vec2{180, 180};
-                    }
-                }
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    for (ImageLayer& layer : document.layers)
+                                    {
+                                        if (layer.id == b)
+                                        {
+                                            layer.transform.origin = Vec2{180, 180};
+                                        }
+                                    }
+                                });
         const std::optional<DocumentSession::MergePlan> plan = session.PlanMerge();
         std::vector<std::uint8_t> bytes(200u * 200u * 4u, 0);
         for (const int corner : {0, 180})
@@ -7136,7 +7148,8 @@ void TestDocumentPixelBudget()
     {
         DocumentSession session;
         session.CreateDocument(200, 200, false);
-        session.EditForTest([&](CanvasDocument& document) { document.layers.push_back(BudgetLayer(10000, 9999)); });
+        EditLayerRecordsForTest(session, [&](DocumentFixture& document)
+                                { document.layers.push_back(BudgetLayer(10000, 9999)); });
         InsertPainted(session, 20, 20, Vec2{10, 10});
         session.BeginTransform(false);
         session.BeginDistort();
@@ -7391,6 +7404,12 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryEntriesTests();
     gFailures += RunRecordRootTests();
     gFailures += RunRecordRootAdoptTests();
+    gFailures += RunDocumentDraftTests();
+    gFailures += RunDocumentFixtureTests();
+    gFailures += RunLayerMetadataWorkTests();
+    gFailures += RunPreservedLayerMetadataTests();
+    gFailures += RunPreservedLayerOpacityTests();
+    gFailures += RunLayerOpacityWorkTests();
     gFailures += RunLayerReadViewTests();
     gFailures += RunOptionalImageThumbnailTests();
     gFailures += RunPreparedHistoryTests();
@@ -7401,7 +7420,6 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
-    gFailures += RunLayerMetadataWorkTests();
     gFailures += RunSelectionNudgeTests();
     gFailures += RunSelectionPreserveTests();
     gFailures += RunWandCancellationTests();

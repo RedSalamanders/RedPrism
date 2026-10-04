@@ -112,13 +112,9 @@ std::optional<PreparedSelectionNudge> DocumentSession::PrepareSelectionNudgePubl
     after.height = before.height;
     after.resolution = before.resolution;
     after.selection = DocumentSelection{before.selection.value().antialiased, std::move(loops.value())};
-    after.layers.reserve(before.layers.size());
-    for (const auto& layer : before.layers)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        after.layers.push_back(layer);
-    }
+    if (cancellation.IsCancelled())
+        return std::nullopt;
+    after.layers = before.layers;
     if (cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
         return std::nullopt;
     result._document = std::move(after);

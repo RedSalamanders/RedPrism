@@ -5,6 +5,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <new>
@@ -52,10 +53,12 @@ class Application::LayerMetadataJob final : public Job
 {
   public:
     LayerMetadataJob(Application& owner, HistoryWorkStamp stamp, LayerMetadataKind kind, Guid target,
-                     std::wstring_view name, double opacity, LayerBlendMode blendMode,
-                     std::uint64_t retirement) noexcept
+                     std::wstring_view name, double opacity, LayerBlendMode blendMode, std::uint64_t retirement,
+                     OpacityMetadataIntent intent, std::optional<double> opening,
+                     std::optional<OpacityMetadataContext> opacityContext) noexcept
         : _owner(owner), _stamp(stamp), _kind(kind), _target(target), _name(name), _opacity(opacity),
-          _blendMode(blendMode), _retirement(retirement), _authority(owner._session.CaptureHistoryRestoreAuthority()),
+          _blendMode(blendMode), _retirement(retirement), _intent(intent), _opening(opening),
+          _opacityContext(opacityContext), _authority(owner._session.CaptureLayerMetadataAuthority(true)),
           _gate(owner._layerMetadataTestGate), _ownerThread(GetCurrentThreadId())
     {
     }
@@ -130,7 +133,12 @@ class Application::LayerMetadataJob final : public Job
                 if (_gate->throwCaptureFailure)
                     throw std::bad_alloc{};
             }
-            auto input = _owner._session.PrepareLayerMetadataInput(_kind, _target, _name, _opacity, _blendMode);
+            auto input =
+                _intent == OpacityMetadataIntent::Preview
+                    ? _owner._session.PrepareLayerOpacityPreviewInput(_target, _opacity)
+                : _intent == OpacityMetadataIntent::TypedCommit
+                    ? _owner._session.PrepareTypedLayerOpacityInput(_target, _opening.value(), _opacity)
+                    : _owner._session.PreparePreservedLayerMetadataInput(_kind, _target, _name, _opacity, _blendMode);
             // No further access to the borrowed request text, on either thread, after this owner capture.
             _name = {};
             if (!input)
@@ -172,6 +180,13 @@ class Application::LayerMetadataJob final : public Job
             outcome = HostOutcome::Failed;
             error = _captureError;
         }
+        else if (outcome == HostOutcome::Succeeded && _opacityContext &&
+                 _opacityContext->action == OpacityAcknowledgement::Preview &&
+                 _owner.NewerOpacityInputPending(_target, _opacityContext->order))
+        {
+            outcome = HostOutcome::Cancelled; // superseded input never publishes or overwrites newer field text
+            error = E_ABORT;
+        }
         else if (outcome == HostOutcome::Succeeded &&
                  (!_payload || !_payload->publication ||
                   !_owner._session.ApplyPreparedLayerMetadataIfCurrent(_payload->publication.value())))
@@ -179,6 +194,8 @@ class Application::LayerMetadataJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        if (outcome == HostOutcome::Succeeded && _opacityContext)
+            _owner.AcknowledgeOpacityMetadata(_target, _opacity, _opacityContext.value());
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
         _owner._layerMetadataTicket.reset();
@@ -192,7 +209,10 @@ class Application::LayerMetadataJob final : public Job
     [[nodiscard]] bool Current() const noexcept
     {
         return !_owner._shutdownStarted && _owner._layerMetadataStamp == _stamp &&
-               _owner._historyWork.IsCurrent(_stamp) && _owner._session.CanApplyHistoryRestore(_authority);
+               _owner._historyWork.IsCurrent(_stamp) && _owner._session.CanApplyLayerMetadataAuthority(_authority) &&
+               (!_opacityContext || (_owner._opacityEdit && _owner._opacityEdit->opening == _opacityContext->opening &&
+                                     _owner._opacityEdit->layer == _target &&
+                                     _owner._opacityEdit->documentSerial == _owner._session.DocumentSerial()));
     }
     Application& _owner;
     const HistoryWorkStamp _stamp;
@@ -204,7 +224,12 @@ class Application::LayerMetadataJob final : public Job
     const double _opacity;
     const LayerBlendMode _blendMode;
     const std::uint64_t _retirement;
-    const HistoryRestoreAuthority _authority;
+    const OpacityMetadataIntent _intent;
+    // Admission validates this original value. Capture happens only on the owner after reservation, then
+    // the worker receives a sealed input; no worker follows the host's live typed-edit state.
+    const std::optional<double> _opening;
+    const std::optional<OpacityMetadataContext> _opacityContext;
+    const LayerMetadataAuthority _authority;
     const std::shared_ptr<LayerMetadataTestGate> _gate;
     const DWORD _ownerThread;
     std::unique_ptr<MetadataPayload, RetireMetadataPayload> _payload;
@@ -212,8 +237,16 @@ class Application::LayerMetadataJob final : public Job
 };
 
 HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name, double opacity,
-                                        LayerBlendMode blendMode) noexcept
+                                        LayerBlendMode blendMode, OpacityMetadataIntent intent,
+                                        std::optional<double> opening,
+                                        std::optional<OpacityMetadataContext> opacityContext) noexcept
 {
+    if (intent > OpacityMetadataIntent::TypedCommit ||
+        (intent != OpacityMetadataIntent::Recorded && kind != LayerMetadataKind::SetOpacity) ||
+        (intent == OpacityMetadataIntent::TypedCommit &&
+         (!opening || !std::isfinite(opening.value()) || opening.value() < 0.0 || opening.value() > 1.0)) ||
+        (intent != OpacityMetadataIntent::TypedCommit && opening))
+        return E_INVALIDARG;
     if (_layerMetadataTicket || kind > LayerMetadataKind::SetBlendMode ||
         (kind == LayerMetadataKind::Rename && !_activeHostRequest))
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
@@ -226,33 +259,8 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
     }
     if (!_session.Document())
         return S_OK;
-    if (!_session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()) ||
-        _session.history.CaptureState().Depth() != 0)
-    {
-        // This slice admits only settled documents. Preserve the reference commands' live-gesture and nested
-        // transaction behavior until their sealed worker authority is implemented; never reject a valid edit
-        // merely because a brush, warp, shape, lasso or outline gesture is still open. The host already orders
-        // this command after any admitted predecessor. These reference constructors still block root activation.
-        if (_historyWork.Busy())
-            return E_ABORT;
-        switch (kind)
-        {
-        case LayerMetadataKind::Rename:
-            _session.RenameLayer(target, name);
-            break;
-        case LayerMetadataKind::ToggleVisibility:
-            _session.ToggleVisibility(target);
-            break;
-        case LayerMetadataKind::SetOpacity:
-            _session.SetOpacity(opacity);
-            break;
-        case LayerMetadataKind::SetBlendMode:
-            _session.SetBlendMode(blendMode);
-            break;
-        }
-        DocumentChanged();
-        return S_OK;
-    }
+    if (!_session.CanApplyLayerMetadataAuthority(_session.CaptureLayerMetadataAuthority(true)))
+        return E_ABORT;
     const auto ordinal = _activeHostRequest ? std::optional(_activeHostRequest->ordinal) : _historyWork.NextOrdinal();
     if (!ordinal)
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
@@ -262,7 +270,7 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
             _historyWork.Continue(_hostFinishedStamp.value(), _session.DocumentSerial(), HistoryWorkKind::Commit);
     if (!_layerMetadataStamp)
         return E_UNEXPECTED;
-    auto memory = _session.LayerMetadataMemoryBytes(kind, kind == LayerMetadataKind::Rename ? name.size() : 0);
+    auto memory = _session.PreservedLayerMetadataMemoryBytes(kind, kind == LayerMetadataKind::Rename ? name.size() : 0);
     auto retirement = _session.HistoryRestoreRetirementMemoryBytes();
     const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
     HRESULT result = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
@@ -276,11 +284,15 @@ HRESULT Application::StartLayerMetadata(LayerMetadataKind kind, Guid target, std
             {
                 if (_layerMetadataTestGate)
                     _layerMetadataTestGate->reservationBytes = memory;
-                std::unique_ptr<Job> job = std::make_unique<LayerMetadataJob>(
-                    *this, _layerMetadataStamp.value(), kind, target, name, opacity, blendMode, retirement);
+                std::unique_ptr<Job> job =
+                    std::make_unique<LayerMetadataJob>(*this, _layerMetadataStamp.value(), kind, target, name, opacity,
+                                                       blendMode, retirement, intent, opening, opacityContext);
                 JobTicket ticket;
-                result = static_cast<HRESULT>(
-                    _jobs.Submit(job, {JobClass::Commit, _session.DocumentSerial(), memory}, ticket));
+                result = static_cast<HRESULT>(_jobs.Submit(
+                    job,
+                    {intent == OpacityMetadataIntent::Preview ? JobClass::InteractivePreview : JobClass::Commit,
+                     _session.DocumentSerial(), memory},
+                    ticket));
                 if (SUCCEEDED(result))
                     _layerMetadataTicket = ticket;
             }

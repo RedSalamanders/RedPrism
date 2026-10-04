@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include "ChromeHost.h"
 #include "HistoryRestoreTestGate.h"
 #include "HistoryRestoreWork.h"
@@ -381,8 +383,9 @@ int Application::RunHistoryRestoreSelfTest() noexcept
             constexpr std::array<std::uint8_t, 4> pixel{17, 34, 51, 255};
             const Raster image = Raster::Make(1, 1, RasterFormat::Bgra8888, pixel.data(), pixel.size());
             const Guid id = _session.ActiveLayerID().value();
-            _session.EditForTest(
-                [&](CanvasDocument& document)
+            EditLayerRecordsForTest(
+                _session,
+                [&](DocumentFixture& document)
                 {
                     for (auto& layer : document.layers)
                         if (layer.id == id)

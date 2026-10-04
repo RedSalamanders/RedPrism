@@ -1,5 +1,7 @@
 #include "MaskEditWorkExtraTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Document.h"
 #include "Executor.h"
 #include "MaskEditWork.h"
@@ -43,7 +45,7 @@ Raster RedImage(int width, int height)
 
 DocumentSession SessionWithLayer(int width, int height, bool withAsset, LayerTransform transform = {})
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = 8;
     document.height = 8;
@@ -57,7 +59,7 @@ DocumentSession SessionWithLayer(int width, int height, bool withAsset, LayerTra
     const Guid active = layer.id;
     document.layers.push_back(std::move(layer));
     DocumentSession session;
-    session.ReplaceDocument(std::move(document), active);
+    session.ReplaceDocument(std::move(document).Seal(), active);
     session.history.Reset();
     return session;
 }
@@ -160,12 +162,12 @@ void InvalidNoAssetTransformsRefuseWithoutMutation()
         LayerTransform transform;
         transform.size = {1, 1};
         DocumentSession session = SessionWithLayer(0, 0, false, transform);
-        session.EditForTest(
-            [&](CanvasDocument& document)
-            {
-                document.layers.front().transform.size.x = dimension;
-                document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 1)};
-            });
+        EditLayerRecordsForTest(session,
+                                [&](DocumentFixture& document)
+                                {
+                                    document.layers.front().transform.size.x = dimension;
+                                    document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 1)};
+                                });
         session.history.Reset();
         const ImageLayer* layerBefore = ActiveLayer(session);
         const auto activeBefore = session.ActiveLayerID();

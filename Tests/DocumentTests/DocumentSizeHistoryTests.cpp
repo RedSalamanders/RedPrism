@@ -1,4 +1,5 @@
 #include "DocumentSizeHistoryTests.h"
+#include "../Support/DocumentFixture.h"
 
 #include "CanvasSize.h"
 #include "Document.h"
@@ -71,17 +72,17 @@ bool InstallCanvasFixture(DocumentSession& session)
     if (!image.HasStorage() || !mask.HasStorage())
         return false;
     const Guid id = *session.ActiveLayerID();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-            LayerMask layerMask;
-            layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
-            layerMask.placement = LayerTransform{Vec2{0, 0}, Vec2{2, 2}};
-            layer.mask = std::move(layerMask);
-            document.selection = SelectionFixture();
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                LayerMask layerMask;
+                                layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
+                                layerMask.placement = LayerTransform{Vec2{0, 0}, Vec2{2, 2}};
+                                layer.mask = std::move(layerMask);
+                                document.selection = SelectionFixture();
+                            });
     session.SelectLayerTarget(id, true);
     session.SetCropFrame(CropRect{0, 0, 2, 2});
     if (session.Document()->layers.size() != 1 || !session.Document()->layers.front().mask)
@@ -102,16 +103,16 @@ bool InstallImageFixture(DocumentSession& session)
     if (!image.HasStorage() || !mask.HasStorage())
         return false;
     const Guid id = *session.ActiveLayerID();
-    session.EditForTest(
-        [&](CanvasDocument& document)
-        {
-            ImageLayer& layer = document.layers.front();
-            layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
-            LayerMask layerMask;
-            layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
-            layer.mask = std::move(layerMask);
-            document.selection = SelectionFixture();
-        });
+    EditLayerRecordsForTest(session,
+                            [&](DocumentFixture& document)
+                            {
+                                ImageLayer& layer = document.layers.front();
+                                layer.asset = RasterAsset{image, Raster::MakeThumbnail(image), layer.name};
+                                LayerMask layerMask;
+                                layerMask.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"mask"};
+                                layer.mask = std::move(layerMask);
+                                document.selection = SelectionFixture();
+                            });
     session.SelectLayerTarget(id, true);
     if (session.Document()->layers.size() != 1 || !session.Document()->layers.front().mask)
         return false;

@@ -8,6 +8,8 @@
 #include "Resources.h"
 #include "resource.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -585,19 +587,21 @@ int Application::RunImageImportSelfTest() noexcept
                     if (mode == Mode::MaskOnly)
                     {
                         const auto selected = _session.ActiveLayerID().value();
-                        _session.EditForTest(
-                            [&](CanvasDocument& document)
-                            {
-                                for (auto& layer : document.layers)
-                                    if (layer.id == selected)
-                                    {
-                                        const std::uint8_t byte = 173;
-                                        const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
-                                        LayerMask placed;
-                                        placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
-                                        layer.mask = std::move(placed);
-                                    }
-                            });
+                        EditLayerRecordsForTest(_session,
+                                                [&](DocumentFixture& fixture)
+                                                {
+                                                    for (auto& layer : fixture.layers)
+                                                        if (layer.id == selected)
+                                                        {
+                                                            const std::uint8_t byte = 173;
+                                                            const Raster mask =
+                                                                Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                                            LayerMask placed;
+                                                            placed.asset =
+                                                                RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                                            layer.mask = std::move(placed);
+                                                        }
+                                                });
                         _session.SelectLayerTarget(selected, true);
                     }
                     if (historyFailure || scopeStale)
@@ -608,14 +612,14 @@ int Application::RunImageImportSelfTest() noexcept
                     if (mode == Mode::CropOnly)
                         _session.SetCropFrame(CropRect{1, 0, 1, 1});
                     if (target == Target::Grouped)
-                        _session.EditForTest(
-                            [](CanvasDocument& document)
-                            {
-                                ImageLayer group = ImageLayer::Blank(L"Import folder", Vec2{8, 4});
-                                group.isGroup = true;
-                                document.layers.back().parentID = group.id;
-                                document.layers.insert(document.layers.begin(), std::move(group));
-                            });
+                        EditLayerRecordsForTest(_session,
+                                                [](DocumentFixture& fixture)
+                                                {
+                                                    ImageLayer group = ImageLayer::Blank(L"Import folder", Vec2{8, 4});
+                                                    group.isGroup = true;
+                                                    fixture.layers.back().parentID = group.id;
+                                                    fixture.layers.insert(fixture.layers.begin(), std::move(group));
+                                                });
                     _session.history.MarkSaved();
                     _documentPath = L"before-import.prism";
                     if (target == Target::Empty)
@@ -904,14 +908,15 @@ int Application::RunImageImportSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._imageImportTestGate->release.get());
     };
-    CanvasDocument projectDocument;
-    projectDocument.id = Guid::Generate();
-    projectDocument.width = 8;
-    projectDocument.height = 4;
+    DocumentFixture projectFixture;
+    projectFixture.id = Guid::Generate();
+    projectFixture.width = 8;
+    projectFixture.height = 4;
     auto projectLayer = ImageLayer::Blank(L"Mixed baseline", Vec2{2, 1});
     const auto projectActive = projectLayer.id;
     projectLayer.asset = RasterAsset{image, image, projectLayer.name};
-    projectDocument.layers.push_back(std::move(projectLayer));
+    projectFixture.layers.push_back(std::move(projectLayer));
+    const CanvasDocument projectDocument = std::move(projectFixture).Seal();
     const auto projectPath = (root / L"mixed.prism").wstring();
     const auto failedProjectPath = (root / L"missing-project.prism").wstring();
     if (SaveProject(projectPath.c_str(), projectDocument, projectActive, true) != ProjectIoStatus::Ok)

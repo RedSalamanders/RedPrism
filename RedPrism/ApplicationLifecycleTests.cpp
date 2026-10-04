@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "DocumentLifecycleTestGate.h"
 #include "Selection.h"
@@ -94,7 +95,8 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
                                   owner._documentLifecycleTicket && owner._historyWork.Busy();
             break;
         case Mode::StaleGeneration:
-            owner._session.EditForTest([](CanvasDocument& document) { document.layers.back().opacity = 0.5; });
+            EditLayerRecordsForTest(owner._session,
+                                    [](DocumentFixture& document) { document.layers.back().opacity = 0.5; });
             break;
         case Mode::StaleReplacement:
         {
@@ -157,7 +159,7 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
                 return false;
         }
 
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 8;
         document.height = 4;
@@ -173,7 +175,7 @@ int Application::RunDocumentLifecycleSelfTest() noexcept
         document.layers.push_back(std::move(lower));
         document.layers.push_back(std::move(upper));
         document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 1, 1)};
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.history.Reset();
         _session.history.MarkSaved();
         _session.SetForegroundColor(0xFF3167A9u);

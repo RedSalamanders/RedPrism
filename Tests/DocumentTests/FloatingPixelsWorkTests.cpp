@@ -1,5 +1,6 @@
 #include "FloatingPixelsWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Document.h"
 #include "Executor.h"
 #include "FloatingPixelsWork.h"
@@ -53,13 +54,13 @@ ImageLayer Layer(const wchar_t* name, const Raster& image)
 
 CanvasDocument Document(int width, int height, ImageLayer layer, DocumentSelection selection)
 {
-    CanvasDocument document;
+    DocumentFixture document;
     document.id = Guid::Generate();
     document.width = width;
     document.height = height;
     document.layers.push_back(std::move(layer));
     document.selection = std::move(selection);
-    return document;
+    return std::move(document).Seal();
 }
 
 bool BytesEqual(const Raster& image, int width, int height, RasterFormat format,
@@ -102,7 +103,7 @@ void LegacySelectionLiftAndRestore()
     ImageLayer sibling = Layer(L"sibling", Bgra(1, 1, std::array<std::uint8_t, 4>{3, 4, 5, 255}));
     const Guid siblingID = sibling.id;
     CanvasDocument source = Document(4, 1, std::move(sourceLayer), Rect(1, 0, 2, 1));
-    source.layers.push_back(std::move(sibling));
+    EditDocumentFixture(source, [&](DocumentFixture& document) { document.layers.push_back(std::move(sibling)); });
     const CanvasDocument before = source;
 
     InlineExecutor executor;
@@ -360,7 +361,7 @@ void MemoryPlanningAndSparseRefusal()
     // The huge sibling is virtual. A 512 canvas also proves temporary 256-square Clear patches cannot be
     // charged as committed layer growth; selection coverage itself remains a cheap 256 KiB plane.
     CanvasDocument budgetSource = Document(512, 512, std::move(target), Rect(0, 0, 1, 1));
-    budgetSource.layers.push_back(std::move(budget));
+    EditDocumentFixture(budgetSource, [&](DocumentFixture& document) { document.layers.push_back(std::move(budget)); });
     auto smallSource = budgetSource;
     smallSource.width = smallSource.height = 8;
     CanvasDocument smallOpened;

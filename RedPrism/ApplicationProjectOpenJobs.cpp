@@ -9,6 +9,8 @@
 #include "Resources.h"
 #include "resource.h"
 
+#include "../Tests/Support/DocumentFixture.h"
+
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -505,14 +507,15 @@ int Application::RunProjectOpenSelfTest() noexcept
         });
     const std::array<std::uint8_t, 8> fileBytes{191, 191, 191, 255, 23, 45, 67, 255};
     const auto fileImage = Raster::Make(2, 1, RasterFormat::Bgra8888, fileBytes.data(), fileBytes.size());
-    CanvasDocument fileDocument;
-    fileDocument.id = Guid::Generate();
-    fileDocument.width = 2;
-    fileDocument.height = 1;
+    DocumentFixture fileFixture;
+    fileFixture.id = Guid::Generate();
+    fileFixture.width = 2;
+    fileFixture.height = 1;
     ImageLayer fileLayer = ImageLayer::Blank(L"Loaded literal", Vec2{2, 1});
     const auto fileId = fileLayer.id;
     fileLayer.asset = RasterAsset{fileImage, fileImage, fileLayer.name};
-    fileDocument.layers.push_back(std::move(fileLayer));
+    fileFixture.layers.push_back(std::move(fileLayer));
+    const CanvasDocument fileDocument = std::move(fileFixture).Seal();
     const auto project = (root / L"source.prism").wstring();
     if (SaveProject(project.c_str(), fileDocument, fileId, true) != ProjectIoStatus::Ok)
         return 5;
@@ -558,19 +561,21 @@ int Application::RunProjectOpenSelfTest() noexcept
                 if (mode == Mode::MaskOnly)
                 {
                     const auto selected = _session.ActiveLayerID().value();
-                    _session.EditForTest(
-                        [&](CanvasDocument& document)
-                        {
-                            for (auto& layer : document.layers)
-                                if (layer.id == selected)
-                                {
-                                    const std::uint8_t byte = 173;
-                                    const Raster mask = Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
-                                    LayerMask placed;
-                                    placed.asset = RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
-                                    layer.mask = std::move(placed);
-                                }
-                        });
+                    EditLayerRecordsForTest(_session,
+                                            [&](DocumentFixture& fixture)
+                                            {
+                                                for (auto& layer : fixture.layers)
+                                                    if (layer.id == selected)
+                                                    {
+                                                        const std::uint8_t byte = 173;
+                                                        const Raster mask =
+                                                            Raster::Make(1, 1, RasterFormat::Gray8, &byte, 1);
+                                                        LayerMask placed;
+                                                        placed.asset =
+                                                            RasterAsset{mask, Raster::MakeThumbnail(mask), L"Mask"};
+                                                        layer.mask = std::move(placed);
+                                                    }
+                                            });
                     _session.SelectLayerTarget(selected, true);
                 }
                 if (historyFailure || scopeStale || mode == Mode::CaptureAllocation)
@@ -865,9 +870,13 @@ int Application::RunProjectOpenSelfTest() noexcept
         return 5;
     auto larger = fileDocument;
     larger.width = 5;
-    auto& largerLayer = larger.layers.front();
-    largerLayer.asset = RasterAsset{SolidRaster(5, 1, 0xFF575757), fileImage, largerLayer.name};
-    largerLayer.transform.size = {5, 1};
+    EditDocumentFixture(larger,
+                        [&](DocumentFixture& fixture)
+                        {
+                            auto& largerLayer = fixture.layers.front();
+                            largerLayer.asset = RasterAsset{SolidRaster(5, 1, 0xFF575757), fileImage, largerLayer.name};
+                            largerLayer.transform.size = {5, 1};
+                        });
     const auto firstPath = (root / L"batch-first.prism").wstring();
     const auto missing = (root / L"missing.prism").wstring();
     const auto unsupported = (root / L"unsupported.prism").wstring();

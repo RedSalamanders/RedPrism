@@ -1,5 +1,6 @@
 #include "ColorEditHistory.h"
 #include "Adjust.h"
+#include "DocumentDraft.h"
 
 #include <algorithm>
 #include <limits>
@@ -39,29 +40,27 @@ std::optional<PreparedColorEdit> PrepareColorEditPublication(const std::optional
     layer.asset = RasterAsset{result.image, result.thumbnail, layer.name};
     layer.transform = result.transform;
     layer.mask = result.mask;
-    CanvasDocument after;
-    after.id = source->id;
-    after.width = source->width;
-    after.height = source->height;
-    after.resolution = source->resolution;
-    after.selection = source->selection;
-    after.layers.reserve(source->layers.size());
-    for (const auto& oldLayer : source->layers)
-    {
-        if (cancellation.IsCancelled())
-            return std::nullopt;
-        after.layers.push_back(oldLayer.id == active ? layer : oldLayer);
-    }
-    if (cancellation.IsCancelled() || ValidateDocument(after) != DocumentStatus::Ok)
+    const auto index = IndexOf(source->layers, active.value());
+    if (!index)
         return std::nullopt;
-    const std::optional<CanvasDocument> afterDocument{std::move(after)};
+    auto draft = CanvasDocumentDraft::Clone(source.value(), source->layers.size(), cancellation);
+    if (!draft)
+        return std::nullopt;
+    {
+        auto layers = draft.value().EditLayers();
+        layers[index.value()] = layer;
+    }
+    auto sealed = draft.value().Seal(cancellation);
+    if (!sealed || cancellation.IsCancelled() || ValidateDocument(sealed.value()) != DocumentStatus::Ok)
+        return std::nullopt;
+    std::optional<CanvasDocument> afterDocument{std::move(sealed.value())};
     auto publication = DocumentHistory::PrepareEdit(std::move(history), source, active, afterDocument, active,
                                                     FilterKindName(result.kind), cancellation, observer);
     if (!publication || cancellation.IsCancelled())
         return std::nullopt;
     // The caller's complete raw result remains available for unchanged/failure and late-completion handling.
     // All result/settings/mask copies happen here, never during owner publication.
-    return PreparedColorEdit(generation, result, std::move(layer), std::move(publication.value()));
+    return PreparedColorEdit(generation, result, std::move(afterDocument), std::move(publication.value()));
 }
 
 std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit& edit) noexcept

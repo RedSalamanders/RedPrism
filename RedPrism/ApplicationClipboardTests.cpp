@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "../Tests/ClipboardMergedBudgetTests.h"
+#include "../Tests/Support/DocumentFixture.h"
 #include "ChromeHost.h"
 #include "ClipboardWorkTestGate.h"
 #include "SystemClipboard.h"
@@ -273,7 +274,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
     for (const auto& scenario : scenarios)
     {
         _clipboardWorkTestGate.reset();
-        CanvasDocument document;
+        DocumentFixture document;
         document.id = Guid::Generate();
         document.width = 9;
         document.height = 7;
@@ -289,7 +290,7 @@ int Application::RunClipboardWorkSelfTest() noexcept
             _session = DocumentSession{}; // independent owner without a previous private copy
             _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
         }
-        _session.ReplaceDocument(std::move(document), active);
+        _session.ReplaceDocument(std::move(document).Seal(), active);
         _session.SetSelection(
             DocumentSelection{false, SelectionLoops{{Vec2{1, 0}, Vec2{2, 0}, Vec2{2, 1}, Vec2{1, 1}}}}, L"Fixture");
         if (scenario.mode != Mode::Empty && !_session.CopySelection())
