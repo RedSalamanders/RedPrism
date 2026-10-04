@@ -429,7 +429,7 @@ void ExpectStale(Fixture& fixture, PreparedAdjustmentOpening& candidate, const c
            (std::string(name) + ".refusal-preserves-current-state").c_str());
 }
 
-void StaleAuthority()
+void StaleTokenAuthority()
 {
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
@@ -447,6 +447,10 @@ void StaleAuthority()
                 ExpectStale(fixture, candidate.value(), "stale.token-generation");
         }
     }
+}
+
+void StaleDocumentGeneration()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -458,6 +462,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.generation");
         }
     }
+}
+
+void StaleOpeningIdentifier()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -469,6 +477,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.opening-id");
         }
     }
+}
+
+void StaleActiveLayer()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -480,6 +492,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.active-layer");
         }
     }
+}
+
+void StaleMaskTarget()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -491,6 +507,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.mask-target");
         }
     }
+}
+
+void StaleCropFrame()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -502,6 +522,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.crop-frame");
         }
     }
+}
+
+void StaleHistoryEpoch()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -519,6 +543,10 @@ void StaleAuthority()
             ExpectStale(fixture, candidate.value(), "stale.history-epoch");
         }
     }
+}
+
+void ForeignSessionRefusal()
+{
     {
         auto sourceOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& source = *sourceOwner;
@@ -535,6 +563,10 @@ void StaleAuthority()
             Expect(SameLiveState(foreign.session, before), "foreign.refusal-keeps-session");
         }
     }
+}
+
+void MovedCandidateTransfer()
+{
     {
         auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
         auto& fixture = *fixtureOwner;
@@ -548,6 +580,19 @@ void StaleAuthority()
             Expect(fixture.session.ApplyPreparedAdjustmentOpeningIfCurrent(moved), "moved.to-candidate-applies");
         }
     }
+}
+
+void StaleAuthority()
+{
+    StaleTokenAuthority();
+    StaleDocumentGeneration();
+    StaleOpeningIdentifier();
+    StaleActiveLayer();
+    StaleMaskTarget();
+    StaleCropFrame();
+    StaleHistoryEpoch();
+    ForeignSessionRefusal();
+    MovedCandidateTransfer();
 }
 
 void LaterSavedRevisionAndAbsentSession()

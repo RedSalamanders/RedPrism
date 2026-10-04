@@ -161,8 +161,10 @@ class Application::ColorPreviewJob final : public Job
         }
         else
         {
-            _payload->prepared.emplace(DocumentSession::PrepareColorDisplayPreviewPublication(
-                std::move(_payload->input.value()), context.executor, context.cancellation, {}));
+            _payload->prepared.emplace();
+            DocumentSession::PrepareColorDisplayPreviewPublicationInto(std::move(_payload->input.value()),
+                                                                       _payload->prepared.value(), context.executor,
+                                                                       context.cancellation, {});
             _payload->input.reset();
         }
         if (_gate && _gate->kind == ColorWorkTestKind::Preview)
@@ -207,18 +209,23 @@ class Application::ColorPreviewJob final : public Job
             }
             else
             {
-                auto input = _owner._session.PrepareColorDisplayPreviewInput(_request.lookupPreview);
-                auto failureInput = _owner._session.PrepareColorDisplayPreviewInput(_request.lookupPreview);
-                if (!input || !failureInput)
+                _owner._session.PrepareColorDisplayPreviewInputInto(_payload->input, _request.lookupPreview);
+                if (!_payload->input)
                 {
                     _captureError = E_ABORT;
                     return false;
                 }
                 // Preallocate a move-only failure publication while the complete reservation is held. The
                 // worker may unwind its input after bad_alloc; completion never reconstructs settings/owners.
-                _payload->fallback.emplace(DocumentSession::PrepareFailedColorDisplayPreviewPublication(
-                    std::move(failureInput.value()), ColorEditJobStatus::Failed));
-                _payload->input.emplace(std::move(input.value()));
+                DocumentSession::PrepareFailedColorDisplayPreviewPublicationInto(
+                    std::move(_payload->input.value()), _payload->fallback, ColorEditJobStatus::Failed);
+                _payload->input.reset(); // All owners moved into the preallocated failure publication.
+                _owner._session.PrepareColorDisplayPreviewInputInto(_payload->input, _request.lookupPreview);
+                if (!_payload->input)
+                {
+                    _captureError = E_ABORT;
+                    return false;
+                }
             }
             if (_owner._jobs.Resume(ticket))
                 return true;

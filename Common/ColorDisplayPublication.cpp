@@ -4,6 +4,7 @@
 #include "ColorEditHistory.h"
 
 #include <limits>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -94,14 +95,25 @@ std::optional<ColorDisplayPreviewMemory> DocumentSession::ColorDisplayPreviewMem
 
 std::optional<ColorDisplayPreviewInput> DocumentSession::PrepareColorDisplayPreviewInput(bool lookupPreview) const
 {
+    std::optional<ColorDisplayPreviewInput> result;
+    PrepareColorDisplayPreviewInputInto(result, lookupPreview);
+    return result;
+}
+
+void DocumentSession::PrepareColorDisplayPreviewInputInto(std::optional<ColorDisplayPreviewInput>& destination,
+                                                          bool lookupPreview) const
+{
+    if (destination)
+        return; // Host capture requires an empty admitted slot; preserve existing owners on refusal.
     if (!_colorDisplayJobsEnabled || !_document || !_colorEdit || !_colorEdit->deferred || _adjustmentEditingID)
-        return std::nullopt;
+        return;
     auto job = PrepareColorEditPreview();
     if (!job)
-        return std::nullopt;
+        return;
     job->lookupPreview = lookupPreview;
-    return ColorDisplayPreviewInput(CaptureImageImportAuthority(), history.CaptureAuthority(), _document.value(),
-                                    std::move(job.value()));
+    // Construct directly in the caller's admitted destination, without a combined input stack temporary.
+    destination.emplace(ColorDisplayPreviewInput::ConstructionKey{}, CaptureImageImportAuthority(),
+                        history.CaptureAuthority(), _document.value(), std::move(job.value()));
 }
 
 ColorDisplayPreviewResult DocumentSession::PrepareColorDisplayPreviewPublication(ColorDisplayPreviewInput input,
@@ -109,14 +121,32 @@ ColorDisplayPreviewResult DocumentSession::PrepareColorDisplayPreviewPublication
                                                                                  CancelToken cancellation,
                                                                                  ColorDisplayObserver observer)
 {
+    // Reference API: host workers use Into on their already allocated payload. Keep this large aggregate off
+    // the reference wrapper's stack too; its allocation failure propagates to the existing worker boundary.
+    auto output = std::make_unique<ColorDisplayPreviewResult>();
+    PrepareColorDisplayPreviewPublicationInto(std::move(input), *output, executor, cancellation, observer);
+    return std::move(*output);
+}
+
+void DocumentSession::PrepareColorDisplayPreviewPublicationInto(ColorDisplayPreviewInput&& input,
+                                                                ColorDisplayPreviewResult& output, Executor& executor,
+                                                                CancelToken cancellation, ColorDisplayObserver observer)
+{
+    output.publication.reset(); // Worker-only destination reuse; it never releases owners on the UI thread.
+    output.status = ColorEditJobStatus::Failed;
     cancellation = cancellation.WithShutdown(executor.ShutdownToken());
-    if (!input._valid || cancellation.IsCancelled())
-        return {cancellation.IsCancelled() ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed};
+    const bool valid = std::exchange(input._valid, false);
+    if (!valid || cancellation.IsCancelled())
+    {
+        if (cancellation.IsCancelled())
+            output.status = ColorEditJobStatus::Cancelled;
+        return;
+    }
     // Equality of independently constructed outlines can traverse millions of points. Establish opening
     // selection equivalence on the worker, then bind the result to this complete source's retained root.
     // The owner first checks full source authority, so its existing token validation takes the identity path.
     if (input._job.token.selection != input._source.selection)
-        return {};
+        return;
     input._job.token.selection = input._source.selection;
     auto result = RunColorEditPreviewJob(input._job, executor, cancellation);
     std::optional<CanvasDocument> display;
@@ -134,11 +164,15 @@ ColorDisplayPreviewResult DocumentSession::PrepareColorDisplayPreviewPublication
                                                                              : ColorEditJobStatus::Failed;
     }
     if (cancellation.IsCancelled())
-        return {ColorEditJobStatus::Cancelled};
-    ColorDisplayPreviewResult output;
+    {
+        output.status = ColorEditJobStatus::Cancelled;
+        return;
+    }
     output.status = result.status;
-    output.publication.emplace(PreparedColorDisplayPreview(std::move(input), std::move(result), std::move(display)));
-    return output;
+    // All members move without throwing. Restore validity only for this immediately transferred publication.
+    input._valid = true;
+    output.publication.emplace(PreparedColorDisplayPreview::ConstructionKey{}, std::move(input), std::move(result),
+                               std::move(display));
 }
 
 bool DocumentSession::ApplyPreparedColorDisplayPreviewIfCurrent(PreparedColorDisplayPreview& prepared) noexcept
@@ -203,7 +237,14 @@ PreparedColorDisplayPreview DocumentSession::PrepareFailedColorDisplayPreviewPub
     ColorDisplayPreviewInput input, ColorEditJobStatus status) noexcept
 {
     static_assert(std::is_nothrow_move_constructible_v<ColorEditPreviewResult>);
-    ColorEditPreviewResult result{std::move(input._job.token), std::move(input._job.edit),
-                                  status == ColorEditJobStatus::NoSource ? status : ColorEditJobStatus::Failed};
-    return PreparedColorDisplayPreview(std::move(input), std::move(result), std::nullopt);
+    return PreparedColorDisplayPreview(PreparedColorDisplayPreview::ConstructionKey{}, std::move(input), status);
+}
+
+void DocumentSession::PrepareFailedColorDisplayPreviewPublicationInto(
+    ColorDisplayPreviewInput&& input, std::optional<PreparedColorDisplayPreview>& destination,
+    ColorEditJobStatus status) noexcept
+{
+    if (destination)
+        return; // Never replace and retire a populated publication on the owner during capture.
+    destination.emplace(PreparedColorDisplayPreview::ConstructionKey{}, std::move(input), status);
 }

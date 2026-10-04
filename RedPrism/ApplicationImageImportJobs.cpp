@@ -742,7 +742,9 @@ int Application::RunImageImportSelfTest() noexcept
                         correct = correct && _imageImportTestGate->historyFaultHits.load() == 1 &&
                                   !_session.history.IsModified();
                     if (failed)
-                        correct = correct && actual.error == (mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY) &&
+                        correct = correct &&
+                                  actual.error == static_cast<std::int32_t>(mode == Mode::Failure ? E_ACCESSDENIED
+                                                                                                  : E_OUTOFMEMORY) &&
                                   _lastErrorId == IDS_ERROR_IMPORT_IMAGE;
                     if (mode == Mode::Cancel)
                         correct = correct && state.cancelPending;
@@ -752,7 +754,7 @@ int Application::RunImageImportSelfTest() noexcept
                         correct = correct && _imageImportTestGate->captureReservationHeld &&
                                   _imageImportTestGate->retired.load() && _imageImportTestGate->retiredOffOwner.load();
                     if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-                        correct = correct && actual.error == E_ABORT;
+                        correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
                     if (younger)
                         correct = correct && younger.value().Read().outcome ==
                                                  (creates ? HostOutcome::Stale : HostOutcome::Succeeded);
@@ -1004,9 +1006,9 @@ int Application::RunImageImportSelfTest() noexcept
                       _session.ActiveLayer()->transform.origin == Vec2{0, 0};
         if (!success)
             correct = correct &&
-                      actual.error == (mode == BatchMode::MixedFailure ? E_OUTOFMEMORY
-                                       : growth                        ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                                                       : E_FAIL) &&
+                      actual.error == static_cast<std::int32_t>(mode == BatchMode::MixedFailure ? E_OUTOFMEMORY
+                                                                : growth ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                         : E_FAIL) &&
                       _lastErrorId == static_cast<UINT>(growth ? IDS_ERROR_TOO_LARGE : IDS_ERROR_IMPORT_IMAGE);
         _projectOpenTestGate.reset();
         std::fprintf(stderr, "%s image-import-host.batch=%u\n", correct ? "PASS" : "FAIL",

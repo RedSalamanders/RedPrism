@@ -12,6 +12,8 @@
 - [x] Integrate the privately qualified lifetime source and portable project entries into the managed candidate; skills/formatting pass all 620 files.
 - [x] Fresh normal managed x64 Debug/Release/ASan suites and ARM64 cross-builds pass for the combined lifetime/build/fixture candidate. All 627 owned inputs match; exact 78-stage / 8,962-control application registry, bounds suite, scanner controls and screenshots pass. Static analysis, diagnosis of the intermittent first-clean-run Wand failure and native activation remain open; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
 - [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
+- [x] Managed default-desktop Debug analysis qualifies the repaired candidate: all five images, unchanged stack thresholds, concurrency SAL controls, ISA/PDB/scanner gates and provenance pass; r31's 754 inputs / 1,038 archive copies are verified. The full current runtime matrix and native activation remain open.
+- [x] First fresh current x64 Debug full suite and all three ARM64 cross-builds pass on identical 754 inputs; 6,491 document / 8,980 application controls, exact 78 stages and 12 new scratch controls are verified. Release/x64 ASan runtime and native activation remain open.
 - [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
@@ -28,13 +30,11 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current integration: the corrected 18-case color-display host route is implemented and pushed in the managed
-candidate (`92bd2ae`). The earlier r21 document suite passed 6,491 controls; that result does not qualify later
-stack/scratch repairs. Full attempts stopped before the main application registry on process/tool-start or
-clipboard fixture failures. Analysis r25 failed PowerShell initialization (`0xC0000142`); r26 ran the same build
-entrypoint in the initialized host but failed tool discovery before compilation. Both are independently
-archived. Qualification waits for Windows process/resource creation to recover; native analysis, the full
-current matrix, remaining code routes and G1 measurements are still required. See
+Current integration: the repaired complete-color-display route passes managed default-desktop Debug analysis
+and the full Debug runtime, including all 18 new actual-host cases. All ARM64 configurations cross-build.
+The exact 754 owned inputs match analysis and every current qualified attempt; every archive copy is verified.
+Fresh Release and x64 ASan full runtime, native activation, the remaining P1 code routes and original G1
+measurements still precede P1 Done. Earlier interrupted/failed attempts are retained in
 [DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). Every P1 exit row remains unchanged.
 
 ## What this milestone delivers

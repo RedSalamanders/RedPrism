@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <new>
 #include <stop_token>
 #include <windows.h>
@@ -130,9 +131,18 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
     result.status = PathClassificationStatus::Ok;
     if (paths.empty())
         return result;
-    auto scratch = scratchSource.create
-                       ? scratchSource.create(scratchSource.context)
-                       : std::unique_ptr<PathClassificationScratch>(new (std::nothrow) PathClassificationScratch{});
+    std::unique_ptr<PathClassificationScratch> scratch;
+    try
+    {
+        scratch = scratchSource.create ? scratchSource.create(scratchSource.context)
+                                       : std::make_unique<PathClassificationScratch>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        // One bounded allocation at this noexcept batch-admission boundary; refuse the whole batch.
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
+                                                      : PathClassificationStatus::OutOfMemory);
+    }
     if (!scratch)
         return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
                                                       : PathClassificationStatus::OutOfMemory);

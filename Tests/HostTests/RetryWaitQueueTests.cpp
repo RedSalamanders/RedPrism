@@ -285,7 +285,7 @@ void TestFixedCapacityAndMuxRegistration() noexcept
     }
     Expect(rig.routes.HasPending(), "capacity.multiplexer_sees_pending");
     Expect(rig.queue.Start({RetryWaitQueue::kCapacity, 99}, 1, {}, receiver) ==
-               HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA),
+               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)),
            "capacity.ninth_refused");
     for (std::size_t index = 0; index < RetryWaitQueue::kCapacity; ++index)
         Expect(rig.queue.SignalDeadlineForTest({index, index + 1}), "capacity.signal_real_wait");

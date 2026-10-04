@@ -571,9 +571,10 @@ int Application::RunSizingWorkSelfTest() noexcept
             if (mode == Mode::Failure)
                 correct = correct && actual.error == E_ACCESSDENIED;
             if (mode == Mode::Allocation || mode == Mode::Memory || mode == Mode::CaptureAllocation || historyFailure)
-                correct = correct && actual.error == E_OUTOFMEMORY;
+                correct = correct && actual.error == static_cast<std::int32_t>(E_OUTOFMEMORY);
             if (mode == Mode::TooLarge)
-                correct = correct && actual.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+                correct =
+                    correct && actual.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
             if (mode == Mode::Invalid)
                 correct = correct && actual.error == E_INVALIDARG;
         }

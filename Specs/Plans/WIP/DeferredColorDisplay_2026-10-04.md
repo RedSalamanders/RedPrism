@@ -26,11 +26,14 @@
   the full normal matrix and added device/maximum-record/shutdown/admission cases still require qualification.
   The corrected 18-case route is implemented and pushed in WIP checkpoint `92bd2ae`. Debug r19–r26 retained process/tool-start and clipboard fixture
   failures before the main application registry; all attempts are independently archived. The standalone
-  6,491-control document suite passed in r21, but this does not qualify the application. Stack-buffer and
-  admitted-result construction repairs are now reviewed and awaiting native analysis and a fresh full matrix.
-  r25 failed PowerShell initialization; r26 failed tool discovery before compilation even when the repository
-  build entrypoint ran inside the initialized host. All archives are verified. Recover Windows process/resource
-  creation before further qualification; the complete candidate still has no overall passing current matrix.
+  6,491-control document suite passed in r21, but this does not qualify the application. r27 used a private
+  temporary WinSta0 desktop, closed after its child exited, and process-scoped `MSBUILDDISABLENODEREUSE=1`.
+  The unchanged forced-rebuild `build.ps1` analysis entrypoint reached compiler diagnostics, then exited 1.
+  Source repairs for in-place color results, heap path scratch, test splitting/array bounds and exact HRESULT
+  comparisons remain pending analysis and runtime qualification. The candidate has no passing current full
+  matrix. Active-desktop G1/Release ETW remains an independent requirement.
+- [x] r31 default-desktop Debug analysis passes all five images, SAL controls, ISA/PDB/scanner gates and provenance on the repaired source; its complete archive is independently verified. Full Debug/Release/ASan runtime and ARM64 cross-build qualification remain open.
+- [x] Fresh current Debug full runtime passes every preceding control, all 99 publication and 18 actual-host controls; all three ARM64 cross-builds pass on the identical 754 inputs. Release/x64 ASan full runtime and native integration remain open.
 - [ ] Activate with the immutable-root integration, full normal x64 suites / ARM64 cross-builds, owning contracts and measured due G1 rows.
 
 Status: ACTIVE private prerequisite work; part of [P1](UiNeverBlocks_2026-09-22.md) and H2.2.

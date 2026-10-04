@@ -316,16 +316,139 @@ This is not proof that Visual Studio is absent or that a particular resource poo
 The installed prerelease Visual Studio 18.x was returned by a separate unchanged `vswhere -prerelease`
 query. No dependency, ISA, provenance, expected exit, legacy golden or timeout gate was bypassed.
 
+## Analysis r27 — private-desktop compiler diagnostics failure
+
+The actual child was PID 49684, started `2026-10-04T17:15:45.534773Z` and completed
+`2026-10-04T17:19:25.538478Z` with exit 1. It ran the unchanged repository entrypoint from the worktree:
+`build.ps1 -Platform x64 -Configuration Debug -Rebuild -MaxCpuCount 2 -Analyze`. To contain compiler/build
+processes, the launcher used a private temporary desktop `WinSta0\RedPrismQualification_53384_191545535792`;
+the desktop handle was closed after the child exited. `MSBUILDDISABLENODEREUSE=1` was scoped to that process.
+This launch reached compiler diagnostics, unlike r25's PowerShell initialization failure and r26's
+pre-compilation tool-discovery failure. No thresholds or qualification gates were changed: production stack
+diagnostics remain at 16 KiB and test diagnostics at 128 KiB.
+
+The build did not compile successfully. Diagnostics include C6262 stack use in `ColorDisplayPublication.cpp`
+and other production/test functions, C28182 null-dereference warnings from nothrow scratch allocations in
+`PathClassificationWork.cpp` and related files, constant-comparison warnings, integer/HRESULT comparison
+warnings, and test assertions that trigger analyzer findings. The build log ends with the actual MSBuild exit
+1; no runtime stages ran. This is useful compiler evidence, not a runtime pass and not P1 completion.
+
+The run receipt records 753 frozen source inputs. Archive completion records 980 independently verified
+source/evidence copies at `2026-10-04T17:22:45.3114011Z`, completion SHA-256
+`B4FB4DAA4999B29CE66BFBF8974538CE13452C021BABFCE896397834630B7588`. Its recorded archive root is
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-private-desktop-x64-Debug-r27-native-analysis-failure`;
+the worktree's `.build\normal-clean-x64-analysis-Debug-r27` contains the run receipt and logs. The
+verified frozen-input count is 753 and verified archive-copy count is 980.
+
+Reviewed candidate repairs remain unqualified: in-place color results, heap path scratch, test splitting and
+array bounds, and exact HRESULT comparisons. No r28 result is available in this record. Active-desktop G1 /
+Release ETW qualification remains separate from the private-desktop compiler run.
+
+## Analysis r28 — interrupted diagnostics only
+
+The tool session ended before its recorder wrote the actual child exit. No recorder/compiler child remained
+when checked; the exit is unavailable and is recorded as null. The frozen source remained unchanged. Compiler
+diagnostics are retained as evidence for further stack and integer-comparison repairs, with no completed
+analysis or runtime claim. The independently verified archive has 1,024 source/evidence copies, completion
+SHA-256 `B992C30AB592C606D6C06FEEB5E6D05FD0008ED88F18EAC9EC7AFBAD27D6EE4D`, verified
+`2026-10-04T17:47:40.7588302Z`, under
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-private-desktop-x64-Debug-r28-interrupted-analysis-diagnostics`.
+A hidden recorder outside the chat tool's process job now owns r29; it retains the actual process handle,
+waits without polling, closes its private desktop and checks all frozen inputs before writing its receipt.
+No r29 outcome is asserted here. The exact existing pixel and state expectations remain required.
+
+## Analysis r29 — production repairs compile; one test stack warning remains
+
+The persistent recorder captured actual child PID 47768, start `2026-10-04T17:52:14.323547Z`, end
+`2026-10-04T17:55:29.575902Z`, exit 1. The same forced Debug analysis reached compilation and linked the
+application, IoTests and CompositionTests. DocumentTests failed C6262 in
+`FailedPublicationFactoryHandlesLatestAndStaleResults` (159,912 bytes); the production diagnostics reported
+by preceding attempts were absent. This remains an overall analysis failure with no runtime or ISA-gate
+success claim. Frozen input count is 754, including the persistent recorder launcher.
+
+The independently verified archive has 1,005 source/evidence copies, completion SHA-256
+`DB902C97C33C5446F9086CD240381C017FE1F6D178D095B1B56FA36F993B8770`, verified
+`2026-10-04T17:56:13.9209981Z`, under
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-private-desktop-x64-Debug-r29-one-test-stack-failure`.
+The remaining test cases were split in their original order. Follow-up r30 runs on the inherited default
+desktop; its actual desktop receipt takes precedence over the launcher's historical private-desktop label.
+Tool discovery on that desktop now returns the installed MSBuild and actual vswhere exit 0. No cause for the
+previous system resource failures is inferred from recovery. Full runtime and active-desktop G1/ETW remain open.
+
+## Analysis r30 — recovered default desktop; further test stack repair
+
+Actual child PID 14468 ran the unchanged forced Debug analysis on the inherited default desktop from
+`2026-10-04T17:58:08.017991Z` to `2026-10-04T18:01:30.254470Z`, exit 1. Its recorded desktop is
+`Inherited default desktop`; the launcher label still named the previous private-desktop workaround and has
+since been corrected for future receipts. C6262 moved to `LookupAndMaskPublicationKeepTheirSourceSemantics`
+(135,656 bytes). The application again compiled and linked without the preceding production diagnostics,
+but DocumentTests and the overall analysis gate remain failed. No runtime stage ran.
+
+All 754 frozen inputs remained unchanged. The independently verified archive contains 1,005 source/evidence
+copies, completion SHA-256 `4D14192918F2405C26B8189FFB51E16EB8AC73F3C16C0AA4ACEA2E407E05E0C9`, verified
+`2026-10-04T18:01:56.7464229Z`, under
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-default-desktop-x64-Debug-r30-test-stack-failure`.
+A cheaper agent is repairing collocated large test outputs; primary review and fresh analysis precede the full
+current runtime matrix. Existing numeric goldens, assertion names and runner order remain required.
+
+## Analysis r31 — qualified compiler and ISA gate
+
+Actual child PID 83176 ran the unchanged forced Debug analysis on the inherited default desktop from
+`2026-10-04T18:09:56.732235Z` to `2026-10-04T18:17:30.319236Z`, exit 0. All five linked images, native
+positive/negative concurrency SAL controls, linked-image ISA scans, matching PDB checks, scanner controls and
+DxUi provenance passed. Production/test stack thresholds remain 16 KiB/128 KiB. Every existing publication
+`Expect` expression, including numeric literals, was mechanically compared with the pre-repair source;
+all 99 control expressions and the helper signature remain unchanged. No runtime qualification follows from
+this analysis build.
+
+All 754 owned inputs remained unchanged. The independently verified archive contains 1,038 source/evidence
+copies, including the actual positive/negative SAL logs, completion SHA-256
+`C6BE5C689E833FFCBB679415779C9909397C9F0D482A535B7FAF48F794DE4C4A`, verified
+`2026-10-04T18:19:03.3384071Z`, under
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-default-desktop-x64-Debug-r31-analysis-qualified`.
+The full Debug suite r32 and ARM64 Debug cross-build r33 began after archive verification; their frozen source
+manifests match r31 exactly (`634E78D32E2D2175881274C52432FE708A68DE81763402D1BA6A8514B43C06F9`).
+They remain pending; no application registry, ASan, ARM64 runtime or due G1 claim is made here. Skills passed
+all 15 entries and formatting passed all 634 files. The plan-split verifier still preserves the original P1
+exit, G1 table, operation scope and all 13 future roadmap sections.
+
+## First complete current Debug runtime and ARM64 cross-builds
+
+All four attempts use the exact r31 owned-source manifest
+`634E78D32E2D2175881274C52432FE708A68DE81763402D1BA6A8514B43C06F9` (754 inputs).
+The Debug suite ran on the inherited default desktop from `2026-10-04T18:19:21.313277Z` to
+`2026-10-04T18:30:57.906753Z`, actual PID 54060, exit 0. Host/document/I/O/composition suites, command-line
+and real main/worker crash probes, hidden WARP application, benchmark smoke and all harness screenshots passed.
+Independent archived-log verification retains exactly 6,392 preceding document controls plus 99 publication
+controls (6,491), and 8,962 preceding application controls plus 18 color host controls (8,980), with the unchanged
+78 ordered stages. All 12 new `pathwork.scratch.*` controls and the existing scratch-creation control passed.
+
+| Attempt | Actual result | Verified archive copies | Completion SHA-256 |
+| --- | --- | --- | --- |
+| x64 Debug r32 | Full `test.ps1 -Rebuild`, exit 0; exact registries above | 1,022 | `1ADE2D720FC6F62C986C7B751B60A00A1AE2A47E29C6413D6ED26ADDB026E8AE` |
+| ARM64 Debug r33 | Cross-build, exit 0; no native runtime claim | 956 | `ABFB2F524D53EEBDA6167F1BDA40972EC70BE4AC42E123CD488FF32DCE36F94B` |
+| ARM64 Release r34 | Cross-build, exit 0; no native runtime claim | 956 | `296806D4BEED7924BB8CA04F3CCDFAF333B53881BA05F178D86404340A841EAB` |
+| ARM64 ASan Debug r35 | Cross-build, exit 0; no native sanitizer runtime claim | 960 | `91BF900110D72E47D5D0E9DADFE252805ECFEA172BA970F6DB6ED34FD9A96DA8` |
+
+Every copied source/product was independently read back and hashed before overwrite. Their archive roots under
+`%LocalAppData%\RedPrism\QualificationArchives` end respectively in
+`p1-color-host-default-desktop-x64-Debug-r32-full-suite-qualified`,
+`p1-color-host-default-desktop-ARM64-Debug-r33-cross-build-qualified`,
+`p1-color-host-default-desktop-ARM64-Release-r34-cross-build-qualified`, and
+`p1-color-host-default-desktop-ARM64-ASanDebug-r35-cross-build-qualified`.
+Release and actual x64 ASan runtime still require their fresh full suites before closing the combined source
+qualification. Native integration, original due G1 timing and the remaining P1 caller/resource routes stay open.
+
 ## Current continuation boundary
 
-P1 remains WIP. All attempts through r26 have actual terminal receipts and independently verified archives;
-no qualification child or subagent remains active. The last overall successful matrix predates the current
-color route. r21's exact 6,491-control document success is scoped to its earlier frozen source; it cannot
-qualify the subsequently reviewed stack/scratch changes or the still unexecuted corrected host cases.
+P1 remains WIP. r27/r29/r30 have actual failed terminal receipts; r28 retains interrupted diagnostics
+with an unavailable exit. r31 passes analysis. Every archive is independently verified; the current full
+runtime matrix has its first Debug pass and all three ARM64 cross-builds; Release and x64 ASan remain open. The last overall successful matrix predates the current color route. r21's exact
+6,491-control document success is scoped to its earlier frozen source; it cannot qualify the subsequently
+reviewed stack/scratch changes or the corrected host cases.
 
-After Windows process/resource creation recovers, first run native Debug analysis with a fresh forced
-rebuild. Preserve and independently verify its products even on failure, repair remaining diagnostics,
-then run fresh full x64 Debug/Release/ASan and all ARM64 cross-builds from one identical owned source.
+Complete fresh full x64 Debug/Release/ASan and all ARM64 cross-builds from the identical owned source.
+Preserve and independently verify each attempt before overwriting its products or repairing any failure.
 Application qualification requires the unchanged 78 ordered stages / 8,962 preceding literal controls plus
 the exact 18 new color controls, and DocumentTests requires its unchanged 6,392 preceding plus 99 publication
 controls. IoTests must also execute the 12 new scratch controls alongside every previous control. Real ASan

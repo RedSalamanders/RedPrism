@@ -158,7 +158,7 @@ void RunScenario(bool cancel, bool signalFailure)
         Expect(state.completed && state.final.status == (cancel ? JobStatus::Cancelled : JobStatus::Finished),
                "one-final-result");
         Expect(state.signalFaultVisits == (signalFailure ? 1u : 0u) &&
-                   state.readyError == (signalFailure ? E_OUTOFMEMORY : S_OK),
+                   state.readyError == static_cast<std::int32_t>(signalFailure ? E_OUTOFMEMORY : S_OK),
                "signal-error-retained-until-real-deadline-acknowledgement");
         Expect(!queue.HasPending() && !queue.HasReady() && scheduler.ReservedMemoryBytes() == 0,
                "no-leaked-wait-or-reservation");

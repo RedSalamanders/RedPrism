@@ -357,9 +357,15 @@ Distribution Summarize(const UiBenchmarkState& state, UiTimingKind kind) noexcep
 void Report(const UiBenchmarkState& state)
 {
     std::array<std::uint64_t, 10> elapsed{};
+    const auto runs = static_cast<std::size_t>(state.runs);
+    if (runs == 0 || runs > elapsed.size())
+    {
+        std::fprintf(stderr, "UI BENCH report rejected invalid run count=%u\n", state.runs);
+        return;
+    }
     std::uint64_t frames = 0;
     GpuReadbackStatistics readback;
-    for (unsigned int run = 0; run < state.runs; ++run)
+    for (std::size_t run = 0; run < runs; ++run)
     {
         elapsed[run] = state.samples[run].elapsedUs;
         frames += state.samples[run].frames;
@@ -368,7 +374,7 @@ void Report(const UiBenchmarkState& state)
         readback.readinessBarriers += state.samples[run].readback.readinessBarriers;
         readback.busyFailures += state.samples[run].readback.busyFailures;
     }
-    std::sort(elapsed.begin(), elapsed.begin() + state.runs);
+    std::sort(elapsed.begin(), elapsed.begin() + runs);
     const auto dispatch = Summarize(state, UiTimingKind::MessageDispatch);
     const auto message = Summarize(state, UiTimingKind::WindowMessage);
     const auto drain = Summarize(state, UiTimingKind::CompletionDrain);
@@ -376,7 +382,7 @@ void Report(const UiBenchmarkState& state)
     const auto action = Summarize(state, UiTimingKind::UiAction);
     const auto frame = Summarize(state, UiTimingKind::Frame);
     const double median =
-        static_cast<double>(elapsed[(state.runs - 1) / 2]) * 0.5 + static_cast<double>(elapsed[state.runs / 2]) * 0.5;
+        static_cast<double>(elapsed.at((runs - 1) / 2)) * 0.5 + static_cast<double>(elapsed.at(runs / 2)) * 0.5;
     std::printf("%s\n",
                 std::format("UI BENCH name={} width={} height={} runs={} warmup=1 elapsedMedianUs={:.1f} "
                             "elapsedP95Us={} elapsedMaxUs={} "
@@ -385,7 +391,7 @@ void Report(const UiBenchmarkState& state)
                             "applyMaxUs={} actionMaxUs={} frameP99UpperUs={} frameMaxUs={} frames={} "
                             "readbackCopies={} readbackMaps={} readinessBarriers={} busyFailures={}",
                             CurrentOperation(state).name, state.fixture.width, state.fixture.height, state.runs, median,
-                            elapsed[(state.runs * 95 + 99) / 100 - 1], elapsed[state.runs - 1], dispatch.p99UpperUs,
+                            elapsed.at((runs * 95 + 99) / 100 - 1), elapsed.at(runs - 1), dispatch.p99UpperUs,
                             dispatch.maximumUs, message.p99UpperUs, message.maximumUs, drain.p99UpperUs,
                             drain.maximumUs, apply.maximumUs, action.maximumUs, frame.p99UpperUs, frame.maximumUs,
                             frames, readback.copies, readback.maps, readback.readinessBarriers, readback.busyFailures)
@@ -878,7 +884,8 @@ void Application::AdvanceUiBenchmark() noexcept
         _session.history.UndoCount() == state.previousUndoCount + 1 && _session.history.UndoName() == L"Import Image";
     const bool importRefused =
         expected == Expected::ImportedLayersRefused && state.importReceipt &&
-        importResult.outcome == HostOutcome::Failed && importResult.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) &&
+        importResult.outcome == HostOutcome::Failed &&
+        importResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)) &&
         _session.DocumentSerial() == state.previousSessionSerial && _documentPath.empty() && document &&
         document->id == state.imageImportBaseline.id && document->width == state.expectedImageWidth &&
         document->height == state.expectedImageHeight && document->layers.size() == 1 &&

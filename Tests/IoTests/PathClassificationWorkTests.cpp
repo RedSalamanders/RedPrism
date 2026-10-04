@@ -137,7 +137,14 @@ struct ScratchFactoryContext final
     {
         return nullptr;
     }
-    return std::unique_ptr<PathClassificationScratch>(new (std::nothrow) PathClassificationScratch{});
+    try
+    {
+        return std::make_unique<PathClassificationScratch>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return nullptr; // This noexcept fixture factory reports only complete allocation refusal.
+    }
 }
 
 void ClassificationRules()

@@ -152,7 +152,16 @@ HRESULT Application::StartExportReadback(HostWriteFormat format) noexcept
     const auto path = _activeHostRequest->input.SelectedOutputPath();
     if (!path)
         return E_UNEXPECTED;
-    std::array<wchar_t, 32768> resolved{};
+    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
+    try
+    {
+        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
+    }
+    auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path->data(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -279,7 +288,8 @@ int Application::RunExportReadbackSelfTest() noexcept
         state.held = state.held && owner._composition.CanvasSurfaceBytes() == 0;
         (void)SetEvent(owner._exportWorkTestGate->release.get());
     };
-    std::array<wchar_t, 32768> temporary{};
+    const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    auto& temporary = *temporaryStorage;
     const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
     if (units == 0 || units >= temporary.size())
         return 5;
@@ -403,11 +413,12 @@ int Application::RunExportReadbackSelfTest() noexcept
             correct = correct && _errorsShown == errors + 1 &&
                       _lastErrorId ==
                           static_cast<UINT>(mode == Mode::PixelBudget ? IDS_ERROR_TOO_LARGE : IDS_ERROR_EXPORT_PNG) &&
-                      actual.error == (mode == Mode::Failure         ? E_ACCESSDENIED
-                                       : mode == Mode::PixelBudget   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                       : mode == Mode::PathBudget    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
-                                       : mode == Mode::LaterTileBusy ? DXGI_ERROR_WAS_STILL_DRAWING
-                                                                     : E_OUTOFMEMORY);
+                      actual.error == static_cast<std::int32_t>(
+                                          mode == Mode::Failure         ? E_ACCESSDENIED
+                                          : mode == Mode::PixelBudget   ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                          : mode == Mode::PathBudget    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
+                                          : mode == Mode::LaterTileBusy ? DXGI_ERROR_WAS_STILL_DRAWING
+                                                                        : E_OUTOFMEMORY);
         else
             correct = correct && _errorsShown == errors;
         if (mode == Mode::RebindBefore || mode == Mode::RebindPublished)

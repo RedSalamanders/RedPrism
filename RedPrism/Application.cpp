@@ -1317,7 +1317,13 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"A click inside the selection did not deselect.\n");
             return 5;
         }
-        InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
+        const Guid swatchId = InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
+        const ImageLayer* swatch = _session.ActiveLayer();
+        if (swatchId == Guid{} || swatch == nullptr || swatch->id != swatchId)
+        {
+            SelfTestFailure(L"The Magic Wand Swatch layer was not inserted and made active.\n");
+            return 5;
+        }
         DocumentChanged();
         {
             _traceWandForTest = true;
@@ -1328,6 +1334,12 @@ int Application::RunSelfTest() noexcept
                         static_cast<unsigned int>(_tool), _hostRequests.Size(), _activeHostRequest.has_value(),
                         _historyWork.Busy(), _opacityEdit.has_value(), _session.wandSettings.sampleAllLayers,
                         _session.wandSettings.tolerance);
+            const Vec2 expectedView = _viewport.ViewFromDocument(Vec2{100.0, 80.0}, DocumentSize());
+            const LPARAM clickLParam = MAKELPARAM(static_cast<int>(std::lround(hole.left + expectedView.x)),
+                                                  static_cast<int>(std::lround(hole.top + expectedView.y)));
+            const std::uint64_t generationBeforeClick = _session.Generation();
+            const WandSettings wandSettingsBeforeClick = _session.wandSettings;
+            const bool antialiasedBeforeClick = _session.selectionAntialiased;
             pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
             pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
             if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
@@ -1337,6 +1349,34 @@ int Application::RunSelfTest() noexcept
                 _session.history.UndoName() != L"Magic Wand")
             {
                 const auto actual = box.value_or(SelectionBounds{});
+                const ImageLayer* active = _session.ActiveLayer();
+                const bool hasRaster = active != nullptr && active->asset.has_value();
+                const int rasterWidth = hasRaster ? active->asset->image.Width() : 0;
+                const int rasterHeight = hasRaster ? active->asset->image.Height() : 0;
+                const std::wstring activeLayerId = active != nullptr ? active->id.ToString() : L"<none>";
+                const std::wstring undoName = _session.history.UndoName();
+                std::fprintf(stderr,
+                             "WAND SWATCH failure bounds_present=%d bounds=[%.3f,%.3f,%.3f,%.3f] "
+                             "undo='%ls' active_id='%ls' inserted_id='%ls' raster_present=%d raster=%dx%d "
+                             "origin=(%.3f,%.3f) rotation=%.3f wand={tolerance=%d sample_size=%d radius=%d "
+                             "contiguous=%d sample_all_layers=%d antialiased=%d} generation_before=%llu "
+                             "generation_after=%llu down_lParam=0x%08lX down_client=(%d,%d) "
+                             "up_lParam=0x%08lX up_client=(%d,%d) expected_document_click=(100,80)\n",
+                             box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY, undoName.c_str(),
+                             activeLayerId.c_str(), swatchId.ToString().c_str(), hasRaster, rasterWidth, rasterHeight,
+                             active != nullptr ? active->transform.origin.x : 0.0,
+                             active != nullptr ? active->transform.origin.y : 0.0,
+                             active != nullptr ? active->transform.rotation : 0.0, wandSettingsBeforeClick.tolerance,
+                             static_cast<int>(wandSettingsBeforeClick.sampleSize), wandSettingsBeforeClick.Radius(),
+                             wandSettingsBeforeClick.contiguous, wandSettingsBeforeClick.sampleAllLayers,
+                             antialiasedBeforeClick, static_cast<unsigned long long>(generationBeforeClick),
+                             static_cast<unsigned long long>(_session.Generation()),
+                             static_cast<unsigned long>(static_cast<std::uint32_t>(clickLParam)),
+                             static_cast<int>(static_cast<short>(LOWORD(clickLParam))),
+                             static_cast<int>(static_cast<short>(HIWORD(clickLParam))),
+                             static_cast<unsigned long>(static_cast<std::uint32_t>(clickLParam)),
+                             static_cast<int>(static_cast<short>(LOWORD(clickLParam))),
+                             static_cast<int>(static_cast<short>(HIWORD(clickLParam))));
                 SelfTestFailure(std::format(L"The Magic Wand did not select the painted layer's pixels exactly "
                                             L"(has bounds {}, [{}, {}, {}, {}], history '{}', tool {}, queued {}, "
                                             L"active {}, history busy {}, opacity {}, host error {:08X}).\n",

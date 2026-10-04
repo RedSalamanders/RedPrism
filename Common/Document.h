@@ -2565,16 +2565,27 @@ class DocumentSession
     }
     [[nodiscard]] bool ColorLookupPreviewReady() const noexcept;
     [[nodiscard]] std::optional<ColorDisplayPreviewInput> PrepareColorDisplayPreviewInput(bool lookupPreview) const;
+    // Requires an empty admitted destination; a populated slot preserves its captured owners.
+    void PrepareColorDisplayPreviewInputInto(std::optional<ColorDisplayPreviewInput>& destination,
+                                             bool lookupPreview) const;
     [[nodiscard]] std::optional<ColorDisplayPreviewMemory> ColorDisplayPreviewMemoryBytes(
         bool lookupPreview) const noexcept;
     [[nodiscard]] static ColorDisplayPreviewResult PrepareColorDisplayPreviewPublication(ColorDisplayPreviewInput input,
                                                                                          Executor& executor,
                                                                                          CancelToken cancellation,
                                                                                          ColorDisplayObserver observer);
+    // Worker-only, already allocated destination; consumes input on every outcome without a large stack result.
+    static void PrepareColorDisplayPreviewPublicationInto(ColorDisplayPreviewInput&& input,
+                                                          ColorDisplayPreviewResult& output, Executor& executor,
+                                                          CancelToken cancellation, ColorDisplayObserver observer);
     // The scheduler's named allocation-failure boundary can return captured owners without copying them.
     // This only prepares invalidation; ordinary authority checks still decide whether it may change the view.
     [[nodiscard]] static PreparedColorDisplayPreview PrepareFailedColorDisplayPreviewPublication(
         ColorDisplayPreviewInput input, ColorEditJobStatus status) noexcept;
+    // Requires an empty admitted destination; a populated slot preserves it and the supplied input.
+    static void PrepareFailedColorDisplayPreviewPublicationInto(ColorDisplayPreviewInput&& input,
+                                                                std::optional<PreparedColorDisplayPreview>& destination,
+                                                                ColorEditJobStatus status) noexcept;
     [[nodiscard]] bool ApplyPreparedColorDisplayPreviewIfCurrent(PreparedColorDisplayPreview& prepared) noexcept;
     [[nodiscard]] bool ApplyColorEditHistogram(const ColorEditHistogramResult& result);
     [[nodiscard]] std::uint64_t ColorEditSequence() const noexcept

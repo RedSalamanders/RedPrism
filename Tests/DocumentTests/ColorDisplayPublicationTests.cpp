@@ -49,7 +49,7 @@ FilterSettings ClippedLevels()
     return settings;
 }
 
-DocumentSession Session(const Raster& image = GrayRamp())
+void InitializeSession(DocumentSession& session, const Raster& image = GrayRamp())
 {
     DocumentFixture fixture;
     fixture.id = Guid::Generate();
@@ -63,8 +63,13 @@ DocumentSession Session(const Raster& image = GrayRamp())
     layer.asset = RasterAsset{image, thumbnail, L"Semantic asset name"};
     layer.shapeImage = image;
     fixture.layers.push_back(std::move(layer));
-    DocumentSession session;
     session.ReplaceDocument(std::move(fixture).Seal(), active);
+}
+
+DocumentSession Session(const Raster& image = GrayRamp())
+{
+    DocumentSession session;
+    InitializeSession(session, image);
     return session;
 }
 
@@ -86,6 +91,22 @@ ColorDisplayPreviewResult Render(DocumentSession& session, bool lookup = false, 
     InlineExecutor executor;
     return DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, cancellation,
                                                                   observer);
+}
+
+std::unique_ptr<ColorDisplayPreviewResult> RenderOwned(DocumentSession& session, bool lookup = false,
+                                                       CancelToken cancellation = {},
+                                                       ColorDisplayObserver observer = {})
+{
+    return std::make_unique<ColorDisplayPreviewResult>(Render(session, lookup, cancellation, observer));
+}
+
+std::unique_ptr<ColorDisplayPreviewResult> PreparePublicationOwned(ColorDisplayPreviewInput&& input,
+                                                                   InlineExecutor& executor,
+                                                                   CancelToken cancellation = {},
+                                                                   ColorDisplayObserver observer = {})
+{
+    return std::make_unique<ColorDisplayPreviewResult>(
+        DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input), executor, cancellation, observer));
 }
 
 const ImageLayer* Layer(const CanvasDocument* document, std::size_t index = 0)
@@ -156,11 +177,13 @@ void ScalarHistoryAuthorityAndSaveMarkerCases()
     const auto generation = session.Generation();
     const Guid revision = session.history.CurrentRevision();
     const auto authority = session.history.CaptureAuthority();
-    auto result = Render(session);
+    auto resultOwner = RenderOwned(session);
+    auto& result = *resultOwner;
     Expect(result.publication.has_value(), "history-epoch.publication-captured");
     if (!result.publication)
         return;
-    auto publication = std::move(result.publication.value());
+    auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+    auto& publication = *publicationOwner;
     session.history.Begin(L"No-op history epoch", session.Document(), session.ActiveLayerID());
     session.history.End(session.Document(), session.ActiveLayerID());
     const bool refused = !session.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && !publication.IsConsumed();
@@ -172,56 +195,76 @@ void ScalarHistoryAuthorityAndSaveMarkerCases()
     auto& saved = *savedOwner;
     OpenDeferredLevels(saved);
     const auto savedAuthority = saved.history.CaptureAuthority();
-    auto savedResult = Render(saved);
+    auto savedResultOwner = RenderOwned(saved);
+    auto& savedResult = *savedResultOwner;
     Expect(savedResult.publication.has_value(), "saved-marker.publication-captured");
     if (!savedResult.publication)
         return;
-    auto savedPublication = std::move(savedResult.publication.value());
+    auto savedPublicationOwner =
+        std::make_unique<PreparedColorDisplayPreview>(std::move(savedResult.publication.value()));
+    auto& savedPublication = *savedPublicationOwner;
     saved.history.MarkSaved();
     Expect(saved.history.IsCurrent(savedAuthority) &&
                saved.ApplyPreparedColorDisplayPreviewIfCurrent(savedPublication) && savedPublication.IsConsumed(),
            "saved-marker-does-not-invalidate-current-publication");
 }
 
-void MovedAndCrossSessionPublicationsRemainReusableOnlyByProducer()
+void MovedPublicationTransfersOwnership()
 {
+    auto sessionOwner = std::make_unique<DocumentSession>();
+    auto& session = *sessionOwner;
+    InitializeSession(session);
+    OpenDeferredLevels(session);
+    auto resultOwner = RenderOwned(session);
+    auto& result = *resultOwner;
+    bool movedFromRefused = false;
+    bool movedToApplied = false;
+    if (result.publication)
     {
-        DocumentSession session = Session();
-        OpenDeferredLevels(session);
-        auto result = Render(session);
-        bool movedFromRefused = false;
-        bool movedToApplied = false;
-        if (result.publication)
-        {
-            auto source = std::move(result.publication.value());
-            PreparedColorDisplayPreview moved(std::move(source));
-            movedFromRefused = source.IsConsumed() && !session.ApplyPreparedColorDisplayPreviewIfCurrent(source);
-            movedToApplied = session.ApplyPreparedColorDisplayPreviewIfCurrent(moved);
-        }
-        Expect(result.publication.has_value() && movedFromRefused && movedToApplied,
-               "move.transferred-publication-consumes-source-and-applies-destination");
+        auto source = std::move(result.publication.value());
+        auto movedOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(source));
+        auto& moved = *movedOwner;
+        movedFromRefused = source.IsConsumed() && !session.ApplyPreparedColorDisplayPreviewIfCurrent(source);
+        movedToApplied = session.ApplyPreparedColorDisplayPreviewIfCurrent(moved);
     }
-    {
-        DocumentSession producer = Session();
-        OpenDeferredLevels(producer);
-        auto result = Render(producer);
-        Expect(result.publication.has_value(), "copy.publication-captured");
-        if (!result.publication)
-            return;
-        auto publication = std::move(result.publication.value());
-        DocumentSession copiedSession = producer;
-        const bool copyRefused =
-            !copiedSession.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && !publication.IsConsumed();
-        DocumentSession foreign = Session();
-        const bool foreignRefused =
-            !foreign.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && !publication.IsConsumed();
-        const bool producerApplied =
-            producer.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && publication.IsConsumed();
-        Expect(copyRefused && foreignRefused && producerApplied, "session-refusals-preserve-publication-for-producer");
-    }
+    Expect(result.publication.has_value() && movedFromRefused && movedToApplied,
+           "move.transferred-publication-consumes-source-and-applies-destination");
 }
 
-void BorrowedDisplayPlannerAndColorPreviewOverloads()
+void CrossSessionPublicationRemainsReusableByProducer()
+{
+    auto producerOwner = std::make_unique<DocumentSession>();
+    auto& producer = *producerOwner;
+    InitializeSession(producer);
+    OpenDeferredLevels(producer);
+    auto resultOwner = RenderOwned(producer);
+    auto& result = *resultOwner;
+    Expect(result.publication.has_value(), "copy.publication-captured");
+    if (!result.publication)
+        return;
+    auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+    auto& publication = *publicationOwner;
+    auto copiedSessionOwner = std::make_unique<DocumentSession>(producer);
+    auto& copiedSession = *copiedSessionOwner;
+    const bool copyRefused =
+        !copiedSession.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && !publication.IsConsumed();
+    auto foreignOwner = std::make_unique<DocumentSession>();
+    auto& foreign = *foreignOwner;
+    InitializeSession(foreign);
+    const bool foreignRefused =
+        !foreign.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && !publication.IsConsumed();
+    const bool producerApplied =
+        producer.ApplyPreparedColorDisplayPreviewIfCurrent(publication) && publication.IsConsumed();
+    Expect(copyRefused && foreignRefused && producerApplied, "session-refusals-preserve-publication-for-producer");
+}
+
+void MovedAndCrossSessionPublicationsRemainReusableOnlyByProducer()
+{
+    MovedPublicationTransfersOwnership();
+    CrossSessionPublicationRemainsReusableByProducer();
+}
+
+void DisabledBorrowedDisplayPlanner()
 {
     {
         DocumentSession disabled = Session();
@@ -229,11 +272,19 @@ void BorrowedDisplayPlannerAndColorPreviewOverloads()
         disabled.SetColorDisplayJobsEnabled(false);
         Expect(!disabled.ColorDisplayPreviewMemoryBytes(false), "planner.disabled-route-refuses");
     }
+}
+
+void MissingDocumentBorrowedDisplayPlanner()
+{
     {
         DocumentSession missing;
         missing.SetColorDisplayJobsEnabled(true);
         Expect(!missing.ColorDisplayPreviewMemoryBytes(false), "planner.missing-document-refuses");
     }
+}
+
+void LiveAdjustmentBorrowedDisplayPlanner()
+{
     {
         DocumentSession live = Session();
         live.SetColorDisplayJobsEnabled(true);
@@ -242,7 +293,23 @@ void BorrowedDisplayPlannerAndColorPreviewOverloads()
         const bool editing = adjustmentID.has_value() && live.BeginAdjustmentEditing(*adjustmentID, GrayRamp(), true);
         Expect(editing && !live.ColorDisplayPreviewMemoryBytes(false), "planner.live-adjustment-refuses");
     }
+}
 
+void MaskNameAddsBorrowedDisplayMetadata()
+{
+    const Raster sparse = SmallSparseRamp();
+    DocumentSession shortMask = SessionWithMaskName(sparse, L"Mask");
+    DocumentSession longMask = SessionWithMaskName(sparse, std::wstring(128 * 1024 + 1, L'M'));
+    const auto shortMaskPlan = shortMask.ColorDisplayPreviewMemoryBytes(false);
+    const auto longMaskPlan = longMask.ColorDisplayPreviewMemoryBytes(false);
+    Expect(shortMaskPlan && longMaskPlan && longMaskPlan->additionalBytes > shortMaskPlan->additionalBytes &&
+               !shortMask.ActiveLayer()->asset->image.IsMaterialized() &&
+               !longMask.ActiveLayer()->asset->image.IsMaterialized(),
+           "planner.large-mask-name-adds-metadata-charge-without-materializing-pixels");
+}
+
+void ValidBorrowedDisplayPlannerAndColorPreviewOverloads()
+{
     DocumentSession session = Session(SmallSparseRamp());
     OpenDeferredLevels(session);
     const auto source = session.Document();
@@ -274,17 +341,10 @@ void BorrowedDisplayPlannerAndColorPreviewOverloads()
     Expect(lookupOverloadsAgree && filterOverloadsAgree && PreviewMemoryOverloadsAgree(liveInput),
            "planner.lookup-filter-and-live-input-overloads-agree");
 
-    const Raster sparse = SmallSparseRamp();
-    DocumentSession shortMask = SessionWithMaskName(sparse, L"Mask");
-    DocumentSession longMask = SessionWithMaskName(sparse, std::wstring(128 * 1024 + 1, L'M'));
-    const auto shortMaskPlan = shortMask.ColorDisplayPreviewMemoryBytes(false);
-    const auto longMaskPlan = longMask.ColorDisplayPreviewMemoryBytes(false);
-    Expect(shortMaskPlan && longMaskPlan && longMaskPlan->additionalBytes > shortMaskPlan->additionalBytes &&
-               !shortMask.ActiveLayer()->asset->image.IsMaterialized() &&
-               !longMask.ActiveLayer()->asset->image.IsMaterialized(),
-           "planner.large-mask-name-adds-metadata-charge-without-materializing-pixels");
+    MaskNameAddsBorrowedDisplayMetadata();
 
-    auto shown = Render(session);
+    auto shownOwner = RenderOwned(session);
+    auto& shown = *shownOwner;
     const bool shownApplied = shown.status == ColorEditJobStatus::Ready && shown.publication.has_value() &&
                               session.ApplyPreparedColorDisplayPreviewIfCurrent(shown.publication.value());
     const auto heldPlan = session.ColorDisplayPreviewMemoryBytes(false);
@@ -292,12 +352,21 @@ void BorrowedDisplayPlannerAndColorPreviewOverloads()
            "planner.published-display-increases-retirement-charge");
 }
 
-void FailedPublicationFactoryHandlesLatestAndStaleResults()
+void BorrowedDisplayPlannerAndColorPreviewOverloads()
+{
+    DisabledBorrowedDisplayPlanner();
+    MissingDocumentBorrowedDisplayPlanner();
+    LiveAdjustmentBorrowedDisplayPlanner();
+    ValidBorrowedDisplayPlannerAndColorPreviewOverloads();
+}
+
+void FailedPublicationFactoryHandlesLatestResult()
 {
     {
         DocumentSession session = Session();
         OpenDeferredLevels(session);
-        auto initial = Render(session);
+        auto initialOwner = RenderOwned(session);
+        auto& initial = *initialOwner;
         Expect(initial.status == ColorEditJobStatus::Ready && initial.publication.has_value() &&
                    session.ApplyPreparedColorDisplayPreviewIfCurrent(initial.publication.value()),
                "failure-factory.latest-baseline-preview-is-shown");
@@ -311,6 +380,10 @@ void FailedPublicationFactoryHandlesLatestAndStaleResults()
                    session.DisplayDocument() == &session.Document().value(),
                "failure-factory.latest-failure-consumes-false-and-selects-committed");
     }
+}
+
+void FailedPublicationFactoryHandlesStaleResult()
+{
     {
         DocumentSession session = Session();
         OpenDeferredLevels(session);
@@ -321,7 +394,8 @@ void FailedPublicationFactoryHandlesLatestAndStaleResults()
         auto staleFailure = DocumentSession::PrepareFailedColorDisplayPreviewPublication(std::move(oldInput.value()),
                                                                                          ColorEditJobStatus::NoSource);
         session.UpdateColorEdit(ClippedLevels(), true);
-        auto latest = Render(session);
+        auto latestOwner = RenderOwned(session);
+        auto& latest = *latestOwner;
         Expect(latest.status == ColorEditJobStatus::Ready && latest.publication.has_value() &&
                    session.ApplyPreparedColorDisplayPreviewIfCurrent(latest.publication.value()),
                "failure-factory.current-preview-is-published");
@@ -330,6 +404,12 @@ void FailedPublicationFactoryHandlesLatestAndStaleResults()
                    session.DisplayDocument() == currentDisplay,
                "failure-factory.stale-intermediate-failure-preserves-current-display");
     }
+}
+
+void FailedPublicationFactoryHandlesLatestAndStaleResults()
+{
+    FailedPublicationFactoryHandlesLatestResult();
+    FailedPublicationFactoryHandlesStaleResult();
 }
 
 void MovedFromInputCannotCreateApplicableFailurePublication()
@@ -341,13 +421,15 @@ void MovedFromInputCannotCreateApplicableFailurePublication()
     if (!input)
         return;
     InlineExecutor executor;
-    auto validResult =
-        DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {}, {});
+    auto validResultOwner = PreparePublicationOwned(std::move(input.value()), executor);
+    auto& validResult = *validResultOwner;
     Expect(validResult.status == ColorEditJobStatus::Ready && validResult.publication.has_value(),
            "invalid-input.first-move-prepares-valid-publication");
     if (!validResult.publication)
         return;
-    auto validPublication = std::move(validResult.publication.value());
+    auto validPublicationOwner =
+        std::make_unique<PreparedColorDisplayPreview>(std::move(validResult.publication.value()));
+    auto& validPublication = *validPublicationOwner;
     auto invalid = DocumentSession::PrepareFailedColorDisplayPreviewPublication(std::move(input.value()),
                                                                                 ColorEditJobStatus::Failed);
     Expect(!session.ApplyPreparedColorDisplayPreviewIfCurrent(invalid) && !invalid.IsConsumed() &&
@@ -386,16 +468,18 @@ void DeferredLevelsPublishesWholeDisplayWithoutDocumentOrHistoryEdit()
     const Guid revision = session.history.CurrentRevision();
     const int undoCount = session.history.UndoCount();
     const std::size_t redoCount = session.history.CaptureState().FutureCount();
-    auto result = [&]
+    auto resultOwner = [&]
     {
         InlineExecutor executor;
-        return DocumentSession::PrepareColorDisplayPreviewPublication(std::move(capture.value()), executor, {}, {});
+        return PreparePublicationOwned(std::move(capture.value()), executor);
     }();
+    auto& result = *resultOwner;
     Expect(result.status == ColorEditJobStatus::Ready && result.publication.has_value(),
            "worker.prepares-display-record");
     if (!result.publication)
         return;
-    auto publication = std::move(result.publication.value());
+    auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+    auto& publication = *publicationOwner;
     Expect(session.Document().value() == committed && session.history.CurrentRevision() == revision &&
                session.history.UndoCount() == undoCount && session.history.CaptureState().FutureCount() == redoCount &&
                !session.history.IsModified(),
@@ -445,12 +529,14 @@ void LookupAndMaskPublicationKeepTheirSourceSemantics()
     {
         DocumentSession session = Session();
         OpenDeferredLevels(session);
-        auto result = Render(session, true);
+        auto resultOwner = RenderOwned(session, true);
+        auto& result = *resultOwner;
         Expect(result.status == ColorEditJobStatus::Ready && result.publication.has_value(),
                "lookup.worker-prepares-result");
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(publication), "lookup.publication-applies");
         const ImageLayer* displayed = Layer(session.DisplayDocument());
         const ColorEdit& panel = session.PendingColorEdit().value();
@@ -481,12 +567,14 @@ void LookupAndMaskPublicationKeepTheirSourceSemantics()
         FilterSettings blur;
         blur.radius = 1.5;
         session.UpdateColorEdit(blur, true);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         Expect(result.status == ColorEditJobStatus::Ready && result.publication.has_value(),
                "mask.worker-prepares-grown-preview");
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(publication), "mask.grown-display-applies");
         const ImageLayer* displayed = Layer(session.DisplayDocument());
         Expect(displayed != nullptr && displayed->transform != originalPlacement && displayed->mask.has_value() &&
@@ -500,15 +588,17 @@ void LookupAndMaskPublicationKeepTheirSourceSemantics()
 
 void IntermediateAndOutOfOrderResultsRespectCurrentPanelAndDisplay()
 {
-    DocumentSession session = Session();
+    auto sessionOwner = std::make_unique<DocumentSession>();
+    auto& session = *sessionOwner;
+    InitializeSession(session);
     OpenDeferredLevels(session);
     auto olderInput = session.PrepareColorDisplayPreviewInput(false);
     Expect(olderInput.has_value(), "ordering.older-input-captured");
     if (!olderInput)
         return;
     InlineExecutor executor;
-    auto older =
-        DocumentSession::PrepareColorDisplayPreviewPublication(std::move(olderInput.value()), executor, {}, {});
+    auto olderOwner = PreparePublicationOwned(std::move(olderInput.value()), executor);
+    auto& older = *olderOwner;
     Expect(older.publication.has_value(), "ordering.older-result-completed");
     if (!older.publication)
         return;
@@ -516,14 +606,15 @@ void IntermediateAndOutOfOrderResultsRespectCurrentPanelAndDisplay()
     Expect(staleInput.has_value(), "ordering.second-old-request-captured");
     if (!staleInput)
         return;
-    auto staleResult =
-        DocumentSession::PrepareColorDisplayPreviewPublication(std::move(staleInput.value()), executor, {}, {});
+    auto staleResultOwner = PreparePublicationOwned(std::move(staleInput.value()), executor);
+    auto& staleResult = *staleResultOwner;
     Expect(staleResult.publication.has_value(), "ordering.second-old-result-completed");
     if (!staleResult.publication)
         return;
 
     session.UpdateColorEdit(ClippedLevels(), true);
-    auto intermediate = std::move(older.publication.value());
+    auto intermediateOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(older.publication.value()));
+    auto& intermediate = *intermediateOwner;
     Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(intermediate), "ordering.intermediate-result-is-shown");
     const ImageLayer* intermediateLayer = Layer(session.DisplayDocument());
     Expect(session.PendingColorEdit()->settings == ClippedLevels() && intermediateLayer != nullptr &&
@@ -536,12 +627,13 @@ void IntermediateAndOutOfOrderResultsRespectCurrentPanelAndDisplay()
            "ordering.latest-settings-remain-live-during-worker");
     if (!newerInput)
         return;
-    auto newer =
-        DocumentSession::PrepareColorDisplayPreviewPublication(std::move(newerInput.value()), executor, {}, {});
+    auto newerOwner = PreparePublicationOwned(std::move(newerInput.value()), executor);
+    auto& newer = *newerOwner;
     Expect(newer.publication.has_value(), "ordering.newer-result-completed");
     if (!newer.publication)
         return;
-    auto latest = std::move(newer.publication.value());
+    auto latestOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(newer.publication.value()));
+    auto& latest = *latestOwner;
     Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(latest), "ordering.newer-result-applies");
     const CanvasDocument* latestDisplay = session.DisplayDocument();
     const ImageLayer* latestLayer = Layer(latestDisplay);
@@ -550,7 +642,8 @@ void IntermediateAndOutOfOrderResultsRespectCurrentPanelAndDisplay()
                Pixel(latestLayer->asset->image, 8) == 255,
            "ordering.latest-display-matches-latest-settings");
 
-    auto stale = std::move(staleResult.publication.value());
+    auto staleOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(staleResult.publication.value()));
+    auto& stale = *staleOwner;
     Expect(!session.ApplyPreparedColorDisplayPreviewIfCurrent(stale), "ordering.older-completed-result-is-rejected");
     const ImageLayer* afterStale = Layer(session.DisplayDocument());
     Expect(session.PendingColorEdit()->settings == ClippedLevels() && afterStale != nullptr &&
@@ -562,12 +655,16 @@ void IntermediateAndOutOfOrderResultsRespectCurrentPanelAndDisplay()
 void SourceHistoryReplacementAndForeignAuthoritiesRejectPublication()
 {
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         EditLayerRecordsForTest(session, [](DocumentFixture& document) { document.layers[0].opacity = 0.5; });
         const CanvasDocument changed = session.Document().value();
         const auto revision = session.history.CurrentRevision();
@@ -576,12 +673,16 @@ void SourceHistoryReplacementAndForeignAuthoritiesRejectPublication()
                "stale-source-metadata-change-refuses-whole-display");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         const Guid target = session.ActiveLayer()->id;
         session.RenameLayer(target, L"Renamed during worker");
         const CanvasDocument changed = session.Document().value();
@@ -592,26 +693,36 @@ void SourceHistoryReplacementAndForeignAuthoritiesRejectPublication()
                "stale-history-refuses-without-overwriting-current-source");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         const CanvasDocument replacement = session.Document().value();
         session.ReplaceDocument(replacement, session.ActiveLayer()->id);
         Expect(!session.ApplyPreparedColorDisplayPreviewIfCurrent(publication),
                "replacement-same-content-new-document-epoch-rejects-old-display");
     }
     {
-        DocumentSession producer = Session();
-        DocumentSession foreign = Session();
+        auto producerOwner = std::make_unique<DocumentSession>();
+        auto& producer = *producerOwner;
+        InitializeSession(producer);
+        auto foreignOwner = std::make_unique<DocumentSession>();
+        auto& foreign = *foreignOwner;
+        InitializeSession(foreign);
         OpenDeferredLevels(producer);
         OpenDeferredLevels(foreign);
-        auto result = Render(producer);
+        auto resultOwner = RenderOwned(producer);
+        auto& result = *resultOwner;
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         const auto before = foreign.Document().value();
         Expect(!foreign.ApplyPreparedColorDisplayPreviewIfCurrent(publication) &&
                    foreign.Document().value() == before && foreign.history.UndoCount() == 0,
@@ -643,38 +754,50 @@ void ExistingLayerScopedCommitStillAppliesAfterUnrelatedMetadataChange()
 void PreviewOffCloseAndReopenInvalidateCompletedWork()
 {
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         Expect(result.publication.has_value(), "off.result-prepared");
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         session.UpdateColorEdit(GammaLevels(), false);
         Expect(!session.ApplyPreparedColorDisplayPreviewIfCurrent(publication) &&
                    session.DisplayDocument() == &session.Document().value(),
                "off-in-flight-result-refuses-and-selects-committed-document");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         session.UpdateColorEdit(FilterSettings{}, true);
         Expect(!session.ApplyPreparedColorDisplayPreviewIfCurrent(publication) &&
                    session.DisplayDocument() == &session.Document().value(),
                "identity-in-flight-result-refuses-and-selects-committed-document");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>();
+        auto& session = *sessionOwner;
+        InitializeSession(session);
         OpenDeferredLevels(session);
-        auto result = Render(session);
+        auto resultOwner = RenderOwned(session);
+        auto& result = *resultOwner;
         Expect(result.publication.has_value(), "reopen.result-prepared");
         if (!result.publication)
             return;
-        auto publication = std::move(result.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+        auto& publication = *publicationOwner;
         session.CancelColorEdit();
         session.BeginColorEdit(FilterKind::Levels, true);
         session.UpdateColorEdit(GammaLevels(), true);
@@ -706,7 +829,9 @@ void Observe(void* context, ColorDisplayStage stage)
 
 void CancellationAndAllocationFailureLeaveRetryableState()
 {
-    DocumentSession session = Session();
+    auto sessionOwner = std::make_unique<DocumentSession>();
+    auto& session = *sessionOwner;
+    InitializeSession(session);
     OpenDeferredLevels(session);
     const CanvasDocument before = session.Document().value();
     const Guid revision = session.history.CurrentRevision();
@@ -719,8 +844,9 @@ void CancellationAndAllocationFailureLeaveRetryableState()
         ObserverState state;
         state.cancellation = &cancellation;
         InlineExecutor executor;
-        const auto cancelled = DocumentSession::PrepareColorDisplayPreviewPublication(
-            std::move(input.value()), executor, cancellation.Token(), ColorDisplayObserver{&state, Observe});
+        auto cancelledOwner = PreparePublicationOwned(std::move(input.value()), executor, cancellation.Token(),
+                                                      ColorDisplayObserver{&state, Observe});
+        const auto& cancelled = *cancelledOwner;
         Expect(state.reached && cancelled.status == ColorEditJobStatus::Cancelled && !cancelled.publication,
                "fault.observer-cancellation-discards-private-display");
         Expect(session.Document().value() == before && session.history.CurrentRevision() == revision &&
@@ -737,8 +863,8 @@ void CancellationAndAllocationFailureLeaveRetryableState()
         bool caught = false;
         try
         {
-            (void)DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {},
-                                                                         ColorDisplayObserver{&state, Observe});
+            (void)PreparePublicationOwned(std::move(input.value()), executor, {},
+                                          ColorDisplayObserver{&state, Observe});
         }
         catch (const std::bad_alloc&)
         {
@@ -749,12 +875,14 @@ void CancellationAndAllocationFailureLeaveRetryableState()
                    session.history.UndoCount() == undoCount,
                "fault.bad-alloc-leaves-document-and-history-unchanged");
     }
-    auto retry = Render(session);
+    auto retryOwner = RenderOwned(session);
+    auto& retry = *retryOwner;
     Expect(retry.status == ColorEditJobStatus::Ready && retry.publication.has_value(),
            "fault.same-panel-retry-succeeds");
     if (retry.publication)
     {
-        auto publication = std::move(retry.publication.value());
+        auto publicationOwner = std::make_unique<PreparedColorDisplayPreview>(std::move(retry.publication.value()));
+        auto& publication = *publicationOwner;
         Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(publication), "fault.retry-publishes-current-result");
     }
 }
@@ -769,16 +897,19 @@ void MovedInputAndSelectionRootBindingAreCovered()
             return;
         ColorDisplayPreviewInput moved(std::move(input.value()));
         InlineExecutor executor;
-        auto result = DocumentSession::PrepareColorDisplayPreviewPublication(std::move(moved), executor, {}, {});
+        auto resultOwner = PreparePublicationOwned(std::move(moved), executor);
+        auto& result = *resultOwner;
         Expect(result.status == ColorEditJobStatus::Ready && result.publication.has_value(),
                "move.transferred-input-renders");
         if (result.publication)
         {
-            auto publication = std::move(result.publication.value());
+            auto publicationOwner =
+                std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+            auto& publication = *publicationOwner;
             Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(publication), "move.transferred-input-publishes");
         }
-        const auto spent =
-            DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {}, {});
+        auto spentOwner = PreparePublicationOwned(std::move(input.value()), executor);
+        const auto& spent = *spentOwner;
         Expect(spent.status == ColorEditJobStatus::Failed && !spent.publication,
                "move.moved-from-input-cannot-start-second-publication");
     }
@@ -794,13 +925,15 @@ void MovedInputAndSelectionRootBindingAreCovered()
         if (!input)
             return;
         InlineExecutor executor;
-        auto result =
-            DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {}, {});
+        auto resultOwner = PreparePublicationOwned(std::move(input.value()), executor);
+        auto& result = *resultOwner;
         Expect(result.status == ColorEditJobStatus::Ready && result.publication.has_value(),
                "selection.worker-binds-equal-independent-root-to-captured-source");
         if (result.publication)
         {
-            auto publication = std::move(result.publication.value());
+            auto publicationOwner =
+                std::make_unique<PreparedColorDisplayPreview>(std::move(result.publication.value()));
+            auto& publication = *publicationOwner;
             Expect(session.ApplyPreparedColorDisplayPreviewIfCurrent(publication),
                    "selection.equal-independent-root-still-publishes");
         }
@@ -814,8 +947,8 @@ void MovedInputAndSelectionRootBindingAreCovered()
         if (!input)
             return;
         InlineExecutor executor;
-        auto result =
-            DocumentSession::PrepareColorDisplayPreviewPublication(std::move(input.value()), executor, {}, {});
+        auto resultOwner = PreparePublicationOwned(std::move(input.value()), executor);
+        auto& result = *resultOwner;
         Expect(result.status == ColorEditJobStatus::Failed && !result.publication &&
                    session.Document()->selection->loops.size() == 1,
                "selection.changed-geometry-refuses-display-preparation");
@@ -827,7 +960,8 @@ void InvalidatedPreviewOwnersStayHeldUntilPreparedTransfer()
     {
         DocumentSession session = Session();
         OpenDeferredLevels(session);
-        auto first = Render(session, true);
+        auto firstOwner = RenderOwned(session, true);
+        auto& first = *firstOwner;
         const bool applied =
             first.publication && session.ApplyPreparedColorDisplayPreviewIfCurrent(first.publication.value());
         Expect(applied && session.ColorLookupPreviewReady(), "owner-hold.lookup-initial-publication-is-visible");
@@ -848,7 +982,8 @@ void InvalidatedPreviewOwnersStayHeldUntilPreparedTransfer()
                    session.DisplayDocument() == &session.Document().value(),
                "owner-hold.identity-retains-invisible-lookup");
         session.UpdateColorEdit(ClippedLevels(), true);
-        auto next = Render(session, true);
+        auto nextOwner = RenderOwned(session, true);
+        auto& next = *nextOwner;
         const bool replaced =
             next.publication && session.ApplyPreparedColorDisplayPreviewIfCurrent(next.publication.value());
         Expect(replaced && session.ColorLookupPreviewReady() && !precedingLookup.expired(),
@@ -860,7 +995,8 @@ void InvalidatedPreviewOwnersStayHeldUntilPreparedTransfer()
         DocumentSession session = Session();
         session.SetColorDisplayJobsEnabled(true);
         session.BeginColorEdit(FilterKind::GaussianBlur, true);
-        auto first = Render(session);
+        auto firstOwner = RenderOwned(session);
+        auto& first = *firstOwner;
         const bool applied =
             first.publication && session.ApplyPreparedColorDisplayPreviewIfCurrent(first.publication.value());
         Expect(applied && session.PendingColorEdit()->grownImage.HasStorage() &&
@@ -889,7 +1025,8 @@ void InvalidatedPreviewOwnersStayHeldUntilPreparedTransfer()
         withoutHeld.retiredGrownImage = {};
         Expect(ColorEditHeldMemoryBytes(session.PendingColorEdit().value()) > ColorEditHeldMemoryBytes(withoutHeld),
                "owner-hold.retirement-planner-includes-invalidated-grown-owner");
-        auto next = Render(session);
+        auto nextOwner = RenderOwned(session);
+        auto& next = *nextOwner;
         const bool replaced =
             next.publication && session.ApplyPreparedColorDisplayPreviewIfCurrent(next.publication.value());
         Expect(replaced && session.PendingColorEdit()->grownImage.HasStorage() &&

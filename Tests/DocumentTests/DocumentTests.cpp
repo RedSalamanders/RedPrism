@@ -3540,7 +3540,7 @@ void TestGradientPreviewPalette()
            "gradient.layer-switch-applies");
 }
 
-void TestGradientTool()
+void TestGradientForegroundToBackground()
 {
     // Legacy foregroundToBackgroundFillsCanvasAndCommitsOneUndo (pixels within 3 levels, as Core Graphics quantizes).
     {
@@ -3562,6 +3562,10 @@ void TestGradientTool()
         session.Undo();
         Expect(!session.ActiveLayer()->asset.has_value(), "gradient.undo-restores");
     }
+}
+
+void TestGradientRadial()
+{
     // Legacy radialSpreadsFromStartToRimInEveryDirection.
     {
         DocumentSession session = GradientSession(101, 101);
@@ -3584,6 +3588,10 @@ void TestGradientTool()
                    NearPixel(ActivePixel(session, 0, 0), {255, 255, 255, 255}),
                "gradient.radial");
     }
+}
+
+void TestGradientReverseAndOpacity()
+{
     // Legacy reverseOpacityAndDirectionFollowSettings: white at the start with 50 % alpha on a blank layer.
     {
         DocumentSession session = GradientSession();
@@ -3596,6 +3604,10 @@ void TestGradientTool()
         Expect(Near(start[3], 128) && Near(start[2], start[3]) && Near(end[2], 0) && Near(end[3], 128),
                "gradient.reverse-and-opacity");
     }
+}
+
+void TestGradientForegroundToTransparent()
+{
     // Legacy foregroundToTransparentPreservesUnderlyingPixelsAndAlpha.
     {
         DocumentSession session = GradientSession();
@@ -3614,6 +3626,10 @@ void TestGradientTool()
                    middle[1] == 0 && middle[3] == 255,
                "gradient.foreground-to-transparent");
     }
+}
+
+void TestGradientCancelAndUndo()
+{
     // Legacy cancelUndoAndClicksLeaveDocumentUntouched.
     {
         DocumentSession session = GradientSession();
@@ -3628,6 +3644,10 @@ void TestGradientTool()
         session.Undo();
         Expect(session.PendingGradient() == nullptr && session.Document().value() == before, "gradient.undo-drops");
     }
+}
+
+void TestGradientRedrag()
+{
     // Legacy redraggingReplacesPendingLineWithoutAccumulating.
     {
         DocumentSession session = GradientSession();
@@ -3638,6 +3658,10 @@ void TestGradientTool()
                    NearPixel(ActivePixel(session, 100, 2), {0, 0, 0, 255}),
                "gradient.redrag-replaces");
     }
+}
+
+void TestGradientMask()
+{
     // Legacy maskGradientWritesCoverageInsideLayerBounds: the default mask palette paints black (hide) to white.
     {
         DocumentSession session = GradientSession();
@@ -3653,6 +3677,10 @@ void TestGradientTool()
                    Near(ActiveMaskValue(session, 100, 2), 255) && Near(ActiveMaskValue(session, 50, 2), 128),
                "gradient.mask");
     }
+}
+
+void TestGradientMaskPaletteColors()
+{
     // The same legacy case with a colored palette (RF-205, legacy paletteColor): a mask gradient runs from the mask
     // palette's foreground (black unless `maskPaintWhite`) to its background, whatever the RGB colors are.
     for (const bool paintWhite : {false, true})
@@ -3684,6 +3712,10 @@ void TestGradientTool()
                    (paintWhite ? std::array<double, 4>{0, 0, 1, 1} : std::array<double, 4>{1, 0, 0, 1}),
                paintWhite ? "gradient.layer-palette-colors-after-white" : "gradient.layer-palette-colors");
     }
+}
+
+void TestGradientPaletteCommands()
+{
     // X and D on a targeted mask (legacy ColorPalette.swift swapPaletteColors / resetPaletteColors) flip and reset
     // the mask palette, not the RGB colors, and a pending mask gradient follows; off the mask they change the colors.
     {
@@ -3711,6 +3743,19 @@ void TestGradientTool()
                    session.BackgroundColor() == 0xFFFF0000u,
                "palette.image-swap-leaves-mask-paint");
     }
+}
+
+void TestGradientTool()
+{
+    TestGradientForegroundToBackground();
+    TestGradientRadial();
+    TestGradientReverseAndOpacity();
+    TestGradientForegroundToTransparent();
+    TestGradientCancelAndUndo();
+    TestGradientRedrag();
+    TestGradientMask();
+    TestGradientMaskPaletteColors();
+    TestGradientPaletteCommands();
     TestGradientPreviewPalette();
 }
 

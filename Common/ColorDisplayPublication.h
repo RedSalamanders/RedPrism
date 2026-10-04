@@ -22,6 +22,16 @@ struct ColorDisplayPreviewMemory final
 class ColorDisplayPreviewInput final
 {
   public:
+    class ConstructionKey final
+    {
+        friend class DocumentSession;
+        ConstructionKey() = default;
+    };
+    ColorDisplayPreviewInput(ConstructionKey, ImageImportAuthority authority, DocumentHistory::Authority history,
+                             const CanvasDocument& source, ColorEditJobInput&& job) noexcept
+        : _authority(std::move(authority)), _history(std::move(history)), _source(source), _job(std::move(job))
+    {
+    }
     ColorDisplayPreviewInput(const ColorDisplayPreviewInput&) = delete;
     ColorDisplayPreviewInput& operator=(const ColorDisplayPreviewInput&) = delete;
     ColorDisplayPreviewInput(ColorDisplayPreviewInput&& other) noexcept
@@ -34,12 +44,6 @@ class ColorDisplayPreviewInput final
   private:
     friend class DocumentSession;
     friend class PreparedColorDisplayPreview;
-    ColorDisplayPreviewInput(ImageImportAuthority authority, DocumentHistory::Authority history, CanvasDocument source,
-                             ColorEditJobInput job) noexcept
-        : _authority(std::move(authority)), _history(std::move(history)), _source(std::move(source)),
-          _job(std::move(job))
-    {
-    }
     ImageImportAuthority _authority;
     DocumentHistory::Authority _history;
     CanvasDocument _source;
@@ -50,6 +54,22 @@ class ColorDisplayPreviewInput final
 class PreparedColorDisplayPreview final
 {
   public:
+    class ConstructionKey final
+    {
+        friend class DocumentSession;
+        ConstructionKey() = default;
+    };
+    PreparedColorDisplayPreview(ConstructionKey, ColorDisplayPreviewInput&& input, ColorEditPreviewResult&& result,
+                                std::optional<CanvasDocument>&& display) noexcept
+        : _input(std::move(input)), _result(std::move(result)), _display(std::move(display))
+    {
+    }
+    PreparedColorDisplayPreview(ConstructionKey, ColorDisplayPreviewInput&& input, ColorEditJobStatus status) noexcept
+        : _input(std::move(input)),
+          _result{std::move(_input._job.token), std::move(_input._job.edit),
+                  status == ColorEditJobStatus::NoSource ? status : ColorEditJobStatus::Failed}
+    {
+    }
     PreparedColorDisplayPreview(const PreparedColorDisplayPreview&) = delete;
     PreparedColorDisplayPreview& operator=(const PreparedColorDisplayPreview&) = delete;
     PreparedColorDisplayPreview(PreparedColorDisplayPreview&& other) noexcept
@@ -74,11 +94,6 @@ class PreparedColorDisplayPreview final
         Raster raster, source, coverage, grown, pendingGrown;
         std::shared_ptr<const AdjustmentLookup> lookup;
     };
-    PreparedColorDisplayPreview(ColorDisplayPreviewInput&& input, ColorEditPreviewResult&& result,
-                                std::optional<CanvasDocument>&& display) noexcept
-        : _input(std::move(input)), _result(std::move(result)), _display(std::move(display))
-    {
-    }
     ColorDisplayPreviewInput _input;
     ColorEditPreviewResult _result;
     std::optional<CanvasDocument> _display; // Swaps with the complete old display at publication.

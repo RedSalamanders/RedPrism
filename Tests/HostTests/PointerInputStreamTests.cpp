@@ -210,7 +210,8 @@ void TestRefusalDropAndOpeningExhaustion() noexcept
 void TestCapacityOne() noexcept
 {
     SingleSlotStream stream;
-    Expect(SingleSlotStream::kCapacity == 1, "single-slot-capacity-is-one");
+    static_assert(SingleSlotStream::kCapacity == 1);
+    Expect(true, "single-slot-capacity-is-one"); // The public compile-time capacity is enforced above.
     Expect(stream.Begin(90, Context{81, 7, 901}, Sample{15, -16, 0x100, 81}), "single-slot-down-admitted");
     Expect(stream.Move(90, Sample{17, -18, 0x101, 81}) == SingleSlotStream::Admission::Overflow,
            "single-slot-offered-move-overflows-behind-down");

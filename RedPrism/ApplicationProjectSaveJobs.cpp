@@ -177,7 +177,16 @@ HRESULT Application::StartProjectSave() noexcept
         return E_UNEXPECTED;
     // Lexical absolute-path preparation performs no filesystem classification. Charge the resolved path,
     // including the process directory for relative arguments, before any per-source libzip path is created.
-    std::array<wchar_t, 32768> resolved{};
+    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
+    try
+    {
+        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
+    }
+    auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path->data(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -301,7 +310,8 @@ int Application::RunProjectSaveSelfTest() noexcept
         }
         (void)SetEvent(owner._projectSaveTestGate->release.get());
     };
-    std::array<wchar_t, 32768> temporary{};
+    const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    auto& temporary = *temporaryStorage;
     const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
     if (units == 0 || units >= temporary.size())
         return 5;
@@ -429,9 +439,10 @@ int Application::RunProjectSaveSelfTest() noexcept
             correct = correct && younger->Read().outcome == HostOutcome::Succeeded;
         if (mode == Mode::Failure || mode == Mode::Allocation || mode == Mode::Admission || mode == Mode::PathBudget)
             correct = correct && _errorsShown == errors + 1 && _lastErrorId == IDS_ERROR_SAVE_PROJECT &&
-                      actual.error == (mode == Mode::Failure      ? E_ACCESSDENIED
-                                       : mode == Mode::PathBudget ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
-                                                                  : E_OUTOFMEMORY);
+                      actual.error == static_cast<std::int32_t>(mode == Mode::Failure ? E_ACCESSDENIED
+                                                                : mode == Mode::PathBudget
+                                                                    ? HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)
+                                                                    : E_OUTOFMEMORY);
         else
             correct = correct && _errorsShown == errors;
         std::fprintf(stderr, "%s project-save-host.case=%u\n", correct ? "PASS" : "FAIL",

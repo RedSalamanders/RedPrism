@@ -559,7 +559,8 @@ int Application::RunTransformPreviewSelfTest() noexcept
     // Use an independent host so the rest of the full application self-test continues on its original owner.
     for (const bool after : {false, true})
     {
-        Application closing(_instance, true, nullptr, 0);
+        auto closingOwner = std::make_unique<Application>(_instance, true, nullptr, 0);
+        auto& closing = *closingOwner;
         const auto closeOwner = wil::scope_exit([&]() noexcept { closing.Shutdown(); });
         if (FAILED(closing._jobs.Initialize(1)) || !closing._jobs.RegisterOwnerWork(closing._ownerWork) ||
             FAILED(closing._retryWait.Initialize(closing._jobs, closing._ownerWork)) ||

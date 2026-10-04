@@ -339,9 +339,15 @@ HRESULT Application::StartProjectOpen(const std::wstring& path) noexcept
     if (!_activeHostRequest || _projectOpenTicket ||
         !std::holds_alternative<HostPathsInput>(_activeHostRequest->input.Input()))
         return E_UNEXPECTED;
-    const std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage(new (std::nothrow) std::array<wchar_t, 32768>{});
-    if (!resolvedStorage)
-        return E_OUTOFMEMORY; // complete path-admission refusal before a history barrier or worker exists
+    std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage;
+    try
+    {
+        resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+    }
+    catch (const std::bad_alloc&)
+    {
+        return E_OUTOFMEMORY; // Complete lexical-path admission refusal before history or worker acceptance.
+    }
     auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path.c_str(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
@@ -760,14 +766,15 @@ int Application::RunProjectOpenSelfTest() noexcept
                 if (mode == Mode::Cancel)
                     correct = correct && state.cancellationPending;
                 if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-                    correct = correct && actual.error == E_ABORT;
+                    correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
                 if (younger)
                     correct = correct && younger.value().Read().outcome == HostOutcome::Stale;
                 const bool failed = expected == HostOutcome::Failed;
                 correct = correct && _errorsShown == errors + static_cast<int>(failed);
                 if (failed)
                     correct = correct && _lastErrorId == IDS_ERROR_OPEN_PROJECT &&
-                              actual.error == (mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY);
+                              actual.error ==
+                                  static_cast<std::int32_t>(mode == Mode::Failure ? E_ACCESSDENIED : E_OUTOFMEMORY);
                 std::fprintf(stderr, "%s project-open-host.phase=%u after=%u case=%u\n", correct ? "PASS" : "FAIL",
                              static_cast<unsigned int>(phase), after ? 1U : 0U, static_cast<unsigned int>(mode));
                 if (!correct)
@@ -964,13 +971,14 @@ int Application::RunProjectOpenSelfTest() noexcept
             correct = correct && state.noticeReceived && state.formattedNotice &&
                       state.noticeVersion == (mode == BatchMode::UnsupportedZero ? 0 : 99);
         if (expected == HostOutcome::Cancelled || expected == HostOutcome::Stale)
-            correct = correct && actual.error == E_ABORT;
+            correct = correct && actual.error == static_cast<std::int32_t>(E_ABORT);
         if (failed)
             correct = correct &&
-                      actual.error == (mode == BatchMode::WorkerFailure     ? E_ACCESSDENIED
-                                       : mode == BatchMode::DecodeAdmission ? E_OUTOFMEMORY
-                                       : mode == BatchMode::Growth          ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
-                                                                            : E_FAIL) &&
+                      actual.error == static_cast<std::int32_t>(mode == BatchMode::WorkerFailure     ? E_ACCESSDENIED
+                                                                : mode == BatchMode::DecodeAdmission ? E_OUTOFMEMORY
+                                                                : mode == BatchMode::Growth
+                                                                    ? HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE)
+                                                                    : E_FAIL) &&
                       _lastErrorId == static_cast<UINT>(versionNotice               ? IDS_ERROR_UNSUPPORTED_VERSION
                                                         : mode == BatchMode::Growth ? IDS_ERROR_TOO_LARGE
                                                                                     : IDS_ERROR_OPEN_PROJECT);

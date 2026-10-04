@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <memory>
 #include <new>
@@ -96,6 +97,16 @@ int Application::RunWandLayerHostSelfTest() noexcept
         Guid revision;
         std::uint64_t generation = 0;
         double zoomBefore = 0;
+
+        ContinuationReceipt& NextQueued() noexcept
+        {
+            if (queuedCount >= queued.size())
+            {
+                std::fprintf(stderr, "Wand host fixture exceeded its receipt capacity\n");
+                std::abort();
+            }
+            return queued[queuedCount++];
+        }
     };
 
     constexpr UINT kWindowMessage = WM_APP + 0x4c8;
@@ -184,16 +195,14 @@ int Application::RunWandLayerHostSelfTest() noexcept
 
             if (state.mode == Mode::OrderedDeselectUndo)
             {
-                state.queued[state.queuedCount++] =
-                    owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect});
-                state.queued[state.queuedCount++] = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
+                state.NextQueued() = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandDeselect});
+                state.NextQueued() = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandUndo});
                 owner._wandLayerHostTestGate.reset();
             }
             else if (state.mode == Mode::CoalesceAdjacent)
             {
-                state.queued[state.queuedCount++] =
-                    owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
-                state.queued[state.queuedCount++] =
+                state.NextQueued() = owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
+                state.NextQueued() =
                     owner.QueueHostInput(HostWandLayerNewInput{Vec2{2.2, 2.2}, CapturedWandSettings(), false});
                 state.queueSizeAtGate = owner._hostRequests.Size();
                 state.adjacentCoalescedAtGate = state.queueSizeAtGate == 1 &&
@@ -204,11 +213,9 @@ int Application::RunWandLayerHostSelfTest() noexcept
             else if (state.mode == Mode::CoalesceFullRing)
             {
                 for (unsigned int index = 0; index < 7; ++index)
-                    state.queued[state.queuedCount++] =
-                        owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandZoomIn});
-                state.queued[state.queuedCount++] =
-                    owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
-                state.queued[state.queuedCount++] =
+                    state.NextQueued() = owner.QueueHostInput(HostCommandInput{ChromeHost::kCommandZoomIn});
+                state.NextQueued() = owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
+                state.NextQueued() =
                     owner.QueueHostInput(HostWandLayerNewInput{Vec2{2.2, 2.2}, CapturedWandSettings(), false});
                 state.queueSizeAtGate = owner._hostRequests.Size();
                 state.fullRingCoalescedAtGate = state.queueSizeAtGate == 8 &&
@@ -218,12 +225,11 @@ int Application::RunWandLayerHostSelfTest() noexcept
             }
             else if (state.mode == Mode::OrdinalGap)
             {
-                state.queued[state.queuedCount++] =
-                    owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
+                state.NextQueued() = owner.QueueHostInput(HostWandLayerNewInput{kClick, CapturedWandSettings(), false});
                 // A recorded stroke can consume the shared ordinal without occupying the command ring.
                 // Exercise that gap directly: the two queue entries themselves remain adjacent WandNew.
                 state.interveningOrdinalAllocated = owner._historyWork.NextOrdinal().has_value();
-                state.queued[state.queuedCount++] =
+                state.NextQueued() =
                     owner.QueueHostInput(HostWandLayerNewInput{Vec2{2.2, 2.2}, CapturedWandSettings(), false});
                 state.queueSizeAtGate = owner._hostRequests.Size();
                 state.ordinalGapRetainedAtGate = state.interveningOrdinalAllocated && state.queueSizeAtGate == 2 &&
@@ -399,7 +405,8 @@ int Application::RunWandLayerHostSelfTest() noexcept
                 (void)RunUiActions(_jobs);
             (void)expect(name(mode), "actual-full-record-table-refuses-before-capture",
                          refused.Read().outcome == HostOutcome::Failed &&
-                             refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) &&
+                             refused.Read().error ==
+                                 static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
                              !_wandLayerHostTicket && !_wandLayerHostStamp && !_historyWork.Busy() &&
                              gate->reservationBytes != 0 && gate->captures.load() == 0 && !gate->retired.load() &&
                              _session.Document() == before && _session.Generation() == generation &&
@@ -591,7 +598,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
         {
             (void)expect(name(mode), "worker-error-is-preserved",
                          state.gateVisited && state.receipt.Read().outcome == HostOutcome::Failed &&
-                             state.receipt.Read().error == E_ACCESSDENIED &&
+                             state.receipt.Read().error == static_cast<std::int32_t>(E_ACCESSDENIED) &&
                              _session.Selection() == state.before->selection,
                          "worker E_ACCESSDENIED was lost or partially published");
         }
@@ -599,8 +606,8 @@ int Application::RunWandLayerHostSelfTest() noexcept
         {
             (void)expect(name(mode), "capture-bad-alloc-fails-without-publication",
                          !state.gateVisited && state.receipt.Read().outcome == HostOutcome::Failed &&
-                             state.receipt.Read().error == E_OUTOFMEMORY && gate->captures.load() == 0 &&
-                             _session.Selection() == state.before->selection,
+                             state.receipt.Read().error == static_cast<std::int32_t>(E_OUTOFMEMORY) &&
+                             gate->captures.load() == 0 && _session.Selection() == state.before->selection,
                          "owner capture bad_alloc was not translated to E_OUTOFMEMORY");
         }
         else if (mode == Mode::HistoryEntryFailure)
@@ -608,7 +615,7 @@ int Application::RunWandLayerHostSelfTest() noexcept
             (void)expect(name(mode), "reached-entry-bad-alloc-fails-atomically",
                          !state.gateVisited && gate->historyFaultHits.load() == 1 &&
                              state.receipt.Read().outcome == HostOutcome::Failed &&
-                             state.receipt.Read().error == E_OUTOFMEMORY &&
+                             state.receipt.Read().error == static_cast<std::int32_t>(E_OUTOFMEMORY) &&
                              _session.Selection() == state.before->selection,
                          "the reached Entry allocation fault did not fail atomically with E_OUTOFMEMORY");
         }
