@@ -8,6 +8,7 @@
 #include "CodecMemoryStreamTests.h"
 #include "FileIoBench.h"
 
+#include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "ClipboardDibWorkTests.h"
 #include "Document.h"
@@ -477,14 +478,15 @@ void TestPngAlphaRoundTrip()
     }
 
     // A project save/load of a soft (semi-transparent) pixel goes through the same encoder path.
-    CanvasDocument document;
-    document.id = Guid::Generate();
-    document.width = 2;
-    document.height = 2;
+    DocumentFixture fixture;
+    fixture.id = Guid::Generate();
+    fixture.width = 2;
+    fixture.height = 2;
     ImageLayer layer = ImageLayer::Blank(L"Soft", Vec2{2, 2});
     const Raster softAsset = SolidBgra(2, 2, 40, 60, 90, 128); // premultiplied, ~50% opacity
     layer.asset = RasterAsset{softAsset, Raster::MakeThumbnail(softAsset), layer.name};
-    document.layers.push_back(layer);
+    fixture.layers.push_back(layer);
+    const CanvasDocument document = std::move(fixture).Seal();
     const std::wstring path = ScratchRoot() + L"\\soft-alpha";
     Expect(SaveProject(path.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "png.alpha-project-save");
     const ProjectLoadResult reloaded = LoadProject(path.c_str());
@@ -1168,8 +1170,12 @@ void TestExplodedGolden()
            "v7.legacy-deflated-project-loads");
     // Overwriting a saved package drops assets that are no longer referenced.
     CanvasDocument trimmed = loaded.document;
-    trimmed.layers.erase(trimmed.layers.begin());
-    trimmed.layers.back().maskSourceID.reset();
+    EditDocumentFixture(trimmed,
+                        [](DocumentFixture& fixture)
+                        {
+                            fixture.layers.erase(fixture.layers.begin());
+                            fixture.layers.back().maskSourceID.reset();
+                        });
     Expect(SaveProject(exploded.c_str(), trimmed, std::nullopt, false) == ProjectIoStatus::Ok, "v7.overwrite");
     Expect(!std::filesystem::exists(std::filesystem::path(exploded) / L"images" /
                                     L"00000000-0000-4000-8000-000000000002.png"),
@@ -1251,10 +1257,10 @@ void TestShapeLiveness()
     // RF-103: `shape` is written only while the layer is still live (its asset is still the raster the shape
     // drew); once the pixels are painted over, `shapeImage` no longer matches `asset.image`, and the shape must
     // not round trip as live (legacy EditorSession+Projects.swift writes `shape: layer.liveShape?.style`).
-    CanvasDocument document;
-    document.id = Guid::Generate();
-    document.width = 2;
-    document.height = 2;
+    DocumentFixture fixture;
+    fixture.id = Guid::Generate();
+    fixture.width = 2;
+    fixture.height = 2;
     ImageLayer layer = ImageLayer::Blank(L"Shape", Vec2{2, 2});
     LayerShapeStyle style{};
     style.kind = ShapeKind::Rectangle;
@@ -1265,7 +1271,8 @@ void TestShapeLiveness()
     const Raster shapePixels = SolidBgra(2, 2, 0, 0, 255, 255);
     layer.asset = RasterAsset{shapePixels, Raster::MakeThumbnail(shapePixels), layer.name};
     layer.shapeImage = shapePixels; // Live: the asset is exactly what the shape drew.
-    document.layers.push_back(layer);
+    fixture.layers.push_back(layer);
+    CanvasDocument document = std::move(fixture).Seal();
 
     const std::wstring livePath = ScratchRoot() + L"\\shape-live";
     Expect(SaveProject(livePath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok, "shape.live-saves");
@@ -1278,8 +1285,12 @@ void TestShapeLiveness()
 
     // Paint over it: a different raster identity in `asset`, same shape metadata still attached, as BrushStroke's
     // paint commit leaves it (it never clears `shape`, only `shapeImage` stops matching `asset`).
-    document.layers.back().asset =
-        RasterAsset{SolidBgra(2, 2, 9, 9, 9, 255), Raster::MakeThumbnail(shapePixels), layer.name};
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& editable)
+                        {
+                            editable.layers.back().asset = RasterAsset{SolidBgra(2, 2, 9, 9, 9, 255),
+                                                                       Raster::MakeThumbnail(shapePixels), layer.name};
+                        });
     const std::wstring paintedPath = ScratchRoot() + L"\\shape-painted";
     Expect(SaveProject(paintedPath.c_str(), document, std::nullopt, false) == ProjectIoStatus::Ok,
            "shape.painted-saves");
@@ -1489,9 +1500,10 @@ void TestImportOntoDocument()
 {
     const std::wstring path = ScratchRoot() + L"\\import.png";
     Expect(EncodePngFile(SolidBgra(6, 3, 10, 20, 30, 255), 72, path.c_str()) == ImageCodecStatus::Ok, "import.fixture");
-    CanvasDocument document;
-    document.width = 100;
-    document.height = 100;
+    DocumentFixture initial;
+    initial.width = 100;
+    initial.height = 100;
+    CanvasDocument document = std::move(initial).Seal();
     std::optional<Guid> active;
     Expect(!PathLooksLikeZipProject(path.c_str()), "import.png-is-not-a-project");
     Expect(ImportImageOnto(document, path.c_str(), active) == ProjectIoStatus::Ok, "import.ok");
@@ -1508,13 +1520,14 @@ void TestImportOntoDocument()
 
     // RF-105: onto a non-empty document, the import is centered on the canvas and nested above the active layer
     // inside its folder (legacy EditorSession.insert), not appended at the root at (0,0).
-    CanvasDocument nested;
-    nested.id = Guid::Generate();
-    nested.width = 200;
-    nested.height = 100;
+    DocumentFixture nestedFixture;
+    nestedFixture.id = Guid::Generate();
+    nestedFixture.width = 200;
+    nestedFixture.height = 100;
     ImageLayer folder = ImageLayer::Blank(L"Folder", Vec2{200, 100});
     folder.isGroup = true;
-    nested.layers.push_back(folder);
+    nestedFixture.layers.push_back(folder);
+    CanvasDocument nested = std::move(nestedFixture).Seal();
     std::optional<Guid> nestedActive = folder.id;
     Expect(ImportImageOnto(nested, path.c_str(), nestedActive) == ProjectIoStatus::Ok, "import.nested-ok");
     Expect(nested.layers.size() == 2 && nested.layers.back().parentID.has_value() &&
@@ -1531,7 +1544,7 @@ void TestImportOntoDocument()
                Near(nested.layers.back().transform.origin.x, std::floor(30.5 - 6.0 / 2.0)) &&
                Near(nested.layers.back().transform.origin.y, std::floor(70.0 - 3.0 / 2.0)),
            "import.centered-on-drop-point");
-    CanvasDocument dropped;
+    CanvasDocument dropped = DocumentFixture{}.Seal();
     std::optional<Guid> droppedActive;
     Expect(ImportImageOnto(dropped, path.c_str(), droppedActive, Vec2{500.0, 500.0}) == ProjectIoStatus::Ok &&
                dropped.width == 6 && dropped.height == 3 && Near(dropped.layers.back().transform.origin.x, 0.0) &&
@@ -1541,14 +1554,15 @@ void TestImportOntoDocument()
     // RF-105: a budget failure pops the layer, restores the previous active layer, and reports TooLarge (not
     // Invalid). `Raster::MakeSparse` with an empty base and no tiles reports 100,000,000 pixels for the budget
     // check without allocating a 400 MB buffer.
-    CanvasDocument full;
-    full.id = Guid::Generate();
-    full.width = 100;
-    full.height = 100;
+    DocumentFixture fullFixture;
+    fullFixture.id = Guid::Generate();
+    fullFixture.width = 100;
+    fullFixture.height = 100;
     ImageLayer huge = ImageLayer::Blank(L"Huge", Vec2{10000, 10000});
     const Raster hugeRaster = Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
     huge.asset = RasterAsset{hugeRaster, Raster{}, huge.name};
-    full.layers.push_back(huge);
+    fullFixture.layers.push_back(huge);
+    CanvasDocument full = std::move(fullFixture).Seal();
     std::optional<Guid> fullActive = huge.id;
     Expect(ImportImageOnto(full, path.c_str(), fullActive) == ProjectIoStatus::TooLarge, "import.budget-too-large");
     Expect(full.layers.size() == 1 && fullActive.has_value() && fullActive.value() == huge.id,
@@ -1557,20 +1571,22 @@ void TestImportOntoDocument()
 
 void TestSaveRejectsInvalidDocument()
 {
-    CanvasDocument bad;
-    bad.width = 0;
-    bad.height = 1;
+    DocumentFixture badFixture;
+    badFixture.width = 0;
+    badFixture.height = 1;
+    CanvasDocument bad = std::move(badFixture).Seal();
     const std::wstring path = ScratchRoot() + L"\\invalid.prism";
     std::error_code error;
     std::filesystem::remove(path, error);
     Expect(SaveProject(path.c_str(), bad, std::nullopt, true) == ProjectIoStatus::Invalid, "save.rejects-invalid");
     Expect(!std::filesystem::exists(path), "save.no-partial-file");
 
-    CanvasDocument good;
-    good.width = 3;
-    good.height = 2;
-    good.id = Guid::Generate();
-    good.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{3, 2}));
+    DocumentFixture goodFixture;
+    goodFixture.width = 3;
+    goodFixture.height = 2;
+    goodFixture.id = Guid::Generate();
+    goodFixture.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{3, 2}));
+    CanvasDocument good = std::move(goodFixture).Seal();
     Expect(SaveProject(path.c_str(), good, std::nullopt, true) == ProjectIoStatus::Ok, "save.blank-layer");
     const ProjectLoadResult loaded = LoadProject(path.c_str());
     Expect(loaded.status == ProjectIoStatus::Ok && loaded.document.layers.size() == 1 &&
@@ -1583,14 +1599,15 @@ void TestSaveRejectsInvalidDocument()
 
 void TestProjectSaveDurability()
 {
-    CanvasDocument document;
-    document.width = 2;
-    document.height = 2;
-    document.id = Guid::Generate();
+    DocumentFixture fixture;
+    fixture.width = 2;
+    fixture.height = 2;
+    fixture.id = Guid::Generate();
     ImageLayer layer = ImageLayer::Blank(L"Durability", Vec2{2, 2});
     const Raster pixels = SolidBgra(2, 2, 7, 19, 31, 255);
     layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
-    document.layers.push_back(layer);
+    fixture.layers.push_back(layer);
+    CanvasDocument document = std::move(fixture).Seal();
 
     const std::wstring zipPath = ScratchRoot() + L"\\durability.prism";
     const std::wstring zipSentinel = zipPath + L".~sentinel";
@@ -1653,7 +1670,9 @@ void TestProjectSaveDurability()
     Expect(!unexpectedTemporary, "save-durability.owned-temporaries-cleaned");
 
     const std::string savedArchive = ReadText(zipPath);
-    document.resolution = 144; // a successful replacement would observably change the previous package
+    EditDocumentFixture(
+        document, [](DocumentFixture& fixture)
+        { fixture.resolution = 144; }); // a successful replacement would observably change the previous package
     HANDLE lockedRaw = CreateFileW(zipPath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL, nullptr);
     wil::unique_hfile locked{lockedRaw};
@@ -1839,13 +1858,14 @@ void TestNativeDestinationRotation()
                            Mode::TimerWait,    Mode::InjectedFinal,    Mode::Healthy};
     for (const auto mode : modes)
     {
-        CanvasDocument original;
-        original.id = Guid::Generate();
-        original.width = 2;
-        original.height = 2;
+        DocumentFixture originalFixture;
+        originalFixture.id = Guid::Generate();
+        originalFixture.width = 2;
+        originalFixture.height = 2;
         auto layer = ImageLayer::Blank(L"Original destination retry", Vec2{2, 2});
         layer.asset = RasterAsset{SolidBgra(2, 2, 7, 19, 31, 255), {}, layer.name};
-        original.layers.push_back(layer);
+        originalFixture.layers.push_back(layer);
+        const CanvasDocument original = std::move(originalFixture).Seal();
         const auto destination = ScratchRoot() + L"\\destination-retry-" + std::to_wstring(static_cast<int>(mode));
         struct BaselineTrace final
         {
@@ -1876,8 +1896,12 @@ void TestNativeDestinationRotation()
             continue;
         const auto before = SnapshotProjectTree(destination);
         auto replacement = original;
-        replacement.resolution = 144;
-        replacement.layers.front().name = L"Published destination retry";
+        EditDocumentFixture(replacement,
+                            [](DocumentFixture& fixture)
+                            {
+                                fixture.resolution = 144;
+                                fixture.layers.front().name = L"Published destination retry";
+                            });
         struct Control final
         {
             Mode mode;
@@ -2024,17 +2048,18 @@ void TestProjectRotationFaultRecovery()
     if (!ownsRoot || filesystemError)
         return;
 
-    CanvasDocument original;
-    original.width = 2;
-    original.height = 2;
-    original.id = Guid::Generate();
-    original.resolution = 72;
+    DocumentFixture originalFixture;
+    originalFixture.width = 2;
+    originalFixture.height = 2;
+    originalFixture.id = Guid::Generate();
+    originalFixture.resolution = 72;
     ImageLayer layer = ImageLayer::Blank(L"Rotation fixture", Vec2{2, 2});
     const Raster pixels = SolidBgra(2, 2, 13, 29, 47, 255);
     layer.asset = RasterAsset{pixels, Raster::MakeThumbnail(pixels), layer.name};
-    original.layers.push_back(layer);
+    originalFixture.layers.push_back(layer);
+    CanvasDocument original = std::move(originalFixture).Seal();
     CanvasDocument replacement = original;
-    replacement.resolution = 144;
+    EditDocumentFixture(replacement, [](DocumentFixture& fixture) { fixture.resolution = 144; });
 
     const std::filesystem::path destination = root / L"project";
     const std::filesystem::path sentinel = root / L"project.~unowned";

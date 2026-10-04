@@ -120,7 +120,7 @@ class CanvasDocumentDraft final
             _sealer = std::move(owned);
             _state = State::Sealing;
         }
-        auto root = _sealer.value().Seal();
+        auto root = _sealer.value().Seal(cancellation);
         if (!root)
             return std::nullopt;
         _state = State::Consumed;

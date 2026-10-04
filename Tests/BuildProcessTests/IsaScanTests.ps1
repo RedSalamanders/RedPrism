@@ -7,6 +7,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repo 'Build\IsaScan.psm1') -Force
+& (Join-Path $PSScriptRoot 'IsaRsiDwordTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Guarded RSI terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaAlGuardTests.ps1')
 & (Join-Path $PSScriptRoot 'IsaClGuardTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Inline switch-table parser controls failed.' }
@@ -129,6 +131,39 @@ foreach ($case in @(
         $caught = $true
     }
     if (-not $caught) { throw "ISA control $($case.Name) unexpectedly passed." }
+    Write-Host "PASS isa-scan.control.$($case.Name) (expected rejection)"
+}
+
+# Identity must reject an unrelated PDB before its offsets are interpreted against the linked image.
+# Give both mismatch controls a deliberately impossible contribution, independent of compiler section layout.
+$scalarScan = Join-Path $root 'Scalar\scan'
+$scalarMetadata = Get-Content -LiteralPath (Join-Path $scalarScan 'contributions.txt') -Raw
+$scalarSymbols = Join-Path $scalarScan 'symbols.txt'
+$scalarDisassembly = Join-Path $scalarScan 'disassembly.txt'
+$guidPattern = '(?m)^\s*GUID: (\{.+\})\r?$'
+$agePattern = '(?m)^\s*Age: (\d+)\r?$'
+$guidRecord = [regex]::Match($scalarMetadata, $guidPattern)
+$ageRecord = [regex]::Match($scalarMetadata, $agePattern)
+if (-not $guidRecord.Success -or -not $ageRecord.Success) { throw 'Scalar PDB identity controls need a GUID and age.' }
+$wrongGuid = [guid]::NewGuid()
+if ($wrongGuid -eq [guid]::Parse($guidRecord.Groups[1].Value)) { throw 'Independent GUID unexpectedly matches the fixture.' }
+$wrongAge = if ([uint32]::Parse($ageRecord.Groups[1].Value) -eq [uint32]::MaxValue) { 0 } else { [uint32]::Parse($ageRecord.Groups[1].Value) + 1 }
+$impossibleContribution = "`nSection Contributions`n  SC[identity-first] | mod = 0, 65534:18446744073709551615, size = 1,`n"
+foreach ($case in @(
+    @{ Name = 'GuidBeforeMalformedContribution'; Metadata = [regex]::Replace($scalarMetadata, $guidPattern, ('  GUID: {' + $wrongGuid.ToString().ToUpperInvariant() + '}')) },
+    @{ Name = 'AgeBeforeMalformedContribution'; Metadata = [regex]::Replace($scalarMetadata, $agePattern, ('  Age: ' + $wrongAge)) }
+)) {
+    $path = Join-Path $root ($case.Name + '.txt')
+    ($case.Metadata + $impossibleContribution) | Set-Content -LiteralPath $path -Encoding utf8
+    $caught = $false
+    try {
+        $null = [RedPrismBuild.IsaScanner]::Scan($scalar, $path, $scalarSymbols, $scalarDisassembly,
+            [string[]] $allowlist.Objects, [string[]] $allowlist.Libraries, [string[]] $allowlist.Functions)
+    } catch {
+        if ($_.Exception.Message -notmatch 'PDB GUID/age does not match') { throw }
+        $caught = $true
+    }
+    if (-not $caught) { throw "ISA control $($case.Name) interpreted a mismatched PDB." }
     Write-Host "PASS isa-scan.control.$($case.Name) (expected rejection)"
 }
 $global:LASTEXITCODE = 0

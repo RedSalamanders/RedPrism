@@ -22,8 +22,9 @@ bool Application::CanvasLifetimeCurrent() const noexcept
     if (_canvasBrushInput.Busy())
     {
         return _canvasBrushInput.Opening() == _canvasLifetime->brushOpening &&
-               (!_canvasBrushReplayed ||
-                (_canvasBrushSessionOpening && _session.PendingBrushOpening() == _canvasBrushSessionOpening));
+               (_canvasBrushReplayed
+                    ? (_canvasBrushSessionOpening && _session.PendingBrushOpening() == _canvasBrushSessionOpening)
+                    : !_session.PendingBrushOpening());
     }
     return !_session.PendingBrushOpening(); // A replacement core opening cannot inherit the old decision.
 }

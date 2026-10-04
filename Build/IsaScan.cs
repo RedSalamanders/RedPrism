@@ -1833,6 +1833,100 @@ namespace RedPrismBuild
             return null;
         }
 
+        // Release FilterSettings switches sign-extend EDX to RSI before an unsigned ESI guard and an
+        // RDX/RSI DWORD dispatch. Prove the full observed producer/prelude as well: a 32-bit guard alone
+        // cannot bound an arbitrary 64-bit RSI. Every row, target and terminal PDB extent must agree.
+        private static InlineTable ReadGuardedRsiDwordTable(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, ulong dispatch, Dictionary<ulong, DecodedInstruction> decoded,
+            List<ulong> decodedStarts, Dictionary<ulong, byte[]> guardRows)
+        {
+            if (dispatch < imageBase + 36 || dispatch - imageBase > UInt32.MaxValue) return null;
+            int ownerIndex = FindContribution(contributions, dispatch);
+            if (ownerIndex < 0) return null;
+            Contribution owner = contributions[ownerIndex];
+            ulong prefix = dispatch - 36, afterJump = dispatch + 19;
+            if (prefix < owner.Begin || afterJump > owner.End) return null;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return null; }
+            if (raw > pe.Length - 55 || !StartsWithAt(pe, raw, 0x48, 0x63, 0xf2) ||
+                !StartsWithAt(pe, raw + 3, 0x48, 0x8b, 0xf9) ||
+                !StartsWithAt(pe, raw + 6, 0xc7, 0x44, 0x24, 0x20, 0, 0, 0, 0) ||
+                pe[raw + 14] != 0xe8 || !StartsWithAt(pe, raw + 19, 0xc7, 0x44, 0x24, 0x20, 1, 0, 0, 0) ||
+                !StartsWithAt(pe, raw + 27, 0x83, 0xfe) || !StartsWithAt(pe, raw + 30, 0x0f, 0x87) ||
+                !StartsWithAt(pe, raw + 36, 0x48, 0x8d, 0x15) ||
+                (long)dispatch + 7 + BitConverter.ToInt32(pe, raw + 39) != (long)imageBase ||
+                !StartsWithAt(pe, raw + 43, 0x8b, 0x8c, 0xb2) ||
+                !StartsWithAt(pe, raw + 50, 0x48, 0x03, 0xca) || !StartsWithAt(pe, raw + 53, 0xff, 0xe1)) return null;
+            uint maximum = pe[raw + 29];
+            if (maximum == 0 || maximum >= 128) return null;
+            uint tableRva = BitConverter.ToUInt32(pe, raw + 46);
+            ulong begin = checked(imageBase + tableRva), end = checked(begin + 4 * (maximum + 1));
+            if ((begin & 3) != 0 || begin <= afterJump || end > owner.End ||
+                !dataSymbols.TryGetValue(begin, out int dataOwner) || dataOwner != owner.Module) return null;
+            int[] starts = { 0, 3, 6, 14, 19, 27, 30, 36, 43, 50, 53 };
+            int[] lengths = { 3, 3, 8, 5, 8, 3, 6, 7, 7, 3, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+            {
+                ulong address = prefix + (ulong)starts[i];
+                if (!guardRows.TryGetValue(address, out byte[] reported) || reported.Length != lengths[i] ||
+                    !MatchesDecodedPe(pe, sections, imageBase, address, reported, contributions, decoded, decodedStarts))
+                    return null;
+            }
+            foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                if (symbol.Value == owner.Module && symbol.Key > begin && symbol.Key < end) return null;
+            long defaultAddress = (long)prefix + 36 + BitConverter.ToInt32(pe, raw + 32);
+            foreach (Function procedure in procedures)
+            {
+                if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
+                    procedure.ContributionEnd != owner.End || prefix < procedure.Begin || procedure.End != end ||
+                    defaultAddress < (long)afterJump || defaultAddress >= (long)begin ||
+                    !IsDecodedBoundary((ulong)defaultAddress, owner.Module, contributions, decoded, decodedStarts)) continue;
+                var table = new InlineTable { Begin = begin, End = end, Module = owner.Module,
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+                int tableRaw;
+                try { tableRaw = checked((int)Offset(tableRva, sections, pe.Length)); }
+                catch (InvalidDataException) { return null; }
+                if (tableRaw > pe.Length - checked((int)(end - begin))) return null;
+                if (tableRaw < 3 || !StartsWithAt(pe, tableRaw - 3, 0xcc, 0x66, 0x90) ||
+                    !guardRows.TryGetValue(begin - 3, out byte[] terminal) || terminal.Length != 1 ||
+                    !MatchesDecodedPe(pe, sections, imageBase, begin - 3, terminal, contributions, decoded, decodedStarts) ||
+                    !guardRows.TryGetValue(begin - 2, out byte[] padding) || padding.Length != 2 ||
+                    !MatchesDecodedPe(pe, sections, imageBase, begin - 2, padding, contributions, decoded, decodedStarts))
+                    return null;
+                int first = decodedStarts.BinarySearch(procedure.Begin);
+                if (first < 0) continue;
+                for (int i = first; i < decodedStarts.Count && decodedStarts[i] < begin; ++i)
+                {
+                    ulong address = decodedStarts[i];
+                    DecodedInstruction instruction = decoded[address];
+                    if (instruction.Unknown || instruction.Module != owner.Module) return null;
+                    int at = checked((int)Offset(checked((uint)(address - imageBase)), sections, pe.Length));
+                    long target;
+                    if (instruction.Length == 2 && (pe[at] == 0xeb || (pe[at] >= 0x70 && pe[at] <= 0x7f)))
+                        target = (long)address + 2 + unchecked((sbyte)pe[at + 1]);
+                    else if (instruction.Length == 5 && (pe[at] == 0xe9 || pe[at] == 0xe8))
+                        target = (long)address + 5 + BitConverter.ToInt32(pe, at + 1);
+                    else if (instruction.Length == 6 && pe[at] == 0x0f && pe[at + 1] >= 0x80 && pe[at + 1] <= 0x8f)
+                        target = (long)address + 6 + BitConverter.ToInt32(pe, at + 2);
+                    else continue;
+                    if ((target > (long)prefix && target < (long)afterJump &&
+                         (address < prefix || address >= afterJump)) ||
+                        (target >= (long)begin && target < (long)end)) return null;
+                }
+                for (uint entry = 0; entry <= maximum; ++entry)
+                {
+                    ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + checked((int)(4 * entry))));
+                    if (target < afterJump || target >= begin ||
+                        !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts)) return null;
+                    table.Targets.Add(target);
+                }
+                return table;
+            }
+            return null;
+        }
+
         private static bool IsDecodedBoundary(ulong target, int module, List<Contribution> contributions,
             Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts)
         {
@@ -1920,16 +2014,25 @@ namespace RedPrismBuild
             }
             if (guid == Guid.Empty) throw new InvalidDataException("PE has no RSDS identity.");
 
-            var modules = new Dictionary<int, Module>();
-            var contributions = new List<Contribution>();
-            int module = -1;
-            bool inContributions = false, guidMatch = false, ageMatch = false;
+            // Bind the PDB before interpreting its offsets in this image. An unrelated PDB can have different
+            // section sizes, so contribution mapping is not a valid way to diagnose an identity mismatch.
+            bool guidMatch = false, ageMatch = false;
             foreach (string line in File.ReadLines(metadata))
             {
                 Match match = Regex.Match(line, @"^\s*GUID: (\{.+\})$");
                 if (match.Success) guidMatch = Guid.Parse(match.Groups[1].Value) == guid;
                 match = Regex.Match(line, @"^\s*Age: (\d+)$");
                 if (match.Success) ageMatch = UInt32.Parse(match.Groups[1].Value) == age;
+            }
+            if (!guidMatch || !ageMatch) throw new InvalidDataException("PDB GUID/age does not match the linked image.");
+
+            var modules = new Dictionary<int, Module>();
+            var contributions = new List<Contribution>();
+            int module = -1;
+            bool inContributions = false;
+            foreach (string line in File.ReadLines(metadata))
+            {
+                Match match;
                 if (line.Trim() == "Section Contributions") inContributions = true;
                 if (!inContributions)
                 {
@@ -1955,7 +2058,6 @@ namespace RedPrismBuild
                 if (sections[index - 1].Executable)
                     contributions.Add(new Contribution { Module = Int32.Parse(match.Groups[1].Value), Begin = begin, End = end });
             }
-            if (!guidMatch || !ageMatch) throw new InvalidDataException("PDB GUID/age does not match the linked image.");
             if (modules.Count == 0 || contributions.Count == 0) throw new InvalidDataException("Missing PDB module/contribution data.");
             contributions.Sort((a, b) => a.Begin.CompareTo(b.Begin));
             for (int i = 1; i < contributions.Count; ++i)
@@ -2028,6 +2130,7 @@ namespace RedPrismBuild
             var r10BaseCandidates = new List<ulong>();
             var rdiBaseCandidates = new List<ulong>();
             var raxStackCandidates = new List<ulong>();
+            var rsiDwordCandidates = new List<ulong>();
             var raxPaddingBodyRanges = new List<InlineTable>();
             var r9ByteCandidates = new List<ulong>();
             var r9HoistedCandidates = new List<ulong>();
@@ -2113,6 +2216,24 @@ namespace RedPrismBuild
                 byte[] encoded = Array.ConvertAll(candidateBytes, b => Byte.Parse(b, NumberStyles.HexNumber));
                 if (checked((long)candidateAddress + 7 + BitConverter.ToInt32(encoded, 3)) != (long)imageBase ||
                     candidateAddress < imageBase + 19) continue;
+                if (encoded[0] == 0x48 && encoded[2] == 0x15 && candidateAddress >= imageBase + 36)
+                {
+                    rsiDwordCandidates.Add(candidateAddress);
+                    foreach (int offset in new int[] { -36, -33, -30, -22, -17, -9, -6, 0, 7, 14, 17 })
+                        rdxGuardCandidates.Add(checked((ulong)((long)candidateAddress + offset)));
+                    try
+                    {
+                        int loadRaw = checked((int)Offset(checked((uint)(candidateAddress + 7 - imageBase)), sections, pe.Length));
+                        if (loadRaw <= pe.Length - 7 && StartsWithAt(pe, loadRaw, 0x8b, 0x8c, 0xb2))
+                        {
+                            ulong tableBegin = checked(imageBase + BitConverter.ToUInt32(pe, loadRaw + 3));
+                            if (tableBegin >= imageBase + 3)
+                                foreach (int offset in new int[] { -3, -2 })
+                                    rdxGuardCandidates.Add(checked((ulong)((long)tableBegin + offset)));
+                        }
+                    }
+                    catch (InvalidDataException) { /* Not a mapped canonical load; retain no terminal rows. */ }
+                }
                 if (r10Candidate)
                 {
                     r10BaseCandidates.Add(candidateAddress);
@@ -2224,6 +2345,12 @@ namespace RedPrismBuild
                 else if (rowOwner >= 0) decoded[rowAddress].Unknown = true;
             }
             decodedStarts.Sort();
+            foreach (ulong address in rsiDwordCandidates)
+            {
+                InlineTable table = ReadGuardedRsiDwordTable(pe, sections, contributions, dataSymbols,
+                    procedures, imageBase, address, decoded, decodedStarts, guardRows);
+                if (table != null) inlineTables.Add(table);
+            }
             foreach (ulong address in r9HoistedCandidates)
             {
                 InlineTable table = ReadGuardedR9HoistedDirectTable(pe, sections, contributions, dataSymbols,

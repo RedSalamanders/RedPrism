@@ -25,6 +25,13 @@ remain separate requirements; these tests alone do not qualify G1.
 
 ### Immutable record primitive foundation
 
+`record-bounds.*` proves immutable cached metadata/ownership/node accounting against an independent literal
+child policy: constant-time copied/concurrent reads, capacity, separate overflows, invalid/unavailable children,
+empty/copy/move/swap/replacement/equality, adoption and cancellation/allocation retry. ImageLayer cases use
+published capacities and actual fields to cover names, spare/empty curves, repeated raster owners, eager semantic
+mask ownership and sparse bounds before/after explicit assembly. The 87 controls preserve the original root and
+document goldens; they establish no application timing, exact retained-history index or complete admission result.
+
 Normal `DocumentTests` runs `document-record-root.*`: 10,000-record zero-copy capture/non-const read, retained
 strings/child owners, event-ordered concurrent readers, private edit ordering/capacity refusal, consumed/moved
 builders, before/mid/final-copy cancellation, reached record-buffer/root-seal/record-copy allocation faults,

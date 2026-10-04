@@ -66,6 +66,7 @@
 #include "RasterConcurrencyTests.h"
 #include "RasterEditWorkTests.h"
 #include "RasterWorkTests.h"
+#include "RecordOwnershipBoundsTests.h"
 #include "RecordRootAdoptTests.h"
 #include "RecordRootBench.h"
 #include "RecordRootTests.h"
@@ -7403,6 +7404,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryStateViewTests();
     gFailures += RunHistoryEntriesTests();
     gFailures += RunRecordRootTests();
+    gFailures += RunRecordOwnershipBoundsTests();
     gFailures += RunRecordRootAdoptTests();
     gFailures += RunDocumentDraftTests();
     gFailures += RunDocumentFixtureTests();

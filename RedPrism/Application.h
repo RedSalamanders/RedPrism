@@ -113,6 +113,7 @@ class Application final : public ChromeEvents
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLeaseShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -242,6 +243,8 @@ class Application final : public ChromeEvents
     int RunCanvasBrushLifetimeCancelSelfTest() noexcept;
     int RunCanvasBrushLifetimeAcceptedSelfTest() noexcept;
     int RunCanvasBrushLifetimeModalSelfTest() noexcept;
+    int RunCanvasBrushLifetimeAuthoritySelfTest() noexcept;
+    int RunCanvasBrushLifetimeWindowSelfTest() noexcept;
     CanvasBrushInput _canvasBrushInput;
     CanvasBrushSample _canvasBrushLastSample{};
     ContinuationReceipt _canvasBrushReceipt;
@@ -920,6 +923,7 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _wandLayerHostStamp;
     std::optional<JobTicket> _wandLayerHostTicket;
     std::shared_ptr<WandLayerHostTestGate> _wandLayerHostTestGate;
+    bool _traceWandForTest = false;
     std::optional<HistoryWorkStamp> _historyRestoreStamp;
     std::optional<JobTicket> _historyRestoreTicket;
     std::shared_ptr<HistoryRestoreTestGate> _historyRestoreTestGate;

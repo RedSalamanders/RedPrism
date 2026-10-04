@@ -549,6 +549,10 @@ void Application::RunHostContinuation() noexcept
         auto taken = _activeHostRequest
                          ? HostRequestQueue::Taken{}
                          : _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
+        // TakeReady may retire a stale queued brush. Its fixed stream must retire in this same action,
+        // including when no selected request remains to rearm the source.
+        if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+            RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
         if (taken.stale != 0)
         {
             _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_QUEUED_STALE);

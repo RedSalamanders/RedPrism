@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <new>
@@ -57,7 +58,7 @@ class Application::WandLayerHostJob final : public Job
                      std::uint64_t retirement) noexcept
         : _owner(owner), _stamp(stamp), _request(request), _retirement(retirement),
           _authority(owner._session.CaptureHistoryRestoreAuthority()), _gate(owner._wandLayerHostTestGate),
-          _ownerThread(GetCurrentThreadId())
+          _ownerThread(GetCurrentThreadId()), _trace(owner._traceWandForTest)
     {
     }
     JobResult Run(JobContext& context) override
@@ -82,6 +83,9 @@ class Application::WandLayerHostJob final : public Job
                         _gate.get()};
         _payload->publication = DocumentSession::PrepareWandLayerSelectionPublication(
             std::move(_payload->input.value()), &_payload->failure, context.cancellation, observer);
+        if (_trace)
+            std::printf("WAND WORKER publication=%d failure=%u cancelled=%d\n", _payload->publication.has_value(),
+                        static_cast<unsigned int>(_payload->failure), context.cancellation.IsCancelled());
         if (context.cancellation.IsCancelled() || _payload->failure == WandFailure::Cancelled)
             return {JobStatus::Cancelled};
         if (!_payload->publication)
@@ -122,6 +126,10 @@ class Application::WandLayerHostJob final : public Job
             }
             _payload->input =
                 _owner._session.PrepareWandLayerSelectionInput(_request.point, _request.settings, _request.antialiased);
+            if (_trace)
+                std::printf("WAND CAPTURE input=%d point=%.3f,%.3f generation=%llu\n", _payload->input.has_value(),
+                            _request.point.x, _request.point.y,
+                            static_cast<unsigned long long>(_owner._session.Generation()));
             if (!_payload->input)
             {
                 _captureError = E_ABORT;
@@ -145,7 +153,8 @@ class Application::WandLayerHostJob final : public Job
                               : result.status == JobStatus::Failed  ? HostOutcome::Failed
                                                                     : HostOutcome::Succeeded;
         std::int32_t error = result.error;
-        if (!Current())
+        const bool current = Current();
+        if (!current)
         {
             outcome = HostOutcome::Stale;
             error = E_ABORT;
@@ -167,6 +176,10 @@ class Application::WandLayerHostJob final : public Job
             outcome = HostOutcome::Stale;
             error = E_ABORT;
         }
+        if (_trace)
+            std::printf("WAND COMPLETE status=%u current=%d outcome=%u error=%08X capture_error=%08X\n",
+                        static_cast<unsigned int>(result.status), current, static_cast<unsigned int>(outcome),
+                        static_cast<std::uint32_t>(error), static_cast<std::uint32_t>(_captureError));
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage,
                                         _payload && _payload->failure == WandFailure::TooDetailed
@@ -192,6 +205,7 @@ class Application::WandLayerHostJob final : public Job
     const HistoryRestoreAuthority _authority;
     const std::shared_ptr<WandLayerHostTestGate> _gate;
     const DWORD _ownerThread;
+    const bool _trace;
     std::unique_ptr<WandLayerHostPayload, RetireWandLayerHostPayload> _payload;
     std::int32_t _captureError = 0;
 };

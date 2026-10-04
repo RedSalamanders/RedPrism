@@ -10,6 +10,13 @@
 - [x] Preserve canvas Down/Move/Up, pointer loss, exact-opening cancellation, competing presses, captured mask palette and admitted tool/target/save boundaries from the combined private Debug/Release/ASan application qualification.
 - [x] Preserve basic lifetime preflight and its 160 cancellation/80 accepted Save/discard/write-failure controls from the full private Debug/Release/ASan application qualification.
 - [x] Preserve modal focus/capture loss and nested owner-action controls from all three private profiles: 8,550 controls/75 stages, 517 identical owned inputs and verified archives.
+- [x] Repair the deep-worktree DxUi restore path in a draft with full identity retention and resolved-props provenance; thirty focused path and eight existing provenance tests pass, actual dependency restore and application link succeed.
+- [x] Review and migrate the normal I/O, benchmark and composition/readback fixtures through explicit test builders; original golden expectations remain unchanged.
+- [x] Repair formatter command-line overflow through bounded batches; all 622 integrated candidate source files pass the formatting check.
+- [x] Integrate the additionally qualified private lifetime authority/window/shutdown source and portable normal project entries.
+- [x] Integrate the separately qualified immutable ownership-bound cache and 87 new controls; all 6,226 original document controls remain unchanged in private Debug/Release/ASan.
+- [x] Fresh combined normal x64 Debug/Release/ASan suites pass exactly 78 stages / 8,962 application controls, the 6,313-control document suite, scanner controls and screenshots; all 627 owned inputs match. All three ARM64 cross-builds pass, and every archive copy is independently verified.
+- [ ] Fix the two existing test error-code comparisons flagged by native static analysis (C6221), then qualify the next integrated source. The first intermittent unchanged Wand failure remains under diagnosis; successful repeated runs do not explain it.
 - [ ] Migrate remaining pointer and lifetime opacity closure callers.
 - [ ] Move adjustment and display record construction and retirement to admitted workers.
 - [ ] Qualify the complete native caller migration with the full x64 suites and ARM64 cross-builds.

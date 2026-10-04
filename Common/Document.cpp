@@ -25,6 +25,53 @@
 #pragma comment(lib, "rpcrt4.lib")
 #pragma comment(lib, "ole32.lib")
 
+std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(const ImageLayer& layer) noexcept
+{
+    RecordOwnershipBounds result;
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    const auto add = [](std::uint64_t& bytes, std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    const auto text = [&](const std::wstring& value) noexcept
+    {
+        // SSO capacity is intentionally overcounted; names and curve buffers are the only variable record
+        // metadata. The record objects, optionals and fixed settings are charged by the root's vector capacity.
+        return value.capacity() <= maximum / sizeof(wchar_t) - 1 &&
+               add(result.metadataBytes, (value.capacity() + 1) * sizeof(wchar_t)) &&
+               add(result.metadataBytes, 64); // allocator rounding and the v145 Debug container proxy
+    };
+    if (!text(layer.name) || (layer.asset && !text(layer.asset.value().name)) ||
+        (layer.mask && !text(layer.mask.value().asset.name)))
+        return std::nullopt;
+    if (layer.adjustment)
+    {
+        for (const auto& channel : layer.adjustment.value().curves.channels)
+            if (channel.capacity() > maximum / sizeof(CurvePoint) ||
+                !add(result.metadataBytes, channel.capacity() * sizeof(CurvePoint)) || !add(result.metadataBytes, 64))
+                return std::nullopt;
+    }
+    result.ownershipBytes = result.metadataBytes;
+    const auto raster = [&](const Raster& image) noexcept
+    {
+        if (!image.HasStorage())
+            return true;
+        const auto bytes = image.RetirementMemoryBytes();
+        const auto nodes = image.RetirementNodeCount();
+        // These construction caches include possible sparse assembly. Reading them never expands a DAG,
+        // materializes pixels or becomes stale when Data() subsequently publishes its resident byte buffer.
+        return bytes && nodes && add(result.ownershipBytes, bytes) && add(result.rasterNodes, nodes);
+    };
+    if (!raster(layer.shapeImage) ||
+        (layer.asset && (!raster(layer.asset.value().image) || !raster(layer.asset.value().thumbnail))) ||
+        (layer.mask && (!raster(layer.mask.value().asset.image) || !raster(layer.mask.value().asset.thumbnail))))
+        return std::nullopt;
+    return result;
+}
+
 Guid Guid::Generate() noexcept
 {
     GUID value{};

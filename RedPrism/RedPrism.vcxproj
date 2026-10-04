@@ -323,6 +323,9 @@
     <ClCompile Include="ApplicationCanvasBrushLifetimeCancelSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushLifetimeAcceptedSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushLifetimeModalSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeAuthoritySelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeWindowSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeShutdownSelfTest.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />

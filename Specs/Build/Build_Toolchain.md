@@ -1,7 +1,7 @@
 # RedPrism build toolchain
 
 Status: current normative repository contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-04
 Owner: root MSBuild projects, `vcpkg.json`, `vcpkg-tool.json`, `build.ps1`, `Build/BuildPresentation.psm1`, `vcpkg-install.ps1`, `Build/VcpkgToolset.psm1`, `Build/VisualStudioDiscovery.psm1`, `format.ps1`
 
 ## Scope
@@ -15,6 +15,11 @@ DxUi restore is C2 work: `restore-dxui.ps1` clones the lock in `Dependencies/DxU
 `.build/dependencies/DxUi/` and never resets `Z:\src\DxUi`. The clone keeps Git long paths and leaves out the directories a
 build never reads (`Measurements/`, `docs/gallery`, `Specs/`), so a deep checkout root restores. See
 [`Core/Core_DxUiIntegration.md`](../Core/Core_DxUiIntegration.md).
+
+DxUi consumer output folders use a 16-character fingerprint prefix with the complete identity retained and
+validated in a marker. This also bounds vcpkg's native temporary-directory path; Git long-path support alone
+does not make those directory operations work. Both MSBuild and product provenance use the resolved output
+root, with full identity comparison before cache reuse, as required by `Core_DxUiIntegration.md`.
 
 Lucide is the tool-rail picture source. It is not a vcpkg port and not an icon font. `Dependencies/Lucide.lock.json`
 names `https://github.com/lucide-icons/lucide` and one commit. `ThirdParty/Lucide/icons/` holds only the tool SVGs
@@ -62,6 +67,10 @@ MUST refuse to run on a non-ARM64 host.
 | MSBuild logs | `.build/logs/` |
 
 `.build/` MUST NOT be committed. `OutDir` / `IntDir` are set in `Directory.Build.props`.
+
+`format.ps1` MUST process every discovered C++ source even in a deep worktree. It submits bounded filename
+batches below the Windows process command-line limit and fails on the first formatter error; splitting the
+invocations MUST NOT change formatting options, omit files or change the final discovered-file count.
 
 Builds sharing a mutable dependency output MUST be serialized, including private candidate builds. A separate
 application `OutDir`/`IntDir` does not isolate a pinned DxUi rebuild that writes the same resolved library path.
@@ -206,6 +215,9 @@ After every x64 build, `build.ps1` scans all five first-party linked executables
 `Build/IsaScan.cs` inspects decoded executable instructions for C4/C5/62 VEX/EVEX prefixes, including a preceding
 legacy address/segment prefix. It checks the PE CodeView GUID and age against the full PDB, maps decimal section
 contributions to their object, and fails on missing/ambiguous attribution or a missing/mismatched PDB.
+GUID and age MUST match before PDB contribution offsets are interpreted in the image's sections. Independent
+wrong-GUID and wrong-age controls with impossible contribution offsets prove this ordering; a matching PDB
+still undergoes every existing contribution, instruction and runtime-allowlist check.
 AVX2 objects allow VEX; AVX-512 objects allow VEX and EVEX. Other objects must match the checked-in
 `Build/IsaRuntimeAllowlist.psd1`. No broad first-party object exception is permitted.
 
@@ -412,6 +424,18 @@ must decode after the computed jump and before the table. This form additionally
 PDB data symbol in the owning contribution. A partial sequence, clobbered base, wrong instruction, invalid branch
 or absent data symbol receives no exemption. Adjacent real VEX remains rejected. No generic instruction skipping
 or new runtime allowlist entry is permitted.
+
+The observed Release color-settings switch has a second exact terminal form: `MOVSXD RSI,EDX`, `MOV RDI,RCX`,
+an RSP+32 DWORD zero store, a direct call, the same slot set to one, unsigned `CMP ESI,imm8` / long `JA`,
+`LEA RDX,imagebase`, `MOV ECX,[RDX+4*RSI+table]`, `ADD RCX,RDX`, `JMP RCX`. The producer and prelude are
+mandatory because a 32-bit guard alone does not bound an arbitrary 64-bit RSI. Every row must decode and match
+the PE; the nonnegative maximum is 1–127. The exact same-owner anonymous data symbol begins the DWORD table;
+its guard-derived end is the owning PDB procedure end. Every target and the default decode after the dispatch
+and before the table. Interior symbols and outside branches entering the prelude or table invalidate proof.
+The terminal INT3 and two-byte NOP must match both PE and listing. Only the proved table receives data status;
+the existing checked INT3 suffix rule applies to a decoded row that crosses its end. Wrong producer, guard,
+base/index, rows, symbols, targets, boundaries or padding and adjacent real VEX remain rejected. Independent
+parser controls cover each refusal. Runtime and tier allowlists are unchanged.
 
 Every x64 configuration also compiles scalar, AVX2 and AVX-512 scan controls. Controls are never executed, so they
 work on a baseline host. Deliberate AVX2 in a baseline object and EVEX in an AVX2 object MUST fail; correctly

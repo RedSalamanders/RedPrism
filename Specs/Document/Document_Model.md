@@ -53,8 +53,8 @@ outside equality: while the asset still holds it the layer is a live shape (`Liv
 
 ### Immutable record construction foundation (P1.9 H2.2)
 
-`Common/RecordRoot.h` provides a shared immutable sequence primitive. This foundation does not yet replace
-`CanvasDocument::layers`; full document writer/capture integration remains tracked in
+`Common/RecordRoot.h` provides a shared immutable sequence primitive. Its primitive qualification does not
+qualify the full `CanvasDocument::layers` writer/capture integration, which remains tracked in
 [`HistoryStorageAccounting`](../Plans/WIP/HistoryStorageAccounting_2026-09-30.md).
 
 A captured root retains its immutable record vector. Copying a root never copies its records, and all reads,
@@ -82,6 +82,20 @@ new clone owns that clone's allocations; it does not silently inherit the source
 Final root destruction belongs to the admitted retirement path. Container capacity alone does not account
 record children, captured history, control blocks or complete construction/retirement peaks. Those remain
 integration and H3 accounting obligations; this primitive establishes no UI timing bound.
+
+An enabled `RecordOwnershipPolicy` measures owned record children while an exclusive builder seals. The
+immutable root caches `RecordOwnershipBounds`: metadata bytes, complete conservative ownership bytes and raster
+node occurrences. Queries and handle copies allocate nothing and never revisit records. Root/vector capacity and
+a control allowance are added to child totals with checked arithmetic. Disabled/unavailable policies, overflow
+or a child ownership total below its metadata total yield an unavailable bound; an otherwise valid root still
+seals. A consumer requiring a complete bound MUST refuse admission explicitly, never substitute zero.
+Cancellation is checked before measurement, between records and before publication; refusal preserves the builder.
+
+`ImageLayer` metadata counts retained layer/asset/mask names and all four curve-channel capacities, with allocator
+and Debug proxy allowances. Ownership additionally sums cached image, mask, thumbnail and shape raster bounds by
+occurrence, including possible sparse assembly. Shared occurrences intentionally overcount, and measurement never
+materializes pixels. These bounds remain stable after lazy assembly. They do not replace exact history deduplication,
+process headroom or complete operation admission/retirement. Application use and G1 remain separately qualified.
 
 Pure layer reads (`IndexOf`, hierarchy/clipping validation, hierarchy entries, descendants and effective
 visibility) borrow `std::span<const ImageLayer>`. Array, sliced, vector and immutable-root ranges retain their

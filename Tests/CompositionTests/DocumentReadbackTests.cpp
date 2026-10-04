@@ -1,5 +1,7 @@
 #include "DocumentReadbackTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "Adjust.h"
 #include "CanvasRenderer.h"
 #include "DocumentReadbackJob.h"
@@ -77,7 +79,7 @@ HRESULT MakeWarp(wil::com_ptr_nothrow<ID3D11Device>& device,
     const Raster image = PatternRaster(width, height);
     layer.asset = RasterAsset{image, image, layer.name};
     layer.transform.sampling = LayerSampling::Nearest;
-    document.layers.push_back(std::move(layer));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(std::move(layer)); });
     return document;
 }
 
@@ -346,7 +348,8 @@ void RunPatternCase(Fixture& fixture, const char* name, D3D11_BOX region, int te
     if (submit != S_OK)
         return;
     state.ticket = ticket;
-    document.layers.clear(); // the admitted job must retain the immutable snapshot
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers.clear(); }); // the admitted job must retain the immutable snapshot
 
     const SettleResult settled = SettleJobs(fixture.scheduler, 15000, DispatchReadbackMessage, &state);
     Expect(settled == SettleResult::Settled, "pattern.settle");
@@ -412,15 +415,15 @@ void RunPatternCase(Fixture& fixture, const char* name, D3D11_BOX region, int te
 
 [[nodiscard]] CanvasDocument ComplexDocument()
 {
-    CanvasDocument document = PatternDocument(12, 9);
+    DocumentFixture fixture = DocumentFixture::Copy(PatternDocument(12, 9));
     ImageLayer folder = ImageLayer::Blank(L"Masked group", Vec2{12, 9});
     folder.isGroup = true;
     const std::array<std::uint8_t, 4> folderMaskPixels{255, 128, 64, 220};
     const Raster folderMask = Raster::Make(2, 2, RasterFormat::Gray8, folderMaskPixels.data(), folderMaskPixels.size());
     folder.mask =
         LayerMask{RasterAsset{folderMask, Raster::MakeThumbnail(folderMask), L"Folder mask"}, true, std::nullopt, true};
-    document.layers.insert(document.layers.begin(), folder);
-    ImageLayer& base = document.layers[1];
+    fixture.layers.insert(fixture.layers.begin(), folder);
+    ImageLayer& base = fixture.layers[1];
     base.parentID = folder.id;
     base.maskSourceID = std::nullopt;
     const std::array<std::uint8_t, 4> layerMaskPixels{255, 96, 192, 32};
@@ -434,15 +437,15 @@ void RunPatternCase(Fixture& fixture, const char* name, D3D11_BOX region, int te
     clipped.parentID = folder.id;
     clipped.maskSourceID = base.id;
     clipped.opacity = 0.65;
-    document.layers.push_back(clipped);
+    fixture.layers.push_back(clipped);
     ImageLayer adjustment = ImageLayer::Blank(L"Levels adjustment", Vec2{12, 9});
     LayerAdjustment levels{};
     levels.kind = AdjustmentKind::Levels;
     Adjust::SetLevelsCurrent(levels.levels, LevelRange{8, 1.35, 245, 4, 250});
     adjustment.adjustment = levels;
     adjustment.parentID = folder.id;
-    document.layers.push_back(std::move(adjustment));
-    return document;
+    fixture.layers.push_back(std::move(adjustment));
+    return std::move(fixture).Seal();
 }
 
 void TestComplexSynchronousReference(Fixture& fixture)

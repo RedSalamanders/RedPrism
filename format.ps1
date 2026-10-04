@@ -34,9 +34,31 @@ if ($Check) {
     $formatArgs += '-i'
 }
 
-& $clangFormat @formatArgs -- @($sourceFiles.FullName)
-if ($LASTEXITCODE -ne 0) {
-    throw "clang-format failed with exit code $LASTEXITCODE."
+# Leave room for the executable/options and Windows quoting within CreateProcess's 32,767-character limit.
+# A deep worktree has much longer absolute paths than the primary checkout; every file still gets checked.
+$batch = [Collections.Generic.List[string]]::new()
+$batchCharacters = 0
+foreach ($sourceFile in $sourceFiles) {
+    $argumentCharacters = $sourceFile.FullName.Length + 3
+    if ($argumentCharacters -gt 24000) {
+        throw "A source path exceeds the formatter command-line budget: $($sourceFile.FullName)"
+    }
+    if ($batchCharacters + $argumentCharacters -gt 24000) {
+        & $clangFormat @formatArgs -- @($batch.ToArray())
+        if ($LASTEXITCODE -ne 0) {
+            throw "clang-format failed with exit code $LASTEXITCODE."
+        }
+        $batch.Clear()
+        $batchCharacters = 0
+    }
+    $batch.Add($sourceFile.FullName)
+    $batchCharacters += $argumentCharacters
+}
+if ($batch.Count -ne 0) {
+    & $clangFormat @formatArgs -- @($batch.ToArray())
+    if ($LASTEXITCODE -ne 0) {
+        throw "clang-format failed with exit code $LASTEXITCODE."
+    }
 }
 
 if ($Check) {

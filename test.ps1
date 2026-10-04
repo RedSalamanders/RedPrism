@@ -272,6 +272,10 @@ Assert-RedPrismDxUiProvenance -OutputRoot $outputRoot -LockFile (Join-Path $repo
 if ($LASTEXITCODE -ne 0) {
     throw "DxUi provenance tests failed with exit code $LASTEXITCODE."
 }
+& (Join-Path $repoRoot 'Tests\BuildProcessTests\DxUiOutputPathTests.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw "DxUi output-path tests failed with exit code $LASTEXITCODE."
+}
 
 Write-Host 'Validating build presentation...' -ForegroundColor Cyan
 & (Join-Path $repoRoot 'Tests\BuildProcessTests\BuildPresentationTests.ps1')

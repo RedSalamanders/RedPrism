@@ -1,5 +1,7 @@
 #include "ImageImportWorkTests.h"
 
+#include "../Support/DocumentFixture.h"
+
 #include "ImageImportWork.h"
 #include "ImageImportWorkTests.h"
 
@@ -268,14 +270,14 @@ void PartialSuccessAndPluralName(const ScratchDirectory& scratch)
     ImageLayer group = ImageLayer::Blank(L"Folder", Vec2{20, 16});
     group.id = groupID;
     group.isGroup = true;
-    document.layers.push_back(group);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(group); });
 
     ImageLayer child = ImageLayer::Blank(L"Existing", Vec2{1, 1});
     child.id = childID;
     child.parentID = groupID;
     child.asset = RasterAsset{image, Raster{}, child.name};
     child.transform.origin = Vec2{2, 3};
-    document.layers.push_back(std::move(child));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(std::move(child)); });
     return document;
 }
 
@@ -322,7 +324,7 @@ void TooLargeFailureIsReportedWithoutPublishing(const ScratchDirectory& scratch)
     ImageLayer huge = ImageLayer::Blank(L"Full budget", Vec2{10000, 10000});
     huge.asset = RasterAsset{Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0), Raster{},
                              huge.name};
-    full.layers.push_back(huge);
+    EditDocumentFixture(full, [&](DocumentFixture& fixture) { fixture.layers.push_back(huge); });
     const std::optional<Guid> active = huge.id;
     const std::array<std::wstring_view, 1> paths{path};
     const ImageImportBatchInput input{full, active, paths};
@@ -615,7 +617,7 @@ void ImportMemoryPlanCoversPixelAndSourceRecordFloors(const ScratchDirectory& sc
     const Raster largeSparse = Raster::MakeSparse(10000, 10000, RasterFormat::Bgra8888, Raster{}, 0, 0, {}, 0);
     CanvasDocument smallSource = ExistingDocument(small, Guid::Generate(), Guid::Generate());
     CanvasDocument largeSource = smallSource;
-    largeSource.layers[1].asset->image = largeSparse;
+    EditDocumentFixture(largeSource, [&](DocumentFixture& fixture) { fixture.layers[1].asset->image = largeSparse; });
     const void* identity = largeSource.layers[1].asset->image.Identity();
     int smallLimit = -1;
     int largeLimit = -1;

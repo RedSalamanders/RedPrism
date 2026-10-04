@@ -852,6 +852,12 @@ struct ImageLayer
     static ImageLayer Blank(std::wstring name, Vec2 size);
 };
 
+template <> struct RecordOwnershipPolicy<ImageLayer> final
+{
+    static constexpr bool enabled = true;
+    [[nodiscard]] static std::optional<RecordOwnershipBounds> Measure(const ImageLayer& layer) noexcept;
+};
+
 struct CanvasDocument
 {
     Guid id;

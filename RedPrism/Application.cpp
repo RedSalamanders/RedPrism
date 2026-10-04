@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <format>
 #include <new>
@@ -1316,17 +1317,34 @@ int Application::RunSelfTest() noexcept
         }
         InsertPaintedLayer(_session, L"Swatch", 120, 80, Vec2{40, 40}, 0.0, 0xFFE58A2Eu);
         DocumentChanged();
-        OnTool(EditorTool::Wand);
-        pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
-        pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
-        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
-            return 5;
-        box = bounds();
-        if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
-            _session.history.UndoName() != L"Magic Wand")
         {
-            SelfTestFailure(L"The Magic Wand did not select the painted layer's pixels exactly.\n");
-            return 5;
+            _traceWandForTest = true;
+            const auto clearTrace = wil::scope_exit([this]() noexcept { _traceWandForTest = false; });
+            OnTool(EditorTool::Wand);
+            std::printf("WAND FIXTURE before-pointer tool=%u queued=%zu active=%d history_busy=%d opacity=%d "
+                        "all_layers=%d tolerance=%d\n",
+                        static_cast<unsigned int>(_tool), _hostRequests.Size(), _activeHostRequest.has_value(),
+                        _historyWork.Busy(), _opacityEdit.has_value(), _session.wandSettings.sampleAllLayers,
+                        _session.wandSettings.tolerance);
+            pointer(WM_LBUTTONDOWN, 0, 100.0, 80.0);
+            pointer(WM_LBUTTONUP, 0, 100.0, 80.0);
+            if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+                return 5;
+            box = bounds();
+            if (!box.has_value() || *box != SelectionBounds{40.0, 40.0, 160.0, 120.0} ||
+                _session.history.UndoName() != L"Magic Wand")
+            {
+                const auto actual = box.value_or(SelectionBounds{});
+                SelfTestFailure(std::format(L"The Magic Wand did not select the painted layer's pixels exactly "
+                                            L"(has bounds {}, [{}, {}, {}, {}], history '{}', tool {}, queued {}, "
+                                            L"active {}, history busy {}, opacity {}, host error {:08X}).\n",
+                                            box.has_value(), actual.minX, actual.minY, actual.maxX, actual.maxY,
+                                            _session.history.UndoName(), static_cast<unsigned int>(_tool),
+                                            _hostRequests.Size(), _activeHostRequest.has_value(), _historyWork.Busy(),
+                                            _opacityEdit.has_value(), static_cast<std::uint32_t>(_hostExecutionError))
+                                    .c_str());
+                return 5;
+            }
         }
         if (!hostKey('I', MK_CONTROL | MK_SHIFT) || _session.history.UndoName() != L"Inverse" ||
             !hostKey('A', MK_CONTROL) || _session.history.UndoName() != L"Select All" ||
@@ -2331,6 +2349,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCanvasBrushLifetimeModalSelfTest\n");
     if (const int canvasLifetimeModal = RunCanvasBrushLifetimeModalSelfTest(); canvasLifetimeModal != 0)
         return canvasLifetimeModal;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAuthoritySelfTest\n");
+    if (const int canvasLifetimeAuthority = RunCanvasBrushLifetimeAuthoritySelfTest(); canvasLifetimeAuthority != 0)
+        return canvasLifetimeAuthority;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeWindowSelfTest\n");
+    if (const int canvasLifetimeWindow = RunCanvasBrushLifetimeWindowSelfTest(); canvasLifetimeWindow != 0)
+        return canvasLifetimeWindow;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -3614,6 +3638,15 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     DxUi::PointerEvent event{};
     event.modifiers = GET_KEYSTATE_WPARAM(wParam) | KeyModifiers();
     POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    if (_traceWandForTest)
+    {
+        const CanvasHole hole = _chrome->HolePixels();
+        const Vec2 view{point.x - hole.left, point.y - hole.top};
+        const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
+        const bool inside = view.x >= 0 && view.y >= 0 && view.x < hole.width && view.y < hole.height;
+        std::printf("WAND POINTER message=%u client=%ld,%ld document=%.3f,%.3f modifiers=%u inside=%d\n", message,
+                    point.x, point.y, pixel.x, pixel.y, event.modifiers, inside);
+    }
     if (message == WM_MOUSEWHEEL)
     {
         POINT screen{point};
@@ -6577,11 +6610,19 @@ void Application::SelectionChanged() noexcept
 
 void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
 {
+    if (_traceWandForTest)
+        std::printf("WAND ROUTE point=%.3f,%.3f mode=%u all_layers=%d applicable_history=%d generation=%llu\n", pixel.x,
+                    pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,
+                    _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()),
+                    static_cast<unsigned long long>(_session.Generation()));
     if (mode == SelectionMode::New && !_session.wandSettings.sampleAllLayers &&
         _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
-        ReportHostAdmission(
-            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased}));
+        const auto receipt =
+            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased});
+        if (_traceWandForTest)
+            std::printf("WAND ADMISSION outcome=%u\n", static_cast<unsigned int>(receipt.Read().outcome));
+        ReportHostAdmission(receipt);
         return;
     }
     std::optional<Raster> composite;

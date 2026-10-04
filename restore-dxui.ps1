@@ -59,7 +59,8 @@ if (-not $MSBuildPath) {
 
 Import-Module (Join-Path $source 'Tools/ConsumerBuild.psm1') -Force
 $buildIdentity = Get-DxUiConsumerBuildIdentity -DxUiRoot $source -MSBuildPath $MSBuildPath -Platform $Platform
-$output = (Join-Path $dependencyRoot $buildIdentity.Fingerprint) + [IO.Path]::DirectorySeparatorChar
+Import-Module (Join-Path $PSScriptRoot 'Build/DxUiOutputPath.psm1') -Force
+$output = Initialize-RedPrismDxUiOutputRoot -DependencyRoot $dependencyRoot -BuildIdentity $buildIdentity
 & (Join-Path $source 'vcpkg-install.ps1') -Platform $Platform -OutputRoot $output
 
 $escape = { param([string] $value) [System.Security.SecurityElement]::Escape($value) }

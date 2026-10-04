@@ -1,8 +1,8 @@
 # DxUi integration
 
 Status: current normative consumer contract
-Last reviewed: 2026-10-01
-Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
+Last reviewed: 2026-10-04
+Owner: `restore-dxui.ps1`, `Build/DxUiRestore.psm1`, `Build/DxUiOutputPath.psm1`, `Dependencies/DxUi.lock.json`, `RedPrism/ChromeHost.*`, `build.ps1` provenance
 
 ## Scope
 
@@ -26,6 +26,15 @@ names in `ChromeHost.h`. `build.ps1` runs
 `.build/dependencies/DxUi/source/<commit>` (from the sibling checkout when it already has the commit, else from the
 public repository) and isolates vcpkg/library outputs under a fingerprint. It never checks out, resets, or edits a
 sibling `Z:\src\DxUi` working tree. A mismatched or dirty pin fails restore.
+
+Output folders use the first 16 hexadecimal characters of the full build fingerprint, reducing the path length
+seen by native vcpkg directory creation. The full 64-character fingerprint and complete build identity remain in
+`DxUi.build-identity.json` inside that folder and in the platform identity/provenance records. Before using an
+existing output folder, restore MUST compare its complete identity; a prefix collision, identity mismatch or
+nonempty unmarked cache MUST fail without overwriting the marker. An empty folder may receive its identity once.
+`DxUi.resolved.<Platform>.props` supplies the actual `DxUiConsumerOutputRoot` to both MSBuild and provenance.
+Provenance MUST validate that literal absolute root and its marker, then bind the linker command to the archive
+under that root. It MUST NOT reconstruct the archive location from a full fingerprint or assume a folder width.
 
 The clone (`Build/DxUiRestore.psm1`) is a sparse checkout of the pinned commit that leaves out `Measurements/`,
 `docs/gallery` and `Specs/`. A build, `Tools/validate_consumer.ps1`, `Tools/ConsumerBuild.psm1` and DxUi's `vcpkg-install.ps1`
@@ -132,3 +141,5 @@ Computer Use and desktop screenshot tools are not evidence.
 
 `--self-test --warp` MUST prove a visible chrome surface with at least one composite and a hidden surface of 0 bytes.
 `Tests/BuildProcessTests/DxUiProvenanceTests.ps1` MUST reject a wrong pin.
+`Tests/BuildProcessTests/DxUiOutputPathTests.ps1` MUST prove full identity retention, idempotence, collision refusal,
+unmarked cache refusal and props-based path resolution, including malformed, relative and escaping roots.

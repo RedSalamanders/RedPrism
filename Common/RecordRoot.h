@@ -3,12 +3,29 @@
 #include "Executor.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+struct RecordOwnershipBounds final
+{
+    std::uint64_t metadataBytes = 0;
+    std::uint64_t ownershipBytes = 0;
+    std::uint64_t rasterNodes = 0;
+    [[nodiscard]] bool operator==(const RecordOwnershipBounds&) const noexcept = default;
+};
+
+// A record policy measures only owned children: inline records and the root allocation are added by Seal.
+// Unregistered types have no complete bound. A missing bound never invents a zero-byte admission estimate.
+template <typename Record> struct RecordOwnershipPolicy
+{
+    static constexpr bool enabled = false;
+};
 
 // Published records are immutable. Capture and every read retain or borrow only this root; editing never
 // obtains a mutable reference into it. Record's owned children must follow the same immutable/shared contract.
@@ -35,17 +52,17 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     [[nodiscard]] const Container& Read() const noexcept
     {
         if (_root)
-            return *_root;
+            return _root->records;
         static const Container empty;
         return empty;
     }
     [[nodiscard]] std::size_t size() const noexcept
     {
-        return _root ? _root->size() : 0;
+        return _root ? _root->records.size() : 0;
     }
     [[nodiscard]] std::size_t capacity() const noexcept
     {
-        return _root ? _root->capacity() : 0;
+        return _root ? _root->records.capacity() : 0;
     }
     [[nodiscard]] bool empty() const noexcept
     {
@@ -57,15 +74,15 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     }
     [[nodiscard]] const_iterator begin() const noexcept
     {
-        return _root ? _root->begin() : const_iterator{};
+        return _root ? _root->records.begin() : const_iterator{};
     }
     [[nodiscard]] const_iterator end() const noexcept
     {
-        return _root ? _root->end() : const_iterator{};
+        return _root ? _root->records.end() : const_iterator{};
     }
     [[nodiscard]] const Record* data() const noexcept
     {
-        return _root ? _root->data() : nullptr;
+        return _root ? _root->records.data() : nullptr;
     }
     [[nodiscard]] const Record& front() const noexcept
     {
@@ -86,6 +103,10 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     [[nodiscard]] const void* Identity() const noexcept
     {
         return _root.get();
+    }
+    [[nodiscard]] std::optional<RecordOwnershipBounds> OwnershipBounds() const noexcept
+    {
+        return _root ? _root->bounds : std::nullopt;
     }
     void swap(RecordRoot& other) noexcept
     {
@@ -196,12 +217,15 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
             records.reserve(limit);
             return Builder(std::move(records), limit, AdoptTag{});
         }
-        [[nodiscard]] std::optional<RecordRoot> Seal()
+        [[nodiscard]] std::optional<RecordRoot> Seal(CancelToken cancellation = {})
         {
-            if (!_sealable)
+            if (!_sealable || cancellation.IsCancelled())
+                return std::nullopt;
+            const auto bounds = MeasureRecords(_records, cancellation);
+            if (cancellation.IsCancelled())
                 return std::nullopt;
             // Allocation precedes the vector move. A failed allocation leaves the builder sealable for retry.
-            auto root = std::allocate_shared<const Container>(_records.get_allocator(), std::move(_records));
+            auto root = std::allocate_shared<const Storage>(_records.get_allocator(), std::move(_records), bounds);
             _sealable = false;
             _limit = 0;
             return RecordRoot(std::move(root));
@@ -240,6 +264,53 @@ template <typename Record, typename Allocator = std::allocator<Record>> class Re
     };
 
   private:
-    explicit RecordRoot(std::shared_ptr<const Container> root) noexcept : _root(std::move(root)) {}
-    std::shared_ptr<const Container> _root;
+    struct Storage final
+    {
+        Storage(Container&& values, std::optional<RecordOwnershipBounds> measured) noexcept
+            : records(std::move(values)), bounds(measured)
+        {
+        }
+        Container records;
+        std::optional<RecordOwnershipBounds> bounds;
+    };
+    [[nodiscard]] static std::optional<RecordOwnershipBounds> MeasureRecords(const Container& records,
+                                                                             CancelToken cancellation) noexcept
+    {
+        if (cancellation.IsCancelled())
+            return std::nullopt;
+        if constexpr (!RecordOwnershipPolicy<Record>::enabled)
+        {
+            return std::nullopt;
+        }
+        else
+        {
+            static_assert(noexcept(RecordOwnershipPolicy<Record>::Measure(std::declval<const Record&>())));
+            constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+            if (records.capacity() > (maximum - sizeof(Storage) - 64) / sizeof(Record))
+                return std::nullopt;
+            const std::uint64_t rootBytes = sizeof(Storage) + 64 + records.capacity() * sizeof(Record);
+            RecordOwnershipBounds total{rootBytes, rootBytes, 0};
+            const auto add = [](std::uint64_t& value, std::uint64_t amount) noexcept
+            {
+                if (amount > (std::numeric_limits<std::uint64_t>::max)() - value)
+                    return false;
+                value += amount;
+                return true;
+            };
+            for (const auto& record : records)
+            {
+                if (cancellation.IsCancelled())
+                    return std::nullopt;
+                const auto bounds = RecordOwnershipPolicy<Record>::Measure(record);
+                if (!bounds || bounds.value().ownershipBytes < bounds.value().metadataBytes ||
+                    !add(total.metadataBytes, bounds.value().metadataBytes) ||
+                    !add(total.ownershipBytes, bounds.value().ownershipBytes) ||
+                    !add(total.rasterNodes, bounds.value().rasterNodes))
+                    return std::nullopt;
+            }
+            return total;
+        }
+    }
+    explicit RecordRoot(std::shared_ptr<const Storage> root) noexcept : _root(std::move(root)) {}
+    std::shared_ptr<const Storage> _root;
 };

@@ -1,3 +1,4 @@
+#include "../Support/DocumentFixture.h"
 #include "../Support/FailureReports.h"
 #include "Adjust.h"
 #include "BrushCompute.h"
@@ -379,8 +380,14 @@ void TestBlendModes(Harness& h)
     for (const auto& [mode, value] : expected)
     {
         CanvasDocument document = Document2x2();
-        document.layers.push_back(LayerFrom(Solid(2, 2, base, base, base, 255), LayerBlendMode::Normal, L"Base"));
-        document.layers.push_back(LayerFrom(Solid(2, 2, top, top, top, 255), mode, L"Top"));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture)
+                            {
+                                fixture.layers.push_back(
+                                    LayerFrom(Solid(2, 2, base, base, base, 255), LayerBlendMode::Normal, L"Base"));
+                            });
+        EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                            { fixture.layers.push_back(LayerFrom(Solid(2, 2, top, top, top, 255), mode, L"Top")); });
         const std::vector<std::uint8_t> pixels = h.Render(document);
         const bool ok =
             pixels.size() == 16 && ChannelClose(pixels[0], static_cast<int>(value * 255 + 0.5), 5) && pixels[3] == 255;
@@ -391,30 +398,42 @@ void TestBlendModes(Harness& h)
         Expect(ok, "blend.golden");
     }
     CanvasDocument half = Document2x2();
-    half.layers.push_back(LayerFrom(Solid(2, 2, base, base, base, 255), LayerBlendMode::Normal, L"Base"));
-    half.layers.push_back(LayerFrom(Solid(2, 2, top, top, top, 255), LayerBlendMode::Normal, L"Top"));
-    half.layers[1].opacity = 0.5;
+    EditDocumentFixture(
+        half, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, base, base, base, 255), LayerBlendMode::Normal, L"Base")); });
+    EditDocumentFixture(
+        half, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, top, top, top, 255), LayerBlendMode::Normal, L"Top")); });
+    EditDocumentFixture(half, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 0.5; });
     std::vector<std::uint8_t> pixels = h.Render(half);
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 153, 5), "blend.opacity-half");
-    half.layers[1].opacity = 0;
+    EditDocumentFixture(half, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 0; });
     pixels = h.Render(half);
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 102, 5), "blend.opacity-zero");
-    half.layers[1].visible = false;
-    half.layers[1].opacity = 1;
+    EditDocumentFixture(half, [&](DocumentFixture& fixture) { fixture.layers[1].visible = false; });
+    EditDocumentFixture(half, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 1; });
     pixels = h.Render(half);
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 102, 5), "blend.hidden-layer");
 
     // Legacy: Multiply of red over white is red; Color Dodge of red over mid gray saturates red only.
     CanvasDocument whiteOver = Document2x2();
-    whiteOver.layers.push_back(LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
-    whiteOver.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Multiply, L"Red"));
+    EditDocumentFixture(
+        whiteOver, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"White")); });
+    EditDocumentFixture(
+        whiteOver, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Multiply, L"Red")); });
     pixels = h.Render(whiteOver);
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 0, 2) && ChannelClose(pixels[1], 0, 2) &&
                ChannelClose(pixels[2], 255, 2) && pixels[3] == 255,
            "compose.multiply-golden");
     CanvasDocument dodge = Document2x2();
-    dodge.layers.push_back(LayerFrom(Solid(2, 2, 128, 128, 128, 255), LayerBlendMode::Normal, L"Gray"));
-    dodge.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::ColorDodge, L"Dodge"));
+    EditDocumentFixture(
+        dodge, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 128, 128, 128, 255), LayerBlendMode::Normal, L"Gray")); });
+    EditDocumentFixture(
+        dodge, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::ColorDodge, L"Dodge")); });
     pixels = h.Render(dodge);
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 128, 3) && ChannelClose(pixels[1], 128, 3) &&
                ChannelClose(pixels[2], 255, 3) && pixels[3] == 255,
@@ -425,18 +444,23 @@ void TestOrderAndBlankLayers(Harness& h)
 {
     // Legacy LayerTests.compositingHonorsVisibilityOrderAndBlankLayers.
     CanvasDocument document = Document2x2();
-    document.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"));
-    document.layers.push_back(LayerFrom(Solid(2, 2, 255, 0, 0, 255), LayerBlendMode::Normal, L"Blue"));
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red")); });
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 255, 0, 0, 255), LayerBlendMode::Normal, L"Blue")); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(pixels.size() == 16 && pixels[0] > 240 && pixels[2] < 10, "order.top-wins");
-    document.layers[1].visible = false;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].visible = false; });
     pixels = h.Render(document);
     Expect(pixels.size() == 16 && pixels[2] > 240 && pixels[0] < 10, "order.hidden-top");
-    document.layers[1].visible = true;
-    std::swap(document.layers[0], document.layers[1]);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].visible = true; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { std::swap(fixture.layers[0], fixture.layers[1]); });
     pixels = h.Render(document);
     Expect(pixels.size() == 16 && pixels[2] > 240, "order.reordered");
-    document.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{2, 2}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{2, 2})); });
     pixels = h.Render(document);
     Expect(pixels.size() == 16 && pixels[2] > 240, "order.blank-layer-transparent");
     CanvasDocument empty = Document2x2();
@@ -448,31 +472,34 @@ void TestRasterMasks(Harness& h)
 {
     // Legacy LayerMaskTests.coverageOpacityAndDisabledMasksRenderCorrectly.
     CanvasDocument document = Document2x2();
-    document.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"));
-    ImageLayer& red = document.layers[0];
-    red.mask = MaskOf(Gray(1, 1, {255}));
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red")); });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(1, 1, {255})); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 255, 255, 255}, 0), "mask.reveal-all");
-    red.mask = MaskOf(Gray(1, 1, {0}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(1, 1, {0})); });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "mask.hide-all");
-    red.mask.value().enabled = false;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.value().enabled = false; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 255, 255, 255}, 0), "mask.disabled");
-    red.mask = MaskOf(Gray(2, 2, {255, 0, 128, 255}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].mask = MaskOf(Gray(2, 2, {255, 0, 128, 255})); });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 0, 128, 255}, 1), "mask.coverage");
-    red.opacity = 0.5;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].opacity = 0.5; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {128, 0, 64, 128}, 1), "mask.coverage-times-opacity");
-    red.opacity = 1;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].opacity = 1; });
     // Legacy transformedMaskResizeAndCanvasChangesStayAligned: flipX mirrors mask and pixels together.
-    red.transform.flipX = true;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.flipX = true; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 255, 255, 128}, 1), "mask.flip-x");
-    red.transform.flipX = false;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.flipX = false; });
     // Rotation keeps the mask on the layer's local grid; total coverage is unchanged.
-    red.transform.rotation = 90;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.rotation = 90; });
     pixels = h.Render(document);
     int total = 0;
     for (std::size_t i = 3; i < pixels.size(); i += 4)
@@ -480,17 +507,20 @@ void TestRasterMasks(Harness& h)
         total += pixels[i];
     }
     Expect(pixels.size() == 16 && ChannelClose(total, 255 + 0 + 128 + 255, 4), "mask.rotation-keeps-total");
-    red.transform.rotation = 0;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.rotation = 0; });
     // An unlinked mask placed one pixel right: outside its pixels it shows its edge tone (white here).
-    red.mask.value().linked = false;
-    LayerTransform placement = red.transform;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.value().linked = false; });
+    LayerTransform placement = document.layers[0].transform;
     placement.origin.x += 1;
-    red.mask.value().placement = placement;
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].mask.value().placement = placement; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 255, 255, 128}, 1), "mask.placement-shift");
     // A hide-all mask moved apart keeps hiding beyond its pixels (legacy aMovedHideAllMaskKeepsHidingPastItsPixels).
-    red.mask = MaskOf(Gray(2, 2, {0, 0, 0, 0}));
-    red.mask.value().placement = placement;
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(2, 2, {0, 0, 0, 0})); });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].mask.value().placement = placement; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "mask.placement-hide-all-background");
 }
@@ -499,37 +529,59 @@ void TestLiveMasks(Harness& h)
 {
     // Legacy LiveMaskTests.fixture: white target clipped to a hidden black source with soft alpha.
     CanvasDocument document = Document2x2();
-    document.layers.push_back(LayerFrom(AlphaRaster({255, 255, 255, 255}, 255), LayerBlendMode::Normal, L"Target"));
-    document.layers.push_back(LayerFrom(AlphaRaster({255, 0, 128, 255}, 0), LayerBlendMode::Normal, L"Source"));
-    document.layers[1].visible = false;
-    document.layers[0].maskSourceID = document.layers[1].id;
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.push_back(
+                                LayerFrom(AlphaRaster({255, 255, 255, 255}, 255), LayerBlendMode::Normal, L"Target"));
+                        });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.push_back(
+                                LayerFrom(AlphaRaster({255, 0, 128, 255}, 0), LayerBlendMode::Normal, L"Source"));
+                        });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].visible = false; });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].maskSourceID = fixture.layers[1].id; });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 0, 128, 255}, 1), "live.hidden-source-supplies-alpha");
     Expect(pixels.size() == 16 && pixels[0] == 255 && pixels[2] == 255, "live.color-comes-from-target");
-    document.layers[1].opacity = 0.5;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 0.5; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {128, 0, 64, 128}, 1), "live.source-opacity-scales-coverage");
-    document.layers[1].opacity = 1;
-    document.layers[0].mask = MaskOf(Gray(2, 2, {128, 128, 128, 128}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 1; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].mask = MaskOf(Gray(2, 2, {128, 128, 128, 128})); });
     pixels = h.Render(document);
     Expect(pixels.size() == 16 && pixels[3] < 200 && pixels[3] > 100, "live.raster-mask-multiplies");
-    document.layers[0].mask.reset();
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.reset(); });
     // Moving the source moves the coverage (legacy movingSourceChangesCoverageAndChainsMultiply).
-    document.layers[1].transform.origin.x += 1;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].transform.origin.x += 1; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 255, 0, 128}, 1), "live.moved-source");
-    document.layers[1].transform.origin.x -= 1;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].transform.origin.x -= 1; });
     // Chains multiply: source clipped to a second hidden source.
-    document.layers.push_back(LayerFrom(AlphaRaster({0, 255, 255, 255}, 255), LayerBlendMode::Normal, L"Upstream"));
-    document.layers[2].visible = false;
-    document.layers[1].maskSourceID = document.layers[2].id;
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.push_back(
+                                LayerFrom(AlphaRaster({0, 255, 255, 255}, 255), LayerBlendMode::Normal, L"Upstream"));
+                        });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[2].visible = false; });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[1].maskSourceID = fixture.layers[2].id; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 128, 255}, 1), "live.chain-multiplies");
     // A blank (pixel-less) source hides the target entirely.
     CanvasDocument blankSource = Document2x2();
-    blankSource.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Target"));
-    blankSource.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{2, 2}));
-    blankSource.layers[0].maskSourceID = blankSource.layers[1].id;
+    EditDocumentFixture(
+        blankSource, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Target")); });
+    EditDocumentFixture(blankSource, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(ImageLayer::Blank(L"Blank", Vec2{2, 2})); });
+    EditDocumentFixture(blankSource,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].maskSourceID = fixture.layers[1].id; });
     pixels = h.Render(blankSource);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "live.blank-source-hides");
 }
@@ -539,9 +591,17 @@ void TestClippingStack(Harness& h)
     // Legacy LiveMaskTests.clippingColorPreservesSoftBaseAlphaWithoutBlackFringe: a white layer clipped to a soft
     // black base keeps the base alpha and takes the white color at full coverage, with no dark fringe.
     CanvasDocument document = Document2x2();
-    document.layers.push_back(LayerFrom(AlphaRaster({255, 128, 32, 0}, 0), LayerBlendMode::Normal, L"Base"));
-    document.layers.push_back(LayerFrom(AlphaRaster({255, 255, 255, 255}, 255), LayerBlendMode::Normal, L"White"));
-    document.layers[1].maskSourceID = document.layers[0].id;
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(AlphaRaster({255, 128, 32, 0}, 0), LayerBlendMode::Normal, L"Base")); });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.push_back(
+                                LayerFrom(AlphaRaster({255, 255, 255, 255}, 255), LayerBlendMode::Normal, L"White"));
+                        });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[1].maskSourceID = fixture.layers[0].id; });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 128, 32, 0}, 1), "stack.keeps-base-alpha");
     bool whiteAtAlpha = pixels.size() == 16;
@@ -555,13 +615,18 @@ void TestClippingStack(Harness& h)
         PrintPixels("stack", pixels);
     }
     Expect(whiteAtAlpha, "stack.white-fills-base-coverage-without-fringe");
-    document.layers[1].opacity = 0.5;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 0.5; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 128, 32, 0}, 1), "stack.child-opacity-keeps-alpha");
-    document.layers[1].opacity = 1;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 1; });
     // A white background under the stack: the result is fully white and opaque.
-    document.layers.insert(document.layers.begin(),
-                           LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"Background"));
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.insert(
+                                fixture.layers.begin(),
+                                LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"Background"));
+                        });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 255, 255, 255}, 0), "stack.background-opaque");
     bool allWhite = pixels.size() == 16;
@@ -575,10 +640,16 @@ void TestClippingStack(Harness& h)
     }
     Expect(allWhite, "stack.background-white");
     // The base blend mode applies to the whole stack (legacy stackModes): Multiply of the stack over the background.
-    document.layers[1].blendMode = LayerBlendMode::Multiply;
-    document.layers[2] = LayerFrom(AlphaRaster({255, 255, 255, 255}, 128), LayerBlendMode::Normal, L"Gray");
-    document.layers[2].maskSourceID = document.layers[1].id;
-    document.layers[0] = LayerFrom(Solid(2, 2, 200, 200, 200, 255), LayerBlendMode::Normal, L"Background");
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[1].blendMode = LayerBlendMode::Multiply; });
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers[2] = LayerFrom(AlphaRaster({255, 255, 255, 255}, 128), LayerBlendMode::Normal, L"Gray"); });
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers[2].maskSourceID = fixture.layers[1].id; });
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers[0] = LayerFrom(Solid(2, 2, 200, 200, 200, 255), LayerBlendMode::Normal, L"Background"); });
     pixels = h.Render(document);
     // Base alpha [255,128,32,0] of a 128-gray stack multiplied over 200 gray: at full alpha 200*128/255 ≈ 100.
     Expect(pixels.size() == 16 && ChannelClose(pixels[0], 100, 3) && ChannelClose(pixels[12], 200, 1),
@@ -593,37 +664,38 @@ void TestFolderMasks(Harness& h)
     folder.isGroup = true;
     ImageLayer red = LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
     red.parentID = folder.id;
-    document.layers.push_back(folder);
-    document.layers.push_back(red);
-    ImageLayer& group = document.layers[0];
-    ImageLayer& child = document.layers[1];
-    group.mask = MaskOf(Gray(1, 1, {0}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(folder); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(red); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(1, 1, {0})); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "folder.hide-all");
-    group.mask.value().enabled = false;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.value().enabled = false; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 255, 255, 255}, 0), "folder.disabled");
-    group.mask = MaskOf(Gray(2, 2, {255, 0, 128, 255}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].mask = MaskOf(Gray(2, 2, {255, 0, 128, 255})); });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 0, 128, 255}, 1), "folder.coverage");
-    child.mask = MaskOf(Gray(2, 2, {255, 0, 128, 255}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[1].mask = MaskOf(Gray(2, 2, {255, 0, 128, 255})); });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 0, 64, 255}, 1), "folder.multiplies-layer-mask");
-    child.mask.reset();
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].mask.reset(); });
     // An enclosing folder's mask applies as well.
     ImageLayer outer = ImageLayer::Blank(L"Outer", Vec2{2, 2});
     outer.isGroup = true;
     outer.mask = MaskOf(Gray(1, 1, {0}));
-    document.layers.insert(document.layers.begin(), outer);
-    document.layers[1].parentID = document.layers[0].id;
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture) { fixture.layers.insert(fixture.layers.begin(), outer); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].parentID = fixture.layers[0].id; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "folder.nested-hide-all");
-    document.layers[0].mask.reset();
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.reset(); });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {255, 0, 128, 255}, 1), "folder.nested-removed");
     Expect(h.composition.CoverageTextureCount() <= 2, "folder.coverage-pool-bounded");
     // A hidden folder hides its children regardless of masks.
-    document.layers[1].visible = false;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].visible = false; });
     pixels = h.Render(document);
     Expect(AlphasClose(pixels, {0, 0, 0, 0}, 0), "folder.hidden-parent");
 }
@@ -653,7 +725,7 @@ void TestTransformRendering(Harness& h)
     layer.transform.origin = Vec2{8, 8};
     layer.transform.size = Vec2{16, 16};
     layer.transform.rotation = 90;
-    document.layers.push_back(layer);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     const auto at = [&](int x, int y, int channel) -> int
     {
@@ -665,16 +737,16 @@ void TestTransformRendering(Harness& h)
     Expect(at(16, 12, 2) > 240 && at(16, 12, 0) < 10, "transform.rotate-90-red-on-top");
     Expect(at(16, 20, 0) > 240 && at(16, 20, 2) < 10, "transform.rotate-90-blue-below");
     Expect(at(2, 2, 3) == 0 && at(30, 30, 3) == 0, "transform.outside-bounds-transparent");
-    document.layers[0].transform.flipX = true;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.flipX = true; });
     pixels = h.Render(document);
     Expect(at(16, 12, 0) > 240 && at(16, 12, 2) < 10, "transform.flip-x-blue-on-top");
-    document.layers[0].transform.flipX = false;
-    document.layers[0].transform.rotation = 0;
-    document.layers[0].transform.origin = Vec2{0, 0};
-    document.layers[0].transform.size = Vec2{32, 32};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.flipX = false; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.rotation = 0; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.origin = Vec2{0, 0}; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.size = Vec2{32, 32}; });
     pixels = h.Render(document);
     Expect(at(4, 4, 2) > 240 && at(28, 4, 0) > 240, "transform.scale-4x");
-    document.layers[0].transform.flipY = true;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.flipY = true; });
     pixels = h.Render(document);
     Expect(at(4, 4, 2) > 240 && at(28, 28, 0) > 240, "transform.flip-y-keeps-columns");
 }
@@ -682,7 +754,9 @@ void TestTransformRendering(Harness& h)
 void TestResidencyAndCaching(Harness& h)
 {
     CanvasDocument document = Document2x2();
-    document.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"));
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red")); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(pixels.size() == 16, "cache.first-compose");
     const std::uint64_t composites = h.composition.CompositeCount();
@@ -702,7 +776,7 @@ void TestResidencyAndCaching(Harness& h)
     Expect(pixels.size() == 16 && pixels[2] == 255, "compose.after-recreate");
     // A document size change rebuilds the canvas and re-composites.
     document.width = 3;
-    document.layers[0].transform.size = Vec2{3, 2};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.size = Vec2{3, 2}; });
     pixels = h.Render(document);
     Expect(pixels.size() == 3 * 2 * 4, "compose.resize-canvas");
 }
@@ -727,7 +801,8 @@ void TestSparseUpload(Harness& h)
     const Raster base = Solid(2, 2, 0, 0, 255, 255);
     const Raster green = Solid(1, 1, 0, 255, 0, 255);
     const Raster sparse = Raster::MakeSparse(4, 4, RasterFormat::Bgra8888, base, 1, 1, {RasterTile{0, 0, green}}, 0);
-    document.layers.push_back(LayerFrom(sparse, LayerBlendMode::Normal, L"Painted"));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(LayerFrom(sparse, LayerBlendMode::Normal, L"Painted")); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(At(pixels, 4, 0, 0, 1) == 255 && At(pixels, 4, 1, 1, 2) == 255 && At(pixels, 4, 2, 2, 2) == 255 &&
                At(pixels, 4, 3, 3, 3) == 0 && At(pixels, 4, 0, 3, 3) == 0 && !sparse.IsMaterialized(),
@@ -736,14 +811,17 @@ void TestSparseUpload(Harness& h)
     const Raster twin = Raster::MakeSparse(4, 4, RasterFormat::Bgra8888, base, 1, 1, {RasterTile{0, 0, green}}, 0);
     const std::uint8_t* twinBytes = twin.Data(); // assembles the pixels first; ByteSize() is 0 until then
     const Raster assembled = Raster::Make(4, 4, RasterFormat::Bgra8888, twinBytes, twin.ByteSize());
-    document.layers[0].asset = RasterAsset{assembled, assembled, L"Painted"};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].asset = RasterAsset{assembled, assembled, L"Painted"}; });
     const std::vector<std::uint8_t> reference = h.Render(document);
     Expect(reference == pixels, "sparse.upload-matches-assembled");
     // A sparse mask reveals beyond its tiles (fill 255) and hides where a black tile lies.
     const Raster black = Gray(2, 2, {0, 0, 0, 0});
     const Raster mask = Raster::MakeSparse(4, 4, RasterFormat::Gray8, Raster{}, 0, 0, {RasterTile{1, 1, black}}, 255);
-    document.layers[0] = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
-    document.layers[0].mask = MaskOf(mask);
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers[0] = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(mask); });
     pixels = h.Render(document);
     Expect(At(pixels, 4, 0, 0, 3) == 255 && At(pixels, 4, 1, 1, 3) == 0 && At(pixels, 4, 2, 2, 3) == 0 &&
                At(pixels, 4, 3, 3, 3) == 255 && !mask.IsMaterialized(),
@@ -756,8 +834,9 @@ void TestSparseUpload(Harness& h)
     window.width = 1;
     window.height = 1;
     const Raster windowed = Raster::MakeSparse(2, 2, RasterFormat::Bgra8888, Raster{}, 0, 0, {window}, 0);
-    document.layers[0] = LayerFrom(windowed, LayerBlendMode::Normal, L"Window");
-    document.layers[0].mask.reset();
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0] = LayerFrom(windowed, LayerBlendMode::Normal, L"Window"); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.reset(); });
     document.width = 2;
     document.height = 2;
     pixels = h.Render(document);
@@ -774,7 +853,7 @@ void TestStrokePreview(Harness& h)
     document.height = 8;
     ImageLayer blank = ImageLayer::Blank(L"Blank", Vec2{8, 8});
     blank.transform.sampling = LayerSampling::Nearest;
-    document.layers.push_back(blank);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(blank); });
     std::vector<std::uint8_t> pixels = h.Render(document);
     Expect(At(pixels, 8, 3, 3, 3) == 0, "stroke.blank-before");
     CanvasRenderer::StrokePreview preview;
@@ -805,9 +884,10 @@ void TestStrokePreview(Harness& h)
         Raster::Replacing(Raster{}, 0, 0, {RasterTile{2, 2, red}, RasterTile{2, 2, green}}, 2, 2, 4, 4, 0);
     h.composition.EndStroke(&committed, 2, 2, &blank.id);
     Expect(!h.composition.HasStroke() && !committed.IsMaterialized(), "stroke.ended");
-    document.layers[0].asset = RasterAsset{committed, committed, L"Blank"};
-    document.layers[0].transform.origin = Vec2{2, 2};
-    document.layers[0].transform.size = Vec2{4, 4};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].asset = RasterAsset{committed, committed, L"Blank"}; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.origin = Vec2{2, 2}; });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].transform.size = Vec2{4, 4}; });
     pixels = h.Render(document);
     Expect(At(pixels, 8, 2, 2, 1) == 255 && At(pixels, 8, 4, 4, 2) == 255 && At(pixels, 8, 1, 1, 3) == 0 &&
                At(pixels, 8, 6, 6, 3) == 0 && !committed.IsMaterialized(),
@@ -819,7 +899,7 @@ void TestStrokePreview(Harness& h)
     masked.height = 8;
     ImageLayer layer = LayerFrom(Solid(8, 8, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
     layer.mask = MaskOf(Gray(1, 1, {255}));
-    masked.layers.push_back(layer);
+    EditDocumentFixture(masked, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
     CanvasRenderer::StrokePreview maskPreview;
     maskPreview.layerID = layer.id;
     maskPreview.mask = true;
@@ -1021,25 +1101,37 @@ void TestAdjustmentLayers(Harness& h)
     // Legacy AdjustmentLayerTests.globalAdjustmentAffectsBelowButNotAboveAndRemainsLive.
     {
         CanvasDocument document = Document2x2();
-        document.layers.push_back(LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture)
+                            {
+                                fixture.layers.push_back(
+                                    LayerFrom(Solid(2, 2, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
+                            });
         LayerAdjustment levels = AdjustmentOf(AdjustmentKind::Levels);
         levels.levels.ranges[0].outputWhite = 0;
-        document.layers.push_back(AdjustmentLayer(levels, L"Levels"));
+        EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                            { fixture.layers.push_back(AdjustmentLayer(levels, L"Levels")); });
         std::vector<std::uint8_t> pixels = h.Render(document);
         Expect(PixelsClose(pixels, {0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255}, 0, "levels below"),
                "adjust.affects-below");
-        document.layers.push_back(LayerFrom(Pixels2x2({{0, 0, 255, 255}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}),
-                                            LayerBlendMode::Normal, L"Red"));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture)
+                            {
+                                fixture.layers.push_back(
+                                    LayerFrom(Pixels2x2({{0, 0, 255, 255}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}),
+                                              LayerBlendMode::Normal, L"Red"));
+                            });
         pixels = h.Render(document);
         Expect(pixels.size() == 16 &&
                    PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "red above"),
                "adjust.not-above");
         // The base changes: the adjustment stays live.
-        document.layers[0].asset->image = Solid(2, 2, 255, 0, 0, 255);
+        EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                            { fixture.layers[0].asset->image = Solid(2, 2, 255, 0, 0, 255); });
         pixels = h.Render(document);
         Expect(pixels.size() == 16 && PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {0, 0, 0, 255}, 0, "live"),
                "adjust.remains-live");
-        document.layers[1].visible = false;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].visible = false; });
         pixels = h.Render(document);
         Expect(pixels.size() == 16 &&
                    PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {255, 0, 0, 255}, 0, "hidden"),
@@ -1048,19 +1140,26 @@ void TestAdjustmentLayers(Harness& h)
     // Legacy clippedCurveChangesOnlyItsBaseAndCopyMergedMatchesExport.
     {
         CanvasDocument document = Document2x2();
-        document.layers.push_back(LayerFrom(Solid(2, 2, 255, 0, 0, 255), LayerBlendMode::Normal, L"Blue"));
-        document.layers.push_back(LayerFrom(Pixels2x2({{0, 255, 0, 255}, {0, 0, 0, 0}, {0, 128, 0, 128}, {0, 0, 0, 0}}),
-                                            LayerBlendMode::Normal, L"Green"));
+        EditDocumentFixture(
+            document, [&](DocumentFixture& fixture)
+            { fixture.layers.push_back(LayerFrom(Solid(2, 2, 255, 0, 0, 255), LayerBlendMode::Normal, L"Blue")); });
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture)
+                            {
+                                fixture.layers.push_back(LayerFrom(
+                                    Pixels2x2({{0, 255, 0, 255}, {0, 0, 0, 0}, {0, 128, 0, 128}, {0, 0, 0, 0}}),
+                                    LayerBlendMode::Normal, L"Green"));
+                            });
         LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
         curves.curves.channels[0] = {CurvePoint{0, 255}, CurvePoint{255, 0}};
         ImageLayer adjustment = AdjustmentLayer(curves, L"Curves");
         adjustment.maskSourceID = document.layers[1].id;
-        document.layers.push_back(adjustment);
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(adjustment); });
         std::vector<std::uint8_t> pixels = h.Render(document);
         Expect(pixels.size() == 16 &&
                    PixelsClose({pixels.begin(), pixels.begin() + 8}, {255, 0, 255, 255, 255, 0, 0, 255}, 1, "clipped"),
                "adjust.clipped-changes-only-its-base");
-        document.layers[2].maskSourceID.reset();
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[2].maskSourceID.reset(); });
         pixels = h.Render(document);
         Expect(pixels.size() == 16 &&
                    PixelsClose({pixels.begin() + 4, pixels.begin() + 8}, {0, 255, 255, 255}, 1, "unclipped"),
@@ -1069,20 +1168,24 @@ void TestAdjustmentLayers(Harness& h)
     // Legacy hueOpacityAndMaskPreserveOriginalPixels.
     {
         CanvasDocument document = Document2x2();
-        document.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red"));
+        EditDocumentFixture(
+            document, [&](DocumentFixture& fixture)
+            { fixture.layers.push_back(LayerFrom(Solid(2, 2, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red")); });
         LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
         hsv.hue = 120;
-        document.layers.push_back(AdjustmentLayer(hsv, L"Hue"));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture) { fixture.layers.push_back(AdjustmentLayer(hsv, L"Hue")); });
         std::vector<std::uint8_t> pixels = h.Render(document);
         Expect(pixels.size() == 16 && ChannelClose(pixels[1], 255, 8) && ChannelClose(pixels[0], 0, 8) &&
                    ChannelClose(pixels[2], 0, 8) && pixels[3] == 255,
                "adjust.hue-rotates");
-        document.layers[1].opacity = 0;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 0; });
         pixels = h.Render(document);
         Expect(PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "opacity 0"),
                "adjust.opacity-zero-keeps-pixels");
-        document.layers[1].opacity = 1;
-        document.layers[1].mask = MaskOf(Gray(1, 1, {0}));
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = 1; });
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture) { fixture.layers[1].mask = MaskOf(Gray(1, 1, {0})); });
         pixels = h.Render(document);
         Expect(PixelsClose({pixels.begin(), pixels.begin() + 4}, {0, 0, 255, 255}, 0, "black mask"),
                "adjust.black-mask-keeps-pixels");
@@ -1090,19 +1193,25 @@ void TestAdjustmentLayers(Harness& h)
     // Legacy adjustmentBlendAndSoftMaskPreserveCoverage.
     {
         CanvasDocument document = Document2x2();
-        document.layers.push_back(
-            LayerFrom(Pixels2x2({{0, 0, 255, 255}, {0, 0, 128, 128}, {0, 0, 32, 32}, {0, 0, 0, 0}}),
-                      LayerBlendMode::Normal, L"Red"));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture)
+                            {
+                                fixture.layers.push_back(LayerFrom(
+                                    Pixels2x2({{0, 0, 255, 255}, {0, 0, 128, 128}, {0, 0, 32, 32}, {0, 0, 0, 0}}),
+                                    LayerBlendMode::Normal, L"Red"));
+                            });
         LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
         hsv.hue = 120;
         ImageLayer adjustment = AdjustmentLayer(hsv, L"Hue");
         adjustment.blendMode = LayerBlendMode::Multiply;
-        document.layers.push_back(adjustment);
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(adjustment); });
         std::vector<std::uint8_t> pixels = h.Render(document);
         Expect(PixelsClose(pixels, {0, 0, 0, 255, 0, 0, 0, 128, 0, 0, 0, 32, 0, 0, 0, 0}, 1, "multiply"),
                "adjust.blend-keeps-coverage");
-        document.layers[1].blendMode = LayerBlendMode::Normal;
-        document.layers[1].mask = MaskOf(Gray(1, 1, {128}));
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture) { fixture.layers[1].blendMode = LayerBlendMode::Normal; });
+        EditDocumentFixture(document,
+                            [&](DocumentFixture& fixture) { fixture.layers[1].mask = MaskOf(Gray(1, 1, {128})); });
         pixels = h.Render(document);
         Expect(AlphasClose(pixels, {255, 128, 32, 0}, 0) && ChannelClose(pixels[2], 127, 3) &&
                    ChannelClose(pixels[1], 128, 3),
@@ -1140,8 +1249,10 @@ void TestAdjustmentLayers(Harness& h)
         for (const auto& [adjustment, slop] : cases)
         {
             CanvasDocument document = Document2x2();
-            document.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base"));
-            document.layers.push_back(AdjustmentLayer(adjustment, L"Adjustment"));
+            EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                                { fixture.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base")); });
+            EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                                { fixture.layers.push_back(AdjustmentLayer(adjustment, L"Adjustment")); });
             const std::vector<std::uint8_t> pixels = h.Render(document);
             const std::vector<std::uint8_t> reference = RasterBytes(Adjust::ApplyAdjustment(adjustment, base));
             Expect(PixelsClose(pixels, reference, slop, AdjustmentLabel(adjustment.kind)), "adjust.gpu-matches-cpu");
@@ -1154,8 +1265,10 @@ void TestAdjustmentLayers(Harness& h)
         Adjust::SetLevelsCurrent(levels.levels, LevelRange{0, 1.25, 255, 0, 255});
 
         CanvasDocument document = Document2x2();
-        document.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base"));
-        document.layers.push_back(AdjustmentLayer(levels, L"Reusable adjustment"));
+        EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                            { fixture.layers.push_back(LayerFrom(base, LayerBlendMode::Normal, L"Base")); });
+        EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                            { fixture.layers.push_back(AdjustmentLayer(levels, L"Reusable adjustment")); });
         const Guid adjustmentId = document.layers[1].id;
         const std::uint64_t createsBefore = h.composition.AdjustmentTextureCreates();
         const std::uint64_t updatesBefore = h.composition.AdjustmentTextureUpdates();
@@ -1188,28 +1301,28 @@ void TestAdjustmentLayers(Harness& h)
 
         renderAndCheck("unchanged-invalidated", 1, 1, 1);
         levels.levels.ranges[0].gamma = 1.75;
-        document.layers[1].adjustment = levels;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = levels; });
         renderAndCheck("levels-gamma", 1, 1, 2);
 
         LayerAdjustment curves = AdjustmentOf(AdjustmentKind::Curves);
         curves.curves.channels[0] = {CurvePoint{0, 10}, CurvePoint{128, 170}, CurvePoint{255, 245}};
-        document.layers[1].adjustment = curves;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = curves; });
         renderAndCheck("curves", 1, 1, 3);
 
         LayerAdjustment exposure = AdjustmentOf(AdjustmentKind::Exposure);
         exposure.exposureSettings = ExposureSettings{1, 0.05, 1.5};
-        document.layers[1].adjustment = exposure;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = exposure; });
         renderAndCheck("exposure", 1, 1, 4);
 
         LayerAdjustment map = AdjustmentOf(AdjustmentKind::GradientMap);
         map.gradientMapSettings =
             GradientMapSettings{AdjustmentColor{0.9, 0.1, 0.2}, AdjustmentColor{0.1, 0.3, 1}, false};
-        document.layers[1].adjustment = map;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = map; });
         renderAndCheck("gradient-map", 1, 1, 5);
 
         LayerAdjustment hsv = AdjustmentOf(AdjustmentKind::Hsv);
         hsv.hsvSettings = Adjust::HsvSettings(45, 25, 5);
-        document.layers[1].adjustment = hsv;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = hsv; });
         renderAndCheck("hsv-warm", 4, 2, 6);
         renderAndCheck("unchanged-cube-invalidated", 4, 2, 6);
         Expect(h.composition.CanvasSurfaceBytes() - bytesBeforeSwitch == cubeBytes - lutBytes,
@@ -1217,24 +1330,24 @@ void TestAdjustmentLayers(Harness& h)
         bytesBeforeSwitch = h.composition.CanvasSurfaceBytes();
 
         hsv.hsvSettings = Adjust::HsvSettings(115, -10, 15);
-        document.layers[1].adjustment = hsv;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = hsv; });
         renderAndCheck("hsv-settings", 4, 2, 7);
 
         exposure.exposureSettings = ExposureSettings{1.5, 0.02, 1.2};
-        document.layers[1].adjustment = exposure;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = exposure; });
         renderAndCheck("switch-back-to-lut", 1, 3, 8);
         Expect(bytesBeforeSwitch - h.composition.CanvasSurfaceBytes() == cubeBytes - lutBytes,
                "adjust.reuse.switch-cube-to-lut-releases-cube");
 
         hsv.hsvSettings = Adjust::HsvSettings(75, 35, -5);
-        document.layers[1].adjustment = hsv;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = hsv; });
         renderAndCheck("cube-recreated-after-kind-switch", 4, 4, 9);
         h.composition.ReleaseDocumentSurfaces();
         Expect(h.composition.CanvasSurfaceBytes() == 0, "adjust.reuse.hidden-surfaces-released");
         renderAndCheck("cube-rebuilt-after-hidden-release", 4, 5, 10);
 
         exposure.exposureSettings = ExposureSettings{0.75, 0.01, 1.3};
-        document.layers[1].adjustment = exposure;
+        EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].adjustment = exposure; });
         renderAndCheck("lut-rebuilt-after-hidden-release", 1, 6, 11);
     }
     // The tables and the cube are released with the document surfaces.
@@ -1268,11 +1381,21 @@ void TestHslBlends(Harness& h)
         for (const double opacity : {1.0, 0.5})
         {
             CanvasDocument document = Document2x2();
-            document.layers.push_back(LayerFrom(Solid(2, 2, test.backdrop[0], test.backdrop[1], test.backdrop[2], 255),
-                                                LayerBlendMode::Normal, L"Backdrop"));
-            document.layers.push_back(
-                LayerFrom(Solid(2, 2, test.source[0], test.source[1], test.source[2], 255), test.mode, L"Source"));
-            document.layers[1].opacity = opacity;
+            EditDocumentFixture(document,
+                                [&](DocumentFixture& fixture)
+                                {
+                                    fixture.layers.push_back(LayerFrom(
+                                        Solid(2, 2, test.backdrop[0], test.backdrop[1], test.backdrop[2], 255),
+                                        LayerBlendMode::Normal, L"Backdrop"));
+                                });
+            EditDocumentFixture(document,
+                                [&](DocumentFixture& fixture)
+                                {
+                                    fixture.layers.push_back(
+                                        LayerFrom(Solid(2, 2, test.source[0], test.source[1], test.source[2], 255),
+                                                  test.mode, L"Source"));
+                                });
+            EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[1].opacity = opacity; });
             const std::vector<std::uint8_t> pixels = h.Render(document);
             const std::array<double, 3> blended = Adjust::BlendStraight(
                 {test.backdrop[2] / 255.0, test.backdrop[1] / 255.0, test.backdrop[0] / 255.0},
@@ -1377,7 +1500,8 @@ void TestBlit(Harness& h)
     // RF-403: zoom is device pixels per document pixel. A 2 x 1 document (black, white) at zoom 2 on a backing-2
     // display covers 4 device pixels, centered in a 16 x 8 hole: columns 6..9.
     CanvasDocument pair = DocumentOf(2, 1);
-    pair.layers.push_back(LayerFrom(Columns(2, 1, 1), LayerBlendMode::Normal, L"Pair"));
+    EditDocumentFixture(pair, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(LayerFrom(Columns(2, 1, 1), LayerBlendMode::Normal, L"Pair")); });
     (void)h.Render(pair);
     const auto red = [](const std::vector<std::uint8_t>& pixels, int width, int x, int y)
     {
@@ -1417,8 +1541,13 @@ void TestBlit(Harness& h)
         striped[i * 4 + 2] = value;
         striped[i * 4 + 3] = 255;
     }
-    stripes.layers.push_back(LayerFrom(Raster::Make(64, 64, RasterFormat::Bgra8888, striped.data(), striped.size()),
-                                       LayerBlendMode::Normal, L"Stripes"));
+    EditDocumentFixture(stripes,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers.push_back(
+                                LayerFrom(Raster::Make(64, 64, RasterFormat::Bgra8888, striped.data(), striped.size()),
+                                          LayerBlendMode::Normal, L"Stripes"));
+                        });
     (void)h.Render(stripes);
     CanvasViewport out;
     out.Resize(Vec2{16, 16}, 1, Vec2{64, 64});
@@ -1453,7 +1582,8 @@ void TestOversize(Harness& h)
         halves[i * 4 + 3] = 255;
     }
     const Raster wide = Raster::Make(100, 10, RasterFormat::Bgra8888, halves.data(), halves.size());
-    document.layers.push_back(LayerFrom(wide, LayerBlendMode::Normal, L"Wide"));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(LayerFrom(wide, LayerBlendMode::Normal, L"Wide")); });
     h.composition.InvalidateDocument();
     Expect(SUCCEEDED(h.composition.Compose(document)) && h.composition.CanvasScale() == 2 &&
                h.composition.RegionTextureCount() == 1,
@@ -1484,18 +1614,23 @@ void TestOversize(Harness& h)
     {
         maskBytes[i] = i % 100u < 30u ? 255 : 0;
     }
-    document.layers[0].mask = MaskOf(Raster::Make(100, 10, RasterFormat::Gray8, maskBytes.data(), maskBytes.size()));
+    EditDocumentFixture(document,
+                        [&](DocumentFixture& fixture)
+                        {
+                            fixture.layers[0].mask =
+                                MaskOf(Raster::Make(100, 10, RasterFormat::Gray8, maskBytes.data(), maskBytes.size()));
+                        });
     exact = SUCCEEDED(h.composition.ComposeReadback(document, flat, width, height)) && flat.size() == halves.size() &&
             flat[(4u * 100u + 29u) * 4u + 3u] == 255 && flat[(4u * 100u + 30u) * 4u + 3u] == 0 &&
             flat[(4u * 100u + 99u) * 4u + 3u] == 0;
     Expect(exact, "oversize.mask-readback");
-    document.layers[0].mask.reset();
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.reset(); });
     // A stroke whose grid is larger than the limit previews through a reduced working texture and is never adopted:
     // the committed raster uploads on its own and reads back exactly.
     CanvasDocument painting = DocumentOf(100, 10);
     ImageLayer blank = ImageLayer::Blank(L"Blank", Vec2{100, 10});
     blank.transform.sampling = LayerSampling::Nearest;
-    painting.layers.push_back(blank);
+    EditDocumentFixture(painting, [&](DocumentFixture& fixture) { fixture.layers.push_back(blank); });
     CanvasRenderer::StrokePreview preview;
     preview.layerID = blank.id;
     preview.width = 100;
@@ -1514,7 +1649,8 @@ void TestOversize(Harness& h)
                painted[(5u * 100u + 90u) * 4u + 2u] > 250,
            "oversize.stroke-preview-drawn");
     h.composition.EndStroke(&wide, 0, 0, &blank.id);
-    painting.layers[0].asset = RasterAsset{wide, wide, L"Blank"};
+    EditDocumentFixture(painting,
+                        [&](DocumentFixture& fixture) { fixture.layers[0].asset = RasterAsset{wide, wide, L"Blank"}; });
     exact = SUCCEEDED(h.composition.ComposeReadback(painting, flat, width, height)) && flat.size() == halves.size() &&
             std::equal(flat.begin(), flat.end(), halves.begin());
     Expect(exact, "oversize.stroke-commit-reads-back");
@@ -1532,7 +1668,8 @@ void TestOversize(Harness& h)
         wideBytes[i * 4 + 3] = 255;
     }
     const Raster wideLayer = Raster::Make(17000, 10, RasterFormat::Bgra8888, wideBytes.data(), wideBytes.size());
-    panorama.layers.push_back(LayerFrom(wideLayer, LayerBlendMode::Normal, L"Panorama"));
+    EditDocumentFixture(panorama, [&](DocumentFixture& fixture)
+                        { fixture.layers.push_back(LayerFrom(wideLayer, LayerBlendMode::Normal, L"Panorama")); });
     h.composition.InvalidateDocument();
     Expect(SUCCEEDED(h.composition.Compose(panorama)) && h.composition.CanvasScale() == 2, "oversize.device-limit-proxy");
     exact = SUCCEEDED(h.composition.ComposeReadback(panorama, flat, width, height)) && width == 17000 && height == 10 &&
@@ -1550,7 +1687,9 @@ void TestReadbackIgnoresPreview(Harness& h)
 {
     // RF-402: export, Copy Merged, the wand and the eyedroppers read the document, never the stroke preview.
     CanvasDocument document = DocumentOf(8, 8);
-    document.layers.push_back(LayerFrom(Solid(8, 8, 255, 255, 255, 255), LayerBlendMode::Normal, L"White"));
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(8, 8, 255, 255, 255, 255), LayerBlendMode::Normal, L"White")); });
     CanvasRenderer::StrokePreview preview;
     preview.layerID = document.layers[0].id;
     preview.width = 8;
@@ -1594,12 +1733,14 @@ void TestLayerAdjustmentPreview(Harness& h)
 {
     // P1.2: the selected layer alone is adjusted, then follows its ordinary clipping, mask, folder, and upper passes.
     CanvasDocument document = DocumentOf(6, 2);
-    document.layers.push_back(LayerFrom(Solid(6, 2, 40, 20, 10, 255), LayerBlendMode::Normal, L"Background"));
+    EditDocumentFixture(
+        document, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(Solid(6, 2, 40, 20, 10, 255), LayerBlendMode::Normal, L"Background")); });
 
     ImageLayer folder = ImageLayer::Blank(L"Masked folder", Vec2{6, 2});
     folder.isGroup = true;
     folder.mask = MaskOf(Gray(6, 2, {255, 255, 160, 255, 200, 255, 255, 192, 128, 255, 160, 255}));
-    document.layers.push_back(folder);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(folder); });
 
     std::vector<std::uint8_t> baseBytes(6u * 2u * 4u, 0);
     for (int y = 0; y < 2; ++y)
@@ -1617,7 +1758,7 @@ void TestLayerAdjustmentPreview(Harness& h)
     const Raster baseRaster = Raster::Make(6, 2, RasterFormat::Bgra8888, baseBytes.data(), baseBytes.size());
     ImageLayer base = LayerFrom(baseRaster, LayerBlendMode::Normal, L"Clipping base");
     base.parentID = folder.id;
-    document.layers.push_back(base);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(base); });
 
     const Raster source = Pixels2x2({{20, 40, 200, 255}, {30, 10, 120, 160}, {80, 100, 180, 192}, {10, 60, 100, 128}});
     ImageLayer target = LayerFrom(source, LayerBlendMode::Normal, L"Preview target");
@@ -1628,7 +1769,7 @@ void TestLayerAdjustmentPreview(Harness& h)
     target.transform.sampling = LayerSampling::Nearest;
     target.opacity = 0.75;
     target.mask = MaskOf(Gray(2, 2, {255, 192, 128, 64}));
-    document.layers.push_back(target);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(target); });
     const std::size_t targetIndex = document.layers.size() - 1;
 
     std::vector<std::uint8_t> upperBytes(6u * 2u * 4u, 0);
@@ -1641,7 +1782,7 @@ void TestLayerAdjustmentPreview(Harness& h)
     setUpper(4, 1, {20, 20, 120, 160});
     ImageLayer upper = LayerFrom(Raster::Make(6, 2, RasterFormat::Bgra8888, upperBytes.data(), upperBytes.size()),
                                  LayerBlendMode::Normal, L"Upper layer");
-    document.layers.push_back(upper);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(upper); });
 
     const std::vector<std::uint8_t> committedBaseline = h.Render(document);
     Expect(committedBaseline.size() == 6u * 2u * 4u, "adjust-preview.committed-baseline-rendered");
@@ -1714,8 +1855,10 @@ void TestLayerAdjustmentPreview(Harness& h)
         std::snprintf(label, sizeof(label), "adjust-preview.%s.cpu-composite", test.name);
 
         CanvasDocument expectedDocument = document;
-        expectedDocument.layers[targetIndex].asset->image = blended;
-        expectedDocument.layers[targetIndex].asset->thumbnail = blended;
+        EditDocumentFixture(expectedDocument,
+                            [&](DocumentFixture& fixture) { fixture.layers[targetIndex].asset->image = blended; });
+        EditDocumentFixture(expectedDocument,
+                            [&](DocumentFixture& fixture) { fixture.layers[targetIndex].asset->thumbnail = blended; });
         h.composition.SetAdjustmentPreview(std::nullopt);
         lastExpectedDisplay = h.Render(expectedDocument);
         Expect(PixelsClose(shown, lastExpectedDisplay, test.tolerance, label), label);
@@ -1787,7 +1930,9 @@ void TestLayerAdjustmentPreview(Harness& h)
     // A pure layer keeps its own alpha, including transparent pixels; grain uses layer-center coordinates at scale 2.
     const Raster alphaSource = Pixels2x2({{20, 40, 200, 255}, {30, 10, 120, 160}, {0, 0, 0, 0}, {10, 60, 100, 128}});
     CanvasDocument pureDocument = Document2x2();
-    pureDocument.layers.push_back(LayerFrom(alphaSource, LayerBlendMode::Normal, L"Alpha preview"));
+    EditDocumentFixture(
+        pureDocument, [&](DocumentFixture& fixture)
+        { fixture.layers.push_back(LayerFrom(alphaSource, LayerBlendMode::Normal, L"Alpha preview")); });
     const Raster alphaCoverage = Gray(2, 2, {255, 128, 255, 192});
     char label[96]{};
     for (const Case& test : cases)
@@ -1814,8 +1959,10 @@ void TestLayerAdjustmentPreview(Harness& h)
         const std::vector<std::uint8_t> shown = h.Render(pureDocument);
 
         CanvasDocument expectedDocument = pureDocument;
-        expectedDocument.layers[0].asset->image = blended;
-        expectedDocument.layers[0].asset->thumbnail = blended;
+        EditDocumentFixture(expectedDocument,
+                            [&](DocumentFixture& fixture) { fixture.layers[0].asset->image = blended; });
+        EditDocumentFixture(expectedDocument,
+                            [&](DocumentFixture& fixture) { fixture.layers[0].asset->thumbnail = blended; });
         h.composition.SetAdjustmentPreview(std::nullopt);
         const std::vector<std::uint8_t> expected = h.Render(expectedDocument);
         std::snprintf(label, sizeof(label), "adjust-preview.%s.alpha-only-composite", test.name);
@@ -1843,7 +1990,7 @@ void TestStrokePreviewMask(Harness& h)
     CanvasDocument document = DocumentOf(8, 8);
     ImageLayer layer = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"Red");
     layer.mask = MaskOf(Gray(4, 4, {255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0}));
-    document.layers.push_back(layer);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(layer); });
     CanvasRenderer::StrokePreview preview;
     preview.layerID = layer.id;
     preview.width = 8;
@@ -1865,7 +2012,7 @@ void TestStrokePreviewMask(Harness& h)
     Expect(placed, "strokemask.unplaced-mask-stays-on-layer");
     h.composition.EndStroke();
     // A uniform 1 x 1 mask stays uniform over the grown grid.
-    document.layers[0].mask = MaskOf(Gray(1, 1, {0}));
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(Gray(1, 1, {0})); });
     Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(paint)),
            "strokemask.uniform-begins");
     const std::vector<std::uint8_t> hidden = h.Render(document);
@@ -1878,7 +2025,7 @@ void TestStrokeAdoption(Harness& h)
     // RF-407: the working texture becomes a committed raster's texture only for its own layer and target.
     CanvasDocument document = DocumentOf(4, 4);
     ImageLayer first = LayerFrom(Solid(4, 4, 0, 0, 255, 255), LayerBlendMode::Normal, L"First");
-    document.layers.push_back(first);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.push_back(first); });
     CanvasRenderer::StrokePreview preview;
     preview.layerID = first.id;
     preview.width = 4;
@@ -1894,7 +2041,7 @@ void TestStrokeAdoption(Harness& h)
     h.composition.EndStroke(&blue, 0, 0, &second.id);
     Expect(h.composition.AdoptionCount() == adoptions, "adopt.other-layer-not-adopted");
     CanvasDocument other = DocumentOf(4, 4);
-    other.layers.push_back(second);
+    EditDocumentFixture(other, [&](DocumentFixture& fixture) { fixture.layers.push_back(second); });
     std::vector<std::uint8_t> pixels = h.Render(other);
     Expect(At(pixels, 4, 1, 1, 0) == 255 && At(pixels, 4, 1, 1, 2) == 0, "adopt.other-layer-uploads-its-own");
     // A mask commit (Gray8) never takes an image preview's texture.
@@ -1902,7 +2049,7 @@ void TestStrokeAdoption(Harness& h)
     Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
            "adopt.preview-again");
     h.composition.EndStroke(&reveal, 0, 0, &first.id);
-    document.layers[0].mask = MaskOf(reveal);
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask = MaskOf(reveal); });
     pixels = h.Render(document);
     Expect(At(pixels, 4, 2, 2, 3) == 255 && At(pixels, 4, 2, 2, 2) == 255, "adopt.mask-commit-uploads-its-own");
     // Its own commit is adopted: the cache holds the working texture for the committed raster, so the canvas shows
@@ -1912,8 +2059,9 @@ void TestStrokeAdoption(Harness& h)
     Expect(SUCCEEDED(h.composition.BeginStroke(preview)) && SUCCEEDED(h.composition.UpdateStrokeTiles(red)),
            "adopt.own-preview");
     h.composition.EndStroke(&committed, 0, 0, &first.id);
-    document.layers[0].mask.reset();
-    document.layers[0].asset = RasterAsset{committed, committed, L"First"};
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers[0].mask.reset(); });
+    EditDocumentFixture(document, [&](DocumentFixture& fixture)
+                        { fixture.layers[0].asset = RasterAsset{committed, committed, L"First"}; });
     pixels = h.Render(document);
     Expect(At(pixels, 4, 2, 2, 2) == 255 && At(pixels, 4, 2, 2, 0) == 0 && !committed.IsMaterialized(),
            "adopt.own-commit-draws-the-texture");

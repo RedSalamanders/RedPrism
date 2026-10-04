@@ -1,5 +1,6 @@
 #include "FilterWorkBenchmark.h"
 
+#include "../Support/DocumentFixture.h"
 #include "Adjust.h"
 #include "CanvasSize.h"
 #include "ColorEditWork.h"
@@ -198,14 +199,15 @@ int RunFilterWorkBenchmark()
                                "sizing-canvas-fill",
                                "sizing-image-nearest",
                                "sizing-image-high"};
-    CanvasDocument sizingSource;
-    sizingSource.id = Guid::Generate();
-    sizingSource.width = kWidth;
-    sizingSource.height = kHeight;
+    DocumentFixture sizingFixture;
+    sizingFixture.id = Guid::Generate();
+    sizingFixture.width = kWidth;
+    sizingFixture.height = kHeight;
     ImageLayer sizingLayer =
         ImageLayer::Blank(L"Benchmark source", {static_cast<double>(kWidth), static_cast<double>(kHeight)});
     sizingLayer.asset = RasterAsset{source, {}, sizingLayer.name};
-    sizingSource.layers.push_back(std::move(sizingLayer));
+    sizingFixture.layers.push_back(std::move(sizingLayer));
+    const CanvasDocument sizingSource = std::move(sizingFixture).Seal();
     const CanvasDocument originalSizingSource = sizingSource;
     LARGE_INTEGER frequency{};
     if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0)
