@@ -14,8 +14,12 @@
 - [x] Correct the modal test compile failure through the existing same-thread pointer-loss route; independently qualify r2 Debug with all 8,550 controls/75 stages and verify every archive copy.
 - [x] Qualify the same modal candidate in Release and ASan Debug with every predecessor application check: 8,550 controls/75 stages; 517 identical owned inputs and 793/793/795 verified copies.
 - [x] Preserve and push the qualified modal source checkpoint (`b22f974`).
-- [x] Draft 200 authority, 108 accepted window/end-session and 72 actual hidden-host shutdown controls; primary reviews/corrects the cheaper agent's window test.
-- [ ] Qualify the combined lifetime-gates candidate (8,930 expected controls/78 stages), including refusal before settlement and immediate stale queued-stream retirement.
+- [x] Draft 200 authority, 108 accepted window/end-session and 104 actual hidden-host shutdown controls; primary reviews/corrects the cheaper agent's window test.
+- [x] Independently preserve failed Debug attempts r1/r2/r3/r4; correct selected-owner receipt, fixture quit drainage, and distinguish executed discard cancellation from retained Save ownership before acknowledgement.
+- [x] Qualify corrected r5 Debug with all 8,962 controls/78 stages, including the 200 authority, 108 window and 104 actual shutdown controls; independently verify all 809 archive copies.
+- [x] Qualify the same frozen lifetime-gates candidate in Release and ASan Debug: all 8,962 controls/78 stages, 520 identical owned inputs and every 809/809/811 archive copy independently verified.
+- [x] Copy only qualified lifetime sources and portable normal project entries into the managed candidate; skills and formatting pass all 620 files.
+- [ ] Complete fresh normal candidate validation, preserve and push this source slice.
 - [ ] Implement nonmutating prompt preflight with scalar document/ordinal/opening authority and reentrancy protection.
 - [ ] Preserve the stroke when either the discard prompt or Save output selection is cancelled.
 - [ ] Acknowledge Save/Don't Save's original stream before executing the dependent lifetime action.
@@ -27,8 +31,10 @@ Status: ACTIVE private implementation. The prior caller (`a0ab3f0`) and basic li
 pushed on `codex/p1-opacity-host-proof`, with the qualified modal extension pushed as `b22f974`. Modal r1 Debug
 failed to compile because its test referenced nonexistent
 `_injectPointerLossForTest`; this is a test build failure, not a product runtime failure, and runtime was not run.
-The corrected modal candidate passes Debug/Release/ASan with all 8,550 controls/75 stages. The next combined
-authority/window/shutdown candidate remains unqualified. No native lifetime route has changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md)
+The corrected modal candidate passes Debug/Release/ASan with all 8,550 controls/75 stages. The combined
+authority/window/shutdown candidate now passes all three private profiles with 8,962 controls/78 stages.
+Its owned sources and portable project entries are integrated into the managed worktree for fresh normal
+validation. No native lifetime route has changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md)
 remains the parent. Exact archive hashes and scope limits are in the
 [lifetime record](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md).
 Owners: `Common/ContinuationQueue.h`, `RedPrism/ContinuationRequests.*`, `ApplicationContinuations.cpp`,

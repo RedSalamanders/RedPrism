@@ -124,11 +124,89 @@ Independent verification: `2026-10-04T08:25:51.9489357UTC`.
 The missing vendor DxUi PDB warning remains recorded in all private profiles. This does not qualify a fresh
 normal worktree matrix, native activation, actual output-picker modal injection or G1 timing.
 
+## Combined lifetime-gates failures and corrected qualification
+
+The combined candidate adds 200 authority and 108 window/end-session controls. Its shutdown fixture now has
+104 controls across held/live streams, accepted discard, accepted Save, and presenter-owned shutdown. Expected
+full application qualification is 8,962 controls/78 stages. Corrected Debug, Release and ASan pass the complete
+suite with actual build/runtime exit 0. All 520 owned C++/header/shader/resource inputs match across profiles.
+This qualifies the private candidate; native activation and G1 measurements remain open.
+
+Each failed Debug attempt built successfully and its actual runtime child exited 5. Every source/evidence copy
+was independently verified before changing the candidate. The throwing wrapper left its top-level Runtime
+property null; the archived child receipt records the actual exit and is retained by the verification receipt.
+
+| Attempt / archive suffix | Inputs / evidence / verified copies | Completion SHA-256 |
+| --- | --- | --- |
+| `r1-Debug-failure` | 780 / 243 / 1,023 | `0EAA77D3518974B88DA4197E24D7040F84B6CE23DD9B7A1DC7659C719691E138` |
+| `r2-Debug-failure` | 780 / 243 / 1,023 | `74E268C4811390188126331945F37EC84DCC9CBB6C48EA4C542C00745D286250` |
+| `r3-Debug-failure` | 780 / 243 / 1,023 | `67D189048D486A014CC167C40EC209B4D33830F735D6FA02D397E48B2BFCE3D7` |
+| `r4-Debug-failure` | 780 / 243 / 1,023 | `90ECB2F7D8AFE983FAF5911BC76D446E16A7A8DF082C3E72BF0814C2B0061334` |
+
+Archive names begin `p1-canvas-lifetime-gates-application-` under the qualification archive folder above.
+r1 exposed two fixture errors: the original brush request is selected even while its opacity prerequisite is
+held, so shutdown reports `Cancelled/E_ABORT`; and destruction posts WM_QUIT, which each isolated fixture must
+drain before starting the next host. r2 passed 77/78 shutdown checks; the remaining expectation incorrectly
+required a live core after accepted Don't Save had already cancelled it in preflight. The corrected fixture
+keeps that cancellation case and adds accepted Save to verify core retention. r3 passed 101/104 shutdown checks;
+the complete host source synchronously acknowledged its live Save prefix before the intended shutdown point.
+r4 passed 102/104 shutdown checks: stopping at preflight also deferred the discard source's cancellation,
+while the fixture still required it to have executed. r5 exercises the actual discard source for discard and
+stops at the preflight boundary before Save acknowledgement, preserving both distinct ownership expectations.
+No product
+receipt, history or pixel expectation is rebaselined to accommodate these fixture errors.
+
+The corrected r5 Debug archive is `p1-canvas-lifetime-gates-application-r5-Debug-qualified-private-full-application`.
+All 780 inputs and 29 evidence copies (809 total) were independently verified at
+`2026-10-04T09:06:14.7381632UTC`.
+
+- Completion SHA-256: `6F9848244C714C2F0B7C36DE721E9B2DF6D61F3703AA2110893A10A4A9215558`.
+- Source manifest: `F6DFBDF5FC90DA6243B637268D6D6B94E39E84D4EC50175724CD509331D0EED5`.
+- Evidence manifest: `53B99734B0B6301FEA1D689F8C62B3050F04AFED9AC32287D9B137D1C91AFCBD`.
+
+Release r6 also passes 8,962 controls/78 stages, actual build/runtime exit 0. All 780 source and 29 evidence
+copies (809 total) were independently verified at `2026-10-04T09:12:21.1488428UTC`.
+
+- Completion SHA-256: `0EE20AE6334099B737F46A9B319EAFBA4B8D4BCB5E1517ABAA9B311955C2D572`.
+- Source manifest: `129A142AE3BD2F88003FA40098073B9693B8EE12E34BB497790C0BEF98C388A6`.
+- Evidence manifest: `47F5225DE8E56752544DE3DDF678BF442C8ED1BA27D4373AC413237D20B6270B`.
+
+ASan r7 passes the same suite with actual `/fsanitize=address` compilation and build/runtime exit 0. All 781
+source and 30 evidence copies (811 total) were independently verified at `2026-10-04T09:23:55.0528973UTC`.
+
+- Completion SHA-256: `8197D0BAC816FA1CE6269502B2BB014271C4C50E6EF7DD1680D1C7C8F3131C50`.
+- Source manifest: `CA3EE8C9249690AF239379671E2D5F18AABF8AA3AF4D7B7B2FCDC057DC8928EF`.
+- Evidence manifest: `63E3CD9D3670751841C4B3070725D63141DCB8438DF2975DC2F6E84C778DF693`.
+
+Archive suffixes are `r6-Release-qualified-private-full-application` and
+`r7-ASanDebug-qualified-private-full-application` under the same prefix above. These runs tighten refusal of
+an unreplayed stream owned by a different core and retire a stale queued stream in the same owner action.
+They retain every preceding literal pixel/history/receipt expectation.
+
+The normal managed Debug build separately failed during DxUi vcpkg restore, before MSBuild or ISA gates, because
+its 64-character output folder made a temporary WIL directory too long. The proposed build-path correction keeps
+the full identity in a marker and makes resolved props authoritative for provenance. Its 29 focused path controls
+and eight existing provenance refusal cases passed; a later timestamp assertion adds one more path check.
+Normal restore now succeeds at the short path and the actual application compiles/links. The normal solution
+build then fails on old mutable-vector fixture calls in HostTests, IoTests and CompositionTests; ISA scanning was
+not reached. All 735 source copies and 34 compiler/link command logs were preserved and independently verified
+before fixture migration. The reviewed I/O/benchmark and composition/readback fixtures now use explicit
+`DocumentFixture` construction/edit/sealing; numeric expectations are preserved. The deep worktree also exposed
+formatter command-line overflow; bounded batches now pass all 617 sources. Two failed normal solution attempts
+precede migration of the remaining import/cancellation/publication and benchmark fixtures. Corrected normal
+Debug r3 builds all five images, passes matching-PDB/full-image ISA scanning and all compiled rejection controls,
+and writes/validates actual DxUi provenance. Its actual child PID 50036 exited 0 at
+`2026-10-04T09:14:30.5799552UTC`; all 733 archived inputs were independently verified before further integration.
+Freeze SHA-256: `3D23FBD86C0A892694085FDC6715A5A706702A86B1F880264D2DA3B9565A60E3`;
+result receipt: `C0C3D5D49A291441804E65CA63481D64BDE982CAE4B9FAF0A402790DA693D25D`.
+This is build-only qualification. A fresh normal runtime/configuration matrix remains open.
+
 ## Remaining limits
 
 The presenter-lifetime guard passes injected Win32 focus/capture loss and nested owner actions with quiet
-prompt answers. Actual output-picker modal behavior, positive window/end-session actions, stale/reentrant
-authority, repeated close and shutdown remain explicit follow-ups. Private builds reuse immutable DxUi products and retain
+prompt answers. The combined candidate additionally covers positive close/end-session actions, stale/reentrant
+authority and actual shutdown within its named cases. Actual output-picker modal behavior, broader repeated
+close/live-tool routes and native integration remain explicit follow-ups. Private builds reuse immutable DxUi products and retain
 the missing vendor-PDB warning, so native symbols/ISA and the normal matrix remain unqualified by these runs.
 
 Only owned source and portable project entries are copied. Private imports, proof projects, seed receipts,
