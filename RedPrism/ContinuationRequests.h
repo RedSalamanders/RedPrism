@@ -68,12 +68,9 @@ struct HostWandLayerNewInput final
     WandSettings settings;
     bool antialiased;
 };
-struct HostWandCompositeNewInput final
-{
-    Vec2 point;
-    WandSettings settings;
-    bool antialiased;
-};
+// Same event fields and New coalescing family. The captured All Layers setting selects the distinct
+// composite graph at execution; avoid a duplicate variant alternative and its wider STL dispatch tables.
+using HostWandCompositeNewInput = HostWandLayerNewInput;
 struct HostSelectionMoveCloseInput final
 {
     std::uint64_t opening;
@@ -229,7 +226,7 @@ using HostRequestInput =
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
                  HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput,
-                 HostCanvasBrushInput, HostWandCompositeNewInput>;
+                 HostCanvasBrushInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

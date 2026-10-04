@@ -44,8 +44,9 @@ recorded snapshots only; original failures and diagnostic uncertainty remain pre
 [color-display evidence](../../TestRuns/DeferredColorDisplay_2026-10-04.md) and
 [sampler evidence](../../TestRuns/SamplerReadback_2026-10-04.md).
 
-The actual All Layers wand New-selection graph passes full Debug r12 with original registries preserved. Debug r11's
-new device-fixture failure is archived; Release build r13 passes, and full Release r14 / ASan build r15 are running.
+The actual All Layers wand New-selection graph passes full Debug r12 and Release r14 with original registries preserved.
+Debug r11's fixture failure and ASan r15's dispatch-table ISA rejection are archived. The shared request descriptor
+repair passes full ASan r16; Debug/Release on that repair, analysis, ARM64 cross-builds, shutdown and G1 remain due.
 [Its checklist](WandCompositeReadback_2026-10-04.md) distinguishes implementation from qualification.
 Remaining P1 callers, admission on the largest supported fixtures, original G1 measurements and native activation
 still precede P1 Done.

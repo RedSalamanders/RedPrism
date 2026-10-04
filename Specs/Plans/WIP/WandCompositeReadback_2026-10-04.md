@@ -4,7 +4,7 @@
 
 - [x] Audit the settled New-selection command, active-layer worker publication, utility readback and ordered completion owners.
 - [x] Implement distinct immutable composite input/publication APIs and a conservative complete-graph memory plan; review the independent core fixtures.
-- [x] Implement the actual New command's descriptor-only admission, asynchronous GPU source, detached worker selection/history preparation and checked publication. Runtime qualification remains pending.
+- [x] Implement the actual New command's descriptor-only admission, asynchronous GPU source, detached worker selection/history preparation and checked publication; Debug r12, Release r14 and ASan r16 pass their complete suites on their recorded snapshots.
 - [x] Full Debug r12 qualifies the real command, captured settings, exact visible composite, cancellation, stale authority, failures, ordinal barriers, no-work inputs and actual record-capacity refusal; 51 core and 111 host checks pass.
 - [x] Full Debug r12 proves Map/utility release before the prepared CPU gate and off-owner readback/completed-composite aggregate retirement; actual device recovery after copy also passes.
 - [ ] Extend graph-specific shutdown/lifetime coverage before capture, while rows are lent and after-ready, including complete last-owner retirement.
@@ -14,15 +14,17 @@
 
 Status: ACTIVE under [P1](UiNeverBlocks_2026-09-22.md), private candidate on `codex/p1-sampler` after `2cfabe9`.
 Full Debug r11 passed the 51 core checks and failed one new device fixture; its verified failure archive is retained.
-The repaired actual device-recovery fixture passes full Debug r12. Release build r13 passes; full Release r14 and
-ASan build r15 are running separately. Whole-profile/runtime, shutdown/lifetime and G1 qualification remain due.
+The repaired actual device-recovery fixture passes full Debug r12 and full Release r14. ASan build r15 fails the
+unchanged ISA scanner on dispatch-table bytes; the shared request descriptor repair passes full ASan r16.
+Debug/Release on that repaired snapshot, static analysis, ARM64 cross-builds, shutdown/lifetime and G1 remain due.
 [Receipts and scope](../../TestRuns/WandCompositeReadback_2026-10-04.md).
 This slice covers settled **New** with All Layers enabled. Add/Subtract and coexisting live tool contexts remain
 on their current synchronous paths and stay in P1's remaining work. No large-image or G1 qualification is claimed.
 
 ## Source and order
 
-`RunMagicWand` queues `HostWandCompositeNewInput` with event-time point, sample size, tolerance, connectivity and
+`RunMagicWand` queues the shared wand descriptor (`HostWandCompositeNewInput` aliases `HostWandLayerNewInput`) with
+event-time point, sample size, tolerance, connectivity and
 antialiasing. The selected original host ordinal captures the settled committed document after older producers
 complete. A fixed descriptor alone is built before whole admission. One scheduler record/ticket/reservation then
 owns source capture, utility composition/readback, worker flood/trace, prepared document/history and retirement.

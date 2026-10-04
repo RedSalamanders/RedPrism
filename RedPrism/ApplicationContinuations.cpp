@@ -362,10 +362,8 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
         (void)request.Finish(HostOutcome::Failed, !ordinal ? HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW) : E_ABORT);
         return receipt;
     }
-    const auto kind = (std::holds_alternative<HostWandLayerNewInput>(request.Input()) ||
-                       std::holds_alternative<HostWandCompositeNewInput>(request.Input()))
-                          ? ContinuationKind::WandNew
-                          : ContinuationKind::Command;
+    const auto kind = std::holds_alternative<HostWandLayerNewInput>(request.Input()) ? ContinuationKind::WandNew
+                                                                                     : ContinuationKind::Command;
     const auto* opacity = std::get_if<HostLayerOpacityInput>(&request.Input());
     const bool preview = opacity && opacity->phase == ChromeEditPhase::Preview;
     const bool fieldInput = opacity != nullptr;

@@ -512,11 +512,12 @@ int Application::RunWandCompositeHostSelfTest() noexcept
             const auto* front = _hostRequests.Front();
             if (front)
                 state.receipt = front->input.Receipt();
+            const auto* captured = front ? std::get_if<HostWandCompositeNewInput>(&front->input.Input()) : nullptr;
             const bool queuedNoInlineChange =
-                front && std::holds_alternative<HostWandCompositeNewInput>(front->input.Input()) &&
-                state.receipt.Read().outcome == HostOutcome::Pending && _session.Document() == state.before &&
-                _session.Selection() == state.selectionBefore && _session.history.CurrentRevision() == state.revision &&
-                _session.Generation() == state.generation;
+                front && std::holds_alternative<HostWandCompositeNewInput>(front->input.Input()) && captured &&
+                captured->settings.sampleAllLayers && state.receipt.Read().outcome == HostOutcome::Pending &&
+                _session.Document() == state.before && _session.Selection() == state.selectionBefore &&
+                _session.history.CurrentRevision() == state.revision && _session.Generation() == state.generation;
             (void)expect(name(mode), "run-magic-wand-queues-without-inline-publication", queuedNoInlineChange,
                          "RunMagicWand did not enqueue the real New request or mutated document/history inline");
             if (mode == Mode::LiteralAndCapture)

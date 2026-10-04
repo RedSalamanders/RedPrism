@@ -5,10 +5,10 @@
 Private graph on `codex/p1-sampler`, based on `2cfabe9`. r11 compiled and passed Host/Document/Composition/Io,
 including all 51 new `wand-composite-core` checks. Its application stage failed one new device fixture; it is not
 a complete Debug qualification. Original assertions, numeric goldens and gates are unchanged. The repaired
-fixture passes full Debug r12 and Release build r13 passes. Full Release r14 and ASan build r15 are running.
+fixture passes full Debug r12 and full Release r14. The shared request descriptor repair passes full ASan r16; current Debug/Release, analysis, ARM64, shutdown and G1 remain due.
 
 Skills: 15 pass. Formatting: 642 files pass before r11 and after the new fixture repair. No current G1 timing,
-large-fixture admission, Release/ASan runtime, static-analysis or native ARM64 execution claim is made here.
+large-fixture admission, static-analysis or native ARM64 execution claim is made here. Profile results below are tied to their frozen snapshots.
 
 ## Full Debug r11 — original new-fixture failure
 
@@ -74,9 +74,57 @@ all **983** copied files independently verify, at 21:54:49.1943833Z. Source mani
 `C01E371F3349C012E116CC14D51EADCAE6249B68FB74C69731E2DFAE4E95E83E`, completion
 `35699FAF31AA81802F5536D17F247BB207D30CD31BA9B47515D7C52A0056915A`.
 
+## Full Release r14 — pass
+
+Child 76692: complete `test.ps1 -Platform x64 -Configuration Release`, 21:58:30.622783Z to
+22:04:51.798324Z, actual exit **0**, same 762-input freeze as r12. All five images, ISA/PDB controls,
+Host/Document/Composition/Io, WARP application, crash/CLI/build-process/RAW corpus and screenshots pass.
+The independently verified literal registries preserve all preceding controls: 6,555 document / 9,099 application,
+79 stages; 51 new core, 111 new host, 2,653 sampler FIFO and 146 clipboard checks.
+Stdout `85E8773656AE1E27CE0A25DBBA09ABC1F9C7026537B856CF816942272AA55DED`,
+stderr `E40CB1087E34C013D1ED3D1C334AE9D1A42F0D05CF833A13948340B03E1B7756`.
+Archive `p1-wand-composite-x64-Release-r14-full-qualified` under the same local qualification archive root:
+1,028 copies independently verified at 22:06:41.6871149Z; completion
+`0F38C60EE9F83E73F35B4E9ED93F73F8F55EB0F765074EFDD296E253E4DBFFDF`, source manifest
+`FC4D2CFD5B5E26553070251BDF5A90FE94D16F1D5887E9C2377EEB623F99CFE4`, evidence manifest
+`FE780CD91E7CAB3EC13F7CA861A844E8FB0F90FE072699EC248CB182ED95EE81`.
+
+## ASan build r15 — ISA rejection and descriptor repair
+
+Child 92252: ASan build, 21:58:31.482821Z to 22:00:55.046739Z, actual exit **1**.
+All five images link; the unchanged scanner rejects bytes at `RedPrism.exe` VA `0x1405a6f98`, attributed to
+`ApplicationLayerMetadataSelfTest.obj`, interpreted as `vcvtsd2ss`. No runtime executes and no ASan finding is implied.
+Disassembly and matching PDB identify these bytes as a compiler-generated dispatch table DWORD `0x005A63C5`,
+after the function return at `0x1405a6f65`. The enclosing STL raw-variant construction visitor starts at
+`0x1405a5b00`, size 5,484. Adding a 32nd variant alternative moves its dispatch table into the 64-entry tier.
+Both wand events have the same captured fields and coalescing family. The repair shares their descriptor type and
+selects the separate worker graph using captured `settings.sampleAllLayers`, restoring 31 top-level alternatives.
+Core composite/layer validation remains distinct; the actual queue test also checks the captured All Layers flag.
+No scanner change, suppression, ISA allowance, stack threshold, golden or older assertion changes.
+
+The original failure archive `p1-wand-composite-x64-ASanDebug-r15-build-failure` verifies all 850 copies,
+completion `EF608720676C2A71E3FF7231A7A45BEB92B2BC69309EB237819C2BA768161561`, source manifest
+`B9864BD18FFA0B849CE34218556E20607A0827C3E26F3F65771387606A5FDB0F`, evidence manifest
+`83D6DCFD82A893D0DF1A8EA6630A2D8AED91ED7534636CE5DE294DA9FE06BA74`, verified 22:02:38.1860268Z.
+
+## Full ASan r16 — pass on the repaired descriptor
+
+Child 40512: complete `test.ps1 -Platform x64 -Configuration "ASan Debug"`,
+22:11:59.071869Z to 22:24:39.532302Z, actual exit **0**. All 762 owned inputs remain unchanged,
+freeze `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826`.
+Stdout `0FE1698CB5FECD53F41A4A2410740DEB6368EC790AB6C8170AC781DCFEB6FA70`,
+stderr `3D4ED4113A5B039EC9627C3C1F8E9E9B2CCDAAD466116BE592CEFC63E5CDF2F7`.
+All five images, unchanged ISA/PDB controls, real sanitizer probe, complete suites, WARP app, crash probes,
+CLI/build/RAW corpus and harness screenshots pass. Exact original literal registries and original ordered stages
+are independently preserved: 6,555 document / 9,099 application controls, 79 stages, 51 new core / 111 new host,
+2,653 sampler FIFO and 146 clipboard checks.
+Archive `p1-wand-composite-x64-ASanDebug-r16-full-qualified`: all 1,035 copied files independently verify at
+22:25:28.4269401Z; completion `3A03D9AD81E528DAA043D89C028CFA074C4C2DE0580774080A10A0EE2D9DA289`,
+source manifest `419C46952D37EE759895B12280D02526C34633EB7B79FC9E45CF5267506C21A4`, evidence manifest
+`C6CAC108ECB329EAF1F5B15D8312C85A5E1A52ABDE09C4B1960D5B5A516EDAFA`.
+
 ## Current remaining qualification
 
-Full Release r14 recorder 20428 starts 21:58:23.391921Z; ASan build r15 recorder 28280 starts
-21:58:25.313188Z. They keep their owned inputs frozen. Test processes do not run concurrently against the shared
-Windows clipboard. Current ASan runtime/actual detection, static analysis, ARM64 cross-builds, graph-specific
-shutdown/lifetime and A/B capacity/G1 remain due. Debug structural passage does not close those parent P1 gates.
+Debug/Release on the repaired descriptor, current static analysis, ARM64 cross-builds, graph-specific shutdown,
+A/B capacity/G1 and complete parent P1 integration remain due. No profile result is generalized across a changed
+snapshot. The actual sampler remains synchronous; its separate prerequisite/caller work is still active.
