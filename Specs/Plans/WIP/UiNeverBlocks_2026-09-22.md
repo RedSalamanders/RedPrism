@@ -27,6 +27,12 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
+Current integration: the corrected 18-case color-display host route is implemented in the managed candidate.
+Its standalone document suite passes 6,491 controls. The latest full attempts stopped before the application
+registry on process/tool-start or clipboard fixture failures; native static analysis and the full current
+matrix remain required. Failed attempts and reviewed stack-buffer repairs are retained in
+[DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). This does not change any P1 exit row.
+
 ## What this milestone delivers
 
 A usable Windows raster editor whose supported editing, selection, merge, file and size workflows keep the

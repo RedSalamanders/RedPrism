@@ -12,9 +12,22 @@
 - [x] Private core publication validates opening/source/settings and scalar history authority, swaps the complete display, and retains replaced owners in its move-only result. Actual host admission and worker retirement remain open.
 - [x] Fresh private Debug/Release/ASan suites pass all 6,392 preceding controls plus 96 publication/planning/owner-retention controls; 635 owned inputs match and every archive copy is verified.
 - [ ] Replace owned settings snapshots in the host's pending mailbox with bounded request descriptors; admit the whole graph before capture in the same resumable record.
+  Implementation is in the managed candidate: scalar mailbox requests, borrowed complete planning, admitted
+  capture/resume, preallocated failure publication, histogram capture after admission, and retained cancelled
+  tickets. Fresh normal qualification is in progress; this row remains open until the actual host gates pass.
 - [x] Private core keeps a compatible completed display and selects committed data on invalidation/off/identity. Opt-in settings ticks retain invisible preview caches and one old grown cache until prepared transfer; shader visibility uses `ColorLookupPreviewReady`.
 - [ ] Reoffer a bounded latest display request after unrelated source metadata changes without changing the opening target token or restoring older metadata.
 - [ ] Qualify actual host before/after-preparation gates, intermediate/latest ordering, cancellation/close/reopen/device/shutdown, faults and off-owner retirement.
+  The first actual host cases are integrated. Primary review corrected display-versus-committed readback,
+  immutable fault configuration and the real Cancel acknowledgement before reopen. Device/shutdown,
+  large-metadata and full acceptance coverage remain open.
+  Normal Debug r17 passed all ten initial cases and the 6,491-control document suite, then failed the later
+  clipboard compatibility fixture. Its null clipboard hold is now independently reproduced and corrected;
+  the full normal matrix and added device/maximum-record/shutdown/admission cases still require qualification.
+  The corrected 18-case route is implemented. Debug r19–r23 retained process/tool-start and clipboard fixture
+  failures before the main application registry; all attempts are independently archived. The standalone
+  6,491-control document suite passed in r21, but this does not qualify the application. Stack-buffer and
+  admitted-result construction repairs are now reviewed and awaiting native analysis and a fresh full matrix.
 - [ ] Activate with the immutable-root integration, full normal x64 suites / ARM64 cross-builds, owning contracts and measured due G1 rows.
 
 Status: ACTIVE private prerequisite work; part of [P1](UiNeverBlocks_2026-09-22.md) and H2.2.
