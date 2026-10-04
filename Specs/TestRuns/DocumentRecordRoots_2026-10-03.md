@@ -2,6 +2,7 @@
 
 ## Implementation checklist
 
+- [x] Commit and push the qualified private candidate as `7dd28d7` on `codex/p1-opacity-host-proof`; native activation remains open.
 - [x] Seed 519 owned files from the qualified lifecycle private r2 archive into a separate private workspace.
 - [x] Primary prepares a standard C++ immutable root and exclusive builder; no mutable published-record access.
 - [x] Review the cheaper-agent independent ownership/cancellation/failure/reader tests and register them privately.
@@ -37,11 +38,14 @@
       - [x] Privately qualify explicit same-opening adjacent preview coalescence without crossing terminal/history inputs.
       - [x] Qualify producer admission/order primitives: 68 independent checks and all six profiles.
       - [x] Qualify the native queue/order foundation: 96 new host controls, full x64 suites and all ARM64 cross-builds.
-      - [x] Commit and push the qualified native queue/order foundation.
+      - [x] Commit and push the qualified native queue/order foundation (`7a0db7c`).
       - [x] Review 47 private typed opacity controls during preserved brush/warp/shape/lasso and nested transactions.
       - [x] Pass all 6,226 private Debug document checks; preserve the first signed-depth compile failure.
       - [x] Pass Release/ASan core suites with all 321 owned Common/DocumentTests/Support inputs identical.
       - [ ] Complete typed host acknowledgement tests and qualify the full application before activation.
+        - [x] Full private Debug application: 31 new host checks, all 139 metadata controls and preceding stages/checks.
+        - [x] Qualify reviewed live-gesture, nested and close/reopen host controls in Debug/Release/ASan.
+        - [ ] Migrate pointer/lifetime closure and qualify complete typed integration before native activation.
       - [ ] Bind owner request and acknowledgement sequences, then migrate every closure prerequisite.
       - [ ] Run complete host/runtime scenarios before activating any typed host path.
     - [ ] Route adjustment and display record construction through their admitted workers.
@@ -60,6 +64,13 @@
       - [x] Qualify Release/ASan host scenarios before production activation.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
+
+The private candidate source is backed up on `codex/p1-opacity-host-proof` at `7dd28d7`, in the attached worktree
+`C:\Users\eric\.codex\worktrees\p1-opacity-host-proof\RedPrism`. All 500 copied owned source files were checked
+against the completed ASan application archive by length and SHA-256 before staging. Private proof projects,
+generated products and machine-specific dependency imports are excluded. The worktree uses the repository's
+portable pinned dependency build glue. This source checkpoint carries the private qualification described below;
+it does not establish a fresh worktree build, full native caller qualification or a G1 deadline.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
 
 ## Current private integration work
@@ -797,3 +808,56 @@ independently length/SHA verified before further native changes. Completion:
 `9F7C48D0C6406049F4442BD0292CF70112A5059855A006C98D6991E9C1DBB14B`;
 source manifest: `60487AA6CDE8EF136E1E77F93AB1F1BF6EDB49D927A9A4C8CA5E5584C6050CF7`;
 evidence manifest: `B6D652308F155B4F8B25BB5BD50FF8D3A3C361E410BEBB97FC62CFA737AFA827`.
+
+The r3 full Debug application passes all 31 new opacity controls, then preserves 39 failures in existing New Canvas
+color/crop fault cases. The changed `CloseOpacityEdit` guard returned before clearing an unchanged invocation or
+an invocation belonging to a replaced document. Fault fixtures deliberately introduce an unchanged typed opening;
+its retained host state then incorrectly rejects a later case before its outline-close worker. The primary repairs
+this production guard: pending jobs/inputs remain protected; stale and unchanged invocations clear with scalar
+operations; changed edits still require acknowledged selected closure. No existing expectation is weakened.
+The complete r3 failure archive has 744 inputs / 222 evidence files; completion
+`C86B749E34ADC0D816BCE9F3BBD8C643057BD5EBE32A1AE2B662E3D5EAD188ED`, independently verified before repair.
+The fresh r4 Debug application is qualifying. Native foundation commit `7a0db7c` is pushed; the broader typed route
+and immutable document layer activation remain private and open.
+
+The complete r4 Debug application now qualifies: 65 stages, all 7,585 preceding controls, unchanged 139 metadata
+checks and all 31 typed host checks. Its 744-input / 23-evidence archive is independently verified; completion
+`08BD1B76009AA608DA02EC4B28AEF9C7291FB332E24501ACA42872EE8C02A08E`. The original r2/r3 failures remain
+preserved. The primary reviews the cheaper-agent live-context tests, adds four held close/reopen refusals and fresh
+retries without pixel-generation changes, verifies that each expected gesture actually exists, and resets retirement
+observations before each new job so earlier destruction cannot satisfy a later job's check. The next candidate
+requires 32 live-context checks in addition to the 31 typed checks and all preceding controls. It remains private.
+
+The r5 candidate stops at the new brush Undo assertion: the delegated scenario incorrectly expected the first Undo
+to restore history while a brush remained live. The owning contracts require brush/warp/shape cancellation first;
+a lasso outline is cleared while history moves in the same call. The primary replaces direct session restores with
+actual host Undo/Redo commands and adds four literal first-Undo policy checks. Existing legacy expectations and
+production behavior remain unchanged. The 745-input / 223-evidence failure archive is independently verified;
+completion `7A4BF8C78D16CF1C170054787795743E8E5AE1B447A6F49009B52BF087B759AF`.
+
+The full r6 Debug WARP application qualifies: 66 ordered stages, all 7,585 predecessor controls, 139 metadata,
+31 typed host and 36 live-context checks across ten contexts. The 745-input / 23-evidence archive is independently
+verified; completion `8A8ED4610635008695F56715BEDC7984CE8A1C1FE9B6D0758FDFC5691DFA1DE9`. Release and ASan
+qualification use the same candidate next. Pointer/lifetime closure, adjustment/display worker construction,
+native root activation, H3/H4 and measured G1 remain open.
+
+### Typed host application matrix qualified (2026-10-04)
+
+Debug r6, Release r7 and ASan Debug r8 each pass the complete WARP application: 66 ordered stages, all 7,585
+predecessor assertion names, 139 metadata checks across 43 cases, 31 typed ordering/closure/failure checks and
+36 live-context checks across ten contexts. All 623 owned private inputs are identical across profiles. All archived
+source/evidence copies are independently length/SHA verified before further code edits. Existing numeric goldens
+are unchanged; all original failed attempts remain preserved.
+
+| Private archive suffix | Inputs / evidence | Completion SHA256 |
+| --- | --- | --- |
+| `opacity-host-application-r6-Debug-qualified-private-full-application` | 745 / 23 | `8A8ED4610635008695F56715BEDC7984CE8A1C1FE9B6D0758FDFC5691DFA1DE9` |
+| `opacity-host-application-r7-Release-qualified-private-full-application` | 745 / 23 | `50C5B614092E6FFC1044C472416A45114439F8A207AFE47E2B90DE3F9A496FBE` |
+| `opacity-host-application-r8-ASanDebug-qualified-private-full-application` | 746 / 24 | `43413832DB8B7A527569A050324C35F2D7CE776924444B302F6A15477D855393` |
+
+The working candidate is `%LocalAppData%\RedPrism\PrivateWork\p1-opacity-host-proof`; each archive contains its
+exact source and qualifier. Native checkout remains on the qualified primitive/settled-metadata implementation.
+The next code must preserve canvas input while closure waits and remove every changed-opacity reference closure,
+then move adjustment/display record construction and retirement off the owner. Native layer-root/typed-route
+activation, ARM64 builds for that integrated route, H3/H4 and measured UI/G1 performance remain required. This
+private matrix establishes behavior and lifetime; it makes no RAW decoding or Photoshop speed claim.

@@ -1,5 +1,9 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
+Private immutable layer/typed opacity source checkpoint: `7dd28d7` is pushed on `codex/p1-opacity-host-proof`.
+Its archived x64 application and document runs pass; pointer/lifetime/display migration, full native integration
+and measured G1 remain open. The attached worktree preserves the candidate for continued implementation.
+
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,
 independent control/source verification and a 630-input/23,526-evidence immutable archive. The exact QWORD-switch
@@ -32,8 +36,9 @@ application configurations. All 613 owned preserving-route inputs match across p
 contexts require actual worker capture, reservation and retirement. Producer opacity input order passes 68
 independent controls and all six private profiles. The native adjacent-preview/order foundation passes all six
 forced-rebuild profiles with 96 new host controls and unchanged predecessor suites. Another 47 preserved typed-opacity core controls pass private Debug/Release/ASan,
-with all 321 Common/document-test/support inputs identical. Typed host acknowledgement and every closure caller, adjustment/display record
-placement, native root activation, H3/H4 and measured G1 remain unchecked.
+with all 321 Common/document-test/support inputs identical. The private typed host route passes 31 ordering and
+36 live-context checks in the complete Debug/Release/ASan applications, with 623 identical owned inputs. Pointer
+and lifetime closure, adjustment/display record placement, native root activation, H3/H4 and measured G1 remain unchecked.
 
 ## Implementation checklist
 
