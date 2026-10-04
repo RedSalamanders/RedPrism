@@ -7,6 +7,11 @@
 - [x] Draft bounded exact-key pending detachment; primary owns its implementation, cheaper agent drafts independent queue tests.
 - [x] Review and qualify detachment ownership, FIFO, wraparound, capacity and preserved admission barriers in the isolated draft: 21 exact controls in Debug/Release/ASan.
 - [x] Draft the private preflight, explicit output owner, same-ordinal selection and modal cancellation guard.
+- [x] Qualify 160 original-stream cancellation and 80 accepted Save/discard/write-failure controls with all predecessor application checks in Debug and Release; independently verify both archives.
+- [x] Qualify the same frozen lifetime inputs in ASan Debug: all 8,358 controls/74 stages; 792 independently verified copies and actual instrumentation flag.
+- [x] Preserve and push the basic preflight source checkpoint (`ffc16df`); all 515 owned inputs match across profiles.
+- [x] Prepare 192 modal pointer-loss/reentrancy checks across the same sixteen cancellation scenarios.
+- [ ] Qualify the modal candidate with every predecessor application check and all required profiles.
 - [ ] Implement nonmutating prompt preflight with scalar document/ordinal/opening authority and reentrancy protection.
 - [ ] Preserve the stroke when either the discard prompt or Save output selection is cancelled.
 - [ ] Acknowledge Save/Don't Save's original stream before executing the dependent lifetime action.
@@ -14,9 +19,11 @@
 - [ ] Qualify held/live/modal/failure cases, every predecessor suite and all required profiles; commit/push qualified slices.
 - [ ] Complete remaining native caller migration and measure G1 before marking P1 complete.
 
-Status: ACTIVE private implementation. The combined prior caller checkpoint is pushed as `a0ab3f0` on
-`codex/p1-opacity-host-proof`. The new private lifetime candidate is unqualified; no native lifetime route has
-changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md) remains the parent.
+Status: ACTIVE private implementation. The prior caller (`a0ab3f0`) and basic lifetime preflight (`ffc16df`) are
+pushed on `codex/p1-opacity-host-proof`. The lifetime preflight passes private Debug/Release/ASan; its modal
+extension is unqualified. No native lifetime route has changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md)
+remains the parent. Exact archive hashes and scope limits are in the
+[lifetime record](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md).
 Owners: `Common/ContinuationQueue.h`, `RedPrism/ContinuationRequests.*`, `ApplicationContinuations.cpp`,
 `ApplicationFiles.cpp`, `Application.cpp`, and the acknowledged shutdown/CPU retirement path.
 Contracts: `Document_History.md`, `UI_ApplicationChrome.md`, `UI_Windowing.md`,

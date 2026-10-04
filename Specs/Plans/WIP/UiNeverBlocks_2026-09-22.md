@@ -25,6 +25,13 @@ checkpoint is `Specs/TestRuns/P1DeferredCanvasCallerCheckpoint_2026-10-04.md`. N
 and lifetime routing, retirement and measured G1 remain open. Continue lifetime and shutdown qualification under
 [`DeferredCanvasLifetime_2026-10-04.md`](DeferredCanvasLifetime_2026-10-04.md).
 
+Basic lifetime preflight is preserved and pushed as `ffc16df` on the experimental branch. Its actual private
+Debug/Release/ASan applications pass 74 stages and 8,358 controls each, retaining all predecessors plus 160
+original-stream cancellation and 80 accepted Save/discard/write-failure checks. All 515 owned inputs match;
+790/790/792 archive copies are independently verified ([record](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md)).
+Modal messages, stale/reentrant authority, accepted window/end-session actions, shutdown, native activation and
+measured G1 remain open.
+
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,
 independent control/source verification and a 630-input/23,526-evidence immutable archive. The exact QWORD-switch
