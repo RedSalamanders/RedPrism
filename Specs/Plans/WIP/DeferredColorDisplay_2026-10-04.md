@@ -1,0 +1,72 @@
+# Deferred color display construction and retirement (P1.9 H2.2)
+
+## Implementation checklist
+
+- [x] Identify owner-side `DisplayDocument` record cloning and final-owner release for deferred destructive previews.
+- [x] Qualify cached layer-record ownership bounds in private Debug/Release/ASan; use them as the planning prerequisite.
+- [x] Implement the private metadata-only display primitive and constant-time checked planning; primary-review the cheaper agent's independent tests and add missing hierarchy/mask cases.
+- [x] Private full Debug/Release/ASan document suites pass 6,313 unchanged existing controls plus 79 display controls/profile; all 631 owned inputs match, actual ASan instrumentation and every source/evidence copy are verified.
+- [ ] Prepare complete immutable color display documents on workers, preserving the existing mask-placement and raster-preview rules.
+- [x] Prove the pure display primitive, cancellation/faults, metadata planning, source sharing and unchanged original records against independent expectations.
+- [x] Primary implements private full-source publication and prepared-owner transfer; independent session tests and actual host qualification remain open.
+- [ ] Add opening/source/settings authority and atomic publication that transfers replaced display and preview owners into the complete retirement aggregate.
+- [ ] Replace owned settings snapshots in the host's pending mailbox with bounded request descriptors; admit the whole graph before capture in the same resumable record.
+- [ ] Keep last complete compatible display while settings change; show committed data on source invalidation/off/identity without reconstructing or freeing a large graph in `DisplayDocument`.
+- [ ] Reoffer a bounded latest display request after unrelated source metadata changes without changing the opening target token or restoring older metadata.
+- [ ] Qualify actual host before/after-preparation gates, intermediate/latest ordering, cancellation/close/reopen/device/shutdown, faults and off-owner retirement.
+- [ ] Activate with the immutable-root integration, full normal x64 suites / ARM64 cross-builds, owning contracts and measured due G1 rows.
+
+Status: ACTIVE private prerequisite work; part of [P1](UiNeverBlocks_2026-09-22.md) and H2.2.
+Bound prerequisite: [LayerRecordOwnershipBounds](LayerRecordOwnershipBounds_2026-10-04.md).
+Owners: `ColorEditWork`, `DocumentSession`, `ApplicationAdjustJobs`; contracts: `Document_Model`,
+`Document_Tools`, `Document_History`, `Core_PerformanceAndResources`, `Testing_Validation`.
+Private primitive evidence: [DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md).
+
+## Display semantics and publication
+
+The worker shares the committed raster graph and privately clones layer metadata. Replace exactly the preview
+target's image/transform. When a mask has no separate placement and the preview transform changes, retain its
+original layer placement as today's display path does. Keep names, ids, order, parents, clipping, blend, opacity,
+adjustments, shape fields, explicit mask placement and semantic mask thumbnail unchanged. Preview construction
+does not create history or mutate the committed document. No raster is materialized for display metadata work.
+
+Direct inline color APIs retain their numeric goldens and immediate behavior. Live adjustment-layer lookup
+previews continue their existing composition route. The new deferred route must validate opening, retained target,
+settings/seed/grid sequence and complete display source authority before publication. Current settings never roll
+back to a completed intermediate request. A source change invalidates a complete old display; unrelated metadata
+must not be overwritten by an old full-document snapshot. A new bounded request may reuse compatible acknowledged
+pixels/lookup/coverage while rebuilding current metadata. Preserve the existing layer-scoped commit token rule.
+
+Apply swaps the fully prepared display and transfers every replaced CPU owner into an already allocated worker
+retirement aggregate. Dropped, failed and cancelled results use that same ownership boundary. Deferred
+`DisplayDocument` only selects a compatible complete display or the current committed document. It allocates,
+clones, validates, processes and retires no large graph. Off/identity/source invalidation may retain an invisible
+old graph until admitted retirement acknowledges; its resident/retirement ownership must remain charged.
+
+## Planning and host ordering
+
+The pure metadata primitive uses constant-time cached bounds and checked unsigned arithmetic. Its declared
+metadata peak covers snapshot/draft/sealed-header overlap, complete record-child capacity and root/control
+allowances. Its retirement declaration covers held source and new display graph occurrences, including the
+preview raster's possible sparse assembly. It must refuse unavailable/overflowing estimates. These partial
+declarations cannot authorize a complete host job: add settings/token/panel/selection/lookup, render scratch,
+current display and complete aggregate retirement before any owning capture. Existing resident pixels are not
+new allocations; retirement occurrence overcount remains separately reported. H3 exact accounting remains open.
+
+The host retains one active and one latest pending primitive descriptor. A descriptor identifies session/document,
+opening/settings sequence and source generation; replacing it releases no document graph or curve-vector snapshot.
+One admitted resumable record captures the exact current source/settings on the owner, then resumes worker
+render/display construction. A settings tick retains the active intermediate request. Cancellation invalidates
+publication immediately but retains tickets, complete reservations, receivers and owners until acknowledgement.
+Failures report through deferred UI work with no idle retry, timer, extra pool or blocking production wait.
+
+## Required proof
+
+Independent core cases cover exact target replacement, grown/downsampled grid, linked/unlinked/explicit/uniform
+mask placement, all untouched records/fields, raster sharing, sparse non-materialization, missing/invalid targets,
+admission refusal and cancellation/allocation checkpoints with no partial output. Publication cases cover
+consumed/foreign/source/history/opening/settings refusal and unchanged committed/history/clipboard state.
+Host gates hold work before and after preparation while view/chrome messages dispatch, then prove exact one-time
+publication/drop and retirement off owner. Include 10,000-record metadata, source changes during rendering,
+preview off/on, continuous settings, failure/retry, closure and shutdown. Structural tests establish no timing
+claim; original P1 owner/apply/frame/cancel measurements remain required on G1 fixtures A/B.

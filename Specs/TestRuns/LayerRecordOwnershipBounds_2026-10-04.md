@@ -6,7 +6,7 @@
 - [x] Correct independent test setup before qualification; preserve existing pixel/history/root expectations.
 - [x] Private full Debug DocumentTests: actual build/run exit 0; 6,226 existing named controls unchanged plus 87 new controls.
 - [x] Independently verify all 1,478 Debug archive copies before another attempt.
-- [ ] Private full Release and ASan DocumentTests with identical owned source, real ASan instrumentation and independently verified evidence.
+- [x] Private full Release and ASan DocumentTests: 6,313 controls/profile, identical 627 owned sources, real ASan compiler instrumentation and every archived copy independently verified.
 - [ ] Managed/native integration, owning contracts and complete normal configuration validation.
 - [ ] Consume bounds in admitted worker display preparation and retirement; finish separate H3 accounting and G1 measurements.
 
@@ -18,6 +18,8 @@ Archives: `%LocalAppData%\RedPrism\QualificationArchives\`.
 | Attempt | Scope/result | Archive | Completed receipt SHA-256 |
 | --- | --- | --- | --- |
 | `r1`, Debug | Full private DocumentTests, actual exit 0; 6,313 named controls | `p1-layer-record-bounds-r1-Debug-qualified-private-document-suite` | `DAD9BA5A8DF67DCA1A6AFB50553C7F959C5E46C699A3AAB24B8E172B3956875E` |
+| `r2`, Release | Full private DocumentTests, actual exit 0; 6,313 named controls; 1,476 copies verified | `p1-layer-record-bounds-r2-Release-qualified-private-document-suite` | `C95ADEE424A903E8291135DA1DE3D2C989C4469EDE26BA45EAC6F4C5DB8A6D96` |
+| `r3`, ASan Debug | Full private DocumentTests, actual exit 0; 6,313 named controls; 1,481 copies verified | `p1-layer-record-bounds-r3-ASanDebug-qualified-private-document-suite` | `B28729C8260388D09C3B121C2A66F2C8C0D07E968CE2BAF6185C2E723F9F7B26` |
 
 The 87 `record-bounds.*` controls use a separate literal child policy to prove cached reads, capacity accounting,
 concurrent immutable queries, disabled/unavailable policies, each arithmetic overflow, invalid child totals,

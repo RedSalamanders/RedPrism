@@ -10,12 +10,13 @@
 - [x] Additional private lifetime authority, accepted close/end-session, failed-save and shutdown qualification: Debug/Release/ASan pass 8,962 controls/78 stages; all 520 owned inputs match and every archive copy is verified.
 - [x] Normal managed Debug build-only: all five images compile/link, matching-PDB ISA controls and actual DxUi provenance pass; 733 archived inputs are independently verified. This does not qualify runtime or native activation.
 - [x] Integrate the privately qualified lifetime source and portable project entries into the managed candidate; skills/formatting pass all 620 files.
-- [ ] Run fresh normal managed x64 Debug, Release and ASan suites and ARM64 cross-builds for the combined lifetime/build/fixture candidate. Clean Debug and Release pass the exact 78-stage / 8,962-control registry; ASan is running. The rejected stale incremental run and intermittent first-clean-run Wand failure remain recorded; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
+- [ ] Run fresh normal managed x64 Debug, Release and ASan suites and ARM64 cross-builds for the combined lifetime/build/fixture candidate. Latest combined Release passes the exact 78-stage / 8,962-control registry, bounds suite, scanner controls and screenshots; fresh Debug is running. The repaired ISA/PDB controls, rejected stale run and intermittent first-clean-run Wand failure remain recorded; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
 - [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
 - [ ] P1.9 H2: activate immutable record roots in the native application after complete pointer, adjustment and display writer/retirement qualification.
-- [ ] P1.9 H2.2: qualify [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) before using them for admitted worker display preparation and retirement.
+- [x] P1.9 H2.2 prerequisite: [cached layer-record ownership bounds](LayerRecordOwnershipBounds_2026-10-04.md) pass the full private Debug/Release/ASan document suites and latest normal Debug integration. Complete normal/native integration remains open.
+- [ ] P1.9 H2.2: finish [deferred color display preparation, publication and retirement](DeferredColorDisplay_2026-10-04.md), including complete admission and actual host qualification.
 - [ ] P1.9 H3: incremental retained-storage accounting, selections and late sparse materialization; maintain the live reservation and history budgets.
 - [ ] P1.9 H4: bounded first uploads, layer/chrome synchronization and large-owner retirement.
 - [ ] Measure every P1-due G1 row on the specified largest supported fixtures; fix and rerun actual overruns. Capture Release/ETW evidence in `Specs/TestRuns/NeverBlocks_<date>.md`.
