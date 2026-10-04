@@ -291,9 +291,34 @@ cancelled batches skipping allocation, and successful custom fixed-size storage.
 numeric golden or runner order changes. Formatting still passes all 634 files and skills all 15 entries.
 These controls have not run on the resource-failing host.
 
+## Pushed checkpoint and resource boundary
+
+The reviewed source is preserved and pushed as WIP commit `92bd2ae` on `codex/p1-opacity-host-proof`.
+This commit includes the corrected 18-case host route, complete publication core, static-analysis repairs and
+12 new scratch-allocation controls. It is an unqualified checkpoint, not native application activation or
+P1 completion. The guide update is reviewed against actual progress and save-before-close callers; it does
+not promise G1 timings or future RAW/SIMD behavior.
+
+Analysis r25's actual PowerShell child (PID 64876) exited `-1073741502` (`0xC0000142`) before compilation,
+with empty stdout/stderr. All 1,009 copies were independently verified at
+2026-10-04T15:41:00.2914138Z. Archive
+`p1-color-host-combined-x64-Debug-r25-powershell-initialization-failure`, completion SHA-256
+`D6E68E11BD91A02A6F2560BE399242945A5DB12CCDBCE67DF6D5D930009D2B46`.
+
+Analysis r26 used an ignored in-process wrapper to avoid starting a second PowerShell host. It invoked the
+identical repository `build.ps1 -Rebuild -Analyze -MaxCpuCount 2` entrypoint, preserved all owned inputs and
+still failed tool discovery before compilation. The tool's actual terminal exit 1 agrees with the wrapper
+receipt; this terminal observation is retained separately. All 1,010 copied source/evidence files were verified
+at 2026-10-04T15:43:01.8709340Z. Archive
+`p1-color-host-combined-x64-Debug-r26-inprocess-tool-discovery-failure`, completion SHA-256
+`A4721374A69881123A4CC555B9DA8AECD4C3733E716DE0399EB15AB7E014F207`.
+This is not proof that Visual Studio is absent or that a particular resource pool caused the failure.
+The installed prerelease Visual Studio 18.x was returned by a separate unchanged `vswhere -prerelease`
+query. No dependency, ISA, provenance, expected exit, legacy golden or timeout gate was bypassed.
+
 ## Current continuation boundary
 
-P1 remains WIP. All attempts through r24 have actual terminal receipts and independently verified archives;
+P1 remains WIP. All attempts through r26 have actual terminal receipts and independently verified archives;
 no qualification child or subagent remains active. The last overall successful matrix predates the current
 color route. r21's exact 6,491-control document success is scoped to its earlier frozen source; it cannot
 qualify the subsequently reviewed stack/scratch changes or the still unexecuted corrected host cases.
