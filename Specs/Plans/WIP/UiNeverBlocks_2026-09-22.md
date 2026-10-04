@@ -4,6 +4,15 @@ Private immutable layer/typed opacity source checkpoint: `7dd28d7` is pushed on 
 Its archived x64 application and document runs pass; pointer/lifetime/display migration, full native integration
 and measured G1 remain open. The attached worktree preserves the candidate for continued implementation.
 
+The next [deferred canvas input slice](DeferredCanvasInput_2026-10-04.md) prepares fixed path/terminal storage and
+56 independent controls. Its Release switch-table repair passes 98 new parser controls with the runtime allowance
+unchanged. Native r3 Debug passes; Release then exposes an existing test-only Alt/menu timer spanning worker
+settlement. Its archived failure precedes a dispatch-scoped guard repair; r4 passes all six profiles and all 909
+archive copies are independently verified. The first private
+Brush/Eraser adapter compiles in Debug and eight held-worker pointer scenarios are prepared. A separate candidate
+adds 66 cancellation/authority and 25 Eraser/mask checks. Actual caller qualification, other tools and lifetime
+routes remain open ([evidence](../../TestRuns/P1DeferredCanvasInput_2026-10-04.md)).
+
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,
 independent control/source verification and a 630-input/23,526-evidence immutable archive. The exact QWORD-switch

@@ -105,6 +105,7 @@
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
     <ClInclude Include="JobCloseHookTests.h" />
     <ClInclude Include="JobSuspendedRetirementTests.h" />
+    <ClInclude Include="PointerInputStreamTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
@@ -178,6 +179,7 @@
     <ClCompile Include="ContinuationAdjacentPreviewTests.cpp" />
     <ClCompile Include="ContinuationPendingViewTests.cpp" />
     <ClCompile Include="OpacityInputOrderTests.cpp" />
+    <ClCompile Include="PointerInputStreamTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />
     <ClCompile Include="ContinuationRequestTests.cpp" />
     <ClCompile Include="HostPathReadTests.cpp" />

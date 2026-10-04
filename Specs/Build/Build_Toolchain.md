@@ -208,6 +208,10 @@ legacy address/segment prefix. It checks the PE CodeView GUID and age against th
 contributions to their object, and fails on missing/ambiguous attribution or a missing/mismatched PDB.
 AVX2 objects allow VEX; AVX-512 objects allow VEX and EVEX. Other objects must match the checked-in
 `Build/IsaRuntimeAllowlist.psd1`. No broad first-party object exception is permitted.
+The R15 signed variant-remap data proof checks the complete PE-backed body and encoded control flow,
+nonvolatile image-base reaching definition, anonymous same-owner DWORD/byte pairs, exact procedure end,
+uniform remap extent, decoded targets and literal alignment NOPs. Unknown effects and unmodelled transfers
+refuse that proof. This data recognition adds no runtime, object or function allowance.
 
 The runtime exceptions are MSVC `vector_algorithms.obj` from `msvcprt[d].lib`, and the exact PDB procedure range
 of the runtime-dispatched `wmemchr` intrinsic in the observed `ImageCodecs.obj`, `HostTests.obj`, `IoTests.obj` or

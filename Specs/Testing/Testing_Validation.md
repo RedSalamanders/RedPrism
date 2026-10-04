@@ -13,6 +13,18 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ### Producer input ordering primitives
 
+The keyboard harness's system-menu timeout is armed only for synchronous key dispatch (including explicit
+`SC_KEYMENU` injection). It is disarmed before worker acknowledgement or frame preparation; a previously queued
+timer callback ignores a disarmed guard. The timer detects a nested system-menu loop, never a processing deadline.
+All existing Alt tap/chord, release-order, focus and fill/history assertions remain required.
+
+Normal `HostTests` also runs 56 independent `pointer-input-stream.*` checks. Literal coordinates, modifiers,
+targets and openings cover immutable admission, wrapped FIFO consumption, full-capacity terminal storage,
+overflow ending only the accepted path once, stale producer/consumer/release, refusal without opening consumption,
+empty live storage waiting for input, terminal ownership through consumption and acknowledgement, explicit Drop,
+capacity one and maximum-opening exhaustion. Context/sample types are trivial values; stream ownership is stable
+and noncopyable. These foundation checks do not activate a canvas caller or establish pixel throughput or G1.
+
 Normal `HostTests` runs `continuation-adjacent-preview.*`, `continuation-pending-view.*` and
 `opacity-input-order.*`. Preserve all 154 preceding queue controls. Adjacent preview tests cover exact tail
 equivalence, document/kind/ordinal barriers, full-ring replacement, refused ownership and single retirement.
@@ -658,6 +670,14 @@ The real host event gates additionally prove live worker lookup publication, the
 preview off while the worker is held and cancellation of late lookup work.
 
 ### CPU dispatch and instruction boundary (P0.8)
+The Release R15 variant-retirement form additionally requires a complete PE-matched procedure body and a
+control-flow proof that its exact nonvolatile image-base definition reaches every signed RBP/byte-remap
+switch. Adjacent DWORD/byte tables require anonymous same-owner PDB symbols, the exact procedure end,
+uniform byte extents, valid indices and decoded body targets; intervening alignment is exact NOP bytes.
+The entire procedure fits stored executable section bytes. Missing/unknown/overlapping or PE-mismatched
+rows, base clobbers/bypasses, unmodelled transfers, incoming protected-interior/data edges and malformed
+bounds refuse the proof. Genuine body VEX/EVEX remains gated. Original runtime allowances are unchanged.
+Parser controls and a fresh complete configuration matrix are required before qualification is declared.
 
 The 56 `isa-compact-rcx-byte-remap.*` controls prove the compact ASan stack guard, same-displacement EAX reload
 and eight contiguous PE/listing rows; both anonymous tables, exact procedure end, literal index range and decoded

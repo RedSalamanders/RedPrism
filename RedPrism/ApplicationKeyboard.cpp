@@ -129,12 +129,31 @@ constexpr UINT_PTR kMenuLoopGuardTimerId = 9;
 }
 
 bool gMenuLoopGuardFired = false;
+bool gMenuLoopGuardArmed = false;
 
 // Self-test guard: a modal system-menu loop would wait forever for input a hidden window never gets.
 void CALLBACK EndMenuLoopForTest(HWND, UINT, UINT_PTR, DWORD) noexcept
 {
+    if (!gMenuLoopGuardArmed)
+        return;
     gMenuLoopGuardFired = true;
     (void)EndMenu();
+}
+
+[[nodiscard]] auto GuardMenuLoopForTest(HWND window) noexcept
+{
+    if (!SetTimer(window, kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest))
+    {
+        SelfTestFailure(L"The keyboard harness could not arm its menu-loop guard.\n");
+        std::_Exit(5);
+    }
+    gMenuLoopGuardArmed = true;
+    return wil::scope_exit(
+        [window]() noexcept
+        {
+            gMenuLoopGuardArmed = false;
+            (void)KillTimer(window, kMenuLoopGuardTimerId);
+        });
 }
 } // namespace
 
@@ -610,7 +629,13 @@ int Application::RunKeyboardSelfTest() noexcept
     const auto key = [this, &settle](UINT virtualKey, UINT modifiers, bool repeat = false)
     {
         settle();
-        const bool handled = HandleAccelerator(virtualKey, modifiers, repeat);
+        bool handled = false;
+        {
+            // Only a nested system-menu loop needs the timer. Worker acknowledgement and frames may take
+            // longer under load; pumping them with the guard armed would report an unrelated timeout.
+            const auto guard = GuardMenuLoopForTest(_window.get());
+            handled = HandleAccelerator(virtualKey, modifiers, repeat);
+        }
         settle();
         return handled;
     };
@@ -1316,7 +1341,6 @@ int Application::RunKeyboardSelfTest() noexcept
     // The menu bar takes a tapped Alt and F10 (no system-menu loop), Escape gives the keyboard back, and
     // Alt+letter opens that menu; a handled Alt chord opens nothing.
     gMenuLoopGuardFired = false;
-    (void)SetTimer(_window.get(), kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest);
     (void)key(VK_MENU, kKeyAlt);
     const bool altTapped = _chrome->MenuKeyboardActive() && !_chrome->CanvasFocused();
     (void)key(VK_ESCAPE, 0);
@@ -1324,11 +1348,16 @@ int Application::RunKeyboardSelfTest() noexcept
     (void)key(VK_F10, 0);
     const bool f10Pressed = _chrome->MenuKeyboardActive();
     (void)key(VK_ESCAPE, 0);
-    (void)SendMessageW(_window.get(), WM_SYSCOMMAND, SC_KEYMENU, 0);
+    {
+        const auto guard = GuardMenuLoopForTest(_window.get());
+        (void)SendMessageW(_window.get(), WM_SYSCOMMAND, SC_KEYMENU, 0);
+    }
     const bool keyMenu = _chrome->MenuKeyboardActive();
-    (void)SendMessageW(_window.get(), WM_SYSCOMMAND, SC_KEYMENU, 0);
+    {
+        const auto guard = GuardMenuLoopForTest(_window.get());
+        (void)SendMessageW(_window.get(), WM_SYSCOMMAND, SC_KEYMENU, 0);
+    }
     const bool keyMenuLeft = !_chrome->MenuKeyboardActive() && _chrome->CanvasFocused();
-    (void)KillTimer(_window.get(), kMenuLoopGuardTimerId);
     if (gMenuLoopGuardFired || !altTapped || !altLeft || !f10Pressed || !keyMenu || !keyMenuLeft)
     {
         return fail(std::format(L"The menu bar did not take the keyboard from a tapped Alt or F10 (loop {}, Alt {}, "
@@ -1356,7 +1385,6 @@ int Application::RunKeyboardSelfTest() noexcept
     OnTool(EditorTool::Hand);
     _chrome->SetCanvasFocused(true);
     gMenuLoopGuardFired = false;
-    (void)SetTimer(_window.get(), kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest);
     (void)key(VK_MENU, kKeyAlt);
     const bool pressArmed = _chrome->MenuKeyboardActive();
     {
@@ -1385,7 +1413,6 @@ int Application::RunKeyboardSelfTest() noexcept
     const bool dropArmed = _chrome->MenuKeyboardActive();
     _chrome->DropChromeFocusForTest();
     const bool dropBrush = key('B', 0) && _tool == EditorTool::Brush && _chrome->CanvasFocused();
-    (void)KillTimer(_window.get(), kMenuLoopGuardTimerId);
     OnTool(EditorTool::Move);
     _chrome->SetCanvasFocused(true);
     if (gMenuLoopGuardFired || !pressArmed || !pressLeft || !brushKey || !killArmed || !killLeft || !activateArmed ||
@@ -1412,6 +1439,7 @@ int Application::RunKeyboardSelfTest() noexcept
         const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
         const LPARAM lParam = 1 | (static_cast<LPARAM>(MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC)) << 16) |
                               (system ? kKeyAltContext : 0) | (up ? kKeyUpFlags : 0);
+        const auto guard = GuardMenuLoopForTest(_window.get());
         (void)SendMessageW(_window.get(), message, virtualKey, lParam);
     };
     {
@@ -1421,7 +1449,6 @@ int Application::RunKeyboardSelfTest() noexcept
         _session.ApplySelection(SelectionGeometry::Rect(12, 12, 20, 20), SelectionMode::New, L"Select");
         _chrome->SetCanvasFocused(true);
         gMenuLoopGuardFired = false;
-        (void)SetTimer(_window.get(), kMenuLoopGuardTimerId, 3000, &EndMenuLoopForTest);
         const int beforeFill = _session.history.UndoCount();
         keyMessage(WM_SYSKEYDOWN, VK_MENU, {VK_MENU, VK_LMENU});
         keyMessage(WM_SYSKEYDOWN, VK_BACK, {VK_MENU, VK_LMENU, VK_BACK});
@@ -1440,7 +1467,6 @@ int Application::RunKeyboardSelfTest() noexcept
         settle();
         const bool filledAgain = _session.history.UndoCount() == beforeFill + 2;
         _chrome->LeaveMenuKeyboard();
-        (void)KillTimer(_window.get(), kMenuLoopGuardTimerId);
         if (restore)
         {
             KeyboardState::Write(saved);
