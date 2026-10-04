@@ -144,6 +144,7 @@
     <ClInclude Include="SelectionNudgeTests.h" />
     <ClInclude Include="SelectionPreserveTests.h" />
     <ClInclude Include="WandLayerSelectionTests.h" />
+    <ClInclude Include="WandCompositeSelectionTests.h" />
     <ClInclude Include="SelectionMoveClosureTests.h" />
     <ClInclude Include="SelectionMoveOpeningTests.h" />
     <ClInclude Include="ColorDismissalTests.h" />
@@ -239,6 +240,7 @@
     <ClCompile Include="WandCancellationTests.cpp" />
     <ClCompile Include="WandChunkBoundaryTests.cpp" />
     <ClCompile Include="WandLayerSelectionTests.cpp" />
+    <ClCompile Include="WandCompositeSelectionTests.cpp" />
     <ClCompile Include="SelectionMoveClosureTests.cpp" />
     <ClCompile Include="SelectionMoveOpeningTests.cpp" />
     <ClCompile Include="ColorDismissalTests.cpp" />

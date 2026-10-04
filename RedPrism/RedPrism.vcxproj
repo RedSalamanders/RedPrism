@@ -277,6 +277,8 @@
     <ClCompile Include="ApplicationSelectionMoveHeaderSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionCommandSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostJobs.cpp" />
+    <ClCompile Include="ApplicationWandCompositeHostJobs.cpp" />
+    <ClCompile Include="ApplicationWandCompositeHostSelfTest.cpp" />
     <ClCompile Include="ApplicationWandLayerHostSelfTest.cpp" />
     <ClCompile Include="ApplicationImageImportJobs.cpp" />
     <ClCompile Include="ApplicationExportJobs.cpp" />

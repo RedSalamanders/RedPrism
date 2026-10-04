@@ -1,7 +1,7 @@
 # Canvas composition
 
 Status: current normative product contract
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-04
 Owner: `RedPrism/CanvasRenderer.*`, `RedPrism/CanvasViewport.h`, HLSL under `RedPrism/Shaders/`, the frame loop's
 failure handling in `RedPrism/Renderer.*` and `Application::RenderFrame`
 
@@ -200,11 +200,14 @@ for its layer only in the display). The remaining synchronous `ComposeReadback` 
 so the next frame composes the display document again (legacy `sampleCompositeColor` draws the document itself).
 The separate utility path below preserves the settled display composite.
 
-Remaining synchronous host callers take the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
+Synchronous callers take the `ComposeReadback(document, Raster&)` overload: staging rows are written into one 64-byte-aligned
 `PixelBuffer` and adopted directly as BGRA8888, with no second full-image CPU copy. The vector overload remains for
 diagnostic consumers and shares the same composition/readback routine. Failure clears either output; partial pixels
-are never published. Merge, adjustment opening and PNG/JPEG export use the asynchronous utility path below; clipboard,
-wand and sampling callers still require migration in P1.3.
+are never published. Merge, adjustment opening and PNG/JPEG export use the asynchronous utility path below. Settled
+New-mode All Layers wand uses the admitted `DocumentReadbackJob` graph below; Add/Subtract and live-context wand
+requests and Clone Stamp/eyedropper sampling retain their existing synchronous composition callers. Clipboard
+actions use worker and readback graphs; prefill/inspection retries and final transfer/publication sequencing retain
+their separate clipboard contracts.
 
 ## GPU readback queue and utility composition (P1.3)
 
@@ -265,6 +268,16 @@ A generation/device
 failure restarts the whole graph at most twice, releasing the previous attempt on a worker; it never publishes
 partial pixels. Unsupported completion, capacity, memory or persistent device failures fail locally.
 
+For settled New-mode All Layers wand, complete graph admission covers the conservative selection plan, full tiled
+readback, source snapshot, job metadata and aggregate retirement before the owner captures its immutable document.
+Each tile is composed from that snapshot; only the owner records/maps/unmaps GPU resources. Workers copy borrowed
+rows into the completed BGRA image, and the final lease and utility targets are released before detached CPU wand
+sampling, tracing and history preparation. Current-only owner publication performs prepared history publication
+and nonthrowing document/display swaps. The completed composite is held separately from the empty base
+`DocumentReadbackJob` transfer destination, so the derived release aggregate can receive base-owned document/pixel/
+image owners without displacing the completed image and retire the whole payload off owner. This route uses event
+completion and does not poll; Add/Subtract and live-context wand requests retain the synchronous composition path.
+
 A detached 1×1 consumer may continue at another in-bounds pixel with `ContinuePixelReadback` only after
 the previous worker and mapped lease have been acknowledged. It retains the exact suspended ticket,
 original immutable document, reservation and total two-restart allowance. Refused early, stale, duplicate
@@ -274,9 +287,12 @@ without polling, a timer or a dummy worker turn. This primitive does not activat
 its gesture, picker/palette authority, terminal ordering and G1 qualification remain P1.3 requirements.
 
 Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
-through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Remaining clipboard/wand/clone/sampler
-consumers still migrate in P1.3. Synchronous readback remains their current path and the diagnostic numeric
-reference; application-wide nonblocking readbacks and G1 are not yet established.
+through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Settled
+New-mode All Layers wand also uses this path as specified above. Add/Subtract and live-context wand plus
+Clone Stamp/eyedropper composition remain synchronous callers. Clipboard readback and transfer use their worker
+graphs; prefill/inspection retries and final transfer/publication sequencing remain governed by the clipboard
+contract. Synchronous readback remains the diagnostic numeric reference; application-wide nonblocking readbacks
+and G1 are not yet established.
 
 ## Failures
 

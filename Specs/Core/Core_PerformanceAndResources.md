@@ -1,7 +1,7 @@
 # RedPrism performance and resource contract
 
 Status: current normative product contract
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-04
 Owner: `Application` frame loop, `Renderer`, `CanvasRenderer`, and DxUi adapters
 
 ## Mandate
@@ -185,10 +185,21 @@ toolset change. History capture/accounting, full graph retirement charging and m
 
 Use the maximum of source, flood/mask and trace phases, with source/recycling carry, plus capture/history storage.
 Charge complete retained current/history/display graphs and new geometry again for aggregate retirement. Sharing
-overcounts intentionally; overflow/unavailable estimates refuse planning. Blank/folder/no-active sampling owns
-only an exact four-point result plus metadata/history. Global allocator/codec/OS headroom and live process pressure
-remain separate from declared storage. The core's owner metadata capture and memory/history traversal still need
-H2/H3 work; this estimate and off-owner publication establish no G1 latency or production scheduler admission.
+overcounts intentionally; overflow/unavailable estimates refuse planning. For the active-layer graph only,
+blank/folder/no-active sampling owns an exact four-point result plus metadata/history. Global allocator/codec/OS
+headroom and live process pressure remain separate from declared storage. The core's owner metadata capture and
+memory/history traversal still need H2/H3 work; this estimate and off-owner publication establish no G1 latency or
+production scheduler admission.
+
+The settled All Layers New wand graph uses `PlanWandCompositeSelectionMemory` and never takes the transparent-source
+shortcut, even when the document has no active image. Its logical sample is the full `4N`-byte BGRA composite;
+`sampledPixelsBytes` uses `PixelBuffer::RequiredBytes(4N)` and is charged again in aggregate retirement. Because the
+source is the detached composite, `privateSourceBytes` is zero even when the document's active-layer planner would
+need a private sparse-source copy. The host adds the tiled readback allocation, immutable source snapshot, job
+metadata and full source retirement before source capture. Large supported fixtures have not qualified this private
+graph; conservative refusal at those supported sizes remains a gap to close before P1 is Done. The parent
+supported-image and G1 A/B acceptance gates remain required; this reservation is not capacity or timing
+qualification. Rendering owns the row-copy and GPU lease boundary described in `Rendering_Composition.md`.
 
 `Application` owns a bounded `JobScheduler`: at most 128 records across queued, running and undrained states, and
 eight pending UI actions. The seven job classes share three OS priorities. The serial classes (`Stroke`,

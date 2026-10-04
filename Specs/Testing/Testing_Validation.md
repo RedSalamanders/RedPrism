@@ -1,7 +1,7 @@
 # RedPrism validation
 
 Status: current normative repository contract
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-04
 Owner: `test.ps1`, `Tests/*`, and `RedPrism.exe` diagnostic switches
 
 ## Scope
@@ -580,6 +580,17 @@ planning without allocating its pixels. A 30,000-square transparent document pro
 Real gated workers prepare both applied and stale aggregates, then dispose of the whole result on the worker after
 the owner closes the document. This proves the core handoff; scheduler/host lifecycle, ordering, failure/refusal
 presentation and measured G1 remain separate gates.
+
+`wand-composite-core.*` covers the detached All Layers New core with an independent literal two-color BGRA composite,
+exact outline vertices/AA, transparent full-canvas selection, history/no-op behavior, invalid composites, crossed
+publication modes, cancellation, authority refusal and the composite-versus-sparse-source memory plans. These
+fixtures do not use the composition or `MagicWand` as their expected-pixel oracle. `RunWandCompositeHostSelfTest`
+contains 18 modes whose expected state and selected outline come from an independent literal visible-composite
+fixture, not from the rendering helper that produces the GPU readback. Require original selected order, current-only
+publication, actual record-capacity refusal, map/utility release before CPU preparation, real device recovery after
+copy acknowledgement, fault atomicity and off-owner aggregate retirement. Recorded passage belongs in
+`Specs/TestRuns/WandCompositeReadback_2026-10-04.md`; these structural controls preserve the existing legacy numeric
+goldens and do not substitute for the required large supported fixtures or G1 performance measurements.
 
 ## Gates
 

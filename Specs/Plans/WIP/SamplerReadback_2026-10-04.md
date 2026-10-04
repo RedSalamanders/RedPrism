@@ -63,7 +63,7 @@ uses synchronous `WandComposite`, and selected younger tool dependencies below a
 2. First admitted owner continuation captures the immutable committed root once. Every point and bounded device
    restart uses that same root through terminal acknowledgement. Capture and retirement bounds include complete
    source metadata, derived wrappers, pixel output and existing utility/residency costs; H4 upload bounds remain due.
-3. Keep one immutable active coordinate/sequence and a fixed FIFO of at most 512 accepted pending coordinates (implemented; runtime qualification pending).
+3. Keep one immutable active coordinate/sequence and a fixed FIFO of at most 512 accepted pending coordinates (the coordinate prerequisite passes full Debug r10; caller/intent integration remains due).
    Coalesce only adjacent pending coordinates that address the same pixel on this immutable source. A single
    latest-point mailbox is insufficient: an opaque middle point followed by a transparent last point must leave
    the middle color selected, as the synchronous path does. Preserve differing coordinates until their result
@@ -89,6 +89,38 @@ uses synchronous `WandComposite`, and selected younger tool dependencies below a
 7. Keep publication outside WndProc/control callbacks: checked scalar palette/picker update plus ring/chrome
    invalidation only. Sampler creates no document revision or history entry. Off-owner aggregate retirement owns
    the captured document through failure, cancellation, replacement and shutdown acknowledgement.
+
+## Caller implementation decisions still to close
+
+The selected consumer audit must cover `PressCanvas`'s current history-work busy guard, the opacity-only predicate
+in `CanDeferCanvasBrush`, `CanvasBrushContext`'s copied settings, `BeginGradientDrag` and the shape release input.
+Moving the GPU read alone leaves those younger consumers using the pre-readback foreground or refusing ordinary
+input. Extend their existing captured input and original shared ordinal; preserve the existing opacity and
+pointer FIFO controls. Tool settings and coordinates remain event-time values even when sampled color resolves later.
+`ReplayCanvasBrush` passes the stored brush RGB to `BeginBrushStrokeAt`; opening its admission predicate alone
+would preserve the stale color. `CaptureGradientRequest` reads live colors and settings later, so delayed opening
+alone would lose event-time settings. `FinishShapeDraft` stores foreground in `HostShapeFinishInput` at Up and
+`StartShape` later consumes that value. Each requires its own checked color dependency rather than a live palette read.
+
+Separate explicit palette/picker input intent from successful sampler publications. The existing guarded sample
+revision renews after its own publication, so it cannot alone distinguish later explicit input from an earlier
+point in this same opening. Each accepted point must retain its intended target/manual-input authority and
+palette baseline. Equal-color and A–B–A manual input invalidate older results; moves accepted after that input may
+sample again. Adjacent equal pixel coordinates with different intent must not coalesce. A transparent result after
+a manual change retains that manual baseline rather than an opaque result computed for an earlier intent.
+
+For a brush/gradient/shape accepted after Up, capture an optional dependency on this exact sampling opening,
+terminal accepted prefix and current explicit input intent. Resolve only that dependency after terminal
+acknowledgement. A later unrelated palette edit must not rebind the already captured tool. If explicit input
+intervened before the younger press, use its captured palette instead. Successful palette publications remain
+outside document revision/history; picker preview callbacks must retain their existing target and cancel-swatch
+semantics without being misclassified as new manual input.
+
+Repeated openings before older acknowledgement need bounded owned storage as well as distinct monotonic IDs.
+Any opening slots/FIFO metadata must be admitted and reusable; no borrowed drag pointer may escape to a worker,
+and no slot is reused before acknowledgement. Define and test real capacity refusal at the opening and point
+boundaries. This section records required implementation constraints; none of these actual callers is qualified
+by the coordinate/palette/picker prerequisite tests alone.
 
 ## Qualification matrix
 

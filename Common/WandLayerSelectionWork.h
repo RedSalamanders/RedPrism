@@ -42,8 +42,8 @@ struct WandLayerSelectionMemoryPlan
     bool transparentShortcut = false;
 };
 
-// Private S4b prototype: settled active-layer New only. Complete admission must precede owner capture.
-// This graph cannot activate a production caller until its capacity and aggregate-retirement planner qualifies.
+// Immutable New-selection capture. Separate entry points bind an active layer or a detached full composite.
+// Complete graph admission must precede owner capture; neither entry point owns a GPU device.
 class WandLayerSelectionInput final
 {
   public:
@@ -51,9 +51,10 @@ class WandLayerSelectionInput final
     WandLayerSelectionInput& operator=(const WandLayerSelectionInput&) = delete;
     WandLayerSelectionInput(WandLayerSelectionInput&& source) noexcept
         : _point(source._point), _settings(source._settings), _antialiased(source._antialiased),
-          _authority(std::move(source._authority)), _token(std::move(source._token)),
-          _history(std::move(source._history)), _document(std::move(source._document)),
-          _active(std::move(source._active)), _valid(std::exchange(source._valid, false))
+          _usesComposite(source._usesComposite), _authority(std::move(source._authority)),
+          _token(std::move(source._token)), _history(std::move(source._history)),
+          _document(std::move(source._document)), _active(std::move(source._active)),
+          _valid(std::exchange(source._valid, false))
     {
     }
     WandLayerSelectionInput& operator=(WandLayerSelectionInput&& source) noexcept
@@ -63,6 +64,7 @@ class WandLayerSelectionInput final
             _point = source._point;
             _settings = source._settings;
             _antialiased = source._antialiased;
+            _usesComposite = source._usesComposite;
             _authority = std::move(source._authority);
             _token = std::move(source._token);
             _history = std::move(source._history);
@@ -72,21 +74,27 @@ class WandLayerSelectionInput final
         }
         return *this;
     }
+    // Borrow only while this valid capture is owned. The host admits the entire graph before taking it.
+    [[nodiscard]] const CanvasDocument* ReadbackDocument() const noexcept
+    {
+        return _valid && _document ? &_document.value() : nullptr;
+    }
 
   private:
     friend class DocumentSession;
     friend class PreparedWandLayerSelection;
     WandLayerSelectionInput(Vec2 point, WandSettings settings, bool antialiased, HistoryRestoreAuthority authority,
                             JobToken token, DocumentHistory::StateView history, CanvasDocument document,
-                            std::optional<Guid> active) noexcept
-        : _point(point), _settings(settings), _antialiased(antialiased), _authority(std::move(authority)),
-          _token(std::move(token)), _history(std::move(history)), _document(std::move(document)),
-          _active(std::move(active))
+                            std::optional<Guid> active, bool usesComposite = false) noexcept
+        : _point(point), _settings(settings), _antialiased(antialiased), _usesComposite(usesComposite),
+          _authority(std::move(authority)), _token(std::move(token)), _history(std::move(history)),
+          _document(std::move(document)), _active(std::move(active))
     {
     }
     Vec2 _point;
     WandSettings _settings;
     bool _antialiased;
+    bool _usesComposite = false;
     HistoryRestoreAuthority _authority;
     JobToken _token;
     DocumentHistory::StateView _history;

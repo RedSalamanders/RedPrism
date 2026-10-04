@@ -2213,12 +2213,20 @@ class DocumentSession
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
                                                                                         WandSettings settings,
                                                                                         bool antialiased) const;
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandCompositeSelectionInput(Vec2 point,
+                                                                                            WandSettings settings,
+                                                                                            bool antialiased) const;
     [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandLayerSelectionPublication(
         WandLayerSelectionInput input, WandFailure* failure = nullptr, CancelToken cancellation = {},
+        DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
+    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandCompositeSelectionPublication(
+        WandLayerSelectionInput input, Raster composite, WandFailure* failure = nullptr, CancelToken cancellation = {},
         DocumentHistory::PrepareObserver historyObserver = {}, const WandLayerSelectionObserver* observer = nullptr);
     [[nodiscard]] bool IsPreparedWandLayerSelectionCurrent(const PreparedWandLayerSelection& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayerSelection& prepared) noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandLayerSelectionMemory(
+        Vec2 point, WandSettings settings) const noexcept;
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandCompositeSelectionMemory(
         Vec2 point, WandSettings settings) const noexcept;
     [[nodiscard]] std::optional<SelectionMoveClosureInput> PrepareSelectionMoveClosureInput(
         bool cancel, std::optional<std::uint64_t> expectedOpening = std::nullopt) const;
@@ -2798,6 +2806,14 @@ class DocumentSession
     }
 
   private:
+    [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandSelectionInput(Vec2 point, WandSettings settings,
+                                                                                   bool antialiased,
+                                                                                   bool composite) const;
+    [[nodiscard]] static std::optional<PreparedWandLayerSelection> PrepareWandSelectionPublication(
+        WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
+        DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer);
+    [[nodiscard]] std::optional<WandLayerSelectionMemoryPlan> PlanWandSelectionMemory(Vec2 point, WandSettings settings,
+                                                                                      bool composite) const noexcept;
     [[nodiscard]] SelectionCommandAuthority CaptureSelectionCommandAuthority() const noexcept;
     [[nodiscard]] bool CanApplySelectionCommand(const SelectionCommandAuthority& authority) const noexcept;
     [[nodiscard]] bool HasDeferredTransform() const noexcept

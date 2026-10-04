@@ -23,9 +23,9 @@ bool ValidPoint(Vec2 point, int width, int height) noexcept
     return std::isfinite(point.x) && std::isfinite(point.y) && point.x >= 0 && point.y >= 0 && point.x < width &&
            point.y < height;
 }
-bool ValidSettings(const WandSettings& settings) noexcept
+bool ValidSettings(const WandSettings& settings, bool composite = false) noexcept
 {
-    return !settings.sampleAllLayers && settings.sampleSize <= WandSampleSize::FiveByFive;
+    return settings.sampleAllLayers == composite && settings.sampleSize <= WandSampleSize::FiveByFive;
 }
 const ImageLayer* CapturedWandLayer(const CanvasDocument& document, const std::optional<Guid>& id) noexcept
 {
@@ -54,7 +54,21 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandLayerSelectio
                                                                                        WandSettings settings,
                                                                                        bool antialiased) const
 {
-    if (!_document || !ValidSettings(settings) || !ValidPoint(point, _document->width, _document->height))
+    return PrepareWandSelectionInput(point, settings, antialiased, false);
+}
+
+std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandCompositeSelectionInput(Vec2 point,
+                                                                                           WandSettings settings,
+                                                                                           bool antialiased) const
+{
+    return PrepareWandSelectionInput(point, settings, antialiased, true);
+}
+
+std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandSelectionInput(Vec2 point, WandSettings settings,
+                                                                                  bool antialiased,
+                                                                                  bool composite) const
+{
+    if (!_document || !ValidSettings(settings, composite) || !ValidPoint(point, _document->width, _document->height))
         return std::nullopt;
     auto authority = CaptureHistoryRestoreAuthority();
     if (!CanApplyHistoryRestore(authority))
@@ -63,11 +77,38 @@ std::optional<WandLayerSelectionInput> DocumentSession::PrepareWandLayerSelectio
     if (!token)
         return std::nullopt;
     return WandLayerSelectionInput(point, settings, antialiased, std::move(authority), std::move(token.value()),
-                                   history.CaptureState(), _document.value(), _activeLayerID);
+                                   history.CaptureState(), _document.value(), _activeLayerID, composite);
 }
 
 std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelectionPublication(
     WandLayerSelectionInput input, WandFailure* failure, CancelToken cancellation,
+    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
+{
+    if (input._usesComposite)
+    {
+        if (failure)
+            *failure = WandFailure::Memory;
+        return std::nullopt;
+    }
+    return PrepareWandSelectionPublication(std::move(input), {}, failure, cancellation, historyObserver, observer);
+}
+
+std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandCompositeSelectionPublication(
+    WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
+    DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
+{
+    if (!input._usesComposite)
+    {
+        if (failure)
+            *failure = WandFailure::Memory;
+        return std::nullopt;
+    }
+    return PrepareWandSelectionPublication(std::move(input), std::move(composite), failure, cancellation,
+                                           historyObserver, observer);
+}
+
+std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandSelectionPublication(
+    WandLayerSelectionInput input, Raster composite, WandFailure* failure, CancelToken cancellation,
     DocumentHistory::PrepareObserver historyObserver, const WandLayerSelectionObserver* observer)
 {
     const auto refused = [&](WandFailure reason) -> std::optional<PreparedWandLayerSelection>
@@ -78,17 +119,22 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelec
     };
     if (cancellation.IsCancelled())
         return refused(WandFailure::Cancelled);
-    if (!input._valid || !input._document || input._token.target || !ValidSettings(input._settings) ||
-        input._document->width != input._token.canvasWidth || input._document->height != input._token.canvasHeight ||
+    if (!input._valid || !input._document || input._token.target ||
+        !ValidSettings(input._settings, input._usesComposite) || input._document->width != input._token.canvasWidth ||
+        input._document->height != input._token.canvasHeight ||
         !ValidPoint(input._point, input._document->width, input._document->height))
+        return refused(WandFailure::Memory);
+    if (input._usesComposite &&
+        (!composite.HasStorage() || composite.Format() != RasterFormat::Bgra8888 ||
+         composite.Width() != input._document->width || composite.Height() != input._document->height))
         return refused(WandFailure::Memory);
     if (failure)
         *failure = WandFailure::None;
     if (!Checkpoint(observer, WandLayerSelectionStage::BeforeSource, cancellation))
         return refused(WandFailure::Cancelled);
     const auto& before = input._document.value();
-    const ImageLayer* target = CapturedWandLayer(before, input._active);
-    const Raster source = target && target->asset ? target->asset->image : Raster{};
+    const ImageLayer* target = input._usesComposite ? nullptr : CapturedWandLayer(before, input._active);
+    const Raster source = input._usesComposite ? composite : target && target->asset ? target->asset->image : Raster{};
     std::optional<std::vector<SelectionLoop>> outline;
     if (!source.HasStorage())
     {
@@ -100,9 +146,11 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelec
     }
     else
     {
-        if (!target)
+        if (!target && !input._usesComposite)
             return refused(WandFailure::Memory);
-        const Raster sampled = RenderLayerPixels(source, target->transform, before.width, before.height, cancellation);
+        const Raster sampled = input._usesComposite ? source
+                                                    : RenderLayerPixels(source, target->transform, before.width,
+                                                                        before.height, cancellation);
         if (cancellation.IsCancelled())
             return refused(WandFailure::Cancelled);
         if (!sampled.HasStorage())
@@ -183,7 +231,19 @@ bool DocumentSession::ApplyPreparedWandLayerSelectionIfCurrent(PreparedWandLayer
 std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelectionMemory(
     Vec2 point, WandSettings settings) const noexcept
 {
-    if (!_document || !ValidSettings(settings) || !ValidPoint(point, _document->width, _document->height) ||
+    return PlanWandSelectionMemory(point, settings, false);
+}
+
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandCompositeSelectionMemory(
+    Vec2 point, WandSettings settings) const noexcept
+{
+    return PlanWandSelectionMemory(point, settings, true);
+}
+
+std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandSelectionMemory(Vec2 point, WandSettings settings,
+                                                                                     bool composite) const noexcept
+{
+    if (!_document || !ValidSettings(settings, composite) || !ValidPoint(point, _document->width, _document->height) ||
         _document->width > kMaxCanvasSide || _document->height > kMaxCanvasSide ||
         !CanApplyHistoryRestore(CaptureHistoryRestoreAuthority()))
         return std::nullopt;
@@ -208,9 +268,9 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelect
         !base.Add(4096))
         return std::nullopt;
     plan.captureHistoryBytes = base.value;
-    const ImageLayer* target = CapturedWandLayer(_document.value(), _activeLayerID);
+    const ImageLayer* target = composite ? nullptr : CapturedWandLayer(_document.value(), _activeLayerID);
     const Raster source = target && target->asset ? target->asset->image : Raster{};
-    plan.transparentShortcut = !source.HasStorage();
+    plan.transparentShortcut = !composite && !source.HasStorage();
     if (plan.transparentShortcut)
     {
         // Exact one-loop/four-point result, vector proxies and immutable root/control included.
@@ -226,7 +286,7 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelect
             return std::nullopt;
         // Always charge the sparse copy even when its immutable cache was already materialized: admission
         // must not become unsafe if cache residency changes before this graph starts sampling.
-        if (source.IsSparse())
+        if (!composite && source.IsSparse())
         {
             plan.privateSourceBytes = PixelBuffer::RequiredBytes(static_cast<std::size_t>(source.Stride()) *
                                                                  static_cast<std::size_t>(source.Height()));
@@ -268,7 +328,8 @@ std::optional<WandLayerSelectionMemoryPlan> DocumentSession::PlanWandLayerSelect
     plan.preparationBytes = base.value;
     // Existing source/document/history/display owners may be last references by acknowledgement. Charge their
     // entire graph, copied metadata and new geometry; no assumption that a current live document retains them.
-    if (!retained.Add(plan.captureHistoryBytes) || !retained.Add(plan.geometryGrowthBytes))
+    if (!retained.Add(plan.captureHistoryBytes) || !retained.Add(plan.geometryGrowthBytes) ||
+        (composite && !retained.Add(plan.sampledPixelsBytes)))
         return std::nullopt;
     plan.retirementBytes = retained.value;
     if (!base.Add(plan.retirementBytes))

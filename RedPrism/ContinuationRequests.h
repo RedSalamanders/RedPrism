@@ -68,6 +68,12 @@ struct HostWandLayerNewInput final
     WandSettings settings;
     bool antialiased;
 };
+struct HostWandCompositeNewInput final
+{
+    Vec2 point;
+    WandSettings settings;
+    bool antialiased;
+};
 struct HostSelectionMoveCloseInput final
 {
     std::uint64_t opening;
@@ -223,7 +229,7 @@ using HostRequestInput =
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
                  HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput,
-                 HostCanvasBrushInput>;
+                 HostCanvasBrushInput, HostWandCompositeNewInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

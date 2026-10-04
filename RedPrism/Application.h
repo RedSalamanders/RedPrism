@@ -605,6 +605,9 @@ class Application final : public ChromeEvents
     class WandLayerHostJob;
     [[nodiscard]] HRESULT StartWandLayerSelection(const HostWandLayerNewInput& input) noexcept;
     int RunWandLayerHostSelfTest() noexcept;
+    class WandCompositeHostJob;
+    [[nodiscard]] HRESULT StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept;
+    int RunWandCompositeHostSelfTest() noexcept;
     class HistoryRestoreJob;
     [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
     int RunHistoryRestoreSelfTest() noexcept;

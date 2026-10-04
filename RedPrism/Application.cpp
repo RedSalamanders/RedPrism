@@ -2515,6 +2515,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunWandLayerHostSelfTest\n");
     if (const int wand = RunWandLayerHostSelfTest(); wand != 0)
         return wand;
+    std::printf("BEGIN self-test.RunWandCompositeHostSelfTest\n");
+    if (const int wandComposite = RunWandCompositeHostSelfTest(); wandComposite != 0)
+        return wandComposite;
     std::printf("BEGIN self-test.RunRasterEditSelfTest\n");
     if (const int rasterEdits = RunRasterEditSelfTest(); rasterEdits != 0)
         return rasterEdits;
@@ -6732,11 +6735,12 @@ void Application::RunMagicWand(Vec2 pixel, SelectionMode mode) noexcept
                     pixel.y, static_cast<unsigned int>(mode), _session.wandSettings.sampleAllLayers,
                     _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()),
                     static_cast<unsigned long long>(_session.Generation()));
-    if (mode == SelectionMode::New && !_session.wandSettings.sampleAllLayers &&
-        _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
+    if (mode == SelectionMode::New && _session.CanApplyHistoryRestore(_session.CaptureHistoryRestoreAuthority()))
     {
         const auto receipt =
-            QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased});
+            _session.wandSettings.sampleAllLayers
+                ? QueueHostInput(HostWandCompositeNewInput{pixel, _session.wandSettings, _session.selectionAntialiased})
+                : QueueHostInput(HostWandLayerNewInput{pixel, _session.wandSettings, _session.selectionAntialiased});
         if (_traceWandForTest)
             std::printf("WAND ADMISSION outcome=%u\n", static_cast<unsigned int>(receipt.Read().outcome));
         ReportHostAdmission(receipt);

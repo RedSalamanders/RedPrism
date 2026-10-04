@@ -1,10 +1,11 @@
 # Document tools: transform (C8), selection (C9), brush (C10) and retouch (C11)
 
 Status: current normative contract (created with C8; later tool phases extend it)
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-04
 Owner: `Common/TransformEdit.*`, `Common/Selection.*`, `Common/BrushStroke.*` (the session's brush and retouch
 members), `Common/Heal.*`, `Common/MaskEditWork.*`, `Common/ImageFilters.*`, `Common/WarpStroke.*`,
-`Common/LayerCopyWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
+`Common/LayerCopyWork.*`, `Common/WandLayerSelectionWork.*`, `RedPrism/ApplicationLayerCopyJobs.cpp`,
+`RedPrism/ApplicationWandCompositeHostJobs.cpp`,
 `DocumentSession` transform and selection members in `Common/Document.*`, `RedPrism/TransformOverlay.h`,
 `RedPrism/CanvasOverlay.*`, the Move-tool, selection-tool and brush code in `RedPrism/Application.cpp`, and the mask
 command job in `RedPrism/ApplicationMaskJobs.cpp`
@@ -425,9 +426,9 @@ order/winding and the eight-million-edge refusal are unchanged. Vertex-start sca
 
 `RenderLayerPixels` forwards cancellation to its placed rasterizer, including transparent blank/invalid-transform
 results. Its sampling and placement rules below remain unchanged. Kernel checkpoints do not bound allocator,
-OS call, vector growth, loop-vector compaction or Clipper latency. These APIs prepare worker migration; the host's
-wand/clone/sampler and selection command/pointer routes remain synchronous until ordered source acquisition,
-complete admission, history publication and lifetime qualification land. S4a establishes no UI/G1 time bound.
+OS call, vector growth, loop-vector compaction or Clipper latency. Direct session callers and the host's non-New or
+live-context wand routes remain synchronous. The settled New host graphs are specified below; these cancellable
+kernels alone establish no UI/G1 time bound.
 
 `DocumentSession::MagicWand(point, mode, composite)` needs a document, no outline move in progress and a point on
 the canvas. `WandSample` is what it reads at document size: with All Layers the caller's composite (the host's
@@ -469,8 +470,27 @@ sampling/flood/trace and history preparation use only the captured graph. Curren
 success/refusal before younger work and retires its complete aggregate off owner. Outside/nonfinite clicks and
 empty documents acknowledge without a job or selection change; an in-canvas no-match publishes `Deselect`.
 Consecutive queued New requests obey the existing document/adjacent-ordinal coalescing rules and retire the
-superseded receipt. This route does not change the pointer busy guard, All Layers/Add/Subtract/Intersect or
-live-gesture routes. Broader pointer replay/closure, metadata/accounting and G1 qualification remain separate.
+superseded receipt. All Layers New follows the composite graph below. Add/Subtract/Intersect and live-context
+wand requests retain their existing synchronous path. Broader pointer replay/closure, metadata/accounting and G1
+qualification remain separate.
+
+### Prepared All Layers New wand (core and host)
+
+Only a settled New-mode wand request with `sampleAllLayers` uses the composite worker graph. Event-time point,
+settings and AA are captured with a move-only input whose borrowed `ReadbackDocument()` pointer is valid only while
+that input remains valid. Capture retains the exact document, session/job and restore authority, and history view;
+publication also checks the captured history epoch. Missing active image pixels do not remove the composite source.
+The active-layer New graph above remains a separate source path. Add/Subtract/Intersect and New requests made while a
+live context prevents settled admission keep their existing synchronous route.
+
+The host reserves the composite planner, full readback, source snapshot, job metadata and aggregate retirement
+before capturing the immutable document. Owner stages compose that snapshot and own every GPU `Map`/`Unmap`; mapped
+rows are copied into worker-owned output storage. After the final lease is acknowledged and utility targets are
+released, detached worker work runs wand sampling/tracing and prepares the complete after-document and history.
+Current-only owner publication publishes history and swaps prepared document/display owners without allocating.
+Cancellation, failed readback/preparation and stale authority publish no partial selection. Old owners retire through
+the worker release aggregate. This graph adds no polling and establishes no large-image acceptance promise or G1
+latency qualification.
 
 ## Brush session (C10)
 

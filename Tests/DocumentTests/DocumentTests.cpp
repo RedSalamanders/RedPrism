@@ -91,6 +91,7 @@
 #include "TransformPreviewWorkTests.h"
 #include "WandCancellationTests.h"
 #include "WandChunkBoundaryTests.h"
+#include "WandCompositeSelectionTests.h"
 #include "WandLayerSelectionTests.h"
 #include "WarpStroke.h"
 
@@ -7549,6 +7550,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunWandCancellationTests();
     gFailures += RunWandChunkBoundaryTests();
     gFailures += RunWandLayerSelectionTests();
+    gFailures += RunWandCompositeSelectionTests();
     gFailures += RunSelectionMoveClosureTests();
     gFailures += RunSelectionMoveOpeningTests();
     gFailures += RunColorDismissalTests();
