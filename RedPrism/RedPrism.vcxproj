@@ -311,6 +311,13 @@
     <ClCompile Include="ApplicationColorCancellationJobs.cpp" />
     <ClCompile Include="ApplicationColorCancellationTests.cpp" />
     <ClCompile Include="ApplicationContinuations.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushInput.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushInputSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushCancellationSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushPaletteSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushCompetingSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushBoundarySelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushMaskPaletteExtensionSelfTest.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />

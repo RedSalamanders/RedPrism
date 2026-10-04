@@ -2304,6 +2304,24 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunLayerOpacityContextsSelfTest\n");
     if (const int opacityContexts = RunLayerOpacityContextsSelfTest(); opacityContexts != 0)
         return opacityContexts;
+    std::printf("BEGIN self-test.RunCanvasBrushOpacitySelfTest\n");
+    if (const int canvasBrush = RunCanvasBrushOpacitySelfTest(); canvasBrush != 0)
+        return canvasBrush;
+    std::printf("BEGIN self-test.RunCanvasBrushCancellationSelfTest\n");
+    if (const int canvasCancellation = RunCanvasBrushCancellationSelfTest(); canvasCancellation != 0)
+        return canvasCancellation;
+    std::printf("BEGIN self-test.RunCanvasBrushPaletteSelfTest\n");
+    if (const int canvasPalette = RunCanvasBrushPaletteSelfTest(); canvasPalette != 0)
+        return canvasPalette;
+    std::printf("BEGIN self-test.RunCanvasBrushCompetingSelfTest\n");
+    if (const int canvasCompeting = RunCanvasBrushCompetingSelfTest(); canvasCompeting != 0)
+        return canvasCompeting;
+    std::printf("BEGIN self-test.RunCanvasBrushMaskPaletteExtensionSelfTest\n");
+    if (const int canvasMaskPalette = RunCanvasBrushMaskPaletteExtensionSelfTest(); canvasMaskPalette != 0)
+        return canvasMaskPalette;
+    std::printf("BEGIN self-test.RunCanvasBrushBoundarySelfTest\n");
+    if (const int canvasBoundary = RunCanvasBrushBoundarySelfTest(); canvasBoundary != 0)
+        return canvasBoundary;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -3616,9 +3634,10 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP)
     {
         event.action = DxUi::PointerAction::Up;
-        if (GetCapture() == _window.get())
+        if (GetCapture() == _window.get() && !(message == WM_RBUTTONUP && _canvasBrushInput.Sampling()))
         {
-            // This release is not a capture loss: the button-up below ends the drag.
+            // A refused right gesture cannot release an admitted left path's capture. Its own left release
+            // below ends that path; this release is not a capture loss.
             _releasingCapture = true;
             ReleaseCapture();
             _releasingCapture = false;
@@ -3638,6 +3657,26 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     }
     event.xPixels = static_cast<float>(point.x);
     event.yPixels = static_cast<float>(point.y);
+    if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
+    if (_canvasBrushInput.Busy() && event.action != DxUi::PointerAction::Wheel)
+    {
+        const CanvasHole capturedHole = _chrome->HolePixels();
+        const Vec2 capturedView{event.xPixels - capturedHole.left, event.yPixels - capturedHole.top};
+        if (event.action == DxUi::PointerAction::Down)
+        {
+            // A repeated left press is a refused new gesture. Seal the accepted prefix before its later
+            // indistinguishable moves can append to this opening. Right-button input leaves the left path live.
+            if (message == WM_LBUTTONDOWN)
+                LoseCanvasBrush();
+            _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_BUSY);
+        }
+        else if (event.action == DxUi::PointerAction::Move || message == WM_LBUTTONUP)
+            RecordCanvasBrush(event, capturedView);
+        else if (event.action == DxUi::PointerAction::Leave)
+            LoseCanvasBrush();
+        return; // A canvas press owns its captured samples over chrome until its terminal is acknowledged.
+    }
     if (event.action == DxUi::PointerAction::Down && !PointerBusy())
     {
         // RF-907 (legacy NativeLayerList's thumbnails): a press on a layer row's Mask badge targets that mask, Shift
@@ -3697,6 +3736,8 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
     case DxUi::PointerAction::Down:
         if (inHole)
         {
+            if (message == WM_LBUTTONDOWN && !_spacePan && QueueCanvasBrush(event, view))
+                return;
             // A press on the canvas ends a typed opacity edit, as a press elsewhere in the chrome commits the field.
             CloseOpacityEdit();
             if (!PointerBusy())
@@ -4125,6 +4166,9 @@ bool Application::SkipsTransformSettle(int command) noexcept
 
 void Application::OnCommand(int command) noexcept
 {
+    if (!_hostExecuting && (command == ChromeHost::kCommandUndo || command == ChromeHost::kCommandRedo) &&
+        CancelCanvasBrush())
+        return; // The first history action cancels this admitted stroke, without consuming opacity history.
     // View/chrome commands keep pumping. Every document mutation waits behind admitted history/input, preserving
     // its event-time command instead of settling a panel inline and falling through on failure.
     const bool view = command == ChromeHost::kCommandZoomFit || command == ChromeHost::kCommandZoomActual ||
@@ -6657,14 +6701,18 @@ namespace
 
 void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
 {
+    BeginBrushStrokeAt(_viewport.DocumentFromView(view, DocumentSize()), modifiers, BrushKindFor());
+}
+
+void Application::BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
+                                     const CanvasBrushContext* captured) noexcept
+{
     if (!_session.Document().has_value() || _session.PendingBrush() != nullptr)
     {
         return;
     }
     // The stroke's coverage and its preview live on the current device.
     BindCompositionDevice();
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
-    const BrushKind kind = BrushKindFor();
     const bool couldPaint = _session.CanPaint();
     if (kind == BrushKind::Clone && !_session.CloneStrokeOffset(pixel).has_value())
     {
@@ -6677,6 +6725,11 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         composite = WandComposite();
     }
     const Raster* sample = composite.has_value() ? &composite.value() : nullptr;
+    const auto begin = [this, kind, sample, captured](Vec2 point)
+    {
+        return captured ? _session.BeginBrush(point, kind, sample, captured->settings, captured->maskWhite)
+                        : _session.BeginBrush(point, kind, sample);
+    };
     bool begun = false;
     if ((modifiers & MK_SHIFT) != 0)
     {
@@ -6684,7 +6737,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
         const std::optional<Vec2> start = _session.ShiftLineStart();
         if (start.has_value())
         {
-            begun = _session.BeginBrush(start.value(), kind, sample);
+            begun = begin(start.value());
             if (begun)
             {
                 _session.ContinueBrush(pixel);
@@ -6693,7 +6746,7 @@ void Application::BeginBrushStroke(Vec2 view, UINT modifiers) noexcept
     }
     if (!begun)
     {
-        begun = _session.BeginBrush(pixel, kind, sample);
+        begun = begin(pixel);
     }
     const BrushStroke* stroke = _session.PendingBrush();
     if (!begun || stroke == nullptr)
@@ -6775,11 +6828,15 @@ void Application::PushPreviewTiles() noexcept
 
 void Application::ContinueBrushStroke(Vec2 view) noexcept
 {
+    ContinueBrushStrokeAt(_viewport.DocumentFromView(view, DocumentSize()));
+}
+
+void Application::ContinueBrushStrokeAt(Vec2 pixel) noexcept
+{
     if (_session.PendingBrush() == nullptr)
     {
         return;
     }
-    const Vec2 pixel = _viewport.DocumentFromView(view, DocumentSize());
     _brushHover = pixel;
     _session.ContinueBrush(pixel);
     if (_session.PendingBrush() == nullptr)

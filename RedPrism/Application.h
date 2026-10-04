@@ -24,6 +24,7 @@
 #include "MaskEditWork.h"
 #include "OwnerWorkMultiplexer.h"
 #include "PathClassificationWork.h"
+#include "PointerInputStream.h"
 #include "PreviewMailbox.h"
 #include "ProjectStore.h"
 #include "Prompts.h"
@@ -205,6 +206,46 @@ class Application final : public ChromeEvents
     void HoverCanvas(const DxUi::PointerEvent& event, Vec2 view, bool inHole) noexcept;
     void EndPointerDrag(PointerEnd end) noexcept;
     [[nodiscard]] bool PointerBusy() const noexcept;
+    struct CanvasBrushContext final
+    {
+        std::uint64_t documentSerial;
+        Guid target;
+        EditorTool tool;
+        BrushKind kind;
+        BrushSettings settings;
+        bool mask;
+        bool maskWhite;
+    };
+    struct CanvasBrushSample final
+    {
+        Vec2 point; // document coordinates at physical event time, including moves after a view change
+        unsigned int modifiers;
+    };
+    using CanvasBrushInput = PointerInputStream<CanvasBrushContext, CanvasBrushSample, 512>;
+    [[nodiscard]] bool CanDeferCanvasBrush() const noexcept;
+    [[nodiscard]] bool QueueCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
+    void RecordCanvasBrush(const DxUi::PointerEvent& event, Vec2 view) noexcept;
+    void LoseCanvasBrush() noexcept;
+    void SealCanvasBrushForBoundary() noexcept;
+    [[nodiscard]] bool CancelCanvasBrush() noexcept;
+    void ReplayCanvasBrush() noexcept;
+    void RetireCanvasBrush(ContinuationOutcome outcome, std::uint64_t opening) noexcept;
+    void BeginBrushStrokeAt(Vec2 pixel, unsigned int modifiers, BrushKind kind,
+                            const CanvasBrushContext* captured = nullptr) noexcept;
+    void ContinueBrushStrokeAt(Vec2 pixel) noexcept;
+    int RunCanvasBrushOpacitySelfTest() noexcept;
+    int RunCanvasBrushCancellationSelfTest() noexcept;
+    int RunCanvasBrushPaletteSelfTest() noexcept;
+    int RunCanvasBrushCompetingSelfTest() noexcept;
+    int RunCanvasBrushBoundarySelfTest() noexcept;
+    int RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept;
+    CanvasBrushInput _canvasBrushInput;
+    CanvasBrushSample _canvasBrushLastSample{};
+    ContinuationReceipt _canvasBrushReceipt;
+    std::uint64_t _canvasBrushOpening = 0;
+    std::uint64_t _canvasBrushCancelledOpening = 0;
+    std::optional<std::uint64_t> _canvasBrushSessionOpening;
+    bool _canvasBrushReplayed = false;
     // A key, a command or a header button ended what a `Drag` drags: the drag ends with it.
     template <class Drag> void DropDrag() noexcept
     {
@@ -927,6 +968,7 @@ class Application final : public ChromeEvents
         Output,
         Settle,
         OpacitySettle,
+        CanvasBrush,
         CancelPanel,
         GradientSettle,
         PixelMoveSettle,

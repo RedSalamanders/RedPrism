@@ -352,6 +352,10 @@ ContinuationReceipt Application::QueueHostInput(HostRequestInput input) noexcept
 ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
 {
     const auto receipt = request.Receipt();
+    const bool endsCanvasBrush = std::holds_alternative<HostToolInput>(request.Input()) ||
+                                 std::holds_alternative<HostLayerSelectInput>(request.Input()) ||
+                                 std::holds_alternative<HostLayerTargetInput>(request.Input()) ||
+                                 std::holds_alternative<HostWriteInput>(request.Input());
     const auto ordinal = _historyWork.NextOrdinal();
     if (_shutdownStarted || !_hostSourceRegistered || !ordinal)
     {
@@ -390,6 +394,10 @@ ContinuationReceipt Application::QueueHostRequest(HostRequest request) noexcept
     else if (!_jobs.RequestUiActionSource(_continuationAction))
     {
         (void)_hostRequests.Clear(RetireHostContinuation);
+    }
+    else if (endsCanvasBrush)
+    {
+        SealCanvasBrushForBoundary();
     }
     return receipt;
 }
@@ -446,6 +454,8 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
         _pendingCancelReceipt = {};
     }
     CompleteDuplicateGestureInput(result.outcome);
+    if (const auto* brush = std::get_if<HostCanvasBrushInput>(&_activeHostRequest->input.Input()))
+        RetireCanvasBrush(result.outcome, brush->opening);
     if (const auto* close = std::get_if<HostSelectionMoveCloseInput>(&_activeHostRequest->input.Input());
         close && _pendingSelectionMoveCloseOpening == std::optional(close->opening) &&
         _pendingSelectionMoveCloseCancel == close->cancel &&
@@ -487,6 +497,8 @@ void Application::RunHostContinuation() noexcept
     {
         return;
     }
+    if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
     // Preview completion rearms this source so the old record and its full reservation retire before the next
     // capture is admitted. Accepted host mutations take precedence over starting another pending preview.
     if (!_activeHostRequest && _hostRequests.Size() == 0)
@@ -595,6 +607,11 @@ void Application::RunHostContinuation() noexcept
         {
         case HostStage::Begin:
             _hostAfterPrerequisite = HostStage::Execute;
+            if (std::holds_alternative<HostCanvasBrushInput>(input))
+            {
+                _hostStage = HostStage::Execute;
+                break; // Only its opacity prerequisite may run before the captured brush press.
+            }
             if (const auto* size = std::get_if<HostSizeApplyInput>(&input);
                 size && size->selectionMoveOpening &&
                 (size->draft.kind == SizeCardKind::CanvasSize || size->draft.kind == SizeCardKind::ImageSize) &&
@@ -905,6 +922,9 @@ void Application::RunHostContinuation() noexcept
         case HostStage::OpacitySettle:
             FinishHostContinuation({HostOutcome::Failed, E_UNEXPECTED});
             return; // Only acknowledgement may leave the held opacity prerequisite.
+        case HostStage::CanvasBrush:
+            ReplayCanvasBrush();
+            return; // One sample per owner action; pending physical input rearms an otherwise idle stream.
         case HostStage::GradientSettle:
         {
             const auto* command = std::get_if<HostCommandInput>(&input);
@@ -1229,6 +1249,17 @@ void Application::RunHostContinuation() noexcept
             break;
         }
         case HostStage::Execute:
+            if (const auto* brush = std::get_if<HostCanvasBrushInput>(&input))
+            {
+                const auto* captured = _canvasBrushInput.CapturedContext(brush->opening);
+                if (!captured || captured->documentSerial != _session.DocumentSerial() ||
+                    _session.ActiveLayerID() != captured->target || _session.IsMaskSelected() != captured->mask ||
+                    _tool != captured->tool)
+                {
+                    FinishHostContinuation({HostOutcome::Stale, E_ABORT});
+                    return;
+                }
+            }
             if (const auto* opacity = std::get_if<HostLayerOpacityInput>(&input);
                 opacity && _session.ActiveLayerID() != opacity->id)
             {
@@ -1290,6 +1321,12 @@ void Application::RunHostContinuation() noexcept
                 break;
             }
             _hostExecutionError = S_OK;
+            if (std::holds_alternative<HostCanvasBrushInput>(input))
+            {
+                _hostStage = HostStage::CanvasBrush;
+                ReplayCanvasBrush();
+                return;
+            }
             if (!ExecuteHostInput() || FAILED(_hostExecutionError))
             {
                 FinishHostContinuation({HostOutcome::Failed, FAILED(_hostBatchError)       ? _hostBatchError

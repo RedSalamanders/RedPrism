@@ -7,7 +7,7 @@
 - [x] Preserve the private Debug, Release and ASan application qualification and all preceding assertions.
 - [x] Preserve the private document suite qualification in the same three configurations.
 - [x] Preserve the captured-settings brush core and opening observer from refreshed Debug/Release/ASan proofs; same 321 core/test inputs and all 6,226 controls/profile.
-- [ ] Preserve canvas Down/Move/Up and pointer loss while opacity closure waits for acknowledgement.
+- [x] Preserve canvas Down/Move/Up, pointer loss, exact-opening cancellation, competing presses, captured mask palette and admitted tool/target/save boundaries from the combined private Debug/Release/ASan application qualification.
 - [ ] Migrate remaining pointer and lifetime opacity closure callers.
 - [ ] Move adjustment and display record construction and retirement to admitted workers.
 - [ ] Qualify the complete native caller migration with the full x64 suites and ARM64 cross-builds.
@@ -42,7 +42,8 @@ repairs and core archive pins. No RAW decoder, SIMD/GPU throughput, Photoshop co
 
 The [captured brush core record](../../TestRuns/P1CapturedBrushCore_2026-10-04.md) qualifies the explicit settings/
 mask-palette BeginBrush overload, opening observer and exhaustion refusal. The existing overload forwards the
-current settings. Canvas routing remains a separate private caller slice; these two source files do not activate it.
+current settings. The [combined caller checkpoint](../../TestRuns/P1DeferredCanvasCallerCheckpoint_2026-10-04.md)
+now preserves the separately qualified application route on this experimental branch. Native integration remains open.
 
 A canvas press must own its document lifetime, target, tool, modifiers and event-time coordinates before waiting
 for opacity closure. Bounded storage must retain the release or pointer-loss outcome even at capacity. Replay must

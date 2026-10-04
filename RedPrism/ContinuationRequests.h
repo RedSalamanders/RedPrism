@@ -127,6 +127,10 @@ struct HostLayerOpacityInput final
     ChromeEditPhase phase;
     OpacityInputOrder::Stamp order{}; // producer field stream; separate from the acknowledged model opening
 };
+struct HostCanvasBrushInput final
+{
+    std::uint64_t opening; // owner-only fixed stream; no borrowed pointer or later view interpretation
+};
 struct HostWriteInput final
 {
     HostWriteFormat format;
@@ -218,7 +222,8 @@ using HostRequestInput =
                  HostEndSessionInput, HostShapeFinishInput, HostGradientApplyInput, HostPixelMoveApplyInput,
                  HostPixelNudgeInput, HostPanelCancelInput, HostTransformFinishInput, HostLayerNudgeInput,
                  HostDuplicateBeginInput, HostDuplicateFinishInput, HostWandLayerNewInput, HostSelectionMoveCloseInput,
-                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput>;
+                 HostSelectionMoveClickInput, HostSelectionMoveHeaderInput, HostSelectionNudgeInput,
+                 HostCanvasBrushInput>;
 
 static_assert(std::is_nothrow_move_constructible_v<HostRequestInput> &&
               std::is_nothrow_move_assignable_v<HostRequestInput>);

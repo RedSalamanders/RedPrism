@@ -619,7 +619,8 @@ bool Application::ExecuteHostInput() noexcept
                           !std::is_same_v<Input, HostPixelMoveApplyInput> && !std::is_same_v<Input, HostPathsInput> &&
                           !std::is_same_v<Input, HostDuplicateBeginInput> &&
                           !std::is_same_v<Input, HostDuplicateFinishInput> &&
-                          !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput>)
+                          !std::is_same_v<Input, HostTransformFinishInput> && !std::is_same_v<Input, HostWriteInput> &&
+                          !std::is_same_v<Input, HostCanvasBrushInput>)
             {
                 return true;
             }
@@ -853,7 +854,10 @@ void Application::EndPointerInteractions() noexcept
     // lifted pixels and a shape draft drop; crop, gradient and eyedropper drags stop where they are; Space no longer
     // pans.
     _spacePan = false;
-    EndPointerDrag(PointerEnd::Lost);
+    if (_canvasBrushInput.Busy())
+        LoseCanvasBrush();
+    else
+        EndPointerDrag(PointerEnd::Lost);
     _session.ClearSnapGuides();
     if (_brushHover.has_value())
     {
