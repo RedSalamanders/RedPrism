@@ -2,6 +2,7 @@
 
 ## Implementation checklist
 
+- [x] Commit and push the qualified private candidate as `7dd28d7` on `codex/p1-opacity-host-proof`; native activation remains open.
 - [x] Seed 519 owned files from the qualified lifecycle private r2 archive into a separate private workspace.
 - [x] Primary prepares a standard C++ immutable root and exclusive builder; no mutable published-record access.
 - [x] Review the cheaper-agent independent ownership/cancellation/failure/reader tests and register them privately.
@@ -63,6 +64,13 @@
       - [x] Qualify Release/ASan host scenarios before production activation.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
+
+The private candidate source is backed up on `codex/p1-opacity-host-proof` at `7dd28d7`, in the attached worktree
+`C:\Users\eric\.codex\worktrees\p1-opacity-host-proof\RedPrism`. All 500 copied owned source files were checked
+against the completed ASan application archive by length and SHA-256 before staging. Private proof projects,
+generated products and machine-specific dependency imports are excluded. The worktree uses the repository's
+portable pinned dependency build glue. This source checkpoint carries the private qualification described below;
+it does not establish a fresh worktree build, full native caller qualification or a G1 deadline.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
 
 ## Current private integration work

@@ -61,6 +61,15 @@ never qualification evidence. Full UI benchmark modes fail if presentation is un
 
 ## Pointer input and the chrome
 
+`PointerInputStream` provides fixed owner-only storage for one admitted gesture. Captured context and samples are
+trivial owning values; published samples cannot borrow session or control state. Accepted path samples retain FIFO
+order. Up/Lost uses a separate terminal slot, including when the move ring is full. Overflow refuses the offered
+move and terminates the accepted prefix once at its last accepted sample using the tool's pointer-loss policy.
+The host reports that refusal. Openings are monotonic and cannot wrap or authorize another reused stream. Taking
+an empty live ring does not close it; consumed terminal ownership remains until acknowledgement. Explicit failed,
+stale and shutdown Drop also requires the exact opening. This reusable foundation performs no pixel work, document
+mutation, allocation or polling. Production deferred canvas callers and their G1 measurements remain separate.
+
 DxUi's embedded host repaints its whole surface after any invalidation, and republishing its UI Automation snapshot
 (`EmbeddedHost::UpdateAccessibility`) walks the whole control tree. A pointer move therefore pushes to the chrome only
 what it changed (review fixes RF-1001, RF-1002):

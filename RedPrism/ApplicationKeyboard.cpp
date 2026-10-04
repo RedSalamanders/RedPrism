@@ -633,6 +633,8 @@ int Application::RunKeyboardSelfTest() noexcept
         settle();
         bool handled = false;
         {
+            // Only a nested system-menu loop needs the timer. Worker acknowledgement and frames may take
+            // longer under load; pumping them with the guard armed would report an unrelated timeout.
             const auto guard = GuardMenuLoopForTest(_window.get());
             handled = HandleAccelerator(virtualKey, modifiers, repeat);
         }

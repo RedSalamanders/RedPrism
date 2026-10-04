@@ -2,6 +2,7 @@
 
 ## Implementation checklist
 
+- [x] Back up the qualified private immutable layer/typed opacity candidate: `7dd28d7`, `codex/p1-opacity-host-proof`.
 - [x] D13 explicit uint64 application limit, class default and machine-query fallback; 45 MP sizing retains undo.
 - [x] Cache retained selection container capacity at geometry construction; constant-time immutable reads.
 - [x] Count unique selection storage in history with the same live-document exclusion as raster storage.
@@ -186,6 +187,17 @@
       inputs, with 28 root assertions and 331 parser controls per x64 configuration
       ([qualified record](../../TestRuns/HistoryRootsAndImageThumbnails_2026-10-01.md)).
   - [ ] H3 — Incremental retained-storage accounting and bounded oldest-first trim/retirement; preserve current-document exclusion, identity lifetime and all trim/Undo/Redo goldens.
+    - [ ] Cache immutable storage topology on the worker, holding every raster/selection owner used as an identity
+      key. Include nested sparse tiles/bases, distinct optional thumbnails and selection capacity without
+      repeated layer/point walks. Keep current-document exclusion and numeric legacy charges unchanged.
+    - [ ] Account for late sparse materialization: `ByteSize()` grows from zero to the assembled allocation when
+      `Data()` publishes its cache. A topology cache alone cannot authorize a stale byte total. Define the
+      resident-charge epoch/notification and off-owner reprepare/trim path before using cached totals for
+      publication. A captured export can materialize a raster now owned only by history while another history
+      worker prepares trim; neither operation may silently exceed the retained limit or traverse history on UI.
+    - [ ] Add independent shared/nested topology, address-reuse, live-document exclusion, capacity, checked overflow
+      and oldest-first cases; gate an export's materialization before/after trim preparation and publication.
+      Verify cancellation/allocation refusal preserves revision/redo and releases every replaced index owner.
   - [ ] H4 — Lazy image-only thumbnails, eager semantic mask thumbnails, bounded first uploads and chrome/apply measurements; meet the complete measured G1 exit.
     - [x] H4.1 — Image-only codec/producer candidates remove unused eager generation while retaining every mask
       thumbnail. The primary reviewed the cheaper agent's codec tests, retained the original literal mask fixture,
