@@ -13,9 +13,17 @@ settlement. Its archived failure precedes a dispatch-scoped guard repair; r4 pas
 archive copies are independently verified. The first private Brush/Eraser adapter passes the complete Debug
 application with 52 pointer checks. The corrected cancellation/palette and competing candidates also pass full
 Debug: 66/25/20 checks, all predecessor controls, and 777/781 verified archive copies. A subsequent candidate
-adds 96 tool/target/standalone Save boundary checks and 68 mask palette checks. Full Release/ASan caller
-qualification, other tools, prompt/lifetime routes and native activation remain open
+adds 96 tool/target/standalone Save boundary checks and 68 mask palette checks. The combined caller subsequently
+passes full Release/ASan qualification; other tools, prompt/lifetime routes and native activation remain open
 ([evidence](../../TestRuns/P1DeferredCanvasInput_2026-10-04.md)).
+
+The combined private boundary/mask caller now passes the actual full x64 WARP application in Debug, Release and
+ASan Debug: 72 ordered stages and 8,118 controls in each profile. All archive copies are independently verified:
+786 Debug, 786 Release and 788 ASan. The portable caller is preserved and pushed as `a0ab3f0` on
+`codex/p1-opacity-host-proof`; all 512 owned candidate inputs matched across the three profiles. Its managed
+checkpoint is `Specs/TestRuns/P1DeferredCanvasCallerCheckpoint_2026-10-04.md`. Native integration, complete tool
+and lifetime routing, retirement and measured G1 remain open. Continue lifetime and shutdown qualification under
+[`DeferredCanvasLifetime_2026-10-04.md`](DeferredCanvasLifetime_2026-10-04.md).
 
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,

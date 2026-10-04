@@ -11,13 +11,15 @@
 - [x] Verify r2's actual isolation failure and dependent refusal (981/980 copies); retain all 66/25 passing new controls without claiming a full suite pass.
 - [x] Refresh core Debug/Release/ASan qualification: all 6,226 checks in each profile, identical 321 core/test inputs, 869/866/871 verified copies.
 - [x] Qualify cancellation/palette and competing r3 full Debug; verify 777/781 archive copies.
-- [ ] Finish the first private application's eight pointer/opacity scenarios in Debug/Release/ASan.
-- [ ] Finish the next private application's nine cancellation/authority and four Eraser/mask scenarios in Debug/Release/ASan.
-- [ ] Finish the next independent candidate's four competing-input cases (20 checks) with unchanged predecessor controls.
+- [x] Qualify the combined boundary/mask private full application in Debug, Release and ASan Debug: 72 ordered stages and 8,118 controls per profile; independently verify all three archives (786/786/788 copies).
+- [x] Finish the first private application's eight pointer/opacity scenarios in Debug/Release/ASan; all 52 checks and predecessor controls are included in each 8,118-control profile.
+- [x] Finish the next private application's nine cancellation/authority and four Eraser/mask scenarios in Debug/Release/ASan; all 66/25 checks and predecessor controls are included in each 8,118-control profile.
+- [x] Finish the next independent candidate's four competing-input cases (20 checks) with unchanged predecessor controls in all three profiles.
 - [ ] Activate complete native callers and qualify remaining tool, lifetime, retirement and measured G1 requirements.
 
 No completed P1, G1, RAW throughput or Photoshop comparison is claimed by these partial results.
 Plan: [Deferred canvas input](../Plans/WIP/DeferredCanvasInput_2026-10-04.md).
+Next lifetime work: [Deferred canvas lifetime](../Plans/WIP/DeferredCanvasLifetime_2026-10-04.md).
 
 ## Native r3: failed complete matrix
 
@@ -196,7 +198,36 @@ mask checks. r1 fails compilation on primary fixture API assumptions (`DocumentS
 `ProjectLoadResult::document` as optional). Its 757 inputs/203 evidence files (960 copies) are independently
 verified before correction to `history.IsModified` and the load status/plain document API. Completion SHA-256:
 `092AEEE44CCF2E9F5BBA11A405ADFFB5813865C03793036E73BF9AB8E0B3218F`.
-r2 rebuilds successfully; runtime remains in progress. No full application or native qualification is claimed.
+
+## Combined boundary/mask: qualified private full applications
+
+The same private combined candidate passes the actual forced rebuild and complete WARP application in Debug,
+Release and ASan Debug. Each application completes exactly 72 ordered stages and all 8,118 controls, including
+the 164 boundary/mask controls, every preceding application control, the saved-project reopen and exact pixel
+expectations, and fixture settings restoration. Each profile records build exit 0 and runtime exit 0. This is
+private qualification only; it does not activate a native caller or qualify remaining tool, keyboard, lifetime,
+shutdown, ARM64 runtime or measured G1 requirements.
+
+Archives under `%LocalAppData%/RedPrism/QualificationArchives/`:
+
+| Profile | Archive suffix | Inputs / evidence / copies | Completion SHA-256 | Source manifest SHA-256 | Evidence manifest SHA-256 | Independent copy verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Debug | `p1-canvas-boundary-application-r2-Debug-qualified-private-full-application` | 757 / 29 / 786 | `9A348971E6F3AA5857A5113FF9D64C39B034BEF060D21E56A2B1AFC42F5DC119` | `A89FAE4BEF84452A3E6FB7FC7E431742DC625A70D255C4D77F5A92327E60C2BF` | `26504E4BB097987B9E98269F47DCE5AD8AD54523400AE47BAF216DB1A6CFB5AE` | Complete; 8,118 controls |
+| Release | `p1-canvas-boundary-application-r3-Release-qualified-private-full-application` | 757 / 29 / 786 | `60665DC19286F8B7A995D5250C1A93A9D579487C2147FF3DD2A0B3FC23166961` | `7AE8E854B1292A48BEC03505A0938C29F091AE4D21F2981129F1133A4BAFD096` | `A1A9A2BD9CB8332946683B64A8841B462EFA174264E0BF0E236EAD28B74F4076` | Complete; 8,118 controls |
+| ASan Debug | `p1-canvas-boundary-application-r4-ASanDebug-qualified-private-full-application` | 758 / 30 / 788 | `566D39E67E35BA9C6BF723D4714A9AE971B1BD1C7094FBCFFD07BFF0630E9460` | `F42941F638E40810D2DC445F198EAB5CFFC4CC0B88057E728650429087D69961` | `13C0647FAEEA292613700A7578262E4B9758DACD32198AF8E16DFF1A23642EF3` | Complete; 8,118 controls |
+
+Independent ASan verification receipt: build exit 0, runtime exit 0, 8,118 controls, verified at
+`2026-10-04T06:42:57.9948465+00:00`. Debug and Release receipts are recorded in
+`.build/p1-canvas-boundary-r2-independent-verification.json` and
+`.build/p1-canvas-boundary-r3-independent-verification.json`; the ASan receipt is
+`.build/p1-canvas-boundary-r4-independent-verification.json`.
+
+The portable combined caller is preserved and pushed as `a0ab3f0` on `codex/p1-opacity-host-proof`; all 512 owned
+candidate inputs matched across the three profiles. Only the changed RedPrism source files and
+`Common/PointerInputStream` were copied, and the portable vcxproj registers seven CPP files. Its managed checkpoint
+is `Specs/TestRuns/P1DeferredCanvasCallerCheckpoint_2026-10-04.md`. The native checkout remains on
+`codex/ui-never-blocks-paused-2026-10-03` at `2789c25`, with source unchanged from `9e466a5`; native integration,
+the full normal matrix and G1 remain open. The separate managed experimental core is also preserved at `c22baee`.
 
 ## Corrected cancellation/palette and competing r3 Debug: qualified private applications
 

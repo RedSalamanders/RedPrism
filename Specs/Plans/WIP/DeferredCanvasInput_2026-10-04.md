@@ -12,27 +12,30 @@
 - [x] Prepare eight actual pointer/held-worker scenarios, including view changes, loss variants, failure and overflow.
 - [x] Compile/link the private Debug application after preserving declaration/visitor failures; verify its archive copies.
 - [x] Qualify the first caller in Debug: all 52 checks/eight cases and preceding application controls; independently verify 772 archive copies.
-- [ ] Qualify those actual caller scenarios and preserve every preceding application assertion in Debug/Release/ASan.
+- [x] Qualify those actual caller scenarios and preserve every preceding application assertion in Debug/Release/ASan (included in the combined 8,118-control application profiles).
 - [x] Prepare the next private cancellation/palette slice: 66 checks across six Escape/Undo/Redo and three replacement-owner authority cases; 25 checks across four Eraser/mask cases.
-- [ ] Qualify that slice in Debug/Release/ASan with the complete preceding application controls and exact stroke-opening authority.
+- [x] Qualify that slice in Debug/Release/ASan with the complete preceding application controls and exact stroke-opening authority (included in the combined 8,118-control application profiles).
 - [x] Qualify cancellation/palette r3 full Debug: 66/25 new checks, unchanged predecessor controls, 777 verified copies.
-- [x] Prepare the next independent competing-input candidate and 20 literal checks: preserve left capture over right Up, seal a refused repeated left Down's accepted prefix, preserve admitted terminals and distinguish new openings/receipts/colors.
+- [x] Prepare and qualify the next independent competing-input candidate's 20 literal checks in all three full application profiles: preserve left capture over right Up, seal a refused repeated left Down's accepted prefix, preserve admitted terminals and distinguish new openings/receipts/colors.
 - [x] Preserve the actual cancellation fixture failure and competing prerequisite refusal; verify all 981/980 archive copies before correcting the new stale-document expectation.
-- [ ] Complete corrected Debug reruns, then qualify the combined candidate in Release/ASan.
+- [x] Qualify the combined boundary/mask candidate in Debug, Release and ASan Debug: all three actual private full applications pass 72 ordered stages and 8,118 controls, including all predecessor controls and 164 boundary/mask checks.
 - [x] Review and integrate 68 white-mask paint/mask Eraser palette checks against spec/legacy expectations; restore incoming fixture settings after acknowledgement.
-- [ ] Qualify those four mask cases with all preceding application controls.
+- [x] Qualify those four mask cases with all preceding application controls.
 - [x] Refresh captured-brush core Debug/Release/ASan: all 6,226 controls/profile, same 321 core/test inputs, verified archives.
 - [x] Prepare an independent boundary candidate: seal accepted prefixes after successful tool/layer/target/standalone Save admission; 96 held/live/refusal checks across twelve cases.
-- [ ] Qualify boundary cases, exact reopened saved pixels, settings isolation and all preceding controls.
-- [ ] Qualify those four cases with all preceding application controls in Debug/Release/ASan.
+- [x] Qualify boundary cases, exact reopened saved pixels, settings isolation and all preceding controls.
+- [x] Qualify those four cases with all preceding application controls in Debug/Release/ASan.
+- [x] Independently verify all three archives: 786 Debug, 786 Release and 788 ASan source/evidence copies.
 - [x] Qualify competing r3 full Debug: 20 new checks, unchanged predecessor controls, 781 verified copies.
 - [ ] Migrate remaining tools, competing inputs and lifetime/shutdown closure.
 - [ ] Migrate adjustment/display record construction and retirement before complete native root activation.
 - [ ] Qualify the complete native matrix and measure admission, replay, publication and frames before claiming G1.
 
 Status: implementation in progress. This plan does not mark P1 complete.
-The native foundation has no active deferred canvas caller. Caller work remains in the private candidate until
-complete authority, input, retirement and validation requirements are satisfied.
+The native foundation has no active deferred canvas caller. The combined boundary/mask caller passes the three
+private x64 application profiles; caller work remains outside the native branch until complete authority, input,
+retirement and validation requirements are satisfied. The next lifetime work is tracked in
+[`DeferredCanvasLifetime_2026-10-04.md`](DeferredCanvasLifetime_2026-10-04.md).
 
 Current qualification state: native r4 passes all six profiles with 60 fresh EXE/PDB products, 56 pointer/98 new
 ISA checks per x64 configuration (pointer checks repeated in ASan stress), all 139 metadata checks/43 cases and
@@ -47,9 +50,16 @@ alpha-zero settings. All 981/980 copies of the actual failure and dependent refu
 The r3 fixture restores incoming settings/tool after its cases; cancellation/palette and competing r3 now pass
 their full Debug WARP suites, with all 777/781 archive copies verified. Refreshed core Debug/Release/ASan passes
 all 6,226 controls/profile with the same 321 core/test inputs and 869/866/871 verified copies; the exact core source
-is pushed on the candidate branch as `c22baee`. The independent boundary/mask candidate rebuilds in r2 Debug
-after preserving a primary-written fixture API compile error (960 copies verified); its runtime is in progress.
-The caller source remains private; Release/ASan, lifetime routing and complete native activation remain open.
+is pushed on the candidate branch as `c22baee`. The combined boundary/mask candidate now passes its actual private
+full WARP application in Debug, Release and ASan Debug: 72 stages and 8,118 controls in each profile. Debug and
+Release archives have 757 inputs and 29 evidence files each; ASan has 758 inputs and 30 evidence files. All 786,
+786 and 788 copies respectively are independently verified. Completion and manifest SHA-256 values are recorded
+in the qualification evidence. The portable caller is preserved and pushed as `a0ab3f0` on
+`codex/p1-opacity-host-proof`; all 512 owned candidate inputs matched across the three profiles. The portable
+project copied only the changed RedPrism source files and `Common/PointerInputStream`, and registers seven CPP
+files in its vcxproj. Its checkpoint is recorded in `Specs/TestRuns/P1DeferredCanvasCallerCheckpoint_2026-10-04.md`
+on the managed checkout. The native branch remains at `2789c25` with source unchanged from `9e466a5`; native
+integration remains open, along with remaining tools, lifetime routing and shutdown, ARM64 runtime, and measured G1.
 
 Earlier, native r3 full Debug passed, including 56 pointer and 98 new ISA checks. Release
 passes the parser and CPU suites, then stops in the existing keyboard harness: both Alt release orders and fills
