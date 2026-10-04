@@ -40,3 +40,23 @@ It runs no pixel kernel, `Data`, history mutation or GPU operation. Cached plann
 settings/render allocation and replaced-display ownership must be included before actual admission. The
 existing full document validator remains an unsliced worker call; cancellation is checked around it, and
 this suite does not establish the original 1 ms cancellation target for that call or the UI/apply/frame targets.
+
+## Session publication work in progress
+
+Private continuation: `%LocalAppData%\RedPrism\PrivateWork\p1-color-publication-proof`. Primary implemented
+move-only capture/publication, complete source and scalar history authority, and transfer of replaced preview
+and display owners. History authority holds no undo stack: display preparation does not read that stack.
+Borrowed planning now covers render scratch, settings/target copies, immutable metadata construction, the
+old display and panel owners, with additional allocation and conservative retirement reported separately.
+Host job/payload records must still be added before admission.
+
+The cheaper agent supplied 60 independent session controls; primary corrected move-only test handling and
+a missing selection include. The first compile failure (`p1-color-publication-r1-Debug-failure`, completed
+receipt `2BFCF30BD03BD0968190FFD351553B98C40A12B2E5041F88BDE26296F42735A9`) retains 1,475 verified copies.
+The second build and full runtime both exited 0 with 6,452 controls, but its archival wrapper rejected a wrong
+new-test prefix in registry comparison. That qualification failure is preserved as
+`p1-color-publication-r2-Debug-failure`, completed receipt
+`3D9A8681DD63FF0CF317292CB13FEC49FA5CB5E98FFE56ECFC017BAC0625F3A1`, all 1,489 copies verified.
+The wrapper is repaired. Those executions preceded the scalar-history/planning changes and do not qualify
+the subsequent source. Isolated history invalidation, moved publication, failed-display invalidation and
+borrowed-planning cases are being added before the fresh three-profile matrix. No host or timing claim follows.

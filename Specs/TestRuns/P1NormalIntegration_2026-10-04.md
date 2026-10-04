@@ -34,6 +34,14 @@ Archives are under `%LocalAppData%\RedPrism\QualificationArchives\`.
 | `normal-clean-x64-test-Debug-r5` | Latest combined lifetime/bounds/scanner candidate, script exit 0; 78 stages / 8,962 application controls and 6,313 document controls | `p1-lifetime-bounds-normal-clean-Debug-r5-pass`, all 852 copies verified | `01A7A3B6BBD19DDC2E94ED2701CEA02ED2A1135710D12EC8E9C3CBE0CABECB64` |
 | `normal-clean-x64-test-Release-r6` | Script exit 1 before runtime: decoded BF16 bytes in a six-entry switch table require a new exact data proof | `p1-lifetime-bounds-normal-clean-Release-r6-isa-rejection`, all 851 copies verified | `D2CC8EF21ED87D34B8FC041B424909EFFBB7120261D65324C205B94E265A527A` |
 | `normal-clean-x64-test-Release-r7` | Fresh combined candidate, script exit 0; exact 78 stages / 8,962 application controls; all ISA controls and screenshots pass | `p1-lifetime-bounds-normal-clean-Release-r7-pass`, all 1,004 copies verified, including scanner extractions/fixtures | `3D389DB2E71765E6167D6A89C65BE325EB64749B04C0D3DE49BE2AC175FEDB31` |
+| `normal-clean-x64-test-Debug-r8` | Same combined source, actual script exit 0; exact 78 ordered stages / 8,962 application controls, all ISA controls and nine screenshots pass | `p1-lifetime-bounds-normal-clean-Debug-r8-pass`, all 1,005 copies independently verified | `F7D5794569F077172C137EF447DA5F31591CF3FE2800DBFDDF8E73EF54413D12` |
+
+Debug r8's archive includes current scanner extraction and negative fixture products. Its source/evidence
+manifest hashes are `D1C2FB924F15782B8AD52245491380FCBFBE810E8A5E2EC6EBA5D62877EA36A4` and
+`A172C4F1EE27FB4302FCDA3204FA487A2C96077100F27BA96705806D83D6A59A`; independent copy verification
+completed at `12:05:54.3041974Z`, followed by exact application registry verification at `12:06:23.6360112Z`.
+Fresh ASan r9 is running against the frozen combined candidate; ARM64 cross-builds and native activation
+remain open. Successful repeated Wand fixtures still do not establish the first failure's cause.
 
 The Release r6 output directory retained the preceding Release self-test logs; its completed archive lists
 their 78 stages as preserved products. This attempt actually executed **zero** application stages, confirmed
