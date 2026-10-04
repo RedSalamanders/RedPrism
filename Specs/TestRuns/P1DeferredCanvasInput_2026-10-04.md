@@ -6,6 +6,11 @@
 - [x] Review 56 literal pointer stream controls and 98 strict R15 parser controls.
 - [x] Verify every source/evidence copy of native r3 and private r4 failures before changing their frozen inputs.
 - [x] Finish native r4 six-profile forced-rebuild matrix and independently verify its archive (909 copies).
+- [x] Finish the first caller's full Debug application suite; verify 772 source/evidence copies.
+- [x] Preserve and verify cancellation r1's actual fixture failure (981 copies) and competing r1's prerequisite refusal (980 copies).
+- [x] Verify r2's actual isolation failure and dependent refusal (981/980 copies); retain all 66/25 passing new controls without claiming a full suite pass.
+- [x] Refresh core Debug/Release/ASan qualification: all 6,226 checks in each profile, identical 321 core/test inputs, 869/866/871 verified copies.
+- [x] Qualify cancellation/palette and competing r3 full Debug; verify 777/781 archive copies.
 - [ ] Finish the first private application's eight pointer/opacity scenarios in Debug/Release/ASan.
 - [ ] Finish the next private application's nine cancellation/authority and four Eraser/mask scenarios in Debug/Release/ASan.
 - [ ] Finish the next independent candidate's four competing-input cases (20 checks) with unchanged predecessor controls.
@@ -88,3 +93,124 @@ history count, opacity, captured settings and receipt assumptions, and adds term
 tip checks. There are 20 expected controls across four cases. Code preserves the admitted left stroke's capture
 over refused right Up and closes the accepted prefix on a refused repeated left Down. Its Debug build/runtime
 and all later configurations remain unqualified. No native pointer routing is changed by this private slice.
+
+## First caller r5 Debug: qualified private application
+
+The actual forced rebuild and full WARP application both exit 0. The application completes exactly 67 ordered
+stages and all 52 `canvas-brush-opacity.*` checks across eight scenarios. All 7,585 preceding application checks,
+139 metadata checks, 31 typed opacity checks and 36 live-context checks remain unchanged and pass. This includes
+the preceding processing, clipboard and rendering suites. Native activation and later configurations remain open.
+
+Archive: `%LocalAppData%/RedPrism/QualificationArchives/p1-canvas-brush-application-r5-Debug-qualified-private-full-application`.
+749 source inputs + 23 evidence files = 772 independently verified copies.
+
+| Record | SHA-256 |
+| --- | --- |
+| Completion | `ACE67487D532BFD1278DE1B7F52E1AEE59C8A385E586AB9AD1FDF8639B70F423` |
+| Source manifest | `BD386E09F499E725009DAF249B36E46E5A06C80301CC3AACDEC9292239EF0790` |
+| Evidence manifest | `579293E8B5A151E47265B744D31DFFAA7E4827172B8B238C2E09593E9F112130` |
+
+## Cancellation r1 Debug: preserved fixture failure
+
+The actual build exits 0; the actual WARP application exits 5. All six held/live Escape/Undo/Redo cases pass
+(48 checks), as do the two same-document replacement-stroke cases (12 checks). The replacement-document case
+fails `old-input-retires-once-without-owned-budget`: its new fixture incorrectly expects Cancelled, although the
+selected host's document-serial guard correctly returns Stale before replay. Palette scenarios are not reached.
+The r2 correction changes only that new receipt expectation; new-owner/history/green-tip assertions stay intact.
+
+Archive: `%LocalAppData%/RedPrism/QualificationArchives/p1-canvas-interruption-application-r1-Debug-failure`.
+752 source inputs + 229 evidence files = 981 independently verified copies.
+Actual runtime PID 73232, exit 5, `2026-10-04T05:25:25.6302213Z` to `2026-10-04T05:28:04.8662473Z`.
+The throwing qualifier leaves its completion's runtime field empty; the actual child receipt is retained.
+
+| Record | SHA-256 |
+| --- | --- |
+| Completion | `2882D9336798C452859E92702A66E70D163AC512F416F37DA3D61384E5FA5D72` |
+| Source manifest | `CB0A8CAF6848E22E5D6E7ABE66E4A95EAC2799F8B2D972FD7D1C6A3F6AE73303` |
+| Evidence manifest | `AE6B54217592E59A4ACB7EC1AA3F8009EB7EDF6F5DF4BF5A7BCC2802F40FC346` |
+
+## Competing r1 Debug: preserved prerequisite refusal
+
+The actual forced rebuild exits 0. Runtime is not launched because the completed cancellation r1 prerequisite
+failed. This result therefore has no application runtime outcome. The r2 helper waits for the corrected r2
+cancellation archive; hidden Windows/clipboard suites remain serialized.
+
+Archive: `%LocalAppData%/RedPrism/QualificationArchives/p1-canvas-competing-application-r1-Debug-failure`.
+754 source inputs + 226 evidence files = 980 independently verified copies.
+
+| Record | SHA-256 |
+| --- | --- |
+| Completion | `A6D6AC74D8194E1B8EE271A19DA18DD8DE0AEDD439CB1FD96F1DFB41A13D1541` |
+| Source manifest | `4999C49EC06AA86F98FB108F11D6470271BB67790B299D44FE2324699E21DC99` |
+| Evidence manifest | `E03F264C074073BADCA3FDA8D64B54086D1D5A441D232E8B26134DF2A15BA5C8` |
+
+## Cancellation/competing r2 Debug: preserved isolation failure
+
+Cancellation r2 builds successfully and all 66 cancellation/authority checks and 25 Eraser/mask checks pass.
+The full application exits 5 in the unchanged project-open suite before its live-brush case (22). The preceding
+palette fixture left its later `{9,1,1,0,1,0}` settings installed: brush alpha is zero, so `BeginBrush` refuses
+the setup. The r3 fixture restores the incoming brush settings, mask palette, brush mode and tool after
+settlement. Existing project-open assertions and all 91 new controls stay unchanged. This identifies a fixture
+isolation defect; r2 is not a qualified full application. Competing r2 compiles but again refuses runtime.
+
+| Archive suffix under `%LocalAppData%/RedPrism/QualificationArchives/` | Inputs / evidence / verified copies | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-canvas-interruption-application-r2-Debug-failure` | 752 / 229 / 981 | `8F337C551494E9FBAA372A26D98B92AC4B0053D0204CADF24CB11599B5968F3C` |
+| `p1-canvas-competing-application-r2-Debug-failure` | 754 / 226 / 980 | `353A4675C4F068FDA0B6AB7DEF2F0E1B474ACB149579FF323CA7FA40F8BDBA26` |
+
+Actual failing runtime PID 113536, exit 5, `2026-10-04T05:50:14.6178255Z` to
+`2026-10-04T05:53:08.3393356Z`. Independent archive verification completes before either fixture/helper is edited.
+
+## Refreshed captured-brush core qualification
+
+The first caller's explicit captured-settings BeginBrush overload, stroke-opening observer and exhaustion
+guard are carried into the existing private full DocumentTests project. The unchanged 6,226-control suite and
+caller compile proof pass Debug, Release and ASan. The 321 Common/DocumentTests/Support source files have identical
+SHA-256 values across profiles. All archived source/evidence copies are independently verified. These core
+results do not activate canvas routing or qualify a complete native model.
+
+| Archive suffix under `%LocalAppData%/RedPrism/QualificationArchives/` | Inputs / evidence / verified copies | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-opacity-host-core-private-r5-Debug-qualified-private-document-suite` | 695 / 174 / 869 | `5F9D3DA0DEAB493DA5238A5AFFA6D79B5918BE8C8AFCE37E38A2D9F63705091A` |
+| `p1-opacity-host-core-private-r6-Release-qualified-private-document-suite` | 695 / 171 / 866 | `5C4F2428B1AFD4BE8411A5C3B24A7607E33F2BFE1F54E7A7D1D67FB8467B7D40` |
+| `p1-opacity-host-core-private-r7-ASanDebug-qualified-private-document-suite` | 696 / 175 / 871 | `5C8C8E1A5697F2C36F1E5AC03C3639D2CA7CDC0B41534DFAEBA907F77096D588` |
+
+## Independent boundary/mask extension candidate
+
+`%LocalAppData%/RedPrism/PrivateWork/p1-canvas-boundary-proof` starts with 631 verified copies of the competing
+r2 frozen source. Its seed explicitly records an unqualified predecessor. Primary implementation seals only
+the captured accepted prefix after successful tool/layer/target/standalone Save admission and releases physical
+capture. A refused admission leaves that stream live; later physical events cannot extend an admitted terminal.
+Twelve held/live/refusal cases add 96 literal checks, including reopening the saved project and checking its
+opacity and accepted pixels. Close/new prompts are not migrated by this slice.
+
+A reviewed cheaper-agent extension adds 68 checks across white-mask paint/mask Eraser success/failure cases.
+The independent reference is `Document_Tools.md` and `UI_ApplicationChrome.md`'s mask palette rule, corroborated
+by legacy `EditorSession+Brush.swift` and `BrushStroke.swift`: mask Erase paints the captured palette value.
+White on the full black mask therefore gives 255 at center/endpoint, 0 outside the original diameter-3 tip,
+with unchanged image bytes, eager semantic thumbnails and separate opacity/stroke history. Cleanup restores
+incoming settings after acknowledgement. These new protocol fixtures do not change any legacy golden.
+
+The Debug qualifier requires exactly 72 ordered stages, all predecessor controls and 164 additional boundary/
+mask checks. r1 fails compilation on primary fixture API assumptions (`DocumentSession::IsModified` and treating
+`ProjectLoadResult::document` as optional). Its 757 inputs/203 evidence files (960 copies) are independently
+verified before correction to `history.IsModified` and the load status/plain document API. Completion SHA-256:
+`092AEEE44CCF2E9F5BBA11A405ADFFB5813865C03793036E73BF9AB8E0B3218F`.
+r2 rebuilds successfully; runtime remains in progress. No full application or native qualification is claimed.
+
+## Corrected cancellation/palette and competing r3 Debug: qualified private applications
+
+Both actual forced rebuilds and full WARP runtimes exit 0. Cancellation/palette completes exactly 69 stages
+with all 66/25 new controls; competing completes exactly 70 with the additional 20 competing controls. All
+7,585 preceding application controls, 139 metadata, 31 typed opacity, 36 live-context and 52 initial pointer
+checks pass unchanged. The complete project-open, clipboard, export and rendering suites pass after fixture
+settings isolation. Every archived source/evidence copy is independently verified.
+
+| Archive suffix under `%LocalAppData%/RedPrism/QualificationArchives/` | Inputs / evidence / verified copies | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-canvas-interruption-application-r3-Debug-qualified-private-full-application` | 752 / 25 / 777 | `E7D73F0F379CDF46BD138461AB7EF15ED7CCCDA7FB91B1722423D91748B44B6B` |
+| `p1-canvas-competing-application-r3-Debug-qualified-private-full-application` | 754 / 27 / 781 | `3CFA75D6F0BC74BB47343E3A979CC12491A62D305F7CD485BA21BE1C31E4F1E3` |
+
+The refreshed captured brush core is committed/pushed as `c22baee` on `codex/p1-opacity-host-proof`. These
+application callers remain private until later configurations and remaining authority/lifetime requirements
+qualify. The native working branch has no active deferred canvas caller; P1 and measured G1 remain open.

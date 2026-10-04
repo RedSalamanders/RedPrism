@@ -1,6 +1,8 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
 Private immutable layer/typed opacity source checkpoint: `7dd28d7` is pushed on `codex/p1-opacity-host-proof`.
+The refreshed captured-brush core is pushed as `c22baee`: Debug/Release/ASan retain all 6,226 document checks,
+with the same 321 core/test inputs and independently verified archives. Native callers remain separate.
 Its archived x64 application and document runs pass; pointer/lifetime/display migration, full native integration
 and measured G1 remain open. The attached worktree preserves the candidate for continued implementation.
 
@@ -8,10 +10,12 @@ The next [deferred canvas input slice](DeferredCanvasInput_2026-10-04.md) prepar
 56 independent controls. Its Release switch-table repair passes 98 new parser controls with the runtime allowance
 unchanged. Native r3 Debug passes; Release then exposes an existing test-only Alt/menu timer spanning worker
 settlement. Its archived failure precedes a dispatch-scoped guard repair; r4 passes all six profiles and all 909
-archive copies are independently verified. The first private
-Brush/Eraser adapter compiles in Debug and eight held-worker pointer scenarios are prepared. A separate candidate
-adds 66 cancellation/authority and 25 Eraser/mask checks. Actual caller qualification, other tools and lifetime
-routes remain open ([evidence](../../TestRuns/P1DeferredCanvasInput_2026-10-04.md)).
+archive copies are independently verified. The first private Brush/Eraser adapter passes the complete Debug
+application with 52 pointer checks. The corrected cancellation/palette and competing candidates also pass full
+Debug: 66/25/20 checks, all predecessor controls, and 777/781 verified archive copies. A subsequent candidate
+adds 96 tool/target/standalone Save boundary checks and 68 mask palette checks. Full Release/ASan caller
+qualification, other tools, prompt/lifetime routes and native activation remain open
+([evidence](../../TestRuns/P1DeferredCanvasInput_2026-10-04.md)).
 
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,

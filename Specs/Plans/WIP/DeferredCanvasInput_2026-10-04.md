@@ -11,11 +11,21 @@
 - [x] Prepare the first private Brush/Eraser caller: event-time document coordinates, tip/color/mask palette and FIFO replay.
 - [x] Prepare eight actual pointer/held-worker scenarios, including view changes, loss variants, failure and overflow.
 - [x] Compile/link the private Debug application after preserving declaration/visitor failures; verify its archive copies.
+- [x] Qualify the first caller in Debug: all 52 checks/eight cases and preceding application controls; independently verify 772 archive copies.
 - [ ] Qualify those actual caller scenarios and preserve every preceding application assertion in Debug/Release/ASan.
 - [x] Prepare the next private cancellation/palette slice: 66 checks across six Escape/Undo/Redo and three replacement-owner authority cases; 25 checks across four Eraser/mask cases.
 - [ ] Qualify that slice in Debug/Release/ASan with the complete preceding application controls and exact stroke-opening authority.
+- [x] Qualify cancellation/palette r3 full Debug: 66/25 new checks, unchanged predecessor controls, 777 verified copies.
 - [x] Prepare the next independent competing-input candidate and 20 literal checks: preserve left capture over right Up, seal a refused repeated left Down's accepted prefix, preserve admitted terminals and distinguish new openings/receipts/colors.
+- [x] Preserve the actual cancellation fixture failure and competing prerequisite refusal; verify all 981/980 archive copies before correcting the new stale-document expectation.
+- [ ] Complete corrected Debug reruns, then qualify the combined candidate in Release/ASan.
+- [x] Review and integrate 68 white-mask paint/mask Eraser palette checks against spec/legacy expectations; restore incoming fixture settings after acknowledgement.
+- [ ] Qualify those four mask cases with all preceding application controls.
+- [x] Refresh captured-brush core Debug/Release/ASan: all 6,226 controls/profile, same 321 core/test inputs, verified archives.
+- [x] Prepare an independent boundary candidate: seal accepted prefixes after successful tool/layer/target/standalone Save admission; 96 held/live/refusal checks across twelve cases.
+- [ ] Qualify boundary cases, exact reopened saved pixels, settings isolation and all preceding controls.
 - [ ] Qualify those four cases with all preceding application controls in Debug/Release/ASan.
+- [x] Qualify competing r3 full Debug: 20 new checks, unchanged predecessor controls, 781 verified copies.
 - [ ] Migrate remaining tools, competing inputs and lifetime/shutdown closure.
 - [ ] Migrate adjustment/display record construction and retirement before complete native root activation.
 - [ ] Qualify the complete native matrix and measure admission, replay, publication and frames before claiming G1.
@@ -27,8 +37,19 @@ complete authority, input, retirement and validation requirements are satisfied.
 Current qualification state: native r4 passes all six profiles with 60 fresh EXE/PDB products, 56 pointer/98 new
 ISA checks per x64 configuration (pointer checks repeated in ASan stress), all 139 metadata checks/43 cases and
 7,585 preceding application controls across 64 ordered stages. All 909 source/evidence archive copies are
-independently verified. The first private caller now runs its complete Debug WARP suite; cancellation/palette
-and competing-input Debug rebuilds pass and await serialized runtime. Their source remains private and unqualified.
+independently verified. Native foundation commit `9e466a5` is pushed. The first private caller's r5 Debug full WARP
+suite passes all 67 stages, with 52 caller checks plus unchanged predecessor controls; all 772 archive copies are
+verified. Cancellation r1 builds and runs, then fails its new replacement-document receipt expectation: the host
+correctly returns Stale before replay. Its 981 archive copies are verified. Competing r1 builds but refuses runtime
+against that failed prerequisite; its 980 archive copies are verified. In r2 all 66 cancellation and 25 palette
+checks pass, then an unchanged project-open test cannot begin its brush: the palette fixture leaked its later
+alpha-zero settings. All 981/980 copies of the actual failure and dependent refusal are independently verified.
+The r3 fixture restores incoming settings/tool after its cases; cancellation/palette and competing r3 now pass
+their full Debug WARP suites, with all 777/781 archive copies verified. Refreshed core Debug/Release/ASan passes
+all 6,226 controls/profile with the same 321 core/test inputs and 869/866/871 verified copies; the exact core source
+is pushed on the candidate branch as `c22baee`. The independent boundary/mask candidate rebuilds in r2 Debug
+after preserving a primary-written fixture API compile error (960 copies verified); its runtime is in progress.
+The caller source remains private; Release/ASan, lifetime routing and complete native activation remain open.
 
 Earlier, native r3 full Debug passed, including 56 pointer and 98 new ISA checks. Release
 passes the parser and CPU suites, then stops in the existing keyboard harness: both Alt release orders and fills
@@ -105,8 +126,9 @@ or queued path data to leave the new green tip/stroke and history untouched. The
 they do not claim actual replacement-document or second-gesture routing is migrated.
 The selected host's document-serial check precedes replay: after document replacement its old receipt must be
 Stale, even if an Escape cancellation was recorded. Cancellation within the same document remains Cancelled.
-Source review found that the still-frozen first fixture expects Cancelled for both. Preserve that attempt before
-correcting its new-fixture receipt expectation; keep the independent new-owner/history/green-tip checks unchanged.
+The first fixture incorrectly expected Cancelled for both. Its actual runtime failure and every archived input
+are preserved and independently verified. The r2 fixture expects Stale after document replacement; independent
+new-owner/history/green-tip checks remain unchanged. No legacy golden or product outcome is changed to pass it.
 
 Competing-button cases cover a refused second Down, right Up, lost capture during refusal, a second complete
 gesture after an earlier terminal was consumed but its acknowledgement is pending, and a new admitted opening
