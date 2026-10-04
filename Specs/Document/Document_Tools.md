@@ -1110,6 +1110,29 @@ readback remains the P1.3 migration.
 
 ### GPU adjustment previews (P1.2)
 
+The immutable-root host queues a bounded scalar preview descriptor: session/document serial, opening, settings
+sequence and full display-source generation. Owning settings/target/document capture occurs only after the
+complete additional-allocation reservation is selected. The same record resumes worker render and complete
+display construction. An admitted opening histogram follows the same capture and retirement boundary.
+An older running settings request may publish an intermediate result; one latest pending descriptor follows
+its acknowledgement. Off, identity, changed display source, Cancel and reopen invalidate publication immediately,
+while the old ticket and reservation remain until that exact record acknowledges.
+
+For destructive previews, `ColorDisplayPublication` binds the rendered target to the complete captured document
+and scalar history authority. The owner validates current authority and swaps the prepared display/panel handles;
+replaced owners remain in the preallocated retirement payload. `DisplayDocument` selects a compatible completed
+display or committed document and does not clone or assemble pixels. Preview invalidation retains invisible
+source/coverage/lookup caches and one old grown cache until prepared transfer; `ColorLookupPreviewReady` controls
+shader visibility. Lookup-only adjustment-layer previews retain their original composition and epoch semantics.
+
+The allocation-free failure publication cannot compare rebuilt outlines on the owner. It accepts only the same
+captured selection root; successful preparation proves equality on the worker and binds that root. Missing,
+foreign, moved-from, consumed or stale publications preserve current data. Complete CPU admission includes
+settings/token metadata, render scratch, display construction and job/payload records; resident retirement
+ownership is reported separately. Failed/cancelled/dropped aggregates retire off owner through the existing
+scheduler release sink. These structural contracts do not establish G1 timing, large-metadata, device recovery,
+shutdown or complete native migration qualification.
+
 For Hue/Saturation, Levels, Curves, Exposure, Gradient Map and Grain, the Application requests immutable
 `AdjustmentLookup` values from the preview worker instead of a filtered CPU raster. Destructive previews retain
 their prepared source and placement and an optional Gray8 selection coverage on that source grid. Compatible

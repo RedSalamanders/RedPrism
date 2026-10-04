@@ -282,8 +282,13 @@ std::optional<std::uint64_t> ColorEditCommitMemoryBytes(const ColorEdit& edit, s
 
 std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput& input) noexcept
 {
-    const ColorEdit& edit = input.edit;
-    if (input.liveAdjustment)
+    return ColorEditPreviewMemoryBytes(input.edit, input.lookupPreview, input.liveAdjustment.has_value());
+}
+
+std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEdit& edit, bool lookupPreview,
+                                                         bool liveAdjustment) noexcept
+{
+    if (liveAdjustment)
         return 1024 * 1024; // immutable tables/cube, bounded settings and result metadata, without raster work
     if (!ValidColorGrid(edit))
     {
@@ -314,7 +319,7 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput
     // Downscaled currently owns a full-size private read until its smaller result is produced. It is released
     // before filtering starts; the new padding and preview source remain owned by the returned cache.
     const auto preparation = downscale ? fullRgba + rgba : 0;
-    if (input.lookupPreview && FilterIsImageAdjustment(edit.kind))
+    if (lookupPreview && FilterIsImageAdjustment(edit.kind))
     {
         const auto coverage = CoverageMemoryBytes(edit, width, height);
         if (!coverage)
@@ -329,7 +334,11 @@ std::optional<std::uint64_t> ColorEditPreviewMemoryBytes(const ColorEditJobInput
 
 std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEditJobInput& input) noexcept
 {
-    const ColorEdit& edit = input.edit;
+    return ColorEditHistogramMemoryBytes(input.edit);
+}
+
+std::optional<std::uint64_t> ColorEditHistogramMemoryBytes(const ColorEdit& edit) noexcept
+{
     if (!edit.original.HasStorage() || edit.original.Format() != RasterFormat::Bgra8888 ||
         edit.kind != FilterKind::Levels)
     {

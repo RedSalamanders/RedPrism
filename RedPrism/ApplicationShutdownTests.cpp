@@ -207,5 +207,5 @@ int Application::RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept
         expect(consumedQuit, "fixture-quit-consumed-before-next-application", after);
     }
     std::printf("application-shutdown summary: %u checks, %d failures\n", checks, failures);
-    return failures ? 5 : 0;
+    return failures ? 5 : RunStandaloneColorDisplayShutdownSelfTest(instance);
 }

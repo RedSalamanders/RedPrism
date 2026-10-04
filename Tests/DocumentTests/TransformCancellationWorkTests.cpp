@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -305,7 +306,8 @@ void DuplicateWorkerCancellationAndHistoryFaults()
 void Refusals()
 {
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
@@ -317,7 +319,8 @@ void Refusals()
                "newer-draft-revision-refuses-old-cancellation");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
@@ -329,7 +332,8 @@ void Refusals()
                "changed-source-refuses-with-state-intact");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
@@ -342,7 +346,8 @@ void Refusals()
                "changed-active-layer-refuses-old-cancellation");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
@@ -353,7 +358,8 @@ void Refusals()
                "changed-history-epoch-refuses-with-state-intact");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
@@ -366,7 +372,8 @@ void Refusals()
                "same-id-document-replacement-refuses-old-cancellation");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto input = fixture.session.PrepareTransformCancellationInput();
@@ -380,11 +387,13 @@ void Refusals()
         }
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         BeginMovedTransform(fixture.session);
         auto prepared = Prepare(fixture.session);
-        Fixture foreign;
+        auto foreignOwner = std::make_unique<Fixture>();
+        auto& foreign = *foreignOwner;
         MakeFixture(foreign);
         foreign.session.ReplaceDocument(fixture.session.Document().value(), fixture.sourceID);
         BeginMovedTransform(foreign.session);
@@ -394,7 +403,8 @@ void Refusals()
                "foreign-session-refuses-prepared-restore");
     }
     {
-        Fixture fixture;
+        auto fixtureOwner = std::make_unique<Fixture>();
+        auto& fixture = *fixtureOwner;
         MakeFixture(fixture);
         Expect(fixture.session.TransformCancellationPreparationMemoryBytes() == 0 &&
                    !fixture.session.PrepareTransformCancellationInput(),

@@ -246,6 +246,8 @@ int Application::RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept
                         MaskPaletteExtensionBlackMask(fixture->mask->asset.image) &&
                         MaskPaletteExtensionBlackMask(fixture->mask->asset.thumbnail)))
             return 5;
+        if (!fixture || !fixture->mask)
+            return 5;
         const Raster mask = fixture->mask->asset.image;
         const Raster thumbnail = fixture->mask->asset.thumbnail;
         _session.history.Reset();

@@ -182,8 +182,11 @@ void LargePreviewRetirement()
                "large-preview.queued-node-retains-source-and-private-tiles-until-destroy");
         Expect(previewNode->bytes >= pixels * 16 && previewNode->destroy != nullptr,
                "large-preview.queued-bytes-cover-private-output-and-selected-coverage-floor");
-        previewNode->destroy(previewNode);
-        previewNodeDestroyed = true;
+        if (previewNode->destroy != nullptr)
+        {
+            previewNode->destroy(previewNode);
+            previewNodeDestroyed = true;
+        }
         Expect(collector.count == 2 && collector.nodes[1] != nullptr &&
                    collector.nodes[1]->bytes >= kDeferredReleaseThreshold,
                "large-preview.source-storage-retires-only-when-preview-node-is-destroyed");

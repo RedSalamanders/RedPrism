@@ -477,27 +477,29 @@ int Application::RunSelectionMoveHeaderSelfTest() noexcept
             const auto expectedError = cancellation ? E_ABORT : E_ACCESSDENIED;
             ok &= expect(
                 name, "close-failure-keeps-live-outline",
-                result.outcome == expectedOutcome && result.error == expectedError && _session.IsMovingSelection() &&
-                    _session.Selection() == state.selection && _session.SelectionMoveOpening() == state.opening &&
-                    _session.Generation() == state.generation && _session.history.IsCurrent(state.history) &&
-                    _session.history.UndoCount() == state.undoCount && _session.marqueeKind == state.marqueeKind &&
-                    _session.lassoKind == state.lassoKind && !_historyWork.Busy() && !_activeHostRequest &&
-                    !_selectionMoveCloseTicket && std::holds_alternative<std::monostate>(_drag),
+                result.outcome == expectedOutcome && result.error == static_cast<std::int32_t>(expectedError) &&
+                    _session.IsMovingSelection() && _session.Selection() == state.selection &&
+                    _session.SelectionMoveOpening() == state.opening && _session.Generation() == state.generation &&
+                    _session.history.IsCurrent(state.history) && _session.history.UndoCount() == state.undoCount &&
+                    _session.marqueeKind == state.marqueeKind && _session.lassoKind == state.lassoKind &&
+                    !_historyWork.Busy() && !_activeHostRequest && !_selectionMoveCloseTicket &&
+                    std::holds_alternative<std::monostate>(_drag),
                 "failed/cancelled End ran Deselect or changed the live selection/history/settings");
         }
         else
         {
             const auto expectedOutcome = cancellation ? HostOutcome::Cancelled : HostOutcome::Failed;
             const auto expectedError = cancellation ? E_ABORT : E_ACCESSDENIED;
-            ok &= expect(name, "followup-failure-keeps-ended-move",
-                         result.outcome == expectedOutcome && result.error == expectedError &&
-                             !_session.IsMovingSelection() && !_session.SelectionMoveOpening() &&
-                             _session.Selection() == state.selection &&
-                             _session.history.UndoCount() == state.undoCount + (moved ? 1 : 0) &&
-                             (!moved || _session.history.UndoName() == L"Move Selection") && !_historyWork.Busy() &&
-                             !_activeHostRequest && !_selectionCommandTicket && !_selectionCommandStamp &&
-                             _jobs.ReservedMemoryBytes() == 0,
-                         "the second worker rewound the committed End or published a partial Deselect");
+            ok &=
+                expect(name, "followup-failure-keeps-ended-move",
+                       result.outcome == expectedOutcome && result.error == static_cast<std::int32_t>(expectedError) &&
+                           !_session.IsMovingSelection() && !_session.SelectionMoveOpening() &&
+                           _session.Selection() == state.selection &&
+                           _session.history.UndoCount() == state.undoCount + (moved ? 1 : 0) &&
+                           (!moved || _session.history.UndoName() == L"Move Selection") && !_historyWork.Busy() &&
+                           !_activeHostRequest && !_selectionCommandTicket && !_selectionCommandStamp &&
+                           _jobs.ReservedMemoryBytes() == 0,
+                       "the second worker rewound the committed End or published a partial Deselect");
             if (moved)
             {
                 _session.Undo();

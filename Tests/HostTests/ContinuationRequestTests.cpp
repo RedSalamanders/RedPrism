@@ -203,10 +203,10 @@ void TestRetirementAndMoveOwnership()
 
 void TestInputBudgetBoundaries()
 {
-    Expect(HostInputBudget::kStorageLimit > 0 && HostInputBudget::kMaxPaths > 0 && HostInputBudget::kMaxPathUnits > 0 &&
-               HostInputBudget::kStorageLimit == 1024 * 1024 && HostInputBudget::kMaxPaths == 256 &&
-               HostInputBudget::kMaxPathUnits == 32767,
-           "budget-limits-are-positive-and-match-host-admission-contract");
+    static_assert(HostInputBudget::kStorageLimit > 0 && HostInputBudget::kMaxPaths > 0 &&
+                  HostInputBudget::kMaxPathUnits > 0 && HostInputBudget::kStorageLimit == 1024 * 1024 &&
+                  HostInputBudget::kMaxPaths == 256 && HostInputBudget::kMaxPathUnits == 32767);
+    Expect(true, "budget-limits-are-positive-and-match-host-admission-contract");
 
     HostInputBudget exactBudget;
     HostRequestInput exactInput = HostPanelOkInput{1};

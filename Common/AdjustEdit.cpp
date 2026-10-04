@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 // The panel owns metadata and immutable handles. Deferred callers prepare worker inputs explicitly; direct
 // callers run the same ColorEditWork graph inline. Neither result path may overwrite newer settings.
@@ -108,6 +109,20 @@ bool DocumentSession::GrowFilterForBlur()
     return true;
 }
 
+bool DocumentSession::HoldColorDisplayOwners() const noexcept
+{
+    return _colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && !_adjustmentEditingID;
+}
+
+void DocumentSession::InvalidateColorPreviewOwners() noexcept
+{
+    if (HoldColorDisplayOwners())
+        return; // Visibility follows its sequence; complete owners transfer at admitted publication/dismissal.
+    _colorEdit->previewRaster = {};
+    _colorEdit->previewLookup.reset();
+    _colorEdit->previewCoverage = {};
+}
+
 bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
 {
     ColorEdit& edit = _colorEdit.value();
@@ -144,9 +159,18 @@ bool DocumentSession::GrowFilterGrid(int left, int top, int right, int bottom)
         return false;
     }
     const GridRect grownRect{targetLeft, targetTop, static_cast<int>(grownWidth), static_cast<int>(grownHeight)};
+    if (HoldColorDisplayOwners() && edit.grownImage.HasStorage())
+    {
+        // An acknowledged matching publication drains this slot before installing another grown cache.
+        // Refuse an unexpected second owner instead of synchronously freeing the first one on a settings tick.
+        if (edit.retiredGrownImage.HasStorage())
+            return false;
+        std::swap(edit.grownImage, edit.retiredGrownImage);
+    }
     edit.grownGrid = ColorEditGrid{targetLeft, targetTop, grownRect.width, grownRect.height};
     edit.grownImage = {};
-    edit.previewSource = {};
+    if (!HoldColorDisplayOwners())
+        edit.previewSource = {};
     edit.previewSequence = 0;
     edit.grownTransform = PlacementOfRect(edit.transform, width, height, grownRect);
     edit.grownOffsetX = -targetLeft;
@@ -267,9 +291,7 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     // A bigger blur needs more room around the layer than it was given.
     if (Adjust::BlurMargin(edit.kind, edit.settings) > edit.grownMargin && !GrowFilterForBlur())
     {
-        edit.previewRaster = {};
-        edit.previewLookup.reset();
-        edit.previewCoverage = {};
+        InvalidateColorPreviewOwners();
         edit.previewSequence = 0;
         edit.previewInvalidatedSequence = _colorEditSequence;
         ++_editRevision;
@@ -281,9 +303,7 @@ void DocumentSession::UpdateColorEdit(const FilterSettings& settings, bool previ
     }
     if (!preview || ColorEditChangesNothing(edit.kind, edit.settings))
     {
-        edit.previewRaster = {};
-        edit.previewLookup.reset();
-        edit.previewCoverage = {};
+        InvalidateColorPreviewOwners();
         edit.previewSequence = 0;
         edit.previewFailed = false;
         edit.previewInvalidatedSequence = _colorEditSequence;

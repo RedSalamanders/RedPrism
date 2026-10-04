@@ -368,8 +368,11 @@ bool HasPixels(const ClipboardTransfer::Inspection& inspection, const std::array
     if (!matches)
     {
         std::printf("clipboardavailability.pixel-decode-status=%u dimensions=%dx%d first-pixel=%u,%u,%u,%u\n",
-                    static_cast<unsigned int>(status), decoded.Width(), decoded.Height(), valid ? decoded.Data()[0] : 0,
-                    valid ? decoded.Data()[1] : 0, valid ? decoded.Data()[2] : 0, valid ? decoded.Data()[3] : 0);
+                    static_cast<unsigned int>(status), decoded.Width(), decoded.Height(),
+                    static_cast<unsigned int>(valid ? decoded.Data()[0] : 0),
+                    static_cast<unsigned int>(valid ? decoded.Data()[1] : 0),
+                    static_cast<unsigned int>(valid ? decoded.Data()[2] : 0),
+                    static_cast<unsigned int>(valid ? decoded.Data()[3] : 0));
         std::printf("clipboardavailability.diag pixel-result copySequence=%u inspectionSequence=%u "
                     "currentSequence=%lu decodeStatus=%u valid=%u expected=%u,%u,%u,%u\n",
                     copy.Sequence(), inspection.Sequence(), static_cast<unsigned long>(GetClipboardSequenceNumber()),

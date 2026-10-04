@@ -91,3 +91,220 @@ ownership without traversing undo history or materializing pixels. It reports re
 new allocation. Actual host job/payload records, reservation-before-capture/resume, mailbox descriptors, shader
 visibility wiring and worker retirement still require integration and host tests. Direct test destruction of a
 prepared aggregate does not prove retirement off the application owner. No application/G1/native activation is claimed.
+
+## Normal integration in progress
+
+The managed candidate now includes the core and actual host wiring. Its pending mailbox holds scalar identities;
+borrowed planning precedes owning capture, an admitted record resumes worker preparation, and owner publication
+retains replaced display/panel owners in the retirement payload. Cancel/off/reopen keep the exact ticket until
+acknowledgement. Histogram capture uses the same admission and retirement boundary. These source changes have
+not yet passed the complete normal matrix or G1 measurements.
+
+Static analysis r14 exited 1 without runtime. All 966 source/evidence copies were independently verified at
+2026-10-04T13:06:09.8653910Z in `p1-display-normal-clean-x64-Debug-r14-analysis-failure`;
+completion SHA-256 `A7642BC473095890C02D80828F25C5F7D033E9D7FF9625B7F860A921541C6229`.
+The run exposed further exact HRESULT comparison warnings, nullable test resources and stack-frame diagnostics.
+The primary reviewed the cheaper agents' bounded comparison/test patches; pending reruns must establish which
+diagnostics are cleared. Existing numeric goldens and error values are unchanged.
+
+A primary correction also bounds failure publication: a separately reconstructed selection cannot trigger
+owner-side geometric equality. It is conservatively refused unless it shares the captured selection root;
+successful workers still prove equality and bind the root before publication. Three independent document
+controls exercise this failure case. Fresh normal Debug r15 is in progress with sources frozen; no pass is claimed.
+
+Normal r15 exited 1 during compilation, without runtime. The new host test called a void session API as a
+predicate, and a const descriptor could not transfer into the mailbox. Every one of the 1,005 archive copies was
+verified before correcting either source. Archive `p1-color-host-normal-clean-x64-Debug-r15-compile-failure`,
+completion SHA-256 `AA22E929A78A4A7939A99841A157638F19B6084E023C9B35529B1857C4EFA133`.
+The calls now verify `HasColorEdit` after opening; the descriptor is mutable for move admission. Normal Debug
+r16 is running from a new frozen snapshot. No runtime or completed milestone is claimed by the failed attempt.
+
+Normal r16 compiled, linked, passed the ISA/build controls and all standalone suites, including the three new
+failure-root controls. The hidden application exited 5 in the first new full-display case (the wrapper exited 1),
+after 57 stages. All 1,015 copied inputs and evidence files were verified before changes. Archive
+`p1-color-host-normal-clean-x64-Debug-r16-full-display-failure`, completion SHA-256
+`192F4393D97BC32E7F37AEF98EAAEC0E2CD69FFB2C904CAC46BBC611F32BDE95`.
+
+The new test's reference incorrectly doubled encoded gray bytes. Primary checked
+retained numeric golden cases: Exposure doubles linear light and its +1-stop gray
+expectation is 176 within 2. The fixture now selects the legacy gray-128 sample and uses that existing expectation;
+the sibling and unselected pixels remain literal. Failure output now reports pixels, publication and retirement
+facts separately. No existing golden or processing arithmetic changed. The independent clipboard-owner fixture
+also retains the Application's opt-in publication policy after resetting its session. Fresh normal Debug r17 is
+running from another frozen snapshot; the new host route remains unqualified until its actual gates pass.
+
+Normal r17 passed all standalone suites and all ten initial `color-display-host.*` cases, then failed the later
+clipboard compatibility fixture. The full application reached 71 stages and exited 5; the wrapper exited 1.
+Every one of the 1,015 copied source/evidence files was verified at 2026-10-04T13:56:06.9836484Z before edits.
+Archive `p1-color-host-normal-clean-x64-Debug-r17-clipboard-failure`, completion SHA-256
+`89594BD8975941C98F4AA6FD6DD67217672B7D3EEAAB7D4B0C316BC182410586`.
+Independent standalone registry verification again confirms 6,392 preceding plus 99 publication controls;
+this scoped success does not qualify the failed overall run.
+
+Primary reproduced the clipboard fixture defect with a read-only native probe (no clipboard contents changed):
+with a null holder and null second reader, both `OpenClipboard` calls succeeded, the second close released the
+hold, and the first close failed. A distinct message-only holder window refused both null and distinct-window
+second opens with error 5 and retained its own successful close. The product's serial Io lane still closes each
+scope before returning; the fixture's null opener allowed asynchronous prefill to release the intended hold.
+The fixture now owns a message-only window, verifies the opener at entry and checks its release/close. This
+models the documented [window-owned clipboard exclusion](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard)
+and preserves the original private-newer-copy expectation and all numeric goldens.
+
+Additional actual host cases are being integrated before the next snapshot: device recovery while preparation
+is running and while ready publication is held, all 10,000 legal metadata records, shutdown before/after
+preparation, and real memory-admission wait/cancellation. Shutdown now clears retained color preview/histogram
+tickets after the scheduler's join, which suppresses `Completed` callbacks. These changes remain unqualified
+until fresh normal runtime, analysis and cross-builds pass. The original P1/G1 exit criteria remain open.
+
+Before r18, primary integrated the current native baseline `024380a` into the managed branch (local merge
+`6b5175e`, qualification pending). Both scanner proofs are retained: the candidate's guarded RSI table and the
+native hoisted R15 remap. Native pointer controls and their project registrations are included. The saved
+unqualified color work was reapplied without conflict; its source remains separate from the qualified prior
+checkpoint. The merged menu guard retains the native dispatch-only timer scope and the candidate's brush
+Escape handling. This is source integration, not a runtime qualification claim.
+
+The cheaper agent drafted the two standalone admission cases. Primary moved private-member access into an
+Application member, removed redundant termination checks, changed cancellation to the actual queued panel
+Cancel receipt, added source/panel guards and retained shutdown-aware gate cleanup. Production admission uses
+the existing optional `MemorySource` through the startup test probe; ordinary startup supplies the OS source.
+The blocker owns a declared 64 MiB reservation, preventing both partial reservation and owning capture of the
+preview. Resume requires the original ticket; cancellation requires no preview capture or worker entry.
+
+Fresh full Debug r18 began at 2026-10-04T14:17:45.2178348Z with 752 frozen inputs, 17 targeted display host
+controls and the unchanged 78-stage registry. Skills pass all 15 entries and formatting passes 634 files.
+The build includes both scanner control families and the native pointer tests. Sources remain frozen through
+actual child exit and independently verified archive completion. No pass is claimed before that boundary.
+
+While r18 is frozen, primary found an additional flaw in the new fault tests: the callback captured a layer id
+before `stalePreparedCase` rebuilt its fixture. The source-identity and sibling mutations could therefore miss
+the intended record; the same-id replacement did not preserve the current fixture's target id. The recorded
+r17 pass lines remain execution evidence, but they do not establish those intended mutations. After r18 is
+archived, callbacks must resolve current fixture ids at the actual mutation boundary and assert the new raster
+or metadata was installed. Add a separate held-source-change case requiring a fresh descriptor and complete
+display with the current sibling fields, not merely eventual rejection of an old generation. No old golden or
+P1 exit gate changes. Current host coverage remains open until the corrected controls are rerun.
+
+Review also found that the waiting-cancel harness retained the preview instrumentation as the owner gate for
+the new dismissal job. Dismissal has its own admitted capture and may legitimately set that gate's capture
+flag. Before queueing Cancel, detach the owner test gate while the already submitted preview keeps its immutable
+shared gate; then assert that preview never captured. This separates two actual jobs' observations without
+changing either production cancellation path. The correction waits for the frozen r18 archive boundary.
+
+Normal r18 exited 1 at the identified waiting-cancel instrumentation case, before the main Application registry.
+Both new shutdown cases and admission resume executed successfully; the other shared-owner new cases did not
+run in this attempt. All standalone suites and both scanner families passed. Every one of the 1,019 copies was
+verified at 2026-10-04T14:28:57.2805887Z. Archive
+`p1-color-host-combined-x64-Debug-r18-admission-instrumentation-failure`, completion SHA-256
+`A896B530AA976FA9254C1DF724122EB6658B9950DDA1D4D1FBD536104868ADFC`.
+The successful standalone DocumentTests registry remains exactly 6,392 preceding plus 99 publication controls.
+
+After that boundary, the preview retained its submitted immutable gate while the owner detached it before
+starting dismissal. Source-identity and sibling callbacks now resolve the current freshly built target and
+prove the new raster/fields were installed. Same-id replacement preserves every document field and raster/mask
+identity and checks a changed session serial. A new held source-change case requires one pending descriptor,
+the old exact ticket until acknowledgement, two worker visits and a complete display with the new sibling
+name/opacity and the original opening/settings. Fresh Debug r19 is running from a new frozen snapshot with
+18 targeted color controls and 634 formatted files. No overall pass is claimed yet.
+
+Normal r19 compiled/linked and passed the ISA controls, then stopped in the failure-report startup probe:
+`DocumentTests.exe --failure-report-self-test` exited `-1073741502` (`0xC0000142`), before its expected CRT
+report and before any application stage. All 1,019 source/evidence copies were verified at
+2026-10-04T14:43:39.0032368Z. Archive
+`p1-color-host-combined-x64-Debug-r19-process-initialization-failure`, completion SHA-256
+`09552D86532E1A188753D65B78301021B8E487A20780937F00848AEDD579B1C4`.
+The unchanged binary (SHA-256 `5095E0B8C6C2357FB65312A38B24A168C63477FD005C00C815CC48268A5FA60A`)
+was launched separately at 14:44:42Z and produced its required CRT report and exit 3. This narrow retry
+establishes no full-suite pass and does not explain the original initialization failure.
+
+Normal r20's PowerShell child itself exited `0xC0000142` before producing any output or starting a build/test.
+All 1,019 copies were verified at 2026-10-04T14:45:44.0594929Z; older output-directory products are retained
+as evidence only, not counted as runtime from this attempt. Archive
+`p1-color-host-combined-x64-Debug-r20-powershell-initialization-failure`, completion SHA-256
+`94DE5AA79D8AFD7F740EB0EF06B747B986325648CE0D4E26B523AB3625B94343`.
+No product source, expected exit, golden or timeout was changed. Fresh Debug r21 is running with that same
+product snapshot. The process-start failures remain unexplained; qualification remains open.
+
+Normal r21 passed compilation, linked-image/scanner controls, all failure-report probes and the Host,
+Document and Composition suites, then exited 1 in IoTests before any application stage. The clipboard
+transfer group reported 25 failed assertions, including NativeFailure/error 8 before clipboard mutation;
+its overall suite result is one failed test group, not one failed assertion. Later availability/settings
+controls ran and the fixture restored the user's clipboard. Every one of the 1,019 copies was verified at
+2026-10-04T14:53:42.7922202Z. Archive
+`p1-color-host-combined-x64-Debug-r21-io-failure`, completion SHA-256
+`FCC661FD4AEE3DD7C126ED53C76F5AFF809D54DAF31E7E67525FBD5EA3897374`.
+These failures are retained and do not qualify the application color route. Fresh native static analysis r22
+is next; it does not run the Windows/clipboard fixtures. The runtime host also intermittently fails to start
+PowerShell threads. The user has been asked to free unused application/build resources; no user process
+has been terminated, and no environmental cause is claimed as proven.
+
+The r22 PowerShell child exited `-532462766` (`0xE0434352`) in `LocalPipeline.InvokeThreadProc`, with
+`Thread failed to start` and an unhandled `NullReferenceException`, before MSBuild or product runtime.
+All 1,009 retained copies were verified at 2026-10-04T14:56:35.2340345Z. Archive
+`p1-color-host-combined-x64-Debug-r22-powershell-failure`, completion SHA-256
+`474D8D4EC79B87591D1ADF1545A7302E2419764EFD74BF451E4C4CBA49F911AB`.
+
+After that boundary, primary reviewed the cheaper agent's four fixture-buffer fixes. Exact patterns,
+`no_vector`, cancellation checkpoints, control names and assertions are unchanged; large fixture arrays
+are heap-owned. Production image-import/project-open path buffers are bounded heap construction with
+whole-operation OutOfMemory refusal, and classification reuses one constant-initialized 64 KiB buffer per
+executing thread. It never pumps messages/reenters classification and acknowledges each read before reuse.
+The existing 96 KiB classification scratch allowance is unchanged. The benchmark's temporary path buffer
+is heap-owned within its existing recoverable setup boundary. The lookup failure result is populated in
+its already admitted payload instead of creating a large stack temporary. Skills pass 15 entries and
+formatting passes 634 files; these new changes await compiler/runtime qualification.
+
+The next analysis attempt uses an ignored Python launcher with `CREATE_NO_WINDOW` to avoid allocating
+another hidden console for the PowerShell child. It still calls the identical repository entrypoint with
+forced Rebuild, freezes/copies all inputs, records the actual child PID/exit and performs no retry. This
+launch change does not establish the cause of the resource failures or bypass any build/test gate.
+
+Analysis r23 reached repository tool discovery, which reported no MSBuild, and exited 1 before compilation.
+A separate unchanged `vswhere` invocation subsequently returned the installed Visual Studio 18.x instance
+and exit 0. No installation, pin or toolchain setting was changed, and the failed discovery remains retained.
+All 1,009 copied files were verified at 2026-10-04T15:06:36.7518248Z. Archive
+`p1-color-host-combined-x64-Debug-r23-tool-discovery-failure`, completion SHA-256
+`DDA5517B5C18360B00ECC6077140A520AC16B5234A7717BD9BE3FE5BC1533F21`.
+
+Analysis r24 discovered the correct existing Visual Studio/toolset but stopped in dependency preflight:
+vcpkg's `vswhere` child returned `0x80070008`, explicitly reporting insufficient memory resources.
+The wrapper exited 1 before compilation. All 1,009 copies were verified at
+2026-10-04T15:09:23.1365108Z. Archive
+`p1-color-host-combined-x64-Debug-r24-dependency-launch-failure`, completion SHA-256
+`E3229D6AEF420B6C905C7841C01C1998B1AFE24896FA7DFD3D35584DADDE6AF5`.
+Further full qualification waits for recovery of the host's process/resource failures. The failed runs
+are not treated as product passes, and no dependency/ISA/provenance gate is skipped.
+
+Primary review replaced the intermediate thread-local classification scratch proposal: a large native TLS
+buffer would add persistent storage to unrelated threads. The current candidate allocates one fixed 64 KiB
+buffer only inside a nonempty, validated classification call, within the already admitted 96 KiB scratch
+allowance. It reuses the buffer for all paths and releases it on the worker after every read is acknowledged.
+Allocation refusal returns `OutOfMemory` with no partial output; the actual host job maps it to failed
+`E_OUTOFMEMORY`. Empty, invalid and pre-cancelled batches allocate no scratch. A controlled fixed-buffer
+factory supports independent refusal/cancellation/positive tests. This change and its new tests still require
+fresh compiler/runtime qualification after the host recovers; no P1 exit or legacy golden is weakened.
+
+The cheaper agent added six scratch-source scenarios with 12 new independent controls. Primary reviewed each
+assertion and strengthened the successful case to a counted `.PRISM` subview whose backing string continues
+with a non-comp suffix. It must terminate the view privately and leave that backing string unchanged.
+The cases cover whole-batch refusal/default output, cancellation winning over refusal, empty/invalid/pre-
+cancelled batches skipping allocation, and successful custom fixed-size storage. No existing test name,
+numeric golden or runner order changes. Formatting still passes all 634 files and skills all 15 entries.
+These controls have not run on the resource-failing host.
+
+## Current continuation boundary
+
+P1 remains WIP. All attempts through r24 have actual terminal receipts and independently verified archives;
+no qualification child or subagent remains active. The last overall successful matrix predates the current
+color route. r21's exact 6,491-control document success is scoped to its earlier frozen source; it cannot
+qualify the subsequently reviewed stack/scratch changes or the still unexecuted corrected host cases.
+
+After Windows process/resource creation recovers, first run native Debug analysis with a fresh forced
+rebuild. Preserve and independently verify its products even on failure, repair remaining diagnostics,
+then run fresh full x64 Debug/Release/ASan and all ARM64 cross-builds from one identical owned source.
+Application qualification requires the unchanged 78 ordered stages / 8,962 preceding literal controls plus
+the exact 18 new color controls, and DocumentTests requires its unchanged 6,392 preceding plus 99 publication
+controls. IoTests must also execute the 12 new scratch controls alongside every previous control. Real ASan
+instrumentation/detection remains required; ARM64 cross-builds do not establish native runtime.
+
+Native activation and the remaining sampler/stroke/selection/file/history/upload/chrome routes and original
+G1 measurements remain P1 requirements. Do not move P1 to Done after only this color-display qualification.

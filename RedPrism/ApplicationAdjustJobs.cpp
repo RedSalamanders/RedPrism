@@ -4,12 +4,16 @@
 
 #include "Adjust.h"
 #include "ChromeHost.h"
+#include "ColorDisplayPublication.h"
+#include "ColorEditHistory.h"
 #include "ColorWorkTestGate.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <new>
 #include <utility>
@@ -33,75 +37,416 @@ JobResult PassColorWorkTestGate(const std::shared_ptr<ColorWorkTestGate>& gate, 
                                    : JobResult{JobStatus::Failed, HRESULT_FROM_WIN32(ERROR_TIMEOUT)};
 }
 
+namespace
+{
+bool AddColorBytes(std::uint64_t& total, std::uint64_t count, std::uint64_t size = 1) noexcept
+{
+    constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    if ((size && count > maximum / size) || count * size > maximum - total)
+        return false;
+    total += count * size;
+    return true;
+}
+
+std::optional<std::uint64_t> ColorCaptureMetadata(const ColorEdit& edit) noexcept
+{
+    std::uint64_t bytes = 65536;
+    for (const auto& channel : edit.settings.curves.channels)
+        if (!AddColorBytes(bytes, channel.size(), 6 * sizeof(CurvePoint)))
+            return std::nullopt;
+    if (edit.sourceToken && edit.sourceToken->target)
+    {
+        const auto& target = edit.sourceToken->target.value();
+        if (target.mask && !AddColorBytes(bytes, target.mask->asset.name.size() + 1, 6 * sizeof(wchar_t)))
+            return std::nullopt;
+        if (target.adjustment)
+            for (const auto& channel : target.adjustment->curves.channels)
+                if (!AddColorBytes(bytes, channel.size(), 6 * sizeof(CurvePoint)))
+                    return std::nullopt;
+    }
+    return bytes;
+}
+
+std::optional<ColorDisplayPreviewMemory> ColorLookupMemory(const DocumentSession& session, bool histogram) noexcept
+{
+    const auto& pending = session.PendingColorEdit();
+    const auto* layer = session.ActiveLayer();
+    if (!pending || !layer)
+        return std::nullopt;
+    const auto& edit = pending.value();
+    const auto render = histogram ? ColorEditHistogramMemoryBytes(edit) : ColorEditPreviewMemoryBytes(edit, true, true);
+    const auto metadata = ColorCaptureMetadata(edit);
+    const auto target = RecordOwnershipPolicy<ImageLayer>::Measure(*layer);
+    const auto held = ColorEditHeldMemoryBytes(edit);
+    if (!render || !metadata || !target || !held)
+        return std::nullopt;
+    ColorDisplayPreviewMemory memory{render.value(), 0};
+    if (!AddColorBytes(memory.additionalBytes, metadata.value()) ||
+        !AddColorBytes(memory.additionalBytes, target->metadataBytes, 6) ||
+        !AddColorBytes(memory.retirementBytes, target->ownershipBytes, 4) ||
+        !AddColorBytes(memory.retirementBytes, held, 4) ||
+        !AddColorBytes(memory.retirementBytes, memory.additionalBytes, 2))
+        return std::nullopt;
+    return memory;
+}
+
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ColorPreviewPayload final : DeferredReleaseNode
+{
+    std::optional<ColorDisplayPreviewInput> input;
+    std::optional<PreparedColorDisplayPreview> fallback;
+    std::optional<ColorDisplayPreviewResult> prepared;
+    std::optional<ColorEditJobInput> lookupInput;
+    std::optional<ColorEditPreviewResult> lookupFallback;
+    std::optional<ColorEditPreviewResult> lookupResult;
+    std::shared_ptr<ColorWorkTestGate> gate;
+    DWORD ownerThread = 0;
+    ColorPreviewPayload() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* value) noexcept
+        { const std::unique_ptr<ColorPreviewPayload> owned(static_cast<ColorPreviewPayload*>(value)); };
+    }
+    ~ColorPreviewPayload()
+    {
+        if (gate && gate->kind == ColorWorkTestKind::Preview)
+        {
+            gate->payloadRetiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->payloadRetired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+
+struct RetireColorPreviewPayload final
+{
+    void operator()(ColorPreviewPayload* value) const noexcept
+    {
+        if (value && !TryDeferRelease(*value))
+        {
+            const std::unique_ptr<ColorPreviewPayload> owned(value);
+        }
+    }
+};
+} // namespace
+
 class Application::ColorPreviewJob final : public Job
 {
   public:
-    ColorPreviewJob(Application& owner, PreviewMailbox<ColorEditJobInput>::Launch launch)
-        : _owner(owner), _stamp(launch.stamp), _input(std::move(launch.input)), _result{_input.token, _input.edit},
-          _gate(owner._colorWorkTestGate)
+    ColorPreviewJob(Application& owner, ColorPreviewRequest request, PreviewStamp stamp, std::uint64_t retirement)
+        : _owner(owner), _request(request), _stamp(stamp), _retirement(retirement), _gate(owner._colorWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
     JobResult Run(JobContext& context) override
     {
-        if (const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
-            gate.status != JobStatus::Finished)
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (!_payload)
+            return {}; // Admission selects this same record before owner capture and resume.
+        if (!_gate || !_gate->afterPreparation)
         {
-            return gate;
+            const auto result = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
+            if (result.status != JobStatus::Finished)
+                return result;
         }
-        _result = RunColorEditPreviewJob(_input, context.executor, context.cancellation);
+        if (_gate && _gate->kind == ColorWorkTestKind::Preview && _gate->throwAllocationFailure)
+            throw std::bad_alloc{};
+        if (_request.lookupOnly)
+        {
+            _payload->lookupResult.emplace(
+                RunColorEditPreviewJob(_payload->lookupInput.value(), context.executor, context.cancellation));
+            _payload->lookupInput.reset();
+        }
+        else
+        {
+            _payload->prepared.emplace(DocumentSession::PrepareColorDisplayPreviewPublication(
+                std::move(_payload->input.value()), context.executor, context.cancellation, {}));
+            _payload->input.reset();
+        }
         if (_gate && _gate->kind == ColorWorkTestKind::Preview)
-        {
             (void)SetEvent(_gate->computed.get());
+        if (_gate && _gate->afterPreparation)
+        {
+            const auto result = PassColorWorkTestGate(_gate, ColorWorkTestKind::Preview, context);
+            if (result.status != JobStatus::Finished)
+                return result;
         }
-        return {};
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+    }
+    bool DeferCompletion(JobResult completion, JobTicket ticket) noexcept override
+    {
+        if (_payload || completion.status != JobStatus::Finished || !Current(true))
+            return false;
+        try
+        {
+            _payload.reset(std::make_unique<ColorPreviewPayload>().release());
+            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            _payload->gate = _gate;
+            _payload->ownerThread = _ownerThread;
+            if (_gate && _gate->kind == ColorWorkTestKind::Preview)
+            {
+                _gate->captureReservationHeld = _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes;
+                if (_gate->throwCaptureFailure)
+                    throw std::bad_alloc{};
+            }
+            if (_request.lookupOnly)
+            {
+                auto input = _owner._session.PrepareColorEditPreview();
+                if (!input)
+                {
+                    _captureError = E_ABORT;
+                    return false;
+                }
+                _owner.ConfigureColorLookupPreview(input.value());
+                _payload->lookupFallback.emplace();
+                _payload->lookupFallback->token = input->token;
+                _payload->lookupFallback->edit = input->edit;
+                _payload->lookupInput.emplace(std::move(input.value()));
+            }
+            else
+            {
+                auto input = _owner._session.PrepareColorDisplayPreviewInput(_request.lookupPreview);
+                auto failureInput = _owner._session.PrepareColorDisplayPreviewInput(_request.lookupPreview);
+                if (!input || !failureInput)
+                {
+                    _captureError = E_ABORT;
+                    return false;
+                }
+                // Preallocate a move-only failure publication while the complete reservation is held. The
+                // worker may unwind its input after bad_alloc; completion never reconstructs settings/owners.
+                _payload->fallback.emplace(DocumentSession::PrepareFailedColorDisplayPreviewPublication(
+                    std::move(failureInput.value()), ColorEditJobStatus::Failed));
+                _payload->input.emplace(std::move(input.value()));
+            }
+            if (_owner._jobs.Resume(ticket))
+                return true;
+            _captureError = E_UNEXPECTED;
+        }
+        catch (const std::bad_alloc&)
+        {
+            _captureError = E_OUTOFMEMORY;
+        }
+        return false;
     }
     void Completed(JobResult completion) noexcept override
     {
-        _owner.CompleteColorPreview(_stamp, _result, completion);
+        _owner._colorCompleting = true;
+        const auto endCompletion = wil::scope_exit([&]() noexcept { _owner._colorCompleting = false; });
+        const bool current = Current(false);
+        bool applied = false;
+        bool changed = false;
+        HRESULT error = FAILED(_captureError) ? _captureError : completion.error;
+        if (current && completion.status != JobStatus::Cancelled && _payload)
+        {
+            if (_request.lookupOnly)
+            {
+                auto* result = completion.status == JobStatus::Finished && SUCCEEDED(error) && _payload->lookupResult
+                                   ? &_payload->lookupResult.value()
+                                   : (_payload->lookupFallback ? &_payload->lookupFallback.value() : nullptr);
+                if (result)
+                {
+                    applied = _owner._session.ApplyColorEditPreview(*result);
+                    changed = applied || result->token.sequence == _owner._session.ColorEditSequence();
+                    if (result->status == ColorEditJobStatus::Failed &&
+                        result->token.sequence == _owner._session.ColorEditSequence())
+                        error = FAILED(error) ? error : E_FAIL;
+                }
+            }
+            else
+            {
+                auto* publication = completion.status == JobStatus::Finished && SUCCEEDED(error) &&
+                                            _payload->prepared && _payload->prepared->publication
+                                        ? &_payload->prepared->publication.value()
+                                        : (_payload->fallback ? &_payload->fallback.value() : nullptr);
+                if (publication)
+                {
+                    applied = _owner._session.ApplyPreparedColorDisplayPreviewIfCurrent(*publication);
+                    changed = publication->IsConsumed();
+                    if (publication->Status() == ColorEditJobStatus::Failed &&
+                        _request.sequence == _owner._session.ColorEditSequence())
+                        error = FAILED(error) ? error : E_FAIL;
+                }
+            }
+        }
+        _owner._colorPreviewTicket.reset(); // Retained across close/off/reopen until this exact acknowledgement.
+        (void)_owner._colorPreviews.Finish(_stamp, applied);
+        if (current && completion.status != JobStatus::Cancelled && FAILED(error) && error != E_ABORT)
+            _owner.QueueColorFailure();
+        if (changed)
+            _owner.DocumentChanged();
+        if (!_owner._shutdownStarted)
+            (void)_owner._jobs.RequestUiActionSource(_owner._continuationAction);
     }
 
   private:
-    Application& _owner; // UI completion only. Run reads immutable values, never the Application.
-    PreviewStamp _stamp;
-    const ColorEditJobInput _input;
-    ColorEditPreviewResult _result;
+    bool Current(bool capturing) const noexcept
+    {
+        const auto& edit = _owner._session.PendingColorEdit();
+        return !_owner._shutdownStarted && !_owner.ColorCommitBusy() && edit && edit->deferred &&
+               _owner._session.DocumentSerial() == _request.documentSerial &&
+               edit->openingSequence == _request.opening && _owner._colorPreviews.CanPublish(_stamp) &&
+               _owner._session.AdjustmentEditingID().has_value() == _request.lookupOnly &&
+               (_request.lookupOnly || _owner._session.Generation() == _request.generation) &&
+               (!capturing || _owner._session.ColorEditSequence() == _request.sequence);
+    }
+    Application& _owner; // Owner callbacks only; Run uses its admitted immutable payload and harness gate.
+    const ColorPreviewRequest _request;
+    const PreviewStamp _stamp;
+    const std::uint64_t _retirement;
     const std::shared_ptr<ColorWorkTestGate> _gate;
+    const DWORD _ownerThread;
+    std::unique_ptr<ColorPreviewPayload, RetireColorPreviewPayload> _payload;
+    HRESULT _captureError = S_OK;
 };
+
+namespace
+{
+#pragma warning(push)
+#pragma warning(disable : 4324)
+struct ColorHistogramPayload final : DeferredReleaseNode
+{
+    std::optional<ColorEditJobInput> input;
+    std::optional<ColorEditHistogramResult> result;
+    std::shared_ptr<ColorWorkTestGate> gate;
+    DWORD ownerThread = 0;
+    ColorHistogramPayload() noexcept
+    {
+        bytes = kDeferredReleaseThreshold;
+        destroy = [](DeferredReleaseNode* node) noexcept
+        { const std::unique_ptr<ColorHistogramPayload> owned(static_cast<ColorHistogramPayload*>(node)); };
+    }
+    ~ColorHistogramPayload()
+    {
+        if (gate && gate->kind == ColorWorkTestKind::Histogram)
+        {
+            gate->payloadRetiredOffOwner.store(GetCurrentThreadId() != ownerThread);
+            gate->payloadRetired.store(true);
+        }
+    }
+};
+#pragma warning(pop)
+struct RetireColorHistogramPayload final
+{
+    void operator()(ColorHistogramPayload* node) const noexcept
+    {
+        if (node && !TryDeferRelease(*node))
+        {
+            const std::unique_ptr<ColorHistogramPayload> owned(node);
+        }
+    }
+};
+} // namespace
 
 class Application::ColorHistogramJob final : public Job
 {
   public:
-    ColorHistogramJob(Application& owner, ColorEditJobInput input)
-        : _owner(owner), _input(std::move(input)),
-          _result{_input.token, _input.edit.openingSequence, _input.edit.original}, _gate(owner._colorWorkTestGate)
+    ColorHistogramJob(Application& owner, std::uint64_t serial, std::uint64_t opening, std::uint64_t retirement)
+        : _owner(owner), _serial(serial), _opening(opening), _retirement(retirement), _gate(owner._colorWorkTestGate),
+          _ownerThread(GetCurrentThreadId())
     {
     }
     JobResult Run(JobContext& context) override
     {
-        if (const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Histogram, context);
-            gate.status != JobStatus::Finished)
+        if (context.cancellation.IsCancelled())
+            return {JobStatus::Cancelled};
+        if (!_payload)
+            return {};
+        if (!_gate || !_gate->afterPreparation)
         {
-            return gate;
+            const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Histogram, context);
+            if (gate.status != JobStatus::Finished)
+                return gate;
         }
-        _result = RunColorEditHistogramJob(_input, context.executor, context.cancellation);
+        if (_gate && _gate->kind == ColorWorkTestKind::Histogram && _gate->throwAllocationFailure)
+            throw std::bad_alloc{};
+        _payload->result.emplace(
+            RunColorEditHistogramJob(_payload->input.value(), context.executor, context.cancellation));
+        _payload->input.reset();
         if (_gate && _gate->kind == ColorWorkTestKind::Histogram)
-        {
             (void)SetEvent(_gate->computed.get());
+        if (_gate && _gate->afterPreparation)
+        {
+            const auto gate = PassColorWorkTestGate(_gate, ColorWorkTestKind::Histogram, context);
+            if (gate.status != JobStatus::Finished)
+                return gate;
         }
-        return {};
+        return context.cancellation.IsCancelled() ? JobResult{JobStatus::Cancelled} : JobResult{};
+    }
+    bool DeferCompletion(JobResult result, JobTicket ticket) noexcept override
+    {
+        if (_payload || result.status != JobStatus::Finished || !Current())
+            return false;
+        try
+        {
+            _payload.reset(std::make_unique<ColorHistogramPayload>().release());
+            _payload->bytes = (std::max)(_retirement, kDeferredReleaseThreshold);
+            _payload->gate = _gate;
+            _payload->ownerThread = _ownerThread;
+            if (_gate && _gate->kind == ColorWorkTestKind::Histogram)
+            {
+                _gate->captureReservationHeld = _owner._jobs.ReservedMemoryBytes() >= _gate->reservationBytes;
+                if (_gate->throwCaptureFailure)
+                    throw std::bad_alloc{};
+            }
+            auto input = _owner._session.PrepareColorEditPreview();
+            if (!input)
+            {
+                _captureError = E_ABORT;
+                return false;
+            }
+            _payload->input.emplace(std::move(input.value()));
+            if (_owner._jobs.Resume(ticket))
+                return true;
+            _captureError = E_UNEXPECTED;
+        }
+        catch (const std::bad_alloc&)
+        {
+            _captureError = E_OUTOFMEMORY;
+        }
+        return false;
     }
     void Completed(JobResult completion) noexcept override
     {
-        _owner.CompleteColorHistogram(_result, completion);
+        HRESULT error = FAILED(_captureError) ? _captureError : completion.error;
+        if (Current() && completion.status != JobStatus::Cancelled)
+        {
+            if (completion.status == JobStatus::Finished && SUCCEEDED(error) && _payload && _payload->result)
+            {
+                auto& result = _payload->result.value();
+                if (_owner._session.ApplyColorEditHistogram(result))
+                {
+                    _owner.SyncChrome();
+                    _owner._frameInvalidated = true;
+                }
+                else if (result.status == ColorEditJobStatus::Failed)
+                    error = E_FAIL;
+            }
+            if (FAILED(error) && error != E_ABORT)
+                _owner.QueueColorFailure();
+        }
+        _owner._colorHistogramTicket.reset();
+        if (!_owner._shutdownStarted)
+            (void)_owner._jobs.RequestUiActionSource(_owner._continuationAction);
     }
 
   private:
-    Application& _owner;
-    const ColorEditJobInput _input;
-    ColorEditHistogramResult _result;
+    bool Current() const noexcept
+    {
+        const auto& edit = _owner._session.PendingColorEdit();
+        return !_owner._shutdownStarted && !_owner.ColorCommitBusy() && edit && edit->deferred &&
+               _owner._session.DocumentSerial() == _serial && edit->openingSequence == _opening;
+    }
+    Application& _owner; // Only owner callbacks read it; Run owns immutable admitted inputs.
+    const std::uint64_t _serial;
+    const std::uint64_t _opening;
+    const std::uint64_t _retirement;
     const std::shared_ptr<ColorWorkTestGate> _gate;
+    const DWORD _ownerThread;
+    std::unique_ptr<ColorHistogramPayload, RetireColorHistogramPayload> _payload;
+    HRESULT _captureError = S_OK;
 };
-
 class Application::ColorFailureAction final : public UiAction
 {
   public:
@@ -157,7 +502,7 @@ void Application::SyncColorLookupPreview() noexcept
         _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
             edit->layerID, {}, {}, edit->preview ? edit->previewLookup : nullptr, _session.AdjustmentOriginal(), 1.0});
     }
-    else if (edit && edit->preview && edit->previewLookup && !edit->previewLookupOnly)
+    else if (edit && _session.ColorLookupPreviewReady() && !edit->previewLookupOnly)
     {
         _composition.SetAdjustmentPreview(CanvasRenderer::AdjustmentPreview{
             edit->layerID, edit->previewSource, edit->previewCoverage, edit->previewLookup, {}, edit->previewScale});
@@ -168,32 +513,33 @@ void Application::SyncColorLookupPreview() noexcept
     }
 }
 
-std::int32_t Application::SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::Launch launch) noexcept
+std::int32_t Application::SubmitColorPreview(PreviewMailbox<ColorPreviewRequest>::Launch launch) noexcept
 {
+    const auto& edit = _session.PendingColorEdit();
+    const auto request = launch.input;
+    if (!edit || !edit->deferred || request.documentSerial != _session.DocumentSerial() ||
+        request.opening != edit->openingSequence || request.sequence != _session.ColorEditSequence() ||
+        request.lookupOnly != _session.AdjustmentEditingID().has_value() ||
+        (!request.lookupOnly && request.generation != _session.Generation()))
+        return E_ABORT;
+    auto memory = request.lookupOnly ? ColorLookupMemory(_session, false)
+                                     : _session.ColorDisplayPreviewMemoryBytes(request.lookupPreview);
+    if (!memory ||
+        !AddColorBytes(memory->additionalBytes, sizeof(ColorPreviewJob) + sizeof(ColorPreviewPayload) + 4096) ||
+        !AddColorBytes(memory->retirementBytes, sizeof(ColorPreviewPayload) + 4096))
+        return E_INVALIDARG;
     try
     {
-        // Pending requests own settings captured during the active render. Pick up any compatible prepared
-        // source that render just published, without changing the pending request's settings sequence.
-        if (auto current = _session.PrepareColorEditPreview();
-            current && current->token.sequence == launch.input.token.sequence &&
-            current->edit.openingSequence == launch.input.edit.openingSequence &&
-            current->token.documentSerial == launch.input.token.documentSerial)
-        {
-            ConfigureColorLookupPreview(*current);
-            launch.input = std::move(*current);
-        }
-        const auto memory = ColorEditPreviewMemoryBytes(launch.input);
-        if (!memory)
-        {
-            return E_INVALIDARG;
-        }
-        const auto serial = launch.input.token.documentSerial;
-        std::unique_ptr<Job> job = std::make_unique<ColorPreviewJob>(*this, std::move(launch));
+        std::unique_ptr<Job> job =
+            std::make_unique<ColorPreviewJob>(*this, request, launch.stamp, memory->retirementBytes);
         JobTicket ticket;
-        const auto status = _jobs.Submit(job, {JobClass::InteractivePreview, serial, *memory}, ticket);
+        const auto status =
+            _jobs.Submit(job, {JobClass::InteractivePreview, request.documentSerial, memory->additionalBytes}, ticket);
         if (status >= 0)
         {
             _colorPreviewTicket = ticket;
+            if (_colorWorkTestGate && _colorWorkTestGate->kind == ColorWorkTestKind::Preview)
+                _colorWorkTestGate->reservationBytes = memory->additionalBytes;
         }
         return status;
     }
@@ -202,28 +548,26 @@ std::int32_t Application::SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::
         return E_OUTOFMEMORY;
     }
 }
-
 std::int32_t Application::SubmitColorHistogram() noexcept
 {
+    const auto& edit = _session.PendingColorEdit();
+    auto memory = ColorLookupMemory(_session, true);
+    if (!edit || !memory ||
+        !AddColorBytes(memory->additionalBytes, sizeof(ColorHistogramJob) + sizeof(ColorHistogramPayload) + 4096) ||
+        !AddColorBytes(memory->retirementBytes, sizeof(ColorHistogramPayload) + 4096))
+        return E_INVALIDARG;
     try
     {
-        auto input = _session.PrepareColorEditPreview();
-        if (!input)
-        {
-            return E_INVALIDARG;
-        }
-        const auto memory = ColorEditHistogramMemoryBytes(*input);
-        if (!memory)
-        {
-            return E_INVALIDARG;
-        }
-        const auto serial = input->token.documentSerial;
-        std::unique_ptr<Job> job = std::make_unique<ColorHistogramJob>(*this, std::move(*input));
+        const auto serial = _session.DocumentSerial();
+        std::unique_ptr<Job> job =
+            std::make_unique<ColorHistogramJob>(*this, serial, edit->openingSequence, memory->retirementBytes);
         JobTicket ticket;
-        const auto status = _jobs.Submit(job, {JobClass::Background, serial, *memory}, ticket);
+        const auto status = _jobs.Submit(job, {JobClass::Background, serial, memory->additionalBytes}, ticket);
         if (status >= 0)
         {
             _colorHistogramTicket = ticket;
+            if (_colorWorkTestGate && _colorWorkTestGate->kind == ColorWorkTestKind::Histogram)
+                _colorWorkTestGate->reservationBytes = memory->additionalBytes;
         }
         return status;
     }
@@ -232,33 +576,35 @@ std::int32_t Application::SubmitColorHistogram() noexcept
         return E_OUTOFMEMORY;
     }
 }
-
 std::int32_t Application::OfferColorPreview() noexcept
 {
-    try
-    {
-        auto input = _session.PrepareColorEditPreview();
-        if (input)
-        {
-            ConfigureColorLookupPreview(*input);
-        }
-        return input && _colorPreviews.Offer(*input).accepted ? S_OK : E_INVALIDARG;
-    }
-    catch (const std::bad_alloc&)
-    {
-        return E_OUTOFMEMORY;
-    }
+    const auto& edit = _session.PendingColorEdit();
+    if (!edit || !edit->deferred)
+        return E_INVALIDARG;
+    const bool live = _session.AdjustmentEditingID().has_value();
+    ColorPreviewRequest request{_session.DocumentSerial(),
+                                edit->openingSequence,
+                                _session.ColorEditSequence(),
+                                live ? 0 : _session.Generation(),
+                                live,
+                                FilterIsImageAdjustment(edit->kind)};
+    return _colorPreviews.Offer(request).accepted ? S_OK : E_INVALIDARG;
 }
 
 void Application::LaunchColorPreview() noexcept
 {
+    if (_shutdownStarted || _colorCompleting || _colorPreviewTicket || ColorCommitBusy() || _historyWork.Busy() ||
+        _activeHostRequest || _hostRequests.Size() || _canvasLifetime)
+        return;
     if (auto launch = _colorPreviews.TakeNext(); launch)
     {
         const auto stamp = launch->stamp;
-        if (SubmitColorPreview(std::move(*launch)) < 0)
+        const auto status = SubmitColorPreview(std::move(launch.value()));
+        if (status < 0)
         {
             (void)_colorPreviews.Finish(stamp, false);
-            QueueColorFailure();
+            if (status != E_ABORT)
+                QueueColorFailure();
         }
     }
 }
@@ -269,39 +615,31 @@ void Application::CancelColorJobs() noexcept
     (void)_colorPreviews.Close();
     _colorMailboxOpen = false;
     if (_colorPreviewTicket)
-    {
-        (void)_jobs.Cancel(*_colorPreviewTicket);
-    }
+        (void)_jobs.Cancel(_colorPreviewTicket.value());
     if (_colorHistogramTicket)
-    {
-        (void)_jobs.Cancel(*_colorHistogramTicket);
-    }
-    _colorPreviewTicket.reset();
-    _colorHistogramTicket.reset();
+        (void)_jobs.Cancel(_colorHistogramTicket.value());
+    // These exact records acknowledge before a reopened panel can capture a second owner graph.
     _colorOpening = 0;
     _colorSeenSequence = 0;
+    _colorSeenGeneration = 0;
     _colorHistogramAttempted = false;
 }
 
 void Application::RefreshColorJobs() noexcept
 {
-    // An admitted commit owns a fixed settings snapshot until its apply/drop. Preview preparation must not
-    // relaunch beneath it. A document replacement requests cancellation, but cannot release its history barrier.
+    if (_colorCompleting)
+        return;
     if (ColorCommitBusy())
     {
         if (_colorCommitStamp->documentSerial != _session.DocumentSerial())
-        {
             CancelColorCommit();
-        }
         return;
     }
     const auto& edit = _session.PendingColorEdit();
     if (_shutdownStarted || !edit || !edit->deferred)
     {
-        if (_colorOpening != 0)
-        {
+        if (_colorOpening)
             CancelColorJobs();
-        }
         return;
     }
     if (_colorDocumentSerial != _session.DocumentSerial() || _colorOpening != edit->openingSequence)
@@ -310,20 +648,29 @@ void Application::RefreshColorJobs() noexcept
         _colorDocumentSerial = _session.DocumentSerial();
         _colorOpening = edit->openingSequence;
     }
-    if (!_colorHistogramAttempted && edit->kind == FilterKind::Levels && !edit->histogramReady)
+    if (!_colorHistogramAttempted && !_colorHistogramTicket && !_historyWork.Busy() && !_activeHostRequest &&
+        !_hostRequests.Size() && !_canvasLifetime && edit->kind == FilterKind::Levels && !edit->histogramReady)
     {
         _colorHistogramAttempted = true;
         if (SubmitColorHistogram() < 0)
-        {
             QueueColorFailure();
-        }
     }
     const auto sequence = _session.ColorEditSequence();
-    if (sequence == _colorSeenSequence)
+    const auto generation = _session.AdjustmentEditingID() ? 0 : _session.Generation();
+    if (sequence == _colorSeenSequence && generation == _colorSeenGeneration)
     {
+        LaunchColorPreview();
         return;
     }
+    if (_colorMailboxOpen && generation != _colorSeenGeneration)
+    {
+        (void)_colorPreviews.Close();
+        _colorMailboxOpen = false;
+        if (_colorPreviewTicket)
+            (void)_jobs.Cancel(_colorPreviewTicket.value());
+    }
     _colorSeenSequence = sequence;
+    _colorSeenGeneration = generation;
     const bool pixels = _session.AdjustmentEditingID().has_value() ||
                         (edit->preview && !ColorEditChangesNothing(edit->kind, edit->settings) &&
                          Adjust::BlurMargin(edit->kind, edit->settings) <= edit->grownMargin);
@@ -332,16 +679,11 @@ void Application::RefreshColorJobs() noexcept
         (void)_colorPreviews.Close();
         _colorMailboxOpen = false;
         if (_colorPreviewTicket)
-        {
-            (void)_jobs.Cancel(*_colorPreviewTicket);
-        }
-        _colorPreviewTicket.reset();
+            (void)_jobs.Cancel(_colorPreviewTicket.value());
         return;
     }
     if (!_colorMailboxOpen)
-    {
         _colorMailboxOpen = _colorPreviews.Begin();
-    }
     if (!_colorMailboxOpen || OfferColorPreview() < 0)
     {
         QueueColorFailure();
@@ -349,56 +691,6 @@ void Application::RefreshColorJobs() noexcept
     }
     LaunchColorPreview();
 }
-
-void Application::CompleteColorPreview(PreviewStamp stamp, ColorEditPreviewResult& result,
-                                       JobResult completion) noexcept
-{
-    if (!_colorPreviews.CanPublish(stamp))
-    {
-        return;
-    }
-    _colorPreviewTicket.reset();
-    if (completion.status != JobStatus::Finished)
-    {
-        result.status =
-            completion.status == JobStatus::Cancelled ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
-    }
-    const bool applied = _session.ApplyColorEditPreview(result);
-    (void)_colorPreviews.Finish(stamp, applied);
-    if (result.status == ColorEditJobStatus::Failed && result.token.sequence == _session.ColorEditSequence())
-    {
-        QueueColorFailure();
-    }
-    LaunchColorPreview();
-    if (applied || result.token.sequence == _session.ColorEditSequence())
-    {
-        DocumentChanged();
-    }
-}
-
-void Application::CompleteColorHistogram(ColorEditHistogramResult& result, JobResult completion) noexcept
-{
-    if (result.token.documentSerial != _colorDocumentSerial || result.openingSequence != _colorOpening)
-    {
-        return;
-    }
-    _colorHistogramTicket.reset();
-    if (completion.status != JobStatus::Finished)
-    {
-        result.status =
-            completion.status == JobStatus::Cancelled ? ColorEditJobStatus::Cancelled : ColorEditJobStatus::Failed;
-    }
-    if (_session.ApplyColorEditHistogram(result))
-    {
-        SyncChrome();
-        _frameInvalidated = true;
-    }
-    else if (result.status == ColorEditJobStatus::Failed)
-    {
-        QueueColorFailure();
-    }
-}
-
 int Application::RunColorJobsSelfTest() noexcept
 {
     const auto fail = [](const wchar_t* message) noexcept
@@ -446,7 +738,7 @@ int Application::RunColorJobsSelfTest() noexcept
         return _colorWorkTestGate->entered && _colorWorkTestGate->release && _colorWorkTestGate->computed;
     };
     if (!newGate(true) || !BeginColorEdit(ChromeHost::kCommandLevels) ||
-        WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+        !WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The production Levels histogram did not reach its worker gate.\n");
     }
@@ -492,7 +784,7 @@ int Application::RunColorJobsSelfTest() noexcept
         return fail(L"The coalesced preview fixture could not open.\n");
     }
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
-    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+    if (!WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The production preview did not reach its worker gate.\n");
     }
@@ -521,7 +813,7 @@ int Application::RunColorJobsSelfTest() noexcept
         return fail(L"The late completion fixture could not open.\n");
     }
     OnAdjustAction(AdjustAction::SetInputGamma, 2);
-    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+    if (!WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The late completion fixture did not start.\n");
     }
@@ -554,7 +846,7 @@ int Application::RunColorJobsSelfTest() noexcept
         return fail(L"The live adjustment lookup fixture did not open.\n");
     }
     DocumentChanged();
-    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0)
+    if (!WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this))
     {
         return fail(L"The live adjustment did not build its lookup on a worker.\n");
     }
@@ -596,7 +888,8 @@ int Application::RunColorJobsSelfTest() noexcept
         return fail(L"The live preview-off gate could not be created.\n");
     _session.UpdateColorEdit(_session.PendingColorEdit()->settings, false);
     DocumentChanged();
-    if (WaitForSingleObject(_colorWorkTestGate->entered.get(), 10000) != WAIT_OBJECT_0 || !matchesAdjustment(original))
+    if (!WaitForColorWorkTestEvent(_jobs, _colorWorkTestGate->entered.get(), DispatchMessageThunk, this) ||
+        !matchesAdjustment(original))
     {
         return fail(L"Live preview off waited for a worker before restoring the opening adjustment.\n");
     }
@@ -608,6 +901,11 @@ int Application::RunColorJobsSelfTest() noexcept
         return fail(L"A late lookup crossed live adjustment Cancel.\n");
     }
     std::printf("PASS color-jobs.live-preview-off-and-cancel-in-flight\n");
+    CancelColorEditForTest();
+    auto previousDocument = _session.Document();
+    if (const int display = RunColorDisplayHostSelfTest(); display != 0)
+        return display;
+    _session.ReplaceDocument(std::move(previousDocument.value()), active);
     _session.SelectLayer(active); // leave the image target expected by the following host fixtures
     DocumentChanged();
     return 0;

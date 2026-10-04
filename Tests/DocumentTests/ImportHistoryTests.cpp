@@ -235,9 +235,14 @@ int RunImportHistoryTests()
         auto publication =
             DocumentHistory::PrepareReplacement(old.history.CaptureState(), baseline, baseline.layers.front().id,
                                                 baseline, baseline.layers.front().id, L"Import Image");
-        const Guid baselineRevision = publication.has_value() ? publication.value().BaselineRevision() : Guid{};
-        const bool replaced = publication.has_value() && old.history.CanPublishReplacement(publication.value()) &&
-                              old.history.PublishReplacement(publication.value());
+        Guid baselineRevision{};
+        bool replaced = false;
+        if (publication.has_value())
+        {
+            baselineRevision = publication.value().BaselineRevision();
+            replaced = old.history.CanPublishReplacement(publication.value()) &&
+                       old.history.PublishReplacement(publication.value());
+        }
         Expect(replaced && baselineRevision != Guid{} && old.history.CurrentRevision() == baselineRevision &&
                    !old.history.IsModified() && !old.history.CanUndo() && !old.history.CanRedo() &&
                    old.history.UndoCount() == 0 && old.history.CaptureState().PastCount() == 0 &&
@@ -254,9 +259,14 @@ int RunImportHistoryTests()
         const Guid importedLayer = after.layers.back().id;
         auto publication = DocumentHistory::PrepareReplacement(history.CaptureState(), baseline, baselineLayer, after,
                                                                importedLayer, L"Import Image");
-        const Guid baselineRevision = publication.has_value() ? publication.value().BaselineRevision() : Guid{};
-        const bool published = publication.has_value() && history.CanPublishReplacement(publication.value()) &&
-                               history.PublishReplacement(publication.value());
+        Guid baselineRevision{};
+        bool published = false;
+        if (publication.has_value())
+        {
+            baselineRevision = publication.value().BaselineRevision();
+            published =
+                history.CanPublishReplacement(publication.value()) && history.PublishReplacement(publication.value());
+        }
         const Guid finalRevision = history.CurrentRevision();
         Expect(published && baselineRevision != Guid{} && finalRevision != baselineRevision && history.IsModified() &&
                    history.UndoCount() == 1 && history.CanUndo() && !history.CanRedo() &&

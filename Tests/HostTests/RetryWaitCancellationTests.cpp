@@ -88,8 +88,8 @@ class CancelledRetry final : public Job, public RetryWaitReceiver
         _state.ticket = ticket;
         if (FAILED(_state.queue->Start(ticket, 5, _state.cancellation, *this)))
             return false;
-        _state.duplicateRefused =
-            _state.queue->Start(ticket, 5, _state.cancellation, *this) == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        _state.duplicateRefused = _state.queue->Start(ticket, 5, _state.cancellation, *this) ==
+                                  static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
         if (_state.requestCancel)
             _state.cancelAccepted = _state.scheduler->Cancel(ticket);
         std::unique_ptr<Job> unrelated = std::make_unique<Unrelated>(_state);

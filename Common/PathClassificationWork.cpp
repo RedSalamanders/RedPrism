@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <new>
 #include <stop_token>
 #include <windows.h>
 
@@ -104,8 +105,8 @@ static_assert(sizeof(wchar_t) == sizeof(char16_t));
 }
 } // namespace
 
-PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths,
-                                          const CancelToken& cancellation) noexcept
+PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> paths, const CancelToken& cancellation,
+                                          PathClassificationScratchSource scratchSource) noexcept
 {
     if (paths.size() > kMaxPathClassificationBatch)
     {
@@ -127,7 +128,15 @@ PathClassificationBatch ClassifyPathBatch(std::span<const std::wstring_view> pat
 
     PathClassificationBatch result;
     result.status = PathClassificationStatus::Ok;
-    std::array<wchar_t, kMaxPathClassificationLength + 1> terminatedPath{};
+    if (paths.empty())
+        return result;
+    auto scratch = scratchSource.create
+                       ? scratchSource.create(scratchSource.context)
+                       : std::unique_ptr<PathClassificationScratch>(new (std::nothrow) PathClassificationScratch{});
+    if (!scratch)
+        return FailedBatch(cancellation.IsCancelled() ? PathClassificationStatus::Cancelled
+                                                      : PathClassificationStatus::OutOfMemory);
+    auto& terminatedPath = *scratch;
     for (std::size_t index = 0; index < paths.size(); ++index)
     {
         if (cancellation.IsCancelled())

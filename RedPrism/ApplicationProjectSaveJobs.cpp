@@ -129,8 +129,9 @@ class Application::ProjectSaveJob final : public Job
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId =
-                error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_SAVE_PROJECT;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                      ? IDS_ERROR_TOO_LARGE
+                                      : IDS_ERROR_SAVE_PROJECT;
             ++_owner._errorsShown;
             _owner._lastErrorId = stringId;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);

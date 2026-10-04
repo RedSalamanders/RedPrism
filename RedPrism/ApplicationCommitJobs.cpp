@@ -281,7 +281,7 @@ Application::HostOutcome Application::StartColorCommit(std::uint64_t ordinal) no
     if (_colorPreviewTicket)
     {
         (void)_jobs.Cancel(_colorPreviewTicket.value());
-        _colorPreviewTicket.reset();
+        // The cancelled preview ticket is retained until its exact acknowledgement.
     }
     // UI synchronization is outside the failure boundary. An admitted job keeps its barrier through apply/drop.
     // The opening histogram remains independent and may finish without changing settings.

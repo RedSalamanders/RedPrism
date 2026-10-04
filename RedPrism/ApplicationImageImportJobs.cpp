@@ -386,10 +386,11 @@ HRESULT Application::StartImageImport(std::span<const std::wstring_view> paths, 
     {
         std::vector<std::wstring> owned;
         owned.reserve(paths.size());
+        const auto resolvedStorage = std::make_unique<std::array<wchar_t, 32768>>();
+        auto& resolved = *resolvedStorage;
         for (const auto path : paths)
         {
             const std::wstring terminated(path);
-            std::array<wchar_t, 32768> resolved{};
             const DWORD units =
                 GetFullPathNameW(terminated.c_str(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
             if (units == 0 || units >= resolved.size() || units > kImageImportMaxPathUnits)

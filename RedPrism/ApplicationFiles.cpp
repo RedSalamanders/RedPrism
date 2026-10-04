@@ -186,17 +186,24 @@ struct ClipboardHold
 {
     wil::unique_event_nothrow opened;
     wil::unique_event_nothrow release;
+    HWND window = nullptr; // borrowed while the holder thread waits; published by opened
     bool held = false;
+    bool closed = false;
     DWORD released = WAIT_FAILED;
 };
 
 DWORD WINAPI HoldClipboard(void* context) noexcept
 {
     auto* hold = static_cast<ClipboardHold*>(context);
+    // A null opener can be reopened and closed by this process's asynchronous prefill reader. Use a distinct
+    // window so the fixture models another window's exclusive hold throughout every product retry.
+    wil::unique_hwnd window(CreateWindowExW(0, L"STATIC", L"RedPrism clipboard hold", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                            nullptr, GetModuleHandleW(nullptr), nullptr));
+    hold->window = window.get();
     // A clipboard manager may read the clipboard for a moment after each change: wait for it, boundedly.
     for (int attempt = 0; attempt < SystemClipboard::kHarnessAttempts && !hold->held; ++attempt)
     {
-        hold->held = OpenClipboard(nullptr) != FALSE;
+        hold->held = window && OpenClipboard(window.get()) != FALSE;
         if (!hold->held)
         {
             Sleep(10);
@@ -206,7 +213,7 @@ DWORD WINAPI HoldClipboard(void* context) noexcept
     hold->released = WaitForSingleObject(hold->release.get(), 10000);
     if (hold->held)
     {
-        (void)CloseClipboard();
+        hold->closed = CloseClipboard() != FALSE;
     }
     return 0;
 }
@@ -1628,7 +1635,8 @@ int Application::RunClipboardSelfTest() noexcept
         return 5;
     }
     wil::unique_handle holder(CreateThread(nullptr, 0, HoldClipboard, &hold, 0, nullptr));
-    if (!holder || WaitForSingleObject(hold.opened.get(), 5000) != WAIT_OBJECT_0 || !hold.held)
+    if (!holder || WaitForSingleObject(hold.opened.get(), 5000) != WAIT_OBJECT_0 || !hold.held ||
+        GetOpenClipboardWindow() != hold.window)
     {
         hold.release.SetEvent();
         if (holder)
@@ -1645,8 +1653,8 @@ int Application::RunClipboardSelfTest() noexcept
     const bool systemRead =
         SystemClipboard::ReadImage(_window.get(), kMaxLayerPixels, still, SystemClipboard::kHarnessAttempts);
     const DWORD systemReadError = GetLastError();
-    const bool writeFailed = systemRead && still.Width() == 3 && _session.Clipboard().has_value() &&
-                             _session.Clipboard()->image.Width() == 30;
+    const bool writeFailed = hold.released == WAIT_OBJECT_0 && hold.closed && systemRead && still.Width() == 3 &&
+                             _session.Clipboard().has_value() && _session.Clipboard()->image.Width() == 30;
     // Paste takes the session's copy, newer than the other app's image the system clipboard still holds.
     clipboardCommand(ChromeHost::kCommandPaste);
     const ImageLayer* pasted = _session.ActiveLayer();
@@ -1656,9 +1664,9 @@ int Application::RunClipboardSelfTest() noexcept
     {
         SelfTestFailure(std::format(L"Paste after a copy that could not reach the system clipboard took an "
                                     L"older image (write failed {}, OS read {} {} × {}, native error {:#x}, "
-                                    L"holder release {:#x}, OS publication {}, pasted {} × {}).\n",
+                                    L"holder release {:#x}, closed {}, OS publication {}, pasted {} × {}).\n",
                                     writeFailed, systemRead, still.Width(), still.Height(), systemReadError,
-                                    hold.released, _clipboardWriteSucceeded,
+                                    hold.released, hold.closed, _clipboardWriteSucceeded,
                                     pasted && pasted->asset.has_value() ? pasted->asset->image.Width() : 0,
                                     pasted && pasted->asset.has_value() ? pasted->asset->image.Height() : 0));
         return 5;

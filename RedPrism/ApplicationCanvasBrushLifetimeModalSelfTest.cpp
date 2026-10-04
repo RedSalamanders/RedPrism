@@ -388,8 +388,8 @@ int Application::RunCanvasBrushLifetimeModalSelfTest() noexcept
             captured && captured->settings == BrushSettings{3, 1, 1, 0, 0, 1};
         if (!expect(scenario.name, "cancelled-lifecycle-keeps-original-brush-pending-and-live",
                     lifecycleResult.outcome == HostOutcome::Cancelled &&
-                        lifecycleResult.error == HRESULT_FROM_WIN32(ERROR_CANCELLED) && originalStreamSurvived &&
-                        !state.closeMessageConsumed) ||
+                        lifecycleResult.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_CANCELLED)) &&
+                        originalStreamSurvived && !state.closeMessageConsumed) ||
             !expect(scenario.name, "original-request-retains-budget-after-opacity-worker-retires",
                     _hostInputBudget.Used() != 0 && _jobs.ReservedMemoryBytes() == 0 && !_historyWork.Busy() &&
                         !_layerMetadataTicket && _layerMetadataTestGate->retired.load() &&

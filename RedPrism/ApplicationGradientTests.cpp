@@ -344,7 +344,7 @@ int Application::RunGradientWorkSelfTest() noexcept
         if (mode == Mode::Memory)
             correct = correct && result.error == E_OUTOFMEMORY;
         if (mode == Mode::TooLarge)
-            correct = correct && result.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            correct = correct && result.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
 
         if (mode == Mode::Success)
         {

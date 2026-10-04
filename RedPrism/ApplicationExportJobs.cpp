@@ -103,9 +103,10 @@ class Application::ExportReadbackJob final : public DocumentReadbackJob
         }
         if (outcome == HostOutcome::Failed)
         {
-            const auto stringId = error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                  : _format == HostWriteFormat::Jpeg                ? IDS_ERROR_EXPORT_JPEG
-                                                                                    : IDS_ERROR_EXPORT_PNG;
+            const auto stringId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                      ? IDS_ERROR_TOO_LARGE
+                                  : _format == HostWriteFormat::Jpeg ? IDS_ERROR_EXPORT_JPEG
+                                                                     : IDS_ERROR_EXPORT_PNG;
             ++_owner._errorsShown;
             _owner._lastErrorId = stringId;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, stringId);

@@ -559,16 +559,16 @@ int Application::RunSelectionMoveFollowupSelfTest() noexcept
             const auto expectedError = mode == Mode::CloseWorkerFailure    ? E_ACCESSDENIED
                                        : mode == Mode::CloseCaptureFailure ? E_OUTOFMEMORY
                                                                            : E_ABORT;
-            ok &= expect(state.name, "failure-stops-before-followup",
-                         result.outcome == expectedOutcome && result.error == expectedError && !state.followupVisited &&
-                             _session.IsMovingSelection() && _session.Selection() == state.selection &&
-                             _session.SelectionMoveOpening() == state.opening &&
-                             _session.Generation() == state.generation && _session.history.IsCurrent(state.history) &&
-                             _session.history.UndoCount() == state.undoCount &&
-                             _session.history.CaptureState().FutureCount() == state.futureCount &&
-                             !std::holds_alternative<OutlineDrag>(_drag),
-                         "failed close ran a follow-up or changed the live selection/history; release must still drop "
-                         "OutlineDrag");
+            ok &= expect(
+                state.name, "failure-stops-before-followup",
+                result.outcome == expectedOutcome && result.error == static_cast<std::int32_t>(expectedError) &&
+                    !state.followupVisited && _session.IsMovingSelection() && _session.Selection() == state.selection &&
+                    _session.SelectionMoveOpening() == state.opening && _session.Generation() == state.generation &&
+                    _session.history.IsCurrent(state.history) && _session.history.UndoCount() == state.undoCount &&
+                    _session.history.CaptureState().FutureCount() == state.futureCount &&
+                    !std::holds_alternative<OutlineDrag>(_drag),
+                "failed close ran a follow-up or changed the live selection/history; release must still drop "
+                "OutlineDrag");
             if (mode == Mode::CloseCancellation)
                 ok &= expect(state.name, "owner-cancel-retains-until-ack",
                              state.cancellationHeld && _tool == state.tool && !_historyWork.Busy() &&

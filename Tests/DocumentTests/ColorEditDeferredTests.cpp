@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <utility>
 
 namespace
@@ -593,7 +594,8 @@ void LookupPreviewReusesCompatibleSelectionCoverage()
 void LookupPreviewInvalidationAndPreCancellation()
 {
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.BeginColorEdit(FilterKind::Levels, true);
         session.UpdateColorEdit(GammaLevels(), true);
         auto input = session.PrepareColorEditPreview();
@@ -611,7 +613,8 @@ void LookupPreviewInvalidationAndPreCancellation()
                "lookup.pre-cancelled-worker-does-not-publish");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.BeginColorEdit(FilterKind::Levels, true);
         session.UpdateColorEdit(GammaLevels(), true);
         auto input = session.PrepareColorEditPreview();
@@ -628,7 +631,8 @@ void LookupPreviewInvalidationAndPreCancellation()
                "lookup-preview-off-rejects-inflight-result");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.BeginColorEdit(FilterKind::Levels, true);
         session.UpdateColorEdit(GammaLevels(), true);
         auto input = session.PrepareColorEditPreview();
@@ -646,7 +650,8 @@ void LookupPreviewInvalidationAndPreCancellation()
                "lookup-reopen-rejects-old-panel-result");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.EditForTest([](CanvasDocument& document)
                             { document.selection = DocumentSelection{true, SelectionGeometry::Rect(0, 0, 2, 1)}; });
         session.BeginColorEdit(FilterKind::Levels, true);
@@ -665,7 +670,8 @@ void LookupPreviewInvalidationAndPreCancellation()
                "lookup-selection-change-rejects-old-target-token");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.BeginColorEdit(FilterKind::Levels, true);
         auto input = session.PrepareColorEditPreview();
         Expect(input.has_value(), "lookup-identity.input-prepared");

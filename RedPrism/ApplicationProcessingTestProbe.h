@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MemoryBudget.h"
 #include "RetryWaitQueue.h"
 
 #include <cstdint>
@@ -25,4 +26,5 @@ struct ApplicationProcessingTestProbe final
     void* context = nullptr;
     std::int32_t (*afterStage)(void*, ApplicationProcessingStage) noexcept = nullptr;
     RetryWaitObserver retryWait;
+    MemorySource memory; // Optional fixed admission source, alive through scheduler Close.
 };

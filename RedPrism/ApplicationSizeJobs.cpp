@@ -219,8 +219,9 @@ class Application::SizingJob final : public Job
         }
         if (outcome == HostOutcome::Failed)
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage,
-                                        error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE
-                                                                                          : IDS_ERROR_RESIZE);
+                                        error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                            ? IDS_ERROR_TOO_LARGE
+                                            : IDS_ERROR_RESIZE);
         _owner._sizingTicket.reset();
         _owner._sizingStamp.reset();
         if (changed)

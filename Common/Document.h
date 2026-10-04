@@ -1238,6 +1238,12 @@ class SelectionMoveClosureInput;
 class PreparedSelectionMoveClosure;
 struct ColorEditJobInput;
 struct ColorEditJobResult;
+enum class ColorEditJobStatus;
+class ColorDisplayPreviewInput;
+class PreparedColorDisplayPreview;
+struct ColorDisplayPreviewMemory;
+struct ColorDisplayPreviewResult;
+struct ColorDisplayObserver;
 class PreparedColorEdit;
 class PreparedDocumentSize;
 class PreparedHistoryRestore;
@@ -1318,8 +1324,9 @@ struct ColorEdit
     std::uint64_t previewInvalidatedSequence = 0; // Preview off/identity/growth refusal invalidates earlier output.
     bool commitFailed = false;
     bool preview = true;
-    std::uint32_t seed = 0;                 // Add Noise's and Grain's pattern, fixed while the panel is open
-    Raster grownImage;                      // the pixels padded out for a blur or a fill (empty when not grown)
+    std::uint32_t seed = 0;   // Add Noise's and Grain's pattern, fixed while the panel is open
+    Raster grownImage;        // the pixels padded out for a blur or a fill (empty when not grown)
+    Raster retiredGrownImage; // Prepared display path: one invalidated grown cache, held until aggregate transfer.
     std::optional<ColorEditGrid> grownGrid; // Planned extent on the original grid, before worker preparation.
     LayerTransform grownTransform;
     double grownMargin = 0;
@@ -1520,6 +1527,22 @@ class DocumentHistory
     };
     [[nodiscard]] StateView CaptureState() const noexcept;
     [[nodiscard]] bool IsCurrent(const StateView& view) const noexcept;
+
+    // Display-only work validates structure without owning an unrelated history stack. The owner identity is
+    // opaque on workers; its monotonic epoch also guards replacement with the same revision/contents.
+    class Authority final
+    {
+      public:
+        Authority() noexcept = default;
+
+      private:
+        friend class DocumentHistory;
+        const DocumentHistory* _owner = nullptr;
+        std::uint64_t _epoch = 0;
+        Guid _revision;
+    };
+    [[nodiscard]] Authority CaptureAuthority() const noexcept;
+    [[nodiscard]] bool IsCurrent(const Authority& authority) const noexcept;
 
     enum class PrepareStage : std::uint8_t
     {
@@ -2535,6 +2558,24 @@ class DocumentSession
     [[nodiscard]] bool ApplyPreparedColorDismissalIfCurrent(PreparedColorDismissal& prepared) noexcept;
     [[nodiscard]] std::optional<ColorEditJobInput> PrepareColorEditPreview() const;
     [[nodiscard]] bool ApplyColorEditPreview(const ColorEditPreviewResult& result);
+    // Host opt-in for the complete prepared display route. Direct inline panels retain their existing path.
+    void SetColorDisplayJobsEnabled(bool enabled) noexcept
+    {
+        _colorDisplayJobsEnabled = enabled;
+    }
+    [[nodiscard]] bool ColorLookupPreviewReady() const noexcept;
+    [[nodiscard]] std::optional<ColorDisplayPreviewInput> PrepareColorDisplayPreviewInput(bool lookupPreview) const;
+    [[nodiscard]] std::optional<ColorDisplayPreviewMemory> ColorDisplayPreviewMemoryBytes(
+        bool lookupPreview) const noexcept;
+    [[nodiscard]] static ColorDisplayPreviewResult PrepareColorDisplayPreviewPublication(ColorDisplayPreviewInput input,
+                                                                                         Executor& executor,
+                                                                                         CancelToken cancellation,
+                                                                                         ColorDisplayObserver observer);
+    // The scheduler's named allocation-failure boundary can return captured owners without copying them.
+    // This only prepares invalidation; ordinary authority checks still decide whether it may change the view.
+    [[nodiscard]] static PreparedColorDisplayPreview PrepareFailedColorDisplayPreviewPublication(
+        ColorDisplayPreviewInput input, ColorEditJobStatus status) noexcept;
+    [[nodiscard]] bool ApplyPreparedColorDisplayPreviewIfCurrent(PreparedColorDisplayPreview& prepared) noexcept;
     [[nodiscard]] bool ApplyColorEditHistogram(const ColorEditHistogramResult& result);
     [[nodiscard]] std::uint64_t ColorEditSequence() const noexcept
     {
@@ -2805,6 +2846,8 @@ class DocumentSession
     std::uint64_t _editRevision = 0;
     mutable std::uint64_t _displayRevision = 0;
     mutable std::uint64_t _displayTransformOpening = 0, _displaySourceGeneration = 0;
+    bool _colorDisplayJobsEnabled = false;
+    mutable std::uint64_t _displayColorOpening = 0, _displayColorSequence = 0;
     mutable std::optional<CanvasDocument> _displayCopy;
     std::optional<LassoDraft> _lassoDraft;
     std::uint64_t _lassoOpening = 0;
@@ -2861,6 +2904,8 @@ class DocumentSession
     [[nodiscard]] ColorEdit* OpenColorEdit(FilterKind kind) noexcept;
     [[nodiscard]] std::optional<LayerAdjustment> EditedAdjustment() const;
     bool GrowFilterForBlur();
+    [[nodiscard]] bool HoldColorDisplayOwners() const noexcept;
+    void InvalidateColorPreviewOwners() noexcept;
     // Pads the filter's grid out to cover `extent` (layer pixels), keeping what is already grown.
     bool GrowFilterGrid(int left, int top, int right, int bottom);
     void RenderColorEditInline();

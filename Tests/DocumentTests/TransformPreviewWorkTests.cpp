@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <span>
@@ -611,7 +612,8 @@ void RefuseStaleForeignAndInvalidInputs()
 {
     InlineExecutor executor;
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         auto newer = fixture.session.PendingTransformEdit()->draft;
         newer.origin.x += 1;
@@ -622,7 +624,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "newer-draft-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.CancelTransform();
         fixture.session.BeginTransform();
@@ -632,7 +635,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "closed-and-reopened-transform-refuses-stale-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         EditLayerRecordsForTest(fixture.session,
                                 [](DocumentFixture& document) { document.layers.front().name = L"changed"; });
@@ -643,7 +647,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-source-document-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.SelectLayer(fixture.sibling);
         const auto active = fixture.session.ActiveLayerID();
@@ -653,7 +658,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-active-target-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         fixture.session.history.Reset();
         Expect(prepared.publication &&
@@ -661,7 +667,8 @@ void RefuseStaleForeignAndInvalidInputs()
                "changed-history-state-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
         CanvasDocument replacement = fixture.session.Document().value();
         fixture.session.ReplaceDocument(std::move(replacement), fixture.id);
@@ -670,15 +677,18 @@ void RefuseStaleForeignAndInvalidInputs()
                "same-id-document-replacement-refuses-old-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto prepared = Prepare(fixture, executor);
-        SessionFixture foreign;
+        auto foreignOwner = std::make_unique<SessionFixture>();
+        auto& foreign = *foreignOwner;
         Expect(prepared.publication &&
                    !foreign.session.ApplyPreparedTransformPreviewIfCurrent(prepared.publication.value()),
                "foreign-session-refuses-display-publication");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto input = fixture.session.PrepareTransformPreviewInput();
         Expect(input.has_value(), "preview-input-captured-for-move-only-check");
         if (input)
@@ -693,7 +703,8 @@ void RefuseStaleForeignAndInvalidInputs()
         }
     }
     {
-        DocumentSession empty;
+        auto emptyOwner = std::make_unique<DocumentSession>();
+        auto& empty = *emptyOwner;
         Expect(empty.TransformPreviewPreparationMemoryBytes() == 0 && !empty.PrepareTransformPreviewInput(),
                "preview-input-refused-without-open-transform");
     }

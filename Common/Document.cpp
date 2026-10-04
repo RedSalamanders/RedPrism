@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "ColorEditWork.h"
 #include "DocumentDraft.h"
 
 #include "PipelineTrace.h"
@@ -4422,6 +4423,18 @@ const CanvasDocument* DocumentSession::DisplayDocument() const
         // changed source falls back to the current committed document without reconstructing any pixels here.
         return _displayCopy && _displayTransformOpening == _transformEdit->opening &&
                        _displaySourceGeneration == Generation()
+                   ? &_displayCopy.value()
+                   : &_document.value();
+    }
+    if (_colorDisplayJobsEnabled && _colorEdit && _colorEdit->deferred && !_adjustmentEditingID)
+    {
+        // Settings ticks retain a compatible completed intermediate display. Off/identity or a changed source
+        // selects committed data while the old display remains charged until admitted retirement acknowledges.
+        return _colorEdit->preview && !ColorEditChangesNothing(_colorEdit->kind, _colorEdit->settings) &&
+                       Adjust::BlurMargin(_colorEdit->kind, _colorEdit->settings) <= _colorEdit->grownMargin &&
+                       _displayCopy && _displayColorOpening == _colorEdit->openingSequence &&
+                       _displaySourceGeneration == Generation() && _displayColorSequence != 0 &&
+                       _displayColorSequence == _colorEdit->previewSequence
                    ? &_displayCopy.value()
                    : &_document.value();
     }

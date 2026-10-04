@@ -315,7 +315,8 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         else if (earlyFault || test.mode == Mode::Failure)
             expect(test.name, "failure-preserves-complete-owner",
                    outcome == HostOutcome::Failed &&
-                       state.receipt.Read().error == (earlyFault ? E_OUTOFMEMORY : E_ACCESSDENIED) &&
+                       state.receipt.Read().error ==
+                           static_cast<std::int32_t>(earlyFault ? E_OUTOFMEMORY : E_ACCESSDENIED) &&
                        _session.Document() == state.before && _session.history.IsCurrent(state.history) &&
                        _session.Generation() == state.generation &&
                        (!test.stage || gate->historyFaultHits.load() == 1));
@@ -433,9 +434,9 @@ int Application::RunSelectionNudgeFaultSelfTest() noexcept
         static_cast<void>(RunUiActions(_jobs));
     expect("scheduler-admission", "actual-record-table-refuses-before-capture",
            refused.Read().outcome == HostOutcome::Failed &&
-               refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && _session.Document() == before &&
-               _session.history.IsCurrent(history) && !_historyWork.Busy() && !_selectionNudgeTicket &&
-               !_selectionNudgeStamp);
+               refused.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+               _session.Document() == before && _session.history.IsCurrent(history) && !_historyWork.Busy() &&
+               !_selectionNudgeTicket && !_selectionNudgeStamp);
     expect("scheduler-admission", "occupied-records-settle",
            SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled);
     const auto retry = QueueHostInput(HostSelectionNudgeInput{1, 0});

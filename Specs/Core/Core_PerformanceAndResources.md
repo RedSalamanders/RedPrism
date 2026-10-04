@@ -641,7 +641,11 @@ other raster operations keep G1 open.
 Open-batch classification is one bounded Io job per selected request, with at most 256 paths and 32,767 UTF-16
 units per path. Admission charges the independent path snapshot and 96 KiB worker scratch allowance; the host
 request retains its separate input charge. The owner caches the fixed result and performs no classification
-filesystem calls. Cancellation keeps the active request/reservation until acknowledgement, including a late
+filesystem calls. One fixed-size terminated path buffer is allocated within that worker scratch allowance,
+reused after each acknowledged read and released on the worker before completion. Scratch refusal fails the
+whole request with `E_OUTOFMEMORY` and publishes no classifications; empty, invalid and pre-cancelled batches
+allocate no scratch. No large automatic or per-thread persistent buffer is required.
+Cancellation keeps the active request/reservation until acknowledgement, including a late
 Finished result. Stop callbacks perform only event signaling; synchronous attribute/open calls and the initial
 acknowledged header wait occur on a worker. The wait still occupies a compute lane and remains F6 work for
 shared event-pool migration. No timing guarantee for OS/driver calls is implied.

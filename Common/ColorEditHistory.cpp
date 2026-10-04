@@ -76,8 +76,8 @@ std::uint64_t ColorEditHeldMemoryBytes(const ColorEdit& edit) noexcept
     };
     const auto raster = [&](const Raster& image) noexcept
     { return !image.HasStorage() || (image.RetirementMemoryBytes() && add(1, image.RetirementMemoryBytes())); };
-    if (!raster(edit.original) || !raster(edit.grownImage) || !raster(edit.previewSource) ||
-        !raster(edit.previewRaster) || !raster(edit.previewCoverage) ||
+    if (!raster(edit.original) || !raster(edit.grownImage) || !raster(edit.retiredGrownImage) ||
+        !raster(edit.previewSource) || !raster(edit.previewRaster) || !raster(edit.previewCoverage) ||
         (edit.selection && !add(1, edit.selection->loops.StorageBytes())))
         return 0;
     for (const auto& channel : edit.settings.curves.channels)

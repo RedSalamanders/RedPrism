@@ -113,6 +113,8 @@ class Application final : public ChromeEvents
     int Run(int showCommand) noexcept;
     int RunSelfTest() noexcept;
     static int RunStandaloneShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneColorDisplayShutdownSelfTest(HINSTANCE instance) noexcept;
+    static int RunStandaloneColorDisplayAdmissionSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneCanvasLifetimeShutdownSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneProcessingSelfTest(HINSTANCE instance) noexcept;
     static int RunStandaloneLiveShutdownSelfTest(HINSTANCE instance) noexcept;
@@ -502,12 +504,20 @@ class Application final : public ChromeEvents
     void CancelColorJobs() noexcept;
     void LaunchColorPreview() noexcept;
     [[nodiscard]] std::int32_t OfferColorPreview() noexcept;
-    [[nodiscard]] std::int32_t SubmitColorPreview(PreviewMailbox<ColorEditJobInput>::Launch launch) noexcept;
+    struct ColorPreviewRequest final
+    {
+        std::uint64_t documentSerial = 0;
+        std::uint64_t opening = 0;
+        std::uint64_t sequence = 0;
+        std::uint64_t generation = 0;
+        bool lookupOnly = false;
+        bool lookupPreview = false;
+    };
+    [[nodiscard]] std::int32_t SubmitColorPreview(PreviewMailbox<ColorPreviewRequest>::Launch launch) noexcept;
     [[nodiscard]] std::int32_t SubmitColorHistogram() noexcept;
-    void CompleteColorPreview(PreviewStamp stamp, ColorEditPreviewResult& result, JobResult completion) noexcept;
-    void CompleteColorHistogram(ColorEditHistogramResult& result, JobResult completion) noexcept;
     void QueueColorFailure() noexcept;
     int RunColorJobsSelfTest() noexcept;
+    int RunColorDisplayHostSelfTest() noexcept;
     void CancelColorEdit(bool cancelQueued = true) noexcept;
     void CancelColorEditForTest() noexcept;
     void OnAdjustAction(AdjustAction action, double value) noexcept override;
@@ -1031,7 +1041,7 @@ class Application final : public ChromeEvents
     std::optional<JobTicket> _colorCommitTicket;
     HostOutcome _colorCommitOutcome = HostOutcome::Succeeded;
     std::int32_t _colorCommitError = 0;
-    PreviewMailbox<ColorEditJobInput> _colorPreviews;
+    PreviewMailbox<ColorPreviewRequest> _colorPreviews;
     PreviewMailbox<GradientRequest> _gradientPreviews;
     bool _gradientMailboxOpen = false;
     bool _gradientCompleting = false;
@@ -1057,9 +1067,11 @@ class Application final : public ChromeEvents
     std::uint64_t _pixelMoveOpeningId = 0;
     std::uint64_t _pixelMoveOpeningGeneration = 0;
     bool _colorMailboxOpen = false;
+    bool _colorCompleting = false;
     std::uint64_t _colorDocumentSerial = 0;
     std::uint64_t _colorOpening = 0;
     std::uint64_t _colorSeenSequence = 0;
+    std::uint64_t _colorSeenGeneration = 0;
     bool _colorHistogramAttempted = false;
     std::optional<JobTicket> _colorPreviewTicket;
     std::optional<JobTicket> _colorHistogramTicket;

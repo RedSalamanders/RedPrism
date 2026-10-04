@@ -315,7 +315,8 @@ int Application::RunSelectionMoveCallerSelfTest() noexcept
             const auto error =
                 mode == Mode::ToolInputAllocation ? E_OUTOFMEMORY : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
             (void)expect(state.name, "refuses-before-capture",
-                         refused.Read().outcome == HostOutcome::Failed && refused.Read().error == error &&
+                         refused.Read().outcome == HostOutcome::Failed &&
+                             refused.Read().error == static_cast<std::int32_t>(error) &&
                              state.gate->captures.load() == 0 && state.gate->visits.load() == 0 &&
                              !_historyWork.Busy() && _jobs.ReservedMemoryBytes() == 0,
                          "refused caller acquired a job, capture or history barrier");

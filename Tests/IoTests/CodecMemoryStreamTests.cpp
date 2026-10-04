@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <memory>
 #include <span>
 #include <stop_token>
 #include <windows.h>
@@ -408,11 +409,11 @@ void CancellationAtZeroBand()
              "cancel.zero-create");
     if (!stream)
         return;
-    std::array<std::uint8_t, 131073> pattern{};
-    pattern.fill(0x6D);
+    constexpr std::size_t byteCount = 131073;
+    auto pattern = std::make_unique<std::uint8_t[]>(byteCount);
+    std::fill_n(pattern.get(), byteCount, std::uint8_t{0x6D});
     ULONG written = 0;
-    ExpectHr(stream->Write(pattern.data(), static_cast<ULONG>(pattern.size()), &written), S_OK,
-             "cancel.zero-fixture-write");
+    ExpectHr(stream->Write(pattern.get(), static_cast<ULONG>(byteCount), &written), S_OK, "cancel.zero-fixture-write");
     LARGE_INTEGER move{};
     move.QuadPart = 7;
     ExpectHr(stream->Seek(move, STREAM_SEEK_SET, nullptr), S_OK, "cancel.zero-fixture-cursor");
@@ -430,10 +431,10 @@ void CancellationAtZeroBand()
 void CancellationStopsWriteAndReadAfterOne64KiBBand()
 {
     constexpr std::size_t byteCount = 131073;
-    std::array<std::uint8_t, byteCount> input{};
+    auto input = std::make_unique<std::uint8_t[]>(byteCount);
     // Fixture generation must run on the baseline ISA, independently of the machine running this test.
 #pragma loop(no_vector)
-    for (std::size_t index = 0; index < input.size(); ++index)
+    for (std::size_t index = 0; index < byteCount; ++index)
         input[index] = static_cast<std::uint8_t>((index * 29u + 17u) & 0xFFu);
 
     std::stop_source writeStop;
@@ -448,11 +449,11 @@ void CancellationStopsWriteAndReadAfterOne64KiBBand()
     if (!writeStream)
         return;
     ULONG written = 99;
-    ExpectHr(writeStream->Write(input.data(), static_cast<ULONG>(input.size()), &written), E_ABORT,
+    ExpectHr(writeStream->Write(input.get(), static_cast<ULONG>(byteCount), &written), E_ABORT,
              "cancel.write-band-aborts");
     const auto partial = writeStream->WrittenBytes();
     Expect(writeObserver.lastCount == 65536 && written == 65536, "cancel.write-exact-partial-count");
-    Expect(partial.size() == 65536 && std::equal(partial.begin(), partial.end(), input.begin()),
+    Expect(partial.size() == 65536 && std::equal(partial.begin(), partial.end(), input.get()),
            "cancel.write-partial-prefix-and-cursor");
 
     LARGE_INTEGER rewind{};
@@ -468,16 +469,16 @@ void CancellationStopsWriteAndReadAfterOne64KiBBand()
              S_OK, "cancel.read-create");
     if (!observedRead)
         return;
-    ExpectHr(observedRead->Write(input.data(), static_cast<ULONG>(input.size()), &written), S_OK,
+    ExpectHr(observedRead->Write(input.get(), static_cast<ULONG>(byteCount), &written), S_OK,
              "cancel.read-observed-fixture-write");
     ExpectHr(observedRead->Seek(rewind, STREAM_SEEK_SET, nullptr), S_OK, "cancel.read-observed-fixture-rewind");
-    std::array<std::uint8_t, byteCount> output{};
-    output.fill(0xCC);
+    auto output = std::make_unique<std::uint8_t[]>(byteCount);
+    std::fill_n(output.get(), byteCount, std::uint8_t{0xCC});
     ULONG received = 99;
-    ExpectHr(observedRead->Read(output.data(), static_cast<ULONG>(output.size()), &received), E_ABORT,
+    ExpectHr(observedRead->Read(output.get(), static_cast<ULONG>(byteCount), &received), E_ABORT,
              "cancel.read-band-aborts");
     Expect(readObserver.lastCount == 65536 && received == 65536, "cancel.read-exact-partial-count");
-    Expect(std::equal(output.begin(), output.begin() + 65536, input.begin()) && output[65536] == 0xCC,
+    Expect(std::equal(output.get(), output.get() + 65536, input.get()) && output[65536] == 0xCC,
            "cancel.read-partial-bytes-and-cursor");
 }
 
@@ -503,12 +504,12 @@ void TinyCapBoundedZeroWriteReadAndComLifetime()
 
     LARGE_INTEGER rewind{};
     ExpectHr(stream->Seek(rewind, STREAM_SEEK_SET, nullptr), S_OK, "bounded.rewind");
-    std::array<std::uint8_t, capacity> actual{};
+    auto actual = std::make_unique<std::uint8_t[]>(static_cast<std::size_t>(capacity));
     ULONG received = 0;
-    ExpectHr(stream->Read(actual.data(), static_cast<ULONG>(actual.size()), &received), S_OK, "bounded.read-all");
+    ExpectHr(stream->Read(actual.get(), static_cast<ULONG>(capacity), &received), S_OK, "bounded.read-all");
     Expect(received == capacity && actual[capacity - 3] == tail[0] && actual[capacity - 2] == tail[1] &&
                actual[capacity - 1] == tail[2] &&
-               std::all_of(actual.begin(), actual.end() - 3, [](std::uint8_t value) { return value == 0; }),
+               std::all_of(actual.get(), actual.get() + capacity - 3, [](std::uint8_t value) { return value == 0; }),
            "bounded.read-all-exact-data");
 
     wil::com_ptr_nothrow<IStream> retained;

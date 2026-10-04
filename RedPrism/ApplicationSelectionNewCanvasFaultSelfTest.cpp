@@ -157,12 +157,13 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
         bool youngerHeld = true, zoomChanged = false, messagePumped = false;
     };
     constexpr UINT kNewCanvasOutlinePump = WM_APP + 0x4ce;
-    std::array<wchar_t, 32768> temporary{};
-    const auto units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
-    if (units == 0 || units >= temporary.size())
+    constexpr std::size_t temporarySize = 32768;
+    auto temporary = std::make_unique<wchar_t[]>(temporarySize);
+    const auto units = GetTempPathW(static_cast<DWORD>(temporarySize), temporary.get());
+    if (units == 0 || units >= temporarySize)
         return 5;
     const auto root =
-        std::filesystem::path(temporary.data()) / (L"RedPrism.NewCanvasOutline." + Guid::Generate().ToString());
+        std::filesystem::path(temporary.get()) / (L"RedPrism.NewCanvasOutline." + Guid::Generate().ToString());
     if (!CreateDirectoryW(root.c_str(), nullptr))
         return 5;
     const auto originalViewport = _viewport;
@@ -202,7 +203,7 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
             _forcedDiscardAnswer = originalAnswer;
             std::error_code error;
             const auto target = std::filesystem::weakly_canonical(root, error);
-            const auto base = std::filesystem::weakly_canonical(std::filesystem::path(temporary.data()), error);
+            const auto base = std::filesystem::weakly_canonical(std::filesystem::path(temporary.get()), error);
             if (!error && target.parent_path() == base)
                 std::filesystem::remove_all(target, error);
         });
@@ -609,9 +610,10 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
                        std::get<OutlineDrag>(_drag).offset == Vec2{5, 7});
         if (closeFailure || writerFailure || lifecycleFailure)
             expect(test.name, "exact-failure-error",
-                   state.receipt.Read().error == (test.mode == Mode::CloseFailure || test.mode == Mode::SaveFailure
-                                                      ? E_ACCESSDENIED
-                                                      : E_OUTOFMEMORY));
+                   state.receipt.Read().error ==
+                       static_cast<std::int32_t>(test.mode == Mode::CloseFailure || test.mode == Mode::SaveFailure
+                                                     ? E_ACCESSDENIED
+                                                     : E_OUTOFMEMORY));
         if (test.mode == Mode::Pump)
             expect(test.name, "view-and-posted-message-pump", state.zoomChanged && state.messagePumped);
         if (test.mode == Mode::CopiedDraft)
@@ -711,9 +713,10 @@ int Application::RunSelectionNewCanvasFaultSelfTest() noexcept
         (void)RunUiActions(_jobs);
     expect("scheduler-admission", "full-record-table-refuses-before-capture",
            receipt.Read().outcome == HostOutcome::Failed &&
-               receipt.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && _session.Document() == before &&
-               _session.Generation() == generation && _session.history.IsCurrent(history) &&
-               gate->captures.load() == 0 && !gate->retired.load() && !_historyWork.Busy() && SizeCardOpen());
+               receipt.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+               _session.Document() == before && _session.Generation() == generation &&
+               _session.history.IsCurrent(history) && gate->captures.load() == 0 && !gate->retired.load() &&
+               !_historyWork.Busy() && SizeCardOpen());
     if (!expect("scheduler-admission", "occupied-records-settle",
                 SettleJobs(_jobs, 15000, DispatchMessageThunk, this) == SettleResult::Settled))
         return 5;

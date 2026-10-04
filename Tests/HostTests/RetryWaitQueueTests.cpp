@@ -220,13 +220,18 @@ void TestRetryIntervalsAndValidation() noexcept
         rig.Close();
         return;
     }
-    Expect(rig.queue.Initialize(rig.scheduler, rig.routes) == HRESULT_FROM_WIN32(ERROR_INVALID_STATE),
+    Expect(rig.queue.Initialize(rig.scheduler, rig.routes) ==
+               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
            "initialize.duplicate_rejected");
 
     Receiver receiver;
     const JobTicket ticket{7, 41};
-    Expect(rig.queue.Start(ticket, 0, {}, receiver) == HRESULT_FROM_WIN32(ERROR_INVALID_STATE), "retry.zero_rejected");
-    Expect(rig.queue.Start(ticket, 6, {}, receiver) == HRESULT_FROM_WIN32(ERROR_INVALID_STATE), "retry.six_rejected");
+    Expect(rig.queue.Start(ticket, 0, {}, receiver) ==
+               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+           "retry.zero_rejected");
+    Expect(rig.queue.Start(ticket, 6, {}, receiver) ==
+               static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_STATE)),
+           "retry.six_rejected");
 
     for (unsigned int retry = 1; retry <= expectedDelays.size(); ++retry)
     {
@@ -234,7 +239,8 @@ void TestRetryIntervalsAndValidation() noexcept
         Expect(SUCCEEDED(start), "interval.start");
         if (FAILED(start))
             break;
-        Expect(rig.queue.Start(ticket, retry, {}, receiver) == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS),
+        Expect(rig.queue.Start(ticket, retry, {}, receiver) ==
+                   static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)),
                "ticket.duplicate_rejected");
         Expect(rig.queue.SignalDeadlineForTest(ticket), "interval.signal_real_wait");
         Expect(SettleJobs(rig.scheduler, 5000) == SettleResult::Settled, "interval.acknowledged");

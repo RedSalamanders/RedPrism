@@ -148,6 +148,7 @@ Application::Application(HINSTANCE instance, bool forceWarp, const wchar_t* scre
                          const wchar_t* demo, const wchar_t* bench) noexcept
     : _instance(instance), _session(HostHistoryLimit()), _forceWarp(forceWarp)
 {
+    _session.SetColorDisplayJobsEnabled(true);
     if (demo != nullptr && demo[0] != L'\0')
     {
         _demo = demo;
@@ -191,7 +192,8 @@ HRESULT Application::InitializeProcessing() noexcept
     };
     RETURN_IF_FAILED(static_cast<HRESULT>(InitializePipelineTrace()));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Trace));
-    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(0, {JobNoticeThunk, this})));
+    RETURN_IF_FAILED(static_cast<HRESULT>(_jobs.Initialize(
+        0, {JobNoticeThunk, this}, _processingTestProbe ? _processingTestProbe->memory : MemorySource{})));
     RETURN_IF_FAILED(checkpoint(ApplicationProcessingStage::Jobs));
     if (!_jobs.RegisterOwnerWork(_ownerWork))
         return E_UNEXPECTED;
@@ -3469,6 +3471,10 @@ void Application::Shutdown() noexcept
     // Close joins and retires every job while deliberately suppressing completion callbacks. Clear the
     // preview's owner ticket only after that acknowledgement; CancelTransformPreviewJobs closed its mailbox.
     _transformPreviewTicket.reset();
+    // Cancellation retains these admitted records until acknowledgement. Close deliberately suppresses
+    // Completed callbacks, so its producer/retirement join is the shutdown acknowledgement instead.
+    _colorPreviewTicket.reset();
+    _colorHistogramTicket.reset();
     if (_documentLifecycleStamp)
         (void)_historyWork.Finish(_documentLifecycleStamp.value());
     _documentLifecycleStamp.reset();

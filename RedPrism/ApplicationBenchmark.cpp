@@ -224,7 +224,8 @@ HRESULT CreateBenchmark(std::wstring_view mode, std::unique_ptr<UiBenchmarkState
         const int height = smoke ? 48 : ceiling ? 10000 : mode == L"ui45" ? 5464 : 2160;
         next->runs = smoke ? 2 : 10;
         next->smoke = smoke;
-        std::array<wchar_t, 32768> temporary{};
+        const auto temporaryStorage = std::make_unique<std::array<wchar_t, 32768>>();
+        auto& temporary = *temporaryStorage;
         const DWORD units = GetTempPathW(static_cast<DWORD>(temporary.size()), temporary.data());
         if (units == 0 || units >= temporary.size())
             return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);

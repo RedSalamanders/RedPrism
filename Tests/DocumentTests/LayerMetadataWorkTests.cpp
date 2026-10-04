@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -323,15 +324,18 @@ void InputValidationAndConsumption()
 void StalePublicationGuards()
 {
     {
-        DocumentSession first = MakeSession();
-        DocumentSession second = MakeSession();
+        auto firstOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& first = *firstOwner;
+        auto secondOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& second = *secondOwner;
         auto prepared = Prepare(first, LayerMetadataKind::Rename, kTargetId, L"Cross-session");
         Expect(prepared && !second.IsPreparedLayerMetadataCurrent(prepared.value()) &&
                    !second.ApplyPreparedLayerMetadataIfCurrent(prepared.value()),
                "publication-cannot-cross-session");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old document");
         session.ReplaceDocument(FixtureDocument(), kTargetId);
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
@@ -339,7 +343,8 @@ void StalePublicationGuards()
                "replacement-document-invalidates-publication");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old active");
         session.SelectLayerTarget(kSiblingId, false);
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
@@ -347,7 +352,8 @@ void StalePublicationGuards()
                "active-target-change-invalidates-publication");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         session.SelectLayerTarget(kSiblingId, false);
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Inactive rename");
         Expect(prepared && session.ApplyPreparedLayerMetadataIfCurrent(prepared.value()) &&
@@ -356,7 +362,8 @@ void StalePublicationGuards()
                "rename-addresses-saved-target-when-another-layer-is-active");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old selection");
         session.SetSelection(std::nullopt, L"Clear Selection");
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
@@ -364,7 +371,8 @@ void StalePublicationGuards()
                "selection-change-invalidates-publication");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old sibling");
         EditLayerRecordsForTest(session,
                                 [](DocumentFixture& document) { document.layers[2].name = L"Changed sibling"; });
@@ -373,7 +381,8 @@ void StalePublicationGuards()
                "other-layer-record-change-invalidates-publication");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old history");
         session.RenameLayer(kTargetId, L"Intervening edit");
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
@@ -381,7 +390,8 @@ void StalePublicationGuards()
                "history-and-generation-change-invalidates-publication");
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Old gesture");
         Expect(session.BeginBrush(Vec2{0.5, 0.5}), "stale-gesture-fixture-opens-brush");
         Expect(prepared && !session.IsPreparedLayerMetadataCurrent(prepared.value()) &&
@@ -390,7 +400,8 @@ void StalePublicationGuards()
         session.CancelBrush();
     }
     {
-        DocumentSession session = MakeSession();
+        auto sessionOwner = std::make_unique<DocumentSession>(MakeSession());
+        auto& session = *sessionOwner;
         auto prepared = Prepare(session, LayerMetadataKind::Rename, kTargetId, L"Limit stale");
         for (int index = 0; index <= kHistoryEntryLimit; ++index)
             session.RenameLayer(kTargetId, (index & 1) == 0 ? L"Limit A" : L"Limit B");

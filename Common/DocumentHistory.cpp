@@ -34,6 +34,20 @@ bool DocumentHistory::IsCurrent(const StateView& view) const noexcept
                                          view.precedingPending == _pending && view.precedingDepth == _depth));
 }
 
+DocumentHistory::Authority DocumentHistory::CaptureAuthority() const noexcept
+{
+    Authority result;
+    result._owner = this;
+    result._epoch = _stateEpoch;
+    result._revision = _revision;
+    return result;
+}
+
+bool DocumentHistory::IsCurrent(const Authority& authority) const noexcept
+{
+    return authority._owner == this && authority._epoch == _stateEpoch && authority._revision == _revision;
+}
+
 const std::wstring& DocumentHistory::StateView::UndoName() const noexcept
 {
     static const std::wstring empty;

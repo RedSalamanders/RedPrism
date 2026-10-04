@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -546,7 +547,8 @@ std::optional<PreparedAdjustmentClosure> PreparedCommit(Fixture& fixture)
 void StaleCandidates()
 {
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto input = fixture.session.PrepareAdjustmentClosureInput(true);
         Expect(input.has_value(), "stale-token.input");
         if (input)
@@ -561,7 +563,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-generation.candidate");
         if (candidate)
@@ -572,7 +575,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-document-serial.candidate");
         if (candidate)
@@ -584,7 +588,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-opening.candidate");
         if (candidate)
@@ -597,7 +602,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-active.candidate");
         if (candidate)
@@ -608,7 +614,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-mask.candidate");
         if (candidate)
@@ -619,7 +626,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-crop.candidate");
         if (candidate)
@@ -630,7 +638,8 @@ void StaleCandidates()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = PreparedCommit(fixture);
         Expect(candidate.has_value(), "stale-history-epoch.candidate");
         if (candidate)

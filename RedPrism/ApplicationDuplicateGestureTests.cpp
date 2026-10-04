@@ -313,7 +313,6 @@ int Application::RunDuplicateGestureSelfTest() noexcept
                     std::_Exit(5);
                 expect(!_duplicateGesture && !_session.PendingTransformEdit() && !_transformRestoreOwner &&
                            _session.Document()->layers.size() == 2 && _session.history.UndoCount() == 1 &&
-                           _session.history.UndoName() == L"Duplicate Layer" &&
                            _session.history.UndoName() == L"Duplicate Layer" && _session.ActiveLayer() &&
                            _session.ActiveLayer()->asset && _session.ActiveLayer()->asset->image == state.source,
                        "release-commits-one-copy-entry", test);

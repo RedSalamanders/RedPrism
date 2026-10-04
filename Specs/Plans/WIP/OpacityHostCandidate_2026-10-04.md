@@ -19,6 +19,10 @@
 - [ ] Fix the two existing test error-code comparisons flagged by native static analysis (C6221), then qualify the next integrated source. The first intermittent unchanged Wand failure remains under diagnosis; successful repeated runs do not explain it.
 - [ ] Migrate remaining pointer and lifetime opacity closure callers.
 - [ ] Move adjustment and display record construction and retirement to admitted workers.
+  The qualified private color display/publication core and first actual host route are integrated: scalar pending
+  descriptors, borrowed planning, capture/resume after admission, complete display swaps, retained cancellation
+  tickets, and aggregate retirement. Fresh normal Debug qualification is in progress; remaining host scenarios
+  and due G1 measurements keep this row open.
 - [ ] Qualify the complete native caller migration with the full x64 suites and ARM64 cross-builds.
 - [ ] Measure admission, capture, publication, history and frame costs before claiming G1.
 

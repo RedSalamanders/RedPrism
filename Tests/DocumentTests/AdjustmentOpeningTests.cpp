@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string>
@@ -431,7 +432,8 @@ void ExpectStale(Fixture& fixture, PreparedAdjustmentOpening& candidate, const c
 void StaleAuthority()
 {
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto input = fixture.session.PrepareAdjustmentOpeningInput();
         Expect(input.has_value(), "stale.token.input");
         if (input)
@@ -446,7 +448,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.generation.candidate");
         if (candidate)
@@ -456,7 +459,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.opening-id.candidate");
         if (candidate)
@@ -466,7 +470,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.active.candidate");
         if (candidate)
@@ -476,7 +481,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.mask.candidate");
         if (candidate)
@@ -486,7 +492,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.crop.candidate");
         if (candidate)
@@ -496,7 +503,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "stale.history-epoch.candidate");
         if (candidate)
@@ -512,8 +520,10 @@ void StaleAuthority()
         }
     }
     {
-        Fixture source(AdjustmentKind::Levels);
-        Fixture foreign(AdjustmentKind::Levels);
+        auto sourceOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& source = *sourceOwner;
+        auto foreignOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& foreign = *foreignOwner;
         auto candidate = Prepare(source, source.source);
         Expect(candidate.has_value(), "foreign.candidate");
         if (candidate)
@@ -526,7 +536,8 @@ void StaleAuthority()
         }
     }
     {
-        Fixture fixture(AdjustmentKind::Levels);
+        auto fixtureOwner = std::make_unique<Fixture>(AdjustmentKind::Levels);
+        auto& fixture = *fixtureOwner;
         auto candidate = Prepare(fixture, fixture.source);
         Expect(candidate.has_value(), "moved.candidate");
         if (candidate)

@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <string_view>
@@ -466,7 +467,8 @@ int RunImportPublicationTests()
     constexpr std::array<std::uint8_t, 4> kImportedPixel{17, 34, 51, 255};
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         Expect(fixture.session.history.CanUndo() && fixture.session.history.CanRedo(),
                "new-single-image-fixture-starts-with-old-undo-and-redo");
         const CanvasDocument baseline = PixelDocument(L"Single imported image", kImportedPixel);
@@ -484,7 +486,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const CanvasDocument baseline = PixelDocument(L"Import baseline", {3, 4, 5, 255});
         const CanvasDocument after = WithSecondImage(baseline, kImportedPixel);
         auto prepared = PrepareCurrent(fixture.session, NewImageBatch(baseline, after));
@@ -512,7 +515,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const Guid documentID = fixture.session.Document().value().id;
         const std::uint64_t serial = fixture.session.DocumentSerial();
         const CanvasDocument after = WithPixel(fixture.session.Document().value(), kImportedPixel);
@@ -534,7 +538,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const auto before = fixture.session.history.CaptureState();
         const Guid revision = fixture.session.history.CurrentRevision();
         const auto crop = std::optional(CropRect{0.1, 0.2, 0.7, 0.6});
@@ -554,7 +559,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         CanvasDocument invalid = PixelDocument(L"Invalid mask graph", {10, 11, 12, 255});
         EditDocumentFixture(invalid,
                             [](DocumentFixture& fixture) { fixture.layers.front().maskSourceID = Guid::Generate(); });
@@ -580,8 +586,10 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture owner;
-        SessionFixture foreign;
+        auto ownerOwner = std::make_unique<SessionFixture>();
+        auto& owner = *ownerOwner;
+        auto foreignOwner = std::make_unique<SessionFixture>();
+        auto& foreign = *foreignOwner;
         ImageImportAuthority emptyAuthority;
         auto defaultPrepared = Prepare(ImageImportBatchResult{}, std::move(emptyAuthority), owner.session.Document(),
                                        owner.session.ActiveLayerID(), owner.session.history.CaptureState());
@@ -596,7 +604,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const CanvasDocument after = WithPixel(fixture.session.Document().value(), kImportedPixel);
         ImageImportAuthority captured = fixture.session.CaptureImageImportAuthority();
         ImageImportAuthority moved = std::move(captured);
@@ -619,7 +628,8 @@ int RunImportPublicationTests()
     ExpectStaleRejected("generation", ChangeGeneration);
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         CancelSource cancellation;
         static_cast<void>(cancellation.Cancel());
         auto prepared = PrepareCurrent(fixture.session,
@@ -630,7 +640,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const CanvasDocument replacementBaseline = PixelDocument(L"Prepared replacement", {21, 22, 23, 255});
         auto staleReplacement = PrepareCurrent(fixture.session, NewImageBatch(replacementBaseline));
         const CanvasDocument ordinaryImport = WithPixel(fixture.session.Document().value(), kImportedPixel);
@@ -650,7 +661,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const CanvasDocument ordinaryAfter = WithPixel(fixture.session.Document().value(), {31, 32, 33, 255});
         auto staleOrdinary =
             PrepareCurrent(fixture.session, ExistingImageBatch(ordinaryAfter, fixture.session.ActiveLayerID().value()));
@@ -670,7 +682,8 @@ int RunImportPublicationTests()
     }
 
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto ordinary = PrepareCurrent(fixture.session,
                                        ExistingImageBatch(WithPixel(fixture.session.Document().value(), kImportedPixel),
                                                           fixture.session.ActiveLayerID().value()));
@@ -681,7 +694,8 @@ int RunImportPublicationTests()
                "ordinary-import-retains-later-saved-revision-after-undo");
     }
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         auto replacement =
             PrepareCurrent(fixture.session, NewImageBatch(PixelDocument(L"New baseline", kImportedPixel)));
         fixture.session.history.MarkSaved(Guid::Generate());
@@ -691,7 +705,8 @@ int RunImportPublicationTests()
     }
     for (const int choice : {0, 1, 2})
     {
-        SessionFixture fixture;
+        auto fixtureOwner = std::make_unique<SessionFixture>();
+        auto& fixture = *fixtureOwner;
         const auto serial = fixture.session.DocumentSerial();
         const CanvasDocument replacement = PixelDocument(L"Project baseline", kImportedPixel);
         const auto active = choice == 0   ? std::optional<Guid>{}
@@ -709,7 +724,8 @@ int RunImportPublicationTests()
                "project-replacement-valid-absent-and-unknown-active-selection");
     }
     {
-        DocumentSession empty;
+        auto emptyOwner = std::make_unique<DocumentSession>();
+        auto& empty = *emptyOwner;
         CanvasDocument blank;
         blank.id = Guid::Generate();
         blank.width = blank.height = 1;
@@ -723,7 +739,8 @@ int RunImportPublicationTests()
     for (const bool project : {false, true})
         for (const bool stop : {false, true})
         {
-            SessionFixture fixture;
+            auto fixtureOwner = std::make_unique<SessionFixture>();
+            auto& fixture = *fixtureOwner;
             const auto original = fixture.session.Document();
             const auto active = fixture.session.ActiveLayerID();
             const auto revision = fixture.session.history.CurrentRevision();

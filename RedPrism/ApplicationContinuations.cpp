@@ -511,6 +511,7 @@ void Application::RunHostContinuation() noexcept
         LaunchGradientPreview();
         LaunchPixelMovePreview();
         LaunchTransformPreview();
+        RefreshColorJobs();
     }
     if (_hostCommitStamp || _historyWork.Busy() || _pathClassificationTicket)
     {

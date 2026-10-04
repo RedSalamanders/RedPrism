@@ -291,8 +291,9 @@ class Application::RasterEditJob final : public Job
         if (outcome == HostOutcome::Failed)
         {
             ++_owner._errorsShown;
-            _owner._lastErrorId =
-                error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? IDS_ERROR_TOO_LARGE : IDS_ERROR_PIXEL_EDIT;
+            _owner._lastErrorId = error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE))
+                                      ? IDS_ERROR_TOO_LARGE
+                                      : IDS_ERROR_PIXEL_EDIT;
             _owner._prompts->PostNotice(_owner._window.get(), kNoticeMessage, _owner._lastErrorId);
         }
         if (outcome == HostOutcome::Cancelled || outcome == HostOutcome::Stale)

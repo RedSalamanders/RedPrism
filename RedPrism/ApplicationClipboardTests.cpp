@@ -287,7 +287,8 @@ int Application::RunClipboardWorkSelfTest() noexcept
         document.layers.push_back(std::move(layer));
         if (scenario.mode == Mode::Empty)
         {
-            _session = DocumentSession{}; // independent owner without a previous private copy
+            _session = DocumentSession{};              // independent owner without a previous private copy
+            _session.SetColorDisplayJobsEnabled(true); // Keep the Application's publication policy on this owner.
             _session.SetBrushEngine(_brushEngine.Ready() ? &_brushEngine : nullptr);
         }
         _session.ReplaceDocument(std::move(document).Seal(), active);

@@ -339,7 +339,10 @@ HRESULT Application::StartProjectOpen(const std::wstring& path) noexcept
     if (!_activeHostRequest || _projectOpenTicket ||
         !std::holds_alternative<HostPathsInput>(_activeHostRequest->input.Input()))
         return E_UNEXPECTED;
-    std::array<wchar_t, 32768> resolved{};
+    const std::unique_ptr<std::array<wchar_t, 32768>> resolvedStorage(new (std::nothrow) std::array<wchar_t, 32768>{});
+    if (!resolvedStorage)
+        return E_OUTOFMEMORY; // complete path-admission refusal before a history barrier or worker exists
+    auto& resolved = *resolvedStorage;
     const DWORD units = GetFullPathNameW(path.c_str(), static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
     if (units == 0)
         return HRESULT_FROM_WIN32(GetLastError());

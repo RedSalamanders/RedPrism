@@ -222,6 +222,12 @@ int RunFilterWorkBenchmark()
     bool succeeded = true;
     for (std::size_t operation = 0; operation < names.size() && succeeded; ++operation)
     {
+        if (operation >= names.size())
+        {
+            succeeded = false;
+            break;
+        }
+        const char* const operationName = names[operation];
         std::vector<double> latencies;
         latencies.reserve(kSamples);
         int early = 0;
@@ -296,7 +302,7 @@ int RunFilterWorkBenchmark()
             }
             if (observation.completion.status == JobStatus::Failed)
             {
-                std::printf("FILTER CANCEL ERROR name=%s hr=0x%08X\n", names[operation],
+                std::printf("FILTER CANCEL ERROR name=%s hr=0x%08X\n", operationName,
                             static_cast<unsigned int>(observation.completion.error));
                 succeeded = false;
                 break;
@@ -318,7 +324,7 @@ int RunFilterWorkBenchmark()
                 {
                     std::printf("FILTER CANCEL ERROR name=%s reason=invalid-sizing-result resize_status=%u "
                                 "completion=%u empty=%u\n",
-                                names[operation], static_cast<unsigned int>(status),
+                                operationName, static_cast<unsigned int>(status),
                                 static_cast<unsigned int>(observation.completion.status), emptyResult ? 1u : 0u);
                     succeeded = false;
                     break;
@@ -326,7 +332,7 @@ int RunFilterWorkBenchmark()
             }
             if (wait == WAIT_OBJECT_0 && !observation.produced)
             {
-                std::printf("FILTER CANCEL ERROR name=%s reason=empty-before-cancellation\n", names[operation]);
+                std::printf("FILTER CANCEL ERROR name=%s reason=empty-before-cancellation\n", operationName);
                 succeeded = false;
                 break;
             }
@@ -350,7 +356,7 @@ int RunFilterWorkBenchmark()
                     observation.completion.status != JobStatus::Cancelled)
                 {
                     std::printf("FILTER CANCEL ERROR name=%s reason=cancelled-sizing-result-not-empty-safe\n",
-                                names[operation]);
+                                operationName);
                     succeeded = false;
                     break;
                 }
@@ -367,13 +373,13 @@ int RunFilterWorkBenchmark()
         if (sizing)
             std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
                         "cancelled_empty=%d peak_bytes=%llu median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
-                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, cancelled,
+                        operationName, kWidth, kHeight, kCancelDelayMs, count, early, overlap, cancelled,
                         static_cast<unsigned long long>(reservation), median, p95, maximum,
                         succeeded ? "ok" : "failed");
         else
             std::printf("FILTER CANCEL name=%s width=%d height=%d delay_ms=%lu samples=%zu early=%d overlap=%d "
                         "median_ms=%.3f p95_ms=%.3f max_ms=%.3f status=%s\n",
-                        names[operation], kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
+                        operationName, kWidth, kHeight, kCancelDelayMs, count, early, overlap, median, p95, maximum,
                         succeeded ? "ok" : "failed");
         std::fflush(stdout);
     }

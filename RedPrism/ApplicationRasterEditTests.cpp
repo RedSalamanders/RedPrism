@@ -240,7 +240,8 @@ int Application::RunRasterEditSelfTest() noexcept
                     if (mode == Mode::Invalid)
                         correct = correct && actual.error == E_INVALIDARG;
                     if (mode == Mode::TooLarge)
-                        correct = correct && actual.error == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+                        correct = correct &&
+                                  actual.error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
                     if (large)
                         correct = correct && _rasterEditTestGate->payloadRetired.load() &&
                                   _rasterEditTestGate->payloadRetiredOffOwner.load();

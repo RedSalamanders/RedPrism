@@ -104,8 +104,13 @@ void TestUiActionSourceCapacity(int& failures)
     ExpectSource(!scheduler.UnregisterUiActionSource(other), "source-wrong-identity-unregister-refused", failures);
     ExpectSource(scheduler.IsIdle() && !scheduler.HasUiWork(), "source-registration-alone-is-idle", failures);
     const HANDLE wake = static_cast<HANDLE>(scheduler.WakeHandle());
-    ExpectSource(wake != nullptr && WaitForSingleObject(wake, 0) == WAIT_TIMEOUT,
-                 "source-registration-alone-does-not-signal-wake", failures);
+    ExpectSource(wake != nullptr, "source-scheduler-wake-exists", failures);
+    if (wake == nullptr)
+    {
+        return;
+    }
+    ExpectSource(WaitForSingleObject(wake, 0) == WAIT_TIMEOUT, "source-registration-alone-does-not-signal-wake",
+                 failures);
     trace.reserve(JobScheduler::kUiActionCapacity + 4);
 
     for (std::size_t index = 0; index < JobScheduler::kUiActionCapacity; ++index)
@@ -123,8 +128,7 @@ void TestUiActionSourceCapacity(int& failures)
     ExpectSource(scheduler.RequestUiActionSource(source) && scheduler.RequestUiActionSource(source),
                  "source-repeated-requests-coalesce", failures);
     ExpectSource(scheduler.HasUiWork() && !scheduler.IsIdle(), "source-ready-is-ui-work", failures);
-    ExpectSource(wake != nullptr && WaitForSingleObject(wake, 0) == WAIT_OBJECT_0,
-                 "source-request-signals-scheduler-wake", failures);
+    ExpectSource(WaitForSingleObject(wake, 0) == WAIT_OBJECT_0, "source-request-signals-scheduler-wake", failures);
 
     ExpectSource(RunUiActions(scheduler), "source-runs-when-ordinary-queue-is-full", failures);
     ExpectSource(source.runs == 1 && trace.size() == 1 && trace[0] == 100,

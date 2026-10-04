@@ -310,7 +310,7 @@ int Application::RunLayerMetadataSelfTest() noexcept
     const bool safeRefusal =
         expect("admission", "full-scheduler-preserves-owner",
                refused.Read().outcome == HostOutcome::Failed &&
-                   refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) &&
+                   refused.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
                    _session.Document() == before && _session.history.CurrentRevision() == revision &&
                    !_historyWork.Busy() && !_layerMetadataTicket && !_layerMetadataStamp);
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled || !safeRefusal)

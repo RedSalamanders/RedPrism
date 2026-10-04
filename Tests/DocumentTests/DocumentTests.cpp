@@ -9,6 +9,8 @@
 #include "ClipboardCommandTests.h"
 #include "ClipboardPasteTests.h"
 #include "ColorDismissalTests.h"
+#include "ColorDisplayPublicationTests.h"
+#include "ColorDisplayWorkTests.h"
 #include "ColorEditDeferredTests.h"
 #include "ColorEditWorkTests.h"
 #include "CopyPixelsTests.h"
@@ -1487,7 +1489,8 @@ void TestSelectionCoverage()
 void TestSelectionSession()
 {
     // Legacy replaceAddAndSubtractCombineOutlines.
-    DocumentSession session = SelectionSession();
+    auto sessionOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& session = *sessionOwner;
     Lasso(session, Square(10, 10, 40));
     Expect(CoverageAt(session.Selection(), 100, 100, 30, 30) == 255 &&
                CoverageAt(session.Selection(), 100, 100, 70, 70) == 0,
@@ -1514,7 +1517,8 @@ void TestSelectionSession()
     Lasso(session, Square(-50, -50, 100));
     Expect(NearBounds(session.Selection(), 0, 0, 50, 50), "selection.clipped-to-canvas");
     // Legacy emptySelectionIsDistinctFromNoSelection.
-    DocumentSession empty = SelectionSession();
+    auto emptyOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& empty = *emptyOwner;
     Lasso(empty, Square(0, 0, 50), SelectionMode::Subtract);
     Expect(!empty.Selection().has_value(), "selection.subtract-from-nothing");
     Lasso(empty, Square(10, 10, 20));
@@ -1525,7 +1529,8 @@ void TestSelectionSession()
     empty.Deselect();
     Expect(!empty.Selection().has_value(), "selection.deselect");
     // Legacy clickDeselectsAndSelectionStepsUndo.
-    DocumentSession steps = SelectionSession();
+    auto stepsOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& steps = *stepsOwner;
     const int count = steps.history.UndoCount();
     Lasso(steps, Square(10, 10, 40));
     Expect(steps.history.UndoCount() == count + 1 && steps.history.UndoName() == L"Lasso", "selection.undo-entry");
@@ -1538,7 +1543,8 @@ void TestSelectionSession()
     steps.Redo();
     Expect(CoverageAt(steps.Selection(), 100, 100, 30, 30) == 255, "selection.redo");
     // Legacy polygonalCornersCanBeRemovedAndClosed.
-    DocumentSession polygon = SelectionSession();
+    auto polygonOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& polygon = *polygonOwner;
     polygon.lassoKind = LassoKind::Polygonal;
     polygon.BeginLasso(Vec2{10, 10}, SelectionMode::New);
     polygon.ExtendLasso(Vec2{90, 10});
@@ -1568,7 +1574,8 @@ void TestSelectionSession()
     Expect(polygon.PendingLasso()->points.size() == 2, "selection.skips-close-points");
     polygon.CancelLasso();
     // Legacy antialiasingControlsEdgeCoverage: the flag at the time of the outline sticks to it.
-    DocumentSession aliased = SelectionSession();
+    auto aliasedOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& aliased = *aliasedOwner;
     const std::vector<Vec2> triangle{Vec2{0, 0}, Vec2{100, 0}, Vec2{0, 100}};
     Lasso(aliased, triangle);
     Expect(aliased.Selection()->antialiased, "selection.antialiased-default");
@@ -1579,7 +1586,8 @@ void TestSelectionSession()
                CoverageAt(aliased.Selection(), 100, 100, 70, 30) == 0,
            "selection.hard-edges");
     // Legacy selectAllInverseAndToolSwitchCancelsDraft.
-    DocumentSession all = SelectionSession();
+    auto allOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& all = *allOwner;
     all.SelectAll();
     Expect(all.history.UndoName() == L"Select All" && CoverageAt(all.Selection(), 100, 100, 0, 0) == 255 &&
                CoverageAt(all.Selection(), 100, 100, 99, 99) == 255,
@@ -1590,7 +1598,8 @@ void TestSelectionSession()
                CoverageAt(all.Selection(), 100, 100, 75, 75) == 255,
            "selection.inverse");
     // Legacy cursorBadgeFollowsModifiersButKeepsAnOutlinesStartingMode.
-    DocumentSession modes = SelectionSession();
+    auto modesOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& modes = *modesOwner;
     Expect(modes.LassoCursorMode(false, false) == SelectionMode::New &&
                modes.LassoCursorMode(true, false) == SelectionMode::Add &&
                modes.LassoCursorMode(false, true) == SelectionMode::Subtract,
@@ -1612,7 +1621,8 @@ void TestSelectionSession()
                !modes.UpdateHeldSelectionKeys(false, false),
            "selection.held-released");
     // A pending transform blocks selection edits; Undo drops an outline in progress.
-    DocumentSession blocked = SelectionSession();
+    auto blockedOwner = std::make_unique<DocumentSession>(SelectionSession());
+    auto& blocked = *blockedOwner;
     InsertPainted(blocked, 20, 20, Vec2{0, 0});
     blocked.BeginTransform(true);
     Expect(!blocked.CanEditSelection(), "selection.transform-blocks");
@@ -1623,7 +1633,8 @@ void TestSelectionSession()
     blocked.Undo();
     Expect(!blocked.PendingLasso().has_value(), "selection.undo-drops-draft");
     // No document: nothing happens.
-    DocumentSession none;
+    auto noneOwner = std::make_unique<DocumentSession>();
+    auto& none = *noneOwner;
     none.SelectAll();
     none.BeginLasso(Vec2{1, 1}, SelectionMode::New);
     Expect(!none.Selection().has_value() && !none.PendingLasso().has_value() && !none.CanModifySelection(),
@@ -7405,6 +7416,8 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunHistoryEntriesTests();
     gFailures += RunRecordRootTests();
     gFailures += RunRecordOwnershipBoundsTests();
+    gFailures += RunColorDisplayWorkTests();
+    gFailures += RunColorDisplayPublicationTests();
     gFailures += RunRecordRootAdoptTests();
     gFailures += RunDocumentDraftTests();
     gFailures += RunDocumentFixtureTests();

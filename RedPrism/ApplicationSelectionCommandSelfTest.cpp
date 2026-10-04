@@ -560,9 +560,9 @@ int Application::RunSelectionCommandSelfTest() noexcept
     const bool admissionRefused =
         expect("admission", "full-record-table-refuses",
                refused.Read().outcome == HostOutcome::Failed &&
-                   refused.Read().error == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && !_historyWork.Busy() &&
-                   !_selectionCommandTicket && !_selectionCommandStamp && _session.Document() == beforeAdmission &&
-                   _session.history.CurrentRevision() == admissionRevision,
+                   refused.Read().error == static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA)) &&
+                   !_historyWork.Busy() && !_selectionCommandTicket && !_selectionCommandStamp &&
+                   _session.Document() == beforeAdmission && _session.history.CurrentRevision() == admissionRevision,
                "real scheduler refusal lost history/input acknowledgement or changed state");
     if (SettleJobs(_jobs, 15000, DispatchMessageThunk, this) != SettleResult::Settled || !admissionRefused)
         return 5;

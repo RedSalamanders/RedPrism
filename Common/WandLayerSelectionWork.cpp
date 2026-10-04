@@ -100,6 +100,8 @@ std::optional<PreparedWandLayerSelection> DocumentSession::PrepareWandLayerSelec
     }
     else
     {
+        if (!target)
+            return refused(WandFailure::Memory);
         const Raster sampled = RenderLayerPixels(source, target->transform, before.width, before.height, cancellation);
         if (cancellation.IsCancelled())
             return refused(WandFailure::Cancelled);

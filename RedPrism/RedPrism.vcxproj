@@ -241,6 +241,8 @@
     <ClCompile Include="..\Common\AdjustEdit.cpp" />
     <ClCompile Include="..\Common\ColorEditWork.cpp" />
     <ClCompile Include="..\Common\ColorEditHistory.cpp" />
+    <ClCompile Include="..\Common\ColorDisplayWork.cpp" />
+    <ClCompile Include="..\Common\ColorDisplayPublication.cpp" />
     <ClCompile Include="..\Common\RasterWork.cpp" />
     <ClCompile Include="..\Common\RasterEditWork.cpp" />
     <ClCompile Include="..\Common\RasterEditHistory.cpp" />
@@ -306,6 +308,8 @@
     <ClCompile Include="ApplicationJobs.cpp" />
     <ClCompile Include="ApplicationAdjust.cpp" />
     <ClCompile Include="ApplicationAdjustJobs.cpp" />
+    <ClCompile Include="ApplicationColorDisplayHostTests.cpp" />
+    <ClCompile Include="ApplicationColorDisplayAdmissionHostTests.cpp" />
     <ClCompile Include="ApplicationCommitJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentClosureJobs.cpp" />
     <ClCompile Include="ApplicationAdjustmentOpeningJobs.cpp" />

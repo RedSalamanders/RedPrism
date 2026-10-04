@@ -58,9 +58,11 @@ class Application::PathClassificationJob final : public Job
             if (result.status != JobStatus::Finished)
                 return result;
         }
-        return context.cancellation.IsCancelled() || _result.status == PathClassificationStatus::Cancelled
-                   ? JobResult{JobStatus::Cancelled}
-                   : JobResult{};
+        if (context.cancellation.IsCancelled() || _result.status == PathClassificationStatus::Cancelled)
+            return {JobStatus::Cancelled};
+        if (_result.status == PathClassificationStatus::OutOfMemory)
+            return {JobStatus::Failed, E_OUTOFMEMORY};
+        return {};
     }
     void Completed(JobResult result) noexcept override
     {

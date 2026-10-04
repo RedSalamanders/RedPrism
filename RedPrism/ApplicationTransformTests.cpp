@@ -558,9 +558,9 @@ int Application::RunTransformWorkSelfTest() noexcept
             const bool noGate = test == Case::Admission || test == Case::Capture;
             const auto outcome = fault.receipt.Read();
             expect(outcome.outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Failed) &&
-                       outcome.error == (cancelled                     ? E_ABORT
-                                         : test == Case::WorkerFailure ? E_ACCESSDENIED
-                                                                       : E_OUTOFMEMORY),
+                       outcome.error == static_cast<std::int32_t>(cancelled                     ? E_ABORT
+                                                                  : test == Case::WorkerFailure ? E_ACCESSDENIED
+                                                                                                : E_OUTOFMEMORY),
                    "floating-fault-exact-outcome", test, after, kind);
             expect(noGate ? !fault.visited : fault.visited && fault.held && fault.viewChanged,
                    "floating-fault-held-reservation-and-view-input", test, after, kind);

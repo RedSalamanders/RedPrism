@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstdio>
+#include <memory>
 #include <new>
 #include <optional>
 #include <type_traits>
@@ -425,13 +426,16 @@ void AdditionalLiteralAndDraftCases()
 void AdmissionAndOwnershipRefusals()
 {
     {
-        DocumentSession empty;
+        auto emptyOwner = std::make_unique<DocumentSession>();
+        auto& empty = *emptyOwner;
         Expect(!empty.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll), "empty-session-refused");
-        DocumentSession invalid = Session();
+        auto invalidOwner = std::make_unique<DocumentSession>(Session());
+        auto& invalid = *invalidOwner;
         Expect(!invalid.PrepareSelectionCommandInput(static_cast<SelectionCommandKind>(255)), "invalid-kind-refused");
     }
     {
-        DocumentSession owner = Session();
+        auto ownerOwner = std::make_unique<DocumentSession>(Session());
+        auto& owner = *ownerOwner;
         auto captured = owner.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll);
         Expect(captured.has_value(), "moved-input-fixture-captured");
         if (captured)
@@ -446,34 +450,41 @@ void AdmissionAndOwnershipRefusals()
         }
     }
     {
-        DocumentSession owner = Session();
+        auto ownerOwner = std::make_unique<DocumentSession>(Session());
+        auto& owner = *ownerOwner;
         auto input = owner.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll);
         auto prepared = input ? DocumentSession::PrepareSelectionCommandPublication(std::move(*input)) : std::nullopt;
-        DocumentSession foreign = Session();
+        auto foreignOwner = std::make_unique<DocumentSession>(Session());
+        auto& foreign = *foreignOwner;
         Expect(prepared && !foreign.IsPreparedSelectionCommandCurrent(*prepared) &&
                    !foreign.ApplyPreparedSelectionCommandIfCurrent(*prepared),
                "foreign-session-refused");
     }
     {
-        DocumentSession original = Session();
+        auto originalOwner = std::make_unique<DocumentSession>(Session());
+        auto& original = *originalOwner;
         auto input = original.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll);
         auto prepared = input ? DocumentSession::PrepareSelectionCommandPublication(std::move(*input)) : std::nullopt;
-        DocumentSession copied = original;
+        auto copiedOwner = std::make_unique<DocumentSession>(original);
+        auto& copied = *copiedOwner;
         Expect(prepared && !copied.IsPreparedSelectionCommandCurrent(*prepared) &&
                    !copied.ApplyPreparedSelectionCommandIfCurrent(*prepared) &&
                    original.IsPreparedSelectionCommandCurrent(*prepared),
                "session-copy-refused-with-original-still-current");
-        DocumentSession moveSource = Session();
+        auto moveSourceOwner = std::make_unique<DocumentSession>(Session());
+        auto& moveSource = *moveSourceOwner;
         auto moveInput = moveSource.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll);
         auto movePrepared =
             moveInput ? DocumentSession::PrepareSelectionCommandPublication(std::move(*moveInput)) : std::nullopt;
-        DocumentSession moved = std::move(moveSource);
+        auto movedOwner = std::make_unique<DocumentSession>(std::move(moveSource));
+        auto& moved = *movedOwner;
         Expect(movePrepared && !moved.IsPreparedSelectionCommandCurrent(*movePrepared) &&
                    !moveSource.IsPreparedSelectionCommandCurrent(*movePrepared),
                "session-move-retires-both-authorities");
     }
     {
-        DocumentSession session = Session();
+        auto sessionOwner = std::make_unique<DocumentSession>(Session());
+        auto& session = *sessionOwner;
         session.BeginShape({0, 0});
         Expect(!session.PrepareSelectionCommandInput(SelectionCommandKind::SelectAll),
                "active-shape-draft-blocks-admission");
