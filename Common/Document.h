@@ -2245,6 +2245,7 @@ class DocumentSession
     // (`SetCloneSource`) and, with `cloneSettings.sampleAllLayers`, the host's composite of the visible canvas at
     // document size.
     bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite = nullptr);
+    bool BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings, bool maskWhite);
     // Alt-click: where Clone Stamp copies from. A new source starts a new alignment.
     void SetCloneSource(Vec2 point) noexcept;
     // The whole-pixel offset a stroke starting at `point` would copy with: aligned strokes keep the first
@@ -2596,6 +2597,10 @@ class DocumentSession
     [[nodiscard]] const BrushStroke* PendingBrush() const noexcept
     {
         return _brush.get();
+    }
+    [[nodiscard]] std::optional<std::uint64_t> PendingBrushOpening() const noexcept
+    {
+        return _brush ? std::optional(_brushOpening) : std::nullopt;
     }
     // Owner-only harness observation; the weak handle retains no draft or borrowed graphics owner.
     [[nodiscard]] std::weak_ptr<BrushStroke> WeakPendingBrushForTest() const noexcept

@@ -1185,6 +1185,14 @@ bool DocumentSession::BeginBrush(Vec2 point, bool erase)
 
 bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite)
 {
+    return BeginBrush(point, kind, composite, brushSettings, maskPaintWhite);
+}
+
+bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* composite, BrushSettings settings,
+                                 bool maskWhite)
+{
+    if (_brushOpening == UINT64_MAX)
+        return false;
     if (HasDeferredTransform() || (_gradient && _gradient->deferred) || (_pixelMove && _pixelMove->deferred))
         return false;
     // A pending gradient applies first, so the stroke paints over it and never drops it (Decision D3).
@@ -1201,10 +1209,9 @@ bool DocumentSession::BeginBrush(Vec2 point, BrushKind kind, const Raster* compo
     {
         return false;
     }
-    BrushSettings settings = brushSettings;
     if (mask)
     {
-        settings.red = maskPaintWhite ? 1.0 : 0.0;
+        settings.red = maskWhite ? 1.0 : 0.0;
         settings.green = settings.red;
         settings.blue = settings.red;
     }
