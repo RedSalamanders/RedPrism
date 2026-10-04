@@ -60,3 +60,34 @@ new-test prefix in registry comparison. That qualification failure is preserved 
 The wrapper is repaired. Those executions preceded the scalar-history/planning changes and do not qualify
 the subsequent source. Isolated history invalidation, moved publication, failed-display invalidation and
 borrowed-planning cases are being added before the fresh three-profile matrix. No host or timing claim follows.
+
+## Qualified private publication core
+
+Fresh forced builds and full document suites each execute 6,392 unchanged preceding controls plus 96 independent
+publication/planning/owner-retention controls. All 635 owned `.cpp/.h/.hlsl/.rc` inputs match by individual
+SHA-256. The ASan compiler command includes `/fsanitize=address` (tracking hash
+`BACAE1165358AC96F0C36B3F4EEA117499BB80DA2677579321A3AB8280279974`).
+
+| Attempt | Actual build/runtime result | Archive and independently verified copies | Completed receipt SHA-256 |
+| --- | --- | --- | --- |
+| r3 Debug | 0 / 0; 6,488 controls | `p1-color-publication-r3-Debug-qualified-private-document-suite`, 1,490 | `F3DB3EA1353347BBF4214DE45CAC386374FC4DFF9DA489ADB127057FE779D12E` |
+| r4 Release | 0 / 0; identical controls | `p1-color-publication-r4-Release-qualified-private-document-suite`, 1,488 | `B3C000E2634824B684A432FE2E4C306364EC8ABCB027761166137F2050BE2D5D` |
+| r5 ASan Debug | 0 / 0; identical controls, actual instrumentation | `p1-color-publication-r5-ASanDebug-qualified-private-document-suite`, 1,493 | `ADDBDD7DED54C673BB4EBE98A5D87D68A4D747A160219618F3E5C9256C9518FB` |
+
+Independent cases separate history-only structural invalidation from complete-source invalidation; changing the
+save marker alone keeps publication valid. Moved-from/consumed, copied/foreign session, replaced document,
+changed source/history, out-of-order and intermediate settings cases preserve current data and controls.
+An allocation-free failure factory transfers captured owners without copying; only a current latest failure
+invalidates the shown preview. Worker cancellation/allocation observers preserve source/history and permit retry.
+
+Primary found and fixed another final-owner path: opt-in settings ticks formerly reset grown/preview caches.
+Off/identity now retain invisible handles; growth moves the old grown cache into one fixed slot, repeated growth
+retains that same owner, and a matching publication moves it into the prepared retirement aggregate. Visibility
+checks exclude those stale handles. A weak lookup owner remains alive across invalidation and publication, then
+expires with the prepared aggregate. Default inline behavior and all existing goldens remain unchanged.
+
+The complete CPU planner covers render scratch, settings/token copies, record construction and old display/panel
+ownership without traversing undo history or materializing pixels. It reports resident retirement separately from
+new allocation. Actual host job/payload records, reservation-before-capture/resume, mailbox descriptors, shader
+visibility wiring and worker retirement still require integration and host tests. Direct test destruction of a
+prepared aggregate does not prove retirement off the application owner. No application/G1/native activation is claimed.

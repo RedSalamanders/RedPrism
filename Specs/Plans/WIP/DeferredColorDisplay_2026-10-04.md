@@ -6,12 +6,13 @@
 - [x] Qualify cached layer-record ownership bounds in private Debug/Release/ASan; use them as the planning prerequisite.
 - [x] Implement the private metadata-only display primitive and constant-time checked planning; primary-review the cheaper agent's independent tests and add missing hierarchy/mask cases.
 - [x] Private full Debug/Release/ASan document suites pass 6,313 unchanged existing controls plus 79 display controls/profile; all 631 owned inputs match, actual ASan instrumentation and every source/evidence copy are verified.
-- [ ] Prepare complete immutable color display documents on workers, preserving the existing mask-placement and raster-preview rules.
+- [x] Private worker preparation builds complete immutable color display documents, preserving mask placement and raster-preview rules; actual host activation remains open.
 - [x] Prove the pure display primitive, cancellation/faults, metadata planning, source sharing and unchanged original records against independent expectations.
 - [x] Primary implements private full-source publication and prepared-owner transfer; independent session tests and actual host qualification remain open.
-- [ ] Add opening/source/settings authority and atomic publication that transfers replaced display and preview owners into the complete retirement aggregate.
+- [x] Private core publication validates opening/source/settings and scalar history authority, swaps the complete display, and retains replaced owners in its move-only result. Actual host admission and worker retirement remain open.
+- [x] Fresh private Debug/Release/ASan suites pass all 6,392 preceding controls plus 96 publication/planning/owner-retention controls; 635 owned inputs match and every archive copy is verified.
 - [ ] Replace owned settings snapshots in the host's pending mailbox with bounded request descriptors; admit the whole graph before capture in the same resumable record.
-- [ ] Keep last complete compatible display while settings change; show committed data on source invalidation/off/identity without reconstructing or freeing a large graph in `DisplayDocument`.
+- [x] Private core keeps a compatible completed display and selects committed data on invalidation/off/identity. Opt-in settings ticks retain invisible preview caches and one old grown cache until prepared transfer; shader visibility uses `ColorLookupPreviewReady`.
 - [ ] Reoffer a bounded latest display request after unrelated source metadata changes without changing the opening target token or restoring older metadata.
 - [ ] Qualify actual host before/after-preparation gates, intermediate/latest ordering, cancellation/close/reopen/device/shutdown, faults and off-owner retirement.
 - [ ] Activate with the immutable-root integration, full normal x64 suites / ARM64 cross-builds, owning contracts and measured due G1 rows.
