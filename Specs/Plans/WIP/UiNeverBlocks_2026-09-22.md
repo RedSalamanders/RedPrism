@@ -12,6 +12,7 @@
 - [x] Integrate the privately qualified lifetime source and portable project entries into the managed candidate; skills/formatting pass all 620 files.
 - [x] Fresh normal managed x64 Debug/Release/ASan suites and ARM64 cross-builds pass for the combined lifetime/build/fixture candidate. All 627 owned inputs match; exact 78-stage / 8,962-control application registry, bounds suite, scanner controls and screenshots pass. Static analysis, diagnosis of the intermittent first-clean-run Wand failure and native activation remain open; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
 - [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
+- [x] Managed default-desktop Debug analysis qualifies the repaired candidate: all five images, unchanged stack thresholds, concurrency SAL controls, ISA/PDB/scanner gates and provenance pass; r31's 754 inputs / 1,038 archive copies are verified. The full current runtime matrix and native activation remain open.
 - [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
@@ -31,11 +32,17 @@ is unavailable on this host; cross-build evidence does not substitute for it.
 Current integration: the corrected 18-case color-display host route is implemented and pushed in the managed
 candidate (`92bd2ae`). The earlier r21 document suite passed 6,491 controls; that result does not qualify later
 stack/scratch repairs. Full attempts stopped before the main application registry on process/tool-start or
-clipboard fixture failures. Analysis r25 failed PowerShell initialization (`0xC0000142`); r26 ran the same build
-entrypoint in the initialized host but failed tool discovery before compilation. Both are independently
-archived. Qualification waits for Windows process/resource creation to recover; native analysis, the full
-current matrix, remaining code routes and G1 measurements are still required. See
-[DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). Every P1 exit row remains unchanged.
+clipboard fixture failures. Analysis r25 failed PowerShell initialization (`0xC0000142`); r26 failed tool
+discovery before compilation. r27 used a private temporary WinSta0 desktop, closed after its child exited, with
+`MSBUILDDISABLENODEREUSE=1` scoped to that process. The unchanged `build.ps1 -Platform x64 -Configuration Debug
+-Rebuild -MaxCpuCount 2 -Analyze` entrypoint reached compiler analysis and exited 1 on diagnostics. This is a
+compiler-diagnostics failure, not a runtime pass or P1 completion. Its independently verified archive, current
+repairs, remaining Debug/Release/ASan and ARM64 qualification, native activation, remaining code routes and
+G1 measurements are recorded in [DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md).
+The persistent recorder now runs on the recovered default desktop. r29/r30 compile and link the application
+without the earlier production diagnostics, but remain overall analysis failures on large test functions;
+their verified evidence and unqualified repairs are retained. The active-desktop G1/Release ETW run remains
+an independent requirement. Every P1 exit row remains unchanged.
 
 ## What this milestone delivers
 
