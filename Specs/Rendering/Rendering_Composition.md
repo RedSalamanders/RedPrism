@@ -265,6 +265,14 @@ A generation/device
 failure restarts the whole graph at most twice, releasing the previous attempt on a worker; it never publishes
 partial pixels. Unsupported completion, capacity, memory or persistent device failures fail locally.
 
+A detached 1×1 consumer may continue at another in-bounds pixel with `ContinuePixelReadback` only after
+the previous worker and mapped lease have been acknowledged. It retains the exact suspended ticket,
+original immutable document, reservation and total two-restart allowance. Refused early, stale, duplicate
+or out-of-bounds requests change no state. Previous CPU output retires on the next worker; utility targets
+are released before that detached boundary. Input may leave the record suspended until a message arrives,
+without polling, a timer or a dummy worker turn. This primitive does not activate the production sampler;
+its gesture, picker/palette authority, terminal ordering and G1 qualification remain P1.3 requirements.
+
 Merge, adjustment-editor opening and PNG/JPEG export use this path, retain their selected history acquisition
 through apply/drop, and validate complete snapshot and device generations before use or CPU detachment. Remaining clipboard/wand/clone/sampler
 consumers still migrate in P1.3. Synchronous readback remains their current path and the diagnostic numeric

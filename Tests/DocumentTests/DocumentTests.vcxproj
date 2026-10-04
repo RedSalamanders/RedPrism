@@ -101,6 +101,7 @@
     <ClInclude Include="..\..\Common\HistoryRestoreWork.h" />
     <ClInclude Include="..\..\Common\ImageImportHistory.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="..\..\Common\InputRevision.h" />
     <ClInclude Include="ColorEditWorkTests.h" />
     <ClInclude Include="ColorEditDeferredTests.h" />
     <ClInclude Include="FilterCancellationTests.h" />

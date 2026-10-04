@@ -69,6 +69,11 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     {
         return false;
     }
+    // Owner-only, after DeferDetachedCompletion has acknowledged a successful 1x1 result. Continue this
+    // exact suspended ticket at another in-bounds pixel, keeping the original snapshot/reservation and
+    // total device-restart limit. A live gesture may stay suspended with no polling until input arrives.
+    // Success must retain the record (return true from its defer hook); refusal changes no state.
+    [[nodiscard]] bool ContinuePixelReadback(JobTicket ticket, unsigned int x, unsigned int y) noexcept;
     virtual void ResetReadback() noexcept {} // worker-only release of a previous attempt's prepared result
     // Owner thread. Ensure the composition and queue use the current device, recovering on a device-lost reason.
     // No waits, modal or message pump. At most two whole-graph restarts; no partial result is published.
@@ -94,7 +99,7 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     GpuWorkQueue& _queue;
     CanvasRenderer& _composition;
     CanvasDocument _document;
-    const D3D11_BOX _region;
+    D3D11_BOX _region;
     PixelBuffer _pixels;
     Raster _image;
     GpuReadbackRows _rows;
@@ -109,4 +114,5 @@ class DocumentReadbackJob : public Job, public GpuReadbackReceiver, public GpuRe
     std::uint64_t _copiedPixels = 0;
     bool _utilityAcquired = false;
     bool _resetOutput = false;
+    bool _detachedReady = false; // owner-only: the preceding worker and GPU lease are acknowledged
 };

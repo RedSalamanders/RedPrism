@@ -456,6 +456,15 @@ class ChromeHost final : public CommandIds
     // The eyedropper loads a sampled color into the open picker (its swatch previews it; OK commits it).
     void SetPickerColor(uint32_t argb) noexcept;
     [[nodiscard]] uint32_t PickerColor() const noexcept;
+    struct PickerSampleAuthority final
+    {
+        Guid host;
+        std::uint64_t revision = 0;
+        PickerTarget target = PickerTarget::Foreground;
+        bool operator==(const PickerSampleAuthority&) const noexcept = default;
+    };
+    [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerSampleAuthority() const noexcept;
+    [[nodiscard]] bool ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept;
     // A checkable View menu item (Sample Ring).
     void SetCommandChecked(int command, bool checked) noexcept;
     void SetDocumentTitle(std::wstring title, bool dirty);
@@ -1346,6 +1355,8 @@ class ChromeHost final : public CommandIds
     std::optional<bool> _maskPaintWhite; // engaged while a layer's mask is the target: the wells show black and white
     EditorTool _tool = EditorTool::Move;
     PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
+    Guid _pickerInstance = Guid::Generate();
+    InputRevision _pickerInputRevision;
     bool _canvasFocused = true;
     bool _attached = false;
 };

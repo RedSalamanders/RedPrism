@@ -190,6 +190,8 @@ struct CaptureState final
     JobResult result{};
     Raster image;
     std::uint64_t deviceGeneration = 0;
+    void (*continuationOwnerAction)(CaptureState&) noexcept = nullptr;
+    void* continuationContext = nullptr;
 };
 
 class ReadbackProbe final : public DocumentReadbackJob
@@ -258,6 +260,30 @@ class ReadbackProbe final : public DocumentReadbackJob
     CaptureState& _state;
 };
 
+[[nodiscard]] bool ReplaceReadbackDevice(CaptureState& state) noexcept
+{
+    wil::com_ptr_nothrow<ID3D11Device> replacementDevice;
+    wil::com_ptr_nothrow<ID3D11DeviceContext> replacementContext;
+    HRESULT result = MakeWarp(replacementDevice, replacementContext);
+    if (SUCCEEDED(result))
+        result = state.fixture.composition.CreateDeviceResources(replacementDevice.get(), replacementContext.get());
+    if (SUCCEEDED(result))
+        result = state.fixture.queue.Bind(replacementDevice.get(), replacementContext.get());
+    if (FAILED(result))
+    {
+        state.rebindSetupFailed = true;
+        state.rebindSetupResult = result;
+        state.fixture.usable = false;
+        (void)state.fixture.scheduler.Cancel(state.ticket);
+        return false;
+    }
+    state.fixture.device = std::move(replacementDevice);
+    state.fixture.context = std::move(replacementContext);
+    state.reboundDeviceGeneration = state.fixture.queue.DeviceGeneration();
+    ++state.rebindMessages;
+    return true;
+}
+
 void DispatchReadbackMessage(void* context, void* nativeMessage) noexcept
 {
     auto& state = *static_cast<CaptureState*>(context);
@@ -271,30 +297,22 @@ void DispatchReadbackMessage(void* context, void* nativeMessage) noexcept
 
     state.ownerMessageSeen = true;
     state.ownerMessageSawPending = state.fixture.queue.HasPending();
-    if (state.cancelFromOwnerMessage)
+    if (state.continuationOwnerAction)
+    {
+        if (state.generationRebind && state.rebindMessages < state.requestedRebinds)
+        {
+            if (!ReplaceReadbackDevice(state))
+                return;
+        }
+        state.continuationOwnerAction(state);
+    }
+    else if (state.cancelFromOwnerMessage)
         state.cancelAccepted = state.fixture.scheduler.Cancel(state.ticket);
     else if (state.generationRebind)
     {
         state.rebindPendingObserved = state.rebindPendingObserved && state.ownerMessageSawPending;
-        wil::com_ptr_nothrow<ID3D11Device> replacementDevice;
-        wil::com_ptr_nothrow<ID3D11DeviceContext> replacementContext;
-        HRESULT result = MakeWarp(replacementDevice, replacementContext);
-        if (SUCCEEDED(result))
-            result = state.fixture.composition.CreateDeviceResources(replacementDevice.get(), replacementContext.get());
-        if (SUCCEEDED(result))
-            result = state.fixture.queue.Bind(replacementDevice.get(), replacementContext.get());
-        if (FAILED(result))
-        {
-            state.rebindSetupFailed = true;
-            state.rebindSetupResult = result;
-            state.fixture.usable = false;
-            (void)state.fixture.scheduler.Cancel(state.ticket);
+        if (!ReplaceReadbackDevice(state))
             return;
-        }
-        state.fixture.device = std::move(replacementDevice);
-        state.fixture.context = std::move(replacementContext);
-        state.reboundDeviceGeneration = state.fixture.queue.DeviceGeneration();
-        ++state.rebindMessages;
     }
     else
     {
@@ -308,6 +326,194 @@ void DispatchReadbackMessage(void* context, void* nativeMessage) noexcept
         }
     }
 }
+
+struct ContinuationState final
+{
+    static constexpr std::array<std::array<unsigned int, 2>, 3> samples{
+        std::array<unsigned int, 2>{0, 0}, std::array<unsigned int, 2>{6, 4}, std::array<unsigned int, 2>{2, 3}};
+
+    Fixture& fixture;
+    CaptureState& capture;
+    bool cancelWhileSuspended = false;
+    bool earlyRefused = false;
+    bool invalidTicketRefused = false;
+    bool staleTicketRefused = false;
+    bool outOfBoundsRefused = false;
+    bool duplicateRefused = false;
+    bool resumeAccepted = true;
+    bool duplicateWasRefused = true;
+    bool boundaryClean = true;
+    bool reservationHeldAtBoundary = true;
+    bool cancelAccepted = false;
+    bool copiedOffOwner = true;
+    bool checkBoundedRetirement = false;
+    bool boundedRetirement = true;
+    bool ticketStable = true;
+    bool ticketCaptured = false;
+    bool replacementAfterFirstPixel = false;
+    JobTicket continuationTicket{};
+    const unsigned long ownerThread = GetCurrentThreadId();
+    unsigned int detachedCalls = 0;
+    unsigned int resetCalls = 0;
+    unsigned int capturedPixels = 0;
+    std::array<std::array<std::uint8_t, 4>, samples.size()> actualPixels{};
+
+    [[nodiscard]] bool AtDetachedBoundary() noexcept
+    {
+        ++detachedCalls;
+        boundaryClean = boundaryClean && fixture.queue.LentCount() == 0 && fixture.queue.InFlightCount() == 0 &&
+                        !fixture.queue.HasPending() && fixture.composition.UtilitySurfaceBytes() == 0;
+        reservationHeldAtBoundary =
+            reservationHeldAtBoundary && fixture.scheduler.ReservedMemoryBytes() == capture.expectedReservation;
+        if (checkBoundedRetirement)
+            boundedRetirement = boundedRetirement && resetCalls == detachedCalls - 1;
+        return boundaryClean && reservationHeldAtBoundary;
+    }
+};
+
+class PixelContinuationProbe final : public DocumentReadbackJob
+{
+  public:
+    PixelContinuationProbe(Fixture& fixture, CaptureState& capture, ContinuationState& continuation,
+                           CanvasDocument document) noexcept
+        : DocumentReadbackJob(fixture.scheduler, fixture.queue, fixture.composition, std::move(document),
+                              D3D11_BOX{0, 0, 0, 1, 1, 1}),
+          _fixture(fixture), _capture(capture), _continuation(continuation)
+    {
+    }
+
+    [[nodiscard]] bool Continue(JobTicket ticket, unsigned int x, unsigned int y) noexcept
+    {
+        return ContinuePixelReadback(ticket, x, y);
+    }
+
+  protected:
+    HRESULT PrepareReadbackDevice(HRESULT reason) noexcept final
+    {
+        const bool reservationHeld = _fixture.scheduler.ReservedMemoryBytes() == _capture.expectedReservation;
+        _capture.reservationWasHeld = reservationHeld;
+        _capture.reservationHeldOnEveryPrepare = _capture.reservationHeldOnEveryPrepare && reservationHeld;
+        if (reason != S_OK || _fixture.composition.Device() != _fixture.device.get() || !reservationHeld)
+            return E_UNEXPECTED;
+        if (_capture.prepareCalls++ == 0)
+        {
+            const HRESULT bind = _fixture.queue.Bind(_fixture.device.get(), _fixture.context.get());
+            if (FAILED(bind))
+                return bind;
+            ++_capture.queueBinds;
+            _capture.prepareSucceeded = true;
+            _continuation.earlyRefused = !Continue(_capture.ticket, 1, 0);
+            if (!_capture.generationRebind && !PostThreadMessageW(GetCurrentThreadId(), kReadbackOwnerMessage, 0,
+                                                                  reinterpret_cast<LPARAM>(&_capture)))
+                return HRESULT_FROM_WIN32(GetLastError());
+        }
+        return S_OK;
+    }
+
+    [[nodiscard]] JobResult ProcessReadback(Raster& image, JobContext&) final
+    {
+        _continuation.copiedOffOwner =
+            _continuation.copiedOffOwner && GetCurrentThreadId() != _continuation.ownerThread;
+        if (!image.Data() || image.Width() != 1 || image.Height() != 1 ||
+            _continuation.capturedPixels >= _continuation.actualPixels.size())
+            return {JobStatus::Failed, E_UNEXPECTED};
+        std::memcpy(_continuation.actualPixels[_continuation.capturedPixels].data(), image.Data(), 4);
+        ++_continuation.capturedPixels;
+        return {};
+    }
+
+    [[nodiscard]] bool ProcessReadbackDetached() const noexcept final
+    {
+        return true;
+    }
+
+    void ResetReadback() noexcept final
+    {
+        _continuation.copiedOffOwner =
+            _continuation.copiedOffOwner && GetCurrentThreadId() != _continuation.ownerThread;
+        ++_continuation.resetCalls;
+    }
+
+    [[nodiscard]] bool DeferDetachedCompletion(JobResult result, JobTicket ticket) noexcept final
+    {
+        if (result.status != JobStatus::Finished || ticket != _capture.ticket || !_continuation.AtDetachedBoundary())
+            return false;
+        if (_continuation.cancelWhileSuspended && _continuation.detachedCalls == 1)
+        {
+            _capture.continuationContext = this;
+            _capture.continuationOwnerAction = &CancelSuspendedContinuation;
+            return PostThreadMessageW(GetCurrentThreadId(), kReadbackOwnerMessage, 0,
+                                      reinterpret_cast<LPARAM>(&_capture)) != FALSE;
+        }
+        if (_continuation.detachedCalls == 1)
+        {
+            JobTicket wrongSlot = ticket;
+            ++wrongSlot.slot;
+            JobTicket stale = ticket;
+            ++stale.generation;
+            _continuation.invalidTicketRefused = !Continue(wrongSlot, 6, 4);
+            _continuation.staleTicketRefused = !Continue(stale, 6, 4);
+            _continuation.outOfBoundsRefused = !Continue(ticket, 7, 0);
+        }
+        const unsigned int sampleIndex = _continuation.detachedCalls;
+        if (sampleIndex >= ContinuationState::samples.size())
+            return false;
+        _capture.continuationContext = this;
+        _capture.continuationOwnerAction = &ResumePixelContinuation;
+        return PostThreadMessageW(GetCurrentThreadId(), kReadbackOwnerMessage, 0,
+                                  reinterpret_cast<LPARAM>(&_capture)) != FALSE;
+    }
+
+    void ReadbackCompleted(JobResult result, Raster image, std::uint64_t deviceGeneration) noexcept final
+    {
+        _capture.continuationContext = nullptr;
+        _capture.continuationOwnerAction = nullptr;
+        ++_capture.completionCalls;
+        _capture.result = result;
+        _capture.image = std::move(image);
+        _capture.deviceGeneration = deviceGeneration;
+    }
+
+  private:
+    static void ResumePixelContinuation(CaptureState& capture) noexcept
+    {
+        auto& self = *static_cast<PixelContinuationProbe*>(capture.continuationContext);
+        const unsigned int sampleIndex = self._continuation.detachedCalls;
+        if (sampleIndex >= ContinuationState::samples.size())
+        {
+            self._continuation.resumeAccepted = false;
+            return;
+        }
+        const auto [x, y] = ContinuationState::samples[sampleIndex];
+        if (capture.generationRebind && sampleIndex == 1)
+            self._continuation.replacementAfterFirstPixel =
+                self._continuation.capturedPixels == 1 && capture.rebindMessages == 1 &&
+                self._continuation.boundaryClean && !self._fixture.queue.HasPending();
+        if (!self._continuation.ticketCaptured)
+        {
+            self._continuation.continuationTicket = capture.ticket;
+            self._continuation.ticketCaptured = true;
+        }
+        else
+            self._continuation.ticketStable =
+                self._continuation.ticketStable && self._continuation.continuationTicket == capture.ticket;
+        self._continuation.resumeAccepted = self.Continue(capture.ticket, x, y);
+        if (self._continuation.resumeAccepted && sampleIndex == 1)
+            self._continuation.duplicateWasRefused = !self.Continue(capture.ticket, 2, 3);
+        self._continuation.duplicateRefused = self._continuation.duplicateWasRefused;
+    }
+
+    static void CancelSuspendedContinuation(CaptureState& capture) noexcept
+    {
+        auto& self = *static_cast<PixelContinuationProbe*>(capture.continuationContext);
+        self._continuation.cancelAccepted = self._fixture.scheduler.Cancel(capture.ticket);
+        self._continuation.resumeAccepted = self.Continue(capture.ticket, 6, 4);
+    }
+
+    Fixture& _fixture;
+    CaptureState& _capture;
+    ContinuationState& _continuation;
+};
 
 [[nodiscard]] bool RasterMatches(const Raster& image, int width, int height,
                                  const std::vector<std::uint8_t>& expected) noexcept
@@ -528,6 +734,148 @@ void TestOwnerCancellation(Fixture& fixture)
     ExpectNoLeaks(fixture, "cancel.queue-reservation-and-utility-resources-released");
 }
 
+void TestPixelContinuation(Fixture& fixture)
+{
+    constexpr D3D11_BOX initialRegion{0, 0, 0, 1, 1, 1};
+    CanvasDocument document = PatternDocument(7, 5);
+    CanvasDocument displayDocument = PatternDocument(4, 3);
+    CaptureState capture{fixture, displayDocument};
+    capture.expectedReservation = DocumentReadbackJob::RequiredMemory(initialRegion);
+    ContinuationState continuation{fixture, capture};
+    std::unique_ptr<Job> job = std::make_unique<PixelContinuationProbe>(fixture, capture, continuation, document);
+    JobTicket ticket{};
+    const HRESULT submit = fixture.scheduler.Submit(job, {JobClass::Commit, 0, capture.expectedReservation}, ticket);
+    Expect(submit == S_OK, "continue.submit-one-pixel-reservation");
+    if (submit != S_OK)
+        return;
+    capture.ticket = ticket;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.clear(); });
+
+    const SettleResult settled = SettleJobs(fixture.scheduler, 15000, DispatchReadbackMessage, &capture);
+    Expect(settled == SettleResult::Settled, "continue.settle");
+    if (settled != SettleResult::Settled)
+    {
+        fixture.usable = false;
+        return;
+    }
+
+    bool samplesMatch = continuation.capturedPixels == ContinuationState::samples.size();
+    for (std::size_t i = 0; i < ContinuationState::samples.size(); ++i)
+    {
+        const auto [x, y] = ContinuationState::samples[i];
+        samplesMatch = samplesMatch && continuation.actualPixels[i] == PatternPixel(x, y);
+    }
+    const auto [lastX, lastY] = ContinuationState::samples.back();
+    const auto lastPixel = PatternPixel(lastX, lastY);
+    Expect(samplesMatch && continuation.copiedOffOwner,
+           "continue.each-one-pixel-result-matches-independent-pattern-formula-off-owner");
+    Expect(continuation.earlyRefused && continuation.invalidTicketRefused && continuation.staleTicketRefused &&
+               continuation.outOfBoundsRefused && continuation.duplicateRefused && continuation.resumeAccepted,
+           "continue.early-wrong-stale-out-of-bounds-and-duplicate-refused-before-valid-resume");
+    Expect(capture.prepareCalls == 3 && capture.queueBinds == 1 && capture.reservationHeldOnEveryPrepare &&
+               continuation.detachedCalls == 3 && continuation.boundaryClean && continuation.reservationHeldAtBoundary,
+           "continue.same-record-reservation-and-clean-detached-boundary-through-three-samples");
+    Expect(capture.ownerMessageSeen && capture.completionCalls == 1 && capture.result.status == JobStatus::Finished &&
+               RasterMatches(capture.image, 1, 1, std::vector<std::uint8_t>(lastPixel.begin(), lastPixel.end())),
+           "continue.owner-message-resumes-and-publishes-one-final-four-byte-pixel");
+    ExpectNoLeaks(fixture, "continue.reservation-mapping-and-utility-released");
+}
+
+void TestPixelContinuationDeviceReplacement(Fixture& fixture)
+{
+    constexpr D3D11_BOX initialRegion{0, 0, 0, 1, 1, 1};
+    CanvasDocument document = PatternDocument(7, 5);
+    CanvasDocument displayDocument = PatternDocument(4, 3);
+    CaptureState capture{fixture, displayDocument};
+    capture.expectedReservation = DocumentReadbackJob::RequiredMemory(initialRegion);
+    capture.generationRebind = true;
+    capture.requestedRebinds = 1;
+    capture.initialDeviceGeneration = fixture.queue.DeviceGeneration();
+    ContinuationState continuation{fixture, capture};
+    continuation.checkBoundedRetirement = true;
+    std::unique_ptr<Job> job = std::make_unique<PixelContinuationProbe>(fixture, capture, continuation, document);
+    JobTicket ticket{};
+    const HRESULT submit = fixture.scheduler.Submit(job, {JobClass::Commit, 0, capture.expectedReservation}, ticket);
+    Expect(submit == S_OK, "continue-rebind.submit-one-pixel-reservation");
+    if (submit != S_OK)
+        return;
+    capture.ticket = ticket;
+    EditDocumentFixture(document, [&](DocumentFixture& fixture) { fixture.layers.clear(); });
+
+    const SettleResult settled = SettleJobs(fixture.scheduler, 15000, DispatchReadbackMessage, &capture);
+    Expect(settled == SettleResult::Settled, "continue-rebind.settle");
+    if (settled != SettleResult::Settled)
+    {
+        fixture.usable = false;
+        return;
+    }
+    if (capture.rebindSetupFailed)
+    {
+        std::printf("     continue-rebind device setup HRESULT=0x%08x\n",
+                    static_cast<unsigned int>(capture.rebindSetupResult));
+        Expect(false, "continue-rebind.replacement-device-setup");
+        fixture.usable = false;
+        return;
+    }
+
+    bool samplesMatch = continuation.capturedPixels == ContinuationState::samples.size();
+    for (std::size_t i = 0; i < ContinuationState::samples.size(); ++i)
+    {
+        const auto [x, y] = ContinuationState::samples[i];
+        samplesMatch = samplesMatch && continuation.actualPixels[i] == PatternPixel(x, y);
+    }
+    const auto [lastX, lastY] = ContinuationState::samples.back();
+    const auto lastPixel = PatternPixel(lastX, lastY);
+    Expect(samplesMatch && continuation.copiedOffOwner,
+           "continue-rebind.exact-pixels-from-original-snapshot-after-caller-edit");
+    Expect(capture.ticket == ticket && continuation.ticketCaptured && continuation.ticketStable &&
+               capture.rebindMessages == 1 && continuation.replacementAfterFirstPixel &&
+               fixture.queue.DeviceGeneration() == capture.initialDeviceGeneration + 2,
+           "continue-rebind.same-ticket-resumes-on-replacement-device-generation");
+    Expect(capture.prepareCalls == 3 && capture.queueBinds == 1 && capture.reservationHeldOnEveryPrepare &&
+               continuation.detachedCalls == 3 && continuation.boundaryClean &&
+               continuation.reservationHeldAtBoundary && continuation.boundedRetirement && continuation.resetCalls == 2,
+           "continue-rebind.one-reservation-and-prior-pixel-retires-on-next-worker");
+    Expect(capture.completionCalls == 1 && capture.result.status == JobStatus::Finished &&
+               RasterMatches(capture.image, 1, 1, std::vector<std::uint8_t>(lastPixel.begin(), lastPixel.end())),
+           "continue-rebind.single-final-exact-pixel-publication");
+    ExpectNoLeaks(fixture, "continue-rebind.reservation-mapping-and-utility-released");
+}
+
+void TestPixelContinuationCancellation(Fixture& fixture)
+{
+    constexpr D3D11_BOX initialRegion{0, 0, 0, 1, 1, 1};
+    CanvasDocument document = PatternDocument(7, 5);
+    CanvasDocument displayDocument = PatternDocument(4, 3);
+    CaptureState capture{fixture, displayDocument};
+    capture.expectedReservation = DocumentReadbackJob::RequiredMemory(initialRegion);
+    ContinuationState continuation{fixture, capture};
+    continuation.cancelWhileSuspended = true;
+    std::unique_ptr<Job> job =
+        std::make_unique<PixelContinuationProbe>(fixture, capture, continuation, std::move(document));
+    JobTicket ticket{};
+    const HRESULT submit = fixture.scheduler.Submit(job, {JobClass::Commit, 0, capture.expectedReservation}, ticket);
+    Expect(submit == S_OK, "continue-cancel.submit");
+    if (submit != S_OK)
+        return;
+    capture.ticket = ticket;
+
+    const SettleResult settled = SettleJobs(fixture.scheduler, 15000, DispatchReadbackMessage, &capture);
+    Expect(settled == SettleResult::Settled, "continue-cancel.settle");
+    if (settled != SettleResult::Settled)
+    {
+        fixture.usable = false;
+        return;
+    }
+    Expect(capture.ownerMessageSeen && continuation.detachedCalls == 1 && continuation.cancelAccepted &&
+               continuation.resumeAccepted && capture.completionCalls == 1 &&
+               capture.result.status == JobStatus::Cancelled && !capture.image.HasStorage(),
+           "continue-cancel.owner-message-cancels-suspended-request-and-wakes-cancelled-worker");
+    Expect(continuation.boundaryClean && continuation.reservationHeldAtBoundary,
+           "continue-cancel.suspended-boundary-retains-reservation-without-mapped-or-utility-resources");
+    ExpectNoLeaks(fixture, "continue-cancel.reservation-mapping-and-utility-released");
+}
+
 void TestPrepareFailure(Fixture& fixture)
 {
     CanvasDocument document = PatternDocument(9, 7);
@@ -698,6 +1046,24 @@ int RunDocumentReadbackTests()
         return gFailures;
     }
     TestOwnerCancellation(fixture);
+    if (!fixture.usable)
+    {
+        fixture.Close();
+        return gFailures;
+    }
+    TestPixelContinuation(fixture);
+    if (!fixture.usable)
+    {
+        fixture.Close();
+        return gFailures;
+    }
+    TestPixelContinuationDeviceReplacement(fixture);
+    if (!fixture.usable)
+    {
+        fixture.Close();
+        return gFailures;
+    }
+    TestPixelContinuationCancellation(fixture);
     if (!fixture.usable)
     {
         fixture.Close();

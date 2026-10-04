@@ -584,6 +584,12 @@ references. Transform-time live-shape redraw remains a separate P1.5/A6 migratio
 - **Eyedropper**: `SampleCompositeColor(composite, point)` is the straight sRGB color of the host's composite at a
   document pixel (nullopt outside or over transparency); the host shows the comparison ring while View › Sample Ring
   (the `sampleRing` setting, [`Core_Settings.md`](../Core/Core_Settings.md), default on) is checked.
+  `CapturePaletteSampleAuthority` binds a potential deferred foreground publication to this exact session and
+  palette input revision. `ApplySampledForegroundColor` refuses foreign or superseded authority without mutation;
+  success renews only the caller's authority. Explicit foreground/background writes, swap and reset invalidate
+  earlier authority even for equal colors or A–B–A input. Session copy/move cannot inherit it. These counters remain
+  outside document generation/history. Exhaustion permanently disables checked publication instead of wrapping.
+  This authority prerequisite does not activate asynchronous sampling or qualify G1.
 - `AddPixelLayer(image, origin, name, editName, dropsSelection, shape)` inserts pixels as a layer above the active
   one (inside its folder) in one entry, the base for shapes and pastes.
 
@@ -764,6 +770,11 @@ malformed/over-budget offered images fail locally. A valid owned receipt and exa
 origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
 owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
 The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+Each admitted native Inspect/Copy attempt uses its own invisible, worker-owned message window for
+`OpenClipboard`. It MUST NOT use a null window or share an opener between simultaneous scopes. Window
+creation failure is a local native failure with empty output; contention remains Busy with the original sealed
+authority. Close the native scope before destroying its window on that worker. No HWND or locked OS pointer
+escapes into the document, owner callback, retry wait or publication.
 
 Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
 and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or

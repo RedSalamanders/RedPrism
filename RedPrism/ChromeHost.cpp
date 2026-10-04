@@ -398,6 +398,7 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
+    _pickerInputRevision.Advance();
     DetachAccessibility();
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
     // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
@@ -2548,6 +2549,7 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
 
 void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
 {
+    _pickerInputRevision.Advance(); // Manual/DxUi input wins even when it returns to the original color.
     // The target follows the working color (a palette well here, a Gradient Map end or the Canvas Size swatch in
     // the host); OK keeps it, Cancel restores it.
     const PickerTarget target = _pickerTarget;
@@ -2576,6 +2578,7 @@ void ChromeHost::ClosePickerCard() noexcept
     {
         return;
     }
+    _pickerInputRevision.Advance();
     // The keyboard goes back where it was: the well or swatch that opened the picker.
     PopCard(ModalCard::Picker);
     _pickerCard->SetVisible(false);
@@ -2605,6 +2608,7 @@ void ChromeHost::OpenColorPicker(PickerTarget target, uint32_t argb) noexcept
         return;
     }
     _pickerTarget = target;
+    _pickerInputRevision.Advance();
     _picker->SetColor(argb | 0xFF000000u);
     ArrangePicker();
     _pickerCard->SetVisible(true);
@@ -2632,6 +2636,8 @@ void ChromeHost::SampleColor(uint32_t argb) noexcept
 {
     if (ColorPickerOpen())
     {
+        // An explicit equal-value input also supersedes a pending asynchronous sample.
+        _pickerInputRevision.Advance();
         _picker->SampleColor(_view.Controls(), argb);
     }
 }
@@ -3213,6 +3219,14 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
         _pointerPressed = true;
     }
     _inDispatch = true;
+    if (ColorPickerOpen() && (event.action == DxUi::PointerAction::Down || _picker->IsDragging()))
+    {
+        const float scale = _dpi > 0.0f ? _dpi / 96.0f : 1.0f;
+        const auto bounds = _pickerCard->GetBounds();
+        const float x = event.xPixels / scale, y = event.yPixels / scale;
+        if (_picker->IsDragging() || (x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom))
+            _pickerInputRevision.Advance();
+    }
     const bool handled = _view.DispatchPointer(event);
     _inDispatch = false;
     if (event.action == DxUi::PointerAction::Up || event.action == DxUi::PointerAction::Leave)
@@ -3267,6 +3281,8 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
         return true;
     }
     _inDispatch = true;
+    if (down && ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
+        _pickerInputRevision.Advance(); // Equal or unfinished typed values may emit no DxUi change callback.
     const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
     _inDispatch = false;
     if (handledKey)
@@ -3353,6 +3369,8 @@ bool ChromeHost::DispatchCharacter(wchar_t character, UINT modifiers) noexcept
         return character >= L' ' ? OpenMenuByMnemonic(character) : true;
     }
     _inDispatch = true;
+    if (ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
+        _pickerInputRevision.Advance();
     const bool handled = _view.DispatchCharacter(character, modifiers);
     _inDispatch = false;
     return handled;
@@ -4066,20 +4084,37 @@ std::optional<D2D1_POINT_2F> ChromeHost::CloneSourceMarkDip() const noexcept
     return _overlay != nullptr ? _overlay->CloneSource() : std::nullopt;
 }
 
+std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerSampleAuthority() const noexcept
+{
+    if (!ColorPickerOpen() || _pickerInputRevision.Current() == 0)
+        return std::nullopt;
+    return PickerSampleAuthority{_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
+}
+
+bool ChromeHost::ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept
+{
+    if (!ColorPickerOpen() || authority.host != _pickerInstance || authority.target != _pickerTarget ||
+        !_pickerInputRevision.Matches(authority.revision))
+        return false;
+    SetPickerColor(argb);
+    authority = {_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
+    return true;
+}
+
 void ChromeHost::SetPickerColor(uint32_t argb) noexcept
 {
     if (!_picker || !_pickerCard || !_pickerCard->IsVisible())
     {
         return;
     }
-    _picker->SetCurrentColor(argb | 0xFF000000u);
-    ShowPaletteWell(_pickerTarget, argb | 0xFF000000u);
-    _view.MarkDirty();
+    // DxUi's current color is the opening/cancellation swatch, not the chosen color.
+    // SampleColor updates the chosen value and reports its normal preview callback.
+    SampleColor(argb);
 }
 
 uint32_t ChromeHost::PickerColor() const noexcept
 {
-    return _picker != nullptr ? _picker->GetCurrentColor() : _foregroundArgb;
+    return _picker != nullptr ? _picker->GetColor() : _foregroundArgb;
 }
 
 void ChromeHost::SetCommandChecked(int command, bool checked) noexcept

@@ -31,6 +31,8 @@ struct DelayedClipboard final
     std::atomic<bool> installed{false}, rendered{false};
     std::atomic<unsigned int> renders{0};
     std::atomic<unsigned int> unrelatedReads{0};
+    std::atomic<ULONGLONG> enteredAt{0}, releasedAt{0}, completedAt{0};
+    std::atomic<DWORD> releaseWait{WAIT_FAILED}, publicationError{ERROR_SUCCESS};
 };
 bool OpenProducer(HWND window) noexcept
 {
@@ -70,9 +72,13 @@ LRESULT CALLBACK ProducerProc(HWND window, UINT message, WPARAM wParam, LPARAM l
             return 0;
         }
         producer->renders.fetch_add(1);
+        producer->enteredAt.store(GetTickCount64());
         if (!PostThreadMessageW(producer->ownerThread, kRenderEnteredMessage, 0, 0))
             return 0;
-        if (WaitForSingleObject(producer->release.get(), 15000) != WAIT_OBJECT_0)
+        const DWORD waited = WaitForSingleObject(producer->release.get(), 15000);
+        producer->releaseWait.store(waited);
+        producer->releasedAt.store(GetTickCount64());
+        if (waited != WAIT_OBJECT_0)
             return 0;
         wil::unique_hglobal block(GlobalAlloc(GMEM_MOVEABLE, kDib.size()));
         if (!block)
@@ -84,11 +90,15 @@ LRESULT CALLBACK ProducerProc(HWND window, UINT message, WPARAM wParam, LPARAM l
             std::memset(locked.get(), 0, GlobalSize(block.get()));
             std::memcpy(locked.get(), kDib.data(), kDib.size());
         }
+        SetLastError(ERROR_SUCCESS);
         if (SetClipboardData(CF_DIB, block.get()))
         {
             (void)block.release();
             producer->rendered.store(true);
         }
+        else
+            producer->publicationError.store(GetLastError());
+        producer->completedAt.store(GetTickCount64());
         return 0;
     }
     if (message == WM_CLOSE || message == WM_DESTROY)
@@ -221,6 +231,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
         Guid revision;
         bool visited = false, held = false, viewDispatched = false, retainedUntilAcknowledged = false;
         bool shutdownObserved = false;
+        ULONGLONG dispatchedAt = 0, openedAt = 0;
     };
     const auto dispatch = [](void* raw, void* native) noexcept
     {
@@ -233,6 +244,7 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             return;
         }
         state.visited = true;
+        state.dispatchedAt = GetTickCount64();
         const bool paste = state.scenario.action == Action::Paste;
         state.held = owner._jobs.ReservedMemoryBytes() > 0 &&
                      (paste ? owner._clipboardTicket.has_value() && owner._historyWork.Busy() &&
@@ -387,15 +399,23 @@ int Application::RunClipboardDelayedSelfTest() noexcept
             owner->_sizeDialog.newWidth = 91;
             owner->_sizeDialog.newHeight = 73;
             owner->OpenSizeCard(SizeCardKind::NewCanvas);
+            state.openedAt = GetTickCount64();
             expect(owner->SizeCardOpen() && owner->_sizeDialog.newWidth == 91 && owner->_sizeDialog.newHeight == 73,
                    scenario.name, "card-opens-before-delayed-render");
         }
         if (SettleJobs(owner->_jobs, 20000, dispatch, &state) != SettleResult::Settled)
             std::_Exit(5);
         if (!state.visited || !state.held || producer.renders.load() != 1 || !producer.rendered.load())
+        {
             std::printf("clipboard-delayed.%s.actual visited=%d held=%d renders=%u rendered=%d unrelated=%u\n",
                         scenario.name, state.visited, state.held, producer.renders.load(), producer.rendered.load(),
                         producer.unrelatedReads.load());
+            std::printf("clipboard-delayed.%s.native entered=%llu opened=%llu dispatched=%llu released=%llu "
+                        "completed=%llu wait=%lu publication-error=%lu size=%.0fx%.0f\n",
+                        scenario.name, producer.enteredAt.load(), state.openedAt, state.dispatchedAt,
+                        producer.releasedAt.load(), producer.completedAt.load(), producer.releaseWait.load(),
+                        producer.publicationError.load(), owner->_sizeDialog.newWidth, owner->_sizeDialog.newHeight);
+        }
         expect(state.visited && state.held && producer.renders.load() == 1 && producer.rendered.load(), scenario.name,
                "actual-delayed-render-held-reserved-worker");
         expect(scenario.mode == Mode::Shutdown ? state.shutdownObserved : state.viewDispatched, scenario.name,

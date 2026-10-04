@@ -978,7 +978,36 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The color picker opened at the top of the canvas instead of beside the wells.\n");
             return 5;
         }
+        const auto pickerOpening = _chrome->CapturePickerSampleAuthority();
+        if (!pickerOpening)
+        {
+            SelfTestFailure(L"The visible picker has no sampling authority.\n");
+            return 5;
+        }
+        auto sampleAuthority = pickerOpening.value();
+        if (!_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF102030u) ||
+            !_chrome->ApplySampledPickerColor(sampleAuthority, 0xFF203040u) ||
+            sampleAuthority == pickerOpening.value() || _chrome->PickerColor() != 0xFF203040u)
+        {
+            SelfTestFailure(L"The picker did not renew its own sampled-color authority.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.own-samples-renew-exact-input-stamp\n");
+        auto foreignPicker = sampleAuthority;
+        foreignPicker.host = Guid::Generate();
+        if (_chrome->ApplySampledPickerColor(foreignPicker, 0xFFFFFFFFu) || _chrome->PickerColor() != 0xFF203040u)
+        {
+            SelfTestFailure(L"The picker accepted a foreign host's sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.foreign-host-refused-without-color-change\n");
         _chrome->SampleColor(0xFF336699u);
+        if (_chrome->ApplySampledPickerColor(sampleAuthority, 0xFFFFFFFFu) || _chrome->PickerColor() != 0xFF336699u)
+        {
+            SelfTestFailure(L"A delayed sample overwrote a newer picker input.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.manual-input-refuses-older-sample\n");
         _chrome->CloseColorPicker(true);
         if (_chrome->ColorPickerOpen() || _session.ForegroundColor() != 0xFF336699u)
         {
@@ -986,6 +1015,32 @@ int Application::RunSelfTest() noexcept
             return 5;
         }
         _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
+        auto backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
+        _chrome->SampleColor(DocumentSession::kDefaultBackgroundArgb);
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
+            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"An equal explicit picker input rebound an older sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.equal-manual-input-refuses-older-sample\n");
+        backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
+        if (!_chrome->ApplySampledPickerColor(backgroundAuthority, 0x00445566u) ||
+            _chrome->PickerColor() != 0xFF445566u)
+        {
+            SelfTestFailure(L"The background picker did not select its own opaque sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.background-sample-selects-opaque-chosen-value\n");
+        _chrome->SampleColor(0xFF112233u);
+        _chrome->SampleColor(0xFF445566u);
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) || _chrome->PickerColor() != 0xFF445566u)
+        {
+            SelfTestFailure(L"An equal-color picker A-B-A edit rebound an older sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.manual-a-b-a-refuses-older-sample\n");
+        backgroundAuthority = _chrome->CapturePickerSampleAuthority().value();
         _chrome->SampleColor(0xFF112233u);
         _chrome->CloseColorPicker(false);
         if (_chrome->ColorPickerOpen() || _session.BackgroundColor() != DocumentSession::kDefaultBackgroundArgb)
@@ -993,6 +1048,22 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"Cancelling the color picker changed the palette.\n");
             return 5;
         }
+        if (_chrome->CapturePickerSampleAuthority() ||
+            _chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u))
+        {
+            SelfTestFailure(L"A closed picker accepted a delayed sample.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.closed-card-refuses-delayed-sample\n");
+        _chrome->OpenColorPicker(PickerTarget::Background, _session.BackgroundColor());
+        if (_chrome->ApplySampledPickerColor(backgroundAuthority, 0xFF000000u) ||
+            _chrome->PickerColor() != DocumentSession::kDefaultBackgroundArgb)
+        {
+            SelfTestFailure(L"Reopening an equal picker rebound an old sampling opening.\n");
+            return 5;
+        }
+        std::printf("PASS sampler-authority.picker.equal-target-reopen-refuses-older-sample\n");
+        _chrome->CloseColorPicker(false);
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
         if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||

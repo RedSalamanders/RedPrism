@@ -103,9 +103,12 @@
     <ClInclude Include="..\..\Common\RetryWaitQueue.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="..\..\Common\InputRevision.h" />
     <ClInclude Include="JobCloseHookTests.h" />
     <ClInclude Include="JobSuspendedRetirementTests.h" />
     <ClInclude Include="PointerInputStreamTests.h" />
+    <ClInclude Include="SamplerInputTests.h" />
+    <ClInclude Include="..\..\Common\SamplerInput.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HostTests.cpp" />
@@ -180,6 +183,7 @@
     <ClCompile Include="ContinuationPendingViewTests.cpp" />
     <ClCompile Include="OpacityInputOrderTests.cpp" />
     <ClCompile Include="PointerInputStreamTests.cpp" />
+    <ClCompile Include="SamplerInputTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />
     <ClCompile Include="ContinuationRequestTests.cpp" />
     <ClCompile Include="HostPathReadTests.cpp" />

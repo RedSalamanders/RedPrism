@@ -697,6 +697,18 @@ host-sampled colors (`ChromeHost::SampleColor`, the eyedropper feed) preview int
 (`ChromeEvents::OnPickerColor`, which reports every change of the one picker with its `PickerTarget`: a well, a
 Gradient Map end, the Canvas Size custom color); Cancel, Escape (also when a picker child has focus) or capture loss
 restore the well.
+Canvas-fed samples update DxUi's chosen color through `SampleColor`; `PickerColor` reads `GetColor`. Its
+`GetCurrentColor`/`SetCurrentColor` swatch is the original opening color reserved for Cancel, not the sampled
+choice. Sampling MUST NOT replace that original. OK commits the chosen sample; Cancel restores the opening value.
+Deferred sampled-picker publication can use `CapturePickerSampleAuthority` and `ApplySampledPickerColor`.
+Authority identifies the exact chrome owner, target and input revision. Opening, closing, detaching and every
+manual/DxUi or direct sampled write advance the revision, including equal colors and A–B–A input. Pointer
+interaction in the picker and keyboard/text input in its focused subtree also invalidate
+older samples even when an equal or unfinished typed value emits no change callback. Canvas pointer sampling and
+view input outside the card do not advance this manual-input authority. Checked success renews the caller's
+authority; stale/foreign/closed/reopened results change no color. Counter exhaustion permanently
+refuses checked publication. These fixed scalar guards add no control, worker, timer or allocation per input and
+do not activate the asynchronous canvas sampler by themselves.
 Pointer input inside the card belongs to chrome even though it lies in the hole; a canvas click outside it focuses
 the canvas and leaves the picker open. Captions come from the STRINGTABLE (`IDS_PICKER_*`, `IDS_PALETTE_*`).
 With a layer's mask targeted, the swap and reset (the keys and the rail's hot zones alike) act on the mask palette

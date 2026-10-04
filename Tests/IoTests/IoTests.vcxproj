@@ -129,6 +129,7 @@
     <ClInclude Include="..\..\Common\OwnerWorkMultiplexer.h" />
     <ClInclude Include="..\..\Common\ColorDismissalWork.h" />
     <ClInclude Include="..\..\Common\HistoryEntries.h" />
+    <ClInclude Include="..\..\Common\InputRevision.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IoTests.cpp" /><ClCompile Include="ClipboardEncodingBudgetTests.cpp" /><ClCompile Include="..\..\Common\ClipboardEncodingBudget.cpp" />

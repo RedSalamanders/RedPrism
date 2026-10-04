@@ -43,6 +43,7 @@
 #include "Resources.h"
 #include "RetryWaitCancellationTests.h"
 #include "RetryWaitQueueTests.h"
+#include "SamplerInputTests.h"
 #include "SettingsStore.h"
 #include "TransformOverlay.h"
 #include "UiTimingHistogramTests.h"
@@ -1818,6 +1819,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunContinuationPendingViewTests();
     gFailures += RunOpacityInputOrderTests();
     gFailures += RunPointerInputStreamTests();
+    gFailures += RunSamplerInputTests();
     gFailures += RunContinuationReceiptTests();
     gFailures += RunContinuationRequestTests();
     gFailures += RunHostPathReadTests();

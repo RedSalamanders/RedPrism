@@ -215,6 +215,12 @@ detached pixels. Receipt encoding is fixed 40-byte metadata. Payload SHA-256 run
 4096-byte stack object and cancellation between 64 KiB bands. Hash full initialized exposed global blocks,
 including zeroed padding. Neither receipt parsing nor digest comparison allocates a payload on the owner.
 
+Native clipboard read attempts use distinct worker-owned message windows to isolate native acquisition.
+Their count is bounded by active compute callbacks: a Busy or completed attempt closes its scope and destroys
+its window before retry suspension or completion. No HWND persists in queued records, wait slots, UI state or
+idle work. Existing fixed clipboard native/metadata headroom covers this transient wrapper; no new worker,
+timer, polling loop or synchronous owner acquisition is introduced. Publication already uses an owned window.
+
 `ClipboardEncodingBudget` is a checked, dimension-based phased peak estimate, not a measurement. It plans PNG
 encode and PNG global-copy/hash peaks, then the later DIB global-copy/hash peak, and charges the larger PNG/DIB
 stage rather than summing sequential stages. The estimate includes capped memory sink and returned-vector

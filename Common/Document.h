@@ -3,6 +3,7 @@
 #include "DeferredRelease.h"
 #include "Executor.h"
 #include "HistoryEntries.h"
+#include "InputRevision.h"
 
 #include "PixelBuffer.h"
 #include "RecordRoot.h"
@@ -2733,19 +2734,42 @@ class DocumentSession
     {
         return _backgroundArgb;
     }
+    struct PaletteSampleAuthority final
+    {
+        Guid session;
+        std::uint64_t revision = 0;
+        bool operator==(const PaletteSampleAuthority&) const noexcept = default;
+    };
+    [[nodiscard]] PaletteSampleAuthority CapturePaletteSampleAuthority() const noexcept
+    {
+        return {_tokenIdentity.value, _paletteRevision.Current()};
+    }
+    // A sampled publication renews only its own authority. Explicit equal-value/A-B-A palette input,
+    // session copy/move, swap or reset prevents an older asynchronous sample from publishing.
+    [[nodiscard]] bool ApplySampledForegroundColor(PaletteSampleAuthority& authority, uint32_t argb) noexcept
+    {
+        if (authority.session != _tokenIdentity.value || !_paletteRevision.Matches(authority.revision))
+            return false;
+        SetForegroundColor(argb);
+        authority = CapturePaletteSampleAuthority();
+        return true;
+    }
     void SetForegroundColor(uint32_t argb) noexcept
     {
+        _paletteRevision.Advance();
         _foregroundArgb = argb | 0xFF000000u;
         ApplyForegroundToBrush();
         RefreshGradient();
     }
     void SetBackgroundColor(uint32_t argb) noexcept
     {
+        _paletteRevision.Advance();
         _backgroundArgb = argb | 0xFF000000u;
         RefreshGradient();
     }
     void SwapPaletteColors() noexcept
     {
+        _paletteRevision.Advance();
         if (_maskSelected)
         {
             maskPaintWhite = !maskPaintWhite;
@@ -2759,6 +2783,7 @@ class DocumentSession
     }
     void ResetPaletteColors() noexcept
     {
+        _paletteRevision.Advance();
         if (_maskSelected)
         {
             maskPaintWhite = false;
@@ -2846,6 +2871,7 @@ class DocumentSession
     std::unordered_set<Guid> _collapsed;
     uint32_t _foregroundArgb = kDefaultForegroundArgb;
     uint32_t _backgroundArgb = kDefaultBackgroundArgb;
+    InputRevision _paletteRevision;
     std::optional<TransformEdit> _transformEdit;
     std::optional<std::pair<Guid, Guid>> _transformDuplicate; // copy, source
     std::optional<CropRect> _cropRect;
