@@ -40,6 +40,7 @@
 #include "ImportHistoryTests.h"
 #include "ImportPublicationTests.h"
 #include "LayerCopyWorkTests.h"
+#include "LayerMetadataWorkTests.h"
 #include "LayerReadViewTests.h"
 #include "LiftReferenceTests.h"
 #include "MaskEditWorkExtraTests.h"
@@ -7400,6 +7401,7 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunAdjustmentClosureTests();
     gFailures += RunAdjustmentOpeningTests();
     gFailures += RunSelectionCommandTests();
+    gFailures += RunLayerMetadataWorkTests();
     gFailures += RunSelectionNudgeTests();
     gFailures += RunSelectionPreserveTests();
     gFailures += RunWandCancellationTests();

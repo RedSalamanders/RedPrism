@@ -89,6 +89,8 @@
     <ClInclude Include="..\..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\..\Common\LayerMetadataWork.h" />
+    <ClInclude Include="LayerMetadataWorkTests.h" />
     <ClInclude Include="..\..\Common\SelectionNudgeWork.h" />
     <ClInclude Include="..\..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\..\Common\SelectionMoveWork.h" />
@@ -257,6 +259,8 @@
     <ClCompile Include="..\..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\..\Common\LayerMetadataWork.cpp" />
+    <ClCompile Include="LayerMetadataWorkTests.cpp" />
     <ClCompile Include="..\..\Common\SelectionNudgeWork.cpp" />
     <ClCompile Include="..\..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\..\Common\SelectionMoveWork.cpp" />

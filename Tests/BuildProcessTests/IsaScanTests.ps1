@@ -23,6 +23,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Exact QWORD terminal-padding parser controls f
 if ($LASTEXITCODE -ne 0) { throw 'QWORD stack/RAX terminal DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaR9ByteSwitchTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'R9 byte-switch terminal DWORD parser controls failed.' }
+& (Join-Path $PSScriptRoot 'IsaR9HoistedDirectTests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Hoisted R9 message-switch parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiIndexTests.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'RDI-indexed DWORD parser controls failed.' }
 & (Join-Path $PSScriptRoot 'IsaRdiBaseByteRemapTests.ps1')

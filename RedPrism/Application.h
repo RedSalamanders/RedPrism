@@ -20,6 +20,7 @@
 #include "JobActivity.h"
 #include "Jobs.h"
 #include "LayerCopyWork.h"
+#include "LayerMetadataWork.h"
 #include "MaskEditWork.h"
 #include "OwnerWorkMultiplexer.h"
 #include "PathClassificationWork.h"
@@ -58,6 +59,7 @@ struct UtilityWorkTestGate;
 struct SizingWorkTestGate;
 struct HistoryRestoreTestGate;
 struct SelectionCommandTestGate;
+struct LayerMetadataTestGate;
 struct SelectionNudgeTestGate;
 struct SelectionMoveCloseTestGate;
 struct WandLayerHostTestGate;
@@ -476,6 +478,11 @@ class Application final : public ChromeEvents
     int RunDocumentLifecycleRefusalSelfTest() noexcept;
     int RunDocumentLifecycleCloseSelfTest() noexcept;
     class SelectionCommandJob;
+    class LayerMetadataJob;
+    int RunLayerMetadataSelfTest() noexcept;
+    [[nodiscard]] HRESULT StartLayerMetadata(LayerMetadataKind kind, Guid target, std::wstring_view name = {},
+                                             double opacity = 1.0,
+                                             LayerBlendMode blendMode = LayerBlendMode::Normal) noexcept;
     class SelectionNudgeJob;
     [[nodiscard]] HRESULT StartSelectionNudge(int dx, int dy) noexcept;
     int RunSelectionNudgeSelfTest() noexcept;
@@ -808,6 +815,9 @@ class Application final : public ChromeEvents
     std::optional<HistoryWorkStamp> _sizingStamp;
     std::optional<HistoryWorkStamp> _selectionCommandStamp;
     std::optional<JobTicket> _selectionCommandTicket;
+    std::optional<HistoryWorkStamp> _layerMetadataStamp;
+    std::optional<JobTicket> _layerMetadataTicket;
+    std::shared_ptr<LayerMetadataTestGate> _layerMetadataTestGate;
     std::shared_ptr<SelectionCommandTestGate> _selectionCommandTestGate;
     std::optional<HistoryWorkStamp> _selectionNudgeStamp;
     std::optional<JobTicket> _selectionNudgeTicket;

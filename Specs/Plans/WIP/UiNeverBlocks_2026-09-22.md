@@ -18,6 +18,15 @@ ASan suites: 5,768 unchanged predecessor assertions plus eight draft/six fixture
 sources and independently verified source/evidence archives. Original failures stay archived. Production metadata and
 preview worker placement, complete accounting/retirement and native activation remain required. P1/G1 stays open.
 
+The settled metadata worker core passes 98 additional private assertions in Debug/Release/ASan. Fresh native
+Debug, Release and ASan pass the complete suites, with 139 metadata-host checks across 43 cases and all ARM64
+cross-builds. The preserved ASan r6 fixture race has an acknowledgement fence; all actual r7 runs pass and the
+verified r8 collector accounts for ASan's second HostTests stress run. Typed opacity preview/closure
+primitives privately pass 112 independent controls across x64 Debug/Release/ASan; explicit adjacent-preview
+queue coalescence passes all 154 existing and 20 new controls plus all ARM64 builds. Full layer-root activation,
+typed host ordering, preserving gesture jobs, admission/accounting, first uploads and measured G1 remain open
+([current checklist and evidence](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
+
 ## Implementation checklist
 
 - [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions

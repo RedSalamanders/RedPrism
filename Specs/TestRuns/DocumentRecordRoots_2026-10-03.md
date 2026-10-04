@@ -27,11 +27,127 @@
   - [x] Pass the full private Debug document suite with all preceding assertions unchanged.
   - [x] Pass the full private Release and ASan document suites against the same candidate.
   - [ ] Place metadata, typed opacity, adjustment and display construction/retirement on production workers.
+    - [x] Prepare sealed settled metadata inputs and private document/history publications.
+    - [x] Review independent rename, visibility, opacity, blend, stale-result and failure controls.
+    - [x] Route production settled metadata callers through admitted jobs and worker retirement.
+    - [ ] Migrate metadata during preserved live gestures and nested transactions; qualify the temporary reference route.
+    - [x] Privately qualify typed opacity preview/restore and original-to-final history primitives without an open transaction.
+    - [ ] Integrate typed opacity host ordering, coalescing and all closure continuations.
+      - [x] Prepare private metadata-job input selection for recorded, history-free preview and typed closure intents.
+      - [x] Privately qualify explicit same-opening adjacent preview coalescence without crossing terminal/history inputs.
+      - [ ] Bind owner request and acknowledgement sequences, then migrate every closure prerequisite.
+      - [ ] Run complete host/runtime scenarios before activating any typed host path.
+    - [ ] Route adjustment and display record construction through their admitted workers.
+    - [ ] Qualify complete callers and exact source/evidence before native activation.
+      - [x] Review fixture conversions and compile all 81 application caller files privately in Debug.
+      - [ ] Link the full application and qualify complete WARP/runtime scenarios and configuration gates.
+    - [x] Qualify the separate native settled metadata worker step while legacy vector capture remains open.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
 
 ## Current private integration work
+
+### Native settled metadata qualification (2026-10-04)
+
+All six actual r7 processes finish with exit zero: full x64 Debug, Release and ASan Debug tests, including
+WARP, screenshots and the real ASan detection probe, and Debug/Release/ASan ARM64 cross-builds. Each x64
+application passes 139 metadata checks across 43 cases; each document suite passes 98 metadata controls.
+All 7,585 preceding application controls and the complete preceding suite names remain unchanged.
+
+The r7 collector stops after these successful processes because it subtracts the two new localized-string
+catalog controls only once. ASan runs HostTests normally and again with `--stress`, so both catalog controls
+appear twice. The complete original failure archive is independently verified: 656 inputs / 3,645 evidence
+files; completion `064BA2816857ABB1616F3076E5D04A7B483090CD59300B5D73583E7180EEB202`.
+
+The r8 collector repairs that accounting, requires exactly one normal host run or two ASan host runs,
+and retains the original actual PID/start/end/exit receipts. Every compiler, linker, test and wrapper input
+must match r7 exactly; only the collector may differ. It verifies the complete r7 archive and current product
+and log hashes before qualifying all six profiles. No tests, controls or expected values are removed.
+
+The qualified archive `p1-layer-metadata-native-r8-qualified` completes at
+`2026-10-04T00:08:19.4457251+00:00`. All 656 inputs / 308 evidence files and both manifests are independently
+verified (964 copies). Completion `0FD3F4C7E93D7104C93A42C879889999D9F8462F7A60768946E45F01D42025AB`;
+source manifest `CBCAB53C313F07E9E2A186DB2B0D6C9FA79EA75F96503C554892E09979D50B7A`;
+evidence manifest `2392584F0D163CB0AE0CDF31BA26B6AA14A854718583F61A6F11E1D8D1DBEFB2`.
+The strict ISA proof is included. This qualifies settled metadata workers, atomic history and worker retirement;
+vector capture/admission traversal, live-context migration, typed host ordering and measured G1 remain open.
+
+The full private immutable-root application links successfully. Its first formal Debug attempt stops before
+runtime because its guard points to the r7 collector failure. All 732 inputs / 213 evidence copies are verified;
+completion `9F04D0C38D6238729DF4962789AEC76AB7EF659025BB5AB5F1275565338F9724`.
+A fresh r2 build/runtime attempt uses the qualified r8 guard. No private WARP success is claimed yet.
+
+### Adjacent preview queue primitive (2026-10-04 local)
+
+The explicit caller predicate can replace only the immediately preceding request with the same document,
+kind and consecutive host ordinal. Typed host integration must additionally require the same opacity
+opening/target and preview phase. Terminal edits and intervening history inputs cannot be skipped. Admission
+refusal retains caller ownership; replacement retires the superseded request exactly once, including at full
+capacity. Move-only lifetime controls independently count replacement, queue clearing and refused ownership.
+
+All 154 unchanged queue controls and 20 new independent controls pass Debug, Release and ASan Debug.
+All three ARM64 profiles cross-build. The isolated proof imports real ASan instrumentation and the qualified
+runtime; it does not claim native ARM64 execution or typed host behavior. All 449 inputs / 52 evidence copies
+and both manifests were independently verified. Archive `p1-adjacent-preview-queue-r1-qualified` completed at
+`2026-10-03T23:16:15.4308329+00:00`; completion
+`81CD93F307C5FC8EF4B936C8D8CD623045B1520DD9327A72500A59DD9CA40B70`, source manifest
+`E3828129781B83D932766C97515D2F919C1E69550DDAA680EC98D798C886DF6E`, evidence manifest
+`950E07B71D45B2B916D0D660281FE995251B07E7C006B18CEE13AE8147851C45`.
+
+The first complete application caller compilation identified remaining mutable fixture construction and
+four production/benchmark construction boundaries. Delegated test fixture conversions are reviewed privately;
+full caller compilation, runtime checks and root activation remain required.
+
+### Native metadata r6 failure and r7 repair
+
+Fresh full Debug and Release suites pass. ASan passes its real sanitizer probe and reaches the application
+suite, then two unchanged transform-preview shutdown retirement assertions fail. The independent test host
+shares the main harness's already-installed owner-thread release sink. Its own shutdown joins producers;
+the detached CPU payload can still be pending in the harness scheduler when the assertion reads the gate.
+The repair awaits that existing scheduler's acknowledgement before the same exact retirement assertion.
+No production lifetime rule, control name, expected value or timeout is relaxed.
+
+The r6 failure archive completed at `2026-10-03T23:18:50.9089242+00:00`: 656 inputs / 3,682 evidence files.
+All 4,338 copies and both manifests were independently verified before repair. Completion
+`9F49BE832CEAB2F31893817C2F5ACB92421E0B79A40BB91DB331029B270A816E`, source manifest
+`AB7D143D57B5FA1471EFC2C8F6303BAEF506FBC5A83CDAA0A56439AE8F3AC65F`, evidence manifest
+`53061166D22C1E97683BBA5948B168A4F35CA717C3CE2DE83E50B550513A2CD4`.
+The r7 matrix rebuilds all six profiles against the repaired fixture; the completed r8 collector qualification
+above retains those actual successful runs.
+
+### Typed opacity core qualification (2026-10-04 local)
+
+Private worker primitives now prepare history-free previews/restores and one original-to-final history
+publication. The opening opacity is retained separately from the currently displayed opacity. A final value
+equal to the last preview still records the opening-to-final change; returning to the opening value preserves
+redo and records no history. Owner publication validates captured document/history/target authority and
+retains displaced documents/history for worker retirement. Production typed-opacity callers still use the
+reference path; opening identity, requested/shown sequences, closure ordering and coalescing remain open.
+
+All 5,768 preceding document controls, 14 draft/fixture controls, 98 settled metadata controls and 112 new
+opacity controls pass the normal full private document suite in Debug, Release and ASan Debug. The 316
+Common/document-test/support source entries have identical paths, lengths and hashes across these three
+archives. Every archived source/evidence copy and both manifests were independently verified.
+
+| Private archive | Inputs / evidence | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-layer-opacity-private-r2-Debug-qualified-private-document-suite` | 672 / 172 | `A46BF3980A0D917D43C1B3F548399B30FF1A089B4EC14D567629009296741570` |
+| `p1-layer-opacity-private-r3-Release-qualified-private-document-suite` | 672 / 169 | `4BCFE423BB9300C2ECFEE9C7051D7F7C51A5C97B16F582679B777CE633C5163B` |
+| `p1-layer-opacity-private-r4-ASanDebug-qualified-private-document-suite` | 673 / 173 | `5159A983CC50F0C74A64C58FE3349419D8C7CB7BF577CF98F0AB7A04B568C4F3` |
+
+The earlier private r1 failure is retained before correcting its invalid group fixture (group opacity must
+be 1). Its completion is `02101EE587F4D4E40F597941E289AEBDEF9B1867DEE1209333C5704AD0CED39B`.
+This evidence does not qualify typed host behavior, WARP, native ARM64 runtime, whole-root activation or G1.
+
+### Native metadata r5 gate failure
+
+The retained full Debug runtime passes its 139 metadata-host controls across 43 cases. All three fresh
+ARM64 builds pass. Release links but its ISA gate refuses one vector-looking switch-table entry; Release
+runtime and x64 ASan remain unqualified in this attempt. The completed r5 failure archive has 655 inputs /
+3,022 evidence files, completion `D5EABC5E88CA7AF8E076D7D42E4244F7CE389FFD07F1780DD91358FD22828526`.
+All 3,677 archived copies were independently verified before preparing the separate strict parser proof
+([checklist](IsaR9HoistedDirect_2026-10-04.md)). No native metadata completion is claimed from this attempt.
 
 The record producers now compile in Common with read-only published layer records. Brush commits, transform
 and floating-pixel construction, resize, masks and color/raster history prepare exclusive drafts and seal
@@ -404,6 +520,99 @@ the scope error before compilation, retains the exact patch under `.build`, tran
 candidate, and restores the native file byte-for-byte from the qualified read/transfer archive. No native
 candidate is activated or tested from that misplaced edit. The isolated proof above remains limited to its
 declared headers and eight literal controls.
+
+## Settled metadata worker step
+
+The primary implements sealed, consumed-by-move input and single-use publication for Rename, visibility, opacity
+button/key commits and blend. The worker constructs a complete validated document and history publication. Owner
+application checks session/document/generation, active/mask target, crop and exact history epoch before nonthrowing
+swaps. No-op acknowledgement preserves redo/revision/generation. Rename retains the card's original target and
+owns its text after admitted capture; worker code never reads the borrowed host request or live session/history.
+Complete document/display/history owners stay in the job payload for worker retirement.
+
+A cheaper agent writes independent literal document tests; primary reviews and repairs fixture scope, group
+semantics and explicit moved-input boundaries. The first private run preserves two failures: a transform fixture
+does not actually open a history transaction, and the memory estimate must refuse an ineligible color panel.
+The corrected suite adds separate transaction/transform checks and the same admission eligibility guard. The
+normal complete suite then passes all 5,768 predecessor assertions, eight draft/six fixture assertions and 98
+metadata assertions in Debug, Release and ASan Debug. All 314 Common/document-test/support source entries are
+identical by length/hash across the three successful archives. Caller static-library compilation is included;
+full application/WARP/ARM64/G1 qualification is separate.
+
+| Private attempt | Outcome | Inputs / evidence | Completion SHA256 |
+| --- | --- | --- | --- |
+| r1 Debug | Two new contract/fixture assertions fail; preserved before repair | 668 / 170 | `DA2DE62AEACE1A1BBE887A3994AB27D289AC3999130A149F77F40587C084C71E` |
+| r2 Debug | Full document suite, exit 0 | 668 / 171 | `01F0B63A33BB00467FB9DDEBD0E261FE49E4487FB22B56541DA62F9CEE69F010` |
+| r3 Release | Full document suite, exit 0 | 670 / 168 | `D59F0AA432C9F493CF59F166446B9692D76062EEFAAFCBD07AE72A1686AAE06A` |
+| r4 ASan Debug | Full document suite, exit 0 | 671 / 172 | `A1DAEC7C7A60E9DFA72A0A58AB1E12C035E246684B3C3D4AE56B207B58F79F1C` |
+
+The create-new archives are under `%LocalAppData%/RedPrism/QualificationArchives/`, named
+`p1-layer-metadata-private-rN-<profile>-<outcome>`. Every source/evidence manifest and archived copy is independently
+verified by length and SHA256 before further source changes. Debug's earlier caller gate version is not claimed
+identical to the later application candidate; the complete core/document source comparison above defines scope.
+
+Native production routes use full admission, ordered completion and worker retirement. The selected Rename
+request owns borrowed text until acknowledgement; only owner capture reads it. A localized layer-edit failure
+notice is catalog-tested. The owner still copies legacy vector records at capture; this step does not activate
+immutable document roots or close H3/G1.
+
+Native r1 preserves a harness failure before any profile starts: duplicate `pwsh.exe` command discovery returns
+an array. The wrapper now uses the exact validated tool path. Its 655-input / eight-evidence archive completes at
+`2026-10-03T21:11:45.6559724Z`, completion
+`19202179F69089BE591052CEB873D4F3778C156ED3600B515203DBA6DE8CDAC9`.
+Native r2's Debug build, ISA, complete document/host/I/O suites and crash probes pass; its WARP application stops
+at an existing opacity-stepper assertion before asynchronous publication. Its 655-input / 625-evidence archive
+completes at `2026-10-03T21:18:41.7564964+00:00`, completion
+`9EC05398505A465A175CA9394AE609CD63024E1D7BC5913512F5A9DF809B787D`, source manifest
+`CF7399FB8A1ADD9431E78D5D74E6D7938663F29B5109FC11A0B66771231DBA3E`, evidence manifest
+`24DEC0CF58EB87ED1873862F7EF50F146CD5DC183F4BB5033DB6B56CF2CD0C77`.
+All copies are independently verified before repair. The existing test now waits for acknowledgement and retains
+its exact 0.5 opacity and undo-name assertions. A bounded cheaper-agent audit confirms other existing rename/blend
+assertions already wait for acknowledgement.
+
+Primary also identifies that settled authority must not reject metadata commands allowed during live gestures
+or an outer transaction. Until preserving worker authority is implemented, these retain the reference route.
+Twenty literal host cases cover four kinds across brush, warp, shape, lasso and nested contexts, including
+unchanged gesture identity, edited field, active target, outer depth/name and no pending job/reservation. The
+separate reference route remains a worker/root-activation blocker. The frozen native r3 matrix is in progress;
+no native completion or measured UI performance claim follows yet.
+
+Native r3's complete forced Debug profile actually exits 0 at `2026-10-03T21:37:04.4374677+00:00`, including all
+98 metadata assertions and 139 application checks across 43 cases. Its collector then fails because the new
+application checks are written to the separate self-test stderr, not the wrapper's main log. The original passing
+profile and collector failure remain in the 655-input / 634-evidence `p1-layer-metadata-native-r3-failure` archive,
+completion `59A24E2FE236436EBDE42D842D3DC402C86EE39A4EA1E9E0898F90C98E8EAF79`, source manifest
+`CE79AB1EDCA47FA7786C1627691FCF403DD218CAF35D60007D3909A130E1C778`, evidence manifest
+`9B7EB3323CCC483DCE45373BCC15AE9600D477032E9749EE60704F8EB9BBD175`.
+
+The repaired collector retains that actual Debug receipt/products only after comparing all 654 other frozen
+compiler/helper/tool inputs, rechecking every prior archived copy and binding exact current product/log hashes.
+Native r4 preserves a collector-only reserved PowerShell `$Host` variable error without rerunning any profile;
+its 655-input / 654-evidence archive completion is
+`5CFC1C796A0B5C381CC6BB4A68D6A992E7A648C03C7B230A5918E81165317FCF`. After independent verification, the
+collector uses a task-specific variable and a static reserved-variable preflight. It reads both application logs,
+preserves all 7,585 predecessor application assertion names, and requires exactly 139 new host assertions plus
+the 43-case summary. Native r5 retains the byte-identical Debug result and runs the five outstanding profiles.
+
+### Next typed opacity implementation
+
+- [ ] Keep edit identity, original value, requested value and acknowledged displayed value separate. Add an opening
+  and monotonic request sequence; late preview results must not overwrite newer values or another document/layer.
+- [ ] Admit complete preview source/output/retirement before capture. Coalesce pending preview ticks for the same
+  opening; workers build exclusive record replacements, with no history transaction and no live session access.
+- [ ] Publish only the current opening/sequence against exact document/history authority. Transfer old records and
+  display owners to the admitted release lane; refusal preserves the acknowledged document and editable text.
+- [ ] Serialize Enter, focus loss, dependent commands, target switch and successful replacement behind the latest
+  preview acknowledgement. Build before-history from the original value and after-history from the final value
+  on a worker; record one `Layer Opacity` entry or a true no-op, without opening an owner transaction.
+- [ ] Escape restores the original value without history. An outside closure retains `_opacityRecorded` across
+  replacement so the old field's equal late commit cannot affect a new target/document. Failed file I/O preserves
+  the live edit; discard/settle policy runs only after successful read and the existing user decision.
+- [ ] Preserve current color-panel, group and live-gesture/nested semantics. Migrate every `CloseOpacityEdit` caller
+  through acknowledged prerequisites before removing the reference constructor.
+- [ ] Test queued and superseded ticks, closure during held work, undo/redo, return-to-start, Escape, target/document
+  change, equal late commit, failed read/admission/allocation, stale epoch, shutdown and complete worker retirement.
+  Preserve all existing numeric expectations and qualify all six profiles before activation/commit.
 
 ## Integration requirements
 

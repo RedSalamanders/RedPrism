@@ -136,6 +136,23 @@
         Original compile/runtime failures are preserved. Production metadata/typed-opacity/adjustment/display worker placement, complete
         reservation/retirement, native activation and measured G1 remain open
         ([record](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
+        - [x] Sealed settled metadata core: 98 independent rename/visibility/opacity/blend ownership, history,
+          stale-result and failure assertions pass the complete private Debug/Release/ASan document suites.
+        - [x] Production settled metadata route: full native Debug, Release and ASan pass 98 document assertions and
+          139 host checks across 43 cases, including ordering, message pumping, cancellation, allocation failure
+          and retirement, plus all ARM64 cross-builds. The preserved ASan r6 fixture race has an acknowledgement
+          fence. All actual r7 runs pass; r8 repairs only the collector's ASan stress-run accounting and independently
+          verifies the final source/evidence archive. A
+          temporary reference route preserves legal edits during live gestures/nested transactions; it remains
+          a separate worker migration requirement. Typed opacity and other record writers remain open.
+        - [x] Private typed-opacity core: preview/restore without history and original-to-final publication pass
+          112 independent controls and all 5,880 preceding controls in Debug/Release/ASan, with identical 316
+          core/test inputs and independently verified archives.
+        - [ ] Typed-opacity host: ordered opening/sequence closure, requested/shown separation, coalescing,
+          late-value suppression and all caller prerequisites. Worker intent plumbing is prepared privately;
+          explicit queue coalescing privately passes 154 existing and 20 new controls plus all six profiles.
+          The 81 application caller files compile privately after reviewed fixture and worker draft conversions;
+          full application linkage/runtime and host integration remain open. The detailed checklist is in the record above.
     - [x] H2.1 — Share immutable past/future container roots: capture copies only root handles, including on
       non-const reads. Every mutation constructs a private replacement before publication; `use_count` never
       authorizes writing a previously shared root. The private strict Debug probe passes 28 assertions covering

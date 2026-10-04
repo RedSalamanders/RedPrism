@@ -1117,6 +1117,11 @@ int Application::RunSelfTest() noexcept
             SelfTestFailure(L"The opacity stepper refused a value.\n");
             return 5;
         }
+        if (SettleJobs(_jobs, 10000, DispatchMessageThunk, this) != SettleResult::Settled)
+        {
+            SelfTestFailure(L"The opacity stepper did not acknowledge its worker.\n");
+            return 5;
+        }
         const ImageLayer* layer = _session.ActiveLayer();
         if (layer == nullptr || std::fabs(layer->opacity - 0.5) > 1e-9 || !_session.history.CanUndo() ||
             _session.history.UndoName() != L"Layer Opacity")
@@ -2284,6 +2289,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunSelectionCommandSelfTest\n");
     if (const int selection = RunSelectionCommandSelfTest(); selection != 0)
         return selection;
+    std::printf("BEGIN self-test.RunLayerMetadataSelfTest\n");
+    if (const int metadata = RunLayerMetadataSelfTest(); metadata != 0)
+        return metadata;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -4341,8 +4349,10 @@ void Application::OnCommand(int command) noexcept
     case ChromeHost::kCommandToggleLayerVisibility:
         if (_session.ActiveLayerID().has_value())
         {
-            _session.ToggleVisibility(_session.ActiveLayerID().value());
-            DocumentChanged();
+            _hostExecutionError =
+                StartLayerMetadata(LayerMetadataKind::ToggleVisibility, _session.ActiveLayerID().value());
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
         }
         break;
     case ChromeHost::kCommandMoveOutOfGroup:
@@ -4468,8 +4478,16 @@ void Application::OnCommand(int command) noexcept
         break;
     case ChromeHost::kCommandBlendPrevious:
     case ChromeHost::kCommandBlendNext:
-        _session.StepBlendMode(command == ChromeHost::kCommandBlendNext);
-        DocumentChanged();
+        if (const auto* layer = _session.ActiveLayer(); layer && !layer->isGroup && !_session.HasColorEdit())
+        {
+            const int direction = command == ChromeHost::kCommandBlendNext ? 1 : -1;
+            const int count = LayerBlendModeCount();
+            const auto mode =
+                static_cast<LayerBlendMode>((static_cast<int>(layer->blendMode) + direction + count) % count);
+            _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetBlendMode, layer->id, {}, 1.0, mode);
+            if (FAILED(_hostExecutionError))
+                _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+        }
         break;
     case ChromeHost::kCommandDeleteKey:
         if (_session.Selection())

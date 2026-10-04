@@ -613,7 +613,10 @@ int Application::RunTransformPreviewSelfTest() noexcept
         const auto result = SettleJobs(closing._jobs, 15000, dispatch, &state);
         expect(result == SettleResult::Settled && state.visited && state.reserved && closing._shutdownComplete,
                "shutdown-joins-before-and-after-preparation-gated-preview");
-        expect(gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
+        // This independent host shares the owning thread's already-installed release sink with this harness.
+        // Its shutdown joins its producers; the harness scheduler acknowledges the detached CPU payload.
+        const bool retirementSettled = settle();
+        expect(retirementSettled && gate->visits.load() == 1 && gate->retired.load() && gate->retiredOffOwner.load(),
                "shutdown-retires-complete-preview-payload-once-off-owner");
         expect(probe.ownerCalls == 1 && authority.unchanged,
                "shutdown-never-publishes-cancelled-preview-or-changes-source-authority");

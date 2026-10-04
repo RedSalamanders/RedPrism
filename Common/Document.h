@@ -1215,6 +1215,10 @@ enum class SelectionCommandKind : std::uint8_t;
 class SelectionCommandInput;
 class SelectionCommandAuthority;
 class PreparedSelectionCommand;
+enum class LayerMetadataKind : std::uint8_t;
+class LayerMetadataInput;
+class PreparedLayerMetadata;
+struct LayerMetadataPrepareObserver;
 class SelectionNudgeInput;
 class PreparedSelectionNudge;
 struct SelectionNudgeObserver;
@@ -2147,6 +2151,19 @@ class DocumentSession
     [[nodiscard]] bool IsPreparedSelectionCommandCurrent(const PreparedSelectionCommand& prepared) const noexcept;
     [[nodiscard]] bool ApplyPreparedSelectionCommandIfCurrent(PreparedSelectionCommand& prepared) noexcept;
     [[nodiscard]] std::uint64_t SelectionCommandMemoryBytes(SelectionCommandKind kind) const noexcept;
+    // Settled metadata capture follows full graph admission. Worker preparation owns the record construction,
+    // validation and complete undo publication; owner application only checks authority and swaps owners.
+    // Capture still copies legacy vector records until the immutable document root integration (P1.9 H2.2).
+    [[nodiscard]] std::optional<LayerMetadataInput> PrepareLayerMetadataInput(
+        LayerMetadataKind kind, Guid target, std::wstring_view name = {}, double opacity = 1.0,
+        LayerBlendMode blendMode = LayerBlendMode::Normal) const;
+    [[nodiscard]] static std::optional<PreparedLayerMetadata> PrepareLayerMetadataPublication(
+        LayerMetadataInput input, CancelToken cancellation, DocumentHistory::PrepareObserver historyObserver,
+        LayerMetadataPrepareObserver observer);
+    [[nodiscard]] bool IsPreparedLayerMetadataCurrent(const PreparedLayerMetadata& prepared) const noexcept;
+    [[nodiscard]] bool ApplyPreparedLayerMetadataIfCurrent(PreparedLayerMetadata& prepared) noexcept;
+    [[nodiscard]] std::uint64_t LayerMetadataMemoryBytes(LayerMetadataKind kind,
+                                                         std::size_t nameUnits = 0) const noexcept;
     [[nodiscard]] std::optional<WandLayerSelectionInput> PrepareWandLayerSelectionInput(Vec2 point,
                                                                                         WandSettings settings,
                                                                                         bool antialiased) const;

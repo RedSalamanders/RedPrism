@@ -112,6 +112,7 @@
     <ClInclude Include="..\Common\AdjustmentClosureWork.h" />
     <ClInclude Include="..\Common\AdjustmentOpeningWork.h" />
     <ClInclude Include="..\Common\SelectionCommandWork.h" />
+    <ClInclude Include="..\Common\LayerMetadataWork.h" />
     <ClInclude Include="..\Common\SelectionNudgeWork.h" />
     <ClInclude Include="..\Common\WandLayerSelectionWork.h" />
     <ClInclude Include="..\Common\SelectionMoveWork.h" />
@@ -160,6 +161,7 @@
     <ClInclude Include="Application.h" />
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
+    <ClInclude Include="LayerMetadataTestGate.h" />
     <ClInclude Include="SelectionNudgeTestGate.h" />
     <ClInclude Include="SelectionMoveCloseTestGate.h" />
     <ClInclude Include="WandLayerHostTestGate.h" />
@@ -210,6 +212,7 @@
     <ClCompile Include="..\Common\AdjustmentClosureWork.cpp" />
     <ClCompile Include="..\Common\AdjustmentOpeningWork.cpp" />
     <ClCompile Include="..\Common\SelectionCommandWork.cpp" />
+    <ClCompile Include="..\Common\LayerMetadataWork.cpp" />
     <ClCompile Include="..\Common\SelectionNudgeWork.cpp" />
     <ClCompile Include="..\Common\WandLayerSelectionWork.cpp" />
     <ClCompile Include="..\Common\SelectionMoveWork.cpp" />
@@ -248,6 +251,8 @@
     <ClCompile Include="ApplicationProjectOpenJobs.cpp" />
     <ClCompile Include="ApplicationHistoryRestoreJobs.cpp" />
     <ClCompile Include="ApplicationSelectionCommandJobs.cpp" />
+    <ClCompile Include="ApplicationLayerMetadataJobs.cpp" />
+    <ClCompile Include="ApplicationLayerMetadataSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeJobs.cpp" />
     <ClCompile Include="ApplicationSelectionNudgeSelfTest.cpp" />
     <ClCompile Include="ApplicationSelectionSizeOutlineLiteralSelfTest.cpp" />

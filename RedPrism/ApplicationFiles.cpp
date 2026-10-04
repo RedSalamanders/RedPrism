@@ -598,8 +598,9 @@ bool Application::ExecuteHostInput() noexcept
             else if constexpr (std::is_same_v<Input, HostLayerRenameInput>)
             {
                 if (value.name)
-                    _session.RenameLayer(value.id, value.name.value());
-                DocumentChanged();
+                    _hostExecutionError = StartLayerMetadata(LayerMetadataKind::Rename, value.id, value.name.value());
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
             }
             else if constexpr (std::is_same_v<Input, HostLayerOpacityInput>)
             {

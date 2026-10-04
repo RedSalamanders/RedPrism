@@ -1312,6 +1312,11 @@ void Application::CancelHostContinuations() noexcept
             (void)_historyWork.RequestCancel();
             (void)_jobs.Cancel(_selectionCommandTicket.value());
         }
+        else if (_layerMetadataTicket)
+        {
+            (void)_historyWork.RequestCancel();
+            (void)_jobs.Cancel(_layerMetadataTicket.value());
+        }
         else if (_selectionMoveCloseTicket)
         {
             (void)_historyWork.RequestCancel();

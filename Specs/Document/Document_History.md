@@ -203,6 +203,26 @@ history unchanged. A later saved marker remains owned by the session. Publicatio
 document/history owners into the result for worker retirement. These core boundaries do not activate production
 selection/gesture callers or close shared capture/accounting and measured G1 gates.
 
+### Settled layer metadata
+
+`PrepareLayerMetadataPublication` constructs the complete metadata document and one legacy-named undo entry
+before owner mutation. Rename, Show/Hide Layer, Layer Opacity and Layer Blend Mode preserve every unedited record,
+pixel/mask handle, selection and active target. No-op acknowledgement does not publish history or clear redo.
+The sealed input is consumed by move; changing and no-op results are single-use. Session/document replacement,
+generation, active/mask target, crop, a reopened draft or history epoch changes refuse publication before either
+history or document changes. Cancellation and construction failure preserve the complete live state. Successful
+application swaps old document/display/history into the prepared result for worker retirement under the admitted
+reservation. A later saved revision stays owned by the session.
+
+The independent reference is the state contract above: `LayerMetadataWorkTests` checks literal values, undo/redo,
+ownership, move consumption and failure checkpoints. `metadata-host` exercises the actual ordered job and caller
+routes, held-message pumping, stale results, scheduler refusal and off-owner retirement. Qualification is tracked
+in [DocumentRecordRoots](../TestRuns/DocumentRecordRoots_2026-10-03.md). Typed opacity previews/closure and shared
+record capture/accounting remain separate work.
+The native settled slice also preserves the reference route for commands during live gestures and nested
+transactions. Its literal host checks retain the gesture, edited field and outer transaction name/depth. Migrating
+that route to preserving worker authority remains required before metadata coverage or root activation is complete.
+
 ## Trim
 
 Production merge binds its complete survivor document and selected-id set to prepared history. Its metadata probe

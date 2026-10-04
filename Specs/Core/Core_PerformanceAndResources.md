@@ -436,6 +436,14 @@ operations away from the UI thread, operation-specific peak estimates and retain
 
 ### Admission, release and recycled buffers
 
+Settled layer metadata jobs reserve the complete private record/history graph, request and replacement name
+overlap, publication/control storage and retirement before capturing document/history. Borrowed rename text must
+refer to the exact selected request; only the owner capture reads it, copies it under admission and clears the
+view before worker resumption. Workers never dereference live session, history or chrome. A selected ordinal and
+its reservation survive cancellation/failure through terminal acknowledgement. The prepared aggregate retains
+replaced document/display/history and retires through the scheduler's worker release lane. Current vector capture
+and metadata/storage admission traversal remain H2/H3 work; this route alone cannot satisfy the UI duration gate.
+
 Every nonzero `JobOptions::memoryBytes` request covers the complete graph's additional allocation peak. At each
 admission the owner samples `GlobalMemoryStatusEx`; the available ceiling is the smaller of physical and commit
 availability, less 1 GiB headroom and outstanding reservations, saturating at zero. Inputs already resident are

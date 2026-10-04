@@ -55,6 +55,7 @@ namespace RedPrismBuild
             public ulong Begin, End;
             public ulong ContributionBegin, ContributionEnd;
             public int Module;
+            public bool VerifyReportedBytes;
             public readonly HashSet<ulong> PendingTargets = new HashSet<ulong>();
             public readonly List<ulong> Targets = new List<ulong>();
         }
@@ -143,6 +144,8 @@ namespace RedPrismBuild
                                         List<Section> sections, ulong imageBase)
         {
             if (table.PendingTargets.Count != 0 || address < table.Begin || address >= table.End) return false;
+            if (table.VerifyReportedBytes && !MatchesPe(pe, sections, imageBase, address,
+                Array.ConvertAll(bytes, b => Byte.Parse(b, NumberStyles.HexNumber)))) return false;
             ulong end = checked(address + (ulong)bytes.Length);
             if (end <= table.End) return true;
             // One decoded row can straddle two independently proved adjacent DWORD tables (OnCommand ASan).
@@ -496,6 +499,406 @@ namespace RedPrismBuild
         // The byte CMP establishes the observed table extent, not a general proof of R9's upper
         // bits or the compiler's entire control flow. Reject direct entries into the dispatch/table except
         // the observed identical CMP/JNE to JA, whose comparison flags are preserved by that branch.
+        // The observed message switch hoists R9=imagebase. Prove the exact guarded R15-257 encoding and
+        // the anonymous table extent. A reverse CFG proof, specialized to each admitted message value,
+        // must find an intact image-base definition on every feasible incoming path. Unknown flag/data
+        // definitions and register effects are refused; a same-procedure LEA alone is never sufficient.
+        private static InlineTable ReadGuardedR9HoistedDirectTable(byte[] pe, List<Section> sections,
+            List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
+            ulong imageBase, ulong load, Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts,
+            Dictionary<ulong, byte[]> rows)
+        {
+            if (load < imageBase + 16) return null;
+            ulong prefix = load - 16;
+            int ownerIndex = FindContribution(contributions, prefix);
+            if (ownerIndex < 0) return null;
+            Contribution owner = contributions[ownerIndex];
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(prefix - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return null; }
+            if (raw > pe.Length - 29 ||
+                !StartsWithAt(pe, raw, 0x41, 0x8d, 0x87, 0xff, 0xfe, 0xff, 0xff) ||
+                !StartsWithAt(pe, raw + 7, 0x83, 0xf8) || pe[raw + 9] < 1 || pe[raw + 9] > 127 ||
+                !StartsWithAt(pe, raw + 10, 0x0f, 0x87) ||
+                !StartsWithAt(pe, raw + 16, 0x41, 0x8b, 0x8c, 0x81) ||
+                !StartsWithAt(pe, raw + 24, 0x49, 0x03, 0xc9) ||
+                !StartsWithAt(pe, raw + 27, 0xff, 0xe1)) return null;
+            int maximum = pe[raw + 9];
+            ulong afterJump = prefix + 29;
+            ulong begin = checked(imageBase + BitConverter.ToUInt32(pe, raw + 20));
+            ulong end = checked(begin + 4ul * (ulong)(maximum + 1));
+            long fallback = checked((long)prefix + 16 + BitConverter.ToInt32(pe, raw + 12));
+            int[] starts = { 0, 7, 10, 16, 24, 27 };
+            int[] lengths = { 7, 3, 6, 8, 3, 2 };
+            for (int i = 0; i < starts.Length; ++i)
+                if (!rows.TryGetValue(prefix + (ulong)starts[i], out byte[] bytes) || bytes.Length != lengths[i] ||
+                    !MatchesDecodedPe(pe, sections, imageBase, prefix + (ulong)starts[i], bytes,
+                        contributions, decoded, decodedStarts)) return null;
+            if ((begin & 3) != 0 || begin <= afterJump || end > owner.End ||
+                !dataSymbols.TryGetValue(begin, out int dataOwner) || dataOwner != owner.Module) return null;
+            foreach (Function procedure in procedures)
+            {
+                if (procedure.Module != owner.Module || procedure.ContributionBegin != owner.Begin ||
+                    procedure.ContributionEnd != owner.End || procedure.Begin > prefix || procedure.End < end) continue;
+                ulong next = procedure.End, codeEnd = procedure.End;
+                foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                    if (symbol.Value == owner.Module && symbol.Key >= procedure.Begin && symbol.Key < procedure.End)
+                    {
+                        codeEnd = Math.Min(codeEnd, symbol.Key);
+                        if (symbol.Key > begin) next = Math.Min(next, symbol.Key);
+                    }
+                if (next != end || codeEnd < afterJump || fallback < (long)procedure.Begin ||
+                    (ulong)fallback >= codeEnd || ((ulong)fallback >= prefix && (ulong)fallback < afterJump) ||
+                    !IsDecodedBoundary((ulong)fallback, owner.Module, contributions, decoded, decodedStarts)) continue;
+                var table = new InlineTable { Begin = begin, End = end, Module = owner.Module,
+                    ContributionBegin = owner.Begin, ContributionEnd = owner.End, VerifyReportedBytes = true };
+                int tableRaw;
+                try { tableRaw = checked((int)Offset(checked((uint)(begin - imageBase)), sections, pe.Length)); }
+                catch (InvalidDataException) { continue; }
+                if (tableRaw > pe.Length - 4 * (maximum + 1)) continue;
+                bool valid = true;
+                for (int i = 0; i <= maximum; ++i)
+                {
+                    ulong target = checked(imageBase + BitConverter.ToUInt32(pe, tableRaw + 4 * i));
+                    if (target < procedure.Begin || target >= codeEnd || (target >= prefix && target < afterJump) ||
+                        !IsDecodedBoundary(target, owner.Module, contributions, decoded, decodedStarts))
+                    { valid = false; break; }
+                    table.Targets.Add(target);
+                }
+                if (!valid || !table.Targets.Contains((ulong)fallback)) continue;
+                for (int value = 257; value <= 257 + maximum && valid; ++value)
+                    valid = ProveHoistedR9(pe, sections, contributions, dataSymbols, imageBase, procedure,
+                        codeEnd, prefix, afterJump, begin, end, value, decoded, decodedStarts, rows);
+                if (valid) return table;
+            }
+            return null;
+        }
+
+        private sealed class R9FlowEdge
+        {
+            public ulong Source, Destination;
+            public bool Conditional, Taken;
+            public R9FlowSwitch Switch;
+        }
+
+        private sealed class R9FlowSwitch
+        {
+            public ulong Guard, End;
+            public int Bias;
+            public ulong[] Targets;
+        }
+
+        private static bool ProveHoistedR9(byte[] pe, List<Section> sections, List<Contribution> contributions,
+            Dictionary<ulong, int> symbols, ulong imageBase, Function procedure, ulong codeEnd,
+            ulong guard, ulong guardEnd, ulong tableBegin, ulong tableEnd, int message,
+            Dictionary<ulong, DecodedInstruction> decoded, List<ulong> decodedStarts, Dictionary<ulong, byte[]> rows)
+        {
+            var parents = new Dictionary<ulong, List<R9FlowEdge>>();
+            var previous = new Dictionary<ulong, ulong>();
+            var body = new List<ulong>();
+            var switches = new List<R9FlowSwitch>();
+            var calls = new HashSet<ulong>();
+            var terminalPadding = new HashSet<ulong>();
+            int first = decodedStarts.BinarySearch(procedure.Begin);
+            if (first < 0) return false;
+            ulong prior = 0;
+            for (int i = first; i < decodedStarts.Count && decodedStarts[i] < codeEnd; ++i)
+            {
+                ulong address = decodedStarts[i];
+                if (body.Count >= 16384 || !rows.TryGetValue(address, out byte[] bytes) ||
+                    !MatchesDecodedPe(pe, sections, imageBase, address, bytes, contributions, decoded, decodedStarts))
+                    return false;
+                if (prior != 0) previous[address] = prior;
+                prior = address;
+                body.Add(address);
+                parents[address] = new List<R9FlowEdge>();
+            }
+            bool Add(ulong source, long destination, bool conditional, bool taken, R9FlowSwitch routing = null)
+            {
+                if (destination < (long)procedure.Begin || destination >= (long)codeEnd ||
+                    !parents.TryGetValue((ulong)destination, out List<R9FlowEdge> incoming)) return false;
+                incoming.Add(new R9FlowEdge { Source = source, Destination = (ulong)destination,
+                    Conditional = conditional, Taken = taken, Switch = routing });
+                return true;
+            }
+            foreach (ulong address in body)
+            {
+                byte[] bytes = rows[address];
+                ulong following = address + (ulong)bytes.Length;
+                bool branch = false, conditional = false, call = false;
+                long target = 0;
+                if (bytes.Length == 2 && (bytes[0] == 0xeb || (bytes[0] >= 0x70 && bytes[0] <= 0x7f)))
+                { branch = true; conditional = bytes[0] != 0xeb; target = (long)following + unchecked((sbyte)bytes[1]); }
+                else if (bytes.Length == 5 && (bytes[0] == 0xe9 || bytes[0] == 0xe8))
+                { branch = true; call = bytes[0] == 0xe8; target = (long)following + BitConverter.ToInt32(bytes, 1); }
+                else if (bytes.Length == 6 && bytes[0] == 0x0f && bytes[1] >= 0x80 && bytes[1] <= 0x8f)
+                { branch = true; conditional = true; target = (long)following + BitConverter.ToInt32(bytes, 2); }
+                if (branch)
+                {
+                    if (call && target >= 0) calls.Add((ulong)target);
+                    if ((target > (long)guard && target < (long)guardEnd &&
+                         (address < guard || address >= guardEnd)) ||
+                        (call && target == (long)guard) || (target >= (long)tableBegin && target < (long)tableEnd))
+                        return false;
+                    if (!call && !Add(address, target, conditional, true)) return false;
+                    if ((conditional || call) && !Add(address, (long)following, conditional, false)) return false;
+                    continue;
+                }
+                if (bytes[0] == 0xc3 || (bytes.Length == 3 && bytes[0] == 0xc2) ||
+                    (bytes.Length == 1 && bytes[0] == 0xcc)) continue;
+                if (bytes.Length == 2 && bytes[0] == 0xff && (bytes[1] == 0xe1 || bytes[1] == 0xe2))
+                {
+                    if (!TryR9FlowTargets(pe, sections, symbols, imageBase, procedure, codeEnd,
+                        address, rows, previous, out R9FlowSwitch routing)) return false;
+                    switches.Add(routing);
+                    foreach (ulong destination in new HashSet<ulong>(routing.Targets))
+                        if (!Add(address, (long)destination, false, true, routing)) return false;
+                    continue;
+                }
+                // Other indirect jumps have no proved local target set. Do not infer a reaching definition.
+                if ((bytes[0] == 0xff && bytes.Length >= 2 && (bytes[1] & 0x38) == 0x20) ||
+                    (bytes.Length >= 3 && bytes[0] >= 0x40 && bytes[0] <= 0x4f && bytes[1] == 0xff &&
+                     (bytes[2] & 0x38) == 0x20)) return false;
+                if (following == codeEnd &&
+                    ((bytes.Length == 1 && bytes[0] == 0x90) ||
+                     (bytes.Length == 2 && StartsWith(bytes, 0x66, 0x90)) ||
+                     (bytes.Length == 3 && StartsWith(bytes, 0x0f, 0x1f, 0x00))))
+                { terminalPadding.Add(address); continue; }
+                if (!Add(address, (long)following, false, false)) return false;
+            }
+            // Padding after unconditional transfers has no executable predecessor. Keep only syntactically
+            // reachable nodes; branch conditions are still an overapproximation at this stage.
+            var children = new Dictionary<ulong, List<ulong>>();
+            foreach (ulong address in body) children[address] = new List<ulong>();
+            foreach (KeyValuePair<ulong, List<R9FlowEdge>> item in parents)
+                foreach (R9FlowEdge edge in item.Value) children[edge.Source].Add(item.Key);
+            var reachable = new HashSet<ulong>();
+            var pending = new Stack<ulong>();
+            pending.Push(procedure.Begin);
+            while (pending.Count != 0)
+            {
+                ulong address = pending.Pop();
+                if (!reachable.Add(address)) continue;
+                foreach (ulong child in children[address]) pending.Push(child);
+            }
+            if (!reachable.Contains(guard)) return false;
+            foreach (ulong address in terminalPadding) if (reachable.Contains(address)) return false;
+            foreach (List<R9FlowEdge> incoming in parents.Values)
+                incoming.RemoveAll(edge => !reachable.Contains(edge.Source));
+            foreach (R9FlowSwitch routing in switches)
+            {
+                if (calls.Contains(routing.Guard)) return false;
+                foreach (ulong address in body)
+                    if (address > routing.Guard && address < routing.End)
+                    {
+                        if (!previous.TryGetValue(address, out ulong preceding) || parents[address].Count != 1 ||
+                            parents[address][0].Source != preceding || parents[address][0].Taken) return false;
+                    }
+            }
+            bool TrustedPrevious(ulong at, out ulong preceding)
+            {
+                preceding = 0;
+                return previous.TryGetValue(at, out preceding) && parents[at].Count == 1 &&
+                    parents[at][0].Source == preceding && !parents[at][0].Taken;
+            }
+            bool Feasible(R9FlowEdge edge)
+            {
+                if (edge.Switch != null)
+                {
+                    uint index = unchecked((uint)(message + edge.Switch.Bias));
+                    return index < edge.Switch.Targets.Length && edge.Switch.Targets[index] == edge.Destination;
+                }
+                if (!edge.Conditional) return true;
+                ulong comparison;
+                if (!TrustedPrevious(edge.Source, out comparison)) return true;
+                byte[] cmp = rows[comparison];
+                // Consecutive JA/JE consumers share the immediately preceding CMP; neither changes flags.
+                if ((cmp.Length == 2 && cmp[0] >= 0x70 && cmp[0] <= 0x7f) ||
+                    (cmp.Length == 6 && cmp[0] == 0x0f && cmp[1] >= 0x80 && cmp[1] <= 0x8f))
+                {
+                    if (!TrustedPrevious(comparison, out comparison)) return true;
+                    cmp = rows[comparison];
+                }
+                uint left, right;
+                if (cmp.Length == 7 && StartsWith(cmp, 0x41, 0x81, 0xff))
+                { left = (uint)message; right = BitConverter.ToUInt32(cmp, 3); }
+                else if ((cmp.Length == 3 && StartsWith(cmp, 0x83, 0xf8)) ||
+                         (cmp.Length == 5 && cmp[0] == 0x3d))
+                {
+                    if (!TrustedPrevious(comparison, out ulong index)) return true;
+                    byte[] lea = rows[index];
+                    int bias;
+                    if (lea.Length == 4 && StartsWith(lea, 0x41, 0x8d, 0x47)) bias = unchecked((sbyte)lea[3]);
+                    else if (lea.Length == 7 && StartsWith(lea, 0x41, 0x8d, 0x87)) bias = BitConverter.ToInt32(lea, 3);
+                    else return true;
+                    left = unchecked((uint)(message + bias));
+                    right = cmp.Length == 3 ? unchecked((uint)(int)(sbyte)cmp[2]) : BitConverter.ToUInt32(cmp, 1);
+                }
+                else return true;
+                byte code = (byte)(rows[edge.Source][rows[edge.Source][0] == 0x0f ? 1 : 0] & 0x0f);
+                bool taken;
+                if (code == 7) taken = left > right;
+                else if (code == 6) taken = left <= right;
+                else if (code == 4) taken = left == right;
+                else if (code == 5) taken = left != right;
+                else return true;
+                return taken == edge.Taken;
+            }
+            var active = new HashSet<ulong>();
+            // 0: no feasible path, 1: all feasible paths preserve a proved definition, 2: unsafe/unknown.
+            var memo = new Dictionary<ulong, int>();
+            int Walk(ulong address, int depth)
+            {
+                if (depth > 256) return 2;
+                if (memo.TryGetValue(address, out int known)) return known;
+                if (!active.Add(address)) return 2;
+                byte[] bytes = rows[address];
+                int valid;
+                if (bytes.Length == 7 && StartsWith(bytes, 0x4c, 0x8d, 0x0d))
+                    valid = (long)address + 7 + BitConverter.ToInt32(bytes, 3) == (long)imageBase ? 1 : 2;
+                else
+                {
+                    valid = PreservesR9AndR15(bytes) ? 0 : 2;
+                    if (valid == 0)
+                    {
+                        foreach (R9FlowEdge edge in parents[address])
+                            if (Feasible(edge))
+                            {
+                                int incoming = Walk(edge.Source, depth + 1);
+                                valid = Math.Max(valid, incoming);
+                                if (valid == 2) break;
+                            }
+                        if (address == procedure.Begin) valid = 2;
+                    }
+                }
+                active.Remove(address);
+                memo[address] = valid;
+                return valid;
+            }
+            return Walk(guard, 0) == 1;
+        }
+
+        private static bool PreservesR9AndR15(byte[] bytes)
+        {
+            return (bytes.Length == 1 && bytes[0] == 0x90) ||
+                (bytes.Length == 3 && StartsWith(bytes, 0x0f, 0x1f, 0x00)) ||
+                (bytes.Length == 4 && StartsWith(bytes, 0x0f, 0x1f, 0x40, 0x00)) ||
+                (bytes.Length == 7 && StartsWith(bytes, 0x49, 0x8d, 0x95)) ||
+                (bytes.Length == 4 && StartsWith(bytes, 0x48, 0x89, 0x55)) ||
+                (bytes.Length == 7 && StartsWith(bytes, 0x41, 0x81, 0xff)) ||
+                (bytes.Length == 4 && StartsWith(bytes, 0x41, 0x8d, 0x47)) ||
+                (bytes.Length == 7 && StartsWith(bytes, 0x41, 0x8d, 0x87)) ||
+                (bytes.Length == 3 && StartsWith(bytes, 0x83, 0xf8)) ||
+                (bytes.Length == 5 && bytes[0] == 0x3d) ||
+                (bytes.Length == 6 && StartsWith(bytes, 0x41, 0xb8)) ||
+                (bytes.Length == 9 && StartsWith(bytes, 0x41, 0x0f, 0xb6, 0x84, 0x01)) ||
+                (bytes.Length == 8 && StartsWith(bytes, 0x41, 0x8b, 0x8c, 0x81)) ||
+                (bytes.Length == 3 && StartsWith(bytes, 0x49, 0x03, 0xc9)) ||
+                (bytes.Length == 7 && StartsWith(bytes, 0x4c, 0x8d, 0x05)) ||
+                (bytes.Length == 8 && StartsWith(bytes, 0x41, 0x8b, 0x94, 0x80)) ||
+                (bytes.Length == 3 && StartsWith(bytes, 0x49, 0x03, 0xd0)) ||
+                (bytes.Length == 2 && (bytes[0] == 0xeb || (bytes[0] >= 0x70 && bytes[0] <= 0x7f) ||
+                                      StartsWith(bytes, 0xff, 0xe1) || StartsWith(bytes, 0xff, 0xe2))) ||
+                (bytes.Length == 5 && bytes[0] == 0xe9) ||
+                (bytes.Length == 6 && bytes[0] == 0x0f && bytes[1] >= 0x80 && bytes[1] <= 0x8f);
+        }
+
+        private static bool TryR9FlowTargets(byte[] pe, List<Section> sections, Dictionary<ulong, int> symbols,
+            ulong imageBase, Function procedure, ulong codeEnd, ulong jump, Dictionary<ulong, byte[]> rows,
+            Dictionary<ulong, ulong> previous, out R9FlowSwitch routing)
+        {
+            routing = null;
+            bool r8 = rows[jump][1] == 0xe2;
+            if (!previous.TryGetValue(jump, out ulong add) || rows[add].Length != 3 || add + 3 != jump ||
+                !(r8 ? StartsWith(rows[add], 0x49, 0x03, 0xd0) : StartsWith(rows[add], 0x49, 0x03, 0xc9)) ||
+                !previous.TryGetValue(add, out ulong load) || rows[load].Length != 8 || load + 8 != add ||
+                !(r8 ? StartsWith(rows[load], 0x41, 0x8b, 0x94, 0x80) : StartsWith(rows[load], 0x41, 0x8b, 0x8c, 0x81)))
+                return false;
+            ulong at = load;
+            if (!previous.TryGetValue(at, out ulong before)) return false;
+            if (r8)
+            {
+                byte[] image = rows[before];
+                if (image.Length != 7 || !StartsWith(image, 0x4c, 0x8d, 0x05) || before + 7 != at ||
+                    (long)before + 7 + BitConverter.ToInt32(image, 3) != (long)imageBase) return false;
+                at = before;
+                if (!previous.TryGetValue(at, out before)) return false;
+            }
+            ulong byteBegin = 0;
+            if (!r8 && rows[before].Length == 9 && StartsWith(rows[before], 0x41, 0x0f, 0xb6, 0x84, 0x01) && before + 9 == at)
+            {
+                byteBegin = checked(imageBase + BitConverter.ToUInt32(rows[before], 5));
+                at = before;
+                if (!previous.TryGetValue(at, out before)) return false;
+            }
+            byte[] ja = rows[before];
+            if (ja.Length != 6 || !StartsWith(ja, 0x0f, 0x87) || before + 6 != at) return false;
+            long fallback = (long)before + 6 + BitConverter.ToInt32(ja, 2);
+            at = before;
+            if (!previous.TryGetValue(at, out before)) return false;
+            byte[] cmp = rows[before];
+            uint maximum;
+            if (cmp.Length == 3 && StartsWith(cmp, 0x83, 0xf8) && cmp[2] <= 127) maximum = cmp[2];
+            else if (cmp.Length == 5 && cmp[0] == 0x3d) maximum = BitConverter.ToUInt32(cmp, 1);
+            else return false;
+            if (maximum == 0 || maximum >= 4096 || before + (ulong)cmp.Length != at) return false;
+            at = before;
+            if (!previous.TryGetValue(at, out before)) return false;
+            byte[] lea = rows[before];
+            int bias;
+            if (lea.Length == 4 && StartsWith(lea, 0x41, 0x8d, 0x47)) bias = unchecked((sbyte)lea[3]);
+            else if (lea.Length == 7 && StartsWith(lea, 0x41, 0x8d, 0x87)) bias = BitConverter.ToInt32(lea, 3);
+            else return false;
+            if (before + (ulong)lea.Length != at) return false;
+            ulong guard = before;
+            ulong begin = checked(imageBase + BitConverter.ToUInt32(rows[load], 4));
+            if ((begin & 3) != 0 || begin < codeEnd || !symbols.TryGetValue(begin, out int owner) || owner != procedure.Module)
+                return false;
+            ulong end = procedure.End;
+            foreach (KeyValuePair<ulong, int> symbol in symbols)
+                if (symbol.Value == owner && symbol.Key > begin && symbol.Key < end) end = symbol.Key;
+            if (end <= begin || end - begin < 8 || end - begin > 4096 * 4 || ((end - begin) & 3) != 0) return false;
+            int raw;
+            try { raw = checked((int)Offset(checked((uint)(begin - imageBase)), sections, pe.Length)); }
+            catch (InvalidDataException) { return false; }
+            int count = checked((int)((end - begin) / 4));
+            if (raw > pe.Length - 4 * count) return false;
+            var entries = new ulong[count];
+            for (int i = 0; i < count; ++i)
+            {
+                ulong target = checked(imageBase + BitConverter.ToUInt32(pe, raw + 4 * i));
+                if (target < procedure.Begin || target >= codeEnd || !rows.ContainsKey(target) ||
+                    (target >= guard && target < jump + 2)) return false;
+                entries[i] = target;
+            }
+            if (fallback < (long)procedure.Begin || fallback >= (long)codeEnd ||
+                !rows.ContainsKey((ulong)fallback) || (fallback >= (long)guard && fallback < (long)jump + 2)) return false;
+            var targets = new ulong[maximum + 1];
+            if (byteBegin == 0)
+            {
+                if (count != targets.Length) return false;
+                Array.Copy(entries, targets, count);
+            }
+            else
+            {
+                if (!symbols.TryGetValue(byteBegin, out int byteOwner) || byteOwner != owner || byteBegin < codeEnd ||
+                    byteBegin + maximum + 1 > procedure.End) return false;
+                foreach (KeyValuePair<ulong, int> symbol in symbols)
+                    if (symbol.Key > byteBegin && symbol.Key < byteBegin + maximum + 1) return false;
+                int byteRaw;
+                try { byteRaw = checked((int)Offset(checked((uint)(byteBegin - imageBase)), sections, pe.Length)); }
+                catch (InvalidDataException) { return false; }
+                if (byteRaw > pe.Length - targets.Length) return false;
+                for (int i = 0; i < targets.Length; ++i)
+                {
+                    if (pe[byteRaw + i] >= entries.Length) return false;
+                    targets[i] = entries[pe[byteRaw + i]];
+                }
+            }
+            routing = new R9FlowSwitch { Guard = guard, End = jump + 2, Bias = bias, Targets = targets };
+            return true;
+        }
+
         private static InlineTable ReadGuardedR9ByteSwitchTable(byte[] pe, List<Section> sections,
             List<Contribution> contributions, Dictionary<ulong, int> dataSymbols, List<Function> procedures,
             ulong imageBase, ulong dispatch, Dictionary<ulong, DecodedInstruction> decoded,
@@ -1627,12 +2030,33 @@ namespace RedPrismBuild
             var raxStackCandidates = new List<ulong>();
             var raxPaddingBodyRanges = new List<InlineTable>();
             var r9ByteCandidates = new List<ulong>();
+            var r9HoistedCandidates = new List<ulong>();
             var r9BodyRanges = new List<InlineTable>();
             foreach (string line in disassemblyLines)
             {
                 Match candidate = InstructionLine.Match(line);
                 if (!candidate.Success) continue;
                 string[] candidateBytes = candidate.Groups[2].Value.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                if (candidateBytes.Length == 8 && candidateBytes[0] == "41" && candidateBytes[1] == "8b" &&
+                    candidateBytes[2] == "8c" && candidateBytes[3] == "81")
+                {
+                    ulong address = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
+                    r9HoistedCandidates.Add(address);
+                    int index = FindContribution(contributions, address);
+                    if (index >= 0)
+                        foreach (Function procedure in procedures)
+                            if (procedure.Module == contributions[index].Module &&
+                                procedure.ContributionBegin == contributions[index].Begin &&
+                                procedure.ContributionEnd == contributions[index].End &&
+                                procedure.Begin <= address && address < procedure.End)
+                            {
+                                ulong end = procedure.End;
+                                foreach (KeyValuePair<ulong, int> symbol in dataSymbols)
+                                    if (symbol.Value == procedure.Module && symbol.Key >= procedure.Begin && symbol.Key < end)
+                                        end = symbol.Key;
+                                r9BodyRanges.Add(new InlineTable { Begin = procedure.Begin, End = end });
+                            }
+                }
                 if (candidateBytes.Length == 4 && candidateBytes[0] == "41" && candidateBytes[1] == "80" && candidateBytes[2] == "f9")
                 {
                     ulong comparison = UInt64.Parse(candidate.Groups[1].Value, NumberStyles.HexNumber);
@@ -1800,6 +2224,12 @@ namespace RedPrismBuild
                 else if (rowOwner >= 0) decoded[rowAddress].Unknown = true;
             }
             decodedStarts.Sort();
+            foreach (ulong address in r9HoistedCandidates)
+            {
+                InlineTable table = ReadGuardedR9HoistedDirectTable(pe, sections, contributions, dataSymbols,
+                    procedures, imageBase, address, decoded, decodedStarts, guardRows);
+                if (table != null) inlineTables.Add(table);
+            }
             foreach (ulong address in rdiBaseCandidates)
             {
                 InlineTable byteTable;

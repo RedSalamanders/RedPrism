@@ -637,7 +637,7 @@ void TestStringTable() noexcept
         Expect(false, "strings.load-redprism-exe");
         return;
     }
-    constexpr std::array<UINT, 486> kIds{IDS_APP_TITLE,
+    constexpr std::array<UINT, 487> kIds{IDS_APP_TITLE,
                                          IDS_UNTITLED,
                                          IDS_DIRTY_MARK,
                                          IDS_STATUS_ZOOM,
@@ -947,6 +947,7 @@ void TestStringTable() noexcept
                                          IDS_ADJUST_EDIT_TITLE,
                                          IDS_ERROR_FILTER,
                                          IDS_ERROR_PIXEL_EDIT,
+                                         IDS_ERROR_LAYER_METADATA,
                                          IDS_ERROR_SELECTION_EDIT,
                                          IDS_ERROR_HISTORY_RESTORE,
                                          IDS_CMD_CONTENT_AWARE_FILL,

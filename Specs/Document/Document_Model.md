@@ -213,6 +213,19 @@ and pixel budgets before replacing any state. Loaded replacements and size resul
 `EditForTest(fn)` is a scoped fixture hook for tests and the application harness; the callback receives a document
 reference that MUST NOT escape. It invalidates the generation before the callback, including if construction fails.
 
+Settled Rename, visibility, opacity button/key commits and blend-mode commands use sealed `LayerMetadataInput`.
+Capture follows full job admission and binds the saved target id, settled session authority, whole-document token
+and immutable history view. Workers construct and validate the complete after-document and named history entry.
+The owner applies only a current result through nonthrowing document/display/history swaps; the result retains
+all replaced owners for worker retirement. Rename uses its card's original target even when another layer is
+active, trims whitespace and ignores blank/unchanged/missing targets. Groups permit rename/visibility and ignore
+opacity/blend. A true no-op leaves generation, revision and redo unchanged. Typed opacity preview/closure remains
+a separate session path. An open brush, warp, shape, lasso/outline gesture or outer history transaction retains
+the reference command route and its gesture/nested history behavior until preserving worker authority is added;
+it must not become a rejected edit merely because the settled worker input is ineligible.
+Native capture still copies vector records until the H2.2 document root integration;
+this worker boundary does not close capture, admission traversal or measured G1.
+
 Final application shutdown has one exclusive retirement boundary after all producers have joined. The owner
 calls `DetachCoverageForShutdown`, severing borrowed graphics engines without destroying the CPU drafts.
 The scheduler's final MTA callback then calls `RetireCpuForShutdown` to release document, display, history, drafts,

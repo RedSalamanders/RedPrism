@@ -192,7 +192,12 @@ void Application::OnLayerOpacity(double opacity, ChromeEditPhase phase) noexcept
         else if (recorded != value)
         {
             // A button, an arrow key or RequestValue: the active layer, one entry.
-            _session.SetOpacity(value);
+            if (const auto* active = _session.ActiveLayer(); active && !active->isGroup)
+            {
+                _hostExecutionError = StartLayerMetadata(LayerMetadataKind::SetOpacity, active->id, {}, value);
+                if (FAILED(_hostExecutionError))
+                    _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_ERROR_LAYER_METADATA);
+            }
         }
         break;
     case ChromeEditPhase::Cancel:
