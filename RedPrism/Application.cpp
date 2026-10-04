@@ -1064,6 +1064,8 @@ int Application::RunSelfTest() noexcept
         }
         std::printf("PASS sampler-authority.picker.equal-target-reopen-refuses-older-sample\n");
         _chrome->CloseColorPicker(false);
+        if (!RunSamplerIntentHostSelfTest())
+            return 5;
         // Palette keys apply while the canvas has focus; the well click and the picker moved focus to chrome.
         _chrome->SetCanvasFocused(true);
         if (!hostKey('X', 0) || _session.ForegroundColor() != DocumentSession::kDefaultBackgroundArgb ||

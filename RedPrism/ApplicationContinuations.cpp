@@ -1882,6 +1882,14 @@ int Application::RunHostContinuationSelfTest() noexcept
         if (!RunUiActions(_jobs) || _activeHostRequest || RunUiActions(_jobs) || _jobs.HasUiWork() ||
             behindOtherKind.Read().outcome != HostOutcome::Pending)
         {
+            const auto readiness = _jobs.UiReadinessForTest();
+            std::printf("DIAG continuation-host.other-history kind=%u active=%u outcome=%u idle=%u "
+                        "completions=%u actions=%u source=%u resumes=%u owner=%u memory=%u\n",
+                        static_cast<unsigned int>(kind), static_cast<unsigned int>(_activeHostRequest.has_value()),
+                        static_cast<unsigned int>(behindOtherKind.Read().outcome),
+                        static_cast<unsigned int>(_jobs.IsIdle()), readiness.completions, readiness.actions,
+                        static_cast<unsigned int>(readiness.source), static_cast<unsigned int>(readiness.resumes),
+                        static_cast<unsigned int>(readiness.owner), static_cast<unsigned int>(readiness.memory));
             return fail(L"A host input selected or polled behind another history kind.\n");
         }
         // Finisher seam only; real selection/stroke/open/import jobs migrate in their own P1 slices.

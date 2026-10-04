@@ -133,4 +133,40 @@ Independent archive `p1-sampler-x64-Debug-r10-full-qualified` verifies 1,025 cop
 This full Debug prerequisite result does not establish Release/ASan, current combined analysis/ARM64,
 actual asynchronous sampler callers, native activation, owner-latency targets or G1.
 
-The current eight picker controls, manual routing and bounded accepted-coordinate FIFO have not passed runtime qualification. The FIFO implementation exists; runtime qualification is pending. Production sampling still uses synchronous `WandComposite`; younger palette-dependent tools remain unintegrated. No G1 or end-to-end sampler result is established.
+Full Debug r10 qualifies its eight picker controls, manual routing and bounded accepted-coordinate FIFO. Production sampling still uses synchronous `WandComposite`; younger palette-dependent tools remain unintegrated. No G1 or end-to-end sampler result is established.
+
+
+## Explicit intent sidecar — r53/r54 builds and full Debug r55
+
+Primary reviewed the separate palette/picker manual counters, sampled-preview scope and intent-sensitive fixed
+FIFO. A cheap-agent fixture compared foreign/wrong-target mutated stamps with an unmutated reference; primary
+repaired only that new assertion to compare each candidate with its own pre-call snapshot. Existing controls,
+legacy numeric expectations, scanner settings and stack limits are unchanged.
+
+Build r53: actual child 47336, 22:34:10.883880Z–22:40:05.922416Z, exit 0, 766 owned inputs. Build r54 adds
+read-only readiness diagnostics to the existing host-ordering failure seam; its original condition is unchanged.
+Child 118032, 22:43:46.876765Z–22:48:33.050954Z, exit 0. All five images, matching-PDB ISA controls and pinned
+DxUi provenance pass. Build-only archives verify 1,024 copies each; completion hashes respectively
+`0601902D6961F9CDC4197CB18725BCF3EA51CB404AF2430B759E54448F34DBEB` and
+`C5EBDF017A95C8FF3ADCE71BD29DD9DFA190BBE68C0C4B17FBE90C48570B73CF`.
+
+Full Debug r55: child 43536, 22:55:06.004619Z–23:04:38.953218Z, actual exit **0**. All 766 inputs are unchanged,
+freeze `3AE094D37EC8DBC0B1DA5F84E966B467E320DB0CB6FF4F804E31111BB242A473`.
+Stdout `85A8CF1B2512AA51DE27606561798AFDF6517F8ECCD933AB0B20136B9920C0CC`,
+stderr `C6C4848C9A0D1E835ACED6892A5C8593C78B4448518E9344A6F911D15DAB2AAC`.
+Complete suites, all five images, ISA/PDB/scanner controls, WARP app, crash/CLI/build/RAW corpus and harness
+screenshots pass. Exact archived literal registries preserve all preceding controls: **6,571 document**
+(6,555 + 16 palette intent), **9,122 application** (9,099 + 23 picker intent), same ordered **79 stages**.
+New intent FIFO: **1,757** checks, zero failures. Original FIFO 2,653 and clipboard transfer 146 remain passing.
+Registry proof SHA-256 `4B9A253FDC5EB3C627B5950622CB8DD5AE255A3E00A31E6E417E1AB0B82B4672`.
+
+Independent archive `p1-sampler-intent-x64-Debug-r55-full-qualified` under the local qualification archive root:
+all 1,033 copies verify at 23:06:30.9103708Z; completion
+`181609C28CBA6A9E599008D911CD44EF7179026167D584377A01A2CDCF340094`, source manifest
+`B4937F338042473C76300F0639B58CE900762714A9F074C089B19ED1EC7C06E8`, evidence manifest
+`D27639ACB04F58E037A261956E8B93175E6B973AF63E823CA97ADB3A6A31D1A8`.
+
+The separate wand Debug r17 failure does not reproduce in r55; its cause remains unassigned. Read-only
+`UiReadinessForTest` distinguishes source readiness from memory/owner/completion notifications if it recurs.
+This pass qualifies the intent prerequisites on the frozen snapshot, not the newer caller checkout's source
+and opening APIs, admitted sampler graph, physical callers, younger consumers, final matrix or G1.

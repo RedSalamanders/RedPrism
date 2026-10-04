@@ -1065,6 +1065,19 @@ bool JobScheduler::InUiCallback() const noexcept
     return _impl->inCallback;
 }
 
+JobScheduler::UiReadiness JobScheduler::UiReadinessForTest() const noexcept
+{
+    if (!_impl || _impl->closed)
+        return {};
+    _impl->CheckOwner();
+    return {QueryDepthSList(&_impl->completions),
+            static_cast<std::uint32_t>(_impl->actionCount),
+            _impl->sourceReady,
+            _impl->resumesPending,
+            !_impl->workers.ShutdownToken().stop_requested() && _impl->ownerWork && _impl->ownerWork->HasReady(),
+            _impl->memoryChanged.load(std::memory_order_acquire)};
+}
+
 void* JobScheduler::WakeHandle() const noexcept
 {
     return _impl ? _impl->wake.get() : nullptr;

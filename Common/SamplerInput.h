@@ -82,7 +82,7 @@ class SamplerInput final
         return true;
     }
 
-    [[nodiscard]] Admission Accept(std::uint64_t opening, std::int32_t x, std::int32_t y) noexcept
+    [[nodiscard]] Admission Accept(std::uint64_t opening, std::int32_t x, std::int32_t y, bool coalesce = true) noexcept
     {
         if (!MatchesOpenSession(opening) || sealed_ || x < 0 || y < 0 || x >= width_ || y >= height_ ||
             lastSequence_ == (std::numeric_limits<std::uint64_t>::max)())
@@ -91,7 +91,7 @@ class SamplerInput final
         }
 
         const SamplerPointStamp stamp{opening, lastSequence_ + 1};
-        if (pendingCount_ != 0)
+        if (coalesce && pendingCount_ != 0)
         {
             const std::uint32_t tail = (head_ + pendingCount_ - 1) % kPendingCapacity;
             SamplerPoint& pending = pending_[tail];

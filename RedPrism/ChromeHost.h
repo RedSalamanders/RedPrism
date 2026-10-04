@@ -464,6 +464,9 @@ class ChromeHost final : public CommandIds
         bool operator==(const PickerSampleAuthority&) const noexcept = default;
     };
     [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerSampleAuthority() const noexcept;
+    // Explicit picker input is independent of the revision renewed by a checked sample's preview callback.
+    [[nodiscard]] std::optional<PickerSampleAuthority> CapturePickerIntentAuthority() const noexcept;
+    [[nodiscard]] bool IsPickerIntentCurrent(const PickerSampleAuthority& authority) const noexcept;
     [[nodiscard]] bool ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept;
     // A checkable View menu item (Sample Ring).
     void SetCommandChecked(int command, bool checked) noexcept;
@@ -954,6 +957,7 @@ class ChromeHost final : public CommandIds
     void SyncToolVisuals() noexcept;
     void OnSplitterChange(DxUi::SplitterChange change) noexcept;
     void OnPickerChange(DxUi::ColorPickerChange change) noexcept;
+    void NotePickerInput(bool sampledPublication = false) noexcept;
     // A palette well shows `argb` (the picker's working color while it previews there).
     void ShowPaletteWell(PickerTarget target, uint32_t argb) noexcept;
     // Hides the picker card without reporting a pick (its target's card closed).
@@ -1357,6 +1361,8 @@ class ChromeHost final : public CommandIds
     PickerTarget _pickerTarget = PickerTarget::Foreground; // what the open color picker edits
     Guid _pickerInstance = Guid::Generate();
     InputRevision _pickerInputRevision;
+    InputRevision _pickerIntentRevision;
+    bool _sampledPickerPublication = false;
     bool _canvasFocused = true;
     bool _attached = false;
 };

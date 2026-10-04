@@ -398,7 +398,7 @@ HRESULT ChromeHost::ReplaceDevice(ID3D11Device* device) noexcept
 
 void ChromeHost::Detach() noexcept
 {
-    _pickerInputRevision.Advance();
+    NotePickerInput();
     DetachAccessibility();
     // Before the view and _graphics let go of the Direct2D factory: the icon caches must not outlive the device
     // they were made on, or the static destructors at exit release their last documents (LucideToolButton.h).
@@ -2547,9 +2547,16 @@ void ChromeHost::OnSplitterChange(DxUi::SplitterChange change) noexcept
     _events.OnChromeLayout();
 }
 
+void ChromeHost::NotePickerInput(bool sampledPublication) noexcept
+{
+    _pickerInputRevision.Advance();
+    if (!sampledPublication)
+        _pickerIntentRevision.Advance();
+}
+
 void ChromeHost::OnPickerChange(DxUi::ColorPickerChange change) noexcept
 {
-    _pickerInputRevision.Advance(); // Manual/DxUi input wins even when it returns to the original color.
+    NotePickerInput(_sampledPickerPublication); // Explicit equal-value or A-B-A input supersedes older samples.
     // The target follows the working color (a palette well here, a Gradient Map end or the Canvas Size swatch in
     // the host); OK keeps it, Cancel restores it.
     const PickerTarget target = _pickerTarget;
@@ -2578,7 +2585,7 @@ void ChromeHost::ClosePickerCard() noexcept
     {
         return;
     }
-    _pickerInputRevision.Advance();
+    NotePickerInput();
     // The keyboard goes back where it was: the well or swatch that opened the picker.
     PopCard(ModalCard::Picker);
     _pickerCard->SetVisible(false);
@@ -2608,7 +2615,7 @@ void ChromeHost::OpenColorPicker(PickerTarget target, uint32_t argb) noexcept
         return;
     }
     _pickerTarget = target;
-    _pickerInputRevision.Advance();
+    NotePickerInput();
     _picker->SetColor(argb | 0xFF000000u);
     ArrangePicker();
     _pickerCard->SetVisible(true);
@@ -2637,7 +2644,7 @@ void ChromeHost::SampleColor(uint32_t argb) noexcept
     if (ColorPickerOpen())
     {
         // An explicit equal-value input also supersedes a pending asynchronous sample.
-        _pickerInputRevision.Advance();
+        NotePickerInput(_sampledPickerPublication);
         _picker->SampleColor(_view.Controls(), argb);
     }
 }
@@ -3225,7 +3232,7 @@ bool ChromeHost::DispatchPointer(const DxUi::PointerEvent& event) noexcept
         const auto bounds = _pickerCard->GetBounds();
         const float x = event.xPixels / scale, y = event.yPixels / scale;
         if (_picker->IsDragging() || (x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom))
-            _pickerInputRevision.Advance();
+            NotePickerInput();
     }
     const bool handled = _view.DispatchPointer(event);
     _inDispatch = false;
@@ -3282,7 +3289,7 @@ bool ChromeHost::DispatchKey(UINT virtualKey, bool down, UINT modifiers) noexcep
     }
     _inDispatch = true;
     if (down && ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
-        _pickerInputRevision.Advance(); // Equal or unfinished typed values may emit no DxUi change callback.
+        NotePickerInput(); // Equal or unfinished typed values may emit no DxUi change callback.
     const bool handledKey = _view.DispatchKey(virtualKey, down, modifiers);
     _inDispatch = false;
     if (handledKey)
@@ -3370,7 +3377,7 @@ bool ChromeHost::DispatchCharacter(wchar_t character, UINT modifiers) noexcept
     }
     _inDispatch = true;
     if (ColorPickerOpen() && Contains(_picker, _view.Controls().GetFocusControl()))
-        _pickerInputRevision.Advance();
+        NotePickerInput();
     const bool handled = _view.DispatchCharacter(character, modifiers);
     _inDispatch = false;
     return handled;
@@ -4091,11 +4098,28 @@ std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerSample
     return PickerSampleAuthority{_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
 }
 
+std::optional<ChromeHost::PickerSampleAuthority> ChromeHost::CapturePickerIntentAuthority() const noexcept
+{
+    if (!ColorPickerOpen() || _pickerIntentRevision.Current() == 0)
+        return std::nullopt;
+    return PickerSampleAuthority{_pickerInstance, _pickerIntentRevision.Current(), _pickerTarget};
+}
+
+bool ChromeHost::IsPickerIntentCurrent(const PickerSampleAuthority& authority) const noexcept
+{
+    return ColorPickerOpen() && authority.host == _pickerInstance && authority.target == _pickerTarget &&
+           _pickerIntentRevision.Matches(authority.revision);
+}
+
 bool ChromeHost::ApplySampledPickerColor(PickerSampleAuthority& authority, uint32_t argb) noexcept
 {
     if (!ColorPickerOpen() || authority.host != _pickerInstance || authority.target != _pickerTarget ||
         !_pickerInputRevision.Matches(authority.revision))
         return false;
+    const bool outerPublication = _sampledPickerPublication;
+    const auto restorePublication =
+        wil::scope_exit([this, outerPublication]() noexcept { _sampledPickerPublication = outerPublication; });
+    _sampledPickerPublication = true;
     SetPickerColor(argb);
     authority = {_pickerInstance, _pickerInputRevision.Current(), _pickerTarget};
     return true;

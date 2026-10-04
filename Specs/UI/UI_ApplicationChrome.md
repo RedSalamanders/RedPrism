@@ -701,6 +701,11 @@ Canvas-fed samples update DxUi's chosen color through `SampleColor`; `PickerColo
 `GetCurrentColor`/`SetCurrentColor` swatch is the original opening color reserved for Cancel, not the sampled
 choice. Sampling MUST NOT replace that original. OK commits the chosen sample; Cancel restores the opening value.
 Deferred sampled-picker publication can use `CapturePickerSampleAuthority` and `ApplySampledPickerColor`.
+`CapturePickerIntentAuthority` and `IsPickerIntentCurrent` separately track explicit input. A successful checked
+sample renews full publication authority through its own Preview callback while retaining explicit intent.
+Public sampling, raw pointer/key/character input and Open/Close/Detach advance explicit intent, including equal
+values and A–B–A. Opening lifetime changes remain explicit even during a callback. Foreground/background Preview
+updates chosen chrome color only; the session palette changes on Commit.
 Authority identifies the exact chrome owner, target and input revision. Opening, closing, detaching and every
 manual/DxUi or direct sampled write advance the revision, including equal colors and A–B–A input. Pointer
 interaction in the picker and keyboard/text input in its focused subtree also invalidate

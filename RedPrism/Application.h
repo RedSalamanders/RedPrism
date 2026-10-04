@@ -608,6 +608,7 @@ class Application final : public ChromeEvents
     class WandCompositeHostJob;
     [[nodiscard]] HRESULT StartWandCompositeSelection(const HostWandCompositeNewInput& input) noexcept;
     int RunWandCompositeHostSelfTest() noexcept;
+    [[nodiscard]] bool RunSamplerIntentHostSelfTest() noexcept;
     class HistoryRestoreJob;
     [[nodiscard]] HRESULT StartHistoryRestore(bool redo) noexcept;
     int RunHistoryRestoreSelfTest() noexcept;

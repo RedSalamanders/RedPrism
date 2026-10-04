@@ -2752,18 +2752,42 @@ class DocumentSession
     {
         return {_tokenIdentity.value, _paletteRevision.Current()};
     }
+    // Explicit palette intent stays stable across this sampler's own publications. Pending points and
+    // younger captured tools bind this authority separately from the per-publication revision above.
+    [[nodiscard]] PaletteSampleAuthority CapturePaletteIntentAuthority() const noexcept
+    {
+        return {_tokenIdentity.value, _paletteIntentRevision.Current()};
+    }
+    [[nodiscard]] bool IsPaletteIntentCurrent(PaletteSampleAuthority authority) const noexcept
+    {
+        return authority.session == _tokenIdentity.value && _paletteIntentRevision.Matches(authority.revision);
+    }
     // A sampled publication renews only its own authority. Explicit equal-value/A-B-A palette input,
     // session copy/move, swap or reset prevents an older asynchronous sample from publishing.
     [[nodiscard]] bool ApplySampledForegroundColor(PaletteSampleAuthority& authority, uint32_t argb) noexcept
     {
         if (authority.session != _tokenIdentity.value || !_paletteRevision.Matches(authority.revision))
             return false;
-        SetForegroundColor(argb);
+        _paletteRevision.Advance();
+        _foregroundArgb = argb | 0xFF000000u;
+        ApplyForegroundToBrush();
+        RefreshGradient();
+        authority = CapturePaletteSampleAuthority();
+        return true;
+    }
+    [[nodiscard]] bool ApplySampledBackgroundColor(PaletteSampleAuthority& authority, uint32_t argb) noexcept
+    {
+        if (authority.session != _tokenIdentity.value || !_paletteRevision.Matches(authority.revision))
+            return false;
+        _paletteRevision.Advance();
+        _backgroundArgb = argb | 0xFF000000u;
+        RefreshGradient();
         authority = CapturePaletteSampleAuthority();
         return true;
     }
     void SetForegroundColor(uint32_t argb) noexcept
     {
+        _paletteIntentRevision.Advance();
         _paletteRevision.Advance();
         _foregroundArgb = argb | 0xFF000000u;
         ApplyForegroundToBrush();
@@ -2771,12 +2795,14 @@ class DocumentSession
     }
     void SetBackgroundColor(uint32_t argb) noexcept
     {
+        _paletteIntentRevision.Advance();
         _paletteRevision.Advance();
         _backgroundArgb = argb | 0xFF000000u;
         RefreshGradient();
     }
     void SwapPaletteColors() noexcept
     {
+        _paletteIntentRevision.Advance();
         _paletteRevision.Advance();
         if (_maskSelected)
         {
@@ -2791,6 +2817,7 @@ class DocumentSession
     }
     void ResetPaletteColors() noexcept
     {
+        _paletteIntentRevision.Advance();
         _paletteRevision.Advance();
         if (_maskSelected)
         {
@@ -2888,6 +2915,7 @@ class DocumentSession
     uint32_t _foregroundArgb = kDefaultForegroundArgb;
     uint32_t _backgroundArgb = kDefaultBackgroundArgb;
     InputRevision _paletteRevision;
+    InputRevision _paletteIntentRevision;
     std::optional<TransformEdit> _transformEdit;
     std::optional<std::pair<Guid, Guid>> _transformDuplicate; // copy, source
     std::optional<CropRect> _cropRect;

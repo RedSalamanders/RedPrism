@@ -110,6 +110,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -792,6 +793,153 @@ void TestPaletteSampleAuthority()
     Expect(boundary.Current() == 0 && !boundary.Matches(0) && !boundary.Matches(1) &&
                !boundary.Matches((std::numeric_limits<std::uint64_t>::max)()),
            "palette-authority.exhaustion-permanently-refuses-instead-of-wrapping");
+}
+
+void TestPaletteIntentAuthority()
+{
+    DocumentSession sampled;
+    sampled.CreateDocument(2, 2, true);
+    const Guid sampledRevision = sampled.history.CurrentRevision();
+    const auto sampledGeneration = sampled.Generation();
+    const int sampledUndoCount = sampled.history.UndoCount();
+    const auto manualAuthority = sampled.CapturePaletteIntentAuthority();
+    const auto originalPublication = sampled.CapturePaletteSampleAuthority();
+    auto publication = originalPublication;
+    Expect(sampled.ApplySampledForegroundColor(publication, 0x00123456u) && publication != originalPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFF123456u &&
+               sampled.brushSettings.red == 0x12 / 255.0 && sampled.brushSettings.green == 0x34 / 255.0 &&
+               sampled.brushSettings.blue == 0x56 / 255.0,
+           "palette-intent.own-foreground-sample-renews-publication-and-updates-brush-rgb");
+    const auto firstPublication = publication;
+    Expect(sampled.ApplySampledBackgroundColor(publication, 0x00654321u) && publication != firstPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFF123456u &&
+               sampled.BackgroundColor() == 0xFF654321u && sampled.brushSettings.red == 0x12 / 255.0 &&
+               sampled.brushSettings.green == 0x34 / 255.0 && sampled.brushSettings.blue == 0x56 / 255.0,
+           "palette-intent.own-background-sample-renews-same-publication-authority");
+    const auto secondPublication = publication;
+    Expect(sampled.ApplySampledForegroundColor(publication, 0x00A1B2C3u) && publication != secondPublication &&
+               sampled.IsPaletteIntentCurrent(manualAuthority) && sampled.ForegroundColor() == 0xFFA1B2C3u &&
+               sampled.brushSettings.red == 0xA1 / 255.0 && sampled.brushSettings.green == 0xB2 / 255.0 &&
+               sampled.brushSettings.blue == 0xC3 / 255.0,
+           "palette-intent.successive-own-samples-keep-original-manual-authority-current");
+
+    auto stalePublication = originalPublication;
+    const uint32_t foregroundBeforeRefusal = sampled.ForegroundColor();
+    const uint32_t backgroundBeforeRefusal = sampled.BackgroundColor();
+    const double brushRedBeforeRefusal = sampled.brushSettings.red;
+    const double brushGreenBeforeRefusal = sampled.brushSettings.green;
+    const double brushBlueBeforeRefusal = sampled.brushSettings.blue;
+    Expect(!sampled.ApplySampledBackgroundColor(stalePublication, 0x00DEADBEu) &&
+               stalePublication == originalPublication && sampled.ForegroundColor() == foregroundBeforeRefusal &&
+               sampled.BackgroundColor() == backgroundBeforeRefusal &&
+               sampled.brushSettings.red == brushRedBeforeRefusal &&
+               sampled.brushSettings.green == brushGreenBeforeRefusal &&
+               sampled.brushSettings.blue == brushBlueBeforeRefusal && sampled.IsPaletteIntentCurrent(manualAuthority),
+           "palette-intent.refused-stale-sample-changes-no-color-authority-or-brush-state");
+    Expect(sampled.history.CurrentRevision() == sampledRevision && sampled.Generation() == sampledGeneration &&
+               sampled.history.UndoCount() == sampledUndoCount,
+           "palette-intent.sampled-colors-remain-outside-document-generation-and-history");
+
+    DocumentSession foregroundEqual;
+    foregroundEqual.CreateDocument(2, 2, true);
+    auto foregroundManual = foregroundEqual.CapturePaletteIntentAuthority();
+    auto foregroundPublication = foregroundEqual.CapturePaletteSampleAuthority();
+    const uint32_t equalForeground = foregroundEqual.ForegroundColor();
+    foregroundEqual.SetForegroundColor(equalForeground);
+    const auto foregroundPublicationAfterIntent = foregroundPublication;
+    Expect(!foregroundEqual.IsPaletteIntentCurrent(foregroundManual) &&
+               !foregroundEqual.ApplySampledForegroundColor(foregroundPublication, 0xFF102938u) &&
+               foregroundPublication == foregroundPublicationAfterIntent &&
+               foregroundEqual.ForegroundColor() == equalForeground && foregroundEqual.brushSettings.red == 0.0 &&
+               foregroundEqual.brushSettings.green == 0.0 && foregroundEqual.brushSettings.blue == 0.0,
+           "palette-intent.equal-explicit-foreground-invalidates-manual-and-publication-authority");
+
+    DocumentSession backgroundEqual;
+    backgroundEqual.CreateDocument(2, 2, true);
+    auto backgroundManual = backgroundEqual.CapturePaletteIntentAuthority();
+    auto backgroundPublication = backgroundEqual.CapturePaletteSampleAuthority();
+    const uint32_t equalBackground = backgroundEqual.BackgroundColor();
+    backgroundEqual.SetBackgroundColor(equalBackground);
+    const auto backgroundPublicationAfterIntent = backgroundPublication;
+    Expect(!backgroundEqual.IsPaletteIntentCurrent(backgroundManual) &&
+               !backgroundEqual.ApplySampledBackgroundColor(backgroundPublication, 0xFF102938u) &&
+               backgroundPublication == backgroundPublicationAfterIntent &&
+               backgroundEqual.BackgroundColor() == equalBackground,
+           "palette-intent.equal-explicit-background-invalidates-manual-and-publication-authority");
+
+    DocumentSession foregroundAba;
+    foregroundAba.CreateDocument(2, 2, true);
+    auto foregroundAbaManual = foregroundAba.CapturePaletteIntentAuthority();
+    auto foregroundAbaPublication = foregroundAba.CapturePaletteSampleAuthority();
+    const uint32_t foregroundOriginal = foregroundAba.ForegroundColor();
+    foregroundAba.SetForegroundColor(0xFF123456u);
+    foregroundAba.SetForegroundColor(foregroundOriginal);
+    const auto foregroundAbaPublicationBeforeRefusal = foregroundAbaPublication;
+    Expect(!foregroundAba.IsPaletteIntentCurrent(foregroundAbaManual) &&
+               !foregroundAba.ApplySampledForegroundColor(foregroundAbaPublication, 0xFF998877u) &&
+               foregroundAbaPublication == foregroundAbaPublicationBeforeRefusal &&
+               foregroundAba.ForegroundColor() == foregroundOriginal,
+           "palette-intent.foreground-a-b-a-refuses-old-manual-and-publication-authority");
+
+    DocumentSession backgroundAba;
+    backgroundAba.CreateDocument(2, 2, true);
+    auto backgroundAbaManual = backgroundAba.CapturePaletteIntentAuthority();
+    auto backgroundAbaPublication = backgroundAba.CapturePaletteSampleAuthority();
+    const uint32_t backgroundOriginal = backgroundAba.BackgroundColor();
+    backgroundAba.SetBackgroundColor(0xFF123456u);
+    backgroundAba.SetBackgroundColor(backgroundOriginal);
+    const auto backgroundAbaPublicationBeforeRefusal = backgroundAbaPublication;
+    Expect(!backgroundAba.IsPaletteIntentCurrent(backgroundAbaManual) &&
+               !backgroundAba.ApplySampledBackgroundColor(backgroundAbaPublication, 0xFF998877u) &&
+               backgroundAbaPublication == backgroundAbaPublicationBeforeRefusal &&
+               backgroundAba.BackgroundColor() == backgroundOriginal,
+           "palette-intent.background-a-b-a-refuses-old-manual-and-publication-authority");
+
+    DocumentSession paletteCommands;
+    paletteCommands.CreateDocument(2, 2, true);
+    auto swapManual = paletteCommands.CapturePaletteIntentAuthority();
+    paletteCommands.SwapPaletteColors();
+    Expect(!paletteCommands.IsPaletteIntentCurrent(swapManual),
+           "palette-intent.palette-swap-invalidates-manual-authority");
+    auto resetManual = paletteCommands.CapturePaletteIntentAuthority();
+    paletteCommands.ResetPaletteColors();
+    Expect(!paletteCommands.IsPaletteIntentCurrent(resetManual),
+           "palette-intent.palette-reset-invalidates-manual-authority");
+
+    DocumentSession maskPalette;
+    maskPalette.CreateDocument(2, 2, true);
+    maskPalette.AddLayerMask(true);
+    const uint32_t maskForeground = maskPalette.ForegroundColor();
+    const uint32_t maskBackground = maskPalette.BackgroundColor();
+    auto maskSwapManual = maskPalette.CapturePaletteIntentAuthority();
+    maskPalette.SwapPaletteColors();
+    Expect(!maskPalette.IsPaletteIntentCurrent(maskSwapManual) && maskPalette.maskPaintWhite &&
+               maskPalette.ForegroundColor() == maskForeground && maskPalette.BackgroundColor() == maskBackground,
+           "palette-intent.mask-target-swap-invalidates-authority-without-changing-colors");
+    auto maskResetManual = maskPalette.CapturePaletteIntentAuthority();
+    maskPalette.ResetPaletteColors();
+    Expect(!maskPalette.IsPaletteIntentCurrent(maskResetManual) && !maskPalette.maskPaintWhite &&
+               maskPalette.ForegroundColor() == maskForeground && maskPalette.BackgroundColor() == maskBackground,
+           "palette-intent.mask-target-reset-invalidates-authority-without-changing-colors");
+
+    DocumentSession owner;
+    owner.CreateDocument(2, 2, true);
+    const auto ownerManual = owner.CapturePaletteIntentAuthority();
+    DocumentSession foreign;
+    foreign.CreateDocument(2, 2, true);
+    auto foreignManual = ownerManual;
+    auto foreignPublication = owner.CapturePaletteSampleAuthority();
+    const auto foreignPublicationBefore = foreignPublication;
+    const uint32_t foreignBackground = foreign.BackgroundColor();
+    Expect(!foreign.IsPaletteIntentCurrent(foreignManual) &&
+               !foreign.ApplySampledBackgroundColor(foreignPublication, 0xFF112233u) &&
+               foreignPublication == foreignPublicationBefore && foreign.BackgroundColor() == foreignBackground,
+           "palette-intent.foreign-session-refuses-manual-and-publication-authority");
+    DocumentSession copied = owner;
+    Expect(!copied.IsPaletteIntentCurrent(ownerManual), "palette-intent.copied-session-refuses-manual-authority");
+    DocumentSession moved = std::move(owner);
+    Expect(!moved.IsPaletteIntentCurrent(ownerManual) && !owner.IsPaletteIntentCurrent(ownerManual),
+           "palette-intent.moved-session-and-source-refuse-original-manual-authority");
 }
 
 // ── Transform (C8, ported from legacy TransformTests, MaskTransformTests and DistortTests) ────────────────
@@ -7500,6 +7648,7 @@ int wmain(int argc, wchar_t** argv)
     TestNamingAndInsertion();
     TestPaletteColors();
     TestPaletteSampleAuthority();
+    TestPaletteIntentAuthority();
     TestTransformGeometry();
     TestTransformDrag();
     TestTransformSnap();
