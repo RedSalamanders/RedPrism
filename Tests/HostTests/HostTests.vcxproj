@@ -175,6 +175,9 @@
     <ClCompile Include="JobActivityTests.cpp" />
     <ClCompile Include="PreviewMailboxTests.cpp" />
     <ClCompile Include="ContinuationQueueTests.cpp" />
+    <ClCompile Include="ContinuationAdjacentPreviewTests.cpp" />
+    <ClCompile Include="ContinuationPendingViewTests.cpp" />
+    <ClCompile Include="OpacityInputOrderTests.cpp" />
     <ClCompile Include="ContinuationReceiptTests.cpp" />
     <ClCompile Include="ContinuationRequestTests.cpp" />
     <ClCompile Include="HostPathReadTests.cpp" />

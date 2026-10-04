@@ -27,6 +27,14 @@ queue coalescence passes all 154 existing and 20 new controls plus all ARM64 bui
 typed host ordering, preserving gesture jobs, admission/accounting, first uploads and measured G1 remain open
 ([current checklist and evidence](../../TestRuns/DocumentRecordRoots_2026-10-03.md)).
 
+The full private immutable-root application and preserving-gesture metadata route now pass all three x64
+application configurations. All 613 owned preserving-route inputs match across profiles; its 20 live gesture/kind
+contexts require actual worker capture, reservation and retirement. Producer opacity input order passes 68
+independent controls and all six private profiles. The native adjacent-preview/order foundation passes all six
+forced-rebuild profiles with 96 new host controls and unchanged predecessor suites. Another 47 preserved typed-opacity core controls pass private Debug/Release/ASan,
+with all 321 Common/document-test/support inputs identical. Typed host acknowledgement and every closure caller, adjustment/display record
+placement, native root activation, H3/H4 and measured G1 remain unchecked.
+
 ## Implementation checklist
 
 - [x] Current fixture qualification — Fourteen supplied-trace controls and all original 125 transfer assertions

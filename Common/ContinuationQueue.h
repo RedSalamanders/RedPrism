@@ -104,6 +104,54 @@ template <typename Request> class ContinuationQueue final
         return ContinuationAdmission::Queued;
     }
 
+    // Preview callers opt into adjacent coalescing explicitly. The newest request replaces only the pending
+    // tail entry when its kind/document/ordinal directly follow that entry and Equivalent accepts their inputs.
+    // The caller chooses which kinds are safe to coalesce; refusal never invokes either callback or moves input.
+    // Neither callback may mutate/reenter this queue. Equivalent borrows its arguments only during this call.
+    template <typename Retire, typename Equivalent>
+    [[nodiscard]] ContinuationAdmission EnqueueAdjacent(std::uint64_t documentSerial, std::uint64_t ordinal,
+                                                        ContinuationKind kind, Request& input, Retire&& retire,
+                                                        Equivalent&& equivalent) noexcept
+    {
+        static_assert(std::is_nothrow_invocable_v<Retire&, Entry&&, ContinuationRetirement>);
+        static_assert(std::is_nothrow_invocable_r_v<bool, Equivalent&, const Request&, const Request&>);
+        if (ordinal == 0 || ordinal <= _lastOrdinal)
+        {
+            return ContinuationAdmission::InvalidOrder;
+        }
+
+        if (_count != 0)
+        {
+            const std::size_t tail = (_head + _count - 1) % kCapacity;
+            const Entry& previous = _entries[tail].value();
+            if (previous.kind == kind && previous.documentSerial == documentSerial && ordinal - previous.ordinal == 1 &&
+                equivalent(previous.input, input))
+            {
+                Entry superseded = std::move(_entries[tail].value());
+                _entries[tail].emplace(Entry{documentSerial, ordinal, kind, std::move(input)});
+                _lastOrdinal = ordinal;
+                retire(std::move(superseded), ContinuationRetirement::Superseded);
+                return ContinuationAdmission::Coalesced;
+            }
+        }
+
+        if (_count == kCapacity)
+        {
+            return ContinuationAdmission::Full;
+        }
+        const std::size_t tail = (_head + _count) % kCapacity;
+        _entries[tail].emplace(Entry{documentSerial, ordinal, kind, std::move(input)});
+        ++_count;
+        _lastOrdinal = ordinal;
+        return ContinuationAdmission::Queued;
+    }
+
+    // Bounded owner inspection only. The reference expires on the next queue mutation; workers never borrow it.
+    [[nodiscard]] const Entry* PendingAt(std::size_t offset) const noexcept
+    {
+        return offset < _count ? &_entries[(_head + offset) % kCapacity].value() : nullptr;
+    }
+
     // Peek metadata to merge commands with earlier recorded strokes. The reference expires at the next queue
     // mutation; it must never be borrowed by a worker or used to take a snapshot early.
     [[nodiscard]] const Entry* Front() const noexcept

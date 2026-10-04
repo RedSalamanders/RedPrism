@@ -35,13 +35,29 @@
     - [ ] Integrate typed opacity host ordering, coalescing and all closure continuations.
       - [x] Prepare private metadata-job input selection for recorded, history-free preview and typed closure intents.
       - [x] Privately qualify explicit same-opening adjacent preview coalescence without crossing terminal/history inputs.
+      - [x] Qualify producer admission/order primitives: 68 independent checks and all six profiles.
+      - [x] Qualify the native queue/order foundation: 96 new host controls, full x64 suites and all ARM64 cross-builds.
+      - [x] Commit and push the qualified native queue/order foundation.
+      - [x] Review 47 private typed opacity controls during preserved brush/warp/shape/lasso and nested transactions.
+      - [x] Pass all 6,226 private Debug document checks; preserve the first signed-depth compile failure.
+      - [x] Pass Release/ASan core suites with all 321 owned Common/DocumentTests/Support inputs identical.
+      - [ ] Complete typed host acknowledgement tests and qualify the full application before activation.
       - [ ] Bind owner request and acknowledgement sequences, then migrate every closure prerequisite.
       - [ ] Run complete host/runtime scenarios before activating any typed host path.
     - [ ] Route adjustment and display record construction through their admitted workers.
     - [ ] Qualify complete callers and exact source/evidence before native activation.
       - [x] Review fixture conversions and compile all 81 application caller files privately in Debug.
-      - [ ] Link the full application and qualify complete WARP/runtime scenarios and configuration gates.
+      - [x] Link the full private application and preserve all 7,585 preceding controls in Debug/Release WARP runs.
+      - [x] Qualify the full private application in x64 Debug/Release/ASan with unchanged owned sources.
+      - [ ] Qualify complete native caller activation and all ARM64 cross-builds.
     - [x] Qualify the separate native settled metadata worker step while legacy vector capture remains open.
+    - [x] Commit and push settled metadata, the ISA proof and harness fence (`ee1421b`).
+    - [x] Qualify preserved gesture/nested-transaction metadata in the separate private workspace.
+      - [x] Prepare constant-sized opening authority without retaining mutable/GPU stroke owners.
+      - [x] Review 187 independent live-context, stale-opening, no-op and nested history controls.
+      - [x] Qualify all 187 controls in complete Debug/Release/ASan document suites with identical owned inputs.
+      - [x] Qualify the full Debug WARP application and all 20 preserved worker contexts.
+      - [x] Qualify Release/ASan host scenarios before production activation.
 - [ ] Integrate document layer records, private mutation builders, complete reservations and retirement.
 - [ ] Qualify unchanged behavior/goldens, all six profiles and paired capture/mutation costs; archive exact evidence.
 - [ ] Update the owning contracts/checklists, commit and push the qualified integration.
@@ -77,6 +93,58 @@ The full private immutable-root application links successfully. Its first formal
 runtime because its guard points to the r7 collector failure. All 732 inputs / 213 evidence copies are verified;
 completion `9F04D0C38D6238729DF4962789AEC76AB7EF659025BB5AB5F1275565338F9724`.
 A fresh r2 build/runtime attempt uses the qualified r8 guard. No private WARP success is claimed yet.
+
+The r2 full Debug runtime exits 5 at the original keyboard-suite opacity assertion: it reads history before
+the settled opacity worker acknowledges. Its complete failure is preserved and independently verified:
+732 inputs / 219 evidence files; completion `A2A95E48FD6EB24EA7E4B6DCDB548AD8EFAF6A24394A72761BE854747AA87142`.
+The private fixture receives the same 10-second acknowledgement fence already qualified in native
+`Application.cpp`; its opacity, history and undo expectations remain unchanged. A fresh r3 full attempt follows.
+
+Preserved gesture metadata is prepared in `p1-metadata-live-proof`, a verified 610-file source copy of the
+full private caller candidate. A separate authority captures session/document/history/target state and opening
+serials for brush, warp, shape and lasso. It never follows or prolongs a mutable stroke; this avoids deferring
+the borrowed coverage engine's `EndStroke` to a worker. Pointer motion keeps its opening; close/reopen expires it.
+At nonzero history depth the worker prepares only the document, preserving the original outer opening and
+depth. Independent tests cover all four kinds, gesture motion, every reopening, two-level transactions and
+Undo/Redo. Review repairs immutable fixture construction and borrowed title lifetime. Full qualification remains open.
+
+### Full private callers and preserved metadata (2026-10-04)
+
+The full immutable-root application passes all 64 ordered stages and 7,585 preceding application controls,
+plus the exact 115 settled metadata controls, in Debug and Release. Debug r3's actual runtime exits zero
+(PID 34120); its collector still expects the older 79-control metadata count. The full failure archive is
+independently verified (732 inputs / 219 evidence; completion
+`2CD7298A8ACA3331DB7A685E791B94FD2BE5B7C8D9300B94BEB23AB24DD2D4B0`).
+The r4 collector compares the exact 115 native settled control names, retaining the successful r3 run and
+every compiler/test/tool input, product and log; only the collector differs. It does not claim the 24 temporary
+live-context reference checks as worker coverage. Release r5 freshly rebuilds and runs the full application.
+All completed copies and both manifests are independently verified. ASan r6 also passes the complete WARP run;
+the 610 private owned inputs are identical across all three profiles. Native activation and ARM64 gates remain open.
+
+| Full private application archive | Inputs / evidence | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-root-application-r4-Debug-qualified-private-full-application` | 732 / 237 | `59C6BCFE85EC6E70F40CC5E75A93404B75058833537AF1118D0D7F5948812B1A` |
+| `p1-root-application-r5-Release-qualified-private-full-application` | 732 / 21 | `43FBC9468FDE9D92D489524A385ED8589C2DB9C8B0775D88C1F8E3C1A7242250` |
+| `p1-root-application-r6-ASanDebug-qualified-private-full-application` | 733 / 22 | `0171B519899438DCFFD2883A9176780BC2E8D2977E3368333BE6606A90E54361` |
+
+The preserved-context candidate passes all 5,992 preceding document/draft/metadata/typed-opacity controls and
+187 new unique controls in full Debug and Release document suites. They include all 16 kind/gesture pairs,
+pointer motion, every close/reopen identity, marquee reopening, two-level history, original/final Undo/Redo,
+cancel/fault preservation, no-op redo and stale session/target/history guards. Its admission/caller static
+proof also builds. The complete host candidate adds 20 literal worker contexts and four outer-transaction
+checks, requiring admitted capture and complete worker retirement; their runtime qualification is pending.
+ASan also passes the complete document suite. All 318 Common/document-test/support entries have identical paths,
+lengths and hashes across the three profiles. A separate read-only review finds no concrete authority/history/
+lifetime defect. The full Debug WARP application passes all 139 metadata host controls across 43 cases,
+including those 20 real worker contexts; Release/ASan host qualification is pending. Debug host archive has
+735 inputs / 23 evidence files, completion `5DE699B87FFE133066F2FB7B620EDA1F55CEFD39FF448A45299EEEB054A52EE1`.
+Every completed copy and manifest is independently verified before the next phase.
+
+| Preserved metadata document archive | Inputs / evidence | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-preserved-metadata-private-r1-Debug-qualified-private-document-suite` | 682 / 173 | `62D91DF4B4E945CE9294672267F7E6362041301F12C94E42CECD7D5BAD3D2492` |
+| `p1-preserved-metadata-private-r2-Release-qualified-private-document-suite` | 682 / 170 | `FB01B61CEF6FB54D546659059BA39749EF599ED0BE71B66169305EFBC5718AB2` |
+| `p1-preserved-metadata-private-r3-ASanDebug-qualified-private-document-suite` | 683 / 174 | `E4FF7EE32F7947FDE8D89993E705CD81715AB0F00FF4BECE8CB5BBA51F020396` |
 
 ### Adjacent preview queue primitive (2026-10-04 local)
 
@@ -610,6 +678,12 @@ the 43-case summary. Native r5 retains the byte-identical Debug result and runs 
   the live edit; discard/settle policy runs only after successful read and the existing user decision.
 - [ ] Preserve current color-panel, group and live-gesture/nested semantics. Migrate every `CloseOpacityEdit` caller
   through acknowledged prerequisites before removing the reference constructor.
+- [ ] Preserve a canvas press and its subsequent samples while opacity closure waits. Capture document/layer/tool
+  authority and event-time document coordinates/modifiers; use a bounded reusable owner buffer, explicit capacity
+  refusal and an observable terminal outcome. Hand/Zoom and other view input remain responsive. Do not replay a
+  press against a newer viewport, target or tool, drop a physical release, or retain capture after release/cancel.
+  Replay has a measured owner-pump budget; it must not execute an accumulated stroke in one UI callback. Test held
+  closure with Down/Move/Up, capture loss, changed target/document, overflow, worker failure and shutdown.
 - [ ] Test queued and superseded ticks, closure during held work, undo/redo, return-to-start, Escape, target/document
   change, equal late commit, failed read/admission/allocation, stale epoch, shutdown and complete worker retirement.
   Preserve all existing numeric expectations and qualify all six profiles before activation/commit.
@@ -629,3 +703,97 @@ including refusal and stale completion. Account actual container capacity and al
 incremental storage indexes and constant-time admission remain H3 until separately qualified. Compare 1/100/10000
 record captures and mutations with the retained vector reference, retaining literal data/checksums and raw
 measurements. No G1 improvement is claimed from source structure alone.
+
+### Preserved metadata full application matrix (2026-10-04)
+
+The complete private application now passes Debug, Release and ASan Debug: 64 ordered stages, all 7,585 preceding
+application controls, 115 unchanged settled metadata checks, and 24 live-context checks across 20 gesture/kind
+cases and four nested outer-transaction cases. The latter checks require actual capture under reservation and
+worker retirement, in addition to literal full-document, target, original gesture and history-depth results.
+Every completed archive manifest and copied source/evidence file is independently verified before further work.
+
+| Archive suffix | Inputs / evidence | Completion SHA256 |
+| --- | --- | --- |
+| `preserved-application-r1-Debug-qualified-private-full-application` | 735 / 23 | `5DE699B87FFE133066F2FB7B620EDA1F55CEFD39FF448A45299EEEB054A52EE1` |
+| `preserved-application-r2-Release-qualified-private-full-application` | 735 / 23 | `CDC7B3C4C83AA3198F27B68403B27D16E55AE87965D556DAB36E348A9C7C9570` |
+| `preserved-application-r3-ASanDebug-qualified-private-full-application` | 736 / 24 | `0869F35C51784C171B50FE7F865CCC9E09E2C1B5D971B65516E674C78D63F381` |
+
+The unchanged source set and retained native root/typed closure reference constructors are still activation
+requirements. The private document root candidate is not activated while owner opacity/display construction can
+clone records. These runs qualify behavior and lifetime; they establish no UI timing bound or G1 completion.
+
+### Producer opacity input order (2026-10-04)
+
+`OpacityInputOrder` separates a field's accepted producer stream from the model's acknowledged edit opening.
+Proposal is allocation-free and consumes no sequence on refused admission; acceptance consumes a move-only
+proposal once. An accepted terminal or generic barrier closes the stream. Exact controller/epoch checks refuse
+stale, moved-from and foreign proposals. Exhaustion refuses further admission before integer wrap.
+
+The cheaper-agent tests are reviewed by the primary, who adds refused-terminal admission, empty-barrier,
+foreign-proposal ownership and epoch-exhaustion controls. All 68 unique literal controls, all 154 preceding queue
+controls and all 20 qualified adjacent-preview controls pass Debug/Release/ASan runtime; all three ARM64 profiles
+cross-build. Thirteen compile-time assertions cover ownership and nonthrowing operations. This is a primitive
+proof; model acknowledgement, typed host routing and closure callers remain open.
+
+`p1-opacity-input-order-r1-qualified` has 453 inputs and 52 evidence files; all 505 archived copies are independently
+verified. Completion: `6AC460AEACF6623DA5CE5292F3749D3AF1C4DF3E9D56C46E697911FE7BA3E7BA`;
+source manifest: `6CBADAAB16891E553E936B989C6E6FFF1E12AFA4B81897667547533C183C9DED`;
+evidence manifest: `EBA4195521B5C1FD28B1DC24B94EE78B8A2A45F6F4C28AAD700727C08A4D1E6B`.
+
+The primary's next private host candidate admits preview/terminal input, binds a separate model opening, builds
+record/history output on workers and acknowledges only checked publication. Pending adjacent ticks coalesce;
+an in-flight preview with a newer tick or terminal in its own uninterrupted stream must retire without apply.
+Selected command/write closure becomes an acknowledged prerequisite. Pointer/lifetime closure and complete
+runtime scenarios remain required before native root activation. The opening checklist keeps them unchecked.
+
+### Typed host candidate and preserved opacity core (2026-10-04)
+
+The primary-owned private candidate separates accepted producer input, model opening, and acknowledged displayed
+value. Preview publication and original-to-final history construction use admitted metadata jobs. A selected
+dependent command or output waits for closure acknowledgement; refused or superseded previews do not publish.
+All closure callers, pointer input, replacement/failure/shutdown scenarios and native activation remain open.
+
+The reviewed 47 new document controls preserve live brush, warp, shape and lasso openings, refusal after reopening,
+nested outer history and return-to-start redo. The first Debug attempt fails `/W4` on signed history-depth comparison;
+its source and failure are archived before changing only the test parameter's type. The repaired full Debug suite
+passes 6,226 checks, including all 6,179 predecessor checks. Release and ASan Debug also pass; all 321 owned
+Common/DocumentTests/Support inputs are identical across these three profiles.
+
+| Private archive | Inputs / evidence | Completion SHA256 |
+| --- | --- | --- |
+| `p1-opacity-host-core-private-r1-Debug-failure` | 690 / 159 | `04E06E8A636E415A10002F14B8E571E3408E8B22073532A3F63CB37D22A44886` |
+| `p1-opacity-host-core-private-r2-Debug-qualified-private-document-suite` | 690 / 174 | `2CC48A035DB132568C9DE5BB7699359F602355510D19F55AB8A07160DAF3A9D0` |
+| `p1-opacity-host-core-private-r3-Release-qualified-private-document-suite` | 691 / 171 | `C5BBE15784E8604E42008D58DE11016858EEAF788F6E3A2DD3670028DD63A0DD` |
+| `p1-opacity-host-core-private-r4-ASanDebug-qualified-private-document-suite` | 692 / 175 | `5C6DF3B8E6138EC41AAD6B1EB25F21BADB537BC3104F13C6C545B0CE54DBFA8D` |
+| `p1-opacity-host-application-r1-Debug-compiled-private-full-application` | 743 / 12 | `5B17355ACD2CE223C88513B09AD98BE599731106B0B8C1A6310322D13724237C` |
+
+All copied sources and evidence are independently byte/length/SHA verified. The application r1 proof is compile/link
+only. A subsequent candidate adds separate callback admission/replay, acknowledgement fences in existing harnesses,
+exact invocation-only fault injection, and 26 new typed host controls. Its full Debug application qualification is in
+progress. Windows/clipboard runtime is serialized behind the native primitive matrix. No typed host runtime or UI
+latency result is claimed from compile success.
+
+The first complete host attempt (`application-r2-Debug`) stops at the held-view assertion after preceding opacity
+cases pass. Its tiny 4x3 fixture can already be at maximum zoom, so the next fixture sets a known starting zoom and
+restores the original viewport. The primary adds four target-order receipt controls: stale old-target preview and
+terminal, harmless equal late terminal, and an independent commit on the newly acknowledged target. A final
+worker cancel closes the fixture's field before subsequent stages. The next attempt requires 31 new controls;
+all predecessor literals and stage order remain required. The r2 failure archive has 744 inputs and 222 evidence
+files, independently verified before repair; completion
+`321AE2F95187A0FD5CA585C2781A6D65CB55E23626DE98CBDACF55B024E57D17`.
+
+### Native queue and opacity order foundation (2026-10-04)
+
+All six fresh forced-rebuild processes finish with exit zero. Skills and formatting gates pass. Full x64 Debug,
+Release and ASan Debug suites retain every predecessor assertion and all 64 application stages, including 7,585
+preceding application controls and 139 settled/live-reference metadata controls. The normal HostTests run adds
+20 adjacent-preview, eight bounded pending-view and 68 producer-order checks; ASan also repeats them in its
+stress run. All three ARM64 configurations cross-build. This is foundation qualification, with no native typed
+host routing, immutable document-root activation, ARM64 runtime, UI timing or G1 claim.
+
+The immutable archive `p1-opacity-order-native-r1-qualified` retains 682 source inputs, 211 evidence files, actual
+process receipts, 60 fresh EXE/PDB products and complete logs. All 893 copied inputs/evidence entries are
+independently length/SHA verified before further native changes. Completion:
+`9F7C48D0C6406049F4442BD0292CF70112A5059855A006C98D6991E9C1DBB14B`;
+source manifest: `60487AA6CDE8EF136E1E77F93AB1F1BF6EDB49D927A9A4C8CA5E5584C6050CF7`;
+evidence manifest: `B6D652308F155B4F8B25BB5BD50FF8D3A3C361E410BEBB97FC62CFA737AFA827`.

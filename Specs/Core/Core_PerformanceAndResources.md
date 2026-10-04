@@ -362,6 +362,19 @@ the pending input and invalidates a refinement; it never repeatedly cancels the 
 queue is a fixed eight-entry ring. Both structures allocate no container storage. `HistoryWork` and `StrokeReplay`
 hold only ordering/state metadata; P1 owns retained stroke samples, and P0.7 accounts for their bytes.
 
+`ContinuationQueue::EnqueueAdjacent` permits an explicit nonthrowing equivalence predicate for pending preview
+inputs. It replaces only the immediately preceding tail with the same document, kind and consecutive shared
+ordinal; a terminal, other command or ordinal gap prevents replacement. Refusal retains incoming ownership.
+The predicate borrows inputs only for the call and cannot reenter the queue. `PendingAt` exposes const pending
+entries by bounded ring offset without allocation or consumption; references expire on the next queue mutation.
+
+`OpacityInputOrder` is an owner-only, allocation-free producer admission primitive. A proposal consumes no
+sequence or stream until accepted after queue admission. Controller/epoch checks consume an accepted proposal
+once; move consumes the original proposal. Accepted terminals/barriers close the producer stream. Exhaustion
+refuses before integer wrap. Workers receive scalar stamps and never proposals or a controller pointer.
+Producer stream identity is distinct from the model's acknowledged edit opening and history authority.
+These primitives alone do not activate typed opacity worker routing or establish a UI timing bound.
+
 Continuation retirement uses caller-supplied, non-throwing callbacks with no retained callable, allocation,
 additional queue storage or worker. At most eight entries retire per TakeReady/Clear call. Queue mutation precedes
 the callback; detached ownership survives until callback return or transfer. Callbacks only publish/transfer owned

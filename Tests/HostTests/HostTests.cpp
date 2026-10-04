@@ -5,6 +5,8 @@
 #include "CanvasViewport.h"
 #include "CommandBindings.h"
 #include "CommandLine.h"
+#include "ContinuationAdjacentPreviewTests.h"
+#include "ContinuationPendingViewTests.h"
 #include "ContinuationQueueTests.h"
 #include "ContinuationReceiptTests.h"
 #include "ContinuationRequestTests.h"
@@ -31,6 +33,7 @@
 #include "Localization.h"
 #include "MemoryAdmissionTests.h"
 #include "MemoryBenchmark.h"
+#include "OpacityInputOrderTests.h"
 #include "OwnerWorkMultiplexerTests.h"
 #include "PerfRootTests.h"
 #include "PipelineTraceTests.h"
@@ -1810,6 +1813,9 @@ int wmain(int argc, wchar_t** argv)
     gFailures += RunPixelRecycleTests();
     gFailures += RunPreviewMailboxTests();
     gFailures += RunContinuationQueueTests();
+    gFailures += RunContinuationAdjacentPreviewTests();
+    gFailures += RunContinuationPendingViewTests();
+    gFailures += RunOpacityInputOrderTests();
     gFailures += RunContinuationReceiptTests();
     gFailures += RunContinuationRequestTests();
     gFailures += RunHostPathReadTests();

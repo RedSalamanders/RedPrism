@@ -10,7 +10,7 @@
 - [x] Reparse the unchanged failed image and four preceding images with the unchanged allowlist.
 - [x] Verify the completed private proof archive before native activation.
 - [x] Complete the native metadata runtime/build matrix and update its checklist.
-- [ ] Commit and push the qualified step.
+- [x] Commit and push the qualified step (`ee1421b`).
 
 ## Current evidence and proof
 

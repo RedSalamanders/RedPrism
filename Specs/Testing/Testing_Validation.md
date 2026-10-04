@@ -11,6 +11,18 @@ before a phase is Done. Screenshot policy for chrome lives here so later phases 
 
 ## Entrypoint
 
+### Producer input ordering primitives
+
+Normal `HostTests` runs `continuation-adjacent-preview.*`, `continuation-pending-view.*` and
+`opacity-input-order.*`. Preserve all 154 preceding queue controls. Adjacent preview tests cover exact tail
+equivalence, document/kind/ordinal barriers, full-ring replacement, refused ownership and single retirement.
+Pending views check literal order before/after wrap, no consumption and empty/full/maximum-offset bounds.
+Opacity producer tests cover refused admission, fresh/continued streams, terminal/barrier ordering, stale,
+foreign and moved proposals, literal counters and checked integer exhaustion. Compile-time checks require
+move-only proposals, stable controllers and nonthrowing operations. Full x64 Debug/Release/ASan suites and
+all three ARM64 cross-builds precede closure. Model acknowledgement and actual typed host/lifetime scenarios
+remain separate requirements; these tests alone do not qualify G1.
+
 ### Immutable record primitive foundation
 
 Normal `DocumentTests` runs `document-record-root.*`: 10,000-record zero-copy capture/non-const read, retained
