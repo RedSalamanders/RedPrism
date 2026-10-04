@@ -1,5 +1,15 @@
 # P1.3 — All Layers wand New-selection readback
 
+## Latest receipts (r17–r21)
+
+- [x] Full x64 Release r19 passes on freeze `D8F949825F1769BF6A18FDFF5175D91CD9AE2E8A7C832CD319C9D469B5A45826`.
+- [x] x64 Debug analysis r21 passes on repaired-fixture freeze `1B98AA514D4105212784C41205917FE1BA449752B537821CC5FF9A7C5950CDC4`.
+- [x] Independent archive receipts for r17–r21 match each archived run's completion, source/evidence manifests, copy count and actual exit.
+- [ ] Debug r17 runtime fails the existing other-history readiness assertion; cause remains unassigned.
+- [x] Preserve Release r18's vcpkg lock failure before compilation; the later serial Release r19 run passes.
+- [x] Preserve Debug analysis r20's tautological-fixture failure; r21 repairs it by deriving logical bytes from captured canvas width and height while retaining expected literal `32`.
+- [ ] Full current Debug/Release/ASan matrix, G1, and parent P1 qualification remain open. The r19 Release and r21 analysis receipts are separate runs on different freezes; they do not qualify a combined matrix.
+
 ## Delivery checklist
 
 - [x] Audit the settled New-selection command, active-layer worker publication, utility readback and ordered completion owners.
@@ -8,7 +18,7 @@
 - [x] Full Debug r12 qualifies the real command, captured settings, exact visible composite, cancellation, stale authority, failures, ordinal barriers, no-work inputs and actual record-capacity refusal; 51 core and 111 host checks pass.
 - [x] Full Debug r12 proves Map/utility release before the prepared CPU gate and off-owner readback/completed-composite aggregate retirement; actual device recovery after copy also passes.
 - [ ] Extend graph-specific shutdown/lifetime coverage before capture, while rows are lent and after-ready, including complete last-owner retirement.
-- [ ] Run the full current x64 Debug/Release/ASan, analysis and ARM64 cross-build gates; preserve preceding controls and failed receipts.
+- [ ] Run the full current x64 Debug/Release/ASan matrix and ARM64 cross-build gates; preserve preceding controls and failed receipts. Release r19 and analysis r21 are separate receipts, not a combined matrix.
 - [ ] Measure the original P1 G1 rows on A/B and fix overruns; qualify the whole P1 caller integration before native activation.
 - [ ] Commit and push the qualified bounded slice; integrate durable contracts and update the parent ledger.
 
@@ -16,7 +26,9 @@ Status: ACTIVE under [P1](UiNeverBlocks_2026-09-22.md), private candidate on `co
 Full Debug r11 passed the 51 core checks and failed one new device fixture; its verified failure archive is retained.
 The repaired actual device-recovery fixture passes full Debug r12 and full Release r14. ASan build r15 fails the
 unchanged ISA scanner on dispatch-table bytes; the shared request descriptor repair passes full ASan r16.
-Debug/Release on that repaired snapshot, static analysis, ARM64 cross-builds, shutdown/lifetime and G1 remain due.
+Later attempts are listed above and in the receipt ledger. Debug r17 and analysis r20 failures remain recorded;
+Release r19 and analysis r21 pass only their respective configurations/scopes. ARM64 cross-builds,
+shutdown/lifetime and G1 remain due.
 [Receipts and scope](../../TestRuns/WandCompositeReadback_2026-10-04.md).
 This slice covers settled **New** with All Layers enabled. Add/Subtract and coexisting live tool contexts remain
 on their current synchronous paths and stay in P1's remaining work. No large-image or G1 qualification is claimed.

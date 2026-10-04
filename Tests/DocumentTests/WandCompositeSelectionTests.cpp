@@ -385,12 +385,15 @@ void CompositeMemoryPlan()
     noLayers.height = 2;
     empty.ReplaceDocument(std::move(noLayers), std::nullopt);
     const auto plan = empty.PlanWandCompositeSelectionMemory(Vec2{0.5, 0.5}, CompositeSettings());
-    constexpr std::size_t kLogicalCompositeBytes = 4u * 4u * 2u;
-    const std::uint64_t requiredCompositeBytes = PixelBuffer::RequiredBytes(kLogicalCompositeBytes);
+    const auto& capturedDocument = empty.Document();
+    const auto logicalCompositeBytes = capturedDocument ? static_cast<std::size_t>(capturedDocument->width) *
+                                                              static_cast<std::size_t>(capturedDocument->height) * 4u
+                                                        : 0u;
+    const std::uint64_t requiredCompositeBytes = PixelBuffer::RequiredBytes(logicalCompositeBytes);
     Expect(plan.has_value(), "memory.empty-document-plan-is-available");
     if (plan.has_value())
-        Expect(!plan.value().transparentShortcut && kLogicalCompositeBytes == 32u &&
-                   requiredCompositeBytes >= kLogicalCompositeBytes &&
+        Expect(!plan.value().transparentShortcut && logicalCompositeBytes == 32u &&
+                   requiredCompositeBytes >= logicalCompositeBytes &&
                    plan.value().sampledPixelsBytes == requiredCompositeBytes && plan.value().privateSourceBytes == 0 &&
                    plan.value().preparationBytes >= requiredCompositeBytes &&
                    plan.value().retirementBytes >= requiredCompositeBytes,
