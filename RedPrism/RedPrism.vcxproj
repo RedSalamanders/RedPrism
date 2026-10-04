@@ -162,6 +162,7 @@
     <ClInclude Include="HistoryRestoreTestGate.h" />
     <ClInclude Include="SelectionCommandTestGate.h" />
     <ClInclude Include="LayerMetadataTestGate.h" />
+    <ClInclude Include="ModalProbePrompts.h" />
     <ClInclude Include="SelectionNudgeTestGate.h" />
     <ClInclude Include="SelectionMoveCloseTestGate.h" />
     <ClInclude Include="WandLayerHostTestGate.h" />
@@ -321,6 +322,7 @@
     <ClCompile Include="ApplicationCanvasLifetime.cpp" />
     <ClCompile Include="ApplicationCanvasBrushLifetimeCancelSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushLifetimeAcceptedSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeModalSelfTest.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />

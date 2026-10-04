@@ -2328,6 +2328,9 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCanvasBrushLifetimeAcceptedSelfTest\n");
     if (const int canvasLifetimeAccepted = RunCanvasBrushLifetimeAcceptedSelfTest(); canvasLifetimeAccepted != 0)
         return canvasLifetimeAccepted;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeModalSelfTest\n");
+    if (const int canvasLifetimeModal = RunCanvasBrushLifetimeModalSelfTest(); canvasLifetimeModal != 0)
+        return canvasLifetimeModal;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;

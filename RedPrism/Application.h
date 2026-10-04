@@ -241,6 +241,7 @@ class Application final : public ChromeEvents
     int RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept;
     int RunCanvasBrushLifetimeCancelSelfTest() noexcept;
     int RunCanvasBrushLifetimeAcceptedSelfTest() noexcept;
+    int RunCanvasBrushLifetimeModalSelfTest() noexcept;
     CanvasBrushInput _canvasBrushInput;
     CanvasBrushSample _canvasBrushLastSample{};
     ContinuationReceipt _canvasBrushReceipt;
