@@ -11,6 +11,7 @@
 - [x] Normal managed Debug build-only: all five images compile/link, matching-PDB ISA controls and actual DxUi provenance pass; 733 archived inputs are independently verified. This does not qualify runtime or native activation.
 - [x] Integrate the privately qualified lifetime source and portable project entries into the managed candidate; skills/formatting pass all 620 files.
 - [x] Fresh normal managed x64 Debug/Release/ASan suites and ARM64 cross-builds pass for the combined lifetime/build/fixture candidate. All 627 owned inputs match; exact 78-stage / 8,962-control application registry, bounds suite, scanner controls and screenshots pass. Static analysis, diagnosis of the intermittent first-clean-run Wand failure and native activation remain open; [evidence](../../TestRuns/P1NormalIntegration_2026-10-04.md).
+- [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
 - [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
@@ -27,11 +28,14 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current integration: the corrected 18-case color-display host route is implemented in the managed candidate.
-Its standalone document suite passes 6,491 controls. The latest full attempts stopped before the application
-registry on process/tool-start or clipboard fixture failures; native static analysis and the full current
-matrix remain required. Failed attempts and reviewed stack-buffer repairs are retained in
-[DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). This does not change any P1 exit row.
+Current integration: the corrected 18-case color-display host route is implemented and pushed in the managed
+candidate (`92bd2ae`). The earlier r21 document suite passed 6,491 controls; that result does not qualify later
+stack/scratch repairs. Full attempts stopped before the main application registry on process/tool-start or
+clipboard fixture failures. Analysis r25 failed PowerShell initialization (`0xC0000142`); r26 ran the same build
+entrypoint in the initialized host but failed tool discovery before compilation. Both are independently
+archived. Qualification waits for Windows process/resource creation to recover; native analysis, the full
+current matrix, remaining code routes and G1 measurements are still required. See
+[DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). Every P1 exit row remains unchanged.
 
 ## What this milestone delivers
 
