@@ -14,6 +14,9 @@
 - [x] Preserve and push the reviewed complete-color-display host and stack/scratch candidate as WIP checkpoint `92bd2ae`; it is not a qualified phase exit or native activation.
 - [x] Managed default-desktop Debug analysis qualifies the repaired candidate: all five images, unchanged stack thresholds, concurrency SAL controls, ISA/PDB/scanner gates and provenance pass; r31's 754 inputs / 1,038 archive copies are verified. The full current runtime matrix and native activation remain open.
 - [x] First fresh current x64 Debug full suite and all three ARM64 cross-builds pass on identical 754 inputs; 6,491 document / 8,980 application controls, exact 78 stages and 12 new scratch controls are verified. Release/x64 ASan runtime and native activation remain open.
+- [x] Preserve Release r36's ISA refusal and qualify fixture-isolated Release r37 without changing assertions, scanner rules or the ISA floor: all 6,491 document / 8,980 application controls and 78 stages pass.
+- [x] Preserve ASan r38's delayed clipboard failure, ARM64 r39–r41 cross-build receipts, and ASan r42's IoTests clipboard failure with its independently verified archive; record r43–r45 as diagnostic station-creation failures without assigning a cause.
+- [x] Reproduce the native null-owner concurrent clipboard-scope hazard with read-only r49/r50 diagnostics and integrate a fresh worker-owned message HWND scope plus actual two-worker Inspect/Copy regression. The original r47/r48 clipboard actor remains unidentified; full-suite ASan r51 exits 0 with all 146 clipboard-transfer checks passing, unchanged 8,980 application controls / 78 stages, 6,491 document controls, and 1,028 independently verified archive copies.
 - [ ] P1.3: finish real sampler, wand and clone all-layers readback callers and device-loss/restart/fallback coverage.
 - [ ] P1.4–P1.6: finish remaining stroke/tool producer ordering, shape redraw, geometry/coverage/display ownership and lifetime routes.
 - [ ] P1.7–P1.8: close clipboard prefill/retry/publication/end-session residuals and measured file/size apply overruns.
@@ -30,12 +33,31 @@
 items identify qualified slices, not compliance with the overall G1 latency contract. Native ARM64 execution
 is unavailable on this host; cross-build evidence does not substitute for it.
 
-Current integration: the repaired complete-color-display route passes managed default-desktop Debug analysis
-and the full Debug runtime, including all 18 new actual-host cases. All ARM64 configurations cross-build.
-The exact 754 owned inputs match analysis and every current qualified attempt; every archive copy is verified.
-Fresh Release and x64 ASan full runtime, native activation, the remaining P1 code routes and original G1
-measurements still precede P1 Done. Earlier interrupted/failed attempts are retained in
-[DeferredColorDisplay](../../TestRuns/DeferredColorDisplay_2026-10-04.md). Every P1 exit row remains unchanged.
+Current integration: complete-color-display Release r37 passes its full x64 suite with the exact 6,491 document /
+8,980 application controls and 78 stages; its 754 inputs and 1,021 archive copies are independently verified.
+The subsequent x64 ASan Debug r38 full test exited 1 after three of 45 `clipboard-delayed` controls failed and
+the application self-test exited 5. Its original failure archive (1,028 copies) is preserved and independently
+verified; no sanitizer violation is established. ARM64 Debug r39, Release r40 and ASan Debug r41 cross-builds
+exited 0 on the same 754-input freeze, with 956, 956 and 960 independently verified archive copies respectively;
+these establish no runtime result. Debug r32 and analysis r31 precede fixture isolation and do not qualify the
+repaired fixture source. x64 ASan r42 exited 1 after build and Host/Document/Composition passed;
+IoTests reported 11 failures in 139 clipboard-transfer checks and stopped before the application (zero stages).
+Its archive preserves 1,028 independently verified copies. Diagnostic station attempts r43–r45 failed before
+child startup with `CreateWindowStationW` errors 5, 5 and 183. Clipboard-holder retries later succeeded, but
+neither those records nor the station errors establish the cause. r46 is build-only. Focused ASan runtime r47
+and r48 failed at native clipboard calls with error 1418; both archives are independently verified and the
+original actor is unknown. Read-only r49's 100 successful Unicode clipboard opens/closes do not establish
+application qualification or universal stability. Read-only concurrent r50 reproduces the null-owner scope
+hazard and confirms that distinct owner HWNDs yield busy refusal without breaking the first scope. Worker
+Inspect/Copy now use a fresh worker-owned message HWND and RAII scope, with an actual two-worker regression.
+Full x64 ASan Debug r51 exits 0; all 146 clipboard-transfer checks pass, the hidden WARP application registry
+records the unchanged 8,980 controls and 78 stages, and the document registry records 6,491 controls. Crash,
+ASan-detection, ISA and other test gates pass; 1,028 archive copies are independently verified with completion
+SHA-256 `AC69CB61894D66FC58A4ED78AA3856CE6D48110270FFB7EDF435FC55A9BDA2CE`. Native activation, remaining
+P1 code routes and original G1 measurements still precede P1 Done. The HWND fix still needs its current
+Debug/Release/static-analysis/ARM64 cross-build matrix; real sampler, wand and clone all-layers callers and
+native activation remain open. [Exact evidence and qualification limits](../../TestRuns/DeferredColorDisplay_2026-10-04.md).
+Every P1 exit row and original G1 requirement remains unchanged; the milestone is incomplete.
 
 ## What this milestone delivers
 

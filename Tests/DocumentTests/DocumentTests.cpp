@@ -5355,6 +5355,113 @@ void TestFilters()
     }
 }
 
+// Legacy sharedEditorsKeepPixelsDynamicAndSupportCancel. Each kind is a separate fixture so the baseline
+// test image needs no indirect enum dispatch across calls that mutate the session.
+template <AdjustmentKind kind> void TestAdjustmentLayerSharedEditor()
+{
+    DocumentSession session = PixelEditSession(2, 2);
+    const Raster white = SolidStraight(2, 2, 1, 1, 1);
+    const Guid baseID = InsertPixels(session, white, L"White");
+    session.AddAdjustment(kind);
+    const std::optional<Guid> id = session.AdjustmentEditingID();
+    Expect(id.has_value() && session.ActiveLayer()->adjustment.has_value(), "adjustlayer.editor-opens");
+    const LayerAdjustment created = session.ActiveLayer()->adjustment.value();
+    Expect(session.BeginAdjustmentEditing(id.value(), white) && session.AdjustmentOriginal().has_value() &&
+               session.AdjustmentOriginal()->kind == kind,
+           "adjustlayer.editor-begins");
+    if constexpr (kind == AdjustmentKind::Levels)
+    {
+        Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady &&
+                   session.PendingColorEdit()->histogram[0][255] == 4,
+               "adjustlayer.levels-histogram");
+        LevelsSettings settings = session.PendingColorEdit()->settings.levels;
+        settings.ranges[0].outputWhite = 0;
+        session.UpdateLevels(settings, true);
+        Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
+        session.UpdateLevels(settings, false);
+        Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Curves)
+    {
+        FilterSettings settings = session.PendingColorEdit()->settings;
+        settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
+        session.UpdateColorEdit(settings, true);
+        Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Exposure || kind == AdjustmentKind::GradientMap ||
+                       kind == AdjustmentKind::Grain)
+    {
+        Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == AdjustmentFilterKind(kind),
+               "adjustlayer.filter-kind");
+        FilterSettings settings = session.PendingColorEdit()->settings;
+        if (kind == AdjustmentKind::Exposure)
+        {
+            settings.exposure.exposure = 1;
+        }
+        else if (kind == AdjustmentKind::GradientMap)
+        {
+            settings.gradientMap.reversed = true;
+        }
+        else
+        {
+            settings.grain.amount = 70;
+        }
+        session.UpdateColorEdit(settings, true);
+        const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
+        Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
+                   live.Grain() == settings.grain,
+               "adjustlayer.filter-live");
+        session.CommitColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Hsv)
+    {
+        HueSaturationSettings settings = session.PendingColorEdit()->settings.hsv;
+        settings.range = ColorRange::Reds;
+        Adjust::RangeOf(settings).hue = 80;
+        Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
+        settings.invertRange = true;
+        session.UpdateHueSaturation(settings, true);
+        Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
+        session.CommitColorEdit();
+    }
+    const LayerAdjustment saved = session.ActiveLayer()->adjustment.value();
+    Expect(!session.AdjustmentEditingID().has_value() && !session.HasColorEdit() &&
+               Find(session.Document(), baseID)->asset->image == white && !session.ActiveLayer()->asset.has_value(),
+           "adjustlayer.commit-keeps-pixels-dynamic");
+    session.SetAdjustmentEditingID(id);
+    Expect(session.BeginAdjustmentEditing(id.value(), white), "adjustlayer.reopens");
+    if constexpr (kind == AdjustmentKind::Levels)
+    {
+        Expect(session.PendingColorEdit()->settings.levels == saved.levels, "adjustlayer.reopened-levels");
+        session.UpdateLevels(LevelsSettings{}, true);
+        session.CancelColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Curves || kind == AdjustmentKind::Exposure ||
+                       kind == AdjustmentKind::GradientMap || kind == AdjustmentKind::Grain)
+    {
+        const FilterSettings reopened = session.PendingColorEdit()->settings;
+        Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
+                   reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
+               "adjustlayer.reopened-filter");
+        session.UpdateColorEdit(FilterSettings{}, true);
+        session.CancelColorEdit();
+    }
+    else if constexpr (kind == AdjustmentKind::Hsv)
+    {
+        Expect(session.PendingColorEdit()->settings.hsv == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
+        session.UpdateHueSaturation(HueSaturationSettings{}, true);
+        session.CancelColorEdit();
+    }
+    Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
+           "adjustlayer.cancel-restores");
+    session.Undo();
+    Expect(session.ActiveLayer()->adjustment == created, "adjustlayer.undo-to-created");
+    session.Redo();
+    Expect(session.ActiveLayer()->adjustment == saved, "adjustlayer.redo-to-saved");
+}
+
 void TestAdjustmentLayers()
 {
     // Legacy adjustmentPersistsDuplicatesAndUndoRestoresSettings (the file round trip lives in IoTests).
@@ -5403,124 +5510,13 @@ void TestAdjustmentLayers()
         session.Undo();
         Expect(session.ActiveLayer()->asset->image == asset, "adjustlayer.curves-undo");
     }
-    // Legacy sharedEditorsKeepPixelsDynamicAndSupportCancel, for every kind.
-    for (const AdjustmentKind kind : {AdjustmentKind::Hsv, AdjustmentKind::Levels, AdjustmentKind::Curves,
-                                      AdjustmentKind::Exposure, AdjustmentKind::GradientMap, AdjustmentKind::Grain})
-    {
-        DocumentSession session = PixelEditSession(2, 2);
-        const Raster white = SolidStraight(2, 2, 1, 1, 1);
-        const Guid baseID = InsertPixels(session, white, L"White");
-        session.AddAdjustment(kind);
-        const std::optional<Guid> id = session.AdjustmentEditingID();
-        Expect(id.has_value() && session.ActiveLayer()->adjustment.has_value(), "adjustlayer.editor-opens");
-        const LayerAdjustment created = session.ActiveLayer()->adjustment.value();
-        Expect(session.BeginAdjustmentEditing(id.value(), white) && session.AdjustmentOriginal().has_value() &&
-                   session.AdjustmentOriginal()->kind == kind,
-               "adjustlayer.editor-begins");
-        switch (kind)
-        {
-        case AdjustmentKind::Levels:
-        {
-            Expect(session.HasColorEdit(FilterKind::Levels) && session.PendingColorEdit()->histogramReady &&
-                       session.PendingColorEdit()->histogram[0][255] == 4,
-                   "adjustlayer.levels-histogram");
-            LevelsSettings settings = session.PendingColorEdit()->settings.levels;
-            settings.ranges[0].outputWhite = 0;
-            session.UpdateLevels(settings, true);
-            Expect(session.ActiveLayer()->adjustment->levels == settings, "adjustlayer.levels-live");
-            session.UpdateLevels(settings, false);
-            Expect(session.ActiveLayer()->adjustment == Adjustment(kind), "adjustlayer.levels-preview-off-restores");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Curves:
-        {
-            FilterSettings settings = session.PendingColorEdit()->settings;
-            settings.curves.channels[0] = {CurvePoint{0, 0}, CurvePoint{255, 0}};
-            session.UpdateColorEdit(settings, true);
-            Expect(session.ActiveLayer()->adjustment->curves == settings.curves, "adjustlayer.curves-live");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Exposure:
-        case AdjustmentKind::GradientMap:
-        case AdjustmentKind::Grain:
-        {
-            Expect(session.HasColorEdit() && session.PendingColorEdit()->kind == AdjustmentFilterKind(kind),
-                   "adjustlayer.filter-kind");
-            FilterSettings settings = session.PendingColorEdit()->settings;
-            if (kind == AdjustmentKind::Exposure)
-            {
-                settings.exposure.exposure = 1;
-            }
-            else if (kind == AdjustmentKind::GradientMap)
-            {
-                settings.gradientMap.reversed = true;
-            }
-            else
-            {
-                settings.grain.amount = 70;
-            }
-            session.UpdateColorEdit(settings, true);
-            const LayerAdjustment live = session.ActiveLayer()->adjustment.value();
-            Expect(live.Exposure() == settings.exposure && live.GradientMap() == settings.gradientMap &&
-                       live.Grain() == settings.grain,
-                   "adjustlayer.filter-live");
-            session.CommitColorEdit();
-            break;
-        }
-        case AdjustmentKind::Hsv:
-        {
-            HueSaturationSettings settings = session.PendingColorEdit()->settings.hsv;
-            settings.range = ColorRange::Reds;
-            Adjust::RangeOf(settings).hue = 80;
-            Adjust::BandOf(settings) = Adjust::BandCentered(Adjust::BandOf(settings), 25);
-            settings.invertRange = true;
-            session.UpdateHueSaturation(settings, true);
-            Expect(session.ActiveLayer()->adjustment->ResolvedHsv() == settings, "adjustlayer.hsv-live");
-            session.CommitColorEdit();
-            break;
-        }
-        }
-        const LayerAdjustment saved = session.ActiveLayer()->adjustment.value();
-        Expect(!session.AdjustmentEditingID().has_value() && !session.HasColorEdit() &&
-                   Find(session.Document(), baseID)->asset->image == white && !session.ActiveLayer()->asset.has_value(),
-               "adjustlayer.commit-keeps-pixels-dynamic");
-        session.SetAdjustmentEditingID(id);
-        Expect(session.BeginAdjustmentEditing(id.value(), white), "adjustlayer.reopens");
-        switch (kind)
-        {
-        case AdjustmentKind::Levels:
-            Expect(session.PendingColorEdit()->settings.levels == saved.levels, "adjustlayer.reopened-levels");
-            session.UpdateLevels(LevelsSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        case AdjustmentKind::Curves:
-        case AdjustmentKind::Exposure:
-        case AdjustmentKind::GradientMap:
-        case AdjustmentKind::Grain:
-        {
-            const FilterSettings reopened = session.PendingColorEdit()->settings;
-            Expect(reopened.curves == saved.curves && reopened.exposure == saved.Exposure() &&
-                       reopened.gradientMap == saved.GradientMap() && reopened.grain == saved.Grain(),
-                   "adjustlayer.reopened-filter");
-            session.UpdateColorEdit(FilterSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        }
-        case AdjustmentKind::Hsv:
-            Expect(session.PendingColorEdit()->settings.hsv == saved.ResolvedHsv(), "adjustlayer.reopened-hsv");
-            session.UpdateHueSaturation(HueSaturationSettings{}, true);
-            session.CancelColorEdit();
-            break;
-        }
-        Expect(session.ActiveLayer()->adjustment == saved && !session.AdjustmentEditingID().has_value(),
-               "adjustlayer.cancel-restores");
-        session.Undo();
-        Expect(session.ActiveLayer()->adjustment == created, "adjustlayer.undo-to-created");
-        session.Redo();
-        Expect(session.ActiveLayer()->adjustment == saved, "adjustlayer.redo-to-saved");
-    }
+    // Keep the legacy kind order and the complete shared-editor assertions for every kind.
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Hsv>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Levels>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Curves>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Exposure>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::GradientMap>();
+    TestAdjustmentLayerSharedEditor<AdjustmentKind::Grain>();
     // Legacy shiftPlusAndMinusStepTheActiveLayersBlendModeWhereverFocusIsExceptTextFields (the session part).
     {
         DocumentSession session = PixelEditSession(40, 20);

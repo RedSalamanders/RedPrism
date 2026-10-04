@@ -764,6 +764,11 @@ malformed/over-budget offered images fail locally. A valid owned receipt and exa
 origin despite immediate-owner-window destruction. A newer private copy cannot rebind an older receipt. Foreign
 owned bytes may still decode at their centered placement. Paste uses at most six total Inspect/Copy acquisitions.
 The same job and reservation survive acknowledged event waits. Failed/cancelled/stale work publishes no Paste.
+Each admitted native Inspect/Copy attempt uses its own invisible, worker-owned message window for
+`OpenClipboard`. It MUST NOT use a null window or share an opener between simultaneous scopes. Window
+creation failure is a local native failure with empty output; contention remains Busy with the original sealed
+authority. Close the native scope before destroying its window on that worker. No HWND or locked OS pointer
+escapes into the document, owner callback, retry wait or publication.
 
 Copy Merged captures its original complete-document authority before asynchronous utility composition. GPU maps
 and utility targets are released before CPU work; later device replacement cannot restart already copied bytes or

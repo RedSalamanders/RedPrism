@@ -456,3 +456,169 @@ instrumentation/detection remains required; ARM64 cross-builds do not establish 
 
 Native activation and the remaining sampler/stroke/selection/file/history/upload/chrome routes and original
 G1 measurements remain P1 requirements. Do not move P1 to Done after only this color-display qualification.
+
+## Managed Release r36 — ISA scan failure
+
+The fresh normal-clean x64 Release test attempt ran on the inherited default desktop from
+`2026-10-04T18:39:39.697607Z` to `2026-10-04T18:42:38.201517Z`, actual child PID 58180, and exited 1
+without retry. The Release images compiled and linked. The ISA scan passed for `RedPrism.exe` (459 decoded
+VEX/EVEX instructions, 0 tier and 459 runtime; 6 undecoded data prefixes and 5 verified table-data regions)
+and `HostTests.exe` (260 decoded, 0 tier and 260 runtime; 1 undecoded data prefix and 0 verified table-data
+regions), then rejected `DocumentTests.exe` at `0x140016024` and `0x14001602c` in `DocumentTests.obj`,
+reporting `vpshufb xmm8, xmm15, xmm12` and `vpshufb xmm11, xmm15, xmmword ptr [r14]`. The scan stopped
+at DocumentTests; no Release test runtime started. Disassembly review shows candidate inline-table bytes, but
+the cause and proof are unresolved. This does not establish actual executable AVX instructions or a scanner
+false positive.
+
+The exact recorder receipt is `.build/normal-clean-x64-test-Release-r36/result.json`: exit 1, 754 inputs,
+freeze hash `634E78D32E2D2175881274C52432FE708A68DE81763402D1BA6A8514B43C06F9`, stdout hash
+`27099E812BFD33E7DAE62500E965DDB8A867F37B6118A95461EC8CA4E82640E8`, stderr hash
+`0DAF5BDC8AAD2C43F58ED7DEF79E2E3E0739501FB97B8A407250A8022AB2E4FC`; mode `test`, platform x64,
+configuration Release, launcher `Hidden persistent recorder; inherited default desktop; actual child exit, no retry`.
+The independent receipt `.build/normal-clean-x64-test-Release-r36/independently-verified-archive.json`
+verifies 1,021 copies in
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-default-desktop-x64-Release-r36-isa-failure`;
+source-manifest hash `6DD90EF4E9840BA32F6B034631350BC666CA589AA5FE7EE5B08A72E5A9AF0BEA`, evidence-manifest
+hash `50DD4800067387276CB5A4214F0C3C30AD7E62002F2E87FD6CF2A8A65F687FD7`, completion hash
+`47C0CAF71D89F7A9106748358050BB639F3D7ADB4A3814014926935DA27909D7`, actual exit 1, zero stages,
+verified `2026-10-04T18:51:51.4334045Z`.
+
+This is a preserved qualification failure, not a Release runtime pass. Release and ASan runtime remain
+unqualified, and this evidence does not complete the deferred-display child or P1.
+
+## Managed Release r37 — full suite qualified
+
+The r36 disassembly places the two reported vector matches inside adjacent DWORD switch tables owned by
+`TestAdjustmentLayers`, reached through its RSI-based enum dispatch. The conservative scanner did not prove that
+layout. Instead of broadening its instruction/data exemptions, the six legacy shared-editor cases now instantiate
+one fixture per explicit kind in the original order. A balanced-call comparison preserves all 1,074 `Expect`
+expressions in `DocumentTests.cpp`; every control and pixel expectation remains unchanged. No production source,
+ISA floor, scanner, runtime allowlist or golden changes in this repair.
+
+The fresh repository `test.ps1 -Platform x64 -Configuration Release -Rebuild` ran on the inherited default desktop
+from 2026-10-04T18:54:40.394917+00:00 to 2026-10-04T19:02:56.196051+00:00, actual child PID 3116, exit 0, without retry.
+All five image scans and adversarial scanner controls pass. Host/Document/I/O/Composition, isolated crash probes,
+hidden WARP application, command line, benchmark smoke, corpus controls and all harness screenshots pass.
+Independent registry comparison verifies 6,491 document controls (6,392 preceding + 99 publication), 8,980
+application controls (8,962 preceding + 18 color host) and the exact 78-stage application sequence.
+
+The source freeze covers 754 owned inputs with hash `2B31D9B6E599A373D4CED54B772C12F7377947CE6B3DDE50A6AC0061FBDC8556`. stdout hash `45EFE43E171EF4DA1BB36BA1EBC178F9D21C9C63F2F8E79ED5F19B449E65F859`;
+stderr hash `F7F4639A7C712E422AFB52D28B9BC9190A86CBE0864B5540373C8263601A0782`. Archive `C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-default-desktop-x64-Release-r37-full-suite-qualified` independently verifies 1021 copies;
+source-manifest hash `182CA95A4165034BA10DD13824F72B09E40D79720C0BF1A5AD7F95E7C26B38CD`, evidence-manifest hash `BC9AE60A8C14E07D9908BEE88C9E3C86C732AB32B9FC8A7E93070CC513C92954`, completion hash `43059FD4BF908E7E1AAEECD9BD63178E524A7711102BD6170DC04565EF99AD27`;
+verified `2026-10-04T19:05:11.5687828+00:00`. The archive preserves the exact failed r36 attempt separately.
+
+This qualifies current managed Release functional behavior. The earlier Debug/analysis/ARM64 records precede the
+fixture isolation and are retained with that limitation. Fresh x64 ASan, current remaining-profile validation,
+native integration, remaining P1 callers and original G1 measurements still precede milestone completion.
+
+## ASan r38 failure and ARM64 cross-builds r39–r41
+
+The fresh normal-clean x64 ASan Debug test r38 used the same 754-input freeze as r37
+(`2B31D9B6E599A373D4CED54B772C12F7377947CE6B3DDE50A6AC0061FBDC8556`). The hidden WARP application failed at
+the `clipboard-delayed` self-test stage: 45 controls ran and three failed, the application exited 5, and the
+overall test exited 1. The recorder ran from `2026-10-04T19:05:18.687776Z` to `2026-10-04T19:20:52.814264Z`
+(PID 59004). This establishes a functional test failure; no AddressSanitizer violation is established by the
+captured result. The original failure archive is preserved at
+`C:\Users\eric\AppData\Local\RedPrism\QualificationArchives\p1-color-host-explicit-fixtures-x64-ASanDebug-r38-clipboard-failure`.
+Its independently verified receipt records 1,028 copies, actual exit 1, 74 stages, and verification at
+`2026-10-04T19:21:33.0079055Z` (completion SHA-256
+`90F7780BDD97B33870A73B4D03B4BB88B3E1EBC63C284A79FB9EF8FDC7FF6389`).
+
+| Attempt | Actual result | Inputs | Independently verified archive copies | Completion SHA-256 |
+| --- | --- | ---: | ---: | --- |
+| x64 ASan Debug r38 | Full test exit 1; `clipboard-delayed` had 3 failures out of 45; no sanitizer violation established | 754 | 1,028 | `90F7780BDD97B33870A73B4D03B4BB88B3E1EBC63C284A79FB9EF8FDC7FF6389` |
+| ARM64 Debug r39 | Cross-build exit 0; no runtime claim | 754 | 956 | `CC9E5A9E4EBBFA58E8251B57C67958F2900E290D0AB88CEC95B43FE68EF05CFF` |
+| ARM64 Release r40 | Cross-build exit 0; no runtime claim | 754 | 956 | `FA9F681678F898DE1357C19BECFD097D8A4C57D1E6B7525A6EB2452394AA6B3E` |
+| ARM64 ASan Debug r41 | Cross-build exit 0; no native sanitizer runtime claim | 754 | 960 | `1843E80DFC775310EE7A16D3A64CE64E736D48EB7DC9EE58A9C83E0E6E55919E` |
+
+The r39–r41 builds share the r38 freeze hash above. Their independently verified archives record actual exit 0
+and zero runtime stages. Earlier Debug r32 and ARM64 r33–r35, as well as analysis r31, precede the fixture
+isolation represented by Release r37; they do not qualify that repaired fixture source.
+
+A fresh x64 ASan Debug run, r42, used 754 frozen inputs with freeze hash
+`C884F7F4AE83CCCC46936FFC964ADCE6F5BBE90BAA7E33A70AFE068BF183AC00`. Child PID 94924 started at
+`2026-10-04T19:29:32.979858Z`, ended at `2026-10-04T19:39:09.917947Z`, and exited 1. Build,
+HostTests, DocumentTests and CompositionTests passed. `IoTests.exe` then exited 1: its clipboard-transfer group
+ran 139 checks with 11 failures, and the suite stopped before the application phase (zero application stages).
+The older application self-test output under `.build` belongs to r38 and is not r42 evidence. The overall r42
+result is a failure, not a pass; the scalar native timestamp and `Wait`/`SetClipboardData` error diagnostics
+establish neither a functional repair nor an environmental cause. Clipboard-holder records show later retries
+that succeeded, which also does not identify the cause.
+
+The existing archive `p1-color-host-native-diagnostics-x64-ASanDebug-r42-host-failure` is retained under
+`%LocalAppData%\RedPrism\QualificationArchives\` with its original name. Independent verification completed
+at `2026-10-04T19:41:11.8592012Z`: all 754 frozen inputs and 274 evidence files (1,028 copies total) were
+verified. Source-manifest SHA-256 is
+`FF984228E380E7A89CDA25BF38452C37772484CC2F11BE9A7E3F399B92250F74`, evidence-manifest SHA-256 is
+`1F567121734BCD96FA90EEBB3DBD281E3DE15C9FCC8E75C70852DF8B3E3DC997`, and completion SHA-256 is
+`935510E0F81C3A3B88CE35180971343F772E39F9B776B87151D2F5DF4FD0E8EB`.
+
+Follow-up isolated-station attempts r43, r44 and r45 are diagnostics against the exact existing `IoTests.exe`,
+not qualification runs. They failed before starting their child: `CreateWindowStationW` returned errors 5, 5
+and 183 respectively. These outcomes do not establish an environmental cause for r42. Primary native-call
+diagnostics continue in parallel; no functional repair or changed assertion/deadline is established. Native
+activation, remaining P1 callers and original G1 measurements remain open.
+
+## Clipboard owner-scope investigation and current candidate
+
+The next incremental x64 ASan Debug build, r46, is build-only: `result.json` records `Mode: build` and exit 0.
+It is not a static-analysis or runtime result. Focused runtime r47 then ran `IoTests.exe` and exited 1 with
+three failed assertions in 139 clipboard-transfer checks. The failure was `CloseClipboard` error 1418. The
+1,028-copy archive was independently verified; neither the actor holding the native clipboard scope nor an
+environmental cause was established. Focused runtime r48 ran the actual application, reached 73 stages and
+exited 5 after one native prefill-DIB failure among 61 checks; `EnumClipboardFormats` returned error 1418.
+Its separately named 1,028-copy archive was also independently verified. These focused failures do not
+qualify the full application or establish an external actor as their cause. Exact local records are linked:
+[r46 build receipt](../../.build/incremental-x64-build-ASanDebug-r46/result.json), [r47 runtime receipt](../../.build/incremental-x64-runtime-ASanDebug-r47/result.json), [r47 independent archive receipt](../../.build/incremental-x64-runtime-ASanDebug-r47/independently-verified-archive.json), [r48 runtime receipt](../../.build/incremental-x64-runtime-ASanDebug-r48/result.json), and [r48 independent archive receipt](../../.build/incremental-x64-runtime-ASanDebug-r48/independently-verified-archive.json). The verified archive names are `p1-color-clipboard-native-calls-x64-ASanDebug-r47-io-close-failure` (completion SHA-256 `8EF66827E8DED2A25270CEA4EBF66F10250D4F00F552367ED71D3AB4B00C0CDC`) and `p1-color-clipboard-native-calls-x64-ASanDebug-r48-prefill-enumeration-failure` (completion SHA-256 `CF6C8FB6A89D06FC0553A7B6F9914FC428849258B519F0C80D49439D37E89654`).
+
+Read-only native diagnostic r49 opened and closed the current Unicode clipboard successfully in all 100
+attempts, with both null and distinct owner-window forms. This does not establish application qualification
+or universal stability. See the [r49 local diagnostic receipt](../../.build/clipboard-native-scope-r49/result.json).
+Read-only concurrent diagnostic r50 reproduced the null-owner scope hazard: with two
+concurrent null-owner opens, both opens succeeded, the second close succeeded, and the first scope's next
+enumeration and close returned 1418. When either scope used a distinct owner HWND, the second open failed
+busy with error 5 and the first scope enumerated and closed successfully. These diagnostics identify the
+reproducible native scope behavior; they do not identify the actor in r47 or r48. See the [r50 local diagnostic receipt](../../.build/clipboard-native-scope-r50/result.json).
+
+The current candidate now opens native clipboard scopes for Inspect and Copy with a fresh worker-owned
+`STATIC` message HWND and RAII scope; it does not open with a null owner. Window creation faults are reported
+as local worker-only native failures, with no automatic retry; busy keeps the existing bounded retry budget,
+and failed results remain empty. The actual two-MTA-worker regression holds the first owner scope open while the second worker
+attempts Inspect and Copy, expects one busy attempt for each, validates the owner thread and HWND, then
+releases the first scope and checks unchanged 2x1 clipboard metadata. Invalid worker windows are refused
+before `OpenClipboard`; existing clipboard goldens remain unchanged.
+
+The fresh full x64 ASan Debug `test.ps1` run r51 exited 0 on its 754-input freeze. Clipboard transfer passed
+all 146 checks (the prior 139 plus seven new checks). The hidden WARP application registry records the
+unchanged 8,980 controls and all 78 ordered stages; the document registry records 6,491 controls. The full
+test also passed its crash probes, ASan detection probe, ISA scan and other gates. The independent archive
+receipt verifies 1,028 copies and 78 stages with completion SHA-256
+`AC69CB61894D66FC58A4ED78AA3856CE6D48110270FFB7EDF435FC55A9BDA2CE`. See the [r51 result](../../.build/incremental-x64-test-ASanDebug-r51/result.json),
+[independent archive receipt](../../.build/incremental-x64-test-ASanDebug-r51/independently-verified-archive.json),
+[application registry](../../.build/incremental-x64-test-ASanDebug-r51/verified-color-host-application-registry.json),
+and [document registry](../../.build/incremental-x64-test-ASanDebug-r51/verified-color-document-registry.json).
+Prior failed and diagnostic receipts remain preserved above. r51 qualifies this x64 ASan suite and its
+recorded registries, not native activation, the remaining configuration matrix or G1.
+
+## Current Debug analysis r52
+
+The sampler's r7 analysis exposed C6326 on constant template switches in the shared-editor fixture. The
+same test-only repair is now applied here: explicit `if constexpr` branches, with no original assertion,
+production path, scanner rule, threshold or suppression change. The independent lexical proof preserves
+all 17 fixture `Expect` expressions and all 983 whole-file expressions as identical multisets; these are
+source-expression counts, not runtime assertion counts.
+
+Current `build.ps1 -Platform x64 -Configuration Debug -Analyze -MaxCpuCount 2` completed successfully from
+`2026-10-04T20:53:24.502436Z` to `2026-10-04T21:00:58.949256Z`, actual child PID 31352, exit 0.
+The analysis entrypoint rebuilt all five images and passed the SAL controls, matching-PDB ISA/scanner gates
+and pinned DxUi provenance. Its 754 inputs remained unchanged; freeze SHA-256
+`D5572E2B598E83AF61B57CEE66DA3DDF1198F8405546158626247202BC71D1F3`; stdout
+`64A66718151ECBC6261C25C8B99CF477B621E3D131ECD59B60F947D2AE3559D9`; stderr is empty.
+The [actual receipt](../../.build/incremental-x64-analysis-Debug-r52/result.json) is analysis-only; r51's full
+ASan runtime precedes this test-dispatch repair. Current full Debug/Release and ARM64 builds, native activation,
+remaining actual callers and G1 stay separate requirements.
+
+Independent archive `p1-color-clipboard-read-window-x64-Debug-r52-analysis-qualified` verifies 1,037 copies,
+zero runtime stages and completion SHA-256 `7E6A2B72555C9B402C0534C810B53014C3A5D0556ED2DA5B86B69F7F24CF6D98`.
+Source-manifest SHA-256 is `EC6BD145C9DCBAC159A9F1507B120671B176A85BAEDF9F38E2732F329F0DF0A5`; evidence
+manifest is `37E5EDEE9B73B83513E515ED86E71397E3F58B135989F84B09F2EC932FF7759D`.

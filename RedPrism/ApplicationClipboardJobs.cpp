@@ -13,6 +13,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <new>
@@ -72,6 +73,12 @@ ClipboardTransfer::Observer ClipboardObserver(const std::shared_ptr<ClipboardWor
                     }
                 }
                 return state.fault == fault ? state.nativeError : 0;
+            },
+            [](void*, ClipboardTransfer::NativeCall call, std::uint32_t format, std::uint32_t error) noexcept
+            {
+                std::printf("DIAG clipboard-host.native call=%u format=%lu error=%lu thread=%lu sequence=%lu\n",
+                            static_cast<unsigned>(call), static_cast<unsigned long>(format),
+                            static_cast<unsigned long>(error), GetCurrentThreadId(), GetClipboardSequenceNumber());
             }};
 }
 HRESULT ClipboardStatusError(ClipboardTransfer::Status status) noexcept

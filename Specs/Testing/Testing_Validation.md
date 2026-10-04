@@ -1491,3 +1491,11 @@ the replacement. Fixture helpers use bounded event waits for external listeners;
   transfer retry budget is unchanged. Exhausted fixture acquisition still fails the original assertion.
   Full frozen native qualification is required before closing these foundations. Production host,
 retry/lifetime, G1 and native ARM64 runtime claims remain separate.
+
+`clipboardtransfer.concurrent.*` gates an actual metadata reader at its native Opened stage. Its opener must
+be a window on that exact MTA worker. A simultaneous Inspect and Copy each return Busy after one acquisition,
+with no output; after release, the first reader enumerates and closes successfully with the literal 2×1 DIB
+metadata. Read-window allocation faults fail locally before opening. This independent held-scope reference
+detects null-window scopes accepting a second open that invalidates the first close. Original transfer, delayed
+render, source-sequence, fallback and cancellation checks remain unchanged. Failure diagnostics retain the
+native call, format and immediate error before cleanup; they never renew a source token or alter retry policy.
