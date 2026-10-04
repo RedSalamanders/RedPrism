@@ -1,5 +1,18 @@
 # Image processing never blocks the UI, runs at hardware speed, and opens camera RAW faster than Photoshop
 
+## Current work checklist
+
+- [x] Native fixed pointer stream and dispatch-scoped menu timer repair: `9e466a5`, full required matrix qualified.
+- [x] Experimental captured-brush, deferred caller and basic lifetime checkpoints: `c22baee`, `a0ab3f0`, `ffc16df`, pushed.
+- [x] Experimental modal focus/capture loss and nested owner actions (`b22f974`, pushed): all three private profiles pass 8,550 controls/75 stages; 517 owned inputs match and all archive copies are verified.
+- [ ] Current slice: qualify 380 additional authority/window/end-session/shutdown checks and commit/push the reviewed candidate.
+- [ ] Finish remaining pointer/lifetime/display migration, native activation and fresh normal validation.
+- [ ] Finish P1 memory accounting/retirement, upload/chrome bounds and measured G1 owner-loop criteria.
+- [ ] P2 SIMD CPU acceleration; P3 sliced GPU/tiled residency; P4 RAW decode/develop qualification.
+- [ ] P5 paired Photoshop performance targets; P6 nondestructive high-bit-depth development and final reliability gates.
+
+The detailed implementation checklist below retains each completed slice and its qualification limits. P1 remains open.
+
 Private immutable layer/typed opacity source checkpoint: `7dd28d7` is pushed on `codex/p1-opacity-host-proof`.
 The refreshed captured-brush core is pushed as `c22baee`: Debug/Release/ASan retain all 6,226 document checks,
 with the same 321 core/test inputs and independently verified archives. Native callers remain separate.
@@ -29,8 +42,14 @@ Basic lifetime preflight is preserved and pushed as `ffc16df` on the experimenta
 Debug/Release/ASan applications pass 74 stages and 8,358 controls each, retaining all predecessors plus 160
 original-stream cancellation and 80 accepted Save/discard/write-failure checks. All 515 owned inputs match;
 790/790/792 archive copies are independently verified ([record](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md)).
-Modal messages, stale/reentrant authority, accepted window/end-session actions, shutdown, native activation and
+Broader stale/reentrant authority, accepted window/end-session actions, shutdown, native activation and
 measured G1 remain open.
+
+The modal extension now passes Debug/Release/ASan: all 8,550 controls/75 stages, including 192 focus/capture-loss
+and nested owner-action checks. Its 517 owned inputs match; all 793/793/795 archive copies are independently
+verified. The next private candidate adds 200 stale-authority, 108 accepted window/end-session and 72 actual
+shutdown checks. It tightens unreplayed-core refusal and retires a stale queued stream in the same owner action;
+that candidate remains unqualified. Native integration, broader lifetimes and measured G1 remain open.
 
 Execution resumed by the user on 2026-10-03; the original [pause checkpoint](../../TestRuns/UiNeverBlocksPause_2026-10-03.md)
 remains preserved. Eligible Close Project outline closure now qualifies in all six profiles: actual exit 0,

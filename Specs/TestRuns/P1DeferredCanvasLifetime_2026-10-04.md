@@ -10,7 +10,8 @@
 - [x] Compare all 515 owned candidate C++/header/shader/resource inputs across these profiles: identical.
 - [x] Verify `/fsanitize=address` in the actual ASan application's compiler command log.
 - [x] Preserve only changed owned sources and portable project registrations in the experimental worktree.
-- [ ] Qualify real modal-message/reentrancy, stale document/core/generation and repeated close cases.
+- [x] Qualify 192 injected modal-message/reentrancy controls in all three private profiles: 8,550 total controls/75 stages; verify 793/793/795 archive copies and 517 identical owned inputs.
+- [ ] Qualify stale document/core/generation, interrupted-owner and repeated close cases.
 - [ ] Qualify accepted window/end-session actions and shutdown during held/live/presenter-owned states.
 - [ ] Complete other callers, native integration, the fresh normal matrix and measured G1.
 
@@ -69,12 +70,65 @@ corrects the initial draft's wrong cancelled-brush/new-stroke expectation before
 all literal expectations and restores test error counters after write failure. Source/helper/compiler/dependencies
 remain frozen through each actual process and independent archive verification.
 
+### Modal candidate r1 Debug compile failure
+
+Archive under `%LocalAppData%\RedPrism\QualificationArchives`:
+
+| Archive | Inputs / evidence / independently verified copies | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-canvas-modal-application-r1-Debug-failure` | 764 / 207 / 971 | `3320DF7331FAD7965390F6BBF3C62353255BB4BCF152AF044BC73707F88A3454` |
+
+Source manifest SHA-256: `6F5FF81A7C1603B26098C230D6E54C515FB151E34511B5E6B4713FCFC5902959`.
+Evidence manifest SHA-256: `8C406DF8A739E2FBFA99B6B489A3C37D6CB42905E53D8F9EF2DC12701AB39D82`.
+Independent verification completed at `2026-10-04T07:57:49.8019573UTC`.
+
+The modal test candidate's actual Debug build child exited 1 because the test referenced nonexistent
+`_injectPointerLossForTest`. The build helper threw before assigning its top-level `Build` property, which
+remained null; the child receipt is the evidence of the actual exit code. Runtime did not run. This records a
+test compile failure and does not indicate a product runtime failure or qualify the modal behavior. Corrected
+all-profile qualification is recorded below. The existing Debug/Release/ASan basic lifetime qualification claims above remain
+unchanged and apply only to their recorded private application runs.
+
+## Corrected modal lifetime qualification
+
+The corrected test sends pointer-loss messages on the owner thread, which `HonorsPointerLoss` already admits.
+It also asserts that loss routing is enabled; no product test flag or product behavior was added. Sixteen
+held/live cancellation scenarios each preserve the original ten literal expectations and add presenter-owner
+reentrancy and focus/capture-loss checks: 192 new checks. All predecessor expectations remain unchanged.
+
+`p1-canvas-modal-application-r2-Debug-qualified-private-full-application` passes actual build/runtime exit 0,
+all 8,550 controls and 75 stages. Its 764 inputs and 29 evidence copies (793 total) were independently verified
+at `2026-10-04T08:06:51.3585474UTC`.
+
+- Completion SHA-256: `63C8A08FB8B5CE54B63ADD592A294854B46E54829CB41613C2743DCF27E7F01C`.
+- Source manifest: `8C2C9E15E24AC5F9A1D6092D8FE6D7DCCE666F27A8BCA7D5946AE69E00F0AF63`.
+- Evidence manifest: `0CFF9318F5F5616CDB12510720EBA8280E52DA69C7F6FB2DFE6A86C30A3D207C`.
+
+Release and ASan also pass actual build/runtime exit 0 and the same 8,550 controls/75 stages. All 517 owned
+C++/header/shader/resource inputs match across the three profiles. Actual ASan compilation contains
+`/fsanitize=address`. Every archive copy was independently verified:
+
+| Archive | Inputs / evidence / copies | Completion SHA-256 |
+| --- | --- | --- |
+| `p1-canvas-modal-application-r3-Release-qualified-private-full-application` | 764 / 29 / 793 | `B5C73EC706C6A39C53EDD1FE4AD01608CA872C1AAFCAB7ABA93F2D5334302578` |
+| `p1-canvas-modal-application-r4-ASanDebug-qualified-private-full-application` | 765 / 30 / 795 | `EFABE880A0E1777093ED16F05ECF4D8167C6B63A9074095A0F5A3DC20EDC64D7` |
+
+Release source manifest: `70FB907CC6F454682A964C19BEC3B59442628EEDD1789DBFEE25CDFD04C5340D`;
+evidence manifest: `779AA1E04628331ED438DC6416D446966D7690962CECF9984F2124958AA88D62`.
+Independent verification: `2026-10-04T08:12:18.6669691UTC`.
+
+ASan source manifest: `C871F7F9D5E28484EB15C3285D7C88925BB7FAF07B7A1143DBA276744886A010`;
+evidence manifest: `04214FBB555F5585FF5076A791FFA4537F463B6C0F06B7E5BBDDE4A07094BBF9`.
+Independent verification: `2026-10-04T08:25:51.9489357UTC`.
+
+The missing vendor DxUi PDB warning remains recorded in all private profiles. This does not qualify a fresh
+normal worktree matrix, native activation, actual output-picker modal injection or G1 timing.
+
 ## Remaining limits
 
-The new presenter-lifetime guard and shutdown fixed-input retirement are implemented but broader actual modal
-and shutdown scenarios remain unqualified. The current cancellation tests use quiet prompt answers and do not
-establish real Win32 focus/capture-loss behavior; that is the next gate. Positive window/end-session actions and
-stale/reentrant authority remain explicit follow-ups. Private builds reuse immutable DxUi products and retain
+The presenter-lifetime guard passes injected Win32 focus/capture loss and nested owner actions with quiet
+prompt answers. Actual output-picker modal behavior, positive window/end-session actions, stale/reentrant
+authority, repeated close and shutdown remain explicit follow-ups. Private builds reuse immutable DxUi products and retain
 the missing vendor-PDB warning, so native symbols/ISA and the normal matrix remain unqualified by these runs.
 
 Only owned source and portable project entries are copied. Private imports, proof projects, seed receipts,

@@ -11,7 +11,11 @@
 - [x] Qualify the same frozen lifetime inputs in ASan Debug: all 8,358 controls/74 stages; 792 independently verified copies and actual instrumentation flag.
 - [x] Preserve and push the basic preflight source checkpoint (`ffc16df`); all 515 owned inputs match across profiles.
 - [x] Prepare 192 modal pointer-loss/reentrancy checks across the same sixteen cancellation scenarios.
-- [ ] Qualify the modal candidate with every predecessor application check and all required profiles.
+- [x] Correct the modal test compile failure through the existing same-thread pointer-loss route; independently qualify r2 Debug with all 8,550 controls/75 stages and verify every archive copy.
+- [x] Qualify the same modal candidate in Release and ASan Debug with every predecessor application check: 8,550 controls/75 stages; 517 identical owned inputs and 793/793/795 verified copies.
+- [x] Preserve and push the qualified modal source checkpoint (`b22f974`).
+- [x] Draft 200 authority, 108 accepted window/end-session and 72 actual hidden-host shutdown controls; primary reviews/corrects the cheaper agent's window test.
+- [ ] Qualify the combined lifetime-gates candidate (8,930 expected controls/78 stages), including refusal before settlement and immediate stale queued-stream retirement.
 - [ ] Implement nonmutating prompt preflight with scalar document/ordinal/opening authority and reentrancy protection.
 - [ ] Preserve the stroke when either the discard prompt or Save output selection is cancelled.
 - [ ] Acknowledge Save/Don't Save's original stream before executing the dependent lifetime action.
@@ -20,8 +24,11 @@
 - [ ] Complete remaining native caller migration and measure G1 before marking P1 complete.
 
 Status: ACTIVE private implementation. The prior caller (`a0ab3f0`) and basic lifetime preflight (`ffc16df`) are
-pushed on `codex/p1-opacity-host-proof`. The lifetime preflight passes private Debug/Release/ASan; its modal
-extension is unqualified. No native lifetime route has changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md)
+pushed on `codex/p1-opacity-host-proof`, with the qualified modal extension pushed as `b22f974`. Modal r1 Debug
+failed to compile because its test referenced nonexistent
+`_injectPointerLossForTest`; this is a test build failure, not a product runtime failure, and runtime was not run.
+The corrected modal candidate passes Debug/Release/ASan with all 8,550 controls/75 stages. The next combined
+authority/window/shutdown candidate remains unqualified. No native lifetime route has changed. The [canvas input plan](DeferredCanvasInput_2026-10-04.md)
 remains the parent. Exact archive hashes and scope limits are in the
 [lifetime record](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md).
 Owners: `Common/ContinuationQueue.h`, `RedPrism/ContinuationRequests.*`, `ApplicationContinuations.cpp`,
