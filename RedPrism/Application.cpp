@@ -2322,6 +2322,12 @@ int Application::RunSelfTest() noexcept
     std::printf("BEGIN self-test.RunCanvasBrushBoundarySelfTest\n");
     if (const int canvasBoundary = RunCanvasBrushBoundarySelfTest(); canvasBoundary != 0)
         return canvasBoundary;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeCancelSelfTest\n");
+    if (const int canvasLifetimeCancel = RunCanvasBrushLifetimeCancelSelfTest(); canvasLifetimeCancel != 0)
+        return canvasLifetimeCancel;
+    std::printf("BEGIN self-test.RunCanvasBrushLifetimeAcceptedSelfTest\n");
+    if (const int canvasLifetimeAccepted = RunCanvasBrushLifetimeAcceptedSelfTest(); canvasLifetimeAccepted != 0)
+        return canvasLifetimeAccepted;
     std::printf("BEGIN self-test.RunSelectionMoveCloseSelfTest\n");
     if (const int close = RunSelectionMoveCloseSelfTest(); close != 0)
         return close;
@@ -3673,7 +3679,7 @@ void Application::OnPointer(UINT message, WPARAM wParam, LPARAM lParam) noexcept
         }
         else if (event.action == DxUi::PointerAction::Move || message == WM_LBUTTONUP)
             RecordCanvasBrush(event, capturedView);
-        else if (event.action == DxUi::PointerAction::Leave)
+        else if (event.action == DxUi::PointerAction::Leave && !(_canvasLifetime && _canvasLifetime->presenting))
             LoseCanvasBrush();
         return; // A canvas press owns its captured samples over chrome until its terminal is acknowledged.
     }

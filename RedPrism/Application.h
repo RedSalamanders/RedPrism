@@ -239,6 +239,8 @@ class Application final : public ChromeEvents
     int RunCanvasBrushCompetingSelfTest() noexcept;
     int RunCanvasBrushBoundarySelfTest() noexcept;
     int RunCanvasBrushMaskPaletteExtensionSelfTest() noexcept;
+    int RunCanvasBrushLifetimeCancelSelfTest() noexcept;
+    int RunCanvasBrushLifetimeAcceptedSelfTest() noexcept;
     CanvasBrushInput _canvasBrushInput;
     CanvasBrushSample _canvasBrushLastSample{};
     ContinuationReceipt _canvasBrushReceipt;
@@ -389,6 +391,19 @@ class Application final : public ChromeEvents
     int RunColorCommitSelfTest() noexcept;
     int RunAdjustmentClosureSelfTest() noexcept;
     using HostRequestQueue = ContinuationQueue<HostRequest>;
+    struct CanvasLifetimePreflight final
+    {
+        HostRequestQueue::Entry entry;
+        std::uint64_t brushOpening;
+        ContinuationReceipt brushReceipt;
+        bool presenting = false;
+        bool save = false;
+        ContinuationReceipt::Result interrupted{HostOutcome::Pending, 0};
+    };
+    static bool CanvasLifetimeInput(const HostRequestInput& input) noexcept;
+    [[nodiscard]] bool CanvasLifetimeCurrent() const noexcept;
+    void RunCanvasLifetimePreflight() noexcept;
+    void FinishCanvasLifetimePreflight(ContinuationReceipt::Result result) noexcept;
     class ContinuationAction final : public UiAction
     {
       public:
@@ -447,6 +462,7 @@ class Application final : public ChromeEvents
     int RunProjectOpenSelfTest() noexcept;
     [[nodiscard]] Prompts::Answer AskDiscardChanges() noexcept;
     [[nodiscard]] HRESULT SelectHostOutput(HostWriteFormat format, bool saveAs) noexcept;
+    [[nodiscard]] HRESULT SelectHostOutput(HostRequest& request, HostWriteFormat format, bool saveAs) noexcept;
     [[nodiscard]] HRESULT WriteHostOutput(HostWriteFormat format) noexcept;
     class ProjectSaveJob;
     [[nodiscard]] HRESULT StartProjectSave() noexcept;
@@ -876,6 +892,8 @@ class Application final : public ChromeEvents
     std::optional<HostRequest> _startupPaths;      // owned until Run initializes the document and can bind its serial
     HostRequestQueue _hostRequests;
     std::optional<HostRequestQueue::Entry> _activeHostRequest;
+    // One additional bounded owner for a prompt ahead of a live stream; its original ordinal never changes.
+    std::optional<CanvasLifetimePreflight> _canvasLifetime;
     std::optional<HistoryWorkStamp> _hostCommitStamp;
     std::optional<HistoryWorkStamp> _hostFinishedStamp;
     std::optional<HistoryWorkStamp> _utilityStamp;

@@ -268,7 +268,8 @@ bool Application::HasUnsavedWork() const noexcept
     {
         return false;
     }
-    if (_session.history.IsModified() || _session.HasColorEdit())
+    if (_session.history.IsModified() || _session.HasColorEdit() ||
+        (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome == HostOutcome::Pending))
     {
         return true;
     }
@@ -341,7 +342,13 @@ HRESULT Application::SelectHostOutput(HostWriteFormat format, bool saveAs) noexc
     {
         return E_UNEXPECTED;
     }
-    auto& request = _activeHostRequest->input;
+    return SelectHostOutput(_activeHostRequest->input, format, saveAs);
+}
+
+HRESULT Application::SelectHostOutput(HostRequest& request, HostWriteFormat format, bool saveAs) noexcept
+{
+    if (!_session.Document())
+        return E_UNEXPECTED;
     try
     {
         if (const auto* write = std::get_if<HostWriteInput>(&request.Input()); write && write->path)
@@ -848,6 +855,9 @@ bool Application::HonorsPointerLoss() const noexcept
 
 void Application::EndPointerInteractions() noexcept
 {
+    // Our close preflight's modal loop may release capture. Its Cancel answer must leave this edit live.
+    if (_canvasLifetime && _canvasLifetime->presenting && _canvasBrushInput.Busy())
+        return;
     // Legacy resignFirstResponder: every drag ends (EndPointerDrag). A stroke or a warp keeps what it painted, as a
     // release would; a transform drag goes back to where it started (a drag-only edit drops, an Alt-drag's duplicate
     // with it); marquee and freehand outlines drop while a polygonal one stays; an outline move keeps its place;

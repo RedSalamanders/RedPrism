@@ -112,7 +112,7 @@ void Application::RetireCanvasBrush(HostOutcome outcome, std::uint64_t opening) 
     const auto* captured = _canvasBrushInput.CapturedContext(opening);
     if (!captured)
         return;
-    if (outcome != HostOutcome::Succeeded && _canvasBrushReplayed && _canvasBrushSessionOpening &&
+    if (!_shutdownStarted && outcome != HostOutcome::Succeeded && _canvasBrushReplayed && _canvasBrushSessionOpening &&
         captured->documentSerial == _session.DocumentSerial() &&
         _session.PendingBrushOpening() == _canvasBrushSessionOpening)
     {

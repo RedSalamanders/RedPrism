@@ -318,6 +318,9 @@
     <ClCompile Include="ApplicationCanvasBrushCompetingSelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushBoundarySelfTest.cpp" />
     <ClCompile Include="ApplicationCanvasBrushMaskPaletteExtensionSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasLifetime.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeCancelSelfTest.cpp" />
+    <ClCompile Include="ApplicationCanvasBrushLifetimeAcceptedSelfTest.cpp" />
     <ClCompile Include="ApplicationChromeSync.cpp" />
     <ClCompile Include="ApplicationCrop.cpp" />
     <ClCompile Include="ApplicationFiles.cpp" />

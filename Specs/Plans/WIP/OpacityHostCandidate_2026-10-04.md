@@ -8,6 +8,7 @@
 - [x] Preserve the private document suite qualification in the same three configurations.
 - [x] Preserve the captured-settings brush core and opening observer from refreshed Debug/Release/ASan proofs; same 321 core/test inputs and all 6,226 controls/profile.
 - [x] Preserve canvas Down/Move/Up, pointer loss, exact-opening cancellation, competing presses, captured mask palette and admitted tool/target/save boundaries from the combined private Debug/Release/ASan application qualification.
+- [x] Preserve basic lifetime preflight and its 160 cancellation/80 accepted Save/discard/write-failure controls from the full private Debug/Release/ASan application qualification.
 - [ ] Migrate remaining pointer and lifetime opacity closure callers.
 - [ ] Move adjustment and display record construction and retirement to admitted workers.
 - [ ] Qualify the complete native caller migration with the full x64 suites and ARM64 cross-builds.
@@ -16,6 +17,10 @@
 Status: experimental source checkpoint on `codex/p1-opacity-host-proof`, based on `7a0db7c`.
 This branch preserves work for review and continuation. The native working branch retains vector layer storage.
 This candidate has not completed the integration checklist and is not a completed P1 release step.
+
+The [lifetime checkpoint](../../TestRuns/P1DeferredCanvasLifetime_2026-10-04.md) preserves the nonmutating
+prompt/output preflight, exact detached ordinal and original-stream acknowledgement. Modal and broader shutdown
+qualification remain open; native activation and the fresh normal configuration matrix remain required.
 
 ## Source and qualification
 

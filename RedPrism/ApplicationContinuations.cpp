@@ -485,7 +485,7 @@ void Application::FinishHostContinuation(ContinuationReceipt::Result result) noe
     _hostBatchFailed = false;
     _hostBatchError = S_OK;
     _pathClassifications = {};
-    if (!_shutdownStarted && _hostRequests.Size() != 0)
+    if (!_shutdownStarted && (_hostRequests.Size() != 0 || _canvasLifetime))
     {
         (void)_jobs.RequestUiActionSource(_continuationAction);
     }
@@ -497,11 +497,16 @@ void Application::RunHostContinuation() noexcept
     {
         return;
     }
+    if (_canvasLifetime && _canvasLifetime->presenting)
+        return; // A nested modal dispatch cannot select or destroy the presenter-owned request.
+    RunCanvasLifetimePreflight();
+    if (_shutdownStarted)
+        return;
     if (_canvasBrushInput.Busy() && _canvasBrushReceipt.Read().outcome != HostOutcome::Pending)
         RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
     // Preview completion rearms this source so the old record and its full reservation retire before the next
     // capture is admitted. Accepted host mutations take precedence over starting another pending preview.
-    if (!_activeHostRequest && _hostRequests.Size() == 0)
+    if (!_activeHostRequest && _hostRequests.Size() == 0 && !_canvasLifetime)
     {
         LaunchGradientPreview();
         LaunchPixelMovePreview();
@@ -513,12 +518,43 @@ void Application::RunHostContinuation() noexcept
     }
     if (!_activeHostRequest)
     {
-        auto taken = _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
+        const auto* front = _hostRequests.Front();
+        const bool lifetimeNext = _canvasLifetime && (!front || _canvasLifetime->entry.ordinal < front->ordinal);
+        if (lifetimeNext)
+        {
+            if (!CanvasLifetimeCurrent())
+            {
+                FinishCanvasLifetimePreflight({HostOutcome::Stale, E_ABORT});
+                return;
+            }
+            const auto stroke = _canvasLifetime->brushReceipt.Read();
+            if (stroke.outcome == HostOutcome::Pending)
+                return;
+            if (stroke.outcome != HostOutcome::Succeeded &&
+                !(!_canvasLifetime->save && stroke.outcome == HostOutcome::Cancelled))
+            {
+                FinishCanvasLifetimePreflight(stroke);
+                return;
+            }
+            _hostSaveBeforeAction = _canvasLifetime->save;
+            _hostWriteFormat = HostWriteFormat::Project;
+            _hostAfterPrerequisite = HostStage::Execute;
+            _hostAfterPanelCancel = HostStage::TransformDiscard;
+            _hostStage = _canvasLifetime->save     ? HostStage::Settle
+                         : _session.HasColorEdit() ? HostStage::CancelPanel
+                                                   : HostStage::TransformDiscard;
+            _activeHostRequest.emplace(std::move(_canvasLifetime->entry));
+            _canvasLifetime.reset();
+        }
+        auto taken = _activeHostRequest
+                         ? HostRequestQueue::Taken{}
+                         : _hostRequests.TakeReady(_session.DocumentSerial(), false, RetireHostContinuation);
         if (taken.stale != 0)
         {
             _prompts->PostNotice(_window.get(), kNoticeMessage, IDS_STATUS_QUEUED_STALE);
         }
-        _activeHostRequest = std::move(taken.ready);
+        if (!_activeHostRequest)
+            _activeHostRequest = std::move(taken.ready);
         if (!_activeHostRequest)
         {
             return;
@@ -1381,7 +1417,7 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
         _hostCommitStamp.reset();
         _hostPrerequisite = {outcome, error};
     }
-    if (!_hostCommitStamp && (_activeHostRequest || _hostRequests.Size() != 0))
+    if (!_hostCommitStamp && (_activeHostRequest || _hostRequests.Size() != 0 || _canvasLifetime))
     {
         // A queued request may have disarmed behind any earlier history operation. Its finisher notifies here
         // after apply/drop and HistoryWork::Finish; operation migrations must wire this same hook.
@@ -1391,6 +1427,7 @@ void Application::ResumeHostHistory(HistoryWorkStamp stamp, HostOutcome outcome,
 
 void Application::CancelHostContinuations() noexcept
 {
+    FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _shapeCommitPreview.reset();
     SyncToolOverlays();
     (void)_hostRequests.Clear(RetireHostContinuation);
@@ -1528,6 +1565,7 @@ void Application::CancelHostContinuations() noexcept
 
 void Application::StopHostContinuations() noexcept
 {
+    FinishCanvasLifetimePreflight({HostOutcome::Cancelled, E_ABORT});
     _startupPaths.reset();
     if (_hostSourceRegistered)
     {
@@ -1536,6 +1574,8 @@ void Application::StopHostContinuations() noexcept
     }
     (void)_hostRequests.Clear(RetireHostContinuation);
     FinishHostContinuation({HostOutcome::Cancelled, E_ABORT});
+    if (_canvasBrushInput.Busy())
+        RetireCanvasBrush(_canvasBrushReceipt.Read().outcome, _canvasBrushInput.Opening());
 }
 
 namespace

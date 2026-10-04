@@ -152,6 +152,38 @@ template <typename Request> class ContinuationQueue final
         return offset < _count ? &_entries[(_head + offset) % kCapacity].value() : nullptr;
     }
 
+    // Detach only this pending input for independent nonmutating prompt/cancellation handling. A taken/active
+    // entry is never in this queue. The caller owns its receipt and retirement after this move; no callback runs.
+    // At most eight fixed slots move. Surviving input order and the admission ordinal watermark are unchanged,
+    // so removing an admitted barrier cannot make later previews/clicks adjacent across its former ordinal.
+    // All borrowed pending references expire, including references to surviving entries. Never retain one across
+    // a prompt: retain the scalar document/ordinal key and reacquire only when the owner resumes.
+    [[nodiscard]] std::optional<Entry> DetachPending(std::uint64_t documentSerial, std::uint64_t ordinal) noexcept
+    {
+        if (ordinal == 0)
+            return std::nullopt;
+        for (std::size_t offset = 0; offset < _count; ++offset)
+        {
+            const std::size_t slot = (_head + offset) % kCapacity;
+            if (_entries[slot]->documentSerial != documentSerial || _entries[slot]->ordinal != ordinal)
+                continue;
+            auto detached = std::move(_entries[slot]);
+            _entries[slot].reset();
+            for (std::size_t next = offset + 1; next < _count; ++next)
+            {
+                const std::size_t from = (_head + next) % kCapacity;
+                const std::size_t to = (_head + next - 1) % kCapacity;
+                _entries[to] = std::move(_entries[from]);
+                _entries[from].reset();
+            }
+            --_count;
+            if (_count == 0)
+                _head = 0;
+            return detached;
+        }
+        return std::nullopt;
+    }
+
     // Peek metadata to merge commands with earlier recorded strokes. The reference expires at the next queue
     // mutation; it must never be borrowed by a worker or used to take a snapshot early.
     [[nodiscard]] const Entry* Front() const noexcept
