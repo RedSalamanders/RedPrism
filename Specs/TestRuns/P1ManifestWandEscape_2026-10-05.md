@@ -12,10 +12,10 @@
 - [x] Split that fixture into bounded functions, retaining every expectation; fresh private wand r2 reproduces the exact 142-control registry.
 - [x] Repaired identical-source full Debug/Release/real ASan, Release analysis and all ARM64 cross-builds.
 - [x] Verify all predecessor controls/routes/stages, the ten actual held-Escape controls, registration and copied source/product evidence.
-- [ ] Commit and push the qualified combined slice.
+- [x] Commit and push the qualified combined slice: `8183976` on `codex/p1-opacity-host-proof`.
 - [ ] Integrate complete first-display resources, post-mip consumers, host Add/Subtract, Native activation and measured G1 under the parent plan.
 
-Status: full combined slice qualified; commit/push pending. This record does not close P1 or authorize native activation.
+Status: full combined slice qualified and pushed as `8183976`. This record does not close P1 or authorize native activation.
 
 ## Changes and references
 
