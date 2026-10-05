@@ -9,7 +9,7 @@ The image-wrapper residency and original worker/upload transport step is fully q
 
 ## Delivery checklist
 
-- [ ] Current prepared-row extension: r172/r174 preserve actual pointer fixture failures; r174 verifies the corrected stale-group expectation. Primary traced initial selection failure to publishing into an unsized Tree viewport and corrected the fixture ordering. Fresh Debug r175 is running; the identical-source matrix, drag/rename/UIA/cost, production activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
+- [ ] Current prepared-row extension: full Debug r178 and strict private/predecessor/registry proof pass all 18 interaction +18 retry controls (9,943 application controls /83 stages). ARM64 r22 cross-builds pass. Release analysis r179 fails its ISA scanner and is independently archived; its repair and the complete identical-source Release/real ASan/analysis matrix remain due. Drag/rename/UIA/cost, complete consumers, Native activation and G1 remain open ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)).
 
 - [x] Managed prepared layer-row/accounting foundation qualified and pushed as `2aa2a11`: exact identical-source full Debug/Release/real ASan, Release analysis, three ARM64 cross-builds and independent private/predecessor/registry/archive proofs pass ([record](../../TestRuns/P1PreparedLayerRows_2026-10-05.md)). Production prepared rows remain disabled; replacement retry/pressure, remaining interactions/UIA/cost, complete H4, Native activation and G1 remain open.
 - [x] Preserve qualified integration `1936fe6`, private WIP `3f49ea2`, all local receipts/helpers and exact resume instructions; stop all assigned agents.
