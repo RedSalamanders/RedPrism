@@ -13,6 +13,7 @@
 - [x] Skills and formatting pass the combined r58 candidate (651 files); r58/r59 compile failures in the new fixture are archived and repaired; the repaired snapshot passes full Debug r60.
 - [x] Full Debug r60 passes actual Eyedropper plus queued Brush/Gradient/Shape and selected/idle cancellation: 6,604 document / 9,178 application controls, unchanged 79 stages, skills/format gates and 1,038 verified archive copies. Remaining profiles, Alt/live contexts, cross-opening fix and G1 stay due.
 - [x] Full Debug r61 passes eight cross-opening prefix and six actual Alt Brush/Heal/Gradient controls, plus guarded release/trim readiness: 6,604 document / 9,192 application controls, unchanged 79 stages and 1,038 verified copies. Physical terminal/alpha follow-ups and final matrix/G1 remain due.
+- [x] Full Release r62 passes capture release at cancellation/boundaries, 11 physical terminal and four partial-alpha controls: 6,604 document / 9,207 application, original 79 stages and 1,038 verified archive copies. Current combined Debug/ASan/analysis/ARM64, broader picker/lifetime/admission and G1 remain due.
 - [ ] Integrate and runtime-qualify the actual Eyedropper and Alt Brush/Heal/Gradient callers with bounded accepted-coordinate FIFO input and one admitted source capture.
 - [ ] Bind publication to the exact document session, gesture opening and foreground/picker input authority, including equal-value reopen and A–B–A changes.
 - [ ] Preserve older sample / younger palette-dependent brush, gradient and shape ordering through terminal acknowledgement.

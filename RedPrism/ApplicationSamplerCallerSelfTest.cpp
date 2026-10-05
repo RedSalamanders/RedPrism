@@ -162,6 +162,21 @@ int Application::RunSamplerCallerSelfTest() noexcept
             }
         }
     }
+    for (int y = 0; y < kHeight; ++y)
+    {
+        const std::size_t partialAlphaPixel =
+            (static_cast<std::size_t>(y) * static_cast<std::size_t>(kWidth) + 60u) * 4u;
+        (*bgra)[partialAlphaPixel] = 31;
+        (*bgra)[partialAlphaPixel + 1] = 63;
+        (*bgra)[partialAlphaPixel + 2] = 127;
+        (*bgra)[partialAlphaPixel + 3] = 128;
+
+        const std::size_t aboveAlphaPixel = (static_cast<std::size_t>(y) * static_cast<std::size_t>(kWidth) + 62u) * 4u;
+        (*bgra)[aboveAlphaPixel] = 31;
+        (*bgra)[aboveAlphaPixel + 1] = 63;
+        (*bgra)[aboveAlphaPixel + 2] = 127;
+        (*bgra)[aboveAlphaPixel + 3] = 16;
+    }
     const Raster source = Raster::Make(kWidth, kHeight, RasterFormat::Bgra8888, bgra->data(), bgra->size());
     if (!source.HasStorage())
     {
@@ -496,6 +511,59 @@ int Application::RunSamplerCallerSelfTest() noexcept
                        "sampler-caller.alt-gradient.opaque-middle-publishes-without-document-edit"))
         return 5;
 
+    const auto runAlphaSample = [this, &installFixture, &pointer, &check, &settle,
+                                 &samplerSlotsClear](int sampleX, std::uint32_t expectedArgb, const char* inputControl,
+                                                     const char* settledControl) noexcept
+    {
+        if (!settle())
+            return false;
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        const Guid fixtureRevision = _session.history.CurrentRevision();
+        const int fixtureUndo = _session.history.UndoCount();
+        const std::uint64_t fixtureGeneration = _session.Generation();
+
+        pointer(WM_LBUTTONDOWN, Vec2{static_cast<double>(sampleX), 15.0});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const std::uint64_t opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = opening != 0 ? FindSamplerOpening(opening) : nullptr;
+        const ContinuationReceipt receipt = pending ? pending->receipt : ContinuationReceipt{};
+        const bool oneScalarPoint = sampling && sampling->opening.has_value() && !sampling->composite.has_value() &&
+                                    pending && pending->points.PendingCount() == 1 &&
+                                    receipt.Read().outcome == ContinuationOutcome::Pending && !_samplerHostTicket &&
+                                    _samplerHostJob == nullptr;
+        pointer(WM_LBUTTONUP, Vec2{0.0, 15.0}); // The opaque blue release coordinate must not be sampled.
+        const auto* sealed = opening != 0 ? FindSamplerOpening(opening) : nullptr;
+        if (!check(oneScalarPoint && sealed && sealed->points.PendingCount() == 1 &&
+                       !std::holds_alternative<ColorSampling>(_drag) &&
+                       _session.history.CurrentRevision() == fixtureRevision &&
+                       _session.history.UndoCount() == fixtureUndo && _session.Generation() == fixtureGeneration,
+                   L"The alpha sample did not seal exactly its Down point or sampled the blue release coordinate.\n",
+                   inputControl))
+            return false;
+
+        if (!settle())
+        {
+            SelfTestFailure(L"An alpha sampler opening did not settle.\n");
+            return false;
+        }
+        return check(
+            receipt.Read().outcome == ContinuationOutcome::Succeeded && _session.ForegroundColor() == expectedArgb &&
+                _session.history.CurrentRevision() == fixtureRevision && _session.history.UndoCount() == fixtureUndo &&
+                _session.Generation() == fixtureGeneration && !_samplerHostTicket && !_samplerHostStamp &&
+                _samplerHostJob == nullptr && !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() &&
+                _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0 && samplerSlotsClear() &&
+                FindSamplerOpening(opening) == nullptr,
+            L"The alpha sample produced the wrong straight color, changed document history, or left sampler work.\n",
+            settledControl);
+    };
+    if (!runAlphaSample(60, 0xFFFD7E3Eu, "sampler-caller.alpha-half.down-only-no-release-sample",
+                        "sampler-caller.alpha-half.straight-color-and-retirement"))
+        return 5;
+    if (!runAlphaSample(62, 0xFFFFFFFFu, "sampler-caller.alpha-low.down-only-no-release-sample",
+                        "sampler-caller.alpha-low.clamped-straight-color-and-retirement"))
+        return 5;
+
     installFixture();
     _session.SetForegroundColor(kMagenta);
     OnTool(EditorTool::Brush);
@@ -514,6 +582,106 @@ int Application::RunSamplerCallerSelfTest() noexcept
                L"A brush press after the manual write did not use its magenta live palette color.\n",
                "sampler-caller.younger-press-paints-captured-magenta"))
         return 5;
+
+    enum class Terminal : std::uint8_t
+    {
+        CapturedLeave,
+        CapturelessLeave,
+        CaptureChanged,
+        CancelMode,
+        Escape
+    };
+    struct TerminalCase final
+    {
+        Terminal terminal;
+        const char* immediate;
+        const char* retired;
+    };
+    constexpr std::array<TerminalCase, 5> terminals{{
+        {Terminal::CapturedLeave, "sampler-caller.terminal.captured-leave-then-up-seals-only-prefix",
+         "sampler-caller.terminal.captured-leave-prefix-acknowledged"},
+        {Terminal::CapturelessLeave, "sampler-caller.terminal.captureless-leave-seals-only-prefix",
+         "sampler-caller.terminal.captureless-leave-prefix-acknowledged"},
+        {Terminal::CaptureChanged, "sampler-caller.terminal.capture-change-seals-only-prefix",
+         "sampler-caller.terminal.capture-change-prefix-acknowledged"},
+        {Terminal::CancelMode, "sampler-caller.terminal.cancel-mode-seals-only-prefix",
+         "sampler-caller.terminal.cancel-mode-prefix-acknowledged"},
+        {Terminal::Escape, "sampler-caller.terminal.escape-cancels-and-releases-capture",
+         "sampler-caller.terminal.escape-acknowledges-without-late-publication"},
+    }};
+    for (const auto& test : terminals)
+    {
+        if (!settle())
+            return 5;
+        installFixture();
+        OnTool(EditorTool::Eyedropper);
+        _chrome->SetCanvasFocused(true);
+        const auto sourceAuthority = _session.CaptureDocumentReadAuthority();
+        const auto revision = _session.history.CurrentRevision();
+        const auto undo = _session.history.UndoCount();
+        pointer(WM_LBUTTONDOWN, Vec2{0, 15});
+        pointer(WM_MOUSEMOVE, Vec2{20, 15});
+        pointer(WM_MOUSEMOVE, Vec2{40, 15});
+        const auto* sampling = std::get_if<ColorSampling>(&_drag);
+        const auto opening = sampling && sampling->opening ? sampling->opening.value() : 0;
+        const auto* pending = FindSamplerOpening(opening);
+        if (!pending || pending->points.PendingCount() != 3 || GetCapture() != _window.get())
+        {
+            SelfTestFailure(L"The physical sampler terminal fixture did not retain its captured prefix.\n");
+            return 5;
+        }
+        const ContinuationReceipt receipt = pending->receipt;
+        if (test.terminal == Terminal::CapturedLeave)
+        {
+            (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
+            pointer(WM_MOUSEMOVE, Vec2{20, 15}); // Capture-held leave must still accept a real subsequent move.
+            if (!check(GetCapture() == _window.get() && std::holds_alternative<ColorSampling>(_drag) &&
+                           pending->points.PendingCount() == 4 && receipt.Read().outcome == HostOutcome::Pending,
+                       L"Captured pointer leave incorrectly ended the live sampler gesture.\n",
+                       "sampler-caller.terminal.captured-leave-remains-live"))
+                return 5;
+            pointer(WM_LBUTTONUP, Vec2{0, 15}); // An opaque release location must not replace the brown prefix.
+        }
+        else if (test.terminal == Terminal::CapturelessLeave)
+        {
+            _releasingCapture = true;
+            (void)ReleaseCapture();
+            _releasingCapture = false;
+            (void)SendMessageW(_window.get(), WM_MOUSELEAVE, 0, 0);
+        }
+        else if (test.terminal == Terminal::CaptureChanged)
+        {
+            (void)ReleaseCapture(); // Delivers the real WM_CAPTURECHANGED through this HWND's window procedure.
+        }
+        else if (test.terminal == Terminal::CancelMode)
+            (void)SendMessageW(_window.get(), WM_CANCELMODE, 0, 0);
+        else if (!HandleAccelerator(VK_ESCAPE, 0))
+        {
+            SelfTestFailure(L"The keyboard route did not take Escape for a physical sampler gesture.\n");
+            return 5;
+        }
+        const bool cancelled = test.terminal == Terminal::Escape;
+        const auto* ended = FindSamplerOpening(opening);
+        if (!check(std::holds_alternative<std::monostate>(_drag) && GetCapture() != _window.get() &&
+                       (cancelled || (ended && ended->points.PendingCount() ==
+                                                   (test.terminal == Terminal::CapturedLeave ? 4u : 3u))) &&
+                       _session.ForegroundColor() == kBlue && sourceAuthority &&
+                       _session.IsDocumentReadCurrent(sourceAuthority.value()) &&
+                       _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo,
+                   L"A sampler terminal kept capture, invented a point or mutated the document inline.\n",
+                   test.immediate))
+            return 5;
+        if (!check(
+                settle() && receipt.Read().outcome == (cancelled ? HostOutcome::Cancelled : HostOutcome::Succeeded) &&
+                    _session.ForegroundColor() == (cancelled ? kBlue : 0xFF804020u) &&
+                    _session.IsDocumentReadCurrent(sourceAuthority.value()) &&
+                    _session.history.CurrentRevision() == revision && _session.history.UndoCount() == undo &&
+                    !FindSamplerOpening(opening) && samplerSlotsClear() && !_samplerHostTicket && !_samplerHostStamp &&
+                    !_samplerHostJob && !_activeHostRequest && !_hostRequests.Size() && !_historyWork.Busy() &&
+                    _jobs.ReservedMemoryBytes() == 0 && _composition.UtilitySurfaceBytes() == 0,
+                L"A physical sampler terminal changed its outcome/prefix or retained graph resources.\n", test.retired))
+            return 5;
+    }
 
     std::printf("PASS sampler-caller.fixture-restore-scheduled\n");
     return 0;

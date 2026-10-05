@@ -283,3 +283,49 @@ source manifest `E39F625FB31200D5400FE47E3059E08D7845134A255453373C06ACA317DCDC4
 Newer physical leave/capture-loss/Cancel Mode/Escape and partial-alpha fixtures are absent from r61.
 Release/ASan/current analysis/ARM64, native activation, broader picker/lifetime/admission cases, H3/H4 and G1 remain
 open. This qualifies its exact Debug snapshot only and remains a WIP checkpoint.
+
+
+## Physical terminals and partial alpha - r62 pending
+
+The reviewed source adds real captured/captureless pointer leave, WM_CAPTURECHANGED, WM_CANCELMODE and Escape
+controls. A capture-held leave accepts another Move; other loss paths seal accepted points, while Escape cancels
+without late palette publication. Tests require exact receipt, original source/history and complete retirement.
+Retiring or sealing a matching physical sampler drag now releases this HWND's capture under the existing
+reentrancy guard. No synthetic Up sample, rollback or replacement gesture is introduced.
+
+Four physical numeric controls cover BGRA 31/63/127/128 -> 0xFFFD7E3E and above-alpha clamp -> 0xFFFFFFFF.
+They release over an opaque blue pixel to prove Up cannot replace the accepted Down result.
+Skills validate 15 skills and format/check pass 651 files. Full Release r62 began at
+2026-10-05T00:43:54.220693Z (recorder 95964); actual result, source freeze and archive are pending.
+This source is frozen through completion. No Release runtime, current matrix or G1 claim is established yet.
+
+
+## Physical terminals and alpha - full Release r62
+
+Actual child 29472, 2026-10-05T00:43:59.435227Z-00:50:37.524131Z, exit **0**; 771 unchanged inputs,
+freeze `CB8CC88E46FF41A3A58DF9F9801BFBE8868C36FCF08E4C52578530F116CAF3A4`.
+Stdout `1F4D483ECE49E5B95ED42F4616C8BF6DF96C7D3E68D5B36631C070A55C5A02C1`, stderr
+`1B33E0DBF238AA9B9AB197009995026A2062FF311AAE0DC43B3BF40D7B846B27`.
+All full runtime suites, unchanged instruction/PDB/scanner controls, WARP application, crash probes, CLI/build/RAW
+fixtures and screenshots pass. Skills/format passed before the freeze.
+
+The independent archived stdout-plus-stderr comparison preserves literal control multiplicities and all
+**79 ordered stages**: **6,604 document**, **9,207 application** (9,192 + 11 terminal + four alpha).
+The initial comparison helper incorrectly assumed every application control was unique and only on stdout;
+that verification assertion failed without changing source or rerunning runtime. The corrected helper reads
+both archived streams and compares counters, as the existing qualification convention requires.
+Proof `verified-terminal-alpha-registries.json` SHA-256
+`33C15C3E026A0B2544210513270008D6E2AED5E276AEFE05DAA0DDBC95167F86`.
+
+Archive `p1-sampler-terminals-alpha-x64-Release-r62-full-qualified` independently verifies **1,038 copies / 79 stages**
+at 2026-10-05T00:51:42.1303922Z. Completion `282FFDD1F7B15427D0D84BC5987C684DF9362AB4D6E8DB9D900793C563B69F7E`,
+source manifest `A4B45232441AFE3E8C2BD956A3822AB5C283EB3BDF756654D89291DEA700806C`, evidence manifest
+`4E3231AF20910F883F400BC90E560D2C6B5B737FC61BA1715AF6173EE371FAD2`.
+
+The capture-held leave stays live; captureless leave, capture change and Cancel Mode seal exactly their accepted
+prefix and resolve brown. Escape returns Cancelled and releases capture without late publication. Alpha controls
+retain the independent literal expectations and prove the opaque release location is never sampled. Source,
+history and generation stay exact and all sampler resources retire.
+
+This is Release correctness qualification, not a latency measurement. Current combined Debug/ASan/analysis/ARM64,
+actual picker target/lifetime/admission breadth, native activation, H3/H4 and original G1 remain open.

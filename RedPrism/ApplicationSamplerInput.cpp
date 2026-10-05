@@ -200,6 +200,12 @@ void Application::RetireSamplerOpening(std::uint64_t openingId) noexcept
     if (const auto* sampling = std::get_if<ColorSampling>(&_drag); sampling && sampling->opening == openingId)
     {
         _drag = PointerDrag{}; // An asynchronous drag holds scalar ring metadata only.
+        if (_window && GetCapture() == _window.get())
+        {
+            _releasingCapture = true;
+            (void)ReleaseCapture();
+            _releasingCapture = false;
+        }
         _layoutDirty = true;
         _frameInvalidated = true;
     }
@@ -215,6 +221,12 @@ void Application::SealSamplerForBoundary() noexcept
     if (const auto* sampling = std::get_if<ColorSampling>(&_drag); sampling && sampling->opening)
     {
         _drag = PointerDrag{};
+        if (_window && GetCapture() == _window.get())
+        {
+            _releasingCapture = true;
+            (void)ReleaseCapture();
+            _releasingCapture = false;
+        }
         _layoutDirty = true;
         _frameInvalidated = true;
     }
