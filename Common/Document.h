@@ -868,6 +868,10 @@ struct CanvasDocument
     RecordRoot<ImageLayer> layers;
     std::optional<DocumentSelection> selection;
     [[nodiscard]] bool operator==(const CanvasDocument&) const noexcept = default;
+    // Complete conservative CPU ownership of this source only, using immutable layer/selection caches.
+    // Includes potential sparse assembly; sharing may overcount. No traversal/allocation/materialization.
+    // Zero refuses an unavailable child bound or overflow; a valid default empty root has a nonzero bound.
+    [[nodiscard]] std::uint64_t RetirementMemoryBytes() const noexcept;
 };
 
 // Result tokens own their source handles: a freed storage address can never alias a new image. The complete

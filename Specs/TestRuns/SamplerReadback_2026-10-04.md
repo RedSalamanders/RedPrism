@@ -485,3 +485,52 @@ verified 2026-10-05T02:02:33.3150033Z. Completion
 The first proof script mistakenly expected lowercase UI smoke text; correcting that diagnostic assertion
 changes neither source nor runtime. Cached source-only document admission is absent from r66. Combined
 Release/ASan/analysis/ARM64, native integration, broader callers and original G1 remain open.
+
+## Cached source admission - ASan Debug r67 build refusal
+
+The source-only document bound and 20 new ownership checks enter full ASan Debug qualification. Actual child
+19528, 2026-10-05T02:05:43.064484Z-02:06:52.007003Z, exit **1**. The new test's inner `ImageLayer layer`
+hides its earlier full-child fixture variable (C4456, treated as error); runtime is not reached. Primary repairs
+the inner variable name to `record` without changing compiler gates or expectations. The secondary review missed
+that warning. Skills and format had passed; those do not establish compilation.
+
+Freeze `9923CF2B59D9D224AFE95AF0E4112C94A44587CECDFA63CC36D5DDB1E24694CF`; stdout
+`35326A657C754276D669D3E3D7FAA4E36EDA426D386CB55112C4F0CDA22340C7`; stderr
+`A8A4252C62957836AF4D50437F1F3B8C24BB1945D8E3E2F5B7FD1DA6346E00C7`.
+Archive `p1-sampler-cached-source-x64-ASanDebug-r67-failed` independently verifies **1,045 copies**, zero
+current runtime stages, at 2026-10-05T02:10:27.2601350Z. Completion
+`83C71F777FE34456B4BC198CE3F1C9A8856F600559946109677187D409822761`; source manifest
+`9938DE60CD144ED4F8DCD02279DC32FAEF71093B23CE46794D0362182D47D515`; evidence manifest
+`879327A3EF488CF60E96D3AF2D3D9DFCDC227A40BA72DF61280500763EA8C94B`.
+Old products/logs included for preservation do not qualify this failed attempt. Fresh r68 tests the repaired
+snapshot; source-only admission, the final matrix and G1 remain pending.
+
+## Cached complete source-only admission - full ASan Debug r68
+
+Actual child 36388, 2026-10-05T02:11:45.349099Z-02:24:54.642310Z, exit **0**, 771 unchanged inputs.
+Freeze `F04A8580A1D0815AE1E2A9112A020F70E55191F500AA6CB82647BC23D3680196`; stdout
+`EE5CE8B923566265930DF915387504A0A04B27806E16F06BA8B3A9163A485B78`; stderr
+`3C1F935C1792B6B87F348036A14BB1ABE557E71E7DA84C90FFD83664EB450218`. Skills/format pass before freeze.
+Full suites, unchanged ISA/PDB/scanner controls, real isolated ASan diagnostic, WARP/crash probes, CLI/build/RAW
+fixtures, both UI smoke paths and harness screenshots pass. No legacy numeric expectation is changed.
+
+Sampler admission now reads the complete immutable document source bound in constant time. It includes cached
+layer/name/curve/raster ownership, selection capacity/control allowances and potential sparse assembly, while
+excluding history the sampler does not capture. Missing/overflowed child bounds refuse before capture. Twenty
+new controls cover full child owners, default/published empty roots, copy/replacement, selection immutability,
+late assembly, an unmeasurable nested child and repeated 10,000-record queries. Primary reviews the agent tests
+and source; secondary review reports no concrete undercount/lifetime issue, but misses the archived r67 shadow
+warning. The repaired compiled tests pass. Source admission alone does not close exact history accounting or uploads.
+
+Independent proof preserves all preceding application PASS lines, **9,266 named application** controls and all
+**79 stages**. Document PASS lines equal the complete preceding registry plus precisely twenty new source-bound
+controls: **6,624** total. Proof `verified-cached-source-registries.json` SHA-256
+`93909BE94E7347EF2110DA8E4EFA67BDB0058A1CD74B4F0C25E8ACD2094EEC8E`.
+Archive `p1-sampler-cached-source-x64-ASanDebug-r68-full-qualified`: **1,048 copies / 79 stages**, independently
+verified 2026-10-05T02:26:31.2968689Z. Completion
+`BFD40D5B8B022E210C9FF7B7093E9EEC470CBAC3795948F786B1F0BC8CDD1AC2`; source manifest
+`3993DDF679EBE977FDAE07EA546F6BF7DAF9BAC499765C650D7B63F1A7C57357`; evidence manifest
+`A0FD123DD43FF77EE4D3CE90726E754F3DDC7D1E6747DA9234E61C7D7798CD14`.
+
+Cached history-stack admission and actual sampler memory-wait/refusal controls are absent from r68. Current
+Debug/Release/analysis/ARM64, native activation, broader callers/H3/H4 and original G1 remain due.

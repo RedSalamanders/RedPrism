@@ -73,6 +73,34 @@ std::optional<RecordOwnershipBounds> RecordOwnershipPolicy<ImageLayer>::Measure(
     return result;
 }
 
+std::uint64_t CanvasDocument::RetirementMemoryBytes() const noexcept
+{
+    const auto layerBounds = layers.OwnershipBounds();
+    // A default empty handle owns no root. A published root with unavailable bounds must be refused.
+    if (!layerBounds && layers.Identity() != nullptr)
+        return 0;
+    std::uint64_t bytes = 64 * 1024 + sizeof(CanvasDocument);
+    const auto add = [&bytes](std::uint64_t amount) noexcept
+    {
+        if (amount > (std::numeric_limits<std::uint64_t>::max)() - bytes)
+            return false;
+        bytes += amount;
+        return true;
+    };
+    if (layerBounds && !add(layerBounds->ownershipBytes))
+        return 0;
+    if (selection)
+    {
+        // StorageBytes covers retained outer/inner vector capacities. Charge the outer shared control/proxy
+        // and each constructed inner vector's allocator/Debug proxy without visiting its points or loops.
+        const auto loopCount = selection->loops.size();
+        if (loopCount > ((std::numeric_limits<std::uint64_t>::max)() - 64) / 64 ||
+            !add(selection->loops.StorageBytes()) || !add(64 + static_cast<std::uint64_t>(loopCount) * 64))
+            return 0;
+    }
+    return bytes;
+}
+
 Guid Guid::Generate() noexcept
 {
     GUID value{};

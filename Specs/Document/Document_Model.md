@@ -97,6 +97,16 @@ occurrence, including possible sparse assembly. Shared occurrences intentionally
 materializes pixels. These bounds remain stable after lazy assembly. They do not replace exact history deduplication,
 process headroom or complete operation admission/retirement. Application use and G1 remain separately qualified.
 
+`CanvasDocument::RetirementMemoryBytes` supplies a complete conservative bound for that immutable source only.
+It reads the sealed layer root and construction-cached selection storage in constant time, without allocation,
+record/point traversal or pixel materialization. The bound includes a 64 KiB root/rounding allowance, the document
+header, complete cached layer ownership, selection retained capacities, and 64-byte outer and per-constructed-loop
+control/allocator allowances. Shared occurrences may overcount. Possible sparse assembly is included before Data
+publishes it. A default empty layer handle has a valid nonzero bound; a published root with unavailable child bounds
+or arithmetic overflow returns zero and MUST cause admission refusal. This source bound excludes unrelated history
+and display owners. Consumers MUST additionally charge their job, readback, producer and retirement peaks. It
+does not replace exact history accounting, global memory admission or first-upload/G1 qualification.
+
 Pure layer reads (`IndexOf`, hierarchy/clipping validation, hierarchy entries, descendants and effective
 visibility) borrow `std::span<const ImageLayer>`. Array, sliced, vector and immutable-root ranges retain their
 own order; lookup indices are relative to the supplied range. Validation refuses a required parent/clipping

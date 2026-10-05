@@ -1205,12 +1205,15 @@ It never starts, stops or cancels a system trace; missing WPR or an invalid prof
 maxima including loop cost. It refuses an already-enabled external timing session so its disabled-path numbers
 are interpretable. This is instrumentation overhead only; operation baselines and G1 remain in the WIP plan.
 
-`RedPrism.exe --bench ui|ui45|ui100|ui-smoke` is the opt-in application-loop measurement described in
+`RedPrism.exe --bench ui|ui45|ui100|ui-smoke|ui-sampler|ui-sampler45|ui-sampler100|ui-sampler-smoke` is the opt-in application-loop measurement described in
 [`Testing_Benchmarks.md`](Testing_Benchmarks.md). Smoke validates completion and output with no timing threshold;
 its 27 operation rows include production project open/save, image imports, PNG/JPEG export, ordered gradient
 preview/apply and an accepted sampler prefix. Sampler trials require three point copies each, the independent
 composite color, unchanged source/history and complete graph retirement.
-normal test runs never download the RAW corpus.
+Focused sampler modes reuse those fixtures and production loop with one operation. Their separate initial-display
+and excluded-warmup boundary rows are outside the recorded trials. The focused smoke requires one operation,
+six recorded copies, two valid boundary rows and complete retirement; it imposes no latency threshold.
+Normal test runs never download the RAW corpus.
 
 Smoke may render with the session display off, while full measurements refuse that state. It validates ordered
 elapsed distributions and the total Present count over two trials. Scheduler tests that inspect undrained job

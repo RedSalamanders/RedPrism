@@ -246,8 +246,10 @@ HRESULT Application::StartSamplerReadback(std::uint64_t openingId) noexcept
     const auto x = static_cast<unsigned int>(point->point.x);
     const auto y = static_cast<unsigned int>(point->point.y);
     const D3D11_BOX region{x, y, 0, x + 1, y + 1, 1};
-    // Conservative full held graph charge. Cached source-only indexes and owner upload bounds remain H3/H4 gates.
-    const auto held = _session.history.RetirementMemoryBytes(_session.Document());
+    // The sampler captures only this immutable source, never history snapshots. Its cached complete bound
+    // includes selection and possible sparse assembly; no layer/name/history traversal occurs in admission.
+    // Exact retained-history deduplication and first-upload bounds remain separate H3/H4 requirements.
+    const auto held = _session.Document()->RetirementMemoryBytes();
     auto memory = DocumentReadbackJob::RequiredMemory(region);
     const auto metadata = sizeof(SamplerHostJob) + sizeof(SamplerReadbackPayload) + sizeof(SamplerState) + 8192ull;
     if (!held || !memory || !AddSamplerBytes(memory, held) || !AddSamplerBytes(memory, metadata))
