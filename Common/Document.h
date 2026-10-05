@@ -239,6 +239,13 @@ class Raster
     {
         return _storage ? _storage->retirementBytes : 0;
     }
+    // Construction-time bound for this storage alone: header, tile-container capacity and pixels, including
+    // a future sparse assembly. Base/tile storages are excluded. Unique ownership indexes sum it once per
+    // held identity. It remains available when repeated child occurrences overflow the complete graph bound.
+    [[nodiscard]] std::uint64_t StorageRetirementMemoryBytes() const noexcept
+    {
+        return _storage ? _storage->selfRetirementBytes : 0;
+    }
     [[nodiscard]] std::uint64_t RetirementNodeCount() const noexcept
     {
         return _storage && _storage->retirementBytes ? _storage->graphNodes : 0;
@@ -265,6 +272,7 @@ class Raster
         int baseX = 0;
         int baseY = 0;
         std::vector<RasterTile> tiles;
+        std::uint64_t selfRetirementBytes = 0;
         std::uint64_t retirementBytes = 0;
         std::uint64_t graphNodes = 1;
         unsigned int graphDepth = 0;
@@ -1480,6 +1488,10 @@ class HistoryStorageTopology final
     {
         return _selection;
     }
+    [[nodiscard]] const RecordRoot<ImageLayer>& RecordOwner() const noexcept
+    {
+        return _layers;
+    }
     [[nodiscard]] std::uint64_t MetadataBytes() const noexcept
     {
         return _metadataBytes;
@@ -1503,6 +1515,7 @@ class DocumentHistory
   private:
     struct Entry;
     struct Pending;
+    struct StorageIndex;
     using EntryHandle = std::shared_ptr<const Entry>;
 
   public:
@@ -1530,9 +1543,9 @@ class DocumentHistory
         StateView& operator=(const StateView&) = default;
         StateView(StateView&& source) noexcept
             : past(std::move(source.past)), future(std::move(source.future)), pending(std::move(source.pending)),
-              owner(std::exchange(source.owner, nullptr)), revision(source.revision), epoch(source.epoch),
-              depth(source.depth), entryLimit(source.entryLimit), byteLimit(source.byteLimit),
-              requirePredecessor(std::exchange(source.requirePredecessor, false)),
+              storageIndex(std::move(source.storageIndex)), owner(std::exchange(source.owner, nullptr)),
+              revision(source.revision), epoch(source.epoch), depth(source.depth), entryLimit(source.entryLimit),
+              byteLimit(source.byteLimit), requirePredecessor(std::exchange(source.requirePredecessor, false)),
               precedingPast(std::move(source.precedingPast)), precedingFuture(std::move(source.precedingFuture)),
               precedingPending(std::move(source.precedingPending)), precedingDepth(source.precedingDepth)
         {
@@ -1544,6 +1557,7 @@ class DocumentHistory
                 past = std::move(source.past);
                 future = std::move(source.future);
                 pending = std::move(source.pending);
+                storageIndex = std::move(source.storageIndex);
                 owner = std::exchange(source.owner, nullptr);
                 revision = source.revision;
                 epoch = source.epoch;
@@ -1582,6 +1596,7 @@ class DocumentHistory
         HistoryEntries<EntryHandle> past;
         HistoryEntries<EntryHandle> future;
         std::shared_ptr<const Pending> pending;
+        std::shared_ptr<const StorageIndex> storageIndex;
         const DocumentHistory* owner = nullptr; // opaque identity only; workers never dereference the live history
         Guid revision;
         std::uint64_t epoch = 0;
@@ -1629,6 +1644,9 @@ class DocumentHistory
         ReplacementSnapshot,
         AdjustmentSnapshot,
         SelectionSnapshot,
+        StorageIndexClone,
+        StorageIndexMembership,
+        StorageIndexBounds,
     };
     // Borrowed for this preparation only. Deterministic worker tests may cancel or throw bad_alloc at these
     // construction boundaries. Production leaves it empty; callbacks never consult live history or UI.
@@ -1787,7 +1805,8 @@ class DocumentHistory
     [[nodiscard]] std::uint64_t RestoreMemoryBytes(const std::optional<CanvasDocument>& current,
                                                    bool redo) const noexcept;
     // Conservative held-graph capacity for retirement, including current, pending, past/future and an optional
-    // additional raster owner. Occurrences deliberately overcount sharing; no set/allocation/materialization.
+    // additional raster owner. Prepared stacks use a worker-sealed unique owning index; reference stacks and
+    // unmatched/pending/additional sources retain occurrence bounds. No set/allocation/materialization on read.
     // Includes a possible sparse materialization cache. Zero refuses overflow or a graph deeper than 128.
     // Reads construction-cached immutable stack/document bounds only. Exact retained-storage indexes remain H3.
     [[nodiscard]] std::uint64_t RetirementMemoryBytes(const std::optional<CanvasDocument>& current,
@@ -1816,7 +1835,7 @@ class DocumentHistory
     [[nodiscard]] static std::shared_ptr<const Snapshot> SealSnapshot(Snapshot snapshot, const StateView& state,
                                                                       CancelToken cancellation = {});
     [[nodiscard]] static bool TrimPrepared(StateView& state, const std::optional<CanvasDocument>& current,
-                                           CancelToken cancellation);
+                                           CancelToken cancellation, PrepareObserver observer);
 
     struct Pending
     {
@@ -1829,6 +1848,7 @@ class DocumentHistory
     Guid _revision = Guid::Generate();
     Guid _savedRevision;
     std::shared_ptr<const Pending> _pending;
+    std::shared_ptr<const StorageIndex> _storageIndex;
     std::uint64_t _stateEpoch = 1;
     int _depth = 0;
     int _entryLimit = kHistoryEntryLimit;

@@ -58,6 +58,17 @@ template <typename Handle> class HistoryEntries final
     {
         return _root ? _root->bounds : std::optional(RecordOwnershipBounds{});
     }
+    // This immutable stack allocation only, from its sealed capacity in constant time. A complete unique
+    // index charges the separately owned entries/snapshots instead of summing their occurrence bounds here.
+    [[nodiscard]] std::optional<std::uint64_t> StorageMetadataBytes() const noexcept
+    {
+        if (!_root)
+            return std::uint64_t{};
+        constexpr auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+        if (_root->values.capacity() > (maximum - sizeof(Storage) - 64) / sizeof(Handle))
+            return std::nullopt;
+        return sizeof(Storage) + 64 + _root->values.capacity() * sizeof(Handle);
+    }
 
     void clear() noexcept
     {

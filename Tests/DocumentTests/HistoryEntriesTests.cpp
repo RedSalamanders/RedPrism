@@ -253,6 +253,53 @@ void TestOwnershipCacheRefusesInvalidChildrenAndOverflow()
            "ownership-cache-unmeasurable-handle-keeps-valid-entry");
 }
 
+void TestStackStorageMetadataExcludesChildrenAndPreservesRoots()
+{
+    OwnershipMeasure measure;
+    MeasuredEntries entries;
+    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}),
+           "storage-only-default-handle-owns-zero-bytes");
+    constexpr std::uint64_t kLargeChild = 1024 * 1024;
+    entries.push_back(MakeMeasuredEntry(measure, 3, RecordOwnershipBounds{0, kLargeChild, 1}));
+    const auto stackBytes = entries.StorageMetadataBytes();
+    const auto calls = measure.calls;
+    Expect(stackBytes && *stackBytes == ExpectedRootBytes(entries) && *stackBytes < 4096 &&
+               entries.OwnershipBounds()->ownershipBytes >= kLargeChild,
+           "storage-only-header-capacity-excludes-one-mib-child");
+    const auto captured = entries;
+    bool stable = true;
+    for (unsigned int query = 0; query < 1024; ++query)
+        stable =
+            stable && entries.StorageMetadataBytes() == stackBytes && captured.StorageMetadataBytes() == stackBytes;
+    Expect(stable && measure.calls == calls && captured.Identity() == entries.Identity(),
+           "storage-only-queries-never-measure-children-or-clone-root");
+    entries.push_back(MakeMeasuredEntry(measure, 4, RecordOwnershipBounds{0, 8 * kLargeChild, 1}));
+    Expect(entries.StorageMetadataBytes() && *entries.StorageMetadataBytes() < 4096 &&
+               captured.StorageMetadataBytes() == stackBytes && captured.size() == 1 && captured.back()->value_ == 3,
+           "storage-only-old-root-survives-new-eight-mib-child");
+    MeasuredEntries moved = std::move(entries);
+    Expect(entries.StorageMetadataBytes() == std::optional(std::uint64_t{}) && moved.StorageMetadataBytes() &&
+               moved.size() == 2 && moved.back()->value_ == 4,
+           "storage-only-move-transfers-capacity-and-clears-source");
+    moved.clear();
+    Expect(moved.StorageMetadataBytes() == std::optional(std::uint64_t{}) &&
+               captured.StorageMetadataBytes() == stackBytes,
+           "storage-only-clear-preserves-captured-allocation");
+    MeasuredEntries unavailable;
+    unavailable.push_back(MakeMeasuredEntry(measure, 5, std::nullopt));
+    const auto unavailableCalls = measure.calls;
+    Expect(!unavailable.OwnershipBounds() && unavailable.StorageMetadataBytes() &&
+               *unavailable.StorageMetadataBytes() == ExpectedRootBytes(unavailable) &&
+               measure.calls == unavailableCalls,
+           "storage-only-unavailable-child-does-not-hide-own-allocation");
+    HistoryEntries<std::shared_ptr<const int>> unsupported;
+    unsupported.push_back(std::make_shared<const int>(7));
+    Expect(!unsupported.OwnershipBounds() && unsupported.StorageMetadataBytes() &&
+               *unsupported.StorageMetadataBytes() >= unsupported.capacity() * sizeof(std::shared_ptr<const int>) &&
+               *unsupported.StorageMetadataBytes() < 4096 && *unsupported.back() == 7,
+           "storage-only-unmeasurable-handle-keeps-valid-self-bound");
+}
+
 bool ValuesAre(const Entries& entries, const int* expected, std::size_t count) noexcept
 {
     if (entries.size() != count)
@@ -633,6 +680,7 @@ int RunHistoryEntriesTests()
     TestOwnershipCacheMutationAndRootSnapshots();
     TestOwnershipCachePopAndEraseRestoreCompleteBounds();
     TestOwnershipCacheRefusesInvalidChildrenAndOverflow();
+    TestStackStorageMetadataExcludesChildrenAndPreservesRoots();
     TestEmptySharingAndReads();
     TestPopEraseAndNoOpErase();
     TestClearSwapAndMoves();

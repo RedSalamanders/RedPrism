@@ -25,6 +25,25 @@ document's selection identity. Its cached charge includes the outer vector objec
 and each loop's retained point capacity; spare capacity counts. Opaque allocator/control-block overhead is
 covered by global headroom. The byte query never traverses selection points. Empty geometry owns no storage.
 
+## Managed P1.9 H3 storage-index candidate
+
+The managed candidate uses a sealed `DocumentHistory::StorageIndex` whose identity keys own their entries,
+rasters and selections. Workers clone index containers and update membership for changed entries; transferring
+an entry between Undo and Redo leaves membership unchanged. Complete live raster/selection identities are excluded.
+`RetainedBytes` resamples unique resident storage on query; its diagnostic does not authorize a cached trim decision.
+Worker sampling and bounds construction still scan distinct owners, so changed-entry membership alone does not
+qualify H3's delta cost. Reference methods and unmatched documents retain the complete traversal fallback.
+
+Cached retirement charges unique raster self-storage capacity (including future sparse assembly), selection
+capacity and layer/index/entry metadata. History-stack own metadata is an O(1) sealed-capacity calculation.
+Pending, unmatched and additional-source bounds remain conservative. Partially constructed indexes stay uniquely
+producer-owned; only successful checked bounds permit shared immutable publication. Owner publication swaps the
+old index into the worker-retired result. Sealed indexes use `AlwaysOnOwner` with their true byte bound, including
+small graphs; other release policies and the release-node layout remain unchanged. Workers without an owner TLS
+sink destroy inline. This candidate passes full managed x64 Debug r74, Release r75 and ASan Debug r76; native activation,
+current analysis/ARM64, late materialization and publication/reprepare synchronization, remaining reference
+cost and G1 are open ([evidence](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+
 ## Transactions
 
 `Begin(name, document, selection)` / `End(document, selection)` nest. Only `depth == 0` records an entry.

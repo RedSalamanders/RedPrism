@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <utility>
@@ -33,6 +34,51 @@ void ExpectTopology(bool condition, const char* name) noexcept
     {
         ++gFailures;
     }
+}
+
+void ExpectStorageSelf(bool condition, const char* name) noexcept
+{
+    std::printf("%s history-storage-self.%s\n", condition ? "PASS" : "FAIL", name);
+    if (!condition)
+    {
+        ++gFailures;
+    }
+}
+
+void ExpectStorageIndex(bool condition, const char* name) noexcept
+{
+    std::printf("%s history-storage-index.%s\n", condition ? "PASS" : "FAIL", name);
+    if (!condition)
+    {
+        ++gFailures;
+    }
+}
+
+struct HistoryIndexCheckpoint final
+{
+    CancelSource* cancellation = nullptr;
+    bool throwAllocation = false;
+    bool reached = false;
+    DocumentHistory::PrepareStage target = DocumentHistory::PrepareStage::TrimIndex;
+
+    static void Run(void* context, DocumentHistory::PrepareStage stage)
+    {
+        auto& checkpoint = *static_cast<HistoryIndexCheckpoint*>(context);
+        if (stage != checkpoint.target)
+            return;
+        checkpoint.reached = true;
+        if (checkpoint.cancellation)
+            (void)checkpoint.cancellation->Cancel();
+        if (checkpoint.throwAllocation)
+            throw std::bad_alloc{};
+    }
+};
+
+bool PublishIndexedEdit(DocumentHistory& history, const std::optional<CanvasDocument>& before,
+                        const std::optional<CanvasDocument>& after, const wchar_t* name)
+{
+    auto publication = DocumentHistory::PrepareEdit(history.CaptureState(), before, {}, after, {}, name);
+    return publication && history.CanPublish(publication.value()) && history.Publish(publication.value());
 }
 
 Raster HeldBgra(std::uint8_t seed)
@@ -409,6 +455,120 @@ void CachedRasterBoundsCoverAdoptionCachesAndSharedDags()
            "cached-overflow-refuses-shared-dag-without-owner-expansion");
 }
 
+void CachedRasterSelfStorageBounds()
+{
+    const Raster empty;
+    ExpectStorageSelf(empty.StorageRetirementMemoryBytes() == 0, "empty-handle-has-zero-self-storage-bound");
+
+    const Raster dense = Raster::Make(8, 8, RasterFormat::Bgra8888);
+    const Raster sparseEmpty = Raster::MakeSparse(8, 8, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
+    const auto denseSelf = dense.StorageRetirementMemoryBytes();
+    const auto sparseSelf = sparseEmpty.StorageRetirementMemoryBytes();
+    ExpectStorageSelf(dense.HasStorage() && sparseEmpty.HasStorage() && denseSelf >= dense.ByteSize() &&
+                          sparseSelf >= dense.ByteSize() &&
+                          dense.Tiles().capacity() == sparseEmpty.Tiles().capacity() && denseSelf == sparseSelf,
+                      "equivalent-dense-and-empty-sparse-self-bounds-cover-same-logical-pixel-floor");
+
+    PixelBuffer adoptedPixels = PixelBuffer::TryAllocate(8 * 8 * 4);
+    if (!adoptedPixels)
+    {
+        ExpectStorageSelf(false, "adoption-buffer-created");
+        return;
+    }
+    const std::uint64_t adoptedAllocation = adoptedPixels.AllocationBytes();
+    for (std::size_t offset = 0; offset < adoptedPixels.Size(); ++offset)
+    {
+        adoptedPixels.Data()[offset] = static_cast<std::uint8_t>(offset & 0xffu);
+    }
+    const Raster adopted = Raster::Adopt(8, 8, RasterFormat::Bgra8888, std::move(adoptedPixels));
+    ExpectStorageSelf(adopted.HasStorage() && adopted.StorageRetirementMemoryBytes() >= adoptedAllocation &&
+                          adopted.StorageRetirementMemoryBytes() >= adopted.ByteSize(),
+                      "adopted-self-bound-covers-actual-allocation-capacity");
+
+    const Raster smallLeaf = Raster::Make(1, 1, RasterFormat::Bgra8888);
+    const Raster largeLeaf = Raster::Make(64, 64, RasterFormat::Bgra8888);
+    const Raster nested =
+        Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, smallLeaf, 0, 0, 1, 1}}, 0);
+    const auto makeOwner = [](const Raster& child, std::size_t occurrences)
+    {
+        std::vector<RasterTile> tiles;
+        tiles.reserve(4);
+        for (std::size_t index = 0; index < occurrences; ++index)
+        {
+            tiles.push_back(RasterTile{static_cast<int>(index), 0, child, 0, 0, 1, 1});
+        }
+        return Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, std::move(tiles), 0);
+    };
+    const Raster oneNestedOwner = makeOwner(nested, 1);
+    const Raster sharedNestedOwners = makeOwner(nested, 2);
+    const Raster sharedSmallChildOwners = makeOwner(smallLeaf, 2);
+    const Raster sharedLargeChildOwners = makeOwner(largeLeaf, 2);
+    const Raster noTileOwner = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {}, 0);
+    const bool equalTwoTileCapacities =
+        sharedNestedOwners.Tiles().capacity() == sharedSmallChildOwners.Tiles().capacity() &&
+        sharedNestedOwners.Tiles().capacity() == sharedLargeChildOwners.Tiles().capacity();
+    ExpectStorageSelf(
+        nested.HasStorage() && sharedNestedOwners.HasStorage() && sharedSmallChildOwners.HasStorage() &&
+            sharedLargeChildOwners.HasStorage() && equalTwoTileCapacities &&
+            largeLeaf.StorageRetirementMemoryBytes() > sharedLargeChildOwners.StorageRetirementMemoryBytes() &&
+            sharedNestedOwners.StorageRetirementMemoryBytes() ==
+                sharedSmallChildOwners.StorageRetirementMemoryBytes() &&
+            sharedNestedOwners.StorageRetirementMemoryBytes() == sharedLargeChildOwners.StorageRetirementMemoryBytes(),
+        "same-two-window-self-bound-excludes-small-large-and-shared-nested-child-storage");
+
+    const auto oneTileCapacity = oneNestedOwner.Tiles().capacity();
+    const auto sharedTileCapacity = sharedNestedOwners.Tiles().capacity();
+    const bool sharedCapacityOrdered = sharedTileCapacity >= oneTileCapacity;
+    const auto sharedCapacityDelta = sharedCapacityOrdered ? sharedTileCapacity - oneTileCapacity : 0;
+    ExpectStorageSelf(
+        oneNestedOwner.HasStorage() && sharedNestedOwners.HasStorage() && sharedCapacityOrdered &&
+            sharedNestedOwners.StorageRetirementMemoryBytes() >= oneNestedOwner.StorageRetirementMemoryBytes() &&
+            sharedNestedOwners.StorageRetirementMemoryBytes() - oneNestedOwner.StorageRetirementMemoryBytes() ==
+                sharedCapacityDelta * sizeof(RasterTile),
+        "shared-nested-occurrence-affects-self-only-by-actual-tile-capacity");
+
+    const auto noTileCapacity = noTileOwner.Tiles().capacity();
+    const bool tileCapacityOrdered = oneTileCapacity >= noTileCapacity;
+    const auto tileCapacityDelta = tileCapacityOrdered ? oneTileCapacity - noTileCapacity : 0;
+    ExpectStorageSelf(noTileOwner.HasStorage() && tileCapacityOrdered && tileCapacityDelta > 0 &&
+                          oneNestedOwner.StorageRetirementMemoryBytes() >= noTileOwner.StorageRetirementMemoryBytes() &&
+                          oneNestedOwner.StorageRetirementMemoryBytes() - noTileOwner.StorageRetirementMemoryBytes() ==
+                              tileCapacityDelta * sizeof(RasterTile),
+                      "equivalent-sparse-owner-difference-is-only-literal-tile-capacity");
+
+    const auto nestedSelfBefore = nested.StorageRetirementMemoryBytes();
+    const auto sharedSelfBefore = sharedNestedOwners.StorageRetirementMemoryBytes();
+    const bool assembled = sharedNestedOwners.Data() != nullptr;
+    ExpectStorageSelf(assembled && sharedNestedOwners.IsMaterialized() && nested.IsMaterialized() &&
+                          nested.StorageRetirementMemoryBytes() == nestedSelfBefore &&
+                          sharedNestedOwners.StorageRetirementMemoryBytes() == sharedSelfBefore,
+                      "cached-self-bounds-stay-stable-before-and-after-real-materialization");
+}
+
+void SelfStorageBoundsSurviveWholeGraphRefusal()
+{
+    Raster depth129 = Raster::Make(1, 1, RasterFormat::Bgra8888);
+    for (int depth = 0; depth < 129; ++depth)
+    {
+        depth129 =
+            Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, depth129, 0, 0, 1, 1}}, 0);
+    }
+    ExpectStorageSelf(depth129.HasStorage() && depth129.RetirementMemoryBytes() == 0 &&
+                          depth129.StorageRetirementMemoryBytes() > 0 && !depth129.IsMaterialized(),
+                      "depth-129-self-bound-survives-unavailable-whole-graph-bound");
+
+    const std::array<std::uint8_t, 8> leafPixels{1, 2, 3, 255, 4, 5, 6, 255};
+    Raster shared = Raster::Make(2, 1, RasterFormat::Bgra8888, leafPixels.data(), leafPixels.size());
+    for (int level = 0; level < 66; ++level)
+    {
+        shared = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0,
+                                    {RasterTile{0, 0, shared, 0, 0, 1, 1}, RasterTile{1, 0, shared, 1, 0, 1, 1}}, 0);
+    }
+    ExpectStorageSelf(shared.HasStorage() && shared.RetirementMemoryBytes() == 0 &&
+                          shared.StorageRetirementMemoryBytes() > 0 && !shared.IsMaterialized(),
+                      "exponential-shared-dag-self-bound-survives-overflowed-whole-graph-bound");
+}
+
 Raster TinyBgra(int width, int height, std::uint8_t seed)
 {
     std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
@@ -757,6 +917,395 @@ void SelectionTopologyHonorsLiveExclusionInDirectAndPreparedTrim()
                    "prepared-trim-drops-history-only-selection-capacity");
 }
 
+void PreparedIndexDeduplicatesSharedRasterAcrossEntries()
+{
+    const Raster shared = TinyBgra(2, 1, 201);
+    auto first = std::optional<CanvasDocument>{DocumentWithRaster(shared, L"shared indexed owner")};
+    auto second = first;
+    second->width = 2;
+    auto third = second;
+    EditDocumentFixture(third.value(), [](DocumentFixture& value) { value.layers.front().asset.reset(); });
+    third->width = 3;
+
+    DocumentHistory history;
+    const bool firstPublished = PublishIndexedEdit(history, first, second, L"shared before after");
+    const bool secondPublished = firstPublished && PublishIndexedEdit(history, second, third, L"shared again");
+    constexpr std::size_t kLiteralRasterBytes = 8;
+    ExpectStorageIndex(secondPublished && history.UndoCount() == 2 &&
+                           history.RetainedBytes(third) == kLiteralRasterBytes,
+                       "shared-before-after-raster-is-charged-once-across-entry-roots");
+}
+
+void PreparedIndexExcludesCompleteLiveNestedRasterClosure()
+{
+    const Raster leaf = TinyBgra(1, 1, 211);
+    const Raster inner = Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, 1);
+    const Raster outer = Raster::MakeSparse(1, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, inner}}, 1);
+    const auto held = std::optional<CanvasDocument>{DocumentWithRaster(outer, L"nested live indexed owner")};
+    auto empty = std::optional<CanvasDocument>{CanvasDocument{}};
+    empty->width = 2;
+
+    DocumentHistory history;
+    const bool retired = PublishIndexedEdit(history, held, empty, L"retire nested owner");
+    constexpr std::size_t kLiteralLeafBytes = 4;
+    const bool retiredCharge = retired && history.RetainedBytes(empty) == kLiteralLeafBytes;
+    auto liveAgain = held;
+    liveAgain->width = 3;
+    const bool live = retiredCharge && PublishIndexedEdit(history, empty, liveAgain, L"make nested owner live");
+    ExpectStorageIndex(retiredCharge && live && history.RetainedBytes(liveAgain) == 0 && !outer.IsMaterialized() &&
+                           !inner.IsMaterialized(),
+                       "live-outer-owner-excludes-every-nested-child-without-materializing-sparse-owners");
+}
+
+void PreparedIndexTrimAndRestoreMatchReferenceOrder()
+{
+    std::array<std::optional<CanvasDocument>, 5> documents;
+    for (std::size_t index = 0; index < documents.size(); ++index)
+    {
+        const int width = index == 4 ? 4 : 1;
+        const Raster raster = TinyBgra(width, 1, static_cast<std::uint8_t>(31 + index));
+        documents[index] = DocumentWithRaster(raster, L"trim parity owner");
+        documents[index]->width = static_cast<int>(index + 1);
+    }
+
+    DocumentHistory prepared(8, 12);
+    DocumentHistory reference(8, 12);
+    bool published = true;
+    for (std::size_t index = 0; index + 1 < documents.size(); ++index)
+    {
+        const std::wstring name = L"trim parity " + std::to_wstring(index + 1);
+        reference.Begin(name, documents[index], {});
+        reference.End(documents[index + 1], {});
+        published = published && PublishIndexedEdit(prepared, documents[index], documents[index + 1], name.c_str());
+    }
+    constexpr std::size_t kLiteralRetainedBeforeUndo = 12;
+    const bool oldestTrimMatches = published && prepared.UndoCount() == 3 && reference.UndoCount() == 3 &&
+                                   prepared.RetainedBytes(documents.back()) == kLiteralRetainedBeforeUndo &&
+                                   reference.RetainedBytes(documents.back()) == kLiteralRetainedBeforeUndo;
+
+    auto restore = DocumentHistory::PrepareRestore(prepared.CaptureState(), false);
+    const auto referenceRestore = reference.Undo();
+    const bool preparedRestoreReady =
+        restore && prepared.CanPublish(restore.value()) && restore.value().RestoreSnapshot().has_value();
+    const bool restorePublished = preparedRestoreReady && prepared.Publish(restore.value());
+    const auto transferredSnapshot = restorePublished ? restore.value().TakeRestoreSnapshot() : std::nullopt;
+    constexpr std::size_t kLiteralAfterPastThenFutureTrim = 0;
+    ExpectStorageIndex(oldestTrimMatches && restorePublished && transferredSnapshot && referenceRestore &&
+                           transferredSnapshot.value().document->width == 4 &&
+                           referenceRestore.value().document->width == 4 && prepared.UndoCount() == 0 &&
+                           reference.UndoCount() == 0 && !prepared.CanRedo() && !reference.CanRedo() &&
+                           prepared.RetainedBytes(documents[3]) == kLiteralAfterPastThenFutureTrim,
+                       "trim-drops-oldest-past-before-future-and-restore-snapshot-survives-trim");
+
+    DocumentHistory preparedRedo(8, 16);
+    DocumentHistory referenceRedo(8, 16);
+    published = true;
+    for (std::size_t index = 0; index + 1 < documents.size(); ++index)
+    {
+        const std::wstring name = L"redo parity " + std::to_wstring(index + 1);
+        referenceRedo.Begin(name, documents[index], {});
+        referenceRedo.End(documents[index + 1], {});
+        published = published && PublishIndexedEdit(preparedRedo, documents[index], documents[index + 1], name.c_str());
+    }
+    auto undo = DocumentHistory::PrepareRestore(preparedRedo.CaptureState(), false);
+    const auto referenceUndo = referenceRedo.Undo();
+    const bool undoPublished = published && undo && preparedRedo.Publish(undo.value());
+    const auto undoSnapshot = undoPublished ? undo.value().TakeRestoreSnapshot() : std::nullopt;
+    constexpr std::size_t kLiteralFutureBytes = 16;
+    const bool pastRemovedFutureKept = undoPublished && undoSnapshot && referenceUndo &&
+                                       preparedRedo.UndoCount() == 0 && referenceRedo.UndoCount() == 0 &&
+                                       preparedRedo.CanRedo() && referenceRedo.CanRedo() &&
+                                       preparedRedo.RetainedBytes(documents[3]) == kLiteralFutureBytes &&
+                                       referenceRedo.RetainedBytes(documents[3]) == kLiteralFutureBytes;
+    auto redo = DocumentHistory::PrepareRestore(preparedRedo.CaptureState(), true);
+    const auto referenceRedoSnapshot = referenceRedo.Redo();
+    const bool redoPublished = pastRemovedFutureKept && redo && preparedRedo.Publish(redo.value());
+    const auto redoSnapshot = redoPublished ? redo.value().TakeRestoreSnapshot() : std::nullopt;
+    ExpectStorageIndex(redoPublished && redoSnapshot && referenceRedoSnapshot &&
+                           redoSnapshot.value().document->width == 5 &&
+                           referenceRedoSnapshot.value().document->width == 5 && preparedRedo.UndoCount() == 1 &&
+                           referenceRedo.UndoCount() == 1 && !preparedRedo.CanRedo() && !referenceRedo.CanRedo() &&
+                           preparedRedo.RetainedBytes(documents.back()) == 4,
+                       "undo-redo-transfers-entry-and-index-membership-with-reference-retention");
+}
+
+void PreparedIndexFailureAtTrimPreservesStateAndAllowsRetry()
+{
+    const Raster raster = TinyBgra(1, 1, 221);
+    const auto first = std::optional<CanvasDocument>{DocumentWithRaster(raster, L"index failure owner")};
+    auto second = std::optional<CanvasDocument>{CanvasDocument{}};
+    second->width = 2;
+    auto third = second;
+    third->width = 3;
+    DocumentHistory history;
+    const bool baselinePublished = PublishIndexedEdit(history, first, second, L"index baseline");
+    const Guid revision = history.CurrentRevision();
+    const int count = history.UndoCount();
+    const std::wstring name = history.UndoName();
+    const std::size_t retained = history.RetainedBytes(second);
+
+    CancelSource cancellation;
+    HistoryIndexCheckpoint cancelCheckpoint{&cancellation, false, false};
+    const auto cancelled =
+        DocumentHistory::PrepareEdit(history.CaptureState(), second, {}, third, {}, L"cancel at trim index",
+                                     cancellation.Token(), {&HistoryIndexCheckpoint::Run, &cancelCheckpoint});
+    ExpectStorageIndex(baselinePublished && !cancelled && cancelCheckpoint.reached &&
+                           history.CurrentRevision() == revision && history.UndoCount() == count &&
+                           history.UndoName() == name && history.RetainedBytes(second) == retained,
+                       "trim-index-cancellation-leaves-published-revision-stacks-and-index-unchanged");
+
+    HistoryIndexCheckpoint allocationCheckpoint{nullptr, true, false};
+    bool allocationCaught = false;
+    try
+    {
+        (void)DocumentHistory::PrepareEdit(history.CaptureState(), second, {}, third, {}, L"allocation at trim index",
+                                           {}, {&HistoryIndexCheckpoint::Run, &allocationCheckpoint});
+    }
+    catch (const std::bad_alloc&)
+    {
+        allocationCaught = true;
+    }
+    const bool preservedAfterAllocation = baselinePublished && allocationCaught && allocationCheckpoint.reached &&
+                                          history.CurrentRevision() == revision && history.UndoCount() == count &&
+                                          history.UndoName() == name && history.RetainedBytes(second) == retained;
+    const bool retryPublished = preservedAfterAllocation && PublishIndexedEdit(history, second, third, L"index retry");
+    ExpectStorageIndex(preservedAfterAllocation && retryPublished && history.UndoCount() == count + 1 &&
+                           history.UndoName() == L"index retry",
+                       "trim-index-allocation-failure-preserves-state-and-fresh-retry-publishes");
+}
+
+void CapturedIndexViewSurvivesResetAndPreventsRasterIdentityReuse()
+{
+    Raster oldRaster = TinyBgra(1, 1, 231);
+    const void* const oldIdentity = oldRaster.Identity();
+    auto oldBefore = std::optional<CanvasDocument>{DocumentWithRaster(oldRaster, L"old indexed owner")};
+    auto oldAfter = std::optional<CanvasDocument>{CanvasDocument{}};
+    oldAfter->width = 2;
+    DocumentHistory history;
+    const bool oldPublished = PublishIndexedEdit(history, oldBefore, oldAfter, L"old indexed root");
+    const auto oldRevision = history.CurrentRevision();
+    const auto oldView = history.CaptureState();
+    oldBefore.reset();
+    oldAfter.reset();
+    oldRaster = {};
+    history.Reset();
+
+    const Raster replacement = TinyBgra(1, 1, 241);
+    auto replacementBefore = std::optional<CanvasDocument>{DocumentWithRaster(replacement, L"new indexed owner")};
+    auto replacementAfter = std::optional<CanvasDocument>{CanvasDocument{}};
+    replacementAfter->width = 3;
+    const bool newPublished = PublishIndexedEdit(history, replacementBefore, replacementAfter, L"new indexed root");
+    auto staleCandidate =
+        DocumentHistory::PrepareEdit(oldView, replacementBefore, {}, replacementAfter, {}, L"stale index view");
+    ExpectStorageIndex(oldPublished && newPublished && replacement.Identity() != oldIdentity &&
+                           oldView.PastCount() == 1 && oldView.UndoName() == L"old indexed root" &&
+                           oldView.Revision() == oldRevision && !history.IsCurrent(oldView) && staleCandidate &&
+                           !history.CanPublish(staleCandidate.value()) && history.UndoCount() == 1 &&
+                           history.UndoName() == L"new indexed root" && history.RetainedBytes(replacementAfter) == 4,
+                       "captured-old-index-view-owns-retired-raster-across-reset-and-rejects-stale-publication");
+}
+
+void PreparedIndexResamplesLateSparseMaterializationOnNextPreparation()
+{
+    const Raster leaf = TinyBgra(1, 1, 251);
+    const Raster sparse = Raster::MakeSparse(2, 1, RasterFormat::Bgra8888, {}, 0, 0, {RasterTile{0, 0, leaf}}, 1);
+    const auto before = std::optional<CanvasDocument>{DocumentWithRaster(sparse, L"late indexed materialization")};
+    auto empty = std::optional<CanvasDocument>{CanvasDocument{}};
+    empty->width = 2;
+    auto next = empty;
+    next->width = 3;
+
+    DocumentHistory history;
+    const bool firstPublished = PublishIndexedEdit(history, before, empty, L"before materialization");
+    constexpr std::size_t kLiteralBeforeMaterialization = 4;
+    const bool initialBytes =
+        firstPublished && history.RetainedBytes(empty) == kLiteralBeforeMaterialization && !sparse.IsMaterialized();
+    DocumentHistory budgeted(100, 8);
+    const bool budgetBaseline = PublishIndexedEdit(budgeted, before, empty, L"Sparse budget baseline");
+    (void)sparse.Data();
+    constexpr std::size_t kLiteralAfterMaterialization = 12;
+    const bool secondPublished = initialBytes && PublishIndexedEdit(history, empty, next, L"after materialization");
+    ExpectStorageIndex(secondPublished && sparse.IsMaterialized() && sparse.ByteSize() == 8 &&
+                           history.RetainedBytes(next) == kLiteralAfterMaterialization,
+                       "separate-preparation-resamples-materialized-sparse-owner-and-nested-leaf-bytes");
+    const bool budgetRecheck = budgetBaseline && PublishIndexedEdit(budgeted, empty, next, L"Recheck sparse budget");
+    ExpectStorageIndex(budgetRecheck && budgeted.UndoCount() == 1 && budgeted.UndoName() == L"Recheck sparse budget" &&
+                           budgeted.RetainedBytes(next) == 0,
+                       "next-preparation-drops-old-history-above-literal-eight-byte-budget-after-cache-growth");
+}
+
+void PreparedIndexBoundsRepeatedLargeRasterAcrossMetadataEdits()
+{
+    constexpr std::uint64_t kMiB = 1024 * 1024;
+    constexpr std::uint64_t kLiteralPixelBytes = kMiB;
+    constexpr std::uint64_t kPreparedBoundCeiling = 8 * kMiB;
+    constexpr std::uint64_t kOccurrenceBoundFloor = 32 * kMiB;
+    constexpr std::size_t kEditCount = 16;
+
+    const Raster shared = HeldBgra(61);
+    auto current = std::optional<CanvasDocument>{DocumentWithRaster(shared, L"shared 1 MiB raster")};
+    DocumentHistory prepared;
+    DocumentHistory reference;
+    bool published = true;
+    for (std::size_t index = 0; index < kEditCount; ++index)
+    {
+        auto next = current;
+        const std::wstring layerName = L"metadata edit " + std::to_wstring(index + 1);
+        EditDocumentFixture(next.value(), [&](DocumentFixture& value) { value.layers.front().name = layerName; });
+        next->width = static_cast<int>(index + 2);
+        const std::wstring historyName = L"shared raster edit " + std::to_wstring(index + 1);
+        reference.Begin(historyName, current, {});
+        reference.End(next, {});
+        published = published && PublishIndexedEdit(prepared, current, next, historyName.c_str());
+        current = std::move(next);
+    }
+
+    const std::uint64_t preparedRetirement = prepared.RetirementMemoryBytes(current);
+    const std::uint64_t preparedAdmission = prepared.EditMemoryBytes(current);
+    const std::uint64_t referenceOccurrenceBound = reference.RetirementMemoryBytes(current);
+    ExpectStorageIndex(published && prepared.UndoCount() == static_cast<int>(kEditCount) &&
+                           preparedRetirement >= kLiteralPixelBytes && preparedRetirement < kPreparedBoundCeiling,
+                       "sixteen-prepared-metadata-edits-charge-shared-raster-once-with-literal-pixel-floor");
+    ExpectStorageIndex(preparedAdmission != 0 && preparedAdmission < kPreparedBoundCeiling,
+                       "prepared-index-metadata-edit-admission-remains-below-independent-eight-mib-ceiling");
+    ExpectStorageIndex(reference.UndoCount() == static_cast<int>(kEditCount) &&
+                           referenceOccurrenceBound > kOccurrenceBoundFloor,
+                       "reference-occurrence-bound-grows-past-thirty-two-mib-for-repeated-shared-owner");
+}
+
+void PartialIndexFaultsPreserveRedoAndAllowACompleteRetry()
+{
+    struct Scenario final
+    {
+        DocumentHistory::PrepareStage stage;
+        const char* name;
+    };
+    constexpr Scenario scenarios[]{{DocumentHistory::PrepareStage::StorageIndexClone, "clone"},
+                                   {DocumentHistory::PrepareStage::StorageIndexMembership, "membership"},
+                                   {DocumentHistory::PrepareStage::StorageIndexBounds, "bounds"}};
+    for (const auto& scenario : scenarios)
+    {
+        const auto first = std::optional<CanvasDocument>{DocumentWithRaster(TinyBgra(1, 1, 11), L"First")};
+        const auto second = std::optional<CanvasDocument>{DocumentWithRaster(TinyBgra(1, 1, 21), L"Second")};
+        const auto third = std::optional<CanvasDocument>{DocumentWithRaster(TinyBgra(1, 1, 31), L"Third")};
+        DocumentHistory history;
+        const bool baseline = PublishIndexedEdit(history, first, second, L"Baseline");
+        auto undo = DocumentHistory::PrepareRestore(history.CaptureState(), false);
+        const bool restored = baseline && undo && history.Publish(*undo);
+        const auto old = history.CaptureState();
+        const Guid revision = history.CurrentRevision();
+        const std::wstring redoName = history.RedoName();
+        CancelSource cancellation;
+        HistoryIndexCheckpoint cancelGate{&cancellation, false, false, scenario.stage};
+        const auto cancelled = DocumentHistory::PrepareEdit(old, first, {}, third, {}, L"Branch", cancellation.Token(),
+                                                            {&HistoryIndexCheckpoint::Run, &cancelGate});
+        const std::string cancelName =
+            std::string("partial-") + scenario.name + "-cancel-preserves-redo-and-live-index";
+        ExpectStorageIndex(restored && !cancelled && cancelGate.reached && history.IsCurrent(old) &&
+                               history.CurrentRevision() == revision && history.UndoCount() == 0 && history.CanRedo() &&
+                               history.RedoName() == redoName && history.RetainedBytes(first) == 4,
+                           cancelName.c_str());
+        HistoryIndexCheckpoint allocationGate{nullptr, true, false, scenario.stage};
+        bool caught = false;
+        try
+        {
+            (void)DocumentHistory::PrepareEdit(old, first, {}, third, {}, L"Branch", {},
+                                               {&HistoryIndexCheckpoint::Run, &allocationGate});
+        }
+        catch (const std::bad_alloc&)
+        {
+            caught = true;
+        }
+        const std::string allocationName =
+            std::string("partial-") + scenario.name + "-allocation-preserves-redo-and-live-index";
+        ExpectStorageIndex(restored && caught && allocationGate.reached && history.IsCurrent(old) &&
+                               history.CurrentRevision() == revision && history.UndoCount() == 0 && history.CanRedo() &&
+                               history.RedoName() == redoName && history.RetainedBytes(first) == 4,
+                           allocationName.c_str());
+        const bool retry = restored && PublishIndexedEdit(history, first, third, L"Retry branch");
+        const std::string retryName = std::string("partial-") + scenario.name + "-retry-publishes-exact-branch";
+        ExpectStorageIndex(retry && history.UndoCount() == 1 && !history.CanRedo() &&
+                               history.UndoName() == L"Retry branch" && history.RetainedBytes(third) == 4 &&
+                               !history.IsCurrent(old),
+                           retryName.c_str());
+    }
+}
+
+struct IndexRetirementSink final
+{
+    std::array<DeferredReleaseNode*, 8> nodes{};
+    std::size_t count = 0;
+    std::size_t destroyed = 0;
+    bool overflow = false;
+    bool installed = false;
+    static void Enqueue(void* context, DeferredReleaseNode& node) noexcept
+    {
+        auto& sink = *static_cast<IndexRetirementSink*>(context);
+        if (sink.count == sink.nodes.size())
+            sink.overflow = true;
+        else
+            sink.nodes[sink.count++] = &node;
+    }
+    bool Close() noexcept
+    {
+        if (!installed)
+            return true;
+        if (!ClearDeferredReleaseSink(this))
+            return false;
+        installed = false;
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            nodes[index]->destroy(nodes[index]);
+            ++destroyed;
+            nodes[index] = nullptr;
+        }
+        count = 0;
+        return true;
+    }
+    ~IndexRetirementSink()
+    {
+        (void)Close();
+    }
+};
+
+void CompleteIndexesUseTheOwnerRetirementHandoff()
+{
+    for (const int side : {1, 2048})
+    {
+        const std::string prefix = side == 1 ? "small-index-" : "large-index-";
+        const auto expect = [&](bool condition, const char* name)
+        {
+            const std::string qualified = prefix + name;
+            ExpectStorageIndex(condition, qualified.c_str());
+        };
+        Raster large = Raster::Make(side, side, RasterFormat::Bgra8888);
+        auto before = std::optional<CanvasDocument>{DocumentWithRaster(large, L"Deferred index")};
+        const std::optional<CanvasDocument> after{CanvasDocument{}};
+        DocumentHistory history;
+        const bool published = PublishIndexedEdit(history, before, after, L"Retire large indexed source");
+        const void* const heldIdentity = large.Identity();
+        before.reset();
+        large = {};
+        IndexRetirementSink sink;
+        sink.installed = InstallDeferredReleaseSink(&IndexRetirementSink::Enqueue, &sink);
+        expect(published && sink.installed, "fixture-publishes-and-installs-exact-retirement-scope");
+        if (!sink.installed)
+            return;
+        history.Reset();
+        const bool declaredSizeMatches = sink.count == 1 && (side == 1 ? sink.nodes[0]->bytes < 16 * 1024 * 1024
+                                                                       : sink.nodes[0]->bytes >= 16 * 1024 * 1024);
+        expect(!history.CanUndo() && !history.CanRedo() && sink.count == 1 && !sink.overflow &&
+                   sink.nodes[0]->destroy && declaredSizeMatches,
+               "last-reference-hands-complete-graph-to-one-node-without-inflating-small-bound");
+        const Raster replacement = TinyBgra(1, 1, 41);
+        expect(replacement.HasStorage() && replacement.Identity() != heldIdentity && sink.destroyed == 0,
+               "keeps-raster-identity-owned-until-consumer-destroys-node");
+        const bool closed = sink.Close();
+        expect(closed && sink.destroyed == 1 && sink.count == 0 && !sink.installed && !sink.overflow,
+               "consumer-destroys-complete-index-once-after-clearing-owner-sink");
+    }
+}
+
 void TestHistoryStorageTopology()
 {
     TopologyCapturesNestedSharedGraphAndEveryLayerOwner();
@@ -764,6 +1313,15 @@ void TestHistoryStorageTopology()
     TopologyMatchesAbsentDefaultEmptyAndCancellation();
     PreparedTopologyChargesCompleteNestedGraphAgainstEmptyLiveRoot();
     SelectionTopologyHonorsLiveExclusionInDirectAndPreparedTrim();
+    PreparedIndexDeduplicatesSharedRasterAcrossEntries();
+    PreparedIndexExcludesCompleteLiveNestedRasterClosure();
+    PreparedIndexTrimAndRestoreMatchReferenceOrder();
+    PreparedIndexFailureAtTrimPreservesStateAndAllowsRetry();
+    CapturedIndexViewSurvivesResetAndPreventsRasterIdentityReuse();
+    PreparedIndexResamplesLateSparseMaterializationOnNextPreparation();
+    PreparedIndexBoundsRepeatedLargeRasterAcrossMetadataEdits();
+    PartialIndexFaultsPreserveRedoAndAllowACompleteRetry();
+    CompleteIndexesUseTheOwnerRetirementHandoff();
 }
 } // namespace
 
@@ -776,6 +1334,8 @@ int RunHistoryRetirementBoundTests()
     ExcessiveSparseTileDepthRefusesEstimate();
     LargeHistoryNamesHaveIndependentCapacityFloors();
     CachedRasterBoundsCoverAdoptionCachesAndSharedDags();
+    CachedRasterSelfStorageBounds();
+    SelfStorageBoundsSurviveWholeGraphRefusal();
     CachedHistoryBoundsPreserveSourceAndPublication();
     ShapeSourceStorageParticipatesInHistoryBudget();
     TestHistoryStorageTopology();

@@ -279,6 +279,17 @@ allocation behavior.
 
 ### Prepared history and aggregate retirement (P1.9 H1 foundation)
 
+The managed H3 candidate seals a `DocumentHistory::StorageIndex` of owning unique entries, raster storage and
+selections. Its worker clones containers, diffs changed-entry membership and samples distinct owners; Undo/Redo
+transfer unchanged entry membership between stacks. This is not a measured delta-cost guarantee. Live identities
+are excluded and the diagnostic `RetainedBytes` reads fresh charges. Cached retirement includes each raster's
+self-storage capacity once, unique selection capacity and index/layer/entry metadata, plus O(1) sealed-stack own
+metadata. Pending, unmatched, reference and additional sources retain conservative fallback bounds. A sealed
+index uses explicit `AlwaysOnOwner` retirement with its true declared bound; partial construction stays uniquely
+worker-owned. Full managed Debug r74, Release r75 and ASan Debug r76 qualify this slice. Late sparse-cache publication and
+history trim/reprepare synchronization, remaining caller/reference costs, analysis/ARM64, native activation
+and G1 remain open ([evidence](../TestRuns/HistoryStorageIndexCandidate_2026-10-05.md)).
+
 Settled active-layer New wand host jobs reserve the qualified phased source/flood/trace/history peak, including
 retirement and job metadata, before owner capture. Event-time settings and point are bounded owned input; source
 sampling, geometry and history construction run on workers. Rejected and applied graphs retire off owner. Queued

@@ -278,10 +278,21 @@ void Raster::CacheRetirementMemory(Storage& storage) noexcept
         storage.graphNodes += value->graphNodes;
         return true;
     };
+    // Freeze the distinct allocation bound before adding children. A shared DAG can have an unavailable
+    // occurrence sum while every individual allocation still has a valid bound for a unique owning index.
+    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)))
+        return;
+    const auto ownedPixels = storage.adoptedBytes.AllocationBytes();
+    if (storage.bytes.capacity() > (std::numeric_limits<std::uint64_t>::max)() - ownedPixels)
+        return;
+    const auto residentPixels = ownedPixels + storage.bytes.capacity();
+    const auto potentialPixels = PixelBuffer::RequiredBytes(static_cast<std::size_t>(logical));
+    if (residentPixels > potentialPixels && !add(1, residentPixels - potentialPixels))
+        return;
+    storage.selfRetirementBytes = bytes;
     // Sum already cached child bounds while the producer owns this record. Even a repeatedly shared nested
     // sparse DAG then has an O(1) bound read; admission never recursively expands it or materializes pixels.
-    if (!bytes || !add(1, sizeof(Storage) + 64) || !add(storage.tiles.capacity(), sizeof(RasterTile)) ||
-        !child(storage.base))
+    if (!child(storage.base))
         return;
     for (const auto& tile : storage.tiles)
         if (!child(tile.pixels._storage))
